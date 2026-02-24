@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment files (keep .env.example as template)
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+.env*.local
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Electron
+release/
+
+# Backup files
+*.bak
+*.bak*

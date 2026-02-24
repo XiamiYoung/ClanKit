@@ -1,0 +1,230 @@
+/* Explicitly load Segoe UI Emoji so Chromium/Electron on WSL2 can render emoji.
+   fontconfig has no Windows fonts registered, so naming the family alone won't work. */
+@font-face {
+  font-family: 'Segoe UI Emoji';
+  src: url('/fonts/seguiemj.ttf') format('truetype');
+  font-display: swap;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary:       #3B82F6;
+    --primary-dark:  #1D4ED8;
+    --primary-light: #60A5FA;
+    --accent:        #F97316;
+    --bg-main:       #F8FAFC;
+    --bg-card:       #ffffff;
+    --bg-sidebar:    #0F172A;
+    --text-primary:  #1E293B;
+    --text-secondary:#475569;
+    --text-muted:    #64748B;
+    --border:        #E2E8F0;
+    --shadow:        rgba(15, 23, 42, 0.06);
+    --shadow-hover:  rgba(15, 23, 42, 0.12);
+
+    /* ── Global font-size scale ────────────────────────────────────────────
+       All views should use these via var() or rem. Changing the html
+       font-size (currently 125% = 20px) rescales everything.             */
+    --fs-page-title: 1.5rem;    /* page headings like "Skills", "Configuration" */
+    --fs-section:    1.25rem;   /* section headers */
+    --fs-subtitle:   1.0625rem; /* card titles, strong labels */
+    --fs-body:       0.9375rem; /* primary body text */
+    --fs-secondary:  0.875rem;  /* secondary / supporting text */
+    --fs-caption:    0.8125rem; /* captions, badges, hints */
+    --fs-small:      0.75rem;   /* fine print */
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* ── Global font scale ───────────────────────────────────────────────────
+     125% base = 20px. All rem-based Tailwind utilities scale automatically.
+     Covers bubbles, input area, sidebar, tool blocks — everything.          */
+  html {
+    font-size: 125%;
+  }
+
+  html, body, #app {
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--bg-main);
+  }
+
+  body {
+    font-size: 1rem;
+    font-family: 'Noto Sans', system-ui, sans-serif,
+      'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', emoji;
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-primary);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Figtree', system-ui, sans-serif,
+      'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', emoji;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar               { width: 18px; height: 18px; }
+  ::-webkit-scrollbar-track         { background: rgba(0,0,0,0.03); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb         { background: #94A3B8; border-radius: 9999px; min-height: 80px; border: 4px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover   { background: #3B82F6; border: 4px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:active  { background: #1D4ED8; border: 4px solid transparent; background-clip: padding-box; }
+
+  /* Code block syntax highlighting */
+  pre code.hljs {
+    background: transparent !important;
+    padding: 0 !important;
+  }
+}
+
+@layer components {
+  /* Card surface */
+  .card {
+    @apply bg-white border border-[#E2E8F0] rounded-2xl shadow-card;
+  }
+
+  /* Chat message animation */
+  .msg-enter-active {
+    animation: msgIn 200ms ease-out;
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Prose styles for markdown rendering inside chat bubbles */
+  .prose-sparkai {
+    color: var(--text-primary);
+    line-height: 1.65;
+    font-size: var(--fs-body);
+  }
+  .prose-sparkai h1,
+  .prose-sparkai h2,
+  .prose-sparkai h3 {
+    font-family: 'Figtree', system-ui, sans-serif;
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .prose-sparkai h1 { font-size: var(--fs-section); }
+  .prose-sparkai h2 { font-size: var(--fs-subtitle); }
+  .prose-sparkai h3 { font-size: var(--fs-body); }
+  .prose-sparkai p  { margin-bottom: 0.75rem; }
+  .prose-sparkai ul,
+  .prose-sparkai ol {
+    margin-left: 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+  .prose-sparkai ul { list-style-type: disc; }
+  .prose-sparkai ol { list-style-type: decimal; }
+  .prose-sparkai a  { color: var(--primary); text-decoration: underline; }
+  .prose-sparkai a:hover { color: var(--primary-dark); }
+  .prose-sparkai blockquote {
+    border-left: 3px solid var(--border);
+    padding-left: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+    margin: 0.75rem 0;
+  }
+  .prose-sparkai code:not(pre code) {
+    background: #EFF6FF;
+    color: #1D4ED8;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .prose-sparkai pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    border-radius: 10px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin-bottom: 0.75rem;
+    border: 1px solid #1E293B;
+  }
+  .prose-sparkai pre code {
+    font-size: var(--fs-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    color: inherit;
+  }
+  /* Wrap tables so they scroll horizontally on narrow windows */
+  .prose-sparkai table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    margin-bottom: 0.75rem;
+    font-size: var(--fs-secondary);
+  }
+  .prose-sparkai th {
+    background: #F1F5F9;
+    color: var(--text-secondary);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    border: 1px solid var(--border);
+  }
+  .prose-sparkai td {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+  }
+  .prose-sparkai img    { border-radius: 8px; max-width: 100%; margin: 0.5rem 0; }
+  .prose-sparkai hr     { border-color: var(--border); margin: 1rem 0; }
+  .prose-sparkai strong { font-weight: 600; }
+  .prose-sparkai em     { font-style: italic; }
+
+  /* Legacy alias */
+  .prose-botanic { @apply prose-sparkai; }
+
+  /* Busy indicator bouncing dots */
+  .busy-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: #3B82F6;
+    animation: busyBounce 1s ease-in-out infinite;
+  }
+  @keyframes busyBounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40%           { transform: translateY(-0.4rem); opacity: 1; }
+  }
+
+}
+
+/* Streaming equalizer bars - outside @layer so specificity applies */
+.streaming-bar {
+  display: inline-block;
+  width: 0.2rem;
+  border-radius: 2px;
+  background: #3B82F6;
+  animation: eqPulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes eqPulse {
+  0%   { height: 0.3rem; opacity: 0.4; }
+  100% { height: 1rem;   opacity: 1; }
+}
+
+
+/* Force white text inside user chat bubbles */
+.user-content,
+.user-content *,
+.user-content p,
+.user-content strong,
+.user-content em,
+.user-content code,
+.user-content li,
+.user-content h1,
+.user-content h2,
+.user-content h3 {
+  color: #ffffff !important;
+}
