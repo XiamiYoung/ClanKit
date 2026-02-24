@@ -8,21 +8,34 @@ const { logger } = require('../../logger')
 class AnthropicClient {
   constructor(config) {
     this.config = config
-    this.client = new Anthropic({
-      apiKey: config.apiKey || process.env.ANTHROPIC_API_KEY || '',
+    const isOpenRouter = config.baseURL && config.baseURL.includes('openrouter.ai')
+    const key = config.apiKey || process.env.ANTHROPIC_API_KEY || ''
+    const clientOpts = {
       baseURL: (config.baseURL && config.baseURL !== 'https://api.anthropic.com')
         ? config.baseURL
         : (process.env.ANTHROPIC_BASE_URL || undefined)
-    })
+    }
+    if (isOpenRouter) {
+      // OpenRouter expects Authorization: Bearer header, not x-api-key.
+      // Must explicitly set apiKey to null to prevent the SDK from reading
+      // ANTHROPIC_API_KEY from env and sending x-api-key instead of Authorization.
+      clientOpts.apiKey = null
+      clientOpts.authToken = key
+    } else {
+      clientOpts.apiKey = key
+    }
+    this.client = new Anthropic(clientOpts)
     logger.agent('AnthropicClient init', {
       model: this.resolveModel(),
       baseURL: config.baseURL,
-      hasKey: !!config.apiKey
+      hasKey: !!key,
+      isOpenRouter
     })
   }
 
   resolveModel() {
     const c = this.config
+    if (c.customModel) return c.customModel   // Per-chat override
     if (c.activeModel === 'opus')  return c.opusModel  || 'claude-opus-4-6'
     if (c.activeModel === 'haiku') return c.haikuModel || 'claude-haiku-4-5'
     return c.sonnetModel || 'claude-sonnet-4-5'

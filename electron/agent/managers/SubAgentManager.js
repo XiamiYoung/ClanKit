@@ -8,9 +8,10 @@
 const { logger } = require('../../logger')
 
 class SubAgentManager {
-  constructor(anthropicClient, toolRegistry) {
+  constructor(anthropicClient, toolRegistry, isOpenAI = false) {
     this.anthropicClient = anthropicClient
     this.toolRegistry = toolRegistry
+    this.isOpenAI = isOpenAI
     this.activeSubAgents = new Map()
   }
 
@@ -51,48 +52,95 @@ class SubAgentManager {
 
     const client = this.anthropicClient.getClient()
     const model = this.anthropicClient.resolveModel()
-    const tools = this.toolRegistry.getToolDefinitions()
+    const anthropicTools = this.toolRegistry.getToolDefinitions()
 
-    const messages = [{ role: 'user', content: task }]
     let finalText = ''
 
     try {
-      for (let turn = 0; turn < safeTurns; turn++) {
-        const params = {
-          model,
-          max_tokens: 4096,
-          system: fullSystem,
-          messages,
-        }
-        if (tools.length > 0) params.tools = tools
+      if (this.isOpenAI) {
+        // ── OpenAI-format sub-agent ──
+        const openaiTools = anthropicTools.map(t => ({
+          type: 'function',
+          function: {
+            name: t.name,
+            description: t.description || '',
+            parameters: t.input_schema || { type: 'object', properties: {} }
+          }
+        }))
 
-        const response = await client.messages.create(params)
+        const messages = [
+          { role: 'system', content: fullSystem },
+          { role: 'user', content: task }
+        ]
 
-        const textBlocks = response.content.filter(b => b.type === 'text')
-        finalText = textBlocks.map(b => b.text).join('\n')
+        for (let turn = 0; turn < safeTurns; turn++) {
+          const params = { model, max_tokens: 4096, messages }
+          if (openaiTools.length > 0) params.tools = openaiTools
 
-        messages.push({ role: 'assistant', content: response.content })
+          const response = await client.chat.completions.create(params)
+          const choice = response.choices?.[0]
+          if (!choice) break
 
-        if (onProgress) onProgress({ turn: turn + 1, maxTurns: safeTurns, preview: finalText.slice(0, 200) })
+          finalText = choice.message?.content || finalText
+          messages.push(choice.message)
 
-        if (response.stop_reason === 'end_turn') break
+          if (onProgress) onProgress({ turn: turn + 1, maxTurns: safeTurns, preview: (finalText || '').slice(0, 200) })
 
-        // Handle tool use
-        if (response.stop_reason === 'tool_use') {
-          const toolResults = []
-          for (const block of response.content) {
-            if (block.type === 'tool_use') {
-              const result = await this.toolRegistry.execute(block.name, block.input)
-              toolResults.push({
-                type: 'tool_result',
-                tool_use_id: block.id,
+          if (choice.finish_reason === 'tool_calls' || (choice.message?.tool_calls?.length > 0)) {
+            for (const tc of choice.message.tool_calls || []) {
+              let parsedArgs = {}
+              try { parsedArgs = JSON.parse(tc.function.arguments || '{}') } catch {}
+              const result = await this.toolRegistry.execute(tc.function.name, parsedArgs)
+              messages.push({
+                role: 'tool',
+                tool_call_id: tc.id,
                 content: JSON.stringify(result)
               })
             }
+          } else {
+            break
           }
-          messages.push({ role: 'user', content: toolResults })
-        } else {
-          break
+        }
+      } else {
+        // ── Anthropic-format sub-agent (existing) ──
+        const messages = [{ role: 'user', content: task }]
+
+        for (let turn = 0; turn < safeTurns; turn++) {
+          const params = {
+            model,
+            max_tokens: 4096,
+            system: fullSystem,
+            messages,
+          }
+          if (anthropicTools.length > 0) params.tools = anthropicTools
+
+          const response = await client.messages.create(params)
+
+          const textBlocks = response.content.filter(b => b.type === 'text')
+          finalText = textBlocks.map(b => b.text).join('\n')
+
+          messages.push({ role: 'assistant', content: response.content })
+
+          if (onProgress) onProgress({ turn: turn + 1, maxTurns: safeTurns, preview: finalText.slice(0, 200) })
+
+          if (response.stop_reason === 'end_turn') break
+
+          if (response.stop_reason === 'tool_use') {
+            const toolResults = []
+            for (const block of response.content) {
+              if (block.type === 'tool_use') {
+                const result = await this.toolRegistry.execute(block.name, block.input)
+                toolResults.push({
+                  type: 'tool_result',
+                  tool_use_id: block.id,
+                  content: JSON.stringify(result)
+                })
+              }
+            }
+            messages.push({ role: 'user', content: toolResults })
+          } else {
+            break
+          }
         }
       }
 

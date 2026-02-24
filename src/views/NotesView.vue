@@ -20,32 +20,6 @@
         <p style="font-family:'Noto Sans',sans-serif; font-size:var(--fs-body); color:#64748B; margin:0 0 24px; line-height:1.6;">
           Select a folder to use as your vault. All markdown files in the folder will be available for viewing and editing.
         </p>
-        <!-- Manual path input -->
-        <div class="flex items-center gap-2 mb-4" style="width:100%;">
-          <input
-            v-model="manualPath"
-            @keydown.enter="submitManualPath"
-            placeholder="Enter folder path, e.g. /mnt/c/Users/you/notes"
-            class="flex-1 px-4 py-3 rounded-xl text-sm"
-            style="border:1px solid #E2E8F0; outline:none; font-family:'Noto Sans',sans-serif; font-size:var(--fs-body); color:#1E293B; background:#fff;"
-            @focus="e => e.currentTarget.style.borderColor='#3B82F6'"
-            @blur="e => e.currentTarget.style.borderColor='#E2E8F0'"
-          />
-          <button
-            @click="submitManualPath"
-            class="px-4 py-3 rounded-xl text-white font-semibold transition-all duration-200 cursor-pointer shrink-0"
-            style="background:#3B82F6; font-family:'Noto Sans',sans-serif; font-size:var(--fs-body); border:none;"
-            @mouseenter="e => e.currentTarget.style.background='#2563EB'"
-            @mouseleave="e => e.currentTarget.style.background='#3B82F6'"
-          >Open</button>
-        </div>
-
-        <div class="flex items-center gap-3 mb-4" style="width:100%;">
-          <div style="flex:1; height:1px; background:#E2E8F0;"></div>
-          <span style="font-family:'Noto Sans',sans-serif; font-size:var(--fs-caption); color:#94A3B8;">or</span>
-          <div style="flex:1; height:1px; background:#E2E8F0;"></div>
-        </div>
-
         <button
           @click="store.pickVault()"
           class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer"
@@ -79,45 +53,14 @@
           >{{ vaultName }}</span>
         </div>
         <div class="flex items-center gap-2">
-          <template v-if="showVaultPathInput">
-            <input
-              ref="vaultPathInputRef"
-              v-model="manualPath"
-              @keydown.enter="submitManualPath"
-              @keydown.escape="showVaultPathInput = false"
-              placeholder="Enter folder path..."
-              class="px-2.5 py-1.5 rounded-lg text-sm"
-              style="border:1px solid #3B82F6; outline:none; font-family:'Noto Sans',sans-serif; width:280px; color:#1E293B;"
-            />
-            <button
-              @click="submitManualPath"
-              class="px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer"
-              style="color:#fff; background:#3B82F6; border:none; font-family:'Noto Sans',sans-serif;"
-            >Go</button>
-            <button
-              @click="showVaultPathInput = false"
-              class="px-2 py-1.5 rounded-lg text-sm cursor-pointer"
-              style="color:#64748B; background:transparent; border:none;"
-            >&times;</button>
-          </template>
-          <template v-else>
-            <button
-              @click="showVaultPathInput = true; nextTick(() => vaultPathInputRef?.focus())"
-              class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer"
-              style="color:#64748B; background:#F1F5F9; border:1px solid #E2E8F0; font-family:'Noto Sans',sans-serif;"
-              @mouseenter="e => { e.currentTarget.style.background='#E2E8F0'; e.currentTarget.style.color='#1E293B' }"
-              @mouseleave="e => { e.currentTarget.style.background='#F1F5F9'; e.currentTarget.style.color='#64748B' }"
-              title="Enter path manually"
-            >Set Path</button>
-            <button
-              @click="store.pickVault()"
-              class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer"
-              style="color:#64748B; background:#F1F5F9; border:1px solid #E2E8F0; font-family:'Noto Sans',sans-serif;"
-              @mouseenter="e => { e.currentTarget.style.background='#E2E8F0'; e.currentTarget.style.color='#1E293B' }"
-              @mouseleave="e => { e.currentTarget.style.background='#F1F5F9'; e.currentTarget.style.color='#64748B' }"
-              title="Browse with folder picker"
-            >Browse</button>
-          </template>
+          <button
+            @click="store.pickVault()"
+            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer"
+            style="color:#64748B; background:#F1F5F9; border:1px solid #E2E8F0; font-family:'Noto Sans',sans-serif;"
+            @mouseenter="e => { e.currentTarget.style.background='#E2E8F0'; e.currentTarget.style.color='#1E293B' }"
+            @mouseleave="e => { e.currentTarget.style.background='#F1F5F9'; e.currentTarget.style.color='#64748B' }"
+            title="Change folder"
+          >Browse</button>
         </div>
       </div>
 
@@ -238,24 +181,28 @@
               <span style="font-family:'Noto Sans',sans-serif; font-size:var(--fs-body); font-weight:600; color:#1E293B;">
                 {{ store.activeFile.name }}
               </span>
-              <span
-                v-if="store.activeFile.dirty"
-                class="px-1.5 py-0.5 rounded-full text-xs"
-                style="background:#FEF3C7; color:#92400E; font-family:'Noto Sans',sans-serif;"
-              >unsaved</span>
-
               <div class="ml-auto flex items-center gap-2">
-                <!-- Save button -->
-                <button
-                  v-if="store.activeFile.dirty"
-                  @click="store.saveFile()"
-                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                  style="color:#fff; background:#3B82F6; border:none; font-family:'Noto Sans',sans-serif;"
-                  @mouseenter="e => e.currentTarget.style.background='#2563EB'"
-                  @mouseleave="e => e.currentTarget.style.background='#3B82F6'"
+                <!-- Auto-save indicator -->
+                <span
+                  v-if="saving"
+                  class="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
+                  style="background:#DBEAFE; color:#1D4ED8; font-family:'Noto Sans',sans-serif;"
                 >
-                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                  Save
+                  <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
+                  saving
+                </span>
+
+                <!-- Copy source -->
+                <button
+                  @click="copySource"
+                  class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                  style="color:#64748B; background:#F1F5F9; border:1px solid #E2E8F0; font-family:'Noto Sans',sans-serif;"
+                  @mouseenter="e => { e.currentTarget.style.background='#E2E8F0'; e.currentTarget.style.color='#1E293B' }"
+                  @mouseleave="e => { e.currentTarget.style.background='#F1F5F9'; e.currentTarget.style.color='#64748B' }"
+                  title="Copy markdown source"
+                >
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  {{ copied ? 'Copied' : 'Copy' }}
                 </button>
 
                 <!-- Mode toggle -->
@@ -270,7 +217,7 @@
                       ? 'background:#3B82F6; color:#fff; border:none;'
                       : 'background:#fff; color:#64748B; border:none;'"
                     style="font-family:'Noto Sans',sans-serif;"
-                  >Preview</button>
+                  >Formatted</button>
                   <button
                     @click="editMode = true"
                     class="px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
@@ -278,33 +225,57 @@
                       ? 'background:#3B82F6; color:#fff; border:none;'
                       : 'background:#fff; color:#64748B; border:none;'"
                     style="font-family:'Noto Sans',sans-serif;"
-                  >Edit</button>
+                  >Source</button>
                 </div>
               </div>
             </div>
 
-            <!-- Preview mode -->
+            <!-- Formatted mode (editable rich preview) -->
             <div
               v-if="!editMode"
-              class="flex-1 overflow-y-auto px-8 py-6"
-              style="scrollbar-width:thin;"
+              class="flex-1 overflow-y-auto py-6"
+              style="scrollbar-width:thin; display:flex; justify-content:center;"
+              @click="handlePreviewClick"
             >
               <div
+                ref="formattedEl"
                 class="prose-obsidian"
-                v-html="renderedMarkdown"
+                contenteditable="true"
+                spellcheck="false"
+                v-html="formattedHtml"
+                @input="onFormattedInput"
+                @paste="onFormattedPaste"
               />
+              <!-- Link error toast -->
+              <div
+                v-if="linkError"
+                class="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg animate-fade-in"
+                style="background:#FEF2F2; border:1px solid #FECACA; color:#991B1B; font-size:var(--fs-secondary); max-width:480px;"
+              >
+                <svg style="width:18px;height:18px;flex-shrink:0;color:#EF4444;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+                <span class="flex-1" style="word-break:break-all;">{{ linkError }}</span>
+                <button
+                  @click="linkError = ''"
+                  class="shrink-0 cursor-pointer"
+                  style="background:none;border:none;color:#991B1B;font-size:16px;padding:0 0 0 8px;"
+                >&times;</button>
+              </div>
             </div>
 
-            <!-- Edit mode -->
-            <textarea
+            <!-- Source mode (raw markdown editor) -->
+            <div
               v-else
-              v-model="editorContent"
-              @keydown.ctrl.s.prevent="store.saveFile()"
-              @keydown.meta.s.prevent="store.saveFile()"
-              class="flex-1 w-full resize-none outline-none px-8 py-6"
-              style="font-family:'JetBrains Mono','Fira Code','Cascadia Code',monospace; font-size:var(--fs-secondary); line-height:1.7; color:#1E293B; background:#fff; border:none; scrollbar-width:thin; white-space:pre-wrap; word-wrap:break-word; overflow-wrap:break-word;"
-              spellcheck="false"
-            />
+              class="flex-1 overflow-y-auto"
+              style="scrollbar-width:thin; display:flex; justify-content:center;"
+            >
+              <textarea
+                v-model="editorContent"
+                class="notes-source-editor"
+                spellcheck="false"
+              />
+            </div>
           </template>
         </div>
       </div>
@@ -313,24 +284,61 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, defineComponent, h } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount, defineComponent, h } from 'vue'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import DOMPurify from 'dompurify'
+import TurndownService from 'turndown'
+import { gfm } from 'turndown-plugin-gfm'
 import { useObsidianStore } from '../stores/obsidian'
 
 const store = useObsidianStore()
 
 const editMode = ref(false)
+const linkError = ref('')
+let linkErrorTimer = null
+const saving = ref(false)
+const copied = ref(false)
+let copiedTimer = null
+const formattedEl = ref(null)
+const formattedHtml = ref('')
+let autoSaveTimer = null
+let editingFormatted = false  // flag to prevent circular updates
+
+// Turndown: HTML → Markdown converter (with GFM tables, strikethrough, etc.)
+const turndown = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+  bulletListMarker: '-',
+  emDelimiter: '*',
+  strongDelimiter: '**',
+  hr: '---',
+})
+turndown.use(gfm)
+
+// Convert data-URL / data-relpath images back to relative markdown paths
+turndown.addRule('local-images', {
+  filter: function (node) {
+    return node.nodeName === 'IMG' && (node.getAttribute('data-relpath') || node.getAttribute('src')?.startsWith('data:'))
+  },
+  replacement: function (content, node) {
+    const relPath = node.getAttribute('data-relpath')
+    const alt = node.getAttribute('alt') || ''
+    const title = node.getAttribute('title')
+    if (relPath) {
+      return `![${alt}](${relPath}${title ? ` "${title}"` : ''})`
+    }
+    // Fallback: keep the data URL as-is (shouldn't normally happen)
+    const src = node.getAttribute('src') || ''
+    return `![${alt}](${src}${title ? ` "${title}"` : ''})`
+  }
+})
 const showNewFileInput = ref(false)
 const showNewFolderInput = ref(false)
 const newItemParent = ref('')
 const newItemName = ref('')
 const newFileInputRef = ref(null)
 const newFolderInputRef = ref(null)
-const manualPath = ref('')
-const showVaultPathInput = ref(false)
-const vaultPathInputRef = ref(null)
 
 // Vault display name (last folder in path)
 const vaultName = computed(() => {
@@ -349,36 +357,320 @@ watch(() => store.activeFile?.content, (val) => {
   }
 }, { immediate: true })
 
-// Sync local → store on every edit (marks dirty)
+// Sync local → store on every edit (marks dirty) + trigger auto-save
 watch(editorContent, (val) => {
   if (store.activeFile && val !== store.activeFile.content) {
     store.updateContent(val)
+    scheduleAutoSave()
   }
 })
 
-// Markdown rendering
-marked.use({ gfm: true, breaks: true })
+// Debounced auto-save (800ms after last keystroke)
+function scheduleAutoSave() {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+  autoSaveTimer = setTimeout(async () => {
+    if (store.activeFile?.dirty) {
+      saving.value = true
+      await store.saveFile()
+      saving.value = false
+    }
+  }, 800)
+}
 
-const renderedMarkdown = computed(() => {
-  if (!store.activeFile?.content) return ''
-  try {
-    const raw = marked.parse(store.activeFile.content)
-    return DOMPurify.sanitize(raw)
-  } catch { return '' }
+onBeforeUnmount(() => {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+  // Flush any pending save
+  if (store.activeFile?.dirty) store.saveFile()
 })
 
-// Reset edit mode when switching files
-watch(() => store.activeFile?.path, () => { editMode.value = false })
+
+// Markdown rendering — custom image renderer marks relative images with data-relpath for post-processing
+// marked 12.x passes positional args: (href, title, text)
+const renderer = new marked.Renderer()
+renderer.image = function (href, title, text) {
+  // For relative/local paths, store original path in data attributes for async base64 loading
+  if (href && !href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('data:')) {
+    const fileDir = store.activeFile?.path?.replace(/[/\\][^/\\]+$/, '') || store.vaultPath
+    const absPath = fileDir ? `${fileDir}/${href}` : href
+    return `<img src="" data-relpath="${href}" data-abspath="${absPath}" alt="${text || ''}"${title ? ` title="${title}"` : ''} />`
+  }
+  return `<img src="${href}" alt="${text || ''}"${title ? ` title="${title}"` : ''} />`
+}
+marked.use({ gfm: true, breaks: true, renderer })
+
+function renderToHtml(md) {
+  if (!md) return ''
+  try {
+    const raw = marked.parse(md)
+    return DOMPurify.sanitize(raw, {
+      ALLOW_UNKNOWN_PROTOCOLS: true,
+      ADD_ATTR: ['data-relpath', 'data-abspath'],
+    })
+  } catch { return '' }
+}
+
+// Refresh the formatted HTML from the current markdown source.
+// Renders markdown to HTML, then asynchronously loads local images as data URLs.
+async function refreshFormattedHtml() {
+  // renderToHtml() already sanitizes via DOMPurify
+  const safeHtml = renderToHtml(editorContent.value)
+  formattedHtml.value = safeHtml
+  await nextTick()
+  // v-html may silently skip updates on contenteditable divs that have been
+  // modified by user typing. Force-sync the DOM so images are in the tree.
+  if (formattedEl.value) {
+    formattedEl.value.textContent = ''                    // clear safely
+    formattedEl.value.insertAdjacentHTML('afterbegin', safeHtml) // re-insert DOMPurify-sanitized HTML
+  }
+  await loadLocalImages()
+}
+
+// Scan the formatted view for local images and load them as data: URLs via IPC
+async function loadLocalImages() {
+  if (!formattedEl.value) return
+  const imgs = formattedEl.value.querySelectorAll('img[data-abspath]')
+  if (imgs.length === 0) return
+  const loadPromises = Array.from(imgs).map(async (img) => {
+    const absPath = img.getAttribute('data-abspath')
+    if (!absPath) return
+    try {
+      const result = await window.electronAPI.obsidian.readImageBase64(absPath)
+      if (result?.base64 && result?.mime) {
+        img.src = `data:${result.mime};base64,${result.base64}`
+      }
+    } catch {}
+  })
+  await Promise.all(loadPromises)
+}
+
+// When the user types in the contenteditable formatted view,
+// convert the edited HTML back to markdown via turndown.
+function onFormattedInput() {
+  if (!formattedEl.value) return
+  const html = formattedEl.value.innerHTML
+  const md = turndown.turndown(html)
+  // Set flag BEFORE updating so the watcher skips re-rendering
+  editingFormatted = true
+  editorContent.value = md
+}
+
+// Read a Blob as base64 (promise-based)
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result.split(',')[1])
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+}
+
+// Save image base64 to vault, insert markdown at cursor position, save file, refresh display
+async function saveAndInsertImage(base64, ext, cursorOffset) {
+  if (!store.activeFile) return
+
+  const fileName = `img-${Date.now()}.${ext}`
+  const fileDir = store.activeFile.path.replace(/[/\\][^/\\]+$/, '') || store.vaultPath
+
+  const result = await window.electronAPI.obsidian.saveImage(fileDir, fileName, base64)
+
+  if (!result || result.error) {
+    showLinkError(`Failed to save image: ${result?.error || 'unknown error'}`)
+    return
+  }
+
+  const imgMarkdown = `\n![${fileName}](${result.relativePath})\n`
+  const content = store.activeFile.content || ''
+
+  // Insert at cursor position if provided, otherwise append at end
+  let newContent
+  if (typeof cursorOffset === 'number' && cursorOffset >= 0 && cursorOffset <= content.length) {
+    newContent = content.slice(0, cursorOffset) + imgMarkdown + content.slice(cursorOffset)
+  } else {
+    newContent = content + imgMarkdown
+  }
+
+  // Directly update store content (bypass watcher chain to avoid race conditions)
+  store.activeFile.content = newContent
+  store.activeFile.dirty = true
+  editorContent.value = newContent
+
+  // Save immediately
+  await store.saveFile()
+
+  // Refresh display
+  editingFormatted = false
+  await refreshFormattedHtml()
+}
+
+// Get the cursor offset in markdown source corresponding to the current selection in the formatted view
+function getCursorMarkdownOffset() {
+  if (!formattedEl.value) return -1
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return -1
+
+  // Clone the DOM up to the cursor, convert to markdown, measure length
+  const range = sel.getRangeAt(0)
+  const preRange = document.createRange()
+  preRange.selectNodeContents(formattedEl.value)
+  preRange.setEnd(range.startContainer, range.startOffset)
+
+  const fragment = preRange.cloneContents()
+  const tempDiv = document.createElement('div')
+  tempDiv.appendChild(fragment)
+  const mdBefore = turndown.turndown(tempDiv.innerHTML)
+  return mdBefore.length
+}
+
+// Handle image paste in formatted view
+async function onFormattedPaste(e) {
+  const items = e.clipboardData?.items
+
+  // Capture cursor position before any async work
+  const cursorOffset = getCursorMarkdownOffset()
+
+  // Check browser clipboard for image data first (native Linux/Mac)
+  if (items && items.length > 0) {
+    let imageItem = null
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        imageItem = items[i]
+        break
+      }
+    }
+    if (imageItem) {
+      e.preventDefault()
+      const blob = imageItem.getAsFile()
+      if (!blob) { showLinkError('Could not read image from clipboard'); return }
+      try {
+        const base64 = await blobToBase64(blob)
+        const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg')
+        await saveAndInsertImage(base64, ext, cursorOffset)
+      } catch (err) {
+        showLinkError(`Image paste failed: ${err.message}`)
+      }
+      return
+    }
+  }
+
+  // WSL2 fallback: browser clipboard has no image data because WSLg
+  // doesn't bridge image binary. Ask PowerShell to read the Windows clipboard.
+  if (window.electronAPI?.getClipboardImage) {
+    const contentBeforePaste = store.activeFile?.content || ''
+    try {
+      const clip = await window.electronAPI.getClipboardImage()
+
+      if (clip?.hasImage && clip.base64) {
+        // Restore content to pre-paste state (undo the default text paste side-effect)
+        store.activeFile.content = contentBeforePaste
+        editorContent.value = contentBeforePaste
+
+        const ext = (clip.type?.split('/')[1] || 'png').replace('jpeg', 'jpg')
+        await saveAndInsertImage(clip.base64, ext, cursorOffset)
+        return
+      }
+    } catch {}
+  }
+
+  // No image found — let default paste proceed (text paste)
+}
+
+// Refresh HTML when file changes
+watch(() => store.activeFile?.path, async () => {
+  editMode.value = false
+  editingFormatted = false
+  await refreshFormattedHtml()
+})
+
+// Refresh HTML when content changes from source mode (not from formatted editing).
+// When editing in formatted mode, we skip this to avoid resetting the DOM + cursor.
+watch(editorContent, async () => {
+  if (editingFormatted) {
+    editingFormatted = false
+    return
+  }
+  await refreshFormattedHtml()
+})
+
+// Refresh HTML when switching back to formatted mode
+watch(editMode, async (val) => {
+  if (!val) await refreshFormattedHtml()
+})
 
 // Auto-focus new file/folder inputs
 watch(showNewFileInput, async (v) => { if (v) { await nextTick(); newFileInputRef.value?.focus() } })
 watch(showNewFolderInput, async (v) => { if (v) { await nextTick(); newFolderInputRef.value?.focus() } })
 
-async function submitManualPath() {
-  if (!manualPath.value.trim()) return
-  await store.setVaultManually(manualPath.value)
-  manualPath.value = ''
-  showVaultPathInput.value = false
+async function copySource() {
+  if (!store.activeFile?.content) return
+  try {
+    await navigator.clipboard.writeText(store.activeFile.content)
+    copied.value = true
+    if (copiedTimer) clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => { copied.value = false }, 2000)
+  } catch {}
+}
+
+function showLinkError(msg) {
+  linkError.value = msg
+  if (linkErrorTimer) clearTimeout(linkErrorTimer)
+  linkErrorTimer = setTimeout(() => { linkError.value = '' }, 6000)
+}
+
+async function handlePreviewClick(e) {
+  // Walk up from click target to find an <a> tag
+  let el = e.target
+  while (el && el.tagName !== 'A') {
+    if (el === e.currentTarget) return // no link found, do nothing
+    el = el.parentElement
+  }
+  if (!el || !el.href) return
+
+  e.preventDefault()
+  e.stopPropagation()
+
+  const href = el.getAttribute('href') || ''
+  const fullUrl = el.href // resolved by browser
+
+  // External URL — open in system browser
+  if (fullUrl.startsWith('http://') || fullUrl.startsWith('https://')) {
+    try {
+      if (window.electronAPI?.openExternal) {
+        const res = await window.electronAPI.openExternal(fullUrl)
+        if (res?.error) showLinkError(`Could not open link: ${res.error}`)
+      } else {
+        window.open(fullUrl, '_blank')
+      }
+    } catch (err) {
+      showLinkError(`Failed to open link: ${err.message}`)
+    }
+    return
+  }
+
+  // Internal .md link — try to open within vault
+  if (href.endsWith('.md') || href.includes('.md#')) {
+    const mdPath = href.split('#')[0]
+    // Resolve relative to current file's directory
+    const currentDir = store.activeFile?.path?.replace(/[/\\][^/\\]+$/, '') || store.vaultPath
+    const resolved = mdPath.startsWith('/')
+      ? store.vaultPath + mdPath
+      : currentDir + '/' + mdPath
+    try {
+      await store.openFile(resolved, mdPath.split('/').pop())
+    } catch (err) {
+      showLinkError(`Could not open note: ${mdPath}`)
+    }
+    return
+  }
+
+  // Anchor link (same page #fragment)
+  if (href.startsWith('#')) {
+    const target = document.getElementById(href.slice(1))
+    if (target) target.scrollIntoView({ behavior: 'smooth' })
+    return
+  }
+
+  // Unknown link type
+  showLinkError(`Cannot open link: ${href}`)
 }
 
 async function handleCreateFile(dir) {
@@ -507,7 +799,30 @@ const TreeNode = defineComponent({
   font-size: var(--fs-body);
   line-height: 1.75;
   color: #1E293B;
-  max-width: 800px;
+  width: 95%;
+  max-width: 95%;
+  outline: none;
+  cursor: text;
+}
+.prose-obsidian:focus {
+  outline: none;
+}
+.notes-source-editor {
+  width: 95%;
+  max-width: 95%;
+  height: 100%;
+  resize: none;
+  outline: none;
+  padding: 24px 0;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: var(--fs-secondary);
+  line-height: 1.7;
+  color: #1E293B;
+  background: #fff;
+  border: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 .prose-obsidian h1 { font-family: 'Figtree', serif; font-size: var(--fs-page-title); font-weight: 700; margin: 0 0 16px; color: #0F172A; border-bottom: 1px solid #E2E8F0; padding-bottom: 8px; }
 .prose-obsidian h2 { font-family: 'Figtree', serif; font-size: var(--fs-section); font-weight: 600; margin: 28px 0 12px; color: #1E293B; }

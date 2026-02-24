@@ -23,6 +23,9 @@ export const useChatsStore = defineStore('chats', () => {
         // Backfill persona fields for older chats
         if (chat.systemPersonaId === undefined) chat.systemPersonaId = null
         if (chat.userPersonaId === undefined) chat.userPersonaId = null
+        // Backfill provider/model fields for older chats
+        if (chat.provider === undefined) chat.provider = null
+        if (chat.model === undefined) chat.model = null
         // Clear stale streaming flags from messages persisted mid-stream
         for (const msg of chat.messages) {
           if (msg.streaming) msg.streaming = false
@@ -49,6 +52,9 @@ export const useChatsStore = defineStore('chats', () => {
       // Persona assignments (null = use default)
       systemPersonaId: null,
       userPersonaId: null,
+      // Per-chat provider/model (null = use global default from config)
+      provider: null,
+      model: null,
     }
     chats.value.unshift(chat)
     activeChatId.value = chat.id
@@ -112,6 +118,22 @@ export const useChatsStore = defineStore('chats', () => {
     await persist()
   }
 
+  async function setChatProvider(chatId, provider) {
+    const chat = chats.value.find(c => c.id === chatId)
+    if (!chat) return
+    chat.provider = provider
+    chat.updatedAt = Date.now()
+    await persist()
+  }
+
+  async function setChatModel(chatId, model) {
+    const chat = chats.value.find(c => c.id === chatId)
+    if (!chat) return
+    chat.model = model
+    chat.updatedAt = Date.now()
+    await persist()
+  }
+
   async function clearChat(chatId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (chat) {
@@ -128,6 +150,7 @@ export const useChatsStore = defineStore('chats', () => {
   return {
     chats, activeChatId, activeChat, isLoading,
     loadChats, createChat, removeChat, renameChat,
-    setActiveChat, addMessage, updateLastAssistantMessage, setChatPersona, clearChat, persist
+    setActiveChat, addMessage, updateLastAssistantMessage, setChatPersona,
+    setChatProvider, setChatModel, clearChat, persist
   }
 })

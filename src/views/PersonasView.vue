@@ -147,10 +147,14 @@ onMounted(async () => {
 })
 
 const systemPersonas = computed(() =>
-  personasStore.personas.filter(p => p.type === 'system')
+  personasStore.personas
+    .filter(p => p.type === 'system')
+    .sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
 )
 const userPersonas = computed(() =>
-  personasStore.personas.filter(p => p.type === 'user')
+  personasStore.personas
+    .filter(p => p.type === 'user')
+    .sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
 )
 
 const showWizard = ref(false)

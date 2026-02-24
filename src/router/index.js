@@ -3,7 +3,9 @@ import ChatsView from '../views/ChatsView.vue'
 import SkillsView from '../views/SkillsView.vue'
 import PersonasView from '../views/PersonasView.vue'
 import ConfigView from '../views/ConfigView.vue'
-import ObsidianView from '../views/ObsidianView.vue'
+import NotesView from '../views/NotesView.vue'
+import McpView from '../views/McpView.vue'
+import ToolsView from '../views/ToolsView.vue'
 
 export default createRouter({
   history: createWebHashHistory(),
@@ -12,7 +14,9 @@ export default createRouter({
     { path: '/chats',     component: ChatsView },
     { path: '/personas',  component: PersonasView },
     { path: '/skills',    component: SkillsView },
-    { path: '/obsidian',  component: ObsidianView },
+    { path: '/mcp',       component: McpView },
+    { path: '/tools',     component: ToolsView },
+    { path: '/notes',     component: NotesView },
     { path: '/config',    component: ConfigView }
   ]
 })

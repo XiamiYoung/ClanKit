@@ -10,7 +10,13 @@ export const useConfigStore = defineStore('config', () => {
     opusModel:   'anthropic/claude-opus-latest',
     haikuModel:  'anthropic/claude-haiku-latest',
     activeModel: 'sonnet',
-    skillsPath:  ''
+    skillsPath:  '',
+    openrouterApiKey:  '',
+    openrouterBaseURL: 'https://openrouter.ai/api',
+    openaiApiKey:      '',
+    openaiBaseURL:     'https://mlaas.virtuosgames.com',
+    openaiModel:       '',
+    defaultProvider:   'anthropic'
   })
 
   const activeModelId = computed(() => {

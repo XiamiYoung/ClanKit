@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- ── User message ─────────────────────────────────────────────────────── -->
-    <div v-if="message.role === 'user'" class="prose-sparkai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" />
+    <div v-if="message.role === 'user'" class="prose-sparkai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleCodeCopy" />
 
     <!-- ── Assistant message ────────────────────────────────────────────────── -->
     <template v-else>
@@ -51,7 +51,7 @@
     <template v-for="(seg, i) in message.segments" :key="i">
 
       <!-- Text segment -->
-      <div v-if="seg.type === 'text'" class="prose-sparkai" style="max-width:none;" v-html="renderMarkdown(seg.content)" />
+      <div v-if="seg.type === 'text'" class="prose-sparkai" style="max-width:none;" v-html="renderMarkdown(seg.content)" @click="handleCodeCopy" />
 
       <!-- File diff (file_operation write/append) -->
       <div v-else-if="seg.type === 'tool' && isFileWrite(seg)" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #d1d5db; font-size:0.78rem;">
@@ -158,6 +158,7 @@
             <pre class="rounded p-2 overflow-x-auto" style="background:#1e2432; color:#e2e8f0; font-size:0.72rem; margin:0; white-space:pre-wrap;">{{ expandedInputs[i] || JSON.stringify(seg.input, null, 2).length <= 50 ? JSON.stringify(seg.input, null, 2) : JSON.stringify(seg.input, null, 2).slice(0, 50) + '…' }}</pre>
             <button v-if="JSON.stringify(seg.input, null, 2).length > 50" @click.stop="expandedInputs[i] = !expandedInputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#3b82f6; background:none; border:none; padding:0;">{{ expandedInputs[i] ? 'Show less ▲' : 'View full ▼' }}</button>
           </div>
+          <!-- Tool images are rendered via the standalone inline image segment below -->
           <!-- Output -->
           <div v-if="seg.output !== undefined" class="px-3 py-2" style="border-top:1px solid #e2e8f0;">
             <div class="flex items-center justify-between mb-1">
@@ -169,6 +170,23 @@
             <pre class="rounded p-2 overflow-x-auto" style="background:#1e2432; color:#e2e8f0; font-size:0.72rem; margin:0; white-space:pre-wrap;">{{ expandedOutputs[i] || String(seg.output).length <= 50 ? String(seg.output) : String(seg.output).slice(0, 50) + '…' }}</pre>
             <button v-if="String(seg.output).length > 50" @click.stop="expandedOutputs[i] = !expandedOutputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#3b82f6; background:none; border:none; padding:0;">{{ expandedOutputs[i] ? 'Show less ▲' : 'View full ▼' }}</button>
           </div>
+        </div>
+      </div>
+
+      <!-- Inline images — always visible in the message flow (base64 or URL) -->
+      <div v-else-if="seg.type === 'image' && seg.images && seg.images.length > 0" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #e2e8f0; background:#f8fafc;">
+        <div class="px-3 py-2" style="background:#f1f5f9; border-bottom:1px solid #e2e8f0;">
+          <span style="font-size:0.75rem; font-weight:600; color:#475569;">Image{{ seg.images.length > 1 ? 's' : '' }}</span>
+          <span v-if="seg.source" style="font-size:0.7rem; color:#94a3b8; margin-left:6px;">from {{ seg.source }}</span>
+        </div>
+        <div class="inline-images-grid p-3">
+          <img
+            v-for="(img, imgIdx) in seg.images"
+            :key="imgIdx"
+            :src="resolveImageSrc(img)"
+            class="inline-image"
+            @click="openImageFullscreen(resolveImageSrc(img))"
+          />
         </div>
       </div>
 
@@ -236,13 +254,47 @@ function formatDuration(ms) {
   return `${mins} min${mins !== 1 ? 's' : ''} ${secs}s`
 }
 
+// ── Strip base64 blobs from text before rendering ────────────────────────────
+function stripBase64(text) {
+  if (!text || text.length < 200) return text
+  // Replace data:image URIs with a short label
+  let cleaned = text.replace(/data:(image\/[a-z+]+);base64,[A-Za-z0-9+/=]{100,}/gi,
+    (m, mime) => `[image: ${mime}]`)
+  // Replace any remaining long base64-like runs (100+ chars of pure base64 alphabet)
+  cleaned = cleaned.replace(/[A-Za-z0-9+/=]{200,}/g,
+    (m) => `[binary data: ${Math.round(m.length * 0.75 / 1024)}KB]`)
+  return cleaned
+}
+
 // ── Markdown renderer ────────────────────────────────────────────────────────
 function renderMarkdown(text) {
   if (!text) return ''
   try {
-    const raw = marked.parse(String(text), { breaks: true, gfm: true })
-    return DOMPurify.sanitize(raw)
+    const clean = stripBase64(String(text))
+    const raw = marked.parse(clean, { breaks: true, gfm: true })
+    const sanitized = DOMPurify.sanitize(raw)
+    // Wrap <pre><code> blocks with a header bar containing a copy button
+    return sanitized
+      .replace(/<pre><code(?:\s+class="language-(\w+)")?>/g, (m, lang) => {
+        const label = lang ? `<span class="code-lang">${lang}</span>` : ''
+        return `<div class="code-block-wrap"><div class="code-block-header">${label}<span class="code-copy-btn">Copy</span></div><pre><code${lang ? ` class="language-${lang}"` : ''}>`
+      })
+      .replace(/<\/code><\/pre>/g, '</code></pre></div>')
   } catch { return String(text) }
+}
+
+// ── Copy handler for code blocks (event delegation) ──────────────────────────
+function handleCodeCopy(e) {
+  const btn = e.target.closest('.code-copy-btn')
+  if (!btn) return
+  const wrap = btn.closest('.code-block-wrap')
+  if (!wrap) return
+  const code = wrap.querySelector('code')
+  if (!code) return
+  navigator.clipboard.writeText(code.textContent).then(() => {
+    btn.textContent = 'Copied!'
+    setTimeout(() => { btn.textContent = 'Copy' }, 2000)
+  }).catch(() => {})
 }
 
 // ── Todo panel state ─────────────────────────────────────────────────────────
@@ -359,6 +411,32 @@ async function copyBlock(key, text) {
   } catch {}
 }
 
+/**
+ * Resolve an image object to a renderable src string.
+ * Supports: { url }, { src }, { data, mimeType } (base64), or a plain string.
+ */
+function resolveImageSrc(img) {
+  if (typeof img === 'string') return img
+  if (img.url) return img.url
+  if (img.src) return img.src
+  if (img.data && img.mimeType) return `data:${img.mimeType};base64,${img.data}`
+  if (img.data) return `data:image/png;base64,${img.data}`
+  return ''
+}
+
+// Open image in a new window for fullscreen viewing
+function openImageFullscreen(dataUri) {
+  const win = window.open('', '_blank')
+  if (!win) return
+  const style = win.document.createElement('style')
+  style.textContent = 'body{margin:0;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;}img{max-width:100%;max-height:100vh;object-fit:contain;}'
+  win.document.head.appendChild(style)
+  win.document.title = 'MCP Image'
+  const img = win.document.createElement('img')
+  img.src = dataUri
+  win.document.body.appendChild(img)
+}
+
 // ── File diff ────────────────────────────────────────────────────────────────
 function getDiff(i, seg) {
   if (diffCache[i]) return diffCache[i]
@@ -412,6 +490,79 @@ function diffMarker(type) {
 </script>
 
 <style scoped>
+/* ── Code block copy button ────────────────────────────────────────────────── */
+:deep(.code-block-wrap) {
+  position: relative;
+  margin: 0.5rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #30363d;
+}
+:deep(.code-block-header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: #1e2432;
+  border-bottom: 1px solid #30363d;
+  min-height: 28px;
+}
+:deep(.code-lang) {
+  font-size: 0.7rem;
+  color: #8b949e;
+  font-family: monospace;
+  text-transform: lowercase;
+}
+:deep(.code-copy-btn) {
+  font-size: 0.7rem;
+  color: #8b949e;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  margin-left: auto;
+  user-select: none;
+}
+:deep(.code-copy-btn:hover) {
+  color: #e6edf3;
+  background: #30363d;
+}
+:deep(.code-block-wrap pre) {
+  margin: 0;
+  padding: 12px;
+  background: #0d1117;
+  overflow-x: auto;
+}
+:deep(.code-block-wrap code) {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.78rem;
+  color: #e6edf3;
+  background: transparent;
+  padding: 0;
+}
+
+/* ── Inline Images (base64 or URL) ─────────────────────────────────────────── */
+.inline-images-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.inline-image {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: opacity 0.15s, box-shadow 0.15s;
+  object-fit: contain;
+  background: #f8fafc;
+}
+.inline-image:hover {
+  opacity: 0.9;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 .wave-bar {
   display: inline-block;
   width: 3.5px;

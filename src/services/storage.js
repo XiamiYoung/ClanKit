@@ -23,7 +23,11 @@ function browserDefaultConfig() {
     sonnetModel: 'anthropic/claude-sonnet-latest',
     opusModel:   'anthropic/claude-opus-latest',
     haikuModel:  'anthropic/claude-3-5-haiku-20241022',
-    activeModel: 'sonnet'
+    activeModel: 'sonnet',
+    openrouterApiKey:  '',
+    openrouterBaseURL: 'https://openrouter.ai/api',
+    defaultProvider:   'anthropic',
+    systemPrompt:      ''
   }
 }
 
@@ -62,6 +66,16 @@ export const storage = {
   async savePersonas(personas) {
     if (isElectron()) return window.electronAPI.savePersonas(personas)
     lsSet('maestro:personas', personas)
+  },
+
+  // ── MCP Servers ──────────────────────────────────────────────────────────────
+  async getMcpServers() {
+    if (isElectron()) return window.electronAPI.getMcpServers()
+    return lsGet('sparkai:mcp-servers', [])
+  },
+  async saveMcpServers(servers) {
+    if (isElectron()) return window.electronAPI.saveMcpServers(servers)
+    lsSet('sparkai:mcp-servers', servers)
   },
 
 }
