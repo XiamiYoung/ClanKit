@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-screen w-screen overflow-hidden" style="background:#F8FAFC; color:#1E293B;">
+  <div class="flex h-screen w-screen overflow-hidden" style="background:#F2F2F7; color:#1A1A1A;">
     <Sidebar />
     <main class="flex-1 min-w-0 overflow-hidden">
       <RouterView />

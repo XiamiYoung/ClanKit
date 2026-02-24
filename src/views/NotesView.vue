@@ -1,5 +1,5 @@
 <template>
-  <div class="h-full flex flex-col overflow-hidden" style="background-color: #F8FAFC;">
+  <div class="h-full flex flex-col overflow-hidden" style="background-color: #F2F2F7;">
 
     <!-- ── NO VAULT SELECTED: Welcome screen ── -->
     <div v-if="!store.vaultPath" class="flex-1 flex items-center justify-center">
@@ -7,25 +7,25 @@
         <!-- Vault icon -->
         <div
           class="mx-auto mb-5 w-20 h-20 rounded-2xl flex items-center justify-center"
-          style="background: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%);"
+          style="background: #1A1A1A;"
         >
           <svg style="width:40px;height:40px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
             <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
           </svg>
         </div>
-        <h2 style="font-family:'Figtree',serif; font-size:var(--fs-page-title); font-weight:700; color:#1E293B; margin:0 0 8px;">
+        <h2 style="font-family:'Inter',serif; font-size:var(--fs-page-title); font-weight:700; color:#1A1A1A; margin:0 0 8px;">
           Notes
         </h2>
-        <p style="font-family:'Noto Sans',sans-serif; font-size:var(--fs-body); color:#64748B; margin:0 0 24px; line-height:1.6;">
+        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; margin:0 0 24px; line-height:1.6;">
           Select a folder to use as your vault. All markdown files in the folder will be available for viewing and editing.
         </p>
         <button
           @click="store.pickVault()"
           class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer"
-          style="background:#F1F5F9; color:#475569; font-family:'Noto Sans',sans-serif; font-size:var(--fs-body); border:1px solid #E2E8F0;"
-          @mouseenter="e => { e.currentTarget.style.background='#E2E8F0'; e.currentTarget.style.color='#1E293B' }"
-          @mouseleave="e => { e.currentTarget.style.background='#F1F5F9'; e.currentTarget.style.color='#475569' }"
+          style="background:#F5F5F5; color:#6B7280; font-family:'Inter',sans-serif; font-size:var(--fs-body); border:1px solid #E5E5EA;"
+          @mouseenter="e => { e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A' }"
+          @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#6B7280' }"
         >
           <svg style="width:20px;height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -40,15 +40,15 @@
       <!-- Header bar -->
       <div
         class="px-4 py-3 shrink-0 flex items-center justify-between"
-        style="background:#fff; border-bottom:1px solid #E2E8F0;"
+        style="background:#FFFFFF; border-bottom:1px solid #E5E5EA;"
       >
         <div class="flex items-center gap-3">
-          <h1 style="font-family:'Figtree',serif; font-size:var(--fs-section); font-weight:600; color:#1E293B; margin:0;">
+          <h1 style="font-family:'Inter',serif; font-size:var(--fs-section); font-weight:600; color:#1A1A1A; margin:0;">
             Notes
           </h1>
           <span
             class="px-2.5 py-0.5 rounded-lg truncate"
-            style="font-family:'Noto Sans',sans-serif; font-size:var(--fs-caption); color:#64748B; background:#F1F5F9; max-width:300px; border:1px solid #E2E8F0;"
+            style="font-family:'Inter',sans-serif; font-size:var(--fs-caption); color:#9CA3AF; background:#F5F5F5; max-width:300px; border:1px solid #E5E5EA;"
             :title="store.vaultPath"
           >{{ vaultName }}</span>
         </div>
@@ -56,9 +56,9 @@
           <button
             @click="store.pickVault()"
             class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer"
-            style="color:#64748B; background:#F1F5F9; border:1px solid #E2E8F0; font-family:'Noto Sans',sans-serif;"
-            @mouseenter="e => { e.currentTarget.style.background='#E2E8F0'; e.currentTarget.style.color='#1E293B' }"
-            @mouseleave="e => { e.currentTarget.style.background='#F1F5F9'; e.currentTarget.style.color='#64748B' }"
+            style="color:#9CA3AF; background:#F5F5F5; border:1px solid #E5E5EA; font-family:'Inter',sans-serif;"
+            @mouseenter="e => { e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A' }"
+            @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#9CA3AF' }"
             title="Change folder"
           >Browse</button>
         </div>
@@ -70,16 +70,16 @@
         <!-- ── LEFT: File Tree Panel ── -->
         <div
           class="shrink-0 flex flex-col overflow-hidden"
-          style="width:280px; min-width:280px; background:#FAFBFC; border-right:1px solid #E2E8F0;"
+          style="width:280px; min-width:280px; background:#F9F9F9; border-right:1px solid #E5E5EA;"
         >
           <!-- Tree toolbar -->
-          <div class="px-3 py-2 flex items-center gap-1 shrink-0" style="border-bottom:1px solid #E2E8F0;">
+          <div class="px-3 py-2 flex items-center gap-1 shrink-0" style="border-bottom:1px solid #E5E5EA;">
             <button
               @click="showNewFileInput = true; newItemParent = store.vaultPath"
               class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer"
-              style="color:#3B82F6; background:rgba(59,130,246,0.08); border:none; font-family:'Noto Sans',sans-serif;"
-              @mouseenter="e => e.currentTarget.style.background='rgba(59,130,246,0.15)'"
-              @mouseleave="e => e.currentTarget.style.background='rgba(59,130,246,0.08)'"
+              style="color:#007AFF; background:rgba(0,122,255,0.08); border:none; font-family:'Inter',sans-serif;"
+              @mouseenter="e => e.currentTarget.style.background='rgba(0,122,255,0.15)'"
+              @mouseleave="e => e.currentTarget.style.background='rgba(0,122,255,0.08)'"
               title="New file"
             >
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
@@ -88,9 +88,9 @@
             <button
               @click="showNewFolderInput = true; newItemParent = store.vaultPath"
               class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer"
-              style="color:#64748B; background:rgba(100,116,139,0.08); border:none; font-family:'Noto Sans',sans-serif;"
-              @mouseenter="e => e.currentTarget.style.background='rgba(100,116,139,0.15)'"
-              @mouseleave="e => e.currentTarget.style.background='rgba(100,116,139,0.08)'"
+              style="color:#9CA3AF; background:rgba(107,114,128,0.08); border:none; font-family:'Inter',sans-serif;"
+              @mouseenter="e => e.currentTarget.style.background='rgba(107,114,128,0.15)'"
+              @mouseleave="e => e.currentTarget.style.background='rgba(107,114,128,0.08)'"
               title="New folder"
             >
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
@@ -99,9 +99,9 @@
             <button
               @click="store.loadTree()"
               class="ml-auto p-1.5 rounded-md transition-colors cursor-pointer"
-              style="color:#94A3B8; border:none; background:transparent;"
-              @mouseenter="e => e.currentTarget.style.color='#475569'"
-              @mouseleave="e => e.currentTarget.style.color='#94A3B8'"
+              style="color:#9CA3AF; border:none; background:transparent;"
+              @mouseenter="e => e.currentTarget.style.color='#6B7280'"
+              @mouseleave="e => e.currentTarget.style.color='#9CA3AF'"
               title="Refresh"
             >
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -109,7 +109,7 @@
           </div>
 
           <!-- New file input (at root) -->
-          <div v-if="showNewFileInput && newItemParent === store.vaultPath" class="px-3 py-2" style="border-bottom:1px solid #E2E8F0;">
+          <div v-if="showNewFileInput && newItemParent === store.vaultPath" class="px-3 py-2" style="border-bottom:1px solid #E5E5EA;">
             <input
               ref="newFileInputRef"
               v-model="newItemName"
@@ -118,12 +118,12 @@
               @blur="showNewFileInput = false; newItemName = ''"
               placeholder="filename.md"
               class="w-full px-2 py-1 rounded text-sm"
-              style="border:1px solid #3B82F6; outline:none; font-family:'Noto Sans',sans-serif; font-size:var(--fs-caption);"
+              style="border:1px solid #007AFF; outline:none; font-family:'Inter',sans-serif; font-size:var(--fs-caption);"
             />
           </div>
 
           <!-- New folder input (at root) -->
-          <div v-if="showNewFolderInput && newItemParent === store.vaultPath" class="px-3 py-2" style="border-bottom:1px solid #E2E8F0;">
+          <div v-if="showNewFolderInput && newItemParent === store.vaultPath" class="px-3 py-2" style="border-bottom:1px solid #E5E5EA;">
             <input
               ref="newFolderInputRef"
               v-model="newItemName"
@@ -132,14 +132,14 @@
               @blur="showNewFolderInput = false; newItemName = ''"
               placeholder="folder name"
               class="w-full px-2 py-1 rounded text-sm"
-              style="border:1px solid #6366F1; outline:none; font-family:'Noto Sans',sans-serif; font-size:var(--fs-caption);"
+              style="border:1px solid #007AFF; outline:none; font-family:'Inter',sans-serif; font-size:var(--fs-caption);"
             />
           </div>
 
           <!-- File tree -->
           <div class="flex-1 overflow-y-auto py-1" style="scrollbar-width:thin;">
             <div v-if="store.fileTree.length === 0" class="px-4 py-8 text-center">
-              <p style="font-family:'Noto Sans',sans-serif; font-size:var(--fs-secondary); color:#94A3B8;">No markdown files found</p>
+              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">No markdown files found</p>
             </div>
             <TreeNode
               v-for="node in store.fileTree"
@@ -161,10 +161,10 @@
           <!-- No file selected -->
           <div v-if="!store.activeFile" class="flex-1 flex items-center justify-center">
             <div class="text-center">
-              <svg class="mx-auto mb-3" style="width:48px;height:48px;color:#CBD5E1;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <svg class="mx-auto mb-3" style="width:48px;height:48px;color:#D1D1D6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
               </svg>
-              <p style="font-family:'Noto Sans',sans-serif; font-size:var(--fs-body); color:#94A3B8;">Select a file to view</p>
+              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">Select a file to view</p>
             </div>
           </div>
 
@@ -173,12 +173,12 @@
             <!-- File header bar -->
             <div
               class="px-4 py-2.5 shrink-0 flex items-center gap-3"
-              style="border-bottom:1px solid #E2E8F0; background:#FAFBFC;"
+              style="border-bottom:1px solid #E5E5EA; background:#F9F9F9;"
             >
-              <svg style="width:16px;height:16px;color:#64748B;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg style="width:16px;height:16px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
               </svg>
-              <span style="font-family:'Noto Sans',sans-serif; font-size:var(--fs-body); font-weight:600; color:#1E293B;">
+              <span style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#1A1A1A;">
                 {{ store.activeFile.name }}
               </span>
               <div class="ml-auto flex items-center gap-2">
@@ -186,7 +186,7 @@
                 <span
                   v-if="saving"
                   class="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
-                  style="background:#DBEAFE; color:#1D4ED8; font-family:'Noto Sans',sans-serif;"
+                  style="background:rgba(0,122,255,0.1); color:#007AFF; font-family:'Inter',sans-serif;"
                 >
                   <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
                   saving
@@ -196,9 +196,9 @@
                 <button
                   @click="copySource"
                   class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                  style="color:#64748B; background:#F1F5F9; border:1px solid #E2E8F0; font-family:'Noto Sans',sans-serif;"
-                  @mouseenter="e => { e.currentTarget.style.background='#E2E8F0'; e.currentTarget.style.color='#1E293B' }"
-                  @mouseleave="e => { e.currentTarget.style.background='#F1F5F9'; e.currentTarget.style.color='#64748B' }"
+                  style="color:#9CA3AF; background:#F5F5F5; border:1px solid #E5E5EA; font-family:'Inter',sans-serif;"
+                  @mouseenter="e => { e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A' }"
+                  @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#9CA3AF' }"
                   title="Copy markdown source"
                 >
                   <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -208,23 +208,23 @@
                 <!-- Mode toggle -->
                 <div
                   class="flex rounded-lg overflow-hidden"
-                  style="border:1px solid #E2E8F0;"
+                  style="border:1px solid #E5E5EA;"
                 >
                   <button
                     @click="editMode = false"
                     class="px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
                     :style="!editMode
-                      ? 'background:#3B82F6; color:#fff; border:none;'
-                      : 'background:#fff; color:#64748B; border:none;'"
-                    style="font-family:'Noto Sans',sans-serif;"
+                      ? 'background:#1A1A1A; color:#fff; border:none;'
+                      : 'background:#fff; color:#9CA3AF; border:none;'"
+                    style="font-family:'Inter',sans-serif;"
                   >Formatted</button>
                   <button
                     @click="editMode = true"
                     class="px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
                     :style="editMode
-                      ? 'background:#3B82F6; color:#fff; border:none;'
-                      : 'background:#fff; color:#64748B; border:none;'"
-                    style="font-family:'Noto Sans',sans-serif;"
+                      ? 'background:#1A1A1A; color:#fff; border:none;'
+                      : 'background:#fff; color:#9CA3AF; border:none;'"
+                    style="font-family:'Inter',sans-serif;"
                   >Source</button>
                 </div>
               </div>
@@ -718,9 +718,9 @@ const TreeNode = defineComponent({
           class: 'flex items-center gap-2 py-1.5 pr-2 cursor-pointer transition-colors duration-100 group relative',
           style: {
             paddingLeft: indent + 'px',
-            background: isActive ? 'rgba(59,130,246,0.1)' : (hovered.value ? 'rgba(0,0,0,0.03)' : 'transparent'),
-            color: isActive ? '#3B82F6' : '#475569',
-            fontFamily: "'Noto Sans',sans-serif",
+            background: isActive ? 'rgba(0,122,255,0.08)' : (hovered.value ? 'rgba(0,0,0,0.03)' : 'transparent'),
+            color: isActive ? '#007AFF' : '#6B7280',
+            fontFamily: "'Inter',sans-serif",
             fontSize: 'var(--fs-secondary)',
           },
           onClick: () => {
@@ -733,7 +733,7 @@ const TreeNode = defineComponent({
           // Chevron for folders
           isDir ? h('svg', {
             style: {
-              width: '12px', height: '12px', flexShrink: 0, color: '#94A3B8',
+              width: '12px', height: '12px', flexShrink: 0, color: '#9CA3AF',
               transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
               transition: 'transform 0.15s'
             },
@@ -742,10 +742,10 @@ const TreeNode = defineComponent({
 
           // Icon
           isDir
-            ? h('svg', { style: 'width:16px;height:16px;flex-shrink:0;color:#F59E0B;', viewBox: '0 0 24 24', fill: 'currentColor' }, [
+            ? h('svg', { style: 'width:16px;height:16px;flex-shrink:0;color:#FF9500;', viewBox: '0 0 24 24', fill: 'currentColor' }, [
                 h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })
               ])
-            : h('svg', { style: 'width:16px;height:16px;flex-shrink:0;color:#94A3B8;', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+            : h('svg', { style: 'width:16px;height:16px;flex-shrink:0;color:#9CA3AF;', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
                 h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
                 h('polyline', { points: '14 2 14 8 20 8' })
               ]),
@@ -795,10 +795,10 @@ const TreeNode = defineComponent({
 
 <style>
 .prose-obsidian {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   line-height: 1.75;
-  color: #1E293B;
+  color: #1A1A1A;
   width: 95%;
   max-width: 95%;
   outline: none;
@@ -817,32 +817,32 @@ const TreeNode = defineComponent({
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
   font-size: var(--fs-secondary);
   line-height: 1.7;
-  color: #1E293B;
+  color: #1A1A1A;
   background: #fff;
   border: none;
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
-.prose-obsidian h1 { font-family: 'Figtree', serif; font-size: var(--fs-page-title); font-weight: 700; margin: 0 0 16px; color: #0F172A; border-bottom: 1px solid #E2E8F0; padding-bottom: 8px; }
-.prose-obsidian h2 { font-family: 'Figtree', serif; font-size: var(--fs-section); font-weight: 600; margin: 28px 0 12px; color: #1E293B; }
-.prose-obsidian h3 { font-family: 'Figtree', serif; font-size: var(--fs-subtitle); font-weight: 600; margin: 24px 0 8px; color: #334155; }
+.prose-obsidian h1 { font-family: 'Inter', serif; font-size: var(--fs-page-title); font-weight: 700; margin: 0 0 16px; color: #1A1A1A; border-bottom: 1px solid #E5E5EA; padding-bottom: 8px; }
+.prose-obsidian h2 { font-family: 'Inter', serif; font-size: var(--fs-section); font-weight: 600; margin: 28px 0 12px; color: #1A1A1A; }
+.prose-obsidian h3 { font-family: 'Inter', serif; font-size: var(--fs-subtitle); font-weight: 600; margin: 24px 0 8px; color: #1A1A1A; }
 .prose-obsidian p { margin: 0 0 12px; }
 .prose-obsidian ul, .prose-obsidian ol { margin: 0 0 12px; padding-left: 24px; }
 .prose-obsidian li { margin: 4px 0; }
 .prose-obsidian code {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.875em;
-  background: #F1F5F9;
+  background: #F5F5F5;
   padding: 2px 6px;
   border-radius: 4px;
-  color: #7C3AED;
+  color: #5856D6;
 }
 .prose-obsidian pre {
-  background: #0F172A;
-  color: #E2E8F0;
+  background: #1C1C1E;
+  color: #E5E5EA;
   padding: 16px;
-  border-radius: 8px;
+  border-radius: 12px;
   overflow-x: auto;
   margin: 0 0 16px;
   font-size: var(--fs-secondary);
@@ -855,18 +855,18 @@ const TreeNode = defineComponent({
   font-size: inherit;
 }
 .prose-obsidian blockquote {
-  border-left: 3px solid #3B82F6;
+  border-left: 3px solid #007AFF;
   margin: 0 0 12px;
   padding: 8px 16px;
-  color: #475569;
-  background: #F8FAFC;
+  color: #6B7280;
+  background: #F2F2F7;
   border-radius: 0 8px 8px 0;
 }
-.prose-obsidian a { color: #3B82F6; text-decoration: none; }
+.prose-obsidian a { color: #007AFF; text-decoration: none; }
 .prose-obsidian a:hover { text-decoration: underline; }
-.prose-obsidian hr { border: none; border-top: 1px solid #E2E8F0; margin: 24px 0; }
+.prose-obsidian hr { border: none; border-top: 1px solid #E5E5EA; margin: 24px 0; }
 .prose-obsidian table { border-collapse: collapse; margin: 0 0 16px; width: 100%; }
-.prose-obsidian th, .prose-obsidian td { border: 1px solid #E2E8F0; padding: 8px 12px; text-align: left; }
-.prose-obsidian th { background: #F8FAFC; font-weight: 600; }
+.prose-obsidian th, .prose-obsidian td { border: 1px solid #E5E5EA; padding: 8px 12px; text-align: left; }
+.prose-obsidian th { background: #F9F9F9; font-weight: 600; }
 .prose-obsidian img { max-width: 100%; border-radius: 8px; }
 </style>

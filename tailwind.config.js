@@ -8,30 +8,43 @@ export default {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#3B82F6',
-          dark:    '#1D4ED8',
-          light:   '#60A5FA',
+          DEFAULT: '#1A1A1A',
+          hover:   '#333333',
+          light:   '#F5F5F5',
         },
-        accent:  '#F97316',
+        accent: {
+          DEFAULT: '#007AFF',
+          hover:   '#0056CC',
+          light:   'rgba(0, 122, 255, 0.08)',
+        },
         bg: {
-          main:    '#F8FAFC',
-          card:    '#ffffff',
-          sidebar: '#0F172A',
+          main:    '#F2F2F7',
+          card:    '#FFFFFF',
+          sidebar: '#FFFFFF',
+          hover:   '#F5F5F5',
         },
         text: {
-          primary:   '#1E293B',
-          secondary: '#475569',
-          muted:     '#64748B',
+          primary:   '#1A1A1A',
+          secondary: '#6B7280',
+          muted:     '#9CA3AF',
         },
         border: {
-          DEFAULT: '#E2E8F0',
-          focus:   '#3B82F6',
+          DEFAULT: '#E5E5EA',
+          light:   '#F0F0F0',
+          focus:   '#007AFF',
         },
       },
       fontFamily: {
-        sans:    ['Noto Sans', 'system-ui', 'sans-serif', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'emoji'],
-        heading: ['Figtree', 'system-ui', 'sans-serif', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'emoji'],
+        sans:    ['Inter', 'Noto Sans', 'system-ui', '-apple-system', 'sans-serif', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'emoji'],
+        heading: ['Inter', 'Figtree', 'system-ui', '-apple-system', 'sans-serif', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'emoji'],
         mono:    ['JetBrains Mono', 'Fira Code', 'monospace'],
+      },
+      borderRadius: {
+        'sm':  '8px',
+        'md':  '12px',
+        'lg':  '16px',
+        'xl':  '20px',
+        '2xl': '24px',
       },
       animation: {
         'fade-in':    'fadeIn 200ms ease-out',
@@ -49,8 +62,9 @@ export default {
         }
       },
       boxShadow: {
-        card:       '0 2px 8px rgba(15, 23, 42, 0.06)',
-        'card-hover': '0 4px 16px rgba(15, 23, 42, 0.12)',
+        'card':       '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+        'card-hover': '0 4px 12px rgba(0,0,0,0.08)',
+        'card-lg':    '0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)',
       }
     }
   },

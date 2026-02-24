@@ -74,7 +74,7 @@ import { getAvatarDataUri } from './personaAvatars'
 
 const props = defineProps({
   persona: { type: Object, required: true },
-  gradient: { type: String, default: 'linear-gradient(135deg, #3B82F6, #6366F1)' },
+  gradient: { type: String, default: 'linear-gradient(135deg, #007AFF, #007AFF)' },
 })
 
 defineEmits(['click', 'edit', 'delete', 'set-default'])
@@ -93,27 +93,19 @@ const fallbackInitial = computed(() => {
   flex-direction: column;
   min-height: 160px;
   max-height: 240px;
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(226, 232, 240, 0.6);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow:
-    0 2px 6px rgba(15, 23, 42, 0.04),
-    0 8px 24px rgba(15, 23, 42, 0.03),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .persona-card:hover {
-  transform: translateY(-4px);
-  background: rgba(255, 255, 255, 0.82);
-  border-color: rgba(99, 102, 241, 0.3);
-  box-shadow:
-    0 12px 32px rgba(15, 23, 42, 0.08),
-    0 4px 16px rgba(59, 130, 246, 0.10),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transform: translateY(-3px);
+  background: #FFFFFF;
+  border-color: #E5E5EA;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 .persona-card:active {
   transform: translateY(-1px);
@@ -133,45 +125,45 @@ const fallbackInitial = computed(() => {
 }
 .persona-card-title-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .persona-card-name {
-  font-family: 'Figtree', sans-serif; font-size: var(--fs-body); font-weight: 700;
-  color: #0F172A; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body); font-weight: 700;
+  color: #1A1A1A; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .persona-card-type {
-  font-family: 'Noto Sans', sans-serif; font-size: 10px; font-weight: 600;
+  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 7px;
   border-radius: 4px; width: fit-content;
 }
-.persona-card-type.system { background: rgba(99, 102, 241, 0.1); color: #6366F1; }
+.persona-card-type.system { background: rgba(0, 122, 255, 0.1); color: #007AFF; }
 .persona-card-type.user { background: rgba(16, 185, 129, 0.1); color: #059669; }
 .persona-card-desc {
-  font-family: 'Noto Sans', sans-serif; font-size: var(--fs-secondary); color: #475569;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); color: #6B7280;
   line-height: 1.55; margin: 0 0 16px; flex: 1;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
 .persona-card-footer {
-  border-top: 1px solid rgba(226, 232, 240, 0.5); padding-top: 12px; margin-top: auto;
+  border-top: 1px solid rgba(229, 229, 234, 0.5); padding-top: 12px; margin-top: auto;
   display: flex; align-items: center; justify-content: space-between;
 }
 .persona-card-badges { display: flex; gap: 6px; }
 .persona-card-default-badge {
-  font-family: 'Noto Sans', sans-serif; font-size: 10px; font-weight: 600;
-  padding: 2px 8px; border-radius: 9999px; background: rgba(245, 158, 11, 0.1);
-  color: #D97706; display: flex; align-items: center; gap: 4px;
+  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: 9999px; background: #1A1A1A;
+  color: #FFFFFF; display: flex; align-items: center; gap: 4px;
 }
 .persona-card-builtin-badge {
-  font-family: 'Noto Sans', sans-serif; font-size: 10px; font-weight: 600;
-  padding: 2px 8px; border-radius: 9999px; background: rgba(99, 102, 241, 0.08);
-  color: #6366F1; display: flex; align-items: center;
+  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: 9999px; background: rgba(0,122,255,0.06);
+  color: #007AFF; display: flex; align-items: center;
 }
 .persona-card-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s ease; }
 .persona-card:hover .persona-card-actions { opacity: 1; }
 .persona-action-btn {
   width: 28px; height: 28px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  border: none; background: transparent; color: #64748B; cursor: pointer;
+  border: none; background: transparent; color: #9CA3AF; cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.persona-action-btn:hover { background: #F1F5F9; color: #3B82F6; }
+.persona-action-btn:hover { background: #F5F5F5; color: #007AFF; }
 .persona-action-btn.danger:hover { background: #FEE2E2; color: #DC2626; }
 
 @media (prefers-reduced-motion: reduce) {

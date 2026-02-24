@@ -61,7 +61,7 @@
             </div>
             <div v-else class="section-empty">
               <div class="section-empty-inner">
-                <svg style="width:28px;height:28px;color:#94A3B8;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <svg style="width:28px;height:28px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1M9 16h0M15 16h0"/>
                 </svg>
                 <p>No system personas yet.</p>
@@ -109,7 +109,7 @@
             </div>
             <div v-else class="section-empty">
               <div class="section-empty-inner">
-                <svg style="width:28px;height:28px;color:#94A3B8;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <svg style="width:28px;height:28px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                   <circle cx="12" cy="7" r="4"/>
                 </svg>
@@ -184,12 +184,12 @@ async function confirmDelete(persona) {
 }
 
 const CIRCLE_COLORS = [
-  '#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EC4899',
-  '#8B5CF6', '#14B8A6', '#EF4444', '#0EA5E9', '#F97316',
+  '#007AFF', '#007AFF', '#10B981', '#F59E0B', '#EC4899',
+  '#5856D6', '#14B8A6', '#EF4444', '#0EA5E9', '#F97316',
   '#A855F7', '#06B6D4', '#1E40AF', '#059669', '#D97706',
   '#7C3AED', '#DB2777', '#0891B2', '#DC2626', '#EA580C',
-  '#4F46E5', '#0D9488', '#B45309', '#9333EA', '#0369A1',
-  '#BE185D', '#1E293B', '#475569', '#78350F', '#064E3B',
+  '#0056CC', '#0D9488', '#B45309', '#9333EA', '#0369A1',
+  '#BE185D', '#1A1A1A', '#6B7280', '#78350F', '#064E3B',
   '#312E81', '#831843', '#134E4A', '#7C2D12', '#1E3A5F',
   '#4A1D96',
 ]
@@ -201,7 +201,7 @@ function getAvatarGradient(persona) {
     return `linear-gradient(135deg, ${c}, ${c}dd)`
   }
   return persona.type === 'system'
-    ? 'linear-gradient(135deg, #6366F1, #8B5CF6)'
+    ? 'linear-gradient(135deg, #007AFF, #5856D6)'
     : 'linear-gradient(135deg, #10B981, #059669)'
 }
 </script>
@@ -209,20 +209,14 @@ function getAvatarGradient(persona) {
 <style scoped>
 /* ── Page shell ──────────────────────────────────────────────────────────── */
 .personas-page {
-  background:
-    radial-gradient(ellipse at 10% 5%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 90% 15%, rgba(236, 72, 153, 0.06) 0%, transparent 45%),
-    radial-gradient(ellipse at 50% 85%, rgba(16, 185, 129, 0.06) 0%, transparent 50%),
-    #F8FAFC;
+  background: #F2F2F7;
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
 .personas-header {
   padding: 24px 32px 20px;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5EA;
 }
 .personas-header-top {
   display: flex;
@@ -230,16 +224,16 @@ function getAvatarGradient(persona) {
   justify-content: space-between;
 }
 .personas-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-page-title);
   font-weight: 700;
-  color: #0F172A;
+  color: #1A1A1A;
   margin: 0;
 }
 .personas-subtitle {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
-  color: #475569;
+  color: #6B7280;
   margin: 4px 0 0 0;
 }
 .personas-header-actions {
@@ -248,14 +242,14 @@ function getAvatarGradient(persona) {
   gap: 8px;
 }
 .persona-count-badge {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
-  color: #64748B;
-  background: rgba(241, 245, 249, 0.8);
+  color: #9CA3AF;
+  background: #F5F5F5;
   padding: 4px 12px;
   border-radius: 9999px;
-  border: 1px solid rgba(226, 232, 240, 0.5);
+  border: 1px solid #E5E5EA;
 }
 
 /* ── Catalog container ───────────────────────────────────────────────────── */
@@ -284,7 +278,7 @@ function getAvatarGradient(persona) {
   width: 1px;
   align-self: stretch;
   margin: 0 24px;
-  background: linear-gradient(180deg, transparent, rgba(148, 163, 184, 0.3) 15%, rgba(148, 163, 184, 0.3) 85%, transparent);
+  background: #E5E5EA;
 }
 @media (max-width: 800px) {
   .personas-columns {
@@ -295,7 +289,7 @@ function getAvatarGradient(persona) {
     width: 100%;
     height: 1px;
     margin: 0;
-    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.3), transparent);
+    background: #E5E5EA;
   }
 }
 
@@ -322,22 +316,22 @@ function getAvatarGradient(persona) {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 .section-icon.system {
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: #1A1A1A;
 }
 .section-icon.user {
-  background: linear-gradient(135deg, #10B981, #059669);
+  background: #007AFF;
 }
 .section-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-section);
   font-weight: 700;
-  color: #0F172A;
+  color: #1A1A1A;
   margin: 0;
 }
 .section-desc {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  color: #64748B;
+  color: #9CA3AF;
   margin: 2px 0 0 0;
 }
 
@@ -370,16 +364,14 @@ function getAvatarGradient(persona) {
   align-items: center;
   gap: 8px;
   padding: 28px 24px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1.5px dashed rgba(148, 163, 184, 0.35);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  border-radius: 16px;
+  background: #F9F9F9;
+  border: 1.5px dashed #D1D1D6;
 }
 .section-empty-inner p {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  color: #94A3B8;
+  color: #9CA3AF;
   margin: 0;
   text-align: center;
 }
@@ -391,7 +383,7 @@ function getAvatarGradient(persona) {
   gap: 6px;
   padding: 7px 14px;
   border-radius: 8px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
   border: none;
@@ -402,22 +394,20 @@ function getAvatarGradient(persona) {
   transform: scale(0.97);
 }
 .persona-add-btn.system {
-  background: #6366F1;
+  background: #1A1A1A;
   color: #fff;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  box-shadow: none;
 }
 .persona-add-btn.system:hover {
-  background: #4F46E5;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  background: #333;
 }
 .persona-add-btn.user {
-  background: #10B981;
+  background: #007AFF;
   color: #fff;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+  box-shadow: none;
 }
 .persona-add-btn.user:hover {
-  background: #059669;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  background: #0056CC;
 }
 
 @media (prefers-reduced-motion: reduce) {

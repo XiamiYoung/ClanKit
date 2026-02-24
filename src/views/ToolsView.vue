@@ -43,16 +43,16 @@
       <div class="text-center" style="max-width:420px;">
         <div
           class="mx-auto mb-5 w-20 h-20 rounded-2xl flex items-center justify-center"
-          style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);"
+          style="background: #FF9500;"
         >
           <svg style="width:40px;height:40px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
           </svg>
         </div>
-        <h2 style="font-family:'Figtree',sans-serif; font-size:var(--fs-section); font-weight:700; color:#1E293B; margin:0 0 8px;">
+        <h2 style="font-family:'Inter',sans-serif; font-size:var(--fs-section); font-weight:700; color:#1A1A1A; margin:0 0 8px;">
           No HTTP tools configured
         </h2>
-        <p style="font-family:'Noto Sans',sans-serif; font-size:var(--fs-body); color:#64748B; line-height:1.6; margin:0;">
+        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; line-height:1.6; margin:0;">
           Add an HTTP tool to give the AI agent access to external APIs and services.
           Tools can be enabled per chat session.
         </p>
@@ -62,11 +62,11 @@
     <!-- No search results -->
     <div v-else-if="filteredTools.length === 0 && searchQuery" class="flex-1 flex items-center justify-center tools-grid-bg">
       <div class="text-center">
-        <svg class="mx-auto" style="width:40px;height:40px;color:#94A3B8;margin-bottom:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg class="mx-auto" style="width:40px;height:40px;color:#9CA3AF;margin-bottom:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
         </svg>
-        <p style="font-family:'Figtree',sans-serif; font-size:var(--fs-body); font-weight:600; color:#475569; margin:0 0 4px;">No tools match "{{ searchQuery }}"</p>
-        <p style="font-family:'Noto Sans',sans-serif; font-size:var(--fs-secondary); color:#94A3B8; margin:0;">Try a different search term or clear the filter.</p>
+        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#6B7280; margin:0 0 4px;">No tools match "{{ searchQuery }}"</p>
+        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF; margin:0;">Try a different search term or clear the filter.</p>
       </div>
     </div>
 
@@ -331,16 +331,7 @@ function truncateEndpoint(ep) {
   return ep.length > 50 ? ep.slice(0, 47) + '...' : ep
 }
 
-const GRADIENTS = [
-  'linear-gradient(135deg, #F59E0B, #D97706)',
-  'linear-gradient(135deg, #3B82F6, #2563EB)',
-  'linear-gradient(135deg, #10B981, #059669)',
-  'linear-gradient(135deg, #8B5CF6, #6366F1)',
-  'linear-gradient(135deg, #EC4899, #DB2777)',
-  'linear-gradient(135deg, #14B8A6, #0D9488)',
-  'linear-gradient(135deg, #EF4444, #DC2626)',
-  'linear-gradient(135deg, #0EA5E9, #0284C7)',
-]
+const GRADIENTS = ['#FF9500', '#007AFF', '#34C759', '#5856D6', '#FF2D55', '#00C7BE', '#FF3B30', '#AF52DE']
 
 function cardGradient(idx) {
   return GRADIENTS[idx % GRADIENTS.length]
@@ -350,63 +341,61 @@ function cardGradient(idx) {
 <style scoped>
 /* ── Page shell ────────────────────────────────────────────────────────────── */
 .tools-page {
-  background: #F8FAFC;
+  background: #F2F2F7;
 }
 
 /* ── Header ────────────────────────────────────────────────────────────────── */
 .catalog-header {
   flex-shrink: 0;
   padding: 16px 24px 14px;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5EA;
 }
 .catalog-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-page-title);
   font-weight: 700;
-  color: #0F172A;
+  color: #1A1A1A;
   margin: 0;
 }
 .catalog-subtitle {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
-  color: #475569;
+  color: #6B7280;
   margin: 4px 0 0 0;
 }
 .catalog-count-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
-  color: #64748B;
-  background: rgba(241, 245, 249, 0.8);
+  color: #9CA3AF;
+  background: rgba(245, 245, 245, 0.8);
   padding: 5px 12px;
   border-radius: 9999px;
-  border: 1px solid rgba(226, 232, 240, 0.5);
+  border: 1px solid rgba(229, 229, 234, 0.5);
 }
 .catalog-add-btn {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  border-radius: 10px;
-  font-family: 'Noto Sans', sans-serif;
+  border-radius: 12px;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
-  background: #D97706;
+  background: #FF9500;
   color: #fff;
   border: none;
   cursor: pointer;
   transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.25);
+  box-shadow: none;
 }
 .catalog-add-btn:hover {
-  background: #B45309;
-  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35);
+  background: #CC7700;
+  box-shadow: none;
 }
 .catalog-add-btn:active {
   transform: scale(0.97);
@@ -424,7 +413,7 @@ function cardGradient(idx) {
   transform: translateY(-50%);
   width: 18px;
   height: 18px;
-  color: #94A3B8;
+  color: #9CA3AF;
   pointer-events: none;
   transition: color 0.2s;
 }
@@ -432,22 +421,22 @@ function cardGradient(idx) {
   width: 100%;
   padding: 11px 42px 11px 42px;
   border-radius: 12px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #E5E5EA;
   background: rgba(255, 255, 255, 0.8);
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
-  color: #1E293B;
+  color: #1A1A1A;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
-.catalog-search-input::placeholder { color: #94A3B8; font-weight: 400; }
-.catalog-search-input:hover { border-color: #94A3B8; }
+.catalog-search-input::placeholder { color: #9CA3AF; font-weight: 400; }
+.catalog-search-input:hover { border-color: #9CA3AF; }
 .catalog-search-input:focus {
-  border-color: #D97706;
-  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.12), 0 1px 3px rgba(15, 23, 42, 0.06);
+  border-color: #007AFF;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
 }
-.catalog-search-wrap:focus-within .catalog-search-icon { color: #D97706; }
+.catalog-search-wrap:focus-within .catalog-search-icon { color: #007AFF; }
 .catalog-search-clear {
   position: absolute;
   right: 10px;
@@ -459,19 +448,15 @@ function cardGradient(idx) {
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  color: #94A3B8;
+  color: #9CA3AF;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.catalog-search-clear:hover { background: #F1F5F9; color: #475569; }
+.catalog-search-clear:hover { background: #F5F5F5; color: #6B7280; }
 
 /* ── Grid background ───────────────────────────────────────────────────────── */
 .tools-grid-bg {
-  background:
-    radial-gradient(ellipse at 15% 10%, rgba(245, 158, 11, 0.10) 0%, transparent 50%),
-    radial-gradient(ellipse at 85% 20%, rgba(217, 119, 6, 0.08) 0%, transparent 45%),
-    radial-gradient(ellipse at 50% 80%, rgba(16, 185, 129, 0.06) 0%, transparent 50%),
-    #F8FAFC;
+  background: #F2F2F7;
 }
 
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
@@ -489,64 +474,54 @@ function cardGradient(idx) {
   position: relative;
   display: flex;
   flex-direction: column;
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(226, 232, 240, 0.6);
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease;
-  box-shadow:
-    0 1px 3px rgba(15, 23, 42, 0.06),
-    0 8px 24px rgba(15, 23, 42, 0.03),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 .tools-card:hover {
-  transform: translateY(-5px);
-  background: rgba(255, 255, 255, 0.78);
-  border-color: rgba(217, 119, 6, 0.35);
-  box-shadow:
-    0 1px 3px rgba(15, 23, 42, 0.06),
-    0 12px 32px rgba(15, 23, 42, 0.08),
-    0 4px 16px rgba(217, 119, 6, 0.10),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transform: translateY(-3px);
+  border-color: #D1D1D6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 .tools-card:active { transform: translateY(-1px); transition-duration: 0.1s; }
-.tools-card-accent { height: 3px; width: 100%; flex-shrink: 0; }
+.tools-card-accent { height: 4px; width: 100%; flex-shrink: 0; }
 .tools-card-body { padding: 20px 20px 16px; display: flex; flex-direction: column; flex: 1; }
 .tools-card-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .tools-card-icon {
   width: 36px; height: 36px;
-  border-radius: 10px;
+  border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+  box-shadow: none;
 }
 .tools-card-name {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 700;
-  color: #1E293B;
+  color: #1A1A1A;
   margin: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tools-category-badge {
   display: inline-flex;
   align-items: center;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 6px;
-  background: #FEF3C7;
-  color: #92400E;
+  background: #FFF5E6;
+  color: #8B5E00;
   flex-shrink: 0;
 }
 .tools-card-desc {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  color: #475569;
+  color: #6B7280;
   line-height: 1.55;
   margin: 0 0 14px;
   flex: 1;
@@ -556,7 +531,7 @@ function cardGradient(idx) {
   overflow: hidden;
 }
 .tools-card-footer {
-  border-top: 1px solid rgba(226, 232, 240, 0.5);
+  border-top: 1px solid rgba(229, 229, 234, 0.5);
   padding-top: 12px;
   margin-top: auto;
   display: flex;
@@ -571,14 +546,14 @@ function cardGradient(idx) {
   border-radius: 4px;
   flex-shrink: 0;
 }
-.method-get { background: #DBEAFE; color: #1D4ED8; }
+.method-get { background: #DBEAFE; color: #0056CC; }
 .method-post { background: #D1FAE5; color: #065F46; }
-.method-put { background: #FEF3C7; color: #92400E; }
+.method-put { background: #FFF5E6; color: #8B5E00; }
 .method-delete { background: #FEE2E2; color: #991B1B; }
 .tools-card-endpoint {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: var(--fs-caption);
-  color: #94A3B8;
+  color: #9CA3AF;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   flex: 1;
 }
@@ -588,7 +563,7 @@ function cardGradient(idx) {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
@@ -598,15 +573,12 @@ function cardGradient(idx) {
 .tools-modal {
   width: min(640px, 95vw);
   max-height: 85vh;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
   border-radius: 20px;
   box-shadow:
     0 25px 60px rgba(0, 0, 0, 0.18),
-    0 8px 32px rgba(217, 119, 6, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    0 8px 32px rgba(255, 149, 0, 0.08);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -616,7 +588,7 @@ function cardGradient(idx) {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid #E5E5EA;
 }
 .tools-modal-header-left {
   display: flex;
@@ -631,13 +603,13 @@ function cardGradient(idx) {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: #D97706;
+  background: #FF9500;
 }
 .tools-modal-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-subtitle);
   font-weight: 700;
-  color: #0F172A;
+  color: #1A1A1A;
   margin: 0;
 }
 .tools-modal-close {
@@ -649,11 +621,11 @@ function cardGradient(idx) {
   justify-content: center;
   border: none;
   background: transparent;
-  color: #64748B;
+  color: #9CA3AF;
   cursor: pointer;
   transition: background 0.15s;
 }
-.tools-modal-close:hover { background: #F1F5F9; }
+.tools-modal-close:hover { background: #F5F5F5; }
 .tools-modal-body {
   flex: 1;
   overflow-y: auto;
@@ -666,7 +638,7 @@ function cardGradient(idx) {
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 24px;
-  border-top: 1px solid #E2E8F0;
+  border-top: 1px solid #E5E5EA;
 }
 
 /* ── Form fields ───────────────────────────────────────────────────────────── */
@@ -674,7 +646,7 @@ function cardGradient(idx) {
 .form-row { display: flex; gap: 12px; }
 .form-label {
   display: block;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
   color: #374151;
@@ -684,49 +656,49 @@ function cardGradient(idx) {
   width: 100%;
   padding: 9px 12px;
   border-radius: 8px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #E5E5EA;
   background: #fff;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
-  color: #1E293B;
+  color: #1A1A1A;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .form-input:focus {
-  border-color: #D97706;
-  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.1);
+  border-color: #007AFF;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
 }
 .form-input-sm {
   width: 100%;
   padding: 7px 10px;
   border-radius: 6px;
-  border: 1px solid #E2E8F0;
-  background: #FAFBFC;
-  font-family: 'Noto Sans', sans-serif;
+  border: 1px solid #E5E5EA;
+  background: #F9F9F9;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  color: #1E293B;
+  color: #1A1A1A;
   outline: none;
   transition: border-color 0.15s;
 }
-.form-input-sm:focus { border-color: #D97706; }
+.form-input-sm:focus { border-color: #007AFF; }
 .form-textarea {
   width: 100%;
   padding: 8px 10px;
   border-radius: 6px;
-  border: 1px solid #E2E8F0;
-  background: #FAFBFC;
+  border: 1px solid #E5E5EA;
+  background: #F9F9F9;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
-  color: #1E293B;
+  color: #1A1A1A;
   outline: none;
   resize: vertical;
   transition: border-color 0.15s;
 }
-.form-textarea:focus { border-color: #D97706; }
+.form-textarea:focus { border-color: #007AFF; }
 .form-hint {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
-  color: #94A3B8;
+  color: #9CA3AF;
   margin: 4px 0 0;
 }
 select.form-input {
@@ -738,7 +710,7 @@ select.form-input {
 .env-section {
   margin-top: 8px;
   padding-top: 16px;
-  border-top: 1px solid #E2E8F0;
+  border-top: 1px solid #E5E5EA;
 }
 .env-header {
   display: flex;
@@ -747,10 +719,10 @@ select.form-input {
   margin-bottom: 12px;
 }
 .env-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 700;
-  color: #1E293B;
+  color: #1A1A1A;
   margin: 0;
 }
 .env-add-btn {
@@ -759,27 +731,27 @@ select.form-input {
   gap: 4px;
   padding: 5px 12px;
   border-radius: 6px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
   font-weight: 600;
-  background: #FEF3C7;
-  color: #D97706;
+  background: #FFF5E6;
+  color: #FF9500;
   border: none;
   cursor: pointer;
   transition: background 0.15s;
 }
-.env-add-btn:hover { background: #FDE68A; }
+.env-add-btn:hover { background: #FFE5B4; }
 .env-empty {
   padding: 20px;
   border-radius: 10px;
-  background: #F8FAFC;
-  border: 1.5px dashed #CBD5E1;
+  background: #F2F2F7;
+  border: 1.5px dashed #D1D1D6;
   text-align: center;
 }
 .env-empty p {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  color: #94A3B8;
+  color: #9CA3AF;
   margin: 0;
 }
 .env-row {
@@ -793,7 +765,7 @@ select.form-input {
   display: flex; align-items: center; justify-content: center;
   border-radius: 6px;
   border: none; background: none;
-  color: #94A3B8; cursor: pointer;
+  color: #9CA3AF; cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s, color 0.15s;
 }
@@ -803,30 +775,30 @@ select.form-input {
 .modal-cancel-btn {
   padding: 8px 18px;
   border-radius: 8px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 500;
-  background: #F1F5F9;
-  color: #475569;
+  background: #F5F5F5;
+  color: #6B7280;
   border: none;
   cursor: pointer;
   transition: background 0.15s;
 }
-.modal-cancel-btn:hover { background: #E2E8F0; }
+.modal-cancel-btn:hover { background: #E5E5EA; }
 .modal-save-btn {
   padding: 8px 22px;
   border-radius: 8px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
-  background: #D97706;
+  background: #FF9500;
   color: #fff;
   border: none;
   cursor: pointer;
   transition: background 0.15s, opacity 0.15s;
-  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25);
+  box-shadow: none;
 }
-.modal-save-btn:hover { background: #B45309; }
+.modal-save-btn:hover { background: #CC7700; }
 .modal-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .modal-delete-btn {
   display: flex;
@@ -834,7 +806,7 @@ select.form-input {
   gap: 5px;
   padding: 8px 14px;
   border-radius: 8px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
   background: #FEF2F2;

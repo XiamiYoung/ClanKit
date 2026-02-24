@@ -43,17 +43,17 @@
       <div class="text-center" style="max-width:420px;">
         <div
           class="mx-auto mb-5 w-20 h-20 rounded-2xl flex items-center justify-center"
-          style="background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%);"
+          style="background: #1A1A1A;"
         >
           <svg style="width:40px;height:40px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
             <circle cx="12" cy="12" r="3"/>
           </svg>
         </div>
-        <h2 style="font-family:'Figtree',sans-serif; font-size:var(--fs-section); font-weight:700; color:#1E293B; margin:0 0 8px;">
+        <h2 style="font-family:'Inter',sans-serif; font-size:var(--fs-section); font-weight:700; color:#1A1A1A; margin:0 0 8px;">
           No MCP servers configured
         </h2>
-        <p style="font-family:'Noto Sans',sans-serif; font-size:var(--fs-body); color:#64748B; line-height:1.6; margin:0;">
+        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; line-height:1.6; margin:0;">
           Add an MCP server to connect external tools and services to the AI agent.
           Tools are discovered automatically from the server.
         </p>
@@ -63,11 +63,11 @@
     <!-- No search results -->
     <div v-else-if="filteredServers.length === 0 && searchQuery" class="flex-1 flex items-center justify-center mcp-grid-bg">
       <div class="text-center">
-        <svg class="mx-auto" style="width:40px;height:40px;color:#94A3B8;margin-bottom:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg class="mx-auto" style="width:40px;height:40px;color:#9CA3AF;margin-bottom:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
         </svg>
-        <p style="font-family:'Figtree',sans-serif; font-size:var(--fs-body); font-weight:600; color:#475569; margin:0 0 4px;">No servers match "{{ searchQuery }}"</p>
-        <p style="font-family:'Noto Sans',sans-serif; font-size:var(--fs-secondary); color:#94A3B8; margin:0;">Try a different search term or clear the filter.</p>
+        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#6B7280; margin:0 0 4px;">No servers match "{{ searchQuery }}"</p>
+        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF; margin:0;">Try a different search term or clear the filter.</p>
       </div>
     </div>
 
@@ -416,16 +416,7 @@ function truncateCommand(server) {
   return cmd.length > 45 ? cmd.slice(0, 42) + '...' : cmd
 }
 
-const GRADIENTS = [
-  'linear-gradient(135deg, #8B5CF6, #6366F1)',
-  'linear-gradient(135deg, #3B82F6, #2563EB)',
-  'linear-gradient(135deg, #10B981, #059669)',
-  'linear-gradient(135deg, #F59E0B, #D97706)',
-  'linear-gradient(135deg, #EC4899, #DB2777)',
-  'linear-gradient(135deg, #14B8A6, #0D9488)',
-  'linear-gradient(135deg, #EF4444, #DC2626)',
-  'linear-gradient(135deg, #0EA5E9, #0284C7)',
-]
+const GRADIENTS = ['#1A1A1A', '#007AFF', '#34C759', '#FF9500', '#FF2D55', '#5856D6', '#FF3B30', '#00C7BE']
 
 function cardGradient(idx) {
   return GRADIENTS[idx % GRADIENTS.length]
@@ -435,63 +426,60 @@ function cardGradient(idx) {
 <style scoped>
 /* ── Page shell ────────────────────────────────────────────────────────────── */
 .mcp-page {
-  background: #F8FAFC;
+  background: #F2F2F7;
 }
 
 /* ── Header ────────────────────────────────────────────────────────────────── */
 .catalog-header {
   flex-shrink: 0;
   padding: 16px 24px 14px;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5EA;
 }
 .catalog-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-page-title);
   font-weight: 700;
-  color: #0F172A;
+  color: #1A1A1A;
   margin: 0;
 }
 .catalog-subtitle {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
-  color: #475569;
+  color: #6B7280;
   margin: 4px 0 0 0;
 }
 .catalog-count-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
-  color: #64748B;
+  color: #9CA3AF;
   background: rgba(241, 245, 249, 0.8);
   padding: 5px 12px;
   border-radius: 9999px;
-  border: 1px solid rgba(226, 232, 240, 0.5);
+  border: 1px solid rgba(229, 229, 234, 0.5);
 }
 .catalog-add-btn {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  border-radius: 10px;
-  font-family: 'Noto Sans', sans-serif;
+  border-radius: 12px;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
-  background: #6366F1;
+  background: #1A1A1A;
   color: #fff;
   border: none;
   cursor: pointer;
-  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  transition: background 0.2s, transform 0.15s;
+  box-shadow: none;
 }
 .catalog-add-btn:hover {
-  background: #4F46E5;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  background: #333;
 }
 .catalog-add-btn:active {
   transform: scale(0.97);
@@ -509,7 +497,7 @@ function cardGradient(idx) {
   transform: translateY(-50%);
   width: 18px;
   height: 18px;
-  color: #94A3B8;
+  color: #9CA3AF;
   pointer-events: none;
   transition: color 0.2s;
 }
@@ -517,22 +505,22 @@ function cardGradient(idx) {
   width: 100%;
   padding: 11px 42px 11px 42px;
   border-radius: 12px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #E5E5EA;
   background: rgba(255, 255, 255, 0.8);
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
-  color: #1E293B;
+  color: #1A1A1A;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
-.catalog-search-input::placeholder { color: #94A3B8; font-weight: 400; }
-.catalog-search-input:hover { border-color: #94A3B8; }
+.catalog-search-input::placeholder { color: #9CA3AF; font-weight: 400; }
+.catalog-search-input:hover { border-color: #9CA3AF; }
 .catalog-search-input:focus {
-  border-color: #6366F1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12), 0 1px 3px rgba(15, 23, 42, 0.06);
+  border-color: #007AFF;
+  box-shadow: 0 0 0 3px rgba(0,122,255,0.1);
 }
-.catalog-search-wrap:focus-within .catalog-search-icon { color: #6366F1; }
+.catalog-search-wrap:focus-within .catalog-search-icon { color: #007AFF; }
 .catalog-search-clear {
   position: absolute;
   right: 10px;
@@ -544,19 +532,15 @@ function cardGradient(idx) {
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  color: #94A3B8;
+  color: #9CA3AF;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.catalog-search-clear:hover { background: #F1F5F9; color: #475569; }
+.catalog-search-clear:hover { background: #F5F5F5; color: #6B7280; }
 
 /* ── Grid background ───────────────────────────────────────────────────────── */
 .mcp-grid-bg {
-  background:
-    radial-gradient(ellipse at 15% 10%, rgba(139, 92, 246, 0.10) 0%, transparent 50%),
-    radial-gradient(ellipse at 85% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 45%),
-    radial-gradient(ellipse at 50% 80%, rgba(16, 185, 129, 0.06) 0%, transparent 50%),
-    #F8FAFC;
+  background: #F2F2F7;
 }
 
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
@@ -574,45 +558,35 @@ function cardGradient(idx) {
   position: relative;
   display: flex;
   flex-direction: column;
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(226, 232, 240, 0.6);
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease;
-  box-shadow:
-    0 1px 3px rgba(15, 23, 42, 0.06),
-    0 8px 24px rgba(15, 23, 42, 0.03),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .mcp-card:hover {
-  transform: translateY(-5px);
-  background: rgba(255, 255, 255, 0.78);
-  border-color: rgba(99, 102, 241, 0.35);
-  box-shadow:
-    0 1px 3px rgba(15, 23, 42, 0.06),
-    0 12px 32px rgba(15, 23, 42, 0.08),
-    0 4px 16px rgba(99, 102, 241, 0.10),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transform: translateY(-3px);
+  border-color: #D1D1D6;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 .mcp-card:active { transform: translateY(-1px); transition-duration: 0.1s; }
-.mcp-card-accent { height: 3px; width: 100%; flex-shrink: 0; }
+.mcp-card-accent { height: 4px; width: 100%; flex-shrink: 0; }
 .mcp-card-body { padding: 20px 20px 16px; display: flex; flex-direction: column; flex: 1; }
 .mcp-card-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .mcp-card-icon {
   width: 36px; height: 36px;
-  border-radius: 10px;
+  border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+  box-shadow: none;
 }
 .mcp-card-name {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 700;
-  color: #1E293B;
+  color: #1A1A1A;
   margin: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -620,19 +594,19 @@ function cardGradient(idx) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 6px;
 }
 .mcp-runtime-badge.running {
-  background: #F0FDF4;
-  color: #059669;
+  background: #E8F8EF;
+  color: #248A3D;
 }
 .mcp-runtime-badge.stopped {
-  background: #F1F5F9;
-  color: #94A3B8;
+  background: #F5F5F5;
+  color: #9CA3AF;
 }
 .mcp-runtime-dot {
   width: 6px;
@@ -641,15 +615,15 @@ function cardGradient(idx) {
   flex-shrink: 0;
 }
 .mcp-runtime-badge.running .mcp-runtime-dot {
-  background: #10B981;
+  background: #34C759;
 }
 .mcp-runtime-badge.stopped .mcp-runtime-dot {
-  background: #CBD5E1;
+  background: #D1D1D6;
 }
 .mcp-card-desc {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  color: #475569;
+  color: #6B7280;
   line-height: 1.55;
   margin: 0 0 14px;
   flex: 1;
@@ -659,7 +633,7 @@ function cardGradient(idx) {
   overflow: hidden;
 }
 .mcp-card-footer {
-  border-top: 1px solid rgba(226, 232, 240, 0.5);
+  border-top: 1px solid rgba(229, 229, 234, 0.5);
   padding-top: 12px;
   margin-top: auto;
   display: flex;
@@ -669,7 +643,7 @@ function cardGradient(idx) {
 .mcp-card-endpoint {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: var(--fs-caption);
-  color: #94A3B8;
+  color: #9CA3AF;
   display: flex; align-items: center; gap: 5px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   max-width: 100%;
@@ -680,7 +654,7 @@ function cardGradient(idx) {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
@@ -690,15 +664,10 @@ function cardGradient(idx) {
 .mcp-modal {
   width: min(640px, 95vw);
   max-height: 85vh;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
   border-radius: 20px;
-  box-shadow:
-    0 25px 60px rgba(0, 0, 0, 0.18),
-    0 8px 32px rgba(99, 102, 241, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -708,7 +677,7 @@ function cardGradient(idx) {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid #E5E5EA;
 }
 .mcp-modal-header-left {
   display: flex;
@@ -723,13 +692,13 @@ function cardGradient(idx) {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: #6366F1;
+  background: #1A1A1A;
 }
 .mcp-modal-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-subtitle);
   font-weight: 700;
-  color: #0F172A;
+  color: #1A1A1A;
   margin: 0;
 }
 .mcp-modal-close {
@@ -741,11 +710,11 @@ function cardGradient(idx) {
   justify-content: center;
   border: none;
   background: transparent;
-  color: #64748B;
+  color: #9CA3AF;
   cursor: pointer;
   transition: background 0.15s;
 }
-.mcp-modal-close:hover { background: #F1F5F9; }
+.mcp-modal-close:hover { background: #F5F5F5; }
 .mcp-modal-body {
   flex: 1;
   overflow-y: auto;
@@ -758,35 +727,35 @@ function cardGradient(idx) {
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 24px;
-  border-top: 1px solid #E2E8F0;
+  border-top: 1px solid #E5E5EA;
 }
 .modal-cancel-btn {
   padding: 8px 18px;
   border-radius: 8px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 500;
-  background: #F1F5F9;
-  color: #475569;
+  background: #F5F5F5;
+  color: #6B7280;
   border: none;
   cursor: pointer;
   transition: background 0.15s;
 }
-.modal-cancel-btn:hover { background: #E2E8F0; }
+.modal-cancel-btn:hover { background: #E5E5EA; }
 .modal-save-btn {
   padding: 8px 22px;
   border-radius: 8px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
-  background: #6366F1;
+  background: #1A1A1A;
   color: #fff;
   border: none;
   cursor: pointer;
   transition: background 0.15s, opacity 0.15s;
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
+  box-shadow: none;
 }
-.modal-save-btn:hover { background: #4F46E5; }
+.modal-save-btn:hover { background: #333; }
 .modal-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .modal-delete-btn {
   display: flex;
@@ -794,7 +763,7 @@ function cardGradient(idx) {
   gap: 5px;
   padding: 8px 14px;
   border-radius: 8px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
   background: #FEF2F2;
@@ -809,7 +778,7 @@ function cardGradient(idx) {
 .form-group { margin-bottom: 16px; }
 .form-label {
   display: block;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
   color: #374151;
@@ -819,49 +788,49 @@ function cardGradient(idx) {
   width: 100%;
   padding: 9px 12px;
   border-radius: 8px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #E5E5EA;
   background: #fff;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
-  color: #1E293B;
+  color: #1A1A1A;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .form-input:focus {
-  border-color: #6366F1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: #1A1A1A;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
 }
 .form-input-sm {
   width: 100%;
   padding: 7px 10px;
   border-radius: 6px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #E5E5EA;
   background: #FAFBFC;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  color: #1E293B;
+  color: #1A1A1A;
   outline: none;
   transition: border-color 0.15s;
 }
-.form-input-sm:focus { border-color: #6366F1; }
+.form-input-sm:focus { border-color: #1A1A1A; }
 .form-textarea {
   width: 100%;
   padding: 8px 10px;
   border-radius: 6px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #E5E5EA;
   background: #FAFBFC;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
-  color: #1E293B;
+  color: #1A1A1A;
   outline: none;
   resize: vertical;
   transition: border-color 0.15s;
 }
-.form-textarea:focus { border-color: #6366F1; }
+.form-textarea:focus { border-color: #1A1A1A; }
 .form-hint {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
-  color: #94A3B8;
+  color: #9CA3AF;
   margin: 4px 0 0;
 }
 
@@ -869,7 +838,7 @@ function cardGradient(idx) {
 .env-section {
   margin-top: 8px;
   padding-top: 16px;
-  border-top: 1px solid #E2E8F0;
+  border-top: 1px solid #E5E5EA;
 }
 .env-header {
   display: flex;
@@ -878,10 +847,10 @@ function cardGradient(idx) {
   margin-bottom: 12px;
 }
 .env-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 700;
-  color: #1E293B;
+  color: #1A1A1A;
   margin: 0;
 }
 .env-add-btn {
@@ -890,11 +859,11 @@ function cardGradient(idx) {
   gap: 4px;
   padding: 5px 12px;
   border-radius: 6px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
   font-weight: 600;
   background: #EEF2FF;
-  color: #6366F1;
+  color: #1A1A1A;
   border: none;
   cursor: pointer;
   transition: background 0.15s;
@@ -903,14 +872,14 @@ function cardGradient(idx) {
 .env-empty {
   padding: 20px;
   border-radius: 10px;
-  background: #F8FAFC;
-  border: 1.5px dashed #CBD5E1;
+  background: #F2F2F7;
+  border: 1.5px dashed #D1D1D6;
   text-align: center;
 }
 .env-empty p {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  color: #94A3B8;
+  color: #9CA3AF;
   margin: 0;
 }
 .env-row {
@@ -924,7 +893,7 @@ function cardGradient(idx) {
   display: flex; align-items: center; justify-content: center;
   border-radius: 6px;
   border: none; background: none;
-  color: #94A3B8; cursor: pointer;
+  color: #9CA3AF; cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s, color 0.15s;
 }
@@ -934,7 +903,7 @@ function cardGradient(idx) {
 .test-section {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #E2E8F0;
+  border-top: 1px solid #E5E5EA;
 }
 .test-btn {
   display: flex;
@@ -942,16 +911,16 @@ function cardGradient(idx) {
   gap: 6px;
   padding: 8px 18px;
   border-radius: 8px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
-  background: #F0FDF4;
-  color: #059669;
-  border: 1px solid #BBF7D0;
+  background: #E8F8EF;
+  color: #248A3D;
+  border: 1px solid #B4E4C7;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
-.test-btn:hover { background: #DCFCE7; border-color: #86EFAC; }
+.test-btn:hover { background: #D4F0E0; border-color: #86EFAC; }
 .test-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .test-result {
@@ -960,23 +929,23 @@ function cardGradient(idx) {
   border-radius: 10px;
 }
 .test-result.success {
-  background: #F0FDF4;
-  border: 1px solid #BBF7D0;
+  background: #E8F8EF;
+  border: 1px solid #B4E4C7;
 }
 .test-result.error {
   background: #FEF2F2;
   border: 1px solid #FECACA;
 }
 .test-result-title {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
   margin: 0 0 8px;
 }
-.test-result.success .test-result-title { color: #059669; }
+.test-result.success .test-result-title { color: #248A3D; }
 .test-result.error .test-result-title { color: #DC2626; }
 .test-result-error {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   color: #991B1B;
   margin: 0;
@@ -997,13 +966,13 @@ function cardGradient(idx) {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
   font-weight: 600;
-  color: #065F46;
+  color: #1D6B35;
   flex-shrink: 0;
 }
 .test-tool-desc {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
-  color: #64748B;
+  color: #9CA3AF;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

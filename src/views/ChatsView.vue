@@ -26,7 +26,7 @@
           class="chat-sidebar-item group"
           :class="{ active: chat.id === chatsStore.activeChatId }"
         >
-          <svg style="width:16px;height:16px;color:#64748B;opacity:0.7;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg style="width:16px;height:16px;color:#9CA3AF;opacity:0.7;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
 
@@ -66,9 +66,9 @@
       <div
         v-if="isDragOver"
         class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
-        style="background:rgba(59,130,246,0.08); border:2.5px dashed #3B82F6; border-radius:12px;"
+        style="background:rgba(0,122,255,0.08); border:2.5px dashed #1A1A1A; border-radius:16px;"
       >
-        <div class="flex flex-col items-center gap-2 px-6 py-4 rounded-2xl" style="background:#EFF6FF; color:#1D4ED8; box-shadow:0 4px 24px rgba(59,130,246,0.15);">
+        <div class="flex flex-col items-center gap-2 px-6 py-4 rounded-2xl" style="background:rgba(0,122,255,0.06); color:#0056CC; box-shadow:0 1px 3px rgba(0,0,0,0.04);">
           <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
           </svg>
@@ -80,27 +80,12 @@
       <template v-if="chatsStore.activeChat">
         <!-- Chat Header -->
         <div class="chat-header">
-          <svg style="width:22px;height:22px;color:#6366F1;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg style="width:22px;height:22px;color:#1A1A1A;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
           <h1 class="chat-header-title">{{ chatsStore.activeChat.title }}</h1>
 
-          <!-- Tools section -->
-          <div class="header-section tools-section">
-            <button
-              class="tools-chip-btn"
-              @click="showToolsModal = true"
-            >
-              <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-              </svg>
-              {{ enabledHttpTools.length }}/{{ toolsStore.tools.length }} tools
-            </button>
-          </div>
-
-          <div class="header-divider"></div>
-
-          <!-- Persona selectors -->
+          <!-- Persona selectors (centered) -->
           <div class="header-section persona-section">
             <!-- System persona chip -->
             <div class="persona-chip-wrap" ref="sysChipWrap">
@@ -112,7 +97,7 @@
                 <div class="persona-chip-avatar">
                   <img v-if="activeSystemAvatarDataUri" :src="activeSystemAvatarDataUri" alt="" class="persona-chip-avatar-img" />
                   <div v-else class="persona-chip-avatar-default system">
-                    <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1"/></svg>
+                    <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1"/></svg>
                   </div>
                 </div>
                 <span class="persona-chip-name">{{ activeSystemPersonaName }}</span>
@@ -155,7 +140,7 @@
                 <div class="persona-chip-avatar">
                   <img v-if="activeUserAvatarDataUri" :src="activeUserAvatarDataUri" alt="" class="persona-chip-avatar-img" />
                   <div v-else class="persona-chip-avatar-default user">
-                    <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   </div>
                 </div>
                 <span class="persona-chip-name">{{ activeUserPersonaName }}</span>
@@ -189,10 +174,10 @@
             </div>
           </div>
 
-          <div class="header-divider"></div>
-
-          <!-- Provider / Model selectors -->
-          <div class="header-section provider-section">
+          <!-- Right group: Provider + Tools -->
+          <div class="header-section right-group">
+            <!-- Provider / Model selectors -->
+            <div class="header-section provider-section">
             <!-- Provider chip -->
             <div class="persona-chip-wrap" ref="providerChipWrap">
               <button
@@ -339,36 +324,57 @@
                 </div>
               </div>
             </div>
+            </div>
+
+            <div class="header-divider"></div>
+
+            <!-- Tools chip -->
+            <div class="header-section tools-section">
+              <div class="persona-chip-wrap">
+              <button
+                class="persona-chip tools-chip"
+                @click="showToolsModal = true"
+                title="Tools"
+              >
+                <div class="model-chip-icon">
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                  </svg>
+                </div>
+                <span class="persona-chip-name">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }} tools</span>
+              </button>
+              </div>
+            </div>
           </div>
 
         </div>
 
         <!-- ── Context Window Usage Bar (always visible) ────────────────────── -->
         <div class="chat-context-bar">
-          <span style="color:#64748B; font-size:var(--fs-small); white-space:nowrap;">Context</span>
+          <span style="color:#6B7280; font-size:var(--fs-small); white-space:nowrap;">Context</span>
           <!-- Progress bar -->
-          <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:#DBEAFE;">
+          <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:#E5E5EA;">
             <div
               class="h-full rounded-full transition-all duration-500"
               :style="{
                 width: Math.min(activeContextMetrics.percentage, 100) + '%',
-                background: activeContextMetrics.percentage > 85 ? '#dc2626' : activeContextMetrics.percentage > 65 ? '#f59e0b' : '#3B82F6'
+                background: activeContextMetrics.percentage > 85 ? '#FF3B30' : activeContextMetrics.percentage > 65 ? '#FF9500' : '#1A1A1A'
               }"
             />
           </div>
           <!-- Percentage and token counts -->
           <span style="font-size:var(--fs-small); white-space:nowrap;"
-            :style="activeContextMetrics.percentage > 85 ? 'color:#dc2626;' : 'color:#64748B;'"
+            :style="activeContextMetrics.percentage > 85 ? 'color:#dc2626;' : 'color:#9CA3AF;'"
           >
             {{ Math.round(activeContextMetrics.percentage) }}%
           </span>
-          <span style="color:#64748B; font-size:var(--fs-small); white-space:nowrap;">
+          <span style="color:#9CA3AF; font-size:var(--fs-small); white-space:nowrap;">
             {{ formatTokenCount(activeContextMetrics.inputTokens) }} in / {{ formatTokenCount(activeContextMetrics.outputTokens) }} out
           </span>
           <span
             v-if="activeContextMetrics.compactionCount > 0"
             class="px-1.5 py-0.5 rounded-full"
-            style="background:#fef3c7; color:#92400e; font-size:var(--fs-small); white-space:nowrap;"
+            style="background:#F5F5F5; color:#6B7280; font-size:var(--fs-small); white-space:nowrap;"
           >
             {{ activeContextMetrics.compactionCount }}x compacted
           </span>
@@ -378,10 +384,10 @@
             :disabled="!hasContextData"
             class="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
             :style="hasContextData
-              ? 'background:#EFF6FF; color:#3B82F6; border:1px solid #BFDBFE;'
-              : 'background:#F1F5F9; color:#CBD5E1; border:1px solid #E2E8F0; cursor:not-allowed;'"
-            @mouseenter="e => { if (hasContextData) e.currentTarget.style.background='#DBEAFE' }"
-            @mouseleave="e => { if (hasContextData) e.currentTarget.style.background='#EFF6FF' }"
+              ? 'background:#1A1A1A; color:#FFFFFF; border:1px solid #1A1A1A;'
+              : 'background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
+            @mouseenter="e => { if (hasContextData) e.currentTarget.style.background='#333' }"
+            @mouseleave="e => { if (hasContextData) e.currentTarget.style.background='#1A1A1A' }"
             :title="hasContextData ? 'Inspect context window contents' : 'Send a message first to inspect context'"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -395,12 +401,12 @@
             :disabled="isCompacting || (!activeRunning && !hasContextData)"
             class="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
             :style="isCompacting
-              ? 'background:#FEF3C7; color:#92400E; border:1px solid #FCD34D;'
+              ? 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'
               : (activeRunning || hasContextData)
-                ? 'background:#EFF6FF; color:#3B82F6; border:1px solid #BFDBFE;'
-                : 'background:#F1F5F9; color:#CBD5E1; border:1px solid #E2E8F0; cursor:not-allowed;'"
-            @mouseenter="e => { if (!isCompacting && (activeRunning || hasContextData)) e.currentTarget.style.background='#DBEAFE' }"
-            @mouseleave="e => { if (!isCompacting && (activeRunning || hasContextData)) e.currentTarget.style.background='#EFF6FF' }"
+                ? 'background:#1A1A1A; color:#FFFFFF; border:1px solid #1A1A1A;'
+                : 'background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
+            @mouseenter="e => { if (!isCompacting && (activeRunning || hasContextData)) e.currentTarget.style.background='#333' }"
+            @mouseleave="e => { if (!isCompacting && (activeRunning || hasContextData)) e.currentTarget.style.background='#1A1A1A' }"
             :title="isCompacting ? 'Compacting…' : activeRunning ? 'Compact on next iteration' : 'Compact context window'"
           >
             <svg v-if="isCompacting" class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -417,31 +423,31 @@
         <div
           v-if="showContextInspector"
           class="fixed inset-0 z-50 flex items-center justify-center"
-          style="background:rgba(15,23,42,0.4);"
+          style="background:rgba(0,0,0,0.3);"
           @click.self="showContextInspector = false"
         >
           <div
             class="relative flex flex-col rounded-2xl overflow-hidden"
-            style="background:#ffffff; width:680px; max-width:90vw; max-height:85vh; box-shadow:0 8px 32px rgba(15,23,42,0.18);"
+            style="background:#FFFFFF; border:1px solid #E5E5EA; border-radius:16px; width:680px; max-width:90vw; max-height:85vh; box-shadow:0 8px 32px rgba(0,0,0,0.12);"
           >
             <!-- Header -->
-            <div class="flex items-center justify-between px-5 py-3 shrink-0" style="border-bottom:1px solid #E2E8F0;">
+            <div class="flex items-center justify-between px-5 py-3 shrink-0" style="border-bottom:1px solid #E5E5EA;">
               <div class="flex items-center gap-2">
-                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                 </svg>
-                <span class="font-semibold" style="font-family:'Figtree',sans-serif; color:#1E293B; font-size:var(--fs-subtitle);">Context Inspector</span>
+                <span class="font-semibold" style="font-family:'Inter',sans-serif; color:#1A1A1A; font-size:var(--fs-subtitle);">Context Inspector</span>
                 <span
                   v-if="contextSnapshot"
                   class="px-1.5 py-0.5 rounded-full"
-                  style="background:#EFF6FF; color:#3B82F6; font-size:var(--fs-small);"
+                  style="background:#F5F5F5; color:#6B7280; font-size:var(--fs-small);"
                 >{{ contextSnapshot.model }}</span>
               </div>
               <button
                 @click="showContextInspector = false"
                 class="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors"
-                style="color:#64748B;"
-                @mouseenter="e => e.currentTarget.style.background='#F1F5F9'"
+                style="color:#9CA3AF;"
+                @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
                 @mouseleave="e => e.currentTarget.style.background=''"
               >
                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -453,45 +459,45 @@
             <!-- Body -->
             <div v-if="!contextSnapshot" class="flex-1 flex items-center justify-center py-16">
               <div class="text-center">
-                <svg class="w-12 h-12 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="1.5">
+                <svg class="w-12 h-12 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="#D1D1D6" stroke-width="1.5">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                 </svg>
-                <p style="color:#64748B; font-size:var(--fs-body);">No context data yet. Send a message first.</p>
+                <p style="color:#9CA3AF; font-size:var(--fs-body);">No context data yet. Send a message first.</p>
               </div>
             </div>
 
             <div v-else class="flex-1 overflow-y-auto px-5 py-4 space-y-3">
               <!-- Metrics section (expanded by default) -->
-              <div style="border:1px solid #E2E8F0; border-radius:12px; overflow:hidden;">
+              <div style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
                 <button
                   @click="inspectorSections.metrics = !inspectorSections.metrics"
                   class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-                  style="background:#F8FAFC;"
-                  @mouseenter="e => e.currentTarget.style.background='#F1F5F9'"
-                  @mouseleave="e => e.currentTarget.style.background='#F8FAFC'"
+                  style="background:#F2F2F7;"
+                  @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
+                  @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
-                  <span class="font-medium" style="color:#1E293B; font-size:var(--fs-body);">Metrics</span>
-                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.metrics ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2">
+                  <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Metrics</span>
+                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.metrics ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"/>
                   </svg>
                 </button>
-                <div v-if="inspectorSections.metrics" class="px-4 py-3" style="border-top:1px solid #E2E8F0;">
-                  <table style="width:100%; font-size:var(--fs-body); color:#1E293B;">
+                <div v-if="inspectorSections.metrics" class="px-4 py-3" style="border-top:1px solid #E5E5EA;">
+                  <table style="width:100%; font-size:var(--fs-body); color:#1A1A1A;">
                     <tbody>
-                      <tr style="border-bottom:1px solid #F1F5F9;">
-                        <td class="py-1.5 pr-4" style="color:#64748B; white-space:nowrap;">Input tokens</td>
+                      <tr style="border-bottom:1px solid #F5F5F5;">
+                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Input tokens</td>
                         <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeContextMetrics.inputTokens?.toLocaleString() ?? '0' }}</td>
                       </tr>
-                      <tr style="border-bottom:1px solid #F1F5F9;">
-                        <td class="py-1.5 pr-4" style="color:#64748B; white-space:nowrap;">Max tokens</td>
+                      <tr style="border-bottom:1px solid #F5F5F5;">
+                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Max tokens</td>
                         <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (activeContextMetrics.maxTokens ?? 0).toLocaleString() }}</td>
                       </tr>
-                      <tr style="border-bottom:1px solid #F1F5F9;">
-                        <td class="py-1.5 pr-4" style="color:#64748B; white-space:nowrap;">Usage</td>
+                      <tr style="border-bottom:1px solid #F5F5F5;">
+                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Usage</td>
                         <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ Math.round(activeContextMetrics.percentage) }}%</td>
                       </tr>
                       <tr>
-                        <td class="py-1.5 pr-4" style="color:#64748B; white-space:nowrap;">Compactions</td>
+                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Compactions</td>
                         <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeContextMetrics.compactionCount ?? 0 }}</td>
                       </tr>
                     </tbody>
@@ -500,185 +506,185 @@
               </div>
 
               <!-- System Prompt section -->
-              <div style="border:1px solid #E2E8F0; border-radius:12px; overflow:hidden;">
+              <div style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
                 <button
                   @click="inspectorSections.system = !inspectorSections.system"
                   class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-                  style="background:#F8FAFC;"
-                  @mouseenter="e => e.currentTarget.style.background='#F1F5F9'"
-                  @mouseleave="e => e.currentTarget.style.background='#F8FAFC'"
+                  style="background:#F2F2F7;"
+                  @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
+                  @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
                   <div class="flex items-center gap-2">
-                    <span class="font-medium" style="color:#1E293B; font-size:var(--fs-body);">System Prompt</span>
-                    <span class="px-1.5 py-0.5 rounded-full" style="background:#F1F5F9; color:#64748B; font-size:var(--fs-small);">
+                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">System Prompt</span>
+                    <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
                       {{ (contextSnapshot.systemPrompt?.length ?? 0).toLocaleString() }} chars
                     </span>
                   </div>
-                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.system ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2">
+                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.system ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"/>
                   </svg>
                 </button>
-                <div v-if="inspectorSections.system" class="px-4 py-3" style="border-top:1px solid #E2E8F0;">
-                  <pre class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#334155; max-height:300px; overflow-y:auto;">{{ contextSnapshot.systemPrompt }}</pre>
+                <div v-if="inspectorSections.system" class="px-4 py-3" style="border-top:1px solid #E5E5EA;">
+                  <pre class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:300px; overflow-y:auto;">{{ contextSnapshot.systemPrompt }}</pre>
                 </div>
               </div>
 
               <!-- Personas section -->
-              <div v-if="contextSnapshot.personas?.systemPersonaPrompt || contextSnapshot.personas?.userPersonaPrompt" style="border:1px solid #E2E8F0; border-radius:12px; overflow:hidden;">
+              <div v-if="contextSnapshot.personas?.systemPersonaPrompt || contextSnapshot.personas?.userPersonaPrompt" style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
                 <button
                   @click="inspectorSections.personas = !inspectorSections.personas"
                   class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-                  style="background:#F8FAFC;"
-                  @mouseenter="e => e.currentTarget.style.background='#F1F5F9'"
-                  @mouseleave="e => e.currentTarget.style.background='#F8FAFC'"
+                  style="background:#F2F2F7;"
+                  @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
+                  @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
                   <div class="flex items-center gap-2">
-                    <span class="font-medium" style="color:#1E293B; font-size:var(--fs-body);">Personas</span>
-                    <span class="px-1.5 py-0.5 rounded-full" style="background:#F1F5F9; color:#64748B; font-size:var(--fs-small);">
+                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Personas</span>
+                    <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
                       {{ (contextSnapshot.personas?.systemPersonaPrompt ? 1 : 0) + (contextSnapshot.personas?.userPersonaPrompt ? 1 : 0) }} active
                     </span>
                   </div>
-                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.personas ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2">
+                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.personas ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"/>
                   </svg>
                 </button>
-                <div v-if="inspectorSections.personas" style="border-top:1px solid #E2E8F0;">
-                  <div v-if="contextSnapshot.personas?.systemPersonaPrompt" class="px-4 py-3" :style="contextSnapshot.personas?.userPersonaPrompt ? 'border-bottom:1px solid #F1F5F9;' : ''">
+                <div v-if="inspectorSections.personas" style="border-top:1px solid #E5E5EA;">
+                  <div v-if="contextSnapshot.personas?.systemPersonaPrompt" class="px-4 py-3" :style="contextSnapshot.personas?.userPersonaPrompt ? 'border-bottom:1px solid #F5F5F5;' : ''">
                     <div class="flex items-center gap-2 mb-1.5">
-                      <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#DBEAFE; color:#1E40AF;">System Persona</span>
+                      <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:rgba(0,122,255,0.1); color:#0056CC;">System Persona</span>
                     </div>
-                    <pre class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#334155; max-height:200px; overflow-y:auto;">{{ contextSnapshot.personas.systemPersonaPrompt }}</pre>
+                    <pre class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ contextSnapshot.personas.systemPersonaPrompt }}</pre>
                   </div>
                   <div v-if="contextSnapshot.personas?.userPersonaPrompt" class="px-4 py-3">
                     <div class="flex items-center gap-2 mb-1.5">
                       <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#D1FAE5; color:#065F46;">User Persona</span>
                     </div>
-                    <pre class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#334155; max-height:200px; overflow-y:auto;">{{ contextSnapshot.personas.userPersonaPrompt }}</pre>
+                    <pre class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ contextSnapshot.personas.userPersonaPrompt }}</pre>
                   </div>
                 </div>
               </div>
 
               <!-- Messages section -->
-              <div style="border:1px solid #E2E8F0; border-radius:12px; overflow:hidden;">
+              <div style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
                 <button
                   @click="inspectorSections.messages = !inspectorSections.messages"
                   class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-                  style="background:#F8FAFC;"
-                  @mouseenter="e => e.currentTarget.style.background='#F1F5F9'"
-                  @mouseleave="e => e.currentTarget.style.background='#F8FAFC'"
+                  style="background:#F2F2F7;"
+                  @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
+                  @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
                   <div class="flex items-center gap-2">
-                    <span class="font-medium" style="color:#1E293B; font-size:var(--fs-body);">Messages</span>
-                    <span class="px-1.5 py-0.5 rounded-full" style="background:#F1F5F9; color:#64748B; font-size:var(--fs-small);">
+                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Messages</span>
+                    <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
                       {{ contextSnapshot.messages?.length ?? 0 }}
                     </span>
                   </div>
-                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.messages ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2">
+                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.messages ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"/>
                   </svg>
                 </button>
-                <div v-if="inspectorSections.messages" style="border-top:1px solid #E2E8F0; max-height:400px; overflow-y:auto;">
+                <div v-if="inspectorSections.messages" style="border-top:1px solid #E5E5EA; max-height:400px; overflow-y:auto;">
                   <div
                     v-for="(msg, idx) in contextSnapshot.messages"
                     :key="idx"
                     class="px-4 py-2.5"
-                    :style="idx < contextSnapshot.messages.length - 1 ? 'border-bottom:1px solid #F1F5F9;' : ''"
+                    :style="idx < contextSnapshot.messages.length - 1 ? 'border-bottom:1px solid #F5F5F5;' : ''"
                   >
                     <div class="flex items-center gap-2 mb-1">
                       <span
                         class="px-1.5 py-0.5 rounded text-xs font-medium"
                         :style="msg.role === 'user'
-                          ? 'background:#DBEAFE; color:#1D4ED8;'
+                          ? 'background:rgba(0,122,255,0.1); color:#0056CC;'
                           : 'background:#D1FAE5; color:#065F46;'"
                       >{{ msg.role }}</span>
-                      <span style="color:#94A3B8; font-size:var(--fs-small);">{{ msg.contentLength?.toLocaleString() }} chars</span>
+                      <span style="color:#9CA3AF; font-size:var(--fs-small);">{{ msg.contentLength?.toLocaleString() }} chars</span>
                     </div>
                     <div
                       class="text-xs cursor-pointer"
-                      style="font-family:'JetBrains Mono',monospace; color:#475569;"
+                      style="font-family:'JetBrains Mono',monospace; color:#6B7280;"
                       @click="expandedMessages[idx] = !expandedMessages[idx]"
                     >
                       <pre v-if="expandedMessages[idx]" class="whitespace-pre-wrap leading-relaxed overflow-x-auto" style="max-height:300px; overflow-y:auto;">{{ msg.fullContent }}</pre>
-                      <span v-else>{{ msg.contentPreview }}<span v-if="msg.contentLength > 200" style="color:#3B82F6;"> ... (click to expand)</span></span>
+                      <span v-else>{{ msg.contentPreview }}<span v-if="msg.contentLength > 200" style="color:#007AFF;"> ... (click to expand)</span></span>
                     </div>
                   </div>
-                  <div v-if="!contextSnapshot.messages?.length" class="px-4 py-3" style="color:#94A3B8; font-size:var(--fs-body);">No messages</div>
+                  <div v-if="!contextSnapshot.messages?.length" class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">No messages</div>
                 </div>
               </div>
 
               <!-- Tools section -->
-              <div style="border:1px solid #E2E8F0; border-radius:12px; overflow:hidden;">
+              <div style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
                 <button
                   @click="inspectorSections.tools = !inspectorSections.tools"
                   class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-                  style="background:#F8FAFC;"
-                  @mouseenter="e => e.currentTarget.style.background='#F1F5F9'"
-                  @mouseleave="e => e.currentTarget.style.background='#F8FAFC'"
+                  style="background:#F2F2F7;"
+                  @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
+                  @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
                   <div class="flex items-center gap-2">
-                    <span class="font-medium" style="color:#1E293B; font-size:var(--fs-body);">Tools</span>
-                    <span class="px-1.5 py-0.5 rounded-full" style="background:#F1F5F9; color:#64748B; font-size:var(--fs-small);">
+                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Tools</span>
+                    <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
                       {{ contextSnapshot.tools?.length ?? 0 }}
                     </span>
                   </div>
-                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.tools ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2">
+                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.tools ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"/>
                   </svg>
                 </button>
-                <div v-if="inspectorSections.tools" style="border-top:1px solid #E2E8F0; max-height:300px; overflow-y:auto;">
+                <div v-if="inspectorSections.tools" style="border-top:1px solid #E5E5EA; max-height:300px; overflow-y:auto;">
                   <div
                     v-for="(tool, idx) in contextSnapshot.tools"
                     :key="idx"
                     class="px-4 py-2"
-                    :style="idx < contextSnapshot.tools.length - 1 ? 'border-bottom:1px solid #F1F5F9;' : ''"
+                    :style="idx < contextSnapshot.tools.length - 1 ? 'border-bottom:1px solid #F5F5F5;' : ''"
                   >
-                    <span class="font-medium text-xs" style="font-family:'JetBrains Mono',monospace; color:#1E293B;">{{ tool.name }}</span>
-                    <p v-if="tool.description" class="mt-0.5 text-xs" style="color:#64748B;">{{ tool.description.slice(0, 150) }}{{ tool.description.length > 150 ? '...' : '' }}</p>
+                    <span class="font-medium text-xs" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A;">{{ tool.name }}</span>
+                    <p v-if="tool.description" class="mt-0.5 text-xs" style="color:#9CA3AF;">{{ tool.description.slice(0, 150) }}{{ tool.description.length > 150 ? '...' : '' }}</p>
                   </div>
-                  <div v-if="!contextSnapshot.tools?.length" class="px-4 py-3" style="color:#94A3B8; font-size:var(--fs-body);">No tools</div>
+                  <div v-if="!contextSnapshot.tools?.length" class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">No tools</div>
                 </div>
               </div>
 
               <!-- Debug Log section -->
-              <div style="border:1px solid #E2E8F0; border-radius:12px; overflow:hidden;">
+              <div style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
                 <button
                   @click="inspectorSections.debugLog = !inspectorSections.debugLog"
                   class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-                  style="background:#F8FAFC;"
-                  @mouseenter="e => e.currentTarget.style.background='#F1F5F9'"
-                  @mouseleave="e => e.currentTarget.style.background='#F8FAFC'"
+                  style="background:#F2F2F7;"
+                  @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
+                  @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
                   <div class="flex items-center gap-2">
-                    <span class="font-medium" style="color:#1E293B; font-size:var(--fs-body);">Debug Log</span>
-                    <span class="px-1.5 py-0.5 rounded-full" style="background:#F1F5F9; color:#64748B; font-size:var(--fs-small);">
+                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Debug Log</span>
+                    <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
                       {{ debugLog.length }} entries
                     </span>
                   </div>
-                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.debugLog ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2">
+                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.debugLog ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"/>
                   </svg>
                 </button>
-                <div v-if="inspectorSections.debugLog" style="border-top:1px solid #E2E8F0;">
+                <div v-if="inspectorSections.debugLog" style="border-top:1px solid #E5E5EA;">
                   <!-- Info bar -->
-                  <div class="px-4 py-2 flex items-center gap-3 flex-wrap" style="background:#F8FAFC; border-bottom:1px solid #F1F5F9;">
-                    <span style="font-size:var(--fs-small); color:#64748B;">
-                      Electron: <span :style="hasElectron ? 'color:#3B82F6; font-weight:600;' : 'color:#dc2626; font-weight:600;'">{{ hasElectron ? 'YES' : 'NO' }}</span>
+                  <div class="px-4 py-2 flex items-center gap-3 flex-wrap" style="background:#F2F2F7; border-bottom:1px solid #F5F5F5;">
+                    <span style="font-size:var(--fs-small); color:#9CA3AF;">
+                      Electron: <span :style="hasElectron ? 'color:#007AFF; font-weight:600;' : 'color:#dc2626; font-weight:600;'">{{ hasElectron ? 'YES' : 'NO' }}</span>
                     </span>
-                    <span style="font-size:var(--fs-small); color:#64748B;">
-                      Model: <span style="color:#1E293B; font-weight:600;">{{ configStore.config.activeModel }} → {{ debugModelId }}</span>
+                    <span style="font-size:var(--fs-small); color:#9CA3AF;">
+                      Model: <span style="color:#1A1A1A; font-weight:600;">{{ configStore.config.activeModel }} → {{ debugModelId }}</span>
                     </span>
                   </div>
                   <!-- Log entries (last 100) -->
-                  <div style="max-height:300px; overflow-y:auto; background:#0F172A; font-family:'JetBrains Mono',monospace;">
+                  <div style="max-height:300px; overflow-y:auto; background:#1A1A1A; font-family:'JetBrains Mono',monospace;">
                     <div class="px-3 py-2 space-y-0.5">
-                      <div v-if="debugLog.length === 0" style="color:#475569; font-size:var(--fs-secondary);">No events yet — send a message to start logging.</div>
+                      <div v-if="debugLog.length === 0" style="color:#6B7280; font-size:var(--fs-secondary);">No events yet — send a message to start logging.</div>
                       <div
                         v-for="(entry, i) in debugLog.slice(-100)"
                         :key="i"
                         style="font-size:var(--fs-secondary);"
-                        :style="entry.level === 'error' ? 'color:#f87171;' : entry.level === 'warn' ? 'color:#fbbf24;' : entry.level === 'success' ? 'color:#86efac;' : entry.level === 'chunk' ? 'color:#93c5fd;' : 'color:#E2E8F0;'"
+                        :style="entry.level === 'error' ? 'color:#f87171;' : entry.level === 'warn' ? 'color:#fbbf24;' : entry.level === 'success' ? 'color:#86efac;' : entry.level === 'chunk' ? 'color:#93c5fd;' : 'color:#E5E5EA;'"
                       >
-                        <span style="color:#475569; margin-right:6px; font-size:var(--fs-caption);">{{ entry.time }}</span>{{ entry.msg }}
+                        <span style="color:#6B7280; margin-right:6px; font-size:var(--fs-caption);">{{ entry.time }}</span>{{ entry.msg }}
                       </div>
                     </div>
                   </div>
@@ -711,9 +717,9 @@
               <button
                 @click="loadMoreMessages"
                 class="px-4 py-1.5 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer"
-                style="background:#F1F5F9; color:#3B82F6; border:1px solid #E2E8F0;"
-                @mouseenter="e => e.currentTarget.style.background='#DBEAFE'"
-                @mouseleave="e => e.currentTarget.style.background='#F1F5F9'"
+                style="background:#F5F5F5; color:#1A1A1A; border:1px solid #E5E5EA;"
+                @mouseenter="e => e.currentTarget.style.background='rgba(0,122,255,0.1)'"
+                @mouseleave="e => e.currentTarget.style.background='#F5F5F5'"
               >
                 Show earlier messages ({{ chatsStore.activeChat.messages.length - visibleMessages.length }} hidden)
               </button>
@@ -753,8 +759,8 @@
                     @click="quoteMessage(msg)"
                     class="w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer"
                     :style="msg.role === 'user'
-                      ? 'background:#ffffff; color:#1D4ED8; border:1px solid rgba(255,255,255,0.6); box-shadow:0 1px 4px rgba(0,0,0,0.18);'
-                      : 'background:#F1F5F9; color:#64748B; border:1px solid #E2E8F0;'"
+                      ? 'background:#ffffff; color:#0056CC; border:1px solid rgba(255,255,255,0.6); box-shadow:0 1px 3px rgba(0,0,0,0.04);'
+                      : 'background:#F5F5F5; color:#9CA3AF; border:1px solid #E5E5EA;'"
                     title="Quote message"
                     aria-label="Quote message"
                   >
@@ -768,8 +774,8 @@
                     @click="copyMessage(msg)"
                     class="w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer"
                     :style="msg.role === 'user'
-                      ? 'background:#ffffff; color:#1D4ED8; border:1px solid rgba(255,255,255,0.6); box-shadow:0 1px 4px rgba(0,0,0,0.18);'
-                      : 'background:#F1F5F9; color:#64748B; border:1px solid #E2E8F0;'"
+                      ? 'background:#ffffff; color:#0056CC; border:1px solid rgba(255,255,255,0.6); box-shadow:0 1px 3px rgba(0,0,0,0.04);'
+                      : 'background:#F5F5F5; color:#9CA3AF; border:1px solid #E5E5EA;'"
                     :title="copiedId === msg.id ? 'Copied!' : 'Copy message'"
                     aria-label="Copy message"
                   >
@@ -792,7 +798,7 @@
                     class="mt-1 text-right"
                     :style="msg.role === 'user'
                       ? 'color:rgba(255,255,255,0.85); font-size:var(--fs-secondary);'
-                      : 'color:#94A3B8; font-size:var(--fs-secondary);'"
+                      : 'color:#9CA3AF; font-size:var(--fs-secondary);'"
                   >
                     {{ formatTime(msg.timestamp) }}
                   </div>
@@ -816,9 +822,9 @@
         <div
           v-if="pendingQueue.length > 0"
           class="shrink-0 px-4 py-2 space-y-1.5"
-          style="background:#FFFBEB; border-top:1px solid #FCD34D;"
+          style="background:#F5F5F5; border-top:1px solid #E5E5EA;"
         >
-          <div class="flex items-center gap-1.5" style="color:#92400E; font-size:var(--fs-small); font-weight:600;">
+          <div class="flex items-center gap-1.5" style="color:#6B7280; font-size:var(--fs-small); font-weight:600;">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
@@ -828,15 +834,15 @@
             v-for="(item, idx) in pendingQueue"
             :key="idx"
             class="flex items-center gap-2 px-3 py-1.5 rounded-lg"
-            style="background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; font-size:var(--fs-small);"
+            style="background:#FFFFFF; color:#6B7280; border:1px solid #E5E5EA; font-size:var(--fs-small);"
           >
-            <span class="shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style="background:#FDE68A; font-size:10px; font-weight:600;">{{ idx + 1 }}</span>
+            <span class="shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style="background:#1A1A1A; color:#fff; font-size:10px; font-weight:600;">{{ idx + 1 }}</span>
             <span class="flex-1 truncate">{{ item.text.slice(0, 80) }}{{ item.text.length > 80 ? '…' : '' }}</span>
             <span v-if="item.attachments?.length" style="opacity:0.7;">{{ item.attachments.length }} file{{ item.attachments.length !== 1 ? 's' : '' }}</span>
             <button
               @click="removeFromQueue(idx)"
               class="shrink-0 cursor-pointer"
-              style="color:#92400E; opacity:0.5;"
+              style="color:#9CA3AF; opacity:0.5;"
               @mouseenter="e => e.currentTarget.style.opacity='1'"
               @mouseleave="e => e.currentTarget.style.opacity='0.5'"
               title="Remove from queue"
@@ -860,12 +866,12 @@
               :key="att.id"
               class="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs max-w-[200px]"
               :style="att.type === 'image'
-                ? 'background:#DBEAFE; color:#1D4ED8; border:1px solid #93C5FD;'
+                ? 'background:rgba(0,122,255,0.1); color:#0056CC; border:1px solid #93C5FD;'
                 : att.type === 'folder'
-                  ? 'background:#FEF3C7; color:#92400E; border:1px solid #FCD34D;'
+                  ? 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'
                   : att.type === 'error'
                     ? 'background:#FEE2E2; color:#991B1B; border:1px solid #FCA5A5;'
-                    : 'background:#F1F5F9; color:#475569; border:1px solid #E2E8F0;'"
+                    : 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'"
             >
               <!-- Type icon -->
               <svg v-if="att.type === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -901,28 +907,28 @@
           <div
             v-if="quotedMessage"
             class="flex items-start gap-2 px-3 py-2 rounded-t-xl"
-            style="background:#EFF6FF; border:1px solid #BFDBFE; border-bottom:none;"
+            style="background:rgba(0,122,255,0.06); border:1px solid #E5E5EA; border-bottom:none;"
           >
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-1.5 mb-0.5">
-                <svg class="w-3.5 h-3.5 shrink-0" style="color:#3B82F6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg class="w-3.5 h-3.5 shrink-0" style="color:#1A1A1A;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21z"/>
                   <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3z"/>
                 </svg>
-                <span style="font-size:var(--fs-small); font-weight:600; color:#1D4ED8;">
+                <span style="font-size:var(--fs-small); font-weight:600; color:#0056CC;">
                   {{ quotedMessage.role === 'user' ? 'You' : 'Assistant' }}
                 </span>
               </div>
-              <p class="truncate" style="font-size:var(--fs-secondary); color:#475569; margin:0;">
+              <p class="truncate" style="font-size:var(--fs-secondary); color:#6B7280; margin:0;">
                 {{ quotedMessage.content?.slice(0, 150) }}{{ (quotedMessage.content?.length ?? 0) > 150 ? '...' : '' }}
               </p>
             </div>
             <button
               @click="clearQuote"
               class="w-5 h-5 rounded flex items-center justify-center shrink-0 cursor-pointer"
-              style="color:#64748B;"
-              @mouseenter="e => e.currentTarget.style.color='#1E293B'"
-              @mouseleave="e => e.currentTarget.style.color='#64748B'"
+              style="color:#9CA3AF;"
+              @mouseenter="e => e.currentTarget.style.color='#1A1A1A'"
+              @mouseleave="e => e.currentTarget.style.color='#9CA3AF'"
               aria-label="Remove quote"
               title="Remove quote"
             >
@@ -941,9 +947,9 @@
               @click="pickFiles"
               :disabled="activeRunning"
               class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
-              style="background:#F1F5F9; color:#64748B;"
-              @mouseenter="e => { if (!activeRunning) e.currentTarget.style.background='#DBEAFE'; e.currentTarget.style.color='#3B82F6'; }"
-              @mouseleave="e => { e.currentTarget.style.background='#F1F5F9'; e.currentTarget.style.color='#64748B'; }"
+              style="background:#F5F5F5; color:#9CA3AF;"
+              @mouseenter="e => { if (!activeRunning) e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A'; }"
+              @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#9CA3AF'; }"
               aria-label="Attach files"
               title="Attach files or folders"
             >
@@ -962,16 +968,16 @@
               placeholder="Type your message here… (paste file paths to attach)"
               rows="3"
               class="flex-1 bg-transparent resize-none outline-none leading-relaxed overflow-y-auto"
-              style="color:#1E293B; font-size:var(--fs-body); min-height:72px; max-height:200px;"
+              style="color:#1A1A1A; font-size:var(--fs-body); min-height:72px; max-height:200px;"
             />
             <!-- Stop button (visible while running) -->
             <button
               v-if="activeRunning"
               @click="stopAgent"
               class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
-              style="background:#fee2e2; color:#dc2626; box-shadow:0 2px 8px rgba(220,38,38,0.18);"
-              @mouseenter="e => e.currentTarget.style.background='#fecaca'"
-              @mouseleave="e => e.currentTarget.style.background='#fee2e2'"
+              style="background:rgba(255,59,48,0.08); color:#FF3B30; box-shadow:0 1px 3px rgba(0,0,0,0.04);"
+              @mouseenter="e => e.currentTarget.style.background='rgba(255,59,48,0.12)'"
+              @mouseleave="e => e.currentTarget.style.background='rgba(255,59,48,0.08)'"
               aria-label="Stop agent"
               title="Stop agent"
             >
@@ -983,8 +989,8 @@
               :disabled="!inputText.trim() && attachments.length === 0"
               class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
               :style="inputText.trim() || attachments.length > 0
-                ? 'background:#3B82F6; color:#ffffff; box-shadow:0 2px 8px rgba(59,130,246,0.25);'
-                : 'background:#DBEAFE; color:#64748B; cursor:not-allowed;'"
+                ? 'background:#1A1A1A; color:#ffffff; box-shadow:0 1px 3px rgba(0,0,0,0.04);'
+                : 'background:#E5E5EA; color:#9CA3AF; cursor:not-allowed;'"
               aria-label="Send message"
               :title="activeRunning ? 'Queue message (will send after current run)' : 'Send message'"
             >
@@ -995,11 +1001,11 @@
             </button>
           </div>
           <div class="flex items-center justify-between mt-1.5 px-1">
-            <div class="flex items-center gap-2 text-xs" style="color:#64748B;">
+            <div class="flex items-center gap-2 text-xs" style="color:#9CA3AF;">
               <span>{{ enabledSkills.length }} skill{{ enabledSkills.length !== 1 ? 's' : '' }} active</span>
-              <span v-if="attachments.length > 0" style="color:#3B82F6;">{{ attachments.length }} file{{ attachments.length !== 1 ? 's' : '' }} attached</span>
+              <span v-if="attachments.length > 0" style="color:#1A1A1A; font-weight:500;">{{ attachments.length }} file{{ attachments.length !== 1 ? 's' : '' }} attached</span>
             </div>
-            <p class="text-xs" style="color:#94A3B8;">
+            <p class="text-xs" style="color:#9CA3AF;">
               Enter to send · Shift+Enter for newline · Ctrl+Shift+A attach
             </p>
           </div>
@@ -1008,12 +1014,12 @@
 
       <!-- No chat selected -->
       <div v-else class="chat-no-selection">
-        <div class="chat-empty-icon" style="width:56px;height:56px;border-radius:14px;">
+        <div class="chat-empty-icon" style="width:56px;height:56px;border-radius:16px;">
           <svg style="width:28px;height:28px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
         </div>
-        <p style="font-family:'Figtree',sans-serif; font-size:var(--fs-subtitle); font-weight:600; color:#475569; margin:12px 0 0;">Select or create a chat to begin</p>
+        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-subtitle); font-weight:600; color:#6B7280; margin:12px 0 0;">Select or create a chat to begin</p>
       </div>
     </div>
 
@@ -1040,7 +1046,7 @@
           <!-- Filter bar -->
           <div class="tools-select-filters">
             <div class="tools-select-search-wrap">
-              <svg style="width:14px;height:14px;color:#94A3B8;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg style="width:14px;height:14px;color:#9CA3AF;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
               </svg>
               <input
@@ -2326,16 +2332,12 @@ onUnmounted(() => {
 <style scoped>
 
 /* ══════════════════════════════════════════════════════════════════════════
-   CHATS PAGE — Glassmorphism Design (matching Skills & Personas pages)
+   CHATS PAGE — Premium Minimalist iOS-inspired Design
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Page shell ─────────────────────────────────────────────────────────── */
 .chats-page {
-  background:
-    radial-gradient(ellipse at 15% 10%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 85% 20%, rgba(99, 102, 241, 0.06) 0%, transparent 45%),
-    radial-gradient(ellipse at 50% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 50%),
-    #F8FAFC;
+  background: #F2F2F7;
 }
 
 /* ── Sidebar ────────────────────────────────────────────────────────────── */
@@ -2344,42 +2346,39 @@ onUnmounted(() => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 250, 252, 0.75) 100%);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-right: 1px solid rgba(226, 232, 240, 0.6);
+  background: #FFFFFF;
+  border-right: 1px solid #E5E5EA;
 }
 .chat-sidebar-header {
   padding: 14px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+  border-bottom: 1px solid #E5E5EA;
 }
 .chat-sidebar-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-subtitle);
   font-weight: 700;
-  color: #0F172A;
+  color: #1A1A1A;
 }
 .chat-sidebar-new-btn {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  background: linear-gradient(135deg, #3B82F6, #6366F1);
+  background: #1A1A1A;
   color: #fff;
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .chat-sidebar-new-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
 }
 .chat-sidebar-new-btn:active {
   transform: translateY(0);
@@ -2402,11 +2401,13 @@ onUnmounted(() => {
   margin-bottom: 2px;
 }
 .chat-sidebar-item:hover {
-  background: rgba(241, 245, 249, 0.8);
+  background: #F5F5F5;
 }
 .chat-sidebar-item.active {
-  background: rgba(99, 102, 241, 0.08);
-  border-color: rgba(99, 102, 241, 0.2);
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .chat-sidebar-item-title {
   flex: 1;
@@ -2414,12 +2415,12 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
-  color: #1E293B;
+  color: #1A1A1A;
 }
 .chat-sidebar-item.active .chat-sidebar-item-title {
-  color: #6366F1;
+  color: #ffffff;
   font-weight: 600;
 }
 .chat-sidebar-item-actions {
@@ -2442,13 +2443,13 @@ onUnmounted(() => {
   justify-content: center;
   border: none;
   background: transparent;
-  color: #64748B;
+  color: #9CA3AF;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 .chat-sidebar-action-btn:hover {
-  background: #F1F5F9;
-  color: #3B82F6;
+  background: #F5F5F5;
+  color: #007AFF;
 }
 .chat-sidebar-action-btn.danger:hover {
   background: #FEE2E2;
@@ -2456,10 +2457,7 @@ onUnmounted(() => {
 }
 /* ── Chat window ────────────────────────────────────────────────────────── */
 .chat-window {
-  background:
-    radial-gradient(ellipse at 20% 15%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 70%, rgba(59, 130, 246, 0.04) 0%, transparent 45%),
-    #F8FAFC;
+  background: #F2F2F7;
 }
 
 /* ── Chat header ────────────────────────────────────────────────────────── */
@@ -2469,43 +2467,43 @@ onUnmounted(() => {
   gap: 12px;
   padding: 12px 20px;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5EA;
   position: relative;
   z-index: 20;
 }
 .chat-header-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-subtitle);
   font-weight: 700;
-  color: #0F172A;
+  color: #1A1A1A;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   margin: 0;
+  flex-shrink: 1;
+  min-width: 0;
 }
 .chat-header-btn {
   padding: 5px 12px;
   border-radius: 8px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 500;
-  color: #64748B;
-  background: rgba(241, 245, 249, 0.8);
-  border: 1px solid rgba(226, 232, 240, 0.6);
+  color: #9CA3AF;
+  background: #F5F5F5;
+  border: 1px solid #E5E5EA;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 .chat-header-btn:hover {
-  background: rgba(226, 232, 240, 0.9);
-  color: #1E293B;
+  background: #E5E5EA;
+  color: #1A1A1A;
 }
 .chat-header-btn.active {
-  background: rgba(99, 102, 241, 0.1);
-  color: #6366F1;
-  border-color: rgba(99, 102, 241, 0.3);
+  background: #1A1A1A;
+  color: #FFFFFF;
+  border-color: #1A1A1A;
 }
 
 /* ── Context bar ────────────────────────────────────────────────────────── */
@@ -2515,10 +2513,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.4);
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5EA;
 }
 
 /* ── Messages area ──────────────────────────────────────────────────────── */
@@ -2530,6 +2526,7 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 16px;
   scrollbar-width: thin;
+  background: linear-gradient(180deg, #FFFFFF 0%, #F9F9FC 50%, #FFFFFF 100%);
 }
 
 /* ── Empty state ────────────────────────────────────────────────────────── */
@@ -2549,20 +2546,20 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #3B82F6, #6366F1);
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+  background: #1A1A1A;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .chat-empty-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-section);
   font-weight: 700;
-  color: #0F172A;
+  color: #1A1A1A;
   margin: 0;
 }
 .chat-empty-subtitle {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
-  color: #64748B;
+  color: #9CA3AF;
   margin: 4px 0 0;
 }
 
@@ -2585,7 +2582,7 @@ onUnmounted(() => {
   height: 44px;
   border-radius: 50%;
   object-fit: cover;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .msg-avatar-fallback {
   width: 44px;
@@ -2594,13 +2591,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .msg-avatar-fallback.system {
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: #1A1A1A;
 }
 .msg-avatar-fallback.user {
-  background: linear-gradient(135deg, #10B981, #059669);
+  background: #007AFF;
 }
 
 /* ── Message bubbles ────────────────────────────────────────────────────── */
@@ -2608,32 +2605,29 @@ onUnmounted(() => {
   padding: 14px 18px;
   line-height: 1.65;
   border-radius: 18px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
 }
 .msg-bubble-user {
-  background: linear-gradient(135deg, #3B82F6, #6366F1);
+  background: linear-gradient(135deg, #374151 0%, #4B5563 50%, #6B7280 100%);
   color: #ffffff;
-  border-bottom-right-radius: 6px;
+  border-radius: 18px 18px 4px 18px;
+  box-shadow: 0 4px 16px rgba(75,85,99,0.25), 0 1px 4px rgba(55,65,81,0.15);
 }
 .msg-bubble-assistant {
-  background: #F1F5F9;
-  border: 1px solid #E2E8F0;
-  color: #1E293B;
-  box-shadow:
-    0 2px 6px rgba(15, 23, 42, 0.05),
-    0 4px 12px rgba(15, 23, 42, 0.03);
-  border-bottom-left-radius: 6px;
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
+  color: #1A1A1A;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
+  border-radius: 18px 18px 18px 4px;
 }
 
 /* ── Input area ─────────────────────────────────────────────────────────── */
 .chat-input-area {
   padding: 12px 20px 16px;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid rgba(226, 232, 240, 0.5);
+  background: #FFFFFF;
+  border-top: 1px solid #E5E5EA;
 }
 .chat-input-box {
   display: flex;
@@ -2641,11 +2635,9 @@ onUnmounted(() => {
   align-items: flex-end;
   border-radius: 16px;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1.5px solid rgba(226, 232, 240, 0.6);
-  box-shadow:
-    0 2px 8px rgba(15, 23, 42, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .chat-input-box.has-quote {
@@ -2654,10 +2646,8 @@ onUnmounted(() => {
   border-top: none;
 }
 .chat-input-box.focused {
-  border-color: rgba(99, 102, 241, 0.5);
-  box-shadow:
-    0 0 0 3px rgba(99, 102, 241, 0.1),
-    0 2px 8px rgba(15, 23, 42, 0.04);
+  border-color: #1A1A1A;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
 }
 
 /* ── Header sections ────────────────────────────────────────────────────── */
@@ -2672,14 +2662,20 @@ onUnmounted(() => {
 .header-divider {
   width: 1px;
   height: 24px;
-  background: #E2E8F0;
+  background: #E5E5EA;
   flex-shrink: 0;
 }
-.tools-section .tools-chip-btn {
-  font-size: var(--fs-small, 12px);
+.tools-section .persona-chip {
+  padding: 4px 10px 4px 4px;
 }
 .persona-section {
   gap: 6px;
+  margin: 0 auto;
+}
+.right-group {
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .provider-section {
   gap: 6px;
@@ -2701,29 +2697,28 @@ onUnmounted(() => {
 .persona-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 12px 4px 4px;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
   border-radius: 9999px;
-  border: 1px solid rgba(226, 232, 240, 0.6);
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid #E5E5EA;
+  background: #FFFFFF;
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
+  height: 36px;
 }
 .persona-chip:hover {
-  border-color: #94A3B8;
+  border-color: #9CA3AF;
   background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .persona-chip.active {
-  border-color: #6366F1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+  border-color: #1A1A1A;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.08);
 }
 .persona-chip-avatar {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -2732,29 +2727,29 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 .persona-chip-avatar-img {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   object-fit: cover;
 }
 .persona-chip-avatar-default {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .persona-chip-avatar-default.system {
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: #1A1A1A;
 }
 .persona-chip-avatar-default.user {
-  background: linear-gradient(135deg, #10B981, #059669);
+  background: #007AFF;
 }
 .persona-chip-name {
   font-size: 13px;
   font-weight: 600;
-  color: #1E293B;
+  color: #6B7280;
   max-width: 220px;
   white-space: nowrap;
   overflow: hidden;
@@ -2763,7 +2758,7 @@ onUnmounted(() => {
 .persona-chip-arrow {
   width: 14px;
   height: 14px;
-  color: #94A3B8;
+  color: #9CA3AF;
   flex-shrink: 0;
 }
 
@@ -2775,25 +2770,21 @@ onUnmounted(() => {
   min-width: 280px;
   max-height: 360px;
   overflow-y: auto;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(226, 232, 240, 0.5);
-  border-radius: 14px;
-  box-shadow:
-    0 12px 40px rgba(15, 23, 42, 0.12),
-    0 4px 16px rgba(99, 102, 241, 0.06);
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
   z-index: 50;
   padding: 6px;
   scrollbar-width: thin;
 }
 .persona-popover-header {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #94A3B8;
+  color: #9CA3AF;
   padding: 8px 10px 4px;
 }
 .persona-popover-item {
@@ -2806,19 +2797,19 @@ onUnmounted(() => {
   border: none;
   background: transparent;
   cursor: pointer;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 14px;
   font-weight: 500;
-  color: #1E293B;
+  color: #1A1A1A;
   transition: background 0.12s;
   text-align: left;
 }
 .persona-popover-item:hover {
-  background: rgba(241, 245, 249, 0.8);
+  background: #F5F5F5;
 }
 .persona-popover-item.selected {
-  background: rgba(99, 102, 241, 0.08);
-  color: #6366F1;
+  background: #1A1A1A;
+  color: #FFFFFF;
   font-weight: 600;
 }
 .persona-popover-avatar {
@@ -2841,13 +2832,16 @@ onUnmounted(() => {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: #94A3B8;
+  background: #9CA3AF;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 13px;
   font-weight: 700;
   color: #fff;
+}
+.persona-popover-item.selected .persona-popover-avatar-fallback {
+  background: rgba(255,255,255,0.15);
 }
 
 /* ── Popover item with description ─────────────────────────────────────── */
@@ -2864,7 +2858,7 @@ onUnmounted(() => {
 .persona-popover-item-desc {
   font-size: 11px;
   font-weight: 400;
-  color: #64748B;
+  color: #9CA3AF;
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -2873,7 +2867,7 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 .persona-popover-item.selected .persona-popover-item-desc {
-  color: #818CF8;
+  color: rgba(255,255,255,0.6);
 }
 
 /* ── Persona hover tooltip ─────────────────────────────────────────────── */
@@ -2886,11 +2880,9 @@ onUnmounted(() => {
   min-width: 220px;
   max-width: 320px;
   padding: 10px 14px;
-  background: rgba(15, 23, 42, 0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(0, 0, 0, 0.92);
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   z-index: 60;
   pointer-events: none;
   text-align: left;
@@ -2903,7 +2895,7 @@ onUnmounted(() => {
   transform: translateX(-50%);
   border-left: 6px solid transparent;
   border-right: 6px solid transparent;
-  border-bottom: 5px solid rgba(15, 23, 42, 0.92);
+  border-bottom: 5px solid rgba(0, 0, 0, 0.92);
 }
 .persona-chip:hover .persona-tooltip {
   display: block;
@@ -2914,27 +2906,28 @@ onUnmounted(() => {
 .persona-tooltip-title {
   font-size: 12px;
   font-weight: 700;
-  color: #F1F5F9;
+  color: #F5F5F5;
   margin-bottom: 4px;
   letter-spacing: 0.01em;
 }
 .persona-tooltip-desc {
   font-size: 12px;
   font-weight: 400;
-  color: #CBD5E1;
+  color: #D1D1D6;
   line-height: 1.5;
 }
 
 /* ── Model chip ────────────────────────────────────────────────────────── */
 .model-chip {
-  padding: 4px 10px 4px 8px;
+  padding: 4px 10px 4px 4px;
   gap: 6px;
+  height: 36px;
 }
 .model-chip-icon {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 6px;
-  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  background: #1A1A1A;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2945,7 +2938,7 @@ onUnmounted(() => {
   font-family: 'JetBrains Mono', 'SF Mono', monospace;
   font-size: 12px;
   font-weight: 600;
-  color: #1E293B;
+  color: #6B7280;
   max-width: 200px;
   white-space: nowrap;
   overflow: hidden;
@@ -2976,15 +2969,15 @@ onUnmounted(() => {
   border: none;
   background: transparent;
   cursor: pointer;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   text-align: left;
   transition: background 0.12s;
 }
 .model-popover-item:hover {
-  background: rgba(241, 245, 249, 0.8);
+  background: #F5F5F5;
 }
 .model-popover-item.selected {
-  background: rgba(99, 102, 241, 0.08);
+  background: #1A1A1A;
 }
 .model-item-info {
   flex: 1;
@@ -2996,58 +2989,58 @@ onUnmounted(() => {
 .model-item-name {
   font-size: 13px;
   font-weight: 500;
-  color: #1E293B;
+  color: #1A1A1A;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .model-popover-item.selected .model-item-name {
-  color: #6366F1;
+  color: #FFFFFF;
   font-weight: 600;
 }
 .model-item-id {
   font-family: 'JetBrains Mono', 'SF Mono', monospace;
   font-size: 11px;
-  color: #94A3B8;
+  color: #9CA3AF;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .model-popover-item.selected .model-item-id {
-  color: #818CF8;
+  color: rgba(255,255,255,0.6);
 }
 .model-item-check {
   width: 16px;
   height: 16px;
-  color: #6366F1;
+  color: #007AFF;
   flex-shrink: 0;
 }
 .model-popover-status {
-  color: #64748B;
+  color: #9CA3AF;
   font-size: 12px;
   padding: 10px 12px;
 }
 .model-popover-status.muted {
-  color: #94A3B8;
+  color: #9CA3AF;
 }
 .model-filter-input {
   width: 100%;
   padding: 7px 10px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #E5E5EA;
   border-radius: 8px;
   font-size: 13px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   outline: none;
-  background: rgba(248, 250, 252, 0.8);
-  color: #1E293B;
+  background: #F5F5F5;
+  color: #1A1A1A;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .model-filter-input::placeholder {
-  color: #94A3B8;
+  color: #9CA3AF;
 }
 .model-filter-input:focus {
-  border-color: #6366F1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+  border-color: #1A1A1A;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.08);
 }
 
 /* ── Animations ─────────────────────────────────────────────────────────── */
@@ -3056,32 +3049,19 @@ onUnmounted(() => {
   50%       { opacity: 0.5; box-shadow: 0 0 10px #3fb950, 0 0 20px #3fb95055; }
 }
 
-/* ── Tools chip button (status line) ────────────────────────────────────── */
-.tools-chip-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-family: 'Noto Sans', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  background: #FEF3C7;
-  color: #92400E;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s;
+/* ── Tools chip (matches persona/model chip style) ─────────────────────── */
+.tools-chip {
+  padding: 4px 10px 4px 4px;
+  gap: 6px;
+  height: 36px;
 }
-.tools-chip-btn:hover { background: #FDE68A; }
 
 /* ── Tools selection modal ─────────────────────────────────────────────── */
 .tools-select-backdrop {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3089,15 +3069,10 @@ onUnmounted(() => {
 .tools-select-modal {
   width: min(560px, 95vw);
   max-height: 80vh;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 18px;
-  box-shadow:
-    0 25px 60px rgba(0, 0, 0, 0.18),
-    0 8px 32px rgba(217, 119, 6, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -3107,7 +3082,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid #E5E5EA;
 }
 .tools-select-header-left {
   display: flex;
@@ -3119,21 +3094,21 @@ onUnmounted(() => {
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  background: #D97706;
+  background: #1A1A1A;
 }
 .tools-select-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-subtitle);
   font-weight: 700;
-  color: #0F172A;
+  color: #1A1A1A;
   margin: 0;
 }
 .tools-select-count {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 600;
-  color: #92400E;
-  background: #FEF3C7;
+  color: #6B7280;
+  background: #F5F5F5;
   padding: 2px 8px;
   border-radius: 6px;
 }
@@ -3141,17 +3116,17 @@ onUnmounted(() => {
   width: 32px; height: 32px;
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  border: none; background: transparent; color: #64748B; cursor: pointer;
+  border: none; background: transparent; color: #9CA3AF; cursor: pointer;
   transition: background 0.15s;
 }
-.tools-select-close:hover { background: #F1F5F9; }
+.tools-select-close:hover { background: #F5F5F5; }
 
 .tools-select-filters {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 20px;
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid #F5F5F5;
 }
 .tools-select-search-wrap {
   flex: 1;
@@ -3160,19 +3135,19 @@ onUnmounted(() => {
   gap: 8px;
   padding: 7px 12px;
   border-radius: 8px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #E5E5EA;
   background: #fff;
 }
 .tools-select-search {
   flex: 1;
   border: none;
   outline: none;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  color: #1E293B;
+  color: #1A1A1A;
   background: transparent;
 }
-.tools-select-search::placeholder { color: #94A3B8; }
+.tools-select-search::placeholder { color: #9CA3AF; }
 .tools-select-actions {
   display: flex;
   gap: 6px;
@@ -3180,43 +3155,43 @@ onUnmounted(() => {
 .tools-select-action-btn {
   padding: 5px 10px;
   border-radius: 6px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 600;
-  border: 1px solid #E2E8F0;
-  background: #F8FAFC;
-  color: #475569;
+  border: 1px solid #E5E5EA;
+  background: #F2F2F7;
+  color: #6B7280;
   cursor: pointer;
   transition: background 0.15s;
   white-space: nowrap;
 }
-.tools-select-action-btn:hover { background: #E2E8F0; }
+.tools-select-action-btn:hover { background: #E5E5EA; }
 
 .tools-select-categories {
   display: flex;
   gap: 6px;
   padding: 8px 20px;
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid #F5F5F5;
   flex-wrap: wrap;
 }
 .tools-cat-chip {
   padding: 3px 10px;
   border-radius: 6px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 600;
-  border: 1px solid #E2E8F0;
-  background: #F8FAFC;
-  color: #64748B;
+  border: 1px solid #E5E5EA;
+  background: #F2F2F7;
+  color: #9CA3AF;
   cursor: pointer;
   transition: all 0.15s;
 }
 .tools-cat-chip.active {
-  background: #D97706;
+  background: #1A1A1A;
   color: #fff;
-  border-color: #D97706;
+  border-color: #1A1A1A;
 }
-.tools-cat-chip:hover:not(.active) { background: #E2E8F0; }
+.tools-cat-chip:hover:not(.active) { background: #E5E5EA; }
 
 .tools-select-list {
   flex: 1;
@@ -3229,9 +3204,9 @@ onUnmounted(() => {
   text-align: center;
 }
 .tools-select-empty p {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  color: #94A3B8;
+  color: #9CA3AF;
   margin: 0;
 }
 .tools-select-row {
@@ -3239,19 +3214,21 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: background 0.15s;
-  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+  border: 1px solid #E5E5EA;
+  background: #FFFFFF;
+  margin-bottom: 6px;
 }
-.tools-select-row:hover { background: #F8FAFC; }
+.tools-select-row:hover { background: #F5F5F5; }
 .tools-select-row.enabled {
-  background: #FFFBEB;
-  border-color: rgba(217, 119, 6, 0.2);
+  border-color: #1A1A1A;
+  background: rgba(0,0,0,0.02);
 }
 .tools-select-checkbox {
   width: 16px; height: 16px;
-  accent-color: #D97706;
+  accent-color: #1A1A1A;
   flex-shrink: 0;
   cursor: pointer;
 }
@@ -3263,25 +3240,25 @@ onUnmounted(() => {
   gap: 2px;
 }
 .tools-select-row-name {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
-  color: #1E293B;
+  color: #1A1A1A;
 }
 .tools-select-row-desc {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
-  color: #64748B;
+  color: #9CA3AF;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .tools-select-row-cat {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 10px;
   font-weight: 600;
-  color: #92400E;
-  background: #FEF3C7;
+  color: #6B7280;
+  background: #F5F5F5;
   padding: 2px 6px;
   border-radius: 4px;
   flex-shrink: 0;
@@ -3290,22 +3267,22 @@ onUnmounted(() => {
   display: flex;
   justify-content: flex-end;
   padding: 12px 20px;
-  border-top: 1px solid #E2E8F0;
+  border-top: 1px solid #E5E5EA;
 }
 .tools-select-done-btn {
   padding: 8px 22px;
   border-radius: 8px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
-  background: #D97706;
+  background: #1A1A1A;
   color: #fff;
   border: none;
   cursor: pointer;
   transition: background 0.15s;
-  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25);
+  box-shadow: none;
 }
-.tools-select-done-btn:hover { background: #B45309; }
+.tools-select-done-btn:hover { background: #333; }
 
 /* ── Reduced motion ─────────────────────────────────────────────────────── */
 /* ── Rename modal ───────────────────────────────────────────────────────── */
@@ -3313,7 +3290,7 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
@@ -3322,15 +3299,10 @@ onUnmounted(() => {
 }
 .rename-modal {
   width: min(420px, 90vw);
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
   border-radius: 16px;
-  box-shadow:
-    0 25px 60px rgba(0, 0, 0, 0.18),
-    0 8px 32px rgba(99, 102, 241, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   overflow: hidden;
 }
 .rename-header {
@@ -3338,13 +3310,13 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid #E5E5EA;
 }
 .rename-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-subtitle);
   font-weight: 700;
-  color: #0F172A;
+  color: #1A1A1A;
   margin: 0;
 }
 .rename-close-btn {
@@ -3356,22 +3328,22 @@ onUnmounted(() => {
   justify-content: center;
   border: none;
   background: transparent;
-  color: #64748B;
+  color: #9CA3AF;
   cursor: pointer;
   transition: background 0.15s;
 }
-.rename-close-btn:hover { background: #F1F5F9; }
+.rename-close-btn:hover { background: #F5F5F5; }
 .rename-body {
   padding: 16px 20px;
 }
 .rename-input {
   width: 100%;
   padding: 10px 14px;
-  border: 1.5px solid #E2E8F0;
+  border: 1.5px solid #E5E5EA;
   border-radius: 10px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
-  color: #1E293B;
+  color: #1A1A1A;
   background: #fff;
   outline: none;
   resize: none;
@@ -3379,7 +3351,7 @@ onUnmounted(() => {
   box-sizing: border-box;
   transition: border-color 0.15s;
 }
-.rename-input:focus { border-color: #6366F1; }
+.rename-input:focus { border-color: #1A1A1A; }
 .rename-actions {
   display: flex;
   justify-content: flex-end;
@@ -3389,18 +3361,18 @@ onUnmounted(() => {
 .rename-btn {
   padding: 8px 18px;
   border-radius: 8px;
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
   cursor: pointer;
   border: none;
   transition: background 0.15s;
 }
-.rename-btn.primary { background: #3B82F6; color: #fff; }
-.rename-btn.primary:hover { background: #2563EB; }
-.rename-btn.primary:disabled { background: #94A3B8; cursor: not-allowed; }
-.rename-btn.secondary { background: #F1F5F9; color: #475569; }
-.rename-btn.secondary:hover { background: #E2E8F0; }
+.rename-btn.primary { background: #007AFF; color: #fff; }
+.rename-btn.primary:hover { background: #0056CC; }
+.rename-btn.primary:disabled { background: #9CA3AF; cursor: not-allowed; }
+.rename-btn.secondary { background: #F5F5F5; color: #6B7280; }
+.rename-btn.secondary:hover { background: #E5E5EA; }
 
 @media (prefers-reduced-motion: reduce) {
   .chat-sidebar-new-btn,
