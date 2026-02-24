@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- ── User message ─────────────────────────────────────────────────────── -->
-    <div v-if="message.role === 'user'" class="prose-sparkai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" />
+    <div v-if="message.role === 'user'" class="prose-sparkai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleCodeCopy" />
 
     <!-- ── Assistant message ────────────────────────────────────────────────── -->
     <template v-else>
@@ -15,7 +15,7 @@
           <span v-if="todoSummary.done > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#dcfce7; color:#15803d;">{{ todoSummary.done }} done</span>
           <span v-if="todoSummary.running > 0" class="px-1.5 py-0.5 rounded-full animate-pulse" style="font-size:0.7rem; background:#fef9c3; color:#a16207;">{{ todoSummary.running }} running</span>
           <span v-if="todoSummary.blocked > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#fee2e2; color:#dc2626;">{{ todoSummary.blocked }} blocked</span>
-          <span v-if="todoSummary.pending > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#f1f5f9; color:#64748b;">{{ todoSummary.pending }} pending</span>
+          <span v-if="todoSummary.pending > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#F5F5F5; color:#9CA3AF;">{{ todoSummary.pending }} pending</span>
         </div>
         <span class="ml-auto" style="font-size:0.75rem; color:#6b7c6b;">{{ todoSummary.done }}/{{ latestTodos.length }}</span>
         <span style="font-size:0.7rem; color:#9ca89c; margin-left:4px;">{{ todoCollapsed ? '▶' : '▼' }}</span>
@@ -29,7 +29,7 @@
             <span v-if="todo.status === 'completed'" style="color:#22c55e;">✓</span>
             <span v-else-if="todo.status === 'in_progress'" style="color:#eab308;">⚡</span>
             <span v-else-if="todo.status === 'blocked'" style="color:#ef4444;">✕</span>
-            <span v-else style="color:#94a3b8;">○</span>
+            <span v-else style="color:#9CA3AF;">○</span>
           </span>
           <!-- Title -->
           <span class="flex-1" style="font-size:0.8rem; color:#374151;" :style="todo.status === 'completed' ? 'text-decoration:line-through; color:#9ca3af;' : ''">
@@ -40,7 +40,7 @@
             :style="todo.status === 'completed' ? 'background:#dcfce7; color:#15803d;' :
                     todo.status === 'in_progress' ? 'background:#fef9c3; color:#a16207;' :
                     todo.status === 'blocked' ? 'background:#fee2e2; color:#dc2626;' :
-                    'background:#f1f5f9; color:#64748b;'">
+                    'background:#F5F5F5; color:#9CA3AF;'">
             {{ todo.status === 'completed' ? 'done' : todo.status === 'in_progress' ? 'running' : todo.status === 'blocked' ? 'blocked' : 'pending' }}
           </span>
         </div>
@@ -51,15 +51,15 @@
     <template v-for="(seg, i) in message.segments" :key="i">
 
       <!-- Text segment -->
-      <div v-if="seg.type === 'text'" class="prose-sparkai" style="max-width:none;" v-html="renderMarkdown(seg.content)" />
+      <div v-if="seg.type === 'text'" class="prose-sparkai" style="max-width:none;" v-html="renderMarkdown(seg.content)" @click="handleCodeCopy" />
 
       <!-- File diff (file_operation write/append) -->
       <div v-else-if="seg.type === 'tool' && isFileWrite(seg)" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #d1d5db; font-size:0.78rem;">
         <!-- Diff header -->
-        <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none" style="background:#1e2432; color:#e2e8f0;" @click="toggleTool(i, seg)">
+        <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none" style="background:#1C1C1E; color:#E5E5EA;" @click="toggleTool(i, seg)">
           <span style="color:#60a5fa;">🔧</span>
           <span style="font-size:0.75rem; font-weight:600;">file_operation</span>
-          <span class="px-1.5 py-0.5 rounded" style="background:#374151; color:#9ca3af; font-size:0.7rem; font-family:monospace;">{{ seg.input?.operation }}</span>
+          <span class="px-1.5 py-0.5 rounded" style="background:#374151; color:#9CA3AF; font-size:0.7rem; font-family:monospace;">{{ seg.input?.operation }}</span>
           <span v-if="seg.input?.path" class="px-1.5 py-0.5 rounded" style="background:#1e3a5f; color:#93c5fd; font-size:0.7rem; font-family:monospace;">{{ seg.input.path }}</span>
           <div class="ml-auto flex items-center gap-2">
             <span class="flex items-center gap-1">
@@ -108,13 +108,13 @@
       </div>
 
       <!-- Generic tool / background_task / dispatch_subagent — collapsible summary row -->
-      <div v-else-if="seg.type === 'tool' && !isHiddenTool(seg)" class="my-1.5 rounded-lg overflow-hidden" style="border:1px solid #e2e8f0;">
+      <div v-else-if="seg.type === 'tool' && !isHiddenTool(seg)" class="my-1.5 rounded-xl overflow-hidden" style="border:1px solid #E5E5EA; background:#FFFFFF;">
         <!-- Header row — always visible -->
         <div
           class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none"
           :style="seg.output === undefined
             ? 'background:#fffbeb; border-left:3px solid #f59e0b;'
-            : 'background:#f8fafc; border-left:3px solid #22c55e;'"
+            : 'background:#F5F5F5; border-left:3px solid #22c55e;'"
           @click="toggleTool(i, seg)"
         >
           <!-- Icon -->
@@ -143,32 +143,50 @@
             done
           </span>
           <!-- Chevron -->
-          <span style="font-size:0.7rem; color:#9ca3af; margin-left:2px;">{{ isToolExpanded(i, seg) ? '▼' : '▶' }}</span>
+          <span style="font-size:0.7rem; color:#9CA3AF; margin-left:2px;">{{ isToolExpanded(i, seg) ? '▼' : '▶' }}</span>
         </div>
         <!-- Expanded body — shown when running OR manually expanded -->
-        <div v-if="isToolExpanded(i, seg)" style="background:#f9fafb; border-top:1px solid #e2e8f0;">
+        <div v-if="isToolExpanded(i, seg)" style="background:#FAFAFA; border-top:1px solid #E5E5EA;">
           <!-- Input -->
           <div v-if="seg.input && Object.keys(seg.input).length > 0" class="px-3 py-2">
             <div class="flex items-center justify-between mb-1">
               <span style="font-size:0.7rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">Input</span>
-              <button @click.stop="copyBlock('input-'+i, JSON.stringify(seg.input, null, 2))" class="flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer" style="background:#f1f5f9; border:1px solid #e2e8f0; color:#64748b; font-size:0.68rem;">
+              <button @click.stop="copyBlock('input-'+i, JSON.stringify(seg.input, null, 2))" class="flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer" style="background:#F5F5F5; border:1px solid #E5E5EA; color:#9CA3AF; font-size:0.68rem;">
                 {{ copiedBlock === 'input-'+i ? '✓ Copied' : '⎘ Copy' }}
               </button>
             </div>
-            <pre class="rounded p-2 overflow-x-auto" style="background:#1e2432; color:#e2e8f0; font-size:0.72rem; margin:0; white-space:pre-wrap;">{{ expandedInputs[i] || JSON.stringify(seg.input, null, 2).length <= 50 ? JSON.stringify(seg.input, null, 2) : JSON.stringify(seg.input, null, 2).slice(0, 50) + '…' }}</pre>
-            <button v-if="JSON.stringify(seg.input, null, 2).length > 50" @click.stop="expandedInputs[i] = !expandedInputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#3b82f6; background:none; border:none; padding:0;">{{ expandedInputs[i] ? 'Show less ▲' : 'View full ▼' }}</button>
+            <pre class="rounded-xl p-2 overflow-x-auto" style="background:#1C1C1E; color:#E5E5EA; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px;">{{ expandedInputs[i] || JSON.stringify(seg.input, null, 2).length <= 50 ? JSON.stringify(seg.input, null, 2) : JSON.stringify(seg.input, null, 2).slice(0, 50) + '…' }}</pre>
+            <button v-if="JSON.stringify(seg.input, null, 2).length > 50" @click.stop="expandedInputs[i] = !expandedInputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#007AFF; background:none; border:none; padding:0;">{{ expandedInputs[i] ? 'Show less ▲' : 'View full ▼' }}</button>
           </div>
+          <!-- Tool images are rendered via the standalone inline image segment below -->
           <!-- Output -->
-          <div v-if="seg.output !== undefined" class="px-3 py-2" style="border-top:1px solid #e2e8f0;">
+          <div v-if="seg.output !== undefined" class="px-3 py-2" style="border-top:1px solid #E5E5EA;">
             <div class="flex items-center justify-between mb-1">
               <span style="font-size:0.7rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">Output</span>
-              <button @click.stop="copyBlock('output-'+i, String(seg.output))" class="flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer" style="background:#f1f5f9; border:1px solid #e2e8f0; color:#64748b; font-size:0.68rem;">
+              <button @click.stop="copyBlock('output-'+i, String(seg.output))" class="flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer" style="background:#F5F5F5; border:1px solid #E5E5EA; color:#9CA3AF; font-size:0.68rem;">
                 {{ copiedBlock === 'output-'+i ? '✓ Copied' : '⎘ Copy' }}
               </button>
             </div>
-            <pre class="rounded p-2 overflow-x-auto" style="background:#1e2432; color:#e2e8f0; font-size:0.72rem; margin:0; white-space:pre-wrap;">{{ expandedOutputs[i] || String(seg.output).length <= 50 ? String(seg.output) : String(seg.output).slice(0, 50) + '…' }}</pre>
-            <button v-if="String(seg.output).length > 50" @click.stop="expandedOutputs[i] = !expandedOutputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#3b82f6; background:none; border:none; padding:0;">{{ expandedOutputs[i] ? 'Show less ▲' : 'View full ▼' }}</button>
+            <pre class="rounded-xl p-2 overflow-x-auto" style="background:#1C1C1E; color:#E5E5EA; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px;">{{ expandedOutputs[i] || String(seg.output).length <= 50 ? String(seg.output) : String(seg.output).slice(0, 50) + '…' }}</pre>
+            <button v-if="String(seg.output).length > 50" @click.stop="expandedOutputs[i] = !expandedOutputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#007AFF; background:none; border:none; padding:0;">{{ expandedOutputs[i] ? 'Show less ▲' : 'View full ▼' }}</button>
           </div>
+        </div>
+      </div>
+
+      <!-- Inline images — always visible in the message flow (base64 or URL) -->
+      <div v-else-if="seg.type === 'image' && seg.images && seg.images.length > 0" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #E5E5EA; background:#FFFFFF;">
+        <div class="px-3 py-2" style="background:#F5F5F5; border-bottom:1px solid #E5E5EA;">
+          <span style="font-size:0.75rem; font-weight:600; color:#6B7280;">Image{{ seg.images.length > 1 ? 's' : '' }}</span>
+          <span v-if="seg.source" style="font-size:0.7rem; color:#9CA3AF; margin-left:6px;">from {{ seg.source }}</span>
+        </div>
+        <div class="inline-images-grid p-3">
+          <img
+            v-for="(img, imgIdx) in seg.images"
+            :key="imgIdx"
+            :src="resolveImageSrc(img)"
+            class="inline-image"
+            @click="openImageFullscreen(resolveImageSrc(img))"
+          />
         </div>
       </div>
 
@@ -179,11 +197,11 @@
         <span v-for="n in 5" :key="n" class="wave-bar" :style="`--bar-color:#4c8446; --bar-glow:#4c844680; animation-delay:${(n-1)*0.13}s;`" />
       </div>
       <!-- Duration label: live while streaming, final when done -->
-      <div v-if="message.streaming && message.streamingStartedAt" class="flex items-center gap-1 mt-1.5" style="color:#94A3B8; font-size:var(--fs-small);">
+      <div v-if="message.streaming && message.streamingStartedAt" class="flex items-center gap-1 mt-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
         <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         <span>cooking for {{ formatDuration(elapsedMs) }}…</span>
       </div>
-      <div v-else-if="!message.streaming && message.durationMs" class="flex items-center gap-1 mt-1.5" style="color:#94A3B8; font-size:var(--fs-small);">
+      <div v-else-if="!message.streaming && message.durationMs" class="flex items-center gap-1 mt-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
         <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         <span>cooked for {{ formatDuration(message.durationMs) }}</span>
       </div>
@@ -236,13 +254,47 @@ function formatDuration(ms) {
   return `${mins} min${mins !== 1 ? 's' : ''} ${secs}s`
 }
 
+// ── Strip base64 blobs from text before rendering ────────────────────────────
+function stripBase64(text) {
+  if (!text || text.length < 200) return text
+  // Replace data:image URIs with a short label
+  let cleaned = text.replace(/data:(image\/[a-z+]+);base64,[A-Za-z0-9+/=]{100,}/gi,
+    (m, mime) => `[image: ${mime}]`)
+  // Replace any remaining long base64-like runs (100+ chars of pure base64 alphabet)
+  cleaned = cleaned.replace(/[A-Za-z0-9+/=]{200,}/g,
+    (m) => `[binary data: ${Math.round(m.length * 0.75 / 1024)}KB]`)
+  return cleaned
+}
+
 // ── Markdown renderer ────────────────────────────────────────────────────────
 function renderMarkdown(text) {
   if (!text) return ''
   try {
-    const raw = marked.parse(String(text), { breaks: true, gfm: true })
-    return DOMPurify.sanitize(raw)
+    const clean = stripBase64(String(text))
+    const raw = marked.parse(clean, { breaks: true, gfm: true })
+    const sanitized = DOMPurify.sanitize(raw)
+    // Wrap <pre><code> blocks with a header bar containing a copy button
+    return sanitized
+      .replace(/<pre><code(?:\s+class="language-(\w+)")?>/g, (m, lang) => {
+        const label = lang ? `<span class="code-lang">${lang}</span>` : ''
+        return `<div class="code-block-wrap"><div class="code-block-header">${label}<span class="code-copy-btn">Copy</span></div><pre><code${lang ? ` class="language-${lang}"` : ''}>`
+      })
+      .replace(/<\/code><\/pre>/g, '</code></pre></div>')
   } catch { return String(text) }
+}
+
+// ── Copy handler for code blocks (event delegation) ──────────────────────────
+function handleCodeCopy(e) {
+  const btn = e.target.closest('.code-copy-btn')
+  if (!btn) return
+  const wrap = btn.closest('.code-block-wrap')
+  if (!wrap) return
+  const code = wrap.querySelector('code')
+  if (!code) return
+  navigator.clipboard.writeText(code.textContent).then(() => {
+    btn.textContent = 'Copied!'
+    setTimeout(() => { btn.textContent = 'Copy' }, 2000)
+  }).catch(() => {})
 }
 
 // ── Todo panel state ─────────────────────────────────────────────────────────
@@ -359,6 +411,32 @@ async function copyBlock(key, text) {
   } catch {}
 }
 
+/**
+ * Resolve an image object to a renderable src string.
+ * Supports: { url }, { src }, { data, mimeType } (base64), or a plain string.
+ */
+function resolveImageSrc(img) {
+  if (typeof img === 'string') return img
+  if (img.url) return img.url
+  if (img.src) return img.src
+  if (img.data && img.mimeType) return `data:${img.mimeType};base64,${img.data}`
+  if (img.data) return `data:image/png;base64,${img.data}`
+  return ''
+}
+
+// Open image in a new window for fullscreen viewing
+function openImageFullscreen(dataUri) {
+  const win = window.open('', '_blank')
+  if (!win) return
+  const style = win.document.createElement('style')
+  style.textContent = 'body{margin:0;background:#1A1A1A;display:flex;align-items:center;justify-content:center;min-height:100vh;}img{max-width:100%;max-height:100vh;object-fit:contain;}'
+  win.document.head.appendChild(style)
+  win.document.title = 'MCP Image'
+  const img = win.document.createElement('img')
+  img.src = dataUri
+  win.document.body.appendChild(img)
+}
+
 // ── File diff ────────────────────────────────────────────────────────────────
 function getDiff(i, seg) {
   if (diffCache[i]) return diffCache[i]
@@ -412,6 +490,79 @@ function diffMarker(type) {
 </script>
 
 <style scoped>
+/* ── Code block copy button ────────────────────────────────────────────────── */
+:deep(.code-block-wrap) {
+  position: relative;
+  margin: 0.5rem 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #30363d;
+}
+:deep(.code-block-header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: #1C1C1E;
+  border-bottom: 1px solid #30363d;
+  min-height: 28px;
+}
+:deep(.code-lang) {
+  font-size: 0.7rem;
+  color: #8b949e;
+  font-family: monospace;
+  text-transform: lowercase;
+}
+:deep(.code-copy-btn) {
+  font-size: 0.7rem;
+  color: #8b949e;
+  background: transparent;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 2px 8px;
+  cursor: pointer;
+  margin-left: auto;
+  user-select: none;
+}
+:deep(.code-copy-btn:hover) {
+  color: #e6edf3;
+  background: #30363d;
+}
+:deep(.code-block-wrap pre) {
+  margin: 0;
+  padding: 12px;
+  background: #1C1C1E;
+  overflow-x: auto;
+}
+:deep(.code-block-wrap code) {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.78rem;
+  color: #E5E5EA;
+  background: transparent;
+  padding: 0;
+}
+
+/* ── Inline Images (base64 or URL) ─────────────────────────────────────────── */
+.inline-images-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.inline-image {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 12px;
+  border: 1px solid #E5E5EA;
+  cursor: pointer;
+  transition: opacity 0.15s, box-shadow 0.15s;
+  object-fit: contain;
+  background: #FFFFFF;
+}
+.inline-image:hover {
+  opacity: 0.9;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
 .wave-bar {
   display: inline-block;
   width: 3.5px;

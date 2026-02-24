@@ -2,14 +2,14 @@
   <!-- Full-width drag region — clicks on buttons are excluded via no-drag -->
   <div
     class="titlebar flex items-center shrink-0 select-none"
-    style="height:38px; background:#1e2433; -webkit-app-region:drag; padding:0 8px 0 14px;"
+    style="height:38px; background:#FFFFFF; border-bottom:1px solid #E5E5EA; -webkit-app-region:drag; padding:0 8px 0 14px;"
   >
     <!-- Sidebar toggle -->
     <button
       @click.stop="$emit('toggle-sidebar')"
       class="flex items-center justify-center rounded transition-colors mr-2"
-      style="-webkit-app-region:no-drag; width:28px; height:28px; color:#8fbc8f; background:transparent; border:none; cursor:pointer; flex-shrink:0;"
-      @mouseenter="e => e.currentTarget.style.background='rgba(255,255,255,0.08)'"
+      style="-webkit-app-region:no-drag; width:28px; height:28px; color:#6B7280; background:transparent; border:none; cursor:pointer; flex-shrink:0;"
+      @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
       @mouseleave="e => e.currentTarget.style.background='transparent'"
       title="Toggle sidebar"
     >
@@ -21,7 +21,7 @@
     </button>
 
     <!-- App name -->
-    <span style="font-family:'Lora',serif; font-size:var(--fs-body); font-weight:600; color:#c4edb0; letter-spacing:0.02em;">
+    <span style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#1A1A1A; letter-spacing:0.02em;">
       SparkAI
     </span>
 
@@ -33,8 +33,8 @@
       <button
         @click.stop="minimize"
         class="flex items-center justify-center rounded transition-colors"
-        style="width:32px; height:26px; background:transparent; border:none; color:#8fbc8f; cursor:pointer;"
-        @mouseenter="e => e.currentTarget.style.background='rgba(255,255,255,0.08)'"
+        style="width:32px; height:26px; background:transparent; border:none; color:#6B7280; cursor:pointer;"
+        @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
         @mouseleave="e => e.currentTarget.style.background='transparent'"
         title="Minimize"
       >
@@ -47,8 +47,8 @@
       <button
         @click.stop="toggleMaximize"
         class="flex items-center justify-center rounded transition-colors"
-        style="width:32px; height:26px; background:transparent; border:none; color:#8fbc8f; cursor:pointer;"
-        @mouseenter="e => e.currentTarget.style.background='rgba(255,255,255,0.08)'"
+        style="width:32px; height:26px; background:transparent; border:none; color:#6B7280; cursor:pointer;"
+        @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
         @mouseleave="e => e.currentTarget.style.background='transparent'"
         :title="isMaximized ? 'Restore' : 'Maximize'"
       >
@@ -59,7 +59,7 @@
         <!-- Restore icon -->
         <svg v-else width="11" height="11" viewBox="0 0 11 11">
           <rect x="2" y="0.5" width="8.5" height="8.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>
-          <rect x="0.5" y="2"   width="8.5" height="8.5" rx="1" fill="#2d3a29" stroke="currentColor" stroke-width="1.2"/>
+          <rect x="0.5" y="2"   width="8.5" height="8.5" rx="1" fill="#FFFFFF" stroke="currentColor" stroke-width="1.2"/>
         </svg>
       </button>
 
@@ -67,9 +67,9 @@
       <button
         @click.stop="close"
         class="flex items-center justify-center rounded transition-colors"
-        style="width:32px; height:26px; background:transparent; border:none; color:#8fbc8f; cursor:pointer;"
+        style="width:32px; height:26px; background:transparent; border:none; color:#6B7280; cursor:pointer;"
         @mouseenter="e => { e.currentTarget.style.background='#c0392b'; e.currentTarget.style.color='#ffffff'; }"
-        @mouseleave="e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#8fbc8f'; }"
+        @mouseleave="e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#6B7280'; }"
         title="Close"
       >
         <svg width="11" height="11" viewBox="0 0 11 11">

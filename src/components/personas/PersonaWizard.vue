@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="wiz-header">
         <div class="wiz-header-left">
-          <div class="wiz-header-icon" :style="{ background: type === 'system' ? '#6366F1' : '#10B981' }">
+          <div class="wiz-header-icon" :style="{ background: type === 'system' ? '#007AFF' : '#10B981' }">
             <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path v-if="type === 'system'" d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1M9 16h0M15 16h0" />
               <path v-else d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
@@ -23,7 +23,7 @@
         <div v-for="(msg, i) in chatMessages" :key="i" class="wiz-msg" :class="msg.from">
           <!-- AI message -->
           <template v-if="msg.from === 'ai'">
-            <div class="wiz-msg-avatar ai" :style="{ background: type === 'system' ? '#6366F1' : '#10B981' }">
+            <div class="wiz-msg-avatar ai" :style="{ background: type === 'system' ? '#007AFF' : '#10B981' }">
               <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8"/></svg>
             </div>
             <div class="wiz-msg-bubble ai">
@@ -412,7 +412,7 @@ onMounted(() => {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
@@ -423,27 +423,22 @@ onMounted(() => {
 .wiz-modal {
   width: min(1100px, 90vw);
   height: 92vh;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
   border-radius: 20px;
-  box-shadow:
-    0 25px 60px rgba(0, 0, 0, 0.18),
-    0 8px 32px rgba(99, 102, 241, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* ── Header ──────────────────────────────────────────────────────────────── */
+/* -- Header ---------------------------------------------------------------- */
 .wiz-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid #E5E5EA;
 }
 .wiz-header-left {
   display: flex;
@@ -460,10 +455,10 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .wiz-title {
-  font-family: 'Figtree', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-subtitle);
   font-weight: 700;
-  color: #0F172A;
+  color: #1A1A1A;
   margin: 0;
 }
 .wiz-close-btn {
@@ -475,13 +470,13 @@ onMounted(() => {
   justify-content: center;
   border: none;
   background: transparent;
-  color: #64748B;
+  color: #9CA3AF;
   cursor: pointer;
   transition: background 0.15s;
 }
-.wiz-close-btn:hover { background: #F1F5F9; }
+.wiz-close-btn:hover { background: #F5F5F5; }
 
-/* ── Chat area ───────────────────────────────────────────────────────────── */
+/* -- Chat area ------------------------------------------------------------- */
 .wiz-chat {
   flex: 1;
   overflow-y: auto;
@@ -501,29 +496,29 @@ onMounted(() => {
 }
 .wiz-msg-bubble {
   border-radius: 12px; padding: 10px 14px;
-  font-family: 'Noto Sans', sans-serif; font-size: var(--fs-body); line-height: 1.55;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body); line-height: 1.55;
 }
-.wiz-msg-bubble.ai { background: #F1F5F9; color: #1E293B; border-bottom-left-radius: 4px; }
-.wiz-msg-bubble.user { background: #3B82F6; color: #fff; border-bottom-right-radius: 4px; }
+.wiz-msg-bubble.ai { background: #F5F5F5; color: #1A1A1A; border-bottom-left-radius: 4px; }
+.wiz-msg-bubble.user { background: #007AFF; color: #fff; border-bottom-right-radius: 4px; }
 .wiz-msg-bubble p { margin: 0; }
 
-/* ── Option pills ────────────────────────────────────────────────────────── */
+/* -- Option pills ---------------------------------------------------------- */
 .wiz-options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .wiz-option-btn {
-  padding: 5px 12px; border-radius: 9999px; border: 1px solid #CBD5E1;
-  background: #fff; font-family: 'Noto Sans', sans-serif; font-size: var(--fs-secondary);
-  font-weight: 500; color: #475569; cursor: pointer; transition: all 0.15s;
+  padding: 5px 12px; border-radius: 9999px; border: 1px solid #D1D1D6;
+  background: #fff; font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
+  font-weight: 500; color: #6B7280; cursor: pointer; transition: all 0.15s;
 }
-.wiz-option-btn:hover { border-color: #6366F1; color: #6366F1; background: rgba(99,102,241,0.06); }
-.wiz-option-btn.selected { border-color: #6366F1; background: #6366F1; color: #fff; }
+.wiz-option-btn:hover { border-color: #007AFF; color: #007AFF; background: rgba(0,122,255,0.06); }
+.wiz-option-btn.selected { border-color: #007AFF; background: #007AFF; color: #fff; }
 .wiz-option-done {
   padding: 5px 14px; border-radius: 9999px; border: 1.5px solid #10B981; background: #10B981;
-  font-family: 'Noto Sans', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
   color: #fff; cursor: pointer; transition: background 0.15s; display: flex; align-items: center; gap: 4px;
 }
 .wiz-option-done:hover { background: #059669; border-color: #059669; }
 
-/* ── Avatar picker trigger ───────────────────────────────────────────────── */
+/* -- Avatar picker trigger ------------------------------------------------- */
 .wiz-avatar-trigger {
   display: flex;
   align-items: center;
@@ -536,18 +531,18 @@ onMounted(() => {
   gap: 8px;
   padding: 10px 20px;
   border-radius: 10px;
-  border: 1.5px solid #6366F1;
-  background: rgba(99, 102, 241, 0.06);
-  color: #6366F1;
-  font-family: 'Noto Sans', sans-serif;
+  border: 1.5px solid #007AFF;
+  background: rgba(0, 122, 255, 0.06);
+  color: #007AFF;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s, box-shadow 0.15s;
 }
 .wiz-pick-avatar-btn:hover {
-  background: rgba(99, 102, 241, 0.12);
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+  background: rgba(0, 122, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.2);
 }
 .wiz-avatar-preview-inline {
   display: flex;
@@ -555,35 +550,35 @@ onMounted(() => {
   gap: 8px;
 }
 .wiz-avatar-selected-label {
-  font-family: 'Noto Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 500;
   color: #10B981;
 }
 
-/* ── Input bar ───────────────────────────────────────────────────────────── */
+/* -- Input bar ------------------------------------------------------------- */
 .wiz-input-bar {
   display: flex; align-items: flex-end; gap: 8px;
-  padding: 12px 16px; border-top: 1px solid #E2E8F0; background: #FAFBFC;
+  padding: 12px 16px; border-top: 1px solid #E5E5EA; background: #F9F9F9;
 }
 .wiz-input {
-  flex: 1; padding: 10px 14px; border: 1px solid #E2E8F0; border-radius: 10px;
-  font-family: 'Noto Sans', sans-serif; font-size: var(--fs-body); color: #1E293B;
+  flex: 1; padding: 10px 14px; border: 1px solid #E5E5EA; border-radius: 10px;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body); color: #1A1A1A;
   background: #fff; outline: none; transition: border-color 0.15s; box-sizing: border-box;
   resize: none; line-height: 1.5; min-height: 44px; max-height: 120px;
 }
-.wiz-input:focus { border-color: #6366F1; }
+.wiz-input:focus { border-color: #007AFF; }
 .wiz-send-btn {
-  width: 38px; height: 38px; border-radius: 10px; border: none; background: #6366F1;
+  width: 38px; height: 38px; border-radius: 10px; border: none; background: #007AFF;
   color: #fff; display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: background 0.15s; flex-shrink: 0;
 }
-.wiz-send-btn:hover { background: #4F46E5; }
-.wiz-send-btn:disabled { background: #CBD5E1; cursor: not-allowed; }
+.wiz-send-btn:hover { background: #0056CC; }
+.wiz-send-btn:disabled { background: #D1D1D6; cursor: not-allowed; }
 
-/* ── Preview bar ─────────────────────────────────────────────────────────── */
+/* -- Preview bar ----------------------------------------------------------- */
 .wiz-preview-bar {
-  border-top: 1px solid #E2E8F0; padding: 14px 16px; background: #FAFBFC;
+  border-top: 1px solid #E5E5EA; padding: 14px 16px; background: #F9F9F9;
 }
 .wiz-preview-avatar-row {
   display: flex;
@@ -592,39 +587,39 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 .wiz-preview-avatar-placeholder {
-  width: 56px; height: 56px; border-radius: 50%; background: #E2E8F0;
+  width: 56px; height: 56px; border-radius: 50%; background: #E5E5EA;
   display: flex; align-items: center; justify-content: center;
-  font-size: 20px; font-weight: 700; color: #94A3B8;
+  font-size: 20px; font-weight: 700; color: #9CA3AF;
 }
 .wiz-change-avatar-btn {
-  padding: 6px 14px; border-radius: 8px; border: 1px solid #E2E8F0;
-  background: #fff; font-family: 'Noto Sans', sans-serif; font-size: var(--fs-secondary);
-  font-weight: 600; color: #6366F1; cursor: pointer; transition: background 0.15s, border-color 0.15s;
+  padding: 6px 14px; border-radius: 8px; border: 1px solid #E5E5EA;
+  background: #fff; font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
+  font-weight: 600; color: #007AFF; cursor: pointer; transition: background 0.15s, border-color 0.15s;
 }
-.wiz-change-avatar-btn:hover { background: #F1F5F9; border-color: #6366F1; }
+.wiz-change-avatar-btn:hover { background: #F5F5F5; border-color: #007AFF; }
 .wiz-preview-label {
-  display: block; font-family: 'Noto Sans', sans-serif; font-size: var(--fs-secondary);
-  font-weight: 600; color: #475569; margin-bottom: 6px;
+  display: block; font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
+  font-weight: 600; color: #6B7280; margin-bottom: 6px;
 }
 .wiz-preview-textarea {
-  width: 100%; padding: 10px 12px; border: 1px solid #E2E8F0; border-radius: 8px;
+  width: 100%; padding: 10px 12px; border: 1px solid #E5E5EA; border-radius: 8px;
   font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-secondary);
-  color: #1E293B; background: #fff; outline: none; resize: vertical; line-height: 1.6;
+  color: #1A1A1A; background: #fff; outline: none; resize: vertical; line-height: 1.6;
   box-sizing: border-box; transition: border-color 0.15s;
 }
-.wiz-preview-textarea:focus { border-color: #6366F1; }
+.wiz-preview-textarea:focus { border-color: #007AFF; }
 .wiz-preview-actions {
   display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;
 }
 .wiz-btn {
-  padding: 8px 18px; border-radius: 8px; font-family: 'Noto Sans', sans-serif;
+  padding: 8px 18px; border-radius: 8px; font-family: 'Inter', sans-serif;
   font-size: var(--fs-body); font-weight: 600; cursor: pointer; border: none; transition: background 0.15s;
 }
-.wiz-btn.primary { background: #6366F1; color: #fff; }
-.wiz-btn.primary:hover { background: #4F46E5; }
-.wiz-btn.primary:disabled { background: #94A3B8; cursor: not-allowed; }
-.wiz-btn.secondary { background: #F1F5F9; color: #475569; }
-.wiz-btn.secondary:hover { background: #E2E8F0; }
+.wiz-btn.primary { background: #007AFF; color: #fff; }
+.wiz-btn.primary:hover { background: #0056CC; }
+.wiz-btn.primary:disabled { background: #9CA3AF; cursor: not-allowed; }
+.wiz-btn.secondary { background: #F5F5F5; color: #6B7280; }
+.wiz-btn.secondary:hover { background: #E5E5EA; }
 
 @media (prefers-reduced-motion: reduce) {
   .wiz-option-btn, .wiz-pick-avatar-btn, .wiz-send-btn, .wiz-btn { transition: none; }

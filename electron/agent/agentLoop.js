@@ -13,10 +13,12 @@
  */
 const { logger } = require('../logger')
 const { AnthropicClient }  = require('./core/AnthropicClient')
+const { OpenAIClient }     = require('./core/OpenAIClient')
 const { ContextManager }   = require('./core/ContextManager')
 const { ToolRegistry }     = require('./tools/ToolRegistry')
 const { SubAgentManager }  = require('./managers/SubAgentManager')
 const { TaskManager }      = require('./managers/TaskManager')
+const { mcpManager }       = require('./mcp/McpManager')
 
 // No hardcoded skill prompts — they arrive dynamically from the UI store
 
@@ -25,15 +27,22 @@ class AgentLoop {
     this.config = config
     this.stopped = false
 
-    // Core components
-    this.anthropicClient = new AnthropicClient(config)
+    // Core components — choose client based on provider
+    const isOpenAIProvider = config.defaultProvider === 'openai' || config._resolvedProvider === 'openai'
+    if (isOpenAIProvider) {
+      this.anthropicClient = new OpenAIClient(config)
+      this.isOpenAI = true
+    } else {
+      this.anthropicClient = new AnthropicClient(config)
+      this.isOpenAI = false
+    }
     this.contextManager  = new ContextManager(this.anthropicClient)
     this.toolRegistry    = new ToolRegistry()
-    this.subAgentManager = new SubAgentManager(this.anthropicClient, this.toolRegistry)
+    this.subAgentManager = new SubAgentManager(this.anthropicClient, this.toolRegistry, this.isOpenAI)
     this.taskManager     = new TaskManager()
     this.contextSnapshot = null
 
-    logger.agent('AgentLoop init', { model: this.anthropicClient.resolveModel() })
+    logger.agent('AgentLoop init', { model: this.anthropicClient.resolveModel(), isOpenAI: this.isOpenAI })
   }
 
   stop() {
@@ -128,8 +137,10 @@ class AgentLoop {
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
   buildSystemPrompt(enabledAgents, enabledSkills, { systemPersonaPrompt, userPersonaPrompt } = {}) {
-    let system = `You are SparkAI, a powerful AI assistant running in a desktop application.
-You help users with coding, analysis, file management, system tasks, and general knowledge.
+    const basePrompt = (this.config.systemPrompt || '').trim()
+      || 'You are SparkAI, a versatile AI assistant running in a desktop application. You help users with a wide range of tasks including research, writing, analysis, coding, creative work, file management, and general knowledge.'
+
+    let system = `${basePrompt}
 
 CORE TOOLS (always available):
 - todo_manager: Plan complex tasks with structured todo lists
@@ -176,6 +187,28 @@ Load a skill when the user's request clearly matches its description.`
 - For long-running commands (builds, test suites), use background_task.
 - When asked about your capabilities or tools, report ONLY the agents and skills listed above as active.
 - Always report progress on large tasks.`
+
+    // Append MCP server info if any are enabled
+    const mcpServers = this.mcpServers || []
+    if (mcpServers.length > 0) {
+      const mcpEntries = mcpServers.map(s =>
+        `- ${s.name}: ${s.description || 'No description'} (${s.command} ${(s.args || []).join(' ')})`
+      )
+      system += `\n\nMCP SERVERS (external integrations — tools discovered dynamically):
+${mcpEntries.join('\n')}
+Use MCP tools when the user's request involves external services or integrations.`
+    }
+
+    // Append HTTP tools info if any are enabled
+    const httpTools = this.httpTools || []
+    if (httpTools.length > 0) {
+      const toolEntries = httpTools.map(t =>
+        `- http_${t.id}: [${t.method}] ${t.endpoint} — ${t.description || t.name}`
+      )
+      system += `\n\nHTTP TOOLS (user-defined API endpoints):
+${toolEntries.join('\n')}
+Use these tools when the user's request matches their description. Pass a 'body' object if the endpoint requires request data.`
+    }
 
     // Append persona context if provided
     if (systemPersonaPrompt) {
@@ -251,7 +284,12 @@ Load a skill when the user's request clearly matches its description.`
    * @param {{systemPersonaPrompt?:string, userPersonaPrompt?:string}} personaPrompts  Persona prompt texts
    * @returns {string} Final text output
    */
-  async run(messages, enabledAgents, enabledSkills, onChunk, currentAttachments, personaPrompts) {
+  async run(messages, enabledAgents, enabledSkills, onChunk, currentAttachments, personaPrompts, mcpServers, httpTools) {
+    // Store MCP servers for system prompt access
+    this.mcpServers = mcpServers || []
+    // Store HTTP tools for injection
+    this.httpTools = httpTools || []
+
     // Load tools for enabled agents
     this.toolRegistry.loadForAgents(enabledAgents)
 
@@ -268,7 +306,7 @@ Load a skill when the user's request clearly matches its description.`
     let finalText = ''
 
     // Gather all tool definitions: registry + subagent + background tasks
-    const allTools = [
+    const allToolsAnthropic = [
       ...this.toolRegistry.getToolDefinitions(),
       this.subAgentManager.getToolDefinition(),
       this.taskManager.getToolDefinition()
@@ -276,7 +314,7 @@ Load a skill when the user's request clearly matches its description.`
 
     // Add load_skill tool when skills are available
     if (this.skillPrompts.size > 0) {
-      allTools.push({
+      allToolsAnthropic.push({
         name: 'load_skill',
         description: 'Load the full instructions for an active skill. Call this when the user\'s request is related to a skill listed in ACTIVE SKILLS. Returns the complete skill guide.',
         input_schema: {
@@ -291,6 +329,58 @@ Load a skill when the user's request clearly matches its description.`
         }
       })
     }
+
+    // Inject MCP tools from configured servers (dynamic discovery via subprocess)
+    const mcpToolMap = new Map() // toolName → { serverId, serverName, tool }
+    if (this.mcpServers.length > 0) {
+      try {
+        const discoveredTools = await mcpManager.getToolsForServers(this.mcpServers)
+        for (const { serverId, serverName, tool } of discoveredTools) {
+          const fullName = `mcp_${serverId.slice(0, 8)}_${tool.name}`
+          mcpToolMap.set(fullName, { serverId, serverName, tool })
+          allToolsAnthropic.push({
+            name: fullName,
+            description: `[MCP: ${serverName}] ${tool.description || tool.name}`,
+            input_schema: tool.inputSchema || { type: 'object', properties: {} }
+          })
+        }
+        logger.agent('MCP tools discovered', { count: discoveredTools.length })
+      } catch (err) {
+        logger.error('MCP tool discovery failed', err.message)
+      }
+    }
+
+    // Inject HTTP tools from user-defined catalog
+    const httpToolMap = new Map() // toolName → tool config
+    if (this.httpTools.length > 0) {
+      for (const tool of this.httpTools) {
+        const fullName = `http_${tool.id}`
+        httpToolMap.set(fullName, tool)
+        allToolsAnthropic.push({
+          name: fullName,
+          description: `[HTTP: ${tool.category || 'HTTP'}] ${tool.description || tool.name}`,
+          input_schema: {
+            type: 'object',
+            properties: {
+              body: { type: 'object', description: 'Request body (JSON). Merged with the tool\'s body template.' }
+            }
+          }
+        })
+      }
+      logger.agent('HTTP tools injected', { count: this.httpTools.length })
+    }
+
+    // Convert tools to the correct format for the provider
+    const allTools = this.isOpenAI
+      ? allToolsAnthropic.map(t => ({
+          type: 'function',
+          function: {
+            name: t.name,
+            description: t.description || '',
+            parameters: t.input_schema || { type: 'object', properties: {} }
+          }
+        }))
+      : allToolsAnthropic
 
     const client = this.anthropicClient.getClient()
     const model  = this.anthropicClient.resolveModel()
@@ -413,157 +503,330 @@ Load a skill when the user's request clearly matches its description.`
           model,
           msgs: createParams.messages.length,
           tools: allTools.length,
-          thinking: isOpus46 ? 'adaptive' : (supportsThinking ? 'enabled' : 'none')
+          thinking: isOpus46 ? 'adaptive' : (supportsThinking ? 'enabled' : 'none'),
+          isOpenAI: this.isOpenAI
         })
 
-        let stream
-        try {
-          // Use beta endpoint when compaction betas are present
-          if (createParams.betas && createParams.betas.length > 0) {
-            const { betas, ...restParams } = createParams
-            stream = await client.beta.messages.stream({ ...restParams, betas })
-          } else {
-            stream = await client.messages.stream(createParams)
+        if (this.isOpenAI) {
+          // ── OpenAI-format streaming ──
+          const openaiMessages = this._toOpenAIMessages(systemPrompt, conversationMessages)
+          const openaiParams = {
+            model,
+            max_tokens: 16384,
+            messages: openaiMessages,
+            stream: true,
           }
-        } catch (streamErr) {
-          logger.error('stream open FAILED', streamErr.message, streamErr.status)
-          throw streamErr
-        }
+          if (allTools.length > 0) openaiParams.tools = allTools
 
-        for await (const event of stream) {
-          if (this.stopped) break
+          let stream
+          try {
+            stream = await client.chat.completions.create(openaiParams)
+          } catch (streamErr) {
+            logger.error('OpenAI stream open FAILED', streamErr.message)
+            throw streamErr
+          }
 
-          if (event.type === 'content_block_start') {
-            if (event.content_block.type === 'text') {
-              currentTextBlock = ''
-            } else if (event.content_block.type === 'thinking') {
-              // Thinking block started
-              onChunk({ type: 'thinking_start' })
-            } else if (event.content_block.type === 'tool_use') {
+          // Accumulate streamed tool calls: index → { id, name, arguments }
+          const toolCallAccumulators = new Map()
+
+          for await (const chunk of stream) {
+            if (this.stopped) break
+            const choice = chunk.choices?.[0]
+            if (!choice) continue
+
+            const delta = choice.delta || {}
+
+            // Text content
+            if (delta.content) {
+              currentTextBlock += delta.content
+              finalText += delta.content
+              onChunk({ type: 'text', text: delta.content })
+            }
+
+            // Tool calls (streamed incrementally)
+            if (delta.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index
+                if (!toolCallAccumulators.has(idx)) {
+                  // Flush any pending text
+                  if (currentTextBlock) {
+                    assistantContent.push({ type: 'text', text: currentTextBlock })
+                    currentTextBlock = ''
+                  }
+                  toolCallAccumulators.set(idx, {
+                    id: tc.id || '',
+                    name: tc.function?.name || '',
+                    arguments: ''
+                  })
+                }
+                const acc = toolCallAccumulators.get(idx)
+                if (tc.id) acc.id = tc.id
+                if (tc.function?.name) acc.name = tc.function.name
+                if (tc.function?.arguments) acc.arguments += tc.function.arguments
+              }
+            }
+
+            if (choice.finish_reason) {
+              stopReason = choice.finish_reason
+            }
+          }
+
+          // Flush remaining text
+          if (currentTextBlock) {
+            assistantContent.push({ type: 'text', text: currentTextBlock })
+            currentTextBlock = ''
+          }
+
+          // Finalize accumulated tool calls
+          const openaiToolCalls = []
+          for (const [, acc] of toolCallAccumulators) {
+            let parsedArgs = {}
+            try { parsedArgs = JSON.parse(acc.arguments || '{}') } catch {}
+            assistantContent.push({
+              type: 'tool_use',
+              id: acc.id,
+              name: acc.name,
+              input: parsedArgs
+            })
+            openaiToolCalls.push({
+              id: acc.id,
+              type: 'function',
+              function: { name: acc.name, arguments: acc.arguments || '{}' }
+            })
+          }
+
+          // Rough usage estimate for context tracking
+          const estTokens = JSON.stringify(openaiMessages).length / 4
+          this.contextManager.inputTokens = Math.ceil(estTokens)
+          onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
+
+          // Push assistant message in OpenAI conversation format
+          const assistantMsg = { role: 'assistant', content: assistantContent }
+          // Also store OpenAI-native format for subsequent requests
+          const nativeAssistant = { role: 'assistant' }
+          const textParts = assistantContent.filter(b => b.type === 'text').map(b => b.text).join('')
+          if (textParts) nativeAssistant.content = textParts
+          if (openaiToolCalls.length > 0) nativeAssistant.tool_calls = openaiToolCalls
+          conversationMessages.push(assistantMsg)
+
+          logger.agent('OpenAI stream end', { iteration, stopReason })
+
+          // ── Handle tool_calls stop reason ──
+          if ((stopReason === 'tool_calls' || stopReason === 'stop' && openaiToolCalls.length > 0) && !this.stopped) {
+            const toolResults = []
+
+            for (const block of assistantContent) {
+              if (block.type !== 'tool_use') continue
+              const toolName  = block.name
+              const toolInput = block.input
+              onChunk({ type: 'tool_call', name: toolName, input: toolInput })
+
+              let result
+              if (toolName === 'load_skill') {
+                const skillId = toolInput.skill_id
+                const prompt = this.skillPrompts.get(skillId)
+                result = prompt
+                  ? { success: true, skill_id: skillId, content: prompt }
+                  : { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
+              } else if (toolName === 'dispatch_subagent') {
+                result = await this.subAgentManager.dispatch(toolInput, (progress) => {
+                  onChunk({ type: 'subagent_progress', ...progress })
+                })
+              } else if (toolName === 'background_task') {
+                result = await this.taskManager.execute(toolInput)
+              } else if (mcpToolMap.has(toolName)) {
+                const { serverId, tool } = mcpToolMap.get(toolName)
+                result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput)
+              } else if (httpToolMap.has(toolName)) {
+                result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
+              } else {
+                result = await this.toolRegistry.execute(toolName, toolInput)
+              }
+              // Extract MCP images before they hit conversation context
+              const mcpImages = result?._mcpImages
+              if (mcpImages) delete result._mcpImages
+              onChunk({ type: 'tool_result', name: toolName, result, ...(mcpImages ? { images: mcpImages } : {}) })
+              let serialized = JSON.stringify(result)
+              // Safety cap: truncate tool results > 100KB to prevent context blowup
+              if (serialized.length > 100000) {
+                logger.warn(`Tool result too large (${serialized.length} chars), truncating: ${toolName}`)
+                serialized = JSON.stringify({ success: result?.success, data: `[Result truncated: ${serialized.length} chars original. Check UI for full output.]` })
+              }
+              toolResults.push({ tool_call_id: block.id, content: serialized })
+            }
+
+            // Push tool results in OpenAI format — each as a separate message
+            for (const tr of toolResults) {
+              conversationMessages.push({
+                role: 'user',
+                content: [{
+                  type: 'tool_result',
+                  tool_use_id: tr.tool_call_id,
+                  content: tr.content
+                }]
+              })
+            }
+          } else {
+            break
+          }
+
+        } else {
+          // ── Anthropic-format streaming (existing) ──
+          let stream
+          try {
+            if (createParams.betas && createParams.betas.length > 0) {
+              const { betas, ...restParams } = createParams
+              stream = await client.beta.messages.stream({ ...restParams, betas })
+            } else {
+              stream = await client.messages.stream(createParams)
+            }
+          } catch (streamErr) {
+            logger.error('stream open FAILED', streamErr.message, streamErr.status)
+            throw streamErr
+          }
+
+          for await (const event of stream) {
+            if (this.stopped) break
+
+            if (event.type === 'content_block_start') {
+              if (event.content_block.type === 'text') {
+                currentTextBlock = ''
+              } else if (event.content_block.type === 'thinking') {
+                onChunk({ type: 'thinking_start' })
+              } else if (event.content_block.type === 'tool_use') {
+                if (currentTextBlock) {
+                  assistantContent.push({ type: 'text', text: currentTextBlock })
+                  currentTextBlock = ''
+                }
+                currentToolUse = {
+                  type: 'tool_use',
+                  id: event.content_block.id,
+                  name: event.content_block.name,
+                  input: ''
+                }
+              }
+
+            } else if (event.type === 'content_block_delta') {
+              if (event.delta.type === 'text_delta') {
+                currentTextBlock += event.delta.text
+                finalText += event.delta.text
+                onChunk({ type: 'text', text: event.delta.text })
+              } else if (event.delta.type === 'thinking_delta') {
+                onChunk({ type: 'thinking', text: event.delta.thinking })
+              } else if (event.delta.type === 'input_json_delta' && currentToolUse) {
+                currentToolUse.input += event.delta.partial_json
+              }
+
+            } else if (event.type === 'content_block_stop') {
               if (currentTextBlock) {
                 assistantContent.push({ type: 'text', text: currentTextBlock })
                 currentTextBlock = ''
               }
-              currentToolUse = {
-                type: 'tool_use',
-                id: event.content_block.id,
-                name: event.content_block.name,
-                input: ''
+              if (currentToolUse) {
+                try {
+                  currentToolUse.input = JSON.parse(currentToolUse.input || '{}')
+                } catch {
+                  currentToolUse.input = {}
+                }
+                assistantContent.push(currentToolUse)
+                currentToolUse = null
               }
-            }
 
-          } else if (event.type === 'content_block_delta') {
-            if (event.delta.type === 'text_delta') {
-              currentTextBlock += event.delta.text
-              finalText += event.delta.text
-              onChunk({ type: 'text', text: event.delta.text })
-            } else if (event.delta.type === 'thinking_delta') {
-              onChunk({ type: 'thinking', text: event.delta.thinking })
-            } else if (event.delta.type === 'input_json_delta' && currentToolUse) {
-              currentToolUse.input += event.delta.partial_json
+            } else if (event.type === 'message_delta') {
+              stopReason = event.delta.stop_reason
             }
-
-          } else if (event.type === 'content_block_stop') {
-            if (currentTextBlock) {
-              assistantContent.push({ type: 'text', text: currentTextBlock })
-              currentTextBlock = ''
-            }
-            if (currentToolUse) {
-              try {
-                currentToolUse.input = JSON.parse(currentToolUse.input || '{}')
-              } catch {
-                currentToolUse.input = {}
-              }
-              assistantContent.push(currentToolUse)
-              currentToolUse = null
-            }
-
-          } else if (event.type === 'message_delta') {
-            stopReason = event.delta.stop_reason
           }
-        }
 
-        // Flush any remaining text
-        if (currentTextBlock) {
-          assistantContent.push({ type: 'text', text: currentTextBlock })
-        }
+          // Flush any remaining text
+          if (currentTextBlock) {
+            assistantContent.push({ type: 'text', text: currentTextBlock })
+          }
 
-        // ── Get final message for usage stats ──
-        let finalMessage
-        try {
-          finalMessage = await stream.finalMessage()
-        } catch {
-          // stream may already be consumed
-        }
+          // ── Get final message for usage stats ──
+          let finalMessage
+          try {
+            finalMessage = await stream.finalMessage()
+          } catch {
+            // stream may already be consumed
+          }
 
-        // Update context metrics from usage
-        if (finalMessage) {
-          this.contextManager.updateUsage(finalMessage)
-          onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
+          // Update context metrics from usage
+          if (finalMessage) {
+            this.contextManager.updateUsage(finalMessage)
+            onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
 
-          // Use the actual content from finalMessage to preserve compaction blocks
-          if (isOpus46 && finalMessage.content) {
-            this.contextManager.appendAssistantContent(conversationMessages, finalMessage.content)
+            if (isOpus46 && finalMessage.content) {
+              this.contextManager.appendAssistantContent(conversationMessages, finalMessage.content)
+            } else {
+              conversationMessages.push({ role: 'assistant', content: assistantContent })
+            }
           } else {
             conversationMessages.push({ role: 'assistant', content: assistantContent })
           }
-        } else {
-          conversationMessages.push({ role: 'assistant', content: assistantContent })
-        }
 
-        logger.agent('stream end', { iteration, stopReason, tokens: this.contextManager.getMetrics() })
+          logger.agent('stream end', { iteration, stopReason, tokens: this.contextManager.getMetrics() })
 
-        // ── Handle tool_use stop reason ──
-        if (stopReason === 'tool_use' && !this.stopped) {
-          const toolResults = []
+          // ── Handle tool_use stop reason ──
+          if (stopReason === 'tool_use' && !this.stopped) {
+            const toolResults = []
 
-          for (const block of assistantContent) {
-            if (block.type !== 'tool_use') continue
+            for (const block of assistantContent) {
+              if (block.type !== 'tool_use') continue
 
-            const toolName  = block.name
-            const toolInput = block.input
+              const toolName  = block.name
+              const toolInput = block.input
 
-            onChunk({ type: 'tool_call', name: toolName, input: toolInput })
+              onChunk({ type: 'tool_call', name: toolName, input: toolInput })
 
-            let result
+              let result
 
-            if (toolName === 'load_skill') {
-              // Lazy skill loading — return full prompt content
-              const skillId = toolInput.skill_id
-              const prompt = this.skillPrompts.get(skillId)
-              if (prompt) {
-                logger.agent('load_skill', { skillId, promptLen: prompt.length })
-                result = { success: true, skill_id: skillId, content: prompt }
+              if (toolName === 'load_skill') {
+                const skillId = toolInput.skill_id
+                const prompt = this.skillPrompts.get(skillId)
+                if (prompt) {
+                  logger.agent('load_skill', { skillId, promptLen: prompt.length })
+                  result = { success: true, skill_id: skillId, content: prompt }
+                } else {
+                  result = { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
+                }
+              } else if (toolName === 'dispatch_subagent') {
+                result = await this.subAgentManager.dispatch(toolInput, (progress) => {
+                  onChunk({ type: 'subagent_progress', ...progress })
+                })
+              } else if (toolName === 'background_task') {
+                result = await this.taskManager.execute(toolInput)
+              } else if (mcpToolMap.has(toolName)) {
+                const { serverId, tool } = mcpToolMap.get(toolName)
+                result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput)
+              } else if (httpToolMap.has(toolName)) {
+                result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
               } else {
-                result = { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
+                result = await this.toolRegistry.execute(toolName, toolInput)
               }
-            } else if (toolName === 'dispatch_subagent') {
-              // Sub-agent dispatch
-              result = await this.subAgentManager.dispatch(toolInput, (progress) => {
-                onChunk({ type: 'subagent_progress', ...progress })
+
+              // Extract MCP images before they hit conversation context
+              const mcpImages = result?._mcpImages
+              if (mcpImages) delete result._mcpImages
+              onChunk({ type: 'tool_result', name: toolName, result, ...(mcpImages ? { images: mcpImages } : {}) })
+
+              let serialized = JSON.stringify(result)
+              // Safety cap: truncate tool results > 100KB to prevent context blowup
+              if (serialized.length > 100000) {
+                logger.warn(`Tool result too large (${serialized.length} chars), truncating: ${toolName}`)
+                serialized = JSON.stringify({ success: result?.success, data: `[Result truncated: ${serialized.length} chars original. Check UI for full output.]` })
+              }
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: block.id,
+                content: serialized
               })
-            } else if (toolName === 'background_task') {
-              // Background task management
-              result = await this.taskManager.execute(toolInput)
-            } else {
-              // Regular tool execution
-              result = await this.toolRegistry.execute(toolName, toolInput)
             }
 
-            onChunk({ type: 'tool_result', name: toolName, result })
+            conversationMessages.push({ role: 'user', content: toolResults })
 
-            toolResults.push({
-              type: 'tool_result',
-              tool_use_id: block.id,
-              content: JSON.stringify(result)
-            })
+          } else {
+            break
           }
-
-          conversationMessages.push({ role: 'user', content: toolResults })
-
-        } else {
-          // end_turn or max_tokens — break
-          break
         }
       }
 
@@ -580,6 +843,348 @@ Load a skill when the user's request clearly matches its description.`
       logger.error('AgentLoop.run error', err.message, err.stack?.split('\n').slice(0, 3).join(' | '))
       throw err
     }
+  }
+
+  /**
+   * Execute an MCP tool via the McpManager subprocess protocol.
+   * Transforms MCP content array to agent-friendly result.
+   * Extracts images/binary data so they never enter conversation context.
+   */
+  async _executeMcpToolViaManager(serverId, toolName, input) {
+    // Max size for text going into conversation context (characters)
+    const MAX_TEXT_FOR_CONTEXT = 50000
+
+    try {
+      const result = await mcpManager.callTool(serverId, toolName, input)
+
+      // Log raw content types for debugging
+      const content = result?.content || []
+      logger.info('MCP tool raw content types:', content.map(c => ({
+        type: c.type,
+        hasData: !!c.data,
+        hasText: !!c.text,
+        hasBlob: !!c.blob,
+        hasResource: !!c.resource,
+        textLen: c.text?.length,
+        dataLen: c.data?.length,
+        mimeType: c.mimeType,
+      })))
+
+      if (result?.isError) {
+        const errorText = content
+          .filter(c => c.type === 'text')
+          .map(c => c.text)
+          .join('\n')
+        return { success: false, error: errorText || 'MCP tool returned an error' }
+      }
+
+      const images = []
+      const textParts = []
+
+      for (const item of content) {
+        if (item.type === 'image') {
+          // Standard MCP image content (base64 or URL)
+          if (item.url) {
+            images.push({ url: item.url, mimeType: item.mimeType || 'image/png' })
+          } else {
+            images.push({ data: item.data, mimeType: item.mimeType || 'image/png' })
+          }
+
+        } else if (item.type === 'image_url') {
+          // OpenAI-style image_url content
+          const imgUrl = item.image_url?.url || item.url
+          if (imgUrl) images.push({ url: imgUrl })
+
+        } else if (item.type === 'resource' && item.resource) {
+          // Embedded resource — may contain binary blobs
+          const res = item.resource
+          if (res.blob && res.mimeType && res.mimeType.startsWith('image/')) {
+            images.push({ data: res.blob, mimeType: res.mimeType })
+          } else if (res.text) {
+            textParts.push(res.text)
+          }
+
+        } else if (item.type === 'text') {
+          let text = item.text || ''
+
+          // 1. Check if the ENTIRE text is a standalone base64 image
+          if (this._looksLikeBase64Image(text)) {
+            const parsed = this._extractBase64Image(text)
+            if (parsed) {
+              images.push(parsed)
+              continue // don't add to textParts
+            }
+          }
+
+          // 2. Scan for data:image URIs EMBEDDED within text/JSON (the n8n case)
+          const { cleaned, extracted } = this._extractEmbeddedImages(text)
+          if (extracted.length > 0) {
+            images.push(...extracted)
+            text = cleaned
+          }
+
+          if (text.trim()) {
+            textParts.push(text)
+          }
+
+        } else {
+          // Unknown content type — log and skip large items
+          logger.warn('MCP unknown content type:', item.type, 'keys:', Object.keys(item))
+          if (item.data && item.data.length > 1000) {
+            images.push({ data: item.data, mimeType: item.mimeType || 'application/octet-stream' })
+          }
+        }
+      }
+
+      // Deduplicate images (same data length + mimeType = same image)
+      const seenImgs = new Set()
+      const uniqueImages = images.filter(img => {
+        const key = img.url || `${img.mimeType}:${(img.data || '').length}`
+        if (seenImgs.has(key)) return false
+        seenImgs.add(key)
+        return true
+      })
+      if (uniqueImages.length < images.length) {
+        logger.info(`Deduplicated MCP images: ${images.length} → ${uniqueImages.length}`)
+      }
+
+      // Assemble text, with a hard size cap
+      let textData = textParts.join('\n')
+      if (textData.length > MAX_TEXT_FOR_CONTEXT) {
+        logger.warn(`MCP tool text truncated: ${textData.length} → ${MAX_TEXT_FOR_CONTEXT} chars`)
+        textData = textData.slice(0, MAX_TEXT_FOR_CONTEXT) + `\n\n[Output truncated — ${textData.length} total characters]`
+      }
+
+      // When images were extracted, give the LLM a clean summary so it
+      // doesn't try to describe raw base64 or claim it can't render images
+      if (uniqueImages.length > 0) {
+        // Strip any leftover extraction placeholders from textData
+        textData = textData.replace(/\[Image extracted for display:[^\]]*\]/g, '').trim()
+        const imgSummary = `[${uniqueImages.length} image(s) returned and displayed to the user in the chat. Describe what you see or inform the user the image is shown above.]`
+        textData = textData ? `${textData}\n\n${imgSummary}` : imgSummary
+      }
+
+      return {
+        success: true,
+        data: textData || (uniqueImages.length > 0 ? `[Returned ${uniqueImages.length} image(s)]` : ''),
+        _mcpImages: uniqueImages.length > 0 ? uniqueImages : undefined,
+      }
+    } catch (err) {
+      logger.error('MCP tool execution failed', err.message)
+      return { success: false, error: err.message }
+    }
+  }
+
+  /**
+   * Execute an HTTP tool by making the configured HTTP request.
+   * Merges agent-provided body with the tool's bodyTemplate.
+   */
+  async _executeHttpTool(tool, input) {
+    const MAX_RESPONSE_SIZE = 100000
+
+    try {
+      const method = (tool.method || 'GET').toUpperCase()
+      const url = tool.endpoint
+      if (!url) return { success: false, error: 'No endpoint URL configured for this tool' }
+
+      const headers = { ...tool.headers }
+      if (!headers['Content-Type'] && (method === 'POST' || method === 'PUT')) {
+        headers['Content-Type'] = 'application/json'
+      }
+
+      let body = undefined
+      if (method !== 'GET' && method !== 'DELETE') {
+        let templateBody = {}
+        try { templateBody = JSON.parse(tool.bodyTemplate || '{}') } catch {}
+        const inputBody = input?.body || {}
+        body = JSON.stringify({ ...templateBody, ...inputBody })
+      }
+
+      logger.agent('HTTP tool exec', { name: tool.name, method, url })
+
+      const https = require('https')
+      const http = require('http')
+      const { URL } = require('url')
+      const parsed = new URL(url)
+      const fetcher = parsed.protocol === 'https:' ? https : http
+
+      const responseData = await new Promise((resolve, reject) => {
+        const options = {
+          method,
+          hostname: parsed.hostname,
+          port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+          path: parsed.pathname + parsed.search,
+          headers,
+          timeout: 30000,
+        }
+
+        const req = fetcher.request(options, (res) => {
+          let data = ''
+          res.on('data', chunk => {
+            data += chunk
+            if (data.length > MAX_RESPONSE_SIZE) {
+              req.destroy()
+              resolve({ status: res.statusCode, data: data.slice(0, MAX_RESPONSE_SIZE) + '\n[Response truncated]', truncated: true })
+            }
+          })
+          res.on('end', () => resolve({ status: res.statusCode, data }))
+        })
+
+        req.on('error', reject)
+        req.on('timeout', () => { req.destroy(); reject(new Error('HTTP request timed out')) })
+
+        if (body) req.write(body)
+        req.end()
+      })
+
+      // Try to parse as JSON
+      let parsed_data
+      try { parsed_data = JSON.parse(responseData.data) } catch { parsed_data = responseData.data }
+
+      const isSuccess = responseData.status >= 200 && responseData.status < 300
+      logger.agent('HTTP tool result', { name: tool.name, status: responseData.status, dataLen: responseData.data.length })
+
+      return {
+        success: isSuccess,
+        status: responseData.status,
+        data: parsed_data,
+        ...(responseData.truncated ? { truncated: true } : {}),
+      }
+    } catch (err) {
+      logger.error('HTTP tool execution failed', { name: tool.name, error: err.message })
+      return { success: false, error: err.message }
+    }
+  }
+
+  /** Check if a text string looks like a base64-encoded image */
+  _looksLikeBase64Image(text) {
+    if (!text || text.length < 100) return false
+    // data URI
+    if (/^data:image\/[a-z]+;base64,/i.test(text)) return true
+    // Pure base64 blob (> 10KB, mostly base64 characters)
+    if (text.length > 10000) {
+      const sample = text.slice(0, 1000)
+      const b64Chars = sample.replace(/[A-Za-z0-9+/=\s]/g, '')
+      if (b64Chars.length < sample.length * 0.05) return true
+    }
+    return false
+  }
+
+  /** Try to extract base64 image data from a standalone text string */
+  _extractBase64Image(text) {
+    // data:image/png;base64,xxxxx
+    const dataUriMatch = text.match(/^data:(image\/[a-z]+);base64,(.+)$/is)
+    if (dataUriMatch) {
+      return { data: dataUriMatch[2].trim(), mimeType: dataUriMatch[1] }
+    }
+    // Pure base64 — assume PNG
+    if (text.length > 10000 && /^[A-Za-z0-9+/=\s]+$/.test(text.slice(0, 1000))) {
+      return { data: text.trim(), mimeType: 'image/png' }
+    }
+    return null
+  }
+
+  /**
+   * Scan text for embedded data:image URIs (e.g. inside JSON), extract them,
+   * and replace with a short placeholder. Handles the n8n case where the MCP
+   * response is a JSON string containing "data:image/png;base64,<6MB>".
+   */
+  _extractEmbeddedImages(text) {
+    if (!text || text.length < 100) return { cleaned: text, extracted: [] }
+
+    const extracted = []
+    let cleaned = text
+
+    // 1. Extract data:image URIs with base64 content (the n8n case)
+    if (text.includes('data:image/')) {
+      cleaned = cleaned.replace(/data:(image\/[a-z+]+);base64,([A-Za-z0-9+/=]{1000,})/gi, (match, mimeType, data) => {
+        extracted.push({ data, mimeType })
+        return `[Image extracted for display: ${mimeType}, ${Math.round(data.length * 0.75 / 1024)}KB]`
+      })
+    }
+
+    // 2. Extract plain image URLs (http/https) ending with known extensions
+    if (/https?:\/\//.test(cleaned)) {
+      cleaned = cleaned.replace(/(https?:\/\/[^\s"'<>]+\.(?:png|jpe?g|gif|webp|svg|bmp|ico)(?:\?[^\s"'<>]*)?)/gi, (match, url) => {
+        extracted.push({ url })
+        return `[Image: ${url}]`
+      })
+    }
+
+    if (extracted.length > 0) {
+      logger.info(`Extracted ${extracted.length} embedded image(s) from text (${text.length} → ${cleaned.length} chars)`)
+    }
+
+    return { cleaned, extracted }
+  }
+
+  /**
+   * Convert Anthropic-format conversation messages to OpenAI chat format.
+   * - System prompt → { role: 'system', content }
+   * - User text → { role: 'user', content }
+   * - User multimodal → { role: 'user', content: [...parts] }
+   * - Assistant with tool_use blocks → { role: 'assistant', content, tool_calls }
+   * - tool_result blocks → { role: 'tool', tool_call_id, content }
+   */
+  _toOpenAIMessages(systemPrompt, messages) {
+    const out = []
+    if (systemPrompt) {
+      out.push({ role: 'system', content: systemPrompt })
+    }
+    for (const msg of messages) {
+      if (msg.role === 'user') {
+        if (Array.isArray(msg.content)) {
+          // Check for tool_result blocks (Anthropic format)
+          const toolResults = msg.content.filter(b => b.type === 'tool_result')
+          if (toolResults.length > 0) {
+            for (const tr of toolResults) {
+              out.push({
+                role: 'tool',
+                tool_call_id: tr.tool_use_id,
+                content: typeof tr.content === 'string' ? tr.content : JSON.stringify(tr.content)
+              })
+            }
+          } else {
+            // Multimodal content — convert to OpenAI format
+            const parts = msg.content.map(block => {
+              if (block.type === 'text') return { type: 'text', text: block.text }
+              if (block.type === 'image' && block.source) {
+                return {
+                  type: 'image_url',
+                  image_url: { url: `data:${block.source.media_type};base64,${block.source.data}` }
+                }
+              }
+              return { type: 'text', text: JSON.stringify(block) }
+            })
+            out.push({ role: 'user', content: parts })
+          }
+        } else {
+          out.push({ role: 'user', content: msg.content })
+        }
+      } else if (msg.role === 'assistant') {
+        if (Array.isArray(msg.content)) {
+          const textParts = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
+          const toolUses = msg.content.filter(b => b.type === 'tool_use')
+          const entry = { role: 'assistant' }
+          if (textParts) entry.content = textParts
+          if (toolUses.length > 0) {
+            entry.tool_calls = toolUses.map(tu => ({
+              id: tu.id,
+              type: 'function',
+              function: {
+                name: tu.name,
+                arguments: typeof tu.input === 'string' ? tu.input : JSON.stringify(tu.input)
+              }
+            }))
+          }
+          if (!entry.content && !entry.tool_calls) entry.content = ''
+          out.push(entry)
+        } else {
+          out.push({ role: 'assistant', content: msg.content || '' })
+        }
+      }
+    }
+    return out
   }
 }
 

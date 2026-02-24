@@ -12,24 +12,32 @@
 
 @layer base {
   :root {
-    --primary:       #3B82F6;
-    --primary-dark:  #1D4ED8;
-    --primary-light: #60A5FA;
-    --accent:        #F97316;
-    --bg-main:       #F8FAFC;
-    --bg-card:       #ffffff;
-    --bg-sidebar:    #0F172A;
-    --text-primary:  #1E293B;
-    --text-secondary:#475569;
-    --text-muted:    #64748B;
-    --border:        #E2E8F0;
-    --shadow:        rgba(15, 23, 42, 0.06);
-    --shadow-hover:  rgba(15, 23, 42, 0.12);
+    --primary:       #1A1A1A;
+    --primary-hover: #333333;
+    --accent:        #007AFF;
+    --accent-hover:  #0056CC;
+    --accent-light:  rgba(0, 122, 255, 0.08);
+    --bg-main:       #F2F2F7;
+    --bg-card:       #FFFFFF;
+    --bg-sidebar:    #FFFFFF;
+    --bg-hover:      #F5F5F5;
+    --text-primary:  #1A1A1A;
+    --text-secondary:#6B7280;
+    --text-muted:    #9CA3AF;
+    --border:        #E5E5EA;
+    --border-light:  #F0F0F0;
+    --shadow:        rgba(0, 0, 0, 0.04);
+    --shadow-hover:  rgba(0, 0, 0, 0.08);
+    --radius-sm:     8px;
+    --radius-md:     12px;
+    --radius-lg:     16px;
+    --radius-xl:     20px;
+    --radius-full:   9999px;
 
     /* ── Global font-size scale ────────────────────────────────────────────
        All views should use these via var() or rem. Changing the html
        font-size (currently 125% = 20px) rescales everything.             */
-    --fs-page-title: 1.5rem;    /* page headings like "Skills", "Configuration" */
+    --fs-page-title: 1.5rem;    /* page headings */
     --fs-section:    1.25rem;   /* section headers */
     --fs-subtitle:   1.0625rem; /* card titles, strong labels */
     --fs-body:       0.9375rem; /* primary body text */
@@ -59,23 +67,26 @@
 
   body {
     font-size: 1rem;
-    font-family: 'Noto Sans', system-ui, sans-serif,
+    font-family: 'Inter', 'Noto Sans', system-ui, -apple-system, sans-serif,
       'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', emoji;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     color: var(--text-primary);
+    letter-spacing: -0.01em;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Figtree', system-ui, sans-serif,
+    font-family: 'Inter', 'Figtree', system-ui, -apple-system, sans-serif,
       'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', emoji;
+    letter-spacing: -0.02em;
   }
 
-  /* Custom scrollbar */
-  ::-webkit-scrollbar               { width: 18px; height: 18px; }
-  ::-webkit-scrollbar-track         { background: rgba(0,0,0,0.03); border-radius: 9999px; }
-  ::-webkit-scrollbar-thumb         { background: #94A3B8; border-radius: 9999px; min-height: 80px; border: 4px solid transparent; background-clip: padding-box; }
-  ::-webkit-scrollbar-thumb:hover   { background: #3B82F6; border: 4px solid transparent; background-clip: padding-box; }
-  ::-webkit-scrollbar-thumb:active  { background: #1D4ED8; border: 4px solid transparent; background-clip: padding-box; }
+  /* Custom scrollbar — thin & minimal */
+  ::-webkit-scrollbar               { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track         { background: transparent; }
+  ::-webkit-scrollbar-thumb         { background: #D1D1D6; border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover   { background: #A1A1AA; }
+  ::-webkit-scrollbar-thumb:active  { background: #71717A; }
 
   /* Code block syntax highlighting */
   pre code.hljs {
@@ -87,7 +98,10 @@
 @layer components {
   /* Card surface */
   .card {
-    @apply bg-white border border-[#E2E8F0] rounded-2xl shadow-card;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
   }
 
   /* Chat message animation */
@@ -108,7 +122,7 @@
   .prose-sparkai h1,
   .prose-sparkai h2,
   .prose-sparkai h3 {
-    font-family: 'Figtree', system-ui, sans-serif;
+    font-family: 'Inter', 'Figtree', system-ui, sans-serif;
     color: var(--text-primary);
     font-weight: 600;
     margin-top: 1rem;
@@ -125,8 +139,8 @@
   }
   .prose-sparkai ul { list-style-type: disc; }
   .prose-sparkai ol { list-style-type: decimal; }
-  .prose-sparkai a  { color: var(--primary); text-decoration: underline; }
-  .prose-sparkai a:hover { color: var(--primary-dark); }
+  .prose-sparkai a  { color: var(--accent); text-decoration: underline; }
+  .prose-sparkai a:hover { color: var(--accent-hover); }
   .prose-sparkai blockquote {
     border-left: 3px solid var(--border);
     padding-left: 0.75rem;
@@ -135,21 +149,21 @@
     margin: 0.75rem 0;
   }
   .prose-sparkai code:not(pre code) {
-    background: #EFF6FF;
-    color: #1D4ED8;
+    background: var(--accent-light);
+    color: var(--accent);
     padding: 0.1rem 0.35rem;
     border-radius: 4px;
     font-size: 0.85em;
     font-family: 'JetBrains Mono', monospace;
   }
   .prose-sparkai pre {
-    background: #0F172A;
-    color: #E2E8F0;
-    border-radius: 10px;
+    background: #1C1C1E;
+    color: #E5E5EA;
+    border-radius: var(--radius-md);
     padding: 1rem;
     overflow-x: auto;
     margin-bottom: 0.75rem;
-    border: 1px solid #1E293B;
+    border: 1px solid #2C2C2E;
   }
   .prose-sparkai pre code {
     font-size: var(--fs-secondary);
@@ -166,7 +180,7 @@
     font-size: var(--fs-secondary);
   }
   .prose-sparkai th {
-    background: #F1F5F9;
+    background: #F9F9F9;
     color: var(--text-secondary);
     padding: 0.5rem 0.75rem;
     text-align: left;
@@ -177,7 +191,7 @@
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border);
   }
-  .prose-sparkai img    { border-radius: 8px; max-width: 100%; margin: 0.5rem 0; }
+  .prose-sparkai img    { border-radius: var(--radius-md); max-width: 100%; margin: 0.5rem 0; }
   .prose-sparkai hr     { border-color: var(--border); margin: 1rem 0; }
   .prose-sparkai strong { font-weight: 600; }
   .prose-sparkai em     { font-style: italic; }
@@ -191,7 +205,7 @@
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 50%;
-    background: #3B82F6;
+    background: var(--accent);
     animation: busyBounce 1s ease-in-out infinite;
   }
   @keyframes busyBounce {
@@ -206,7 +220,7 @@
   display: inline-block;
   width: 0.2rem;
   border-radius: 2px;
-  background: #3B82F6;
+  background: var(--accent);
   animation: eqPulse 0.8s ease-in-out infinite alternate;
 }
 @keyframes eqPulse {

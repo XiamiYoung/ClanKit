@@ -10,26 +10,69 @@ if (process.platform === 'linux') {
   process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts.conf')
 }
 
-const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, shell, screen, protocol, net } = require('electron')
 const os = require('os')
 const { execFile } = require('child_process')
 const { logger, LOG_DIR } = require('./logger')
 
 // Load .env into the Electron main process using a direct parser.
 // dotenv v17 has ESM-first issues in Electron; plain fs is 100% reliable.
+// Supports multi-line JSON values (brace-balanced accumulation).
 ;(function loadEnv() {
   const envFile = path.join(__dirname, '..', '.env')
   if (!fs.existsSync(envFile)) return
   const lines = fs.readFileSync(envFile, 'utf8').split('\n')
+  let pendingKey = null
+  let pendingVal = ''
+  let braceDepth = 0
+
+  function commitPending() {
+    if (pendingKey) {
+      process.env[pendingKey] = pendingVal.trim()
+      pendingKey = null
+      pendingVal = ''
+      braceDepth = 0
+    }
+  }
+
   for (const line of lines) {
+    // If accumulating a multi-line value, keep appending
+    if (pendingKey && braceDepth > 0) {
+      pendingVal += '\n' + line
+      for (const ch of line) {
+        if (ch === '{' || ch === '[') braceDepth++
+        else if (ch === '}' || ch === ']') braceDepth--
+      }
+      if (braceDepth <= 0) commitPending()
+      continue
+    }
+
     const trimmed = line.trim()
     if (!trimmed || trimmed.startsWith('#')) continue
     const idx = trimmed.indexOf('=')
     if (idx === -1) continue
     const key = trimmed.slice(0, idx).trim()
     const val = trimmed.slice(idx + 1).trim()
-    process.env[key] = val   // always override so file wins over shell defaults
+
+    // Check if value starts a multi-line JSON block
+    if (val.startsWith('{') || val.startsWith('[')) {
+      pendingKey = key
+      pendingVal = val
+      braceDepth = 0
+      for (const ch of val) {
+        if (ch === '{' || ch === '[') braceDepth++
+        else if (ch === '}' || ch === ']') braceDepth--
+      }
+      if (braceDepth <= 0) {
+        commitPending()
+      }
+      // else keep accumulating on next lines
+    } else {
+      process.env[key] = val
+    }
   }
+  // Flush anything left (malformed, but don't lose it)
+  commitPending()
 })()
 
 logger.info('=== SparkAI starting ===', 'NODE_ENV=' + process.env.NODE_ENV)
@@ -41,6 +84,7 @@ const DATA_DIR = path.join(os.homedir(), '.sparkai')
 const CHATS_FILE = path.join(DATA_DIR, 'chats.json')
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
 const PERSONAS_FILE = path.join(DATA_DIR, 'personas.json')
+const MCP_FILE = path.join(DATA_DIR, 'mcp-servers.json')
 const ENV_FILE = path.join(__dirname, '..', '.env')
 
 const OLD_DATA_DIR = path.join(os.homedir(), '.maestro-agent')
@@ -85,7 +129,14 @@ const DEFAULT_CONFIG = {
   opusModel:    process.env.ANTHROPIC_DEFAULT_OPUS_MODEL     || 'claude-opus-4-6',
   haikuModel:   process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL    || 'claude-haiku-3-5',
   activeModel:  'sonnet',
-  skillsPath:   ''
+  skillsPath:   '',
+  openrouterApiKey:  process.env.OPENROUTER_API_KEY  || '',
+  openrouterBaseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api',
+  openaiApiKey:      process.env.OPENAI_API_KEY       || '',
+  openaiBaseURL:     process.env.OPENAI_BASE_URL      || 'https://mlaas.virtuosgames.com',
+  openaiModel:       '',
+  defaultProvider:   'anthropic',
+  systemPrompt:      process.env.SPARK_SYSTEM_PROMPT || ''
 }
 
 // ─── Main Window ────────────────────────────────────────────────────────────
@@ -119,22 +170,45 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null })
 
-  // ── Prevent Electron from navigating when files are dropped ──
-  // On WSL2+WSLg, file drops from Windows Explorer can trigger navigation to
-  // file:// URLs. Intercept them and send the paths back as attachments.
+  // ── Prevent Electron from navigating away from the app ──
+  // Block ALL navigations that would leave the SPA. file:// drops are forwarded
+  // as attachments; http(s) links are opened in the system browser instead.
   mainWindow.webContents.on('will-navigate', (event, url) => {
+    // Allow same-origin dev-server reloads
+    const currentURL = mainWindow.webContents.getURL()
+    if (currentURL && url.startsWith(new URL(currentURL).origin)) return
+
+    event.preventDefault()
+
     if (url.startsWith('file://')) {
-      event.preventDefault()
       logger.info('Intercepted file drop navigation:', url)
-      // Send the file path to the renderer for attachment
       if (!mainWindow.isDestroyed()) {
         mainWindow.webContents.send('file-dropped', url)
       }
+    } else if (url.startsWith('http://') || url.startsWith('https://')) {
+      logger.info('Intercepted external link navigation, opening in browser:', url)
+      shell.openExternal(url).catch(err => logger.error('openExternal failed:', err.message))
+    } else {
+      logger.warn('Blocked navigation to unsupported URL:', url)
     }
   })
 }
 
+// Register vault-asset:// protocol to serve local vault files (images, etc.)
+// Must be registered before app is ready.
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'vault-asset',
+  privileges: { bypassCSP: true, supportFetchAPI: true, stream: true }
+}])
+
 app.whenReady().then(() => {
+  // Handle vault-asset:// requests → serve files from disk
+  // URL format: vault-asset:///absolute/path/to/file
+  protocol.handle('vault-asset', (request) => {
+    const filePath = decodeURIComponent(new URL(request.url).pathname)
+    return net.fetch('file://' + filePath)
+  })
+
   ensureDataDir()
   createWindow()
   logger.info('Window created. Log dir:', LOG_DIR)
@@ -145,6 +219,10 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('before-quit', () => {
+  mcpManager.stopAll().catch(err => logger.error('MCP cleanup error:', err.message))
 })
 
 // ─── IPC: Storage ───────────────────────────────────────────────────────────
@@ -165,7 +243,10 @@ ipcMain.handle('store:get-config', () => {
     hasApiKey: !!(result.apiKey),
     apiKeyPrefix: result.apiKey ? result.apiKey.slice(0, 8) + '…' : '(empty)',
     sonnetModel: result.sonnetModel,
-    activeModel: result.activeModel
+    activeModel: result.activeModel,
+    defaultProvider: result.defaultProvider,
+    hasOpenRouterKey: !!(result.openrouterApiKey),
+    openrouterBaseURL: result.openrouterBaseURL
   })
   return result
 })
@@ -173,6 +254,182 @@ ipcMain.handle('store:save-config', (_, config) => { writeJSON(CONFIG_FILE, conf
 
 ipcMain.handle('store:get-personas', () => readJSON(PERSONAS_FILE, []))
 ipcMain.handle('store:save-personas', (_, personas) => { writeJSON(PERSONAS_FILE, personas); return true })
+
+ipcMain.handle('store:get-mcp-servers', () => readJSON(MCP_FILE, []))
+ipcMain.handle('store:save-mcp-servers', (_, servers) => { writeJSON(MCP_FILE, servers); return true })
+
+// ─── IPC: MCP Server Configuration (.env-based) ─────────────────────────────
+// MCP_SERVERS is stored as a JSON string in .env, matching Claude Desktop format:
+// MCP_SERVERS={"server-name":{"command":"npx","args":["-y","pkg"],"env":{}}}
+
+ipcMain.handle('mcp:get-config', () => {
+  try {
+    const raw = process.env.MCP_SERVERS || '{}'
+    return JSON.parse(raw)
+  } catch (err) {
+    logger.error('mcp:get-config parse error', err.message)
+    return {}
+  }
+})
+
+ipcMain.handle('mcp:save-config', (_, mcpServers) => {
+  try {
+    const prettyJson = JSON.stringify(mcpServers, null, 2)
+    process.env.MCP_SERVERS = prettyJson
+    // Write back to .env file (multi-line JSON block)
+    let content = fs.existsSync(ENV_FILE) ? fs.readFileSync(ENV_FILE, 'utf8') : ''
+    // Match existing MCP_SERVERS= block (single-line or multi-line until closing brace)
+    const mcpPattern = /^# MCP Servers[^\n]*\nMCP_SERVERS=[\s\S]*?(?=\n[A-Z_]+=|\n#|\s*$)/m
+    const mcpLinePattern = /^MCP_SERVERS=.*$/m
+    const newBlock = `# MCP Servers (JSON — Claude Desktop format)\nMCP_SERVERS=${prettyJson}`
+    if (mcpPattern.test(content)) {
+      content = content.replace(mcpPattern, newBlock)
+    } else if (mcpLinePattern.test(content)) {
+      content = content.replace(mcpLinePattern, newBlock)
+    } else {
+      content = content.trimEnd() + `\n\n${newBlock}\n`
+    }
+    fs.writeFileSync(ENV_FILE, content, 'utf8')
+    return { success: true }
+  } catch (err) {
+    logger.error('mcp:save-config error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// ─── IPC: HTTP Tools Configuration (.env-based) ──────────────────────────────
+// HTTP_TOOLS is stored as a JSON string in .env:
+// HTTP_TOOLS={"tool-id":{"name":"...","method":"GET","endpoint":"...",...}}
+
+ipcMain.handle('tools:get-config', () => {
+  try {
+    const raw = process.env.HTTP_TOOLS || '{}'
+    return JSON.parse(raw)
+  } catch (err) {
+    logger.error('tools:get-config parse error', err.message)
+    return {}
+  }
+})
+
+ipcMain.handle('tools:save-config', (_, toolsConfig) => {
+  try {
+    const prettyJson = JSON.stringify(toolsConfig, null, 2)
+    process.env.HTTP_TOOLS = prettyJson
+    let content = fs.existsSync(ENV_FILE) ? fs.readFileSync(ENV_FILE, 'utf8') : ''
+    const toolsPattern = /^# HTTP Tools[^\n]*\nHTTP_TOOLS=[\s\S]*?(?=\n[A-Z_]+=|\n#|\s*$)/m
+    const toolsLinePattern = /^HTTP_TOOLS=.*$/m
+    const newBlock = `# HTTP Tools (JSON)\nHTTP_TOOLS=${prettyJson}`
+    if (toolsPattern.test(content)) {
+      content = content.replace(toolsPattern, newBlock)
+    } else if (toolsLinePattern.test(content)) {
+      content = content.replace(toolsLinePattern, newBlock)
+    } else {
+      content = content.trimEnd() + `\n\n${newBlock}\n`
+    }
+    fs.writeFileSync(ENV_FILE, content, 'utf8')
+    return { success: true }
+  } catch (err) {
+    logger.error('tools:save-config error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('mcp:get-status', () => {
+  return mcpManager.getRunningStatus()
+})
+
+ipcMain.handle('mcp:test-connection', async (_, config) => {
+  try {
+    return await mcpManager.testConnection(config)
+  } catch (err) {
+    logger.error('mcp:test-connection error', err.message)
+    return { success: false, error: err.message, tools: [] }
+  }
+})
+
+// ─── IPC: OpenRouter Model Fetching ──────────────────────────────────────────
+ipcMain.handle('openrouter:fetch-models', async (_, { apiKey, baseURL }) => {
+  const url = (baseURL || 'https://openrouter.ai/api').replace(/\/+$/, '') + '/v1/models'
+  try {
+    const https = require('https')
+    const http = require('http')
+    const fetcher = url.startsWith('https') ? https : http
+    const data = await new Promise((resolve, reject) => {
+      const req = fetcher.get(url, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 15000
+      }, (res) => {
+        let body = ''
+        res.on('data', chunk => { body += chunk })
+        res.on('end', () => {
+          if (res.statusCode >= 400) {
+            reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 200)}`))
+          } else {
+            try { resolve(JSON.parse(body)) } catch (e) { reject(new Error('Invalid JSON response')) }
+          }
+        })
+      })
+      req.on('error', reject)
+      req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')) })
+    })
+    const models = (data.data || []).map(m => ({
+      id: m.id,
+      name: m.name || m.id,
+      context_length: m.context_length,
+      pricing: m.pricing
+    }))
+    logger.info('openrouter:fetch-models', { count: models.length })
+    return { success: true, models }
+  } catch (err) {
+    logger.error('openrouter:fetch-models error', err.message)
+    return { success: false, error: err.message, models: [] }
+  }
+})
+
+// ─── IPC: OpenAI Model Fetching ──────────────────────────────────────────────
+ipcMain.handle('openai:fetch-models', async (_, { apiKey, baseURL }) => {
+  const base = (baseURL || 'https://mlaas.virtuosgames.com').replace(/\/+$/, '')
+  const url = base + '/proxy/openai/v1/models'
+  try {
+    const https = require('https')
+    const http = require('http')
+    const fetcher = url.startsWith('https') ? https : http
+    const data = await new Promise((resolve, reject) => {
+      const req = fetcher.get(url, {
+        headers: {
+          'x-api-key': apiKey,
+          'Content-Type': 'application/json'
+        },
+        timeout: 15000
+      }, (res) => {
+        let body = ''
+        res.on('data', chunk => { body += chunk })
+        res.on('end', () => {
+          if (res.statusCode >= 400) {
+            reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 200)}`))
+          } else {
+            try { resolve(JSON.parse(body)) } catch (e) { reject(new Error('Invalid JSON response')) }
+          }
+        })
+      })
+      req.on('error', reject)
+      req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')) })
+    })
+    const models = (data.data || []).map(m => ({
+      id: m.id,
+      name: m.name || m.id,
+      context_length: m.context_length
+    }))
+    logger.info('openai:fetch-models', { count: models.length })
+    return { success: true, models }
+  } catch (err) {
+    logger.error('openai:fetch-models error', err.message)
+    return { success: false, error: err.message, models: [] }
+  }
+})
 
 // ─── IPC: Skills (filesystem-based) ─────────────────────────────────────────
 
@@ -369,19 +626,22 @@ ipcMain.handle('shell:exec', async (_, { cmd, args }) => {
 
 // ─── IPC: Agent Loop ─────────────────────────────────────────────────────────
 const { AgentLoop } = require('./agent/agentLoop')
+const { mcpManager } = require('./agent/mcp/McpManager')
 const activeLoops = new Map()          // chatId → AgentLoop
 const lastContextSnapshots = new Map() // chatId → snapshot
 
 logger.info('IPC handlers registered: agent:run, agent:stop')
 
-ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts }) => {
+ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts, mcpServers, httpTools }) => {
   logger.agent('IPC agent:run received', { chatId, model: config?.activeModel, msgCount: messages?.length })
   logger.agent('config snapshot', {
     baseURL: config?.baseURL,
     hasApiKey: !!(config?.apiKey),
     apiKeyPrefix: config?.apiKey ? config.apiKey.slice(0, 8) + '…' : '(empty)',
     sonnetModel: config?.sonnetModel,
-    activeModel: config?.activeModel
+    activeModel: config?.activeModel,
+    customModel: config?.customModel || null,
+    provider: config?.defaultProvider || 'anthropic'
   })
 
   // If this chat already has a running loop, stop it first
@@ -406,7 +666,9 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
         }
       },
       currentAttachments,
-      personaPrompts
+      personaPrompts,
+      mcpServers,
+      httpTools
     )
     logger.agent('run done', { chatId, success: result !== undefined, resultLen: typeof result === 'string' ? result.length : 0 })
     return { success: true, result }
@@ -655,6 +917,38 @@ $results -join '|'
   })
 }
 
+/**
+ * Show a native Windows folder picker via PowerShell.
+ * Returns a Windows path string, or null on cancel.
+ */
+function showWindowsFolderPicker() {
+  return new Promise((resolve) => {
+    const ps = `
+Add-Type -AssemblyName System.Windows.Forms
+$dd = New-Object System.Windows.Forms.FolderBrowserDialog
+$dd.Description = 'Select a folder'
+$dd.ShowNewFolderButton = $true
+if ($dd.ShowDialog() -eq 'OK') {
+  $dd.SelectedPath
+} else {
+  ''
+}
+`.trim()
+
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps],
+      { timeout: 120000 },
+      (err, stdout) => {
+        if (err) {
+          logger.error('PowerShell folder picker error:', err.message)
+          return resolve(null)
+        }
+        const result = stdout.trim()
+        resolve(result || null)
+      }
+    )
+  })
+}
+
 // files:pick — on WSL use native Windows dialog, otherwise GTK
 ipcMain.handle('files:pick', async () => {
   if (IS_WSL) {
@@ -693,17 +987,22 @@ ipcMain.handle('files:resolve-drop-paths', (_, rawPaths) => {
 
 // ─── IPC: Obsidian Vault ──────────────────────────────────────────────────────
 
-// Convert Windows paths to WSL2 mount paths (e.g. D:\notes → /mnt/d/notes)
+// Normalize paths for the current platform.
+// On WSL: convert Windows drive paths (D:\notes) to WSL mount paths (/mnt/d/notes).
+// On native Windows/Linux: leave paths as-is (just normalize backslashes on Windows).
 function toLinuxPath(p) {
   if (!p) return p
-  // Match Windows drive letter paths like D:\, C:\Users, E:/folder
   const m = p.match(/^([A-Za-z]):[/\\](.*)$/)
   if (m) {
-    const drive = m[1].toLowerCase()
-    const rest = m[2].replace(/\\/g, '/')
-    return `/mnt/${drive}/${rest}`.replace(/\/+$/, '') || `/mnt/${drive}`
+    if (IS_WSL) {
+      // WSL: convert to /mnt/drive/... mount path
+      const drive = m[1].toLowerCase()
+      const rest = m[2].replace(/\\/g, '/')
+      return `/mnt/${drive}/${rest}`.replace(/\/+$/, '') || `/mnt/${drive}`
+    }
+    // Native Windows: normalize backslashes to forward slashes for consistency
+    return p.replace(/\\/g, '/')
   }
-  // Already a Linux path or relative path
   return p
 }
 
@@ -729,8 +1028,19 @@ ipcMain.handle('obsidian:save-config', (_, config) => {
   return true
 })
 
-// Folder picker
+// Folder picker — on WSL use native Windows Explorer dialog via PowerShell
 ipcMain.handle('obsidian:pick-folder', async () => {
+  if (IS_WSL) {
+    try {
+      const folder = await showWindowsFolderPicker()
+      if (!folder) return null
+      return folder
+    } catch (err) {
+      logger.error('Windows folder picker failed, falling back to GTK:', err.message)
+      // fall through to GTK dialog
+    }
+  }
+
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
     title: 'Select Obsidian Vault Folder'
@@ -802,6 +1112,82 @@ ipcMain.handle('obsidian:write-file', (_, rawPath, content) => {
     fs.writeFileSync(toLinuxPath(rawPath), content, 'utf8')
     return { success: true }
   } catch (err) {
+    return { error: err.message }
+  }
+})
+
+// Get image from Windows clipboard via PowerShell.
+// On WSL2: uses powershell.exe (WSLg clipboard only bridges text, not images).
+// On native Windows: uses powershell.exe directly.
+// On native Linux/macOS: not supported (browser clipboard handles images natively).
+ipcMain.handle('clipboard:get-image', async () => {
+  const isWindows = process.platform === 'win32'
+  if (!IS_WSL && !isWindows) return { hasImage: false }
+
+  // PowerShell command is the same for both WSL and native Windows
+  const psCmd = isWindows ? 'powershell' : 'powershell.exe'
+  return new Promise((resolve) => {
+    const ps = `
+Add-Type -AssemblyName System.Windows.Forms
+$img = [System.Windows.Forms.Clipboard]::GetImage()
+if ($img -eq $null) {
+  Write-Output 'NO_IMAGE'
+} else {
+  $ms = New-Object System.IO.MemoryStream
+  $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+  $bytes = $ms.ToArray()
+  $ms.Close()
+  $img.Dispose()
+  [Convert]::ToBase64String($bytes)
+}
+`.trim()
+
+    execFile(psCmd, ['-NoProfile', '-NonInteractive', '-Command', ps],
+      { timeout: 15000, maxBuffer: 50 * 1024 * 1024 },
+      (err, stdout) => {
+        if (err) {
+          logger.error('clipboard:get-image PowerShell error:', err.message)
+          return resolve({ hasImage: false, error: err.message })
+        }
+        const output = stdout.trim()
+        if (output === 'NO_IMAGE' || !output) {
+          return resolve({ hasImage: false })
+        }
+        logger.info('clipboard:get-image got image, base64 length:', output.length)
+        resolve({ hasImage: true, base64: output, type: 'image/png' })
+      }
+    )
+  })
+})
+
+// Read an image file as base64 data URL (for embedding in rendered HTML)
+ipcMain.handle('obsidian:read-image-base64', (_, rawPath) => {
+  try {
+    const filePath = toLinuxPath(rawPath)
+    if (!fs.existsSync(filePath)) return { error: 'File not found' }
+    const ext = path.extname(filePath).toLowerCase()
+    const mimeTypes = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp' }
+    const mime = mimeTypes[ext] || 'application/octet-stream'
+    const base64 = fs.readFileSync(filePath).toString('base64')
+    return { base64, mime }
+  } catch (err) {
+    return { error: err.message }
+  }
+})
+
+// Save a binary image (base64 data) into the vault's assets folder
+ipcMain.handle('obsidian:save-image', (_, rawDir, fileName, base64Data) => {
+  try {
+    const dir = toLinuxPath(rawDir)
+    const assetsDir = path.join(dir, 'assets')
+    if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true })
+    const filePath = path.join(assetsDir, fileName)
+    const buf = Buffer.from(base64Data, 'base64')
+    fs.writeFileSync(filePath, buf)
+    logger.info('Saved image:', filePath, `(${buf.length} bytes)`)
+    return { success: true, relativePath: `assets/${fileName}`, absolutePath: filePath }
+  } catch (err) {
+    logger.error('obsidian:save-image error:', err.message)
     return { error: err.message }
   }
 })
@@ -893,6 +1279,15 @@ ipcMain.handle('shell:open-file', async (_, filePath) => {
     }
     const result = await shell.openPath(resolved)
     if (result) return { error: result }
+    return { success: true }
+  } catch (err) {
+    return { error: err.message }
+  }
+})
+
+ipcMain.handle('shell:open-external', async (_, url) => {
+  try {
+    await shell.openExternal(url)
     return { success: true }
   } catch (err) {
     return { error: err.message }

@@ -3,7 +3,7 @@
     <!-- Formatting Toolbar -->
     <div
       class="flex items-center gap-0.5 px-2 py-1.5 flex-wrap"
-      style="border-bottom:1px solid #E2E8F0; background:#F8FAFC;"
+      style="border-bottom:1px solid #E5E5EA; background:#F2F2F7;"
     >
       <!-- Bold -->
       <button
@@ -52,7 +52,7 @@
       </button>
 
       <!-- Divider -->
-      <div class="w-px h-5 mx-1" style="background:#E2E8F0;"></div>
+      <div class="w-px h-5 mx-1" style="background:#E5E5EA;"></div>
 
       <!-- Heading 2 -->
       <button
@@ -75,7 +75,7 @@
       </button>
 
       <!-- Divider -->
-      <div class="w-px h-5 mx-1" style="background:#E2E8F0;"></div>
+      <div class="w-px h-5 mx-1" style="background:#E5E5EA;"></div>
 
       <!-- Bullet List -->
       <button
@@ -106,7 +106,7 @@
       </button>
 
       <!-- Divider -->
-      <div class="w-px h-5 mx-1" style="background:#E2E8F0;"></div>
+      <div class="w-px h-5 mx-1" style="background:#E5E5EA;"></div>
 
       <!-- Code Block -->
       <button
@@ -125,8 +125,8 @@
       <button
         @click="editor?.chain().focus().setHorizontalRule().run()"
         class="w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer"
-        style="color:#64748B;"
-        @mouseenter="e => e.currentTarget.style.background='#E2E8F0'"
+        style="color:#9CA3AF;"
+        @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
         @mouseleave="e => e.currentTarget.style.background=''"
         title="Horizontal rule"
       >
@@ -172,7 +172,7 @@ const editor = useEditor({
   editorProps: {
     attributes: {
       class: 'outline-none leading-relaxed',
-      style: 'color:#1E293B; font-size:var(--fs-body); min-height:72px; max-height:200px; overflow-y:auto; padding:8px 12px;'
+      style: 'color:#1A1A1A; font-size:var(--fs-body); min-height:72px; max-height:200px; overflow-y:auto; padding:8px 12px;'
     },
     handleKeyDown(view, event) {
       // Enter without shift = submit
@@ -211,8 +211,8 @@ function toolbarBtnClass(isActive) {
   return [
     'w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer',
     isActive
-      ? 'bg-blue-100 text-blue-600'
-      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+      ? 'bg-[rgba(0,122,255,0.1)] text-[#007AFF]'
+      : 'text-[#6B7280] hover:bg-[#F5F5F5] hover:text-[#1A1A1A]'
   ]
 }
 
@@ -286,7 +286,7 @@ onBeforeUnmount(() => {
   padding: 8px 12px;
   font-size: var(--fs-body);
   line-height: 1.65;
-  color: #1E293B;
+  color: #1A1A1A;
 }
 
 .rich-editor-content .tiptap p {
@@ -302,7 +302,7 @@ onBeforeUnmount(() => {
 .rich-editor-content .tiptap h3 {
   font-weight: 600;
   margin: 0.5em 0 0.25em 0;
-  color: #0F172A;
+  color: #1A1A1A;
 }
 
 .rich-editor-content .tiptap h1 { font-size: var(--fs-section); }
@@ -323,7 +323,7 @@ onBeforeUnmount(() => {
 }
 
 .rich-editor-content .tiptap code {
-  background: #F1F5F9;
+  background: #F5F5F5;
   color: #E11D48;
   border-radius: 4px;
   padding: 0.15em 0.35em;
@@ -332,8 +332,8 @@ onBeforeUnmount(() => {
 }
 
 .rich-editor-content .tiptap pre {
-  background: #0F172A;
-  color: #E2E8F0;
+  background: #1A1A1A;
+  color: #E5E5EA;
   border-radius: 8px;
   padding: 12px 16px;
   margin: 0.5em 0;
@@ -352,10 +352,10 @@ onBeforeUnmount(() => {
 }
 
 .rich-editor-content .tiptap blockquote {
-  border-left: 3px solid #3B82F6;
+  border-left: 3px solid #007AFF;
   padding-left: 12px;
   margin: 0.5em 0;
-  color: #475569;
+  color: #6B7280;
   font-style: italic;
 }
 
@@ -379,7 +379,7 @@ onBeforeUnmount(() => {
 
 .rich-editor-content .tiptap hr {
   border: none;
-  border-top: 1px solid #E2E8F0;
+  border-top: 1px solid #E5E5EA;
   margin: 0.75em 0;
 }
 
@@ -387,7 +387,7 @@ onBeforeUnmount(() => {
 .rich-editor-content .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
-  color: #94A3B8;
+  color: #9CA3AF;
   pointer-events: none;
   height: 0;
 }
