@@ -4,10 +4,10 @@
   "description": "SparkAI - Multi-LLM Desktop Application",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "concurrently \"vite\" \"wait-on tcp:5173 && bash scripts/run-electron.sh\"",
+    "dev": "concurrently \"vite\" \"wait-on tcp:5173 && node scripts/run-electron.js\"",
     "build": "vite build",
     "preview": "vite preview",
-    "electron": "bash scripts/run-electron.sh"
+    "electron": "node scripts/run-electron.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
