@@ -43,7 +43,7 @@
       <div class="text-center" style="max-width:420px;">
         <div
           class="mx-auto mb-5 w-20 h-20 rounded-2xl flex items-center justify-center"
-          style="background: #FF9500;"
+          style="background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
         >
           <svg style="width:40px;height:40px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
@@ -331,10 +331,8 @@ function truncateEndpoint(ep) {
   return ep.length > 50 ? ep.slice(0, 47) + '...' : ep
 }
 
-const GRADIENTS = ['#FF9500', '#007AFF', '#34C759', '#5856D6', '#FF2D55', '#00C7BE', '#FF3B30', '#AF52DE']
-
-function cardGradient(idx) {
-  return GRADIENTS[idx % GRADIENTS.length]
+function cardGradient() {
+  return 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'
 }
 </script>
 
@@ -386,16 +384,15 @@ function cardGradient(idx) {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
-  background: #FF9500;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #fff;
   border: none;
   cursor: pointer;
   transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .catalog-add-btn:hover {
-  background: #CC7700;
-  box-shadow: none;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 .catalog-add-btn:active {
   transform: scale(0.97);
@@ -514,8 +511,8 @@ function cardGradient(idx) {
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 6px;
-  background: #FFF5E6;
-  color: #8B5E00;
+  background: #F5F5F5;
+  color: #6B7280;
   flex-shrink: 0;
 }
 .tools-card-desc {
@@ -546,10 +543,10 @@ function cardGradient(idx) {
   border-radius: 4px;
   flex-shrink: 0;
 }
-.method-get { background: #DBEAFE; color: #0056CC; }
-.method-post { background: #D1FAE5; color: #065F46; }
-.method-put { background: #FFF5E6; color: #8B5E00; }
-.method-delete { background: #FEE2E2; color: #991B1B; }
+.method-get { background: #F5F5F5; color: #1A1A1A; }
+.method-post { background: #F5F5F5; color: #1A1A1A; }
+.method-put { background: #F5F5F5; color: #1A1A1A; }
+.method-delete { background: #F5F5F5; color: #1A1A1A; }
 .tools-card-endpoint {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: var(--fs-caption);
@@ -603,7 +600,8 @@ function cardGradient(idx) {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: #FF9500;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .tools-modal-title {
   font-family: 'Inter', sans-serif;
@@ -734,13 +732,13 @@ select.form-input {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
   font-weight: 600;
-  background: #FFF5E6;
-  color: #FF9500;
+  background: #F5F5F5;
+  color: #1A1A1A;
   border: none;
   cursor: pointer;
   transition: background 0.15s;
 }
-.env-add-btn:hover { background: #FFE5B4; }
+.env-add-btn:hover { background: #E5E5EA; }
 .env-empty {
   padding: 20px;
   border-radius: 10px;
@@ -791,14 +789,14 @@ select.form-input {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
-  background: #FF9500;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #fff;
   border: none;
   cursor: pointer;
   transition: background 0.15s, opacity 0.15s;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
-.modal-save-btn:hover { background: #CC7700; }
+.modal-save-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .modal-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .modal-delete-btn {
   display: flex;
@@ -809,13 +807,14 @@ select.form-input {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
-  background: #FEF2F2;
-  color: #DC2626;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  color: #fff;
   border: none;
   cursor: pointer;
   transition: background 0.15s;
 }
-.modal-delete-btn:hover { background: #FEE2E2; }
+.modal-delete-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 
 /* ── Reduced motion ─────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {

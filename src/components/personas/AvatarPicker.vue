@@ -169,7 +169,7 @@ function confirm() {
   transform: scale(1.04);
 }
 .avpicker-item.selected {
-  border-color: #007AFF;
+  border-color: #1A1A1A;
   background: rgba(0, 122, 255, 0.08);
   box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
 }
@@ -192,18 +192,18 @@ function confirm() {
   transition: background 0.15s;
 }
 .avpicker-btn.primary {
-  background: #007AFF;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
   color: #fff;
 }
-.avpicker-btn.primary:hover { background: #0056CC; }
+.avpicker-btn.primary:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .avpicker-btn.primary:disabled { background: #9CA3AF; cursor: not-allowed; }
 .avpicker-btn.shuffle {
   display: flex;
   align-items: center;
   gap: 6px;
   background: #fff;
-  color: #007AFF;
-  border: 1.5px solid #007AFF;
+  color: #1A1A1A;
+  border: 1.5px solid #1A1A1A;
 }
 .avpicker-btn.shuffle:hover { background: rgba(0, 122, 255, 0.06); }
 .avpicker-btn.defaults {

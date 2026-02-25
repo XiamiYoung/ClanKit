@@ -64,7 +64,7 @@
         <div class="text-center" style="max-width:420px;">
           <div
             class="mx-auto mb-5 w-20 h-20 rounded-2xl flex items-center justify-center"
-            style="background: #1A1A1A;"
+            style="background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
           >
             <svg style="width:40px;height:40px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
@@ -253,18 +253,8 @@ import { useConfigStore } from '../stores/config'
 const skillsStore = useSkillsStore()
 const configStore = useConfigStore()
 
-const CARD_GRADIENTS = [
-  '#1A1A1A',
-  '#007AFF',
-  '#34C759',
-  '#FF9500',
-  '#FF2D55',
-  '#5856D6',
-  '#FF3B30',
-  '#00C7BE',
-]
-function cardGradient(idx) {
-  return CARD_GRADIENTS[idx % CARD_GRADIENTS.length]
+function cardGradient() {
+  return 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'
 }
 
 function formatName(name) {
@@ -451,12 +441,13 @@ const SkillTreeNode = defineComponent({
           class: 'flex items-center gap-2 py-1.5 pr-2 cursor-pointer',
           style: {
             paddingLeft: indent + 'px',
-            background: isActive ? 'rgba(0, 0, 0, 0.06)' : (hovered.value ? 'rgba(0, 0, 0, 0.02)' : 'transparent'),
+            background: isActive ? 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' : (hovered.value ? 'rgba(0, 0, 0, 0.02)' : 'transparent'),
             borderRight: isActive ? '2px solid #1A1A1A' : '2px solid transparent',
-            color: isActive ? '#1A1A1A' : '#6B7280',
+            color: isActive ? '#fff' : '#6B7280',
+            boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none',
             fontFamily: "'Inter',sans-serif",
             fontSize: 'var(--fs-secondary)',
-            transition: 'background 0.15s, color 0.15s',
+            transition: 'background 0.15s, color 0.15s, box-shadow 0.15s',
           },
           onClick: () => {
             if (isDir) emit('toggle-folder', props.node.path)
@@ -475,10 +466,10 @@ const SkillTreeNode = defineComponent({
           }, [h('polyline', { points: '9 18 15 12 9 6' })]) : h('span', { style: 'width:12px;display:inline-block;' }),
 
           isDir
-            ? h('svg', { style: 'width:14px;height:14px;flex-shrink:0;color:#F59E0B;', viewBox: '0 0 24 24', fill: 'currentColor' }, [
+            ? h('svg', { style: 'width:14px;height:14px;flex-shrink:0;color:#6B7280;', viewBox: '0 0 24 24', fill: 'currentColor' }, [
                 h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })
               ])
-            : h('svg', { style: 'width:14px;height:14px;flex-shrink:0;color:#9CA3AF;', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+            : h('svg', { style: 'width:14px;height:14px;flex-shrink:0;color:' + (isActive ? '#fff' : '#9CA3AF') + ';', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
                 h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
                 h('polyline', { points: '14 2 14 8 20 8' })
               ]),
@@ -688,7 +679,7 @@ const SkillTreeNode = defineComponent({
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .skill-card-name {
   font-family: 'Inter', sans-serif;
@@ -738,7 +729,7 @@ const SkillTreeNode = defineComponent({
 .skill-card-open {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  color: #007AFF;
+  color: #1A1A1A;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -747,7 +738,7 @@ const SkillTreeNode = defineComponent({
 }
 .skill-card:hover .skill-card-open {
   gap: 6px;
-  color: #0056CC;
+  color: #374151;
 }
 
 /* Reduced motion */
@@ -808,9 +799,9 @@ const SkillTreeNode = defineComponent({
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   flex-shrink: 0;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .detail-title {
   font-family: 'Inter', sans-serif;

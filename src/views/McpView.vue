@@ -43,7 +43,7 @@
       <div class="text-center" style="max-width:420px;">
         <div
           class="mx-auto mb-5 w-20 h-20 rounded-2xl flex items-center justify-center"
-          style="background: #1A1A1A;"
+          style="background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
         >
           <svg style="width:40px;height:40px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
@@ -416,10 +416,8 @@ function truncateCommand(server) {
   return cmd.length > 45 ? cmd.slice(0, 42) + '...' : cmd
 }
 
-const GRADIENTS = ['#1A1A1A', '#007AFF', '#34C759', '#FF9500', '#FF2D55', '#5856D6', '#FF3B30', '#00C7BE']
-
-function cardGradient(idx) {
-  return GRADIENTS[idx % GRADIENTS.length]
+function cardGradient() {
+  return 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'
 }
 </script>
 
@@ -471,15 +469,15 @@ function cardGradient(idx) {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #fff;
   border: none;
   cursor: pointer;
   transition: background 0.2s, transform 0.15s;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .catalog-add-btn:hover {
-  background: #333;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 .catalog-add-btn:active {
   transform: scale(0.97);
@@ -692,7 +690,8 @@ function cardGradient(idx) {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .mcp-modal-title {
   font-family: 'Inter', sans-serif;
@@ -748,14 +747,14 @@ function cardGradient(idx) {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #fff;
   border: none;
   cursor: pointer;
   transition: background 0.15s, opacity 0.15s;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
-.modal-save-btn:hover { background: #333; }
+.modal-save-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .modal-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .modal-delete-btn {
   display: flex;
@@ -766,13 +765,14 @@ function cardGradient(idx) {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
-  background: #FEF2F2;
-  color: #DC2626;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  color: #fff;
   border: none;
   cursor: pointer;
   transition: background 0.15s;
 }
-.modal-delete-btn:hover { background: #FEE2E2; }
+.modal-delete-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 
 /* ── Form fields ───────────────────────────────────────────────────────────── */
 .form-group { margin-bottom: 16px; }
@@ -914,13 +914,14 @@ function cardGradient(idx) {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
-  background: #E8F8EF;
-  color: #248A3D;
-  border: 1px solid #B4E4C7;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  color: #fff;
+  border: none;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s;
 }
-.test-btn:hover { background: #D4F0E0; border-color: #86EFAC; }
+.test-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .test-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .test-result {

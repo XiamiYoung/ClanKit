@@ -74,7 +74,7 @@ import { getAvatarDataUri } from './personaAvatars'
 
 const props = defineProps({
   persona: { type: Object, required: true },
-  gradient: { type: String, default: 'linear-gradient(135deg, #007AFF, #007AFF)' },
+  gradient: { type: String, default: 'linear-gradient(135deg, #0F0F0F, #374151)' },
 })
 
 defineEmits(['click', 'edit', 'delete', 'set-default'])
@@ -133,8 +133,8 @@ const fallbackInitial = computed(() => {
   text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 7px;
   border-radius: 4px; width: fit-content;
 }
-.persona-card-type.system { background: rgba(0, 122, 255, 0.1); color: #007AFF; }
-.persona-card-type.user { background: rgba(16, 185, 129, 0.1); color: #059669; }
+.persona-card-type.system { background: rgba(0, 0, 0, 0.06); color: #1A1A1A; }
+.persona-card-type.user { background: rgba(0, 0, 0, 0.06); color: #1A1A1A; }
 .persona-card-desc {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); color: #6B7280;
   line-height: 1.55; margin: 0 0 16px; flex: 1;
@@ -147,13 +147,15 @@ const fallbackInitial = computed(() => {
 .persona-card-badges { display: flex; gap: 6px; }
 .persona-card-default-badge {
   font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
-  padding: 2px 8px; border-radius: 9999px; background: #1A1A1A;
+  padding: 2px 8px; border-radius: 9999px;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
   color: #FFFFFF; display: flex; align-items: center; gap: 4px;
 }
 .persona-card-builtin-badge {
   font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
-  padding: 2px 8px; border-radius: 9999px; background: rgba(0,122,255,0.06);
-  color: #007AFF; display: flex; align-items: center;
+  padding: 2px 8px; border-radius: 9999px; background: rgba(0,0,0,0.06);
+  color: #1A1A1A; display: flex; align-items: center;
 }
 .persona-card-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s ease; }
 .persona-card:hover .persona-card-actions { opacity: 1; }
@@ -163,7 +165,7 @@ const fallbackInitial = computed(() => {
   border: none; background: transparent; color: #9CA3AF; cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.persona-action-btn:hover { background: #F5F5F5; color: #007AFF; }
+.persona-action-btn:hover { background: #F5F5F5; color: #1A1A1A; }
 .persona-action-btn.danger:hover { background: #FEE2E2; color: #DC2626; }
 
 @media (prefers-reduced-motion: reduce) {

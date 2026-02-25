@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="wiz-header">
         <div class="wiz-header-left">
-          <div class="wiz-header-icon" :style="{ background: type === 'system' ? '#007AFF' : '#10B981' }">
+          <div class="wiz-header-icon" :style="{ background: 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }">
             <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path v-if="type === 'system'" d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1M9 16h0M15 16h0" />
               <path v-else d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
@@ -23,7 +23,7 @@
         <div v-for="(msg, i) in chatMessages" :key="i" class="wiz-msg" :class="msg.from">
           <!-- AI message -->
           <template v-if="msg.from === 'ai'">
-            <div class="wiz-msg-avatar ai" :style="{ background: type === 'system' ? '#007AFF' : '#10B981' }">
+            <div class="wiz-msg-avatar ai" :style="{ background: 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }">
               <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8"/></svg>
             </div>
             <div class="wiz-msg-bubble ai">
@@ -499,7 +499,7 @@ onMounted(() => {
   font-family: 'Inter', sans-serif; font-size: var(--fs-body); line-height: 1.55;
 }
 .wiz-msg-bubble.ai { background: #F5F5F5; color: #1A1A1A; border-bottom-left-radius: 4px; }
-.wiz-msg-bubble.user { background: #007AFF; color: #fff; border-bottom-right-radius: 4px; }
+.wiz-msg-bubble.user { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color: #fff; border-bottom-right-radius: 4px; }
 .wiz-msg-bubble p { margin: 0; }
 
 /* -- Option pills ---------------------------------------------------------- */
@@ -509,14 +509,16 @@ onMounted(() => {
   background: #fff; font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
   font-weight: 500; color: #6B7280; cursor: pointer; transition: all 0.15s;
 }
-.wiz-option-btn:hover { border-color: #007AFF; color: #007AFF; background: rgba(0,122,255,0.06); }
-.wiz-option-btn.selected { border-color: #007AFF; background: #007AFF; color: #fff; }
+.wiz-option-btn:hover { border-color: #1A1A1A; color: #1A1A1A; background: rgba(0,0,0,0.03); }
+.wiz-option-btn.selected { border-color: #1A1A1A; background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); color: #fff; }
 .wiz-option-done {
-  padding: 5px 14px; border-radius: 9999px; border: 1.5px solid #10B981; background: #10B981;
+  padding: 5px 14px; border-radius: 9999px; border: 1.5px solid #374151;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
   color: #fff; cursor: pointer; transition: background 0.15s; display: flex; align-items: center; gap: 4px;
 }
-.wiz-option-done:hover { background: #059669; border-color: #059669; }
+.wiz-option-done:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); border-color: #4B5563; }
 
 /* -- Avatar picker trigger ------------------------------------------------- */
 .wiz-avatar-trigger {
@@ -531,9 +533,9 @@ onMounted(() => {
   gap: 8px;
   padding: 10px 20px;
   border-radius: 10px;
-  border: 1.5px solid #007AFF;
-  background: rgba(0, 122, 255, 0.06);
-  color: #007AFF;
+  border: 1.5px solid #1A1A1A;
+  background: rgba(0, 0, 0, 0.03);
+  color: #1A1A1A;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
@@ -541,8 +543,8 @@ onMounted(() => {
   transition: background 0.15s, box-shadow 0.15s;
 }
 .wiz-pick-avatar-btn:hover {
-  background: rgba(0, 122, 255, 0.12);
-  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.2);
+  background: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 .wiz-avatar-preview-inline {
   display: flex;
@@ -553,7 +555,7 @@ onMounted(() => {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 500;
-  color: #10B981;
+  color: #1A1A1A;
 }
 
 /* -- Input bar ------------------------------------------------------------- */
@@ -567,13 +569,15 @@ onMounted(() => {
   background: #fff; outline: none; transition: border-color 0.15s; box-sizing: border-box;
   resize: none; line-height: 1.5; min-height: 44px; max-height: 120px;
 }
-.wiz-input:focus { border-color: #007AFF; }
+.wiz-input:focus { border-color: #1A1A1A; }
 .wiz-send-btn {
-  width: 38px; height: 38px; border-radius: 10px; border: none; background: #007AFF;
+  width: 38px; height: 38px; border-radius: 10px; border: none;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
   color: #fff; display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: background 0.15s; flex-shrink: 0;
 }
-.wiz-send-btn:hover { background: #0056CC; }
+.wiz-send-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .wiz-send-btn:disabled { background: #D1D1D6; cursor: not-allowed; }
 
 /* -- Preview bar ----------------------------------------------------------- */
@@ -594,9 +598,9 @@ onMounted(() => {
 .wiz-change-avatar-btn {
   padding: 6px 14px; border-radius: 8px; border: 1px solid #E5E5EA;
   background: #fff; font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
-  font-weight: 600; color: #007AFF; cursor: pointer; transition: background 0.15s, border-color 0.15s;
+  font-weight: 600; color: #1A1A1A; cursor: pointer; transition: background 0.15s, border-color 0.15s;
 }
-.wiz-change-avatar-btn:hover { background: #F5F5F5; border-color: #007AFF; }
+.wiz-change-avatar-btn:hover { background: #F5F5F5; border-color: #1A1A1A; }
 .wiz-preview-label {
   display: block; font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
   font-weight: 600; color: #6B7280; margin-bottom: 6px;
@@ -607,7 +611,7 @@ onMounted(() => {
   color: #1A1A1A; background: #fff; outline: none; resize: vertical; line-height: 1.6;
   box-sizing: border-box; transition: border-color 0.15s;
 }
-.wiz-preview-textarea:focus { border-color: #007AFF; }
+.wiz-preview-textarea:focus { border-color: #1A1A1A; }
 .wiz-preview-actions {
   display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;
 }
@@ -615,8 +619,12 @@ onMounted(() => {
   padding: 8px 18px; border-radius: 8px; font-family: 'Inter', sans-serif;
   font-size: var(--fs-body); font-weight: 600; cursor: pointer; border: none; transition: background 0.15s;
 }
-.wiz-btn.primary { background: #007AFF; color: #fff; }
-.wiz-btn.primary:hover { background: #0056CC; }
+.wiz-btn.primary {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  color: #fff;
+}
+.wiz-btn.primary:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .wiz-btn.primary:disabled { background: #9CA3AF; cursor: not-allowed; }
 .wiz-btn.secondary { background: #F5F5F5; color: #6B7280; }
 .wiz-btn.secondary:hover { background: #E5E5EA; }

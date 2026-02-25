@@ -24,7 +24,7 @@
                 :key="p.value"
                 @click="form.defaultProvider = p.value"
                 :style="form.defaultProvider === p.value
-                  ? 'background:#1A1A1A; border:1px solid #1A1A1A; color:#FFFFFF;'
+                  ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); border:1px solid #1A1A1A; color:#FFFFFF;'
                   : 'background:#ffffff; border:1px solid #E5E5EA; color:#6B7280;'"
                 class="flex-1 py-2 rounded-lg font-medium transition-all duration-150 cursor-pointer model-btn"
                 style="font-size:var(--fs-body); font-family:'Inter',sans-serif;"
@@ -135,7 +135,7 @@
                     :key="opt.value"
                     @click="form.activeModel = opt.value"
                     :style="form.activeModel === opt.value
-                      ? 'background:#1A1A1A; border:1px solid #1A1A1A; color:#FFFFFF;'
+                      ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); border:1px solid #1A1A1A; color:#FFFFFF;'
                       : 'background:#ffffff; border:1px solid #E5E5EA; color:#6B7280;'"
                     class="flex-1 py-1.5 rounded-lg font-medium transition-all duration-150 cursor-pointer model-btn"
                     style="font-size:var(--fs-body); font-family:'Inter',sans-serif;"
@@ -172,9 +172,9 @@
                     @click="testConnection('anthropic')"
                     :disabled="testingAnthropic"
                     class="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    style="background:#1A1A1A; color:#ffffff; font-family:'Inter',sans-serif; border:none; font-size:var(--fs-body);"
-                    @mouseenter="!testingAnthropic && ($event.currentTarget.style.background='#333')"
-                    @mouseleave="!testingAnthropic && ($event.currentTarget.style.background='#1A1A1A')"
+                    style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); color:#ffffff; font-family:'Inter',sans-serif; border:none; font-size:var(--fs-body);"
+                    @mouseenter="!testingAnthropic && ($event.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)')"
+                    @mouseleave="!testingAnthropic && ($event.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)')"
                   >
                     <svg v-if="!testingAnthropic" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -266,9 +266,9 @@
                   @click="fetchOrModels"
                   :disabled="orModelsFetching || !form.openrouterApiKey"
                   class="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  style="background:#1A1A1A; color:#ffffff; font-family:'Inter',sans-serif; border:none; font-size:var(--fs-body); border-radius:10px;"
-                  @mouseenter="!orModelsFetching && form.openrouterApiKey && ($event.currentTarget.style.background='#333')"
-                  @mouseleave="$event.currentTarget.style.background='#1A1A1A'"
+                  style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); color:#ffffff; font-family:'Inter',sans-serif; border:none; font-size:var(--fs-body); border-radius:10px;"
+                  @mouseenter="!orModelsFetching && form.openrouterApiKey && ($event.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)')"
+                  @mouseleave="$event.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
                 >
                   <svg v-if="!orModelsFetching" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
@@ -342,9 +342,9 @@
                     @click="testConnection('openrouter')"
                     :disabled="testingOpenRouter || !orSelectedTestModel"
                     class="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    style="background:#1A1A1A; color:#ffffff; font-family:'Inter',sans-serif; border:none; font-size:var(--fs-body);"
-                    @mouseenter="!testingOpenRouter && orSelectedTestModel && ($event.currentTarget.style.background='#333')"
-                    @mouseleave="!testingOpenRouter && ($event.currentTarget.style.background='#1A1A1A')"
+                    style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); color:#ffffff; font-family:'Inter',sans-serif; border:none; font-size:var(--fs-body);"
+                    @mouseenter="!testingOpenRouter && orSelectedTestModel && ($event.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)')"
+                    @mouseleave="!testingOpenRouter && ($event.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)')"
                   >
                     <svg v-if="!testingOpenRouter" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -436,9 +436,9 @@
                   @click="fetchOpenAIModels"
                   :disabled="openaiModelsFetching || !form.openaiApiKey"
                   class="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  style="background:#1A1A1A; color:#ffffff; font-family:'Inter',sans-serif; border:none; font-size:var(--fs-body); border-radius:10px;"
-                  @mouseenter="!openaiModelsFetching && form.openaiApiKey && ($event.currentTarget.style.background='#333')"
-                  @mouseleave="$event.currentTarget.style.background='#1A1A1A'"
+                  style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); color:#ffffff; font-family:'Inter',sans-serif; border:none; font-size:var(--fs-body); border-radius:10px;"
+                  @mouseenter="!openaiModelsFetching && form.openaiApiKey && ($event.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)')"
+                  @mouseleave="$event.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
                 >
                   <svg v-if="!openaiModelsFetching" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
@@ -512,9 +512,9 @@
                     @click="testConnection('openai')"
                     :disabled="testingOpenAI || !openaiSelectedTestModel"
                     class="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    style="background:#1A1A1A; color:#ffffff; font-family:'Inter',sans-serif; border:none; font-size:var(--fs-body);"
-                    @mouseenter="!testingOpenAI && openaiSelectedTestModel && ($event.currentTarget.style.background='#333')"
-                    @mouseleave="!testingOpenAI && ($event.currentTarget.style.background='#1A1A1A')"
+                    style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); color:#ffffff; font-family:'Inter',sans-serif; border:none; font-size:var(--fs-body);"
+                    @mouseenter="!testingOpenAI && openaiSelectedTestModel && ($event.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)')"
+                    @mouseleave="!testingOpenAI && ($event.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)')"
                   >
                     <svg v-if="!testingOpenAI" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -568,9 +568,9 @@
             @click="save"
             :disabled="saving"
             class="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            style="background:#1A1A1A; color:#ffffff; font-family:'Inter',sans-serif; border:none; border-radius:12px; box-shadow:none; font-size:var(--fs-body);"
-            @mouseenter="!saving && ($event.currentTarget.style.background='#333333')"
-            @mouseleave="!saving && ($event.currentTarget.style.background='#1A1A1A')"
+            style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); color:#ffffff; font-family:'Inter',sans-serif; border:none; border-radius:12px; font-size:var(--fs-body);"
+            @mouseenter="!saving && ($event.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)')"
+            @mouseleave="!saving && ($event.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)')"
           >
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
@@ -912,7 +912,7 @@ async function testConnection(provider) {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
 }
-.model-btn:not([style*="#1A1A1A"]):hover {
+.model-btn:not([style*="#0F0F0F"]):hover {
   border-color: #D1D1D6 !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }

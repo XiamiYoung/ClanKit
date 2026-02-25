@@ -184,14 +184,9 @@ async function confirmDelete(persona) {
 }
 
 const CIRCLE_COLORS = [
-  '#007AFF', '#007AFF', '#10B981', '#F59E0B', '#EC4899',
-  '#5856D6', '#14B8A6', '#EF4444', '#0EA5E9', '#F97316',
-  '#A855F7', '#06B6D4', '#1E40AF', '#059669', '#D97706',
-  '#7C3AED', '#DB2777', '#0891B2', '#DC2626', '#EA580C',
-  '#0056CC', '#0D9488', '#B45309', '#9333EA', '#0369A1',
-  '#BE185D', '#1A1A1A', '#6B7280', '#78350F', '#064E3B',
-  '#312E81', '#831843', '#134E4A', '#7C2D12', '#1E3A5F',
-  '#4A1D96',
+  '#1A1A1A', '#2D3748', '#374151', '#4A5568', '#1F2937',
+  '#111827', '#1E293B', '#334155', '#3F3F46', '#27272A',
+  '#18181B', '#292524', '#1C1917', '#1E1B4B', '#172554',
 ]
 
 function getAvatarGradient(persona) {
@@ -201,8 +196,8 @@ function getAvatarGradient(persona) {
     return `linear-gradient(135deg, ${c}, ${c}dd)`
   }
   return persona.type === 'system'
-    ? 'linear-gradient(135deg, #007AFF, #5856D6)'
-    : 'linear-gradient(135deg, #10B981, #059669)'
+    ? 'linear-gradient(135deg, #0F0F0F, #374151)'
+    : 'linear-gradient(135deg, #0F0F0F, #374151)'
 }
 </script>
 
@@ -319,7 +314,8 @@ function getAvatarGradient(persona) {
   background: #1A1A1A;
 }
 .section-icon.user {
-  background: #007AFF;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .section-title {
   font-family: 'Inter', sans-serif;
@@ -394,20 +390,20 @@ function getAvatarGradient(persona) {
   transform: scale(0.97);
 }
 .persona-add-btn.system {
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #fff;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .persona-add-btn.system:hover {
-  background: #333;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 .persona-add-btn.user {
-  background: #007AFF;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #fff;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .persona-add-btn.user:hover {
-  background: #0056CC;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 
 @media (prefers-reduced-motion: reduce) {

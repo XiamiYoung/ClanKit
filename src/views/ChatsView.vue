@@ -384,10 +384,10 @@
             :disabled="!hasContextData"
             class="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
             :style="hasContextData
-              ? 'background:#1A1A1A; color:#FFFFFF; border:1px solid #1A1A1A;'
+              ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
               : 'background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
-            @mouseenter="e => { if (hasContextData) e.currentTarget.style.background='#333' }"
-            @mouseleave="e => { if (hasContextData) e.currentTarget.style.background='#1A1A1A' }"
+            @mouseenter="e => { if (hasContextData) e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }"
+            @mouseleave="e => { if (hasContextData) e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }"
             :title="hasContextData ? 'Inspect context window contents' : 'Send a message first to inspect context'"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -403,10 +403,10 @@
             :style="isCompacting
               ? 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'
               : (activeRunning || hasContextData)
-                ? 'background:#1A1A1A; color:#FFFFFF; border:1px solid #1A1A1A;'
+                ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
                 : 'background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
-            @mouseenter="e => { if (!isCompacting && (activeRunning || hasContextData)) e.currentTarget.style.background='#333' }"
-            @mouseleave="e => { if (!isCompacting && (activeRunning || hasContextData)) e.currentTarget.style.background='#1A1A1A' }"
+            @mouseenter="e => { if (!isCompacting && (activeRunning || hasContextData)) e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }"
+            @mouseleave="e => { if (!isCompacting && (activeRunning || hasContextData)) e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }"
             :title="isCompacting ? 'Compacting…' : activeRunning ? 'Compact on next iteration' : 'Compact context window'"
           >
             <svg v-if="isCompacting" class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -836,7 +836,7 @@
             class="flex items-center gap-2 px-3 py-1.5 rounded-lg"
             style="background:#FFFFFF; color:#6B7280; border:1px solid #E5E5EA; font-size:var(--fs-small);"
           >
-            <span class="shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style="background:#1A1A1A; color:#fff; font-size:10px; font-weight:600;">{{ idx + 1 }}</span>
+            <span class="shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#fff; font-size:10px; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);">{{ idx + 1 }}</span>
             <span class="flex-1 truncate">{{ item.text.slice(0, 80) }}{{ item.text.length > 80 ? '…' : '' }}</span>
             <span v-if="item.attachments?.length" style="opacity:0.7;">{{ item.attachments.length }} file{{ item.attachments.length !== 1 ? 's' : '' }}</span>
             <button
@@ -989,7 +989,7 @@
               :disabled="!inputText.trim() && attachments.length === 0"
               class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
               :style="inputText.trim() || attachments.length > 0
-                ? 'background:#1A1A1A; color:#ffffff; box-shadow:0 1px 3px rgba(0,0,0,0.04);'
+                ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
                 : 'background:#E5E5EA; color:#9CA3AF; cursor:not-allowed;'"
               aria-label="Send message"
               :title="activeRunning ? 'Queue message (will send after current run)' : 'Send message'"
@@ -2370,15 +2370,15 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   border: none;
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #fff;
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .chat-sidebar-new-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.16), 0 2px 4px rgba(0,0,0,0.1);
 }
 .chat-sidebar-new-btn:active {
   transform: translateY(0);
@@ -2501,9 +2501,10 @@ onUnmounted(() => {
   color: #1A1A1A;
 }
 .chat-header-btn.active {
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
   border-color: #1A1A1A;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 
 /* ── Context bar ────────────────────────────────────────────────────────── */
@@ -2546,8 +2547,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #1A1A1A;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .chat-empty-title {
   font-family: 'Inter', sans-serif;
@@ -2594,7 +2595,8 @@ onUnmounted(() => {
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .msg-avatar-fallback.system {
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .msg-avatar-fallback.user {
   background: #007AFF;
@@ -2609,10 +2611,10 @@ onUnmounted(() => {
   font-size: var(--fs-body);
 }
 .msg-bubble-user {
-  background: linear-gradient(135deg, #374151 0%, #4B5563 50%, #6B7280 100%);
+  background: linear-gradient(135deg, #0D9488 0%, #14B8A6 50%, #2DD4BF 100%);
   color: #ffffff;
   border-radius: 18px 18px 4px 18px;
-  box-shadow: 0 4px 16px rgba(75,85,99,0.25), 0 1px 4px rgba(55,65,81,0.15);
+  box-shadow: 0 4px 16px rgba(20,184,166,0.25), 0 1px 4px rgba(13,148,136,0.15);
 }
 .msg-bubble-assistant {
   background: #FFFFFF;
@@ -2741,7 +2743,8 @@ onUnmounted(() => {
   justify-content: center;
 }
 .persona-chip-avatar-default.system {
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .persona-chip-avatar-default.user {
   background: #007AFF;
@@ -2808,9 +2811,10 @@ onUnmounted(() => {
   background: #F5F5F5;
 }
 .persona-popover-item.selected {
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
   font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .persona-popover-avatar {
   width: 36px;
@@ -2927,12 +2931,13 @@ onUnmounted(() => {
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .model-chip-label {
   font-family: 'JetBrains Mono', 'SF Mono', monospace;
@@ -2977,7 +2982,8 @@ onUnmounted(() => {
   background: #F5F5F5;
 }
 .model-popover-item.selected {
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .model-item-info {
   flex: 1;
@@ -3094,7 +3100,8 @@ onUnmounted(() => {
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .tools-select-title {
   font-family: 'Inter', sans-serif;
@@ -3187,9 +3194,10 @@ onUnmounted(() => {
   transition: all 0.15s;
 }
 .tools-cat-chip.active {
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #fff;
   border-color: #1A1A1A;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .tools-cat-chip:hover:not(.active) { background: #E5E5EA; }
 
@@ -3275,14 +3283,14 @@ onUnmounted(() => {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #fff;
   border: none;
   cursor: pointer;
   transition: background 0.15s;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
-.tools-select-done-btn:hover { background: #333; }
+.tools-select-done-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 
 /* ── Reduced motion ─────────────────────────────────────────────────────── */
 /* ── Rename modal ───────────────────────────────────────────────────────── */
