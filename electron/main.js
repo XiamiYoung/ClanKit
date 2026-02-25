@@ -80,11 +80,17 @@ logger.info('=== SparkAI starting ===', 'NODE_ENV=' + process.env.NODE_ENV)
 const isDev = process.env.NODE_ENV !== 'production'
 
 // ─── Storage ────────────────────────────────────────────────────────────────
-const DATA_DIR = path.join(os.homedir(), '.sparkai')
+const DEFAULT_DATA_PATH = path.join(os.homedir(), '.sparkai')
+const DATA_DIR = DEFAULT_DATA_PATH
 const CHATS_FILE = path.join(DATA_DIR, 'chats.json')
+const CHATS_DIR = path.join(DATA_DIR, 'chats')
+const CHATS_INDEX_FILE = path.join(CHATS_DIR, 'index.json')
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
 const PERSONAS_FILE = path.join(DATA_DIR, 'personas.json')
-const MCP_FILE = path.join(DATA_DIR, 'mcp-servers.json')
+const MCP_SERVERS_FILE = path.join(DATA_DIR, 'mcp-servers.json')
+const TOOLS_FILE = path.join(DATA_DIR, 'tools.json')
+const SOULS_DIR = path.join(DATA_DIR, 'souls')
+const KNOWLEDGE_FILE = path.join(DATA_DIR, 'knowledge.json')
 const ENV_FILE = path.join(__dirname, '..', '.env')
 
 const OLD_DATA_DIR = path.join(os.homedir(), '.maestro-agent')
@@ -121,22 +127,183 @@ function writeJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8')
 }
 
+// ─── Atomic async JSON write (write to .tmp then rename) ─────────────────────
+async function writeJSONAtomic(file, data) {
+  const dir = path.dirname(file)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  const tmp = file + '.tmp'
+  await fs.promises.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
+  await fs.promises.rename(tmp, file)
+}
+
+async function readJSONAsync(file, fallback) {
+  try {
+    const raw = await fs.promises.readFile(file, 'utf8')
+    return JSON.parse(raw)
+  } catch {
+    return fallback
+  }
+}
+
+// ─── Chat index helpers ──────────────────────────────────────────────────────
+function chatMetaFromChat(chat) {
+  const { messages, ...meta } = chat
+  return meta
+}
+
+// ─── Migration: monolithic chats.json → per-chat files ───────────────────────
+async function migrateChatsIfNeeded() {
+  const chatsDir = CHATS_DIR
+  const indexFile = CHATS_INDEX_FILE
+  const oldFile = CHATS_FILE
+
+  if (fs.existsSync(chatsDir) && fs.existsSync(indexFile)) {
+    // Already migrated — clean up any leftover .tmp files
+    try {
+      const files = await fs.promises.readdir(chatsDir)
+      for (const f of files) {
+        if (f.endsWith('.tmp')) {
+          await fs.promises.unlink(path.join(chatsDir, f)).catch(() => {})
+        }
+      }
+    } catch {}
+    return
+  }
+
+  if (!fs.existsSync(chatsDir)) {
+    fs.mkdirSync(chatsDir, { recursive: true })
+  }
+
+  if (fs.existsSync(oldFile)) {
+    // Migrate from monolithic file
+    try {
+      const allChats = JSON.parse(fs.readFileSync(oldFile, 'utf8'))
+      if (Array.isArray(allChats)) {
+        const index = []
+        for (const chat of allChats) {
+          if (!chat.id) continue
+          await writeJSONAtomic(path.join(chatsDir, `${chat.id}.json`), chat)
+          index.push(chatMetaFromChat(chat))
+        }
+        await writeJSONAtomic(indexFile, index)
+        // Backup old file
+        await fs.promises.rename(oldFile, oldFile + '.backup')
+        logger.info(`Migrated ${index.length} chats from chats.json to chats/ directory`)
+      }
+    } catch (err) {
+      logger.error('Chat migration failed:', err.message)
+      // If migration fails, create empty index so app still works
+      if (!fs.existsSync(indexFile)) {
+        await writeJSONAtomic(indexFile, [])
+      }
+    }
+  } else {
+    // Fresh install — create empty index
+    await writeJSONAtomic(indexFile, [])
+  }
+}
+
+// ─── Migration: .env user data → JSON files ──────────────────────────────────
+async function migrateEnvDataIfNeeded() {
+  // a) Migrate config values from .env → config.json (one-time seed)
+  const cfg = readJSON(CONFIG_FILE, {})
+  if (!cfg.apiKey) {
+    let changed = false
+    const envMap = {
+      apiKey:       'ANTHROPIC_API_KEY',
+      baseURL:      'ANTHROPIC_BASE_URL',
+      sonnetModel:  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+      opusModel:    'ANTHROPIC_DEFAULT_OPUS_MODEL',
+      haikuModel:   'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+      openrouterApiKey:  'OPENROUTER_API_KEY',
+      openrouterBaseURL: 'OPENROUTER_BASE_URL',
+      openaiApiKey:      'OPENAI_API_KEY',
+      openaiBaseURL:     'OPENAI_BASE_URL',
+      systemPrompt:      'SPARK_SYSTEM_PROMPT',
+      obsidianVaultPath: 'OBSIDIAN_VAULT_PATH',
+      pineconeApiKey:    'PINECONE_API_KEY'
+    }
+    for (const [cfgKey, envKey] of Object.entries(envMap)) {
+      const envVal = process.env[envKey]
+      if (envVal && !cfg[cfgKey]) {
+        cfg[cfgKey] = envVal
+        changed = true
+      }
+    }
+    // Also migrate pineconeApiKey from knowledge.json (old location) → config.json
+    const knowledge = readJSON(KNOWLEDGE_FILE, {})
+    if (knowledge.pineconeApiKey && !cfg.pineconeApiKey) {
+      cfg.pineconeApiKey = knowledge.pineconeApiKey
+      delete knowledge.pineconeApiKey
+      writeJSON(KNOWLEDGE_FILE, knowledge)
+      changed = true
+    }
+    if (changed) {
+      writeJSON(CONFIG_FILE, cfg)
+      logger.info('Migrated env/user data into config.json')
+    }
+  } else {
+    // Config already has apiKey — still check if pineconeApiKey needs moving from knowledge.json
+    const knowledge = readJSON(KNOWLEDGE_FILE, {})
+    if (knowledge.pineconeApiKey) {
+      if (!cfg.pineconeApiKey) cfg.pineconeApiKey = knowledge.pineconeApiKey
+      delete knowledge.pineconeApiKey
+      writeJSON(KNOWLEDGE_FILE, knowledge)
+      writeJSON(CONFIG_FILE, cfg)
+      logger.info('Migrated pineconeApiKey from knowledge.json to config.json')
+    }
+  }
+
+  // b) Migrate MCP_SERVERS env var → mcp-servers.json
+  const mcpData = readJSON(MCP_SERVERS_FILE, null)
+  if ((mcpData === null || (typeof mcpData === 'object' && Object.keys(mcpData).length === 0)) && process.env.MCP_SERVERS) {
+    try {
+      const parsed = JSON.parse(process.env.MCP_SERVERS)
+      if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+        writeJSON(MCP_SERVERS_FILE, parsed)
+        logger.info('Migrated MCP_SERVERS from .env to mcp-servers.json')
+      }
+    } catch (err) {
+      logger.error('Failed to parse MCP_SERVERS env var:', err.message)
+    }
+  }
+
+  // c) Migrate HTTP_TOOLS env var → tools.json
+  const toolsData = readJSON(TOOLS_FILE, null)
+  if (toolsData === null && process.env.HTTP_TOOLS) {
+    try {
+      const parsed = JSON.parse(process.env.HTTP_TOOLS)
+      if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+        writeJSON(TOOLS_FILE, parsed)
+        logger.info('Migrated HTTP_TOOLS from .env to tools.json')
+      }
+    } catch (err) {
+      logger.error('Failed to parse HTTP_TOOLS env var:', err.message)
+    }
+  }
+}
+
 // ─── Default Data ───────────────────────────────────────────────────────────
 const DEFAULT_CONFIG = {
-  apiKey:       process.env.ANTHROPIC_API_KEY                || '',
-  baseURL:      process.env.ANTHROPIC_BASE_URL               || 'https://api.anthropic.com',
-  sonnetModel:  process.env.ANTHROPIC_DEFAULT_SONNET_MODEL   || 'claude-sonnet-4-5',
-  opusModel:    process.env.ANTHROPIC_DEFAULT_OPUS_MODEL     || 'claude-opus-4-6',
-  haikuModel:   process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL    || 'claude-haiku-3-5',
+  apiKey:       '',
+  baseURL:      'https://api.anthropic.com',
+  sonnetModel:  'claude-sonnet-4-5',
+  opusModel:    'claude-opus-4-6',
+  haikuModel:   'claude-haiku-3-5',
   activeModel:  'sonnet',
   skillsPath:   '',
-  openrouterApiKey:  process.env.OPENROUTER_API_KEY  || '',
-  openrouterBaseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api',
-  openaiApiKey:      process.env.OPENAI_API_KEY       || '',
-  openaiBaseURL:     process.env.OPENAI_BASE_URL      || 'https://mlaas.virtuosgames.com',
+  dataPath:     DEFAULT_DATA_PATH,
+  openrouterApiKey:  '',
+  openrouterBaseURL: 'https://openrouter.ai/api',
+  openaiApiKey:      '',
+  openaiBaseURL:     'https://mlaas.virtuosgames.com',
   openaiModel:       '',
+  openrouterDefaultModel: '',
+  openaiDefaultModel:     '',
   defaultProvider:   'anthropic',
-  systemPrompt:      process.env.SPARK_SYSTEM_PROMPT || ''
+  systemPrompt:      '',
+  obsidianVaultPath: '',
+  pineconeApiKey:    ''
 }
 
 // ─── Main Window ────────────────────────────────────────────────────────────
@@ -201,7 +368,7 @@ protocol.registerSchemesAsPrivileged([{
   privileges: { bypassCSP: true, supportFetchAPI: true, stream: true }
 }])
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Handle vault-asset:// requests → serve files from disk
   // URL format: vault-asset:///absolute/path/to/file
   protocol.handle('vault-asset', (request) => {
@@ -210,6 +377,8 @@ app.whenReady().then(() => {
   })
 
   ensureDataDir()
+  await migrateChatsIfNeeded()
+  await migrateEnvDataIfNeeded()
   createWindow()
   logger.info('Window created. Log dir:', LOG_DIR)
   app.on('activate', () => {
@@ -226,14 +395,80 @@ app.on('before-quit', () => {
 })
 
 // ─── IPC: Storage ───────────────────────────────────────────────────────────
-ipcMain.handle('store:get-chats', () => readJSON(CHATS_FILE, []))
-ipcMain.handle('store:save-chats', (_, chats) => { writeJSON(CHATS_FILE, chats); return true })
+
+// ── Per-chat granular operations ─────────────────────────────────────────────
+ipcMain.handle('store:get-chat-index', async () => {
+  return readJSONAsync(CHATS_INDEX_FILE, [])
+})
+
+ipcMain.handle('store:save-chat-index', async (_, index) => {
+  await writeJSONAtomic(CHATS_INDEX_FILE, index)
+  return true
+})
+
+ipcMain.handle('store:get-chat', async (_, chatId) => {
+  const file = path.join(CHATS_DIR, `${chatId}.json`)
+  return readJSONAsync(file, null)
+})
+
+ipcMain.handle('store:save-chat', async (_, chat) => {
+  if (!chat || !chat.id) return false
+  // Write the per-chat file atomically
+  await writeJSONAtomic(path.join(CHATS_DIR, `${chat.id}.json`), chat)
+  // Update the index entry
+  const index = await readJSONAsync(CHATS_INDEX_FILE, [])
+  const meta = chatMetaFromChat(chat)
+  const idx = index.findIndex(e => e.id === chat.id)
+  if (idx >= 0) {
+    index[idx] = meta
+  } else {
+    index.unshift(meta)
+  }
+  await writeJSONAtomic(CHATS_INDEX_FILE, index)
+  return true
+})
+
+ipcMain.handle('store:delete-chat', async (_, chatId) => {
+  // Remove per-chat file
+  const file = path.join(CHATS_DIR, `${chatId}.json`)
+  try { await fs.promises.unlink(file) } catch {}
+  // Remove from index
+  const index = await readJSONAsync(CHATS_INDEX_FILE, [])
+  const filtered = index.filter(e => e.id !== chatId)
+  await writeJSONAtomic(CHATS_INDEX_FILE, filtered)
+  return true
+})
+
+// ── Backward-compatible bulk operations (reads per-chat files) ───────────────
+ipcMain.handle('store:get-chats', async () => {
+  const index = await readJSONAsync(CHATS_INDEX_FILE, null)
+  if (index === null) {
+    // Fallback: no migration yet, read old monolithic file
+    return readJSON(CHATS_FILE, [])
+  }
+  const chats = []
+  for (const entry of index) {
+    const chat = await readJSONAsync(path.join(CHATS_DIR, `${entry.id}.json`), null)
+    if (chat) chats.push(chat)
+  }
+  return chats
+})
+
+ipcMain.handle('store:save-chats', async (_, chats) => {
+  if (!fs.existsSync(CHATS_DIR)) fs.mkdirSync(CHATS_DIR, { recursive: true })
+  const index = []
+  for (const chat of chats) {
+    if (!chat.id) continue
+    await writeJSONAtomic(path.join(CHATS_DIR, `${chat.id}.json`), chat)
+    index.push(chatMetaFromChat(chat))
+  }
+  await writeJSONAtomic(CHATS_INDEX_FILE, index)
+  return true
+})
 
 ipcMain.handle('store:get-config', () => {
   const saved = readJSON(CONFIG_FILE, {})
-  // Only let saved values override defaults when they are non-empty strings.
-  // This ensures env vars from .env always populate the config
-  // on first launch (or when the user clears a field and saves).
+  // Only let saved non-empty values override defaults.
   const nonEmpty = Object.fromEntries(
     Object.entries(saved).filter(([, v]) => v !== '' && v !== null && v !== undefined)
   )
@@ -252,44 +487,81 @@ ipcMain.handle('store:get-config', () => {
 })
 ipcMain.handle('store:save-config', (_, config) => { writeJSON(CONFIG_FILE, config); return true })
 
+ipcMain.handle('store:get-data-path', () => ({
+  dataPath: DATA_DIR,
+  defaultDataPath: DEFAULT_DATA_PATH,
+  platform: process.platform,
+}))
+
 ipcMain.handle('store:get-personas', () => readJSON(PERSONAS_FILE, []))
 ipcMain.handle('store:save-personas', (_, personas) => { writeJSON(PERSONAS_FILE, personas); return true })
 
-ipcMain.handle('store:get-mcp-servers', () => readJSON(MCP_FILE, []))
-ipcMain.handle('store:save-mcp-servers', (_, servers) => { writeJSON(MCP_FILE, servers); return true })
+// ─── IPC: Soul Memory Files ─────────────────────────────────────────────────
+function ensureSoulsDir(type) {
+  const dir = path.join(SOULS_DIR, type)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  return dir
+}
 
-// ─── IPC: MCP Server Configuration (.env-based) ─────────────────────────────
-// MCP_SERVERS is stored as a JSON string in .env, matching Claude Desktop format:
-// MCP_SERVERS={"server-name":{"command":"npx","args":["-y","pkg"],"env":{}}}
-
-ipcMain.handle('mcp:get-config', () => {
+ipcMain.handle('souls:read', (_, personaId, type) => {
   try {
-    const raw = process.env.MCP_SERVERS || '{}'
-    return JSON.parse(raw)
+    const filePath = path.join(ensureSoulsDir(type), `${personaId}.md`)
+    if (!fs.existsSync(filePath)) return null
+    return fs.readFileSync(filePath, 'utf8')
   } catch (err) {
-    logger.error('mcp:get-config parse error', err.message)
-    return {}
+    logger.error('souls:read error', err.message)
+    return null
   }
 })
 
-ipcMain.handle('mcp:save-config', (_, mcpServers) => {
+ipcMain.handle('souls:write', (_, personaId, type, content) => {
   try {
-    const prettyJson = JSON.stringify(mcpServers, null, 2)
-    process.env.MCP_SERVERS = prettyJson
-    // Write back to .env file (multi-line JSON block)
-    let content = fs.existsSync(ENV_FILE) ? fs.readFileSync(ENV_FILE, 'utf8') : ''
-    // Match existing MCP_SERVERS= block (single-line or multi-line until closing brace)
-    const mcpPattern = /^# MCP Servers[^\n]*\nMCP_SERVERS=[\s\S]*?(?=\n[A-Z_]+=|\n#|\s*$)/m
-    const mcpLinePattern = /^MCP_SERVERS=.*$/m
-    const newBlock = `# MCP Servers (JSON — Claude Desktop format)\nMCP_SERVERS=${prettyJson}`
-    if (mcpPattern.test(content)) {
-      content = content.replace(mcpPattern, newBlock)
-    } else if (mcpLinePattern.test(content)) {
-      content = content.replace(mcpLinePattern, newBlock)
-    } else {
-      content = content.trimEnd() + `\n\n${newBlock}\n`
-    }
-    fs.writeFileSync(ENV_FILE, content, 'utf8')
+    const filePath = path.join(ensureSoulsDir(type), `${personaId}.md`)
+    fs.writeFileSync(filePath, content, 'utf8')
+    return { success: true }
+  } catch (err) {
+    logger.error('souls:write error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('souls:exists', (_, personaId, type) => {
+  try {
+    const filePath = path.join(ensureSoulsDir(type), `${personaId}.md`)
+    return fs.existsSync(filePath)
+  } catch { return false }
+})
+
+ipcMain.handle('souls:list', (_, type) => {
+  try {
+    const dir = ensureSoulsDir(type)
+    return fs.readdirSync(dir)
+      .filter(f => f.endsWith('.md'))
+      .map(f => f.replace(/\.md$/, ''))
+  } catch (err) {
+    logger.error('souls:list error', err.message)
+    return []
+  }
+})
+
+ipcMain.handle('souls:delete', (_, personaId, type) => {
+  try {
+    const filePath = path.join(ensureSoulsDir(type), `${personaId}.md`)
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    return { success: true }
+  } catch (err) {
+    logger.error('souls:delete error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// ─── IPC: MCP Server Configuration (~/.sparkai/mcp-servers.json) ─────────────
+
+ipcMain.handle('mcp:get-config', () => readJSON(MCP_SERVERS_FILE, {}))
+
+ipcMain.handle('mcp:save-config', async (_, mcpServers) => {
+  try {
+    await writeJSONAtomic(MCP_SERVERS_FILE, mcpServers)
     return { success: true }
   } catch (err) {
     logger.error('mcp:save-config error', err.message)
@@ -297,40 +569,793 @@ ipcMain.handle('mcp:save-config', (_, mcpServers) => {
   }
 })
 
-// ─── IPC: HTTP Tools Configuration (.env-based) ──────────────────────────────
-// HTTP_TOOLS is stored as a JSON string in .env:
-// HTTP_TOOLS={"tool-id":{"name":"...","method":"GET","endpoint":"...",...}}
+// ─── IPC: HTTP Tools Configuration (~/.sparkai/tools.json) ───────────────────
 
-ipcMain.handle('tools:get-config', () => {
-  try {
-    const raw = process.env.HTTP_TOOLS || '{}'
-    return JSON.parse(raw)
-  } catch (err) {
-    logger.error('tools:get-config parse error', err.message)
-    return {}
-  }
-})
+ipcMain.handle('tools:get-config', () => readJSON(TOOLS_FILE, {}))
 
-ipcMain.handle('tools:save-config', (_, toolsConfig) => {
+ipcMain.handle('tools:save-config', async (_, toolsConfig) => {
   try {
-    const prettyJson = JSON.stringify(toolsConfig, null, 2)
-    process.env.HTTP_TOOLS = prettyJson
-    let content = fs.existsSync(ENV_FILE) ? fs.readFileSync(ENV_FILE, 'utf8') : ''
-    const toolsPattern = /^# HTTP Tools[^\n]*\nHTTP_TOOLS=[\s\S]*?(?=\n[A-Z_]+=|\n#|\s*$)/m
-    const toolsLinePattern = /^HTTP_TOOLS=.*$/m
-    const newBlock = `# HTTP Tools (JSON)\nHTTP_TOOLS=${prettyJson}`
-    if (toolsPattern.test(content)) {
-      content = content.replace(toolsPattern, newBlock)
-    } else if (toolsLinePattern.test(content)) {
-      content = content.replace(toolsLinePattern, newBlock)
-    } else {
-      content = content.trimEnd() + `\n\n${newBlock}\n`
-    }
-    fs.writeFileSync(ENV_FILE, content, 'utf8')
+    await writeJSONAtomic(TOOLS_FILE, toolsConfig)
     return { success: true }
   } catch (err) {
     logger.error('tools:save-config error', err.message)
     return { success: false, error: err.message }
+  }
+})
+
+// ─── IPC: Knowledge / Pinecone RAG ──────────────────────────────────────────
+
+ipcMain.handle('knowledge:get-config', () => {
+  const cfg = readJSON(CONFIG_FILE, {})
+  const saved = readJSON(KNOWLEDGE_FILE, {})
+  return {
+    pineconeApiKey:    cfg.pineconeApiKey || '',
+    pineconeIndexName: saved.pineconeIndexName || '',
+    ragEnabled:        saved.ragEnabled !== undefined ? saved.ragEnabled : true,
+    embeddingProvider: saved.embeddingProvider || 'openai',
+    embeddingModel:    saved.embeddingModel || 'text-embedding-3-small',
+    indexConfigs:      saved.indexConfigs || {}
+  }
+})
+
+ipcMain.handle('knowledge:save-config', async (_, config) => {
+  try {
+    // pineconeApiKey goes to config.json (with all other API keys)
+    if (config.pineconeApiKey !== undefined) {
+      const cfg = readJSON(CONFIG_FILE, {})
+      cfg.pineconeApiKey = config.pineconeApiKey
+      await writeJSONAtomic(CONFIG_FILE, cfg)
+    }
+    // index name, rag toggle, and embedding config stay in knowledge.json
+    const saved = readJSON(KNOWLEDGE_FILE, {})
+    if (config.pineconeIndexName !== undefined) saved.pineconeIndexName = config.pineconeIndexName
+    if (config.ragEnabled !== undefined)        saved.ragEnabled = config.ragEnabled
+    if (config.embeddingProvider !== undefined)  saved.embeddingProvider = config.embeddingProvider
+    if (config.embeddingModel !== undefined)     saved.embeddingModel = config.embeddingModel
+    if (config.indexConfigs !== undefined)       saved.indexConfigs = config.indexConfigs
+    writeJSON(KNOWLEDGE_FILE, saved)
+    return { success: true }
+  } catch (err) {
+    logger.error('knowledge:save-config error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// Verify API key by listing indexes (lightweight check)
+ipcMain.handle('knowledge:verify-connection', async (_, { apiKey }) => {
+  if (!apiKey) {
+    return { success: false, error: 'API key is required' }
+  }
+  try {
+    const https = require('https')
+    const data = await new Promise((resolve, reject) => {
+      const req = https.request('https://api.pinecone.io/indexes', {
+        method: 'GET',
+        headers: { 'Api-Key': apiKey, 'Content-Type': 'application/json' },
+        timeout: 15000
+      }, (res) => {
+        let body = ''
+        res.on('data', chunk => { body += chunk })
+        res.on('end', () => {
+          if (res.statusCode >= 400) {
+            reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 300)}`))
+          } else {
+            try { resolve(JSON.parse(body)) } catch (e) { reject(new Error('Invalid JSON response')) }
+          }
+        })
+      })
+      req.on('error', reject)
+      req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')) })
+      req.end()
+    })
+    const count = (data.indexes || []).length
+    logger.info('knowledge:verify-connection success', { indexCount: count })
+    return { success: true, message: `Connected — ${count} index${count !== 1 ? 'es' : ''} found` }
+  } catch (err) {
+    logger.error('knowledge:verify-connection error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// List all indexes for the given API key
+ipcMain.handle('knowledge:list-indexes', async (_, { apiKey }) => {
+  if (!apiKey) {
+    return { success: false, error: 'API key is required', indexes: [] }
+  }
+  try {
+    const https = require('https')
+    const data = await new Promise((resolve, reject) => {
+      const req = https.request('https://api.pinecone.io/indexes', {
+        method: 'GET',
+        headers: { 'Api-Key': apiKey, 'Content-Type': 'application/json' },
+        timeout: 15000
+      }, (res) => {
+        let body = ''
+        res.on('data', chunk => { body += chunk })
+        res.on('end', () => {
+          if (res.statusCode >= 400) {
+            reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 300)}`))
+          } else {
+            try { resolve(JSON.parse(body)) } catch (e) { reject(new Error('Invalid JSON response')) }
+          }
+        })
+      })
+      req.on('error', reject)
+      req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')) })
+      req.end()
+    })
+    const indexes = (data.indexes || []).map(idx => ({
+      name: idx.name,
+      dimension: idx.dimension,
+      metric: idx.metric,
+      host: idx.host,
+      status: idx.status?.ready ? 'ready' : (idx.status?.state || 'unknown'),
+      vectorCount: idx.status?.ready ? (idx.total_vector_count || 0) : 0
+    }))
+    logger.info('knowledge:list-indexes', { count: indexes.length })
+    return { success: true, indexes }
+  } catch (err) {
+    logger.error('knowledge:list-indexes error', err.message)
+    return { success: false, error: err.message, indexes: [] }
+  }
+})
+
+// Describe a specific index (stats)
+ipcMain.handle('knowledge:describe-index', async (_, { apiKey, indexName }) => {
+  if (!apiKey || !indexName) {
+    return { success: false, error: 'API key and index name are required' }
+  }
+  try {
+    const https = require('https')
+    const data = await new Promise((resolve, reject) => {
+      const req = https.request(`https://api.pinecone.io/indexes/${indexName}`, {
+        method: 'GET',
+        headers: { 'Api-Key': apiKey, 'Content-Type': 'application/json' },
+        timeout: 15000
+      }, (res) => {
+        let body = ''
+        res.on('data', chunk => { body += chunk })
+        res.on('end', () => {
+          if (res.statusCode >= 400) {
+            reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 300)}`))
+          } else {
+            try { resolve(JSON.parse(body)) } catch (e) { reject(new Error('Invalid JSON response')) }
+          }
+        })
+      })
+      req.on('error', reject)
+      req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')) })
+      req.end()
+    })
+    // Extract region/cloud/type from spec
+    const spec = data.spec || {}
+    const serverless = spec.serverless || {}
+    const cloud = serverless.cloud || ''
+    const region = serverless.region || ''
+    const vectorType = data.metric ? 'Dense' : 'Unknown'
+    // Determine type from spec keys
+    const indexType = spec.serverless ? 'Serverless' : spec.pod ? 'Pod' : 'Unknown'
+
+    return {
+      success: true,
+      stats: {
+        name: data.name,
+        dimension: data.dimension,
+        metric: data.metric,
+        host: data.host,
+        vectorCount: data.status?.ready ? (data.total_vector_count || 0) : 0,
+        ready: !!data.status?.ready,
+        cloud,
+        region,
+        indexType,
+        vectorType
+      }
+    }
+  } catch (err) {
+    logger.error('knowledge:describe-index error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('knowledge:list-documents', async (_, { apiKey, indexName }) => {
+  // Read local document metadata
+  try {
+    const docsFile = path.join(DATA_DIR, 'knowledge-docs.json')
+    const docs = readJSON(docsFile, [])
+    return { success: true, documents: docs }
+  } catch (err) {
+    logger.error('knowledge:list-documents error', err.message)
+    return { success: false, error: err.message, documents: [] }
+  }
+})
+
+// List unique source files from Pinecone vector metadata
+ipcMain.handle('knowledge:list-sources', async (_, { apiKey, indexName }) => {
+  if (!apiKey || !indexName) {
+    return { success: false, error: 'API key and index name are required', sources: [] }
+  }
+  try {
+    const info = await getPineconeIndexInfo(apiKey, indexName)
+    const https = require('https')
+
+    // Helper for HTTPS requests
+    function httpsRequest(url, options, body) {
+      return new Promise((resolve, reject) => {
+        const req = https.request(url, { ...options, timeout: 15000 }, (res) => {
+          let data = ''
+          res.on('data', chunk => { data += chunk })
+          res.on('end', () => {
+            if (res.statusCode >= 400) reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 300)}`))
+            else {
+              try { resolve(JSON.parse(data)) } catch { reject(new Error('Invalid JSON response')) }
+            }
+          })
+        })
+        req.on('error', reject)
+        req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')) })
+        if (body) req.write(body)
+        req.end()
+      })
+    }
+
+    let metadataEntries = []
+
+    // Strategy 1: list vector IDs then fetch metadata
+    try {
+      const listData = await httpsRequest(`https://${info.host}/vectors/list?limit=100`, {
+        method: 'GET',
+        headers: { 'Api-Key': apiKey }
+      })
+
+      const vectorIds = (listData.vectors || []).map(v => v.id)
+      if (vectorIds.length > 0) {
+        // Fetch in batches of 30 to keep URL length reasonable
+        const BATCH = 30
+        for (let i = 0; i < Math.min(vectorIds.length, 90); i += BATCH) {
+          const batch = vectorIds.slice(i, i + BATCH)
+          const idsQuery = batch.map(id => `ids=${encodeURIComponent(id)}`).join('&')
+          const fetchData = await httpsRequest(`https://${info.host}/vectors/fetch?${idsQuery}`, {
+            method: 'GET',
+            headers: { 'Api-Key': apiKey }
+          })
+          const vectors = fetchData.vectors || {}
+          for (const [, vec] of Object.entries(vectors)) {
+            if (vec.metadata) metadataEntries.push(vec.metadata)
+          }
+        }
+      }
+    } catch (listErr) {
+      // Strategy 2 fallback: query with zero vector to get samples with metadata
+      logger.warn('knowledge:list-sources list fallback, using query:', listErr.message)
+      try {
+        const dim = info.dimension || 512
+        const zeroVec = new Array(dim).fill(0)
+        const queryBody = JSON.stringify({ vector: zeroVec, topK: 100, includeMetadata: true })
+        const queryData = await httpsRequest(`https://${info.host}/query`, {
+          method: 'POST',
+          headers: {
+            'Api-Key': apiKey,
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(queryBody)
+          }
+        }, queryBody)
+        const matches = queryData.matches || []
+        for (const m of matches) {
+          if (m.metadata) metadataEntries.push(m.metadata)
+        }
+      } catch (queryErr) {
+        logger.error('knowledge:list-sources query fallback failed:', queryErr.message)
+      }
+    }
+
+    // Extract unique file/source names from metadata
+    const sourceMap = new Map()
+    for (const meta of metadataEntries) {
+      const fileName = meta.documentName || meta.file || meta.source || 'Unknown'
+      if (!sourceMap.has(fileName)) {
+        sourceMap.set(fileName, { name: fileName, chunks: 0, documentId: meta.documentId || null })
+      }
+      sourceMap.get(fileName).chunks++
+    }
+
+    const sources = Array.from(sourceMap.values())
+    logger.info('knowledge:list-sources', { indexName, sources: sources.length })
+    return { success: true, sources }
+  } catch (err) {
+    logger.error('knowledge:list-sources error', err.message)
+    return { success: false, error: err.message, sources: [] }
+  }
+})
+
+ipcMain.handle('knowledge:pick-files', async () => {
+  if (filePickerOpen) return []
+  filePickerOpen = true
+  try {
+    if (IS_WSL) {
+      try {
+        const winPaths = await showWindowsFilePicker()
+        if (winPaths.length === 0) return []
+        return winPaths.map(wp => IS_WSL ? toWslPath(wp) : wp)
+      } catch (err) {
+        logger.error('Knowledge file picker (WSL) failed:', err.message)
+      }
+    }
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile', 'multiSelections'],
+      title: 'Select files to upload to Knowledge Base',
+      filters: [
+        { name: 'Documents', extensions: ['txt', 'md', 'pdf', 'json', 'csv', 'html', 'xml', 'yaml', 'yml'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    })
+    if (result.canceled || result.filePaths.length === 0) return []
+    return result.filePaths
+  } finally {
+    filePickerOpen = false
+  }
+})
+
+ipcMain.handle('knowledge:upload-files', async (_, { apiKey, indexName, filePaths }) => {
+  try {
+    const docsFile = path.join(DATA_DIR, 'knowledge-docs.json')
+    const docs = readJSON(docsFile, [])
+    const knowledgeCfg = readJSON(KNOWLEDGE_FILE, {})
+    const cfg = readJSON(CONFIG_FILE, {})
+    const results = []
+
+    // Resolve embedding config — prefer per-index config to stay consistent with RAG query
+    const idxCfg = (knowledgeCfg.indexConfigs || {})[indexName] || {}
+    const embProvider = idxCfg.embeddingProvider || knowledgeCfg.embeddingProvider || 'openai'
+    const embModel = idxCfg.embeddingModel || knowledgeCfg.embeddingModel || 'text-embedding-3-small'
+    const embApiKey = embProvider === 'openrouter' ? cfg.openrouterApiKey : cfg.openaiApiKey
+    const embBaseURL = embProvider === 'openrouter' ? cfg.openrouterBaseURL : cfg.openaiBaseURL
+
+    // Get Pinecone index host and dimension for upsert
+    let indexHost = null
+    let indexDimension = null
+    try {
+      const info = await getPineconeIndexInfo(apiKey, indexName)
+      indexHost = info.host
+      indexDimension = info.dimension
+    } catch (err) {
+      logger.error('Failed to get Pinecone index info:', err.message)
+      return { success: false, error: `Failed to get index info: ${err.message}` }
+    }
+
+    for (const filePath of filePaths) {
+      const resolvedPath = IS_WSL ? toWslPath(filePath) : filePath
+      const name = path.basename(resolvedPath)
+      const ext = path.extname(name).toLowerCase().replace('.', '')
+      let content = ''
+      let size = 0
+
+      try {
+        const stat = fs.statSync(resolvedPath)
+        size = stat.size
+        if (size > 10 * 1024 * 1024) {
+          results.push({ name, error: 'File too large (max 10MB)' })
+          continue
+        }
+        content = fs.readFileSync(resolvedPath, 'utf8')
+      } catch (err) {
+        results.push({ name, error: err.message })
+        continue
+      }
+
+      // Split into chunks (simple chunking by paragraphs/lines)
+      const chunks = []
+      const paragraphs = content.split(/\n\n+/)
+      let currentChunk = ''
+      for (const para of paragraphs) {
+        if ((currentChunk + para).length > 1000) {
+          if (currentChunk.trim()) chunks.push(currentChunk.trim())
+          currentChunk = para
+        } else {
+          currentChunk += (currentChunk ? '\n\n' : '') + para
+        }
+      }
+      if (currentChunk.trim()) chunks.push(currentChunk.trim())
+
+      const docId = `doc_${Date.now()}_${name.replace(/[^a-z0-9]/gi, '_')}`
+
+      // Generate embeddings and upsert to Pinecone
+      let upsertedCount = 0
+      try {
+        // Process chunks in batches of 10 to avoid rate limits
+        const BATCH_SIZE = 10
+        for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+          const batch = chunks.slice(i, i + BATCH_SIZE)
+          const vectors = []
+
+          for (let j = 0; j < batch.length; j++) {
+            const chunkIdx = i + j
+            const embedding = await generateEmbedding({
+              text: batch[j],
+              provider: embProvider,
+              model: embModel,
+              apiKey: embApiKey,
+              baseURL: embBaseURL,
+              dimensions: indexDimension || undefined
+            })
+            vectors.push({
+              id: `${docId}_chunk_${chunkIdx}`,
+              values: embedding,
+              metadata: {
+                text: batch[j],
+                documentId: docId,
+                documentName: name,
+                chunkIndex: chunkIdx
+              }
+            })
+          }
+
+          await pineconeUpsert(apiKey, indexHost, vectors)
+          upsertedCount += vectors.length
+          logger.info('knowledge:upload-files upserted batch', { name, batch: Math.floor(i / BATCH_SIZE) + 1, vectors: vectors.length })
+        }
+      } catch (err) {
+        logger.error('knowledge:upload-files embedding/upsert error', { name, error: err.message })
+        results.push({ name, error: `Embedding/upsert failed: ${err.message}` })
+        continue
+      }
+
+      const doc = {
+        id: docId,
+        name,
+        type: ext.toUpperCase() || 'TXT',
+        size,
+        chunkCount: chunks.length,
+        uploadedAt: Date.now(),
+        filePath: resolvedPath
+      }
+
+      docs.push(doc)
+      results.push({ name, success: true, chunkCount: chunks.length, upsertedCount })
+      logger.info('knowledge:upload-files processed', { name, chunks: chunks.length, upserted: upsertedCount })
+    }
+
+    writeJSON(docsFile, docs)
+    return { success: true, results }
+  } catch (err) {
+    logger.error('knowledge:upload-files error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('knowledge:delete-document', async (_, { documentId }) => {
+  try {
+    const docsFile = path.join(DATA_DIR, 'knowledge-docs.json')
+    let docs = readJSON(docsFile, [])
+    docs = docs.filter(d => d.id !== documentId)
+    writeJSON(docsFile, docs)
+    logger.info('knowledge:delete-document', { documentId })
+    return { success: true }
+  } catch (err) {
+    logger.error('knowledge:delete-document error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// Delete all vectors belonging to a source file from Pinecone
+ipcMain.handle('knowledge:delete-source', async (_, { apiKey, indexName, sourceName }) => {
+  if (!apiKey || !indexName || !sourceName) {
+    return { success: false, error: 'API key, index name, and source name are required' }
+  }
+  try {
+    const info = await getPineconeIndexInfo(apiKey, indexName)
+    const https = require('https')
+
+    function httpsReq(url, options, body) {
+      return new Promise((resolve, reject) => {
+        const req = https.request(url, { ...options, timeout: 30000 }, (res) => {
+          let data = ''
+          res.on('data', chunk => { data += chunk })
+          res.on('end', () => {
+            if (res.statusCode >= 400) reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 300)}`))
+            else {
+              try { resolve(JSON.parse(data)) } catch { resolve({}) }
+            }
+          })
+        })
+        req.on('error', reject)
+        req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')) })
+        if (body) req.write(body)
+        req.end()
+      })
+    }
+
+    // Try multiple metadata field names that might hold the source file name
+    const filterFields = ['documentName', 'file', 'source']
+    let deleted = false
+
+    for (const field of filterFields) {
+      try {
+        const delBody = JSON.stringify({
+          filter: { [field]: { '$eq': sourceName } }
+        })
+        await httpsReq(`https://${info.host}/vectors/delete`, {
+          method: 'POST',
+          headers: { 'Api-Key': apiKey, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(delBody) }
+        }, delBody)
+        deleted = true
+        logger.info('knowledge:delete-source', { indexName, sourceName, field })
+      } catch (err) {
+        // Filter-based delete may fail on pod indexes — continue trying other fields
+        logger.warn(`knowledge:delete-source filter on ${field} failed:`, err.message)
+      }
+    }
+
+    if (!deleted) {
+      return { success: false, error: 'Failed to delete vectors — metadata filter not supported on this index type' }
+    }
+
+    // Also remove from local docs list if matching
+    const docsFile = path.join(DATA_DIR, 'knowledge-docs.json')
+    let docs = readJSON(docsFile, [])
+    docs = docs.filter(d => d.name !== sourceName)
+    writeJSON(docsFile, docs)
+
+    return { success: true }
+  } catch (err) {
+    logger.error('knowledge:delete-source error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('knowledge:get-document-summary', async (_, { documentId }) => {
+  try {
+    const docsFile = path.join(DATA_DIR, 'knowledge-docs.json')
+    const docs = readJSON(docsFile, [])
+    const doc = docs.find(d => d.id === documentId)
+    if (!doc) return { success: false, error: 'Document not found' }
+
+    let summary = ''
+    let sampleChunks = []
+
+    if (doc.filePath && fs.existsSync(doc.filePath)) {
+      const content = fs.readFileSync(doc.filePath, 'utf8')
+      // Generate summary: first 500 chars
+      summary = content.substring(0, 500) + (content.length > 500 ? '...' : '')
+      // Sample chunks
+      const paragraphs = content.split(/\n\n+/).filter(p => p.trim())
+      sampleChunks = paragraphs.slice(0, 3).map(p => p.substring(0, 200) + (p.length > 200 ? '...' : ''))
+    } else {
+      summary = 'Original file not accessible. Document metadata is stored locally.'
+    }
+
+    return { success: true, summary, sampleChunks }
+  } catch (err) {
+    logger.error('knowledge:get-document-summary error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// ── Embedding generation helper ──────────────────────────────────────────────
+async function generateEmbedding({ text, provider, model, apiKey, baseURL, dimensions }) {
+  const https = require('https')
+  const http = require('http')
+
+  let url, headers, body
+
+  if (provider === 'openrouter') {
+    const base = (baseURL || 'https://openrouter.ai/api').replace(/\/+$/, '')
+    url = base + '/v1/embeddings'
+    headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    }
+    const payload = { model, input: text }
+    if (dimensions) payload.dimensions = dimensions
+    body = JSON.stringify(payload)
+  } else {
+    // OpenAI or OpenAI-compatible
+    const cfg = readJSON(CONFIG_FILE, {})
+    const base = (baseURL || cfg.openaiBaseURL || 'https://api.openai.com').replace(/\/+$/, '')
+    // Use standard OpenAI endpoint path
+    const isStandardOpenAI = base.includes('api.openai.com')
+    url = isStandardOpenAI ? base + '/v1/embeddings' : base + '/proxy/openai/v1/embeddings'
+    const key = apiKey || cfg.openaiApiKey || ''
+    headers = {
+      'Content-Type': 'application/json'
+    }
+    if (isStandardOpenAI) {
+      headers['Authorization'] = `Bearer ${key}`
+    } else {
+      headers['x-api-key'] = key
+    }
+    const payload = { model: model || 'text-embedding-3-small', input: text }
+    if (dimensions) payload.dimensions = dimensions
+    body = JSON.stringify(payload)
+  }
+
+  const { URL } = require('url')
+  const parsed = new URL(url)
+  const fetcher = parsed.protocol === 'https:' ? https : http
+
+  const data = await new Promise((resolve, reject) => {
+    const req = fetcher.request({
+      method: 'POST',
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      headers,
+      timeout: 30000
+    }, (res) => {
+      let body = ''
+      res.on('data', chunk => { body += chunk })
+      res.on('end', () => {
+        if (res.statusCode >= 400) {
+          reject(new Error(`Embedding API ${res.statusCode}: ${body.slice(0, 300)}`))
+        } else {
+          try { resolve(JSON.parse(body)) } catch (e) { reject(new Error('Invalid JSON from embedding API')) }
+        }
+      })
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('Embedding request timed out')) })
+    req.write(body)
+    req.end()
+  })
+
+  const embedding = data?.data?.[0]?.embedding
+  if (!embedding || !Array.isArray(embedding)) {
+    throw new Error('No embedding returned from API')
+  }
+  return embedding
+}
+
+// ── Pinecone index info resolver (cached) ────────────────────────────────────
+const indexInfoCache = new Map()
+
+async function getPineconeIndexInfo(apiKey, indexName) {
+  const cacheKey = `${apiKey.slice(0, 8)}:${indexName}`
+  if (indexInfoCache.has(cacheKey)) return indexInfoCache.get(cacheKey)
+
+  const https = require('https')
+  const data = await new Promise((resolve, reject) => {
+    const req = https.request(`https://api.pinecone.io/indexes/${indexName}`, {
+      method: 'GET',
+      headers: { 'Api-Key': apiKey, 'Content-Type': 'application/json' },
+      timeout: 15000
+    }, (res) => {
+      let body = ''
+      res.on('data', chunk => { body += chunk })
+      res.on('end', () => {
+        if (res.statusCode >= 400) reject(new Error(`Pinecone describe ${res.statusCode}: ${body.slice(0, 300)}`))
+        else {
+          try { resolve(JSON.parse(body)) } catch { reject(new Error('Invalid JSON from Pinecone')) }
+        }
+      })
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('Pinecone describe timed out')) })
+    req.end()
+  })
+
+  const host = data.host
+  if (!host) throw new Error('No host returned for Pinecone index')
+  const info = { host, dimension: data.dimension || null }
+  indexInfoCache.set(cacheKey, info)
+  return info
+}
+
+// ── Pinecone upsert helper ───────────────────────────────────────────────────
+async function pineconeUpsert(apiKey, indexHost, vectors) {
+  const https = require('https')
+  const body = JSON.stringify({ vectors })
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(`https://${indexHost}/vectors/upsert`, {
+      method: 'POST',
+      headers: {
+        'Api-Key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      timeout: 60000
+    }, (res) => {
+      let data = ''
+      res.on('data', chunk => { data += chunk })
+      res.on('end', () => {
+        if (res.statusCode >= 400) reject(new Error(`Pinecone upsert ${res.statusCode}: ${data.slice(0, 300)}`))
+        else {
+          try { resolve(JSON.parse(data)) } catch { resolve({ success: true }) }
+        }
+      })
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('Pinecone upsert timed out')) })
+    req.write(body)
+    req.end()
+  })
+}
+
+// ── Pinecone query helper ────────────────────────────────────────────────────
+async function pineconeQuery(apiKey, indexHost, vector, topK = 5) {
+  const https = require('https')
+  const body = JSON.stringify({ vector, topK, includeMetadata: true })
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(`https://${indexHost}/query`, {
+      method: 'POST',
+      headers: {
+        'Api-Key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000
+    }, (res) => {
+      let data = ''
+      res.on('data', chunk => { data += chunk })
+      res.on('end', () => {
+        if (res.statusCode >= 400) reject(new Error(`Pinecone query ${res.statusCode}: ${data.slice(0, 300)}`))
+        else {
+          try { resolve(JSON.parse(data)) } catch { reject(new Error('Invalid JSON from Pinecone query')) }
+        }
+      })
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('Pinecone query timed out')) })
+    req.write(body)
+    req.end()
+  })
+}
+
+// ── RAG query logic (shared between IPC and agent:run) ───────────────────────
+async function queryRAG({ query, pineconeApiKey, pineconeIndexName, topK, embeddingProvider, embeddingModel }) {
+  if (!pineconeApiKey || !pineconeIndexName || !query) {
+    return { success: false, error: 'Missing required parameters', matches: [] }
+  }
+
+  const cfg = readJSON(CONFIG_FILE, {})
+  const embeddingApiKey = embeddingProvider === 'openrouter'
+    ? cfg.openrouterApiKey
+    : cfg.openaiApiKey
+  const embeddingBaseURL = embeddingProvider === 'openrouter'
+    ? cfg.openrouterBaseURL
+    : cfg.openaiBaseURL
+
+  // Get index host and dimension
+  const { host: indexHost, dimension: indexDimension } = await getPineconeIndexInfo(pineconeApiKey, pineconeIndexName)
+
+  // Generate embedding for the query (match index dimension)
+  const queryVector = await generateEmbedding({
+    text: query,
+    provider: embeddingProvider || 'openai',
+    model: embeddingModel || 'text-embedding-3-small',
+    apiKey: embeddingApiKey,
+    baseURL: embeddingBaseURL,
+    dimensions: indexDimension || undefined
+  })
+
+  // Query Pinecone
+  const result = await pineconeQuery(pineconeApiKey, indexHost, queryVector, topK || 5)
+  const matches = (result.matches || []).map(m => ({
+    id: m.id,
+    score: m.score,
+    text: m.metadata?.text || '',
+    documentName: m.metadata?.documentName || ''
+  }))
+
+  return { success: true, matches }
+}
+
+// IPC: Generate embeddings
+ipcMain.handle('knowledge:generate-embeddings', async (_, { text, provider, model, apiKey, baseURL }) => {
+  try {
+    const embedding = await generateEmbedding({ text, provider, model, apiKey, baseURL })
+    return { success: true, embedding }
+  } catch (err) {
+    logger.error('knowledge:generate-embeddings error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// IPC: Query knowledge base
+ipcMain.handle('knowledge:query', async (_, params) => {
+  try {
+    return await queryRAG(params)
+  } catch (err) {
+    logger.error('knowledge:query error', err.message)
+    return { success: false, error: err.message, matches: [] }
   }
 })
 
@@ -438,7 +1463,14 @@ ipcMain.handle('openai:fetch-models', async (_, { apiKey, baseURL }) => {
  * If configPath is empty, use platform-specific default.
  */
 function resolveSkillsPath(configPath) {
-  if (configPath && configPath.trim()) return toLinuxPath(configPath.trim())
+  if (configPath && configPath.trim()) {
+    let p = configPath.trim()
+    // Expand leading ~ to home directory (shell expansion doesn't apply in Node)
+    if (p.startsWith('~/') || p === '~') {
+      p = path.join(os.homedir(), p.slice(1))
+    }
+    return toLinuxPath(p)
+  }
   // Default: ~/.claude/skills on Linux/WSL, %APPDATA%\Claude\skills on Windows
   if (process.platform === 'win32') {
     return path.join(process.env.APPDATA || '', 'Claude', 'skills')
@@ -632,8 +1664,8 @@ const lastContextSnapshots = new Map() // chatId → snapshot
 
 logger.info('IPC handlers registered: agent:run, agent:stop')
 
-ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts, mcpServers, httpTools }) => {
-  logger.agent('IPC agent:run received', { chatId, model: config?.activeModel, msgCount: messages?.length })
+ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts, mcpServers, httpTools, personaRuns, knowledgeConfig }) => {
+  logger.agent('IPC agent:run received', { chatId, model: config?.activeModel, msgCount: messages?.length, personaRuns: personaRuns?.length || 0 })
   logger.agent('config snapshot', {
     baseURL: config?.baseURL,
     hasApiKey: !!(config?.apiKey),
@@ -645,12 +1677,165 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   })
 
   // If this chat already has a running loop, stop it first
-  if (activeLoops.has(chatId)) {
-    activeLoops.get(chatId).stop()
-    activeLoops.delete(chatId)
+  for (const [key, loop] of activeLoops) {
+    if (key === chatId || key.startsWith(chatId + ':')) {
+      loop.stop()
+      activeLoops.delete(key)
+    }
   }
 
-  const loop = new AgentLoop(config)
+  // ── RAG retrieval (if enabled) ──
+  // Merge with file-based config so we always have the latest indexConfigs
+  if (knowledgeConfig) {
+    const fileCfg = readJSON(KNOWLEDGE_FILE, {})
+    const filePineconeKey = readJSON(CONFIG_FILE, {}).pineconeApiKey || ''
+    if (!knowledgeConfig.pineconeApiKey && filePineconeKey) knowledgeConfig.pineconeApiKey = filePineconeKey
+    if (!knowledgeConfig.indexConfigs || Object.keys(knowledgeConfig.indexConfigs).length === 0) {
+      knowledgeConfig.indexConfigs = fileCfg.indexConfigs || {}
+    }
+    if (knowledgeConfig.ragEnabled === undefined) knowledgeConfig.ragEnabled = fileCfg.ragEnabled !== false
+  }
+  let ragContext = null
+  if (knowledgeConfig?.ragEnabled && knowledgeConfig.pineconeApiKey) {
+    try {
+      // Extract the last user message text
+      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
+      const queryText = typeof lastUserMsg?.content === 'string'
+        ? lastUserMsg.content
+        : (Array.isArray(lastUserMsg?.content)
+          ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text).join(' ')
+          : '')
+
+      if (queryText.trim()) {
+        // Determine which indexes to query: all enabled indexes from indexConfigs
+        const idxConfigs = knowledgeConfig.indexConfigs || {}
+        const enabledIndexes = Object.entries(idxConfigs)
+          .filter(([, cfg]) => cfg.enabled)
+          .map(([name, cfg]) => ({ name, embeddingProvider: cfg.embeddingProvider, embeddingModel: cfg.embeddingModel }))
+
+        // Fallback: if no indexConfigs yet, use the selected index with global embedding config
+        if (enabledIndexes.length === 0 && knowledgeConfig.pineconeIndexName) {
+          enabledIndexes.push({
+            name: knowledgeConfig.pineconeIndexName,
+            embeddingProvider: knowledgeConfig.embeddingProvider || 'openai',
+            embeddingModel: knowledgeConfig.embeddingModel || 'text-embedding-3-small'
+          })
+        }
+
+        if (enabledIndexes.length > 0) {
+          logger.agent('RAG query', { chatId, queryLen: queryText.length, indexes: enabledIndexes.map(i => i.name) })
+          const allMatches = []
+          for (const idx of enabledIndexes) {
+            try {
+              const ragResult = await queryRAG({
+                query: queryText,
+                pineconeApiKey: knowledgeConfig.pineconeApiKey,
+                pineconeIndexName: idx.name,
+                topK: 5,
+                embeddingProvider: idx.embeddingProvider,
+                embeddingModel: idx.embeddingModel
+              })
+              if (ragResult.success && ragResult.matches.length > 0) {
+                allMatches.push(...ragResult.matches)
+              }
+            } catch (idxErr) {
+              logger.error('RAG index query error (non-fatal)', { chatId, index: idx.name, error: idxErr.message })
+            }
+          }
+          if (allMatches.length > 0) {
+            // Sort by score descending and take top 5
+            allMatches.sort((a, b) => (b.score || 0) - (a.score || 0))
+            ragContext = allMatches.slice(0, 5)
+            logger.agent('RAG matches found', { chatId, count: ragContext.length, topScore: ragContext[0]?.score })
+          }
+        }
+      }
+    } catch (err) {
+      logger.error('RAG retrieval error (non-fatal)', { chatId, error: err.message })
+      // Non-fatal — continue without RAG context
+    }
+  }
+  // ── Group chat: one or more persona runs (concurrent) ──
+  if (personaRuns && personaRuns.length >= 1) {
+    logger.agent('Group chat mode (concurrent)', { chatId, personaCount: personaRuns.length })
+    const baseMessages = [...messages]
+
+    // Emit all persona_start events upfront so UI creates all message bubbles immediately
+    for (const run of personaRuns) {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('agent:chunk', {
+          chatId,
+          chunk: { type: 'persona_start', personaId: run.personaId, personaName: run.personaName }
+        })
+      }
+    }
+
+    // Launch all persona loops concurrently
+    const promises = personaRuns.map(run => {
+      const loopKey = `${chatId}:${run.personaId}`
+      const loopConfig = { ...(run.config || config), soulsDir: SOULS_DIR }
+      const loop = new AgentLoop(loopConfig)
+      activeLoops.set(loopKey, loop)
+
+      return (async () => {
+        try {
+          const result = await loop.run(
+            baseMessages,
+            run.enabledAgents || enabledAgents,
+            run.enabledSkills || enabledSkills,
+            (chunk) => {
+              if (!event.sender.isDestroyed()) {
+                event.sender.send('agent:chunk', {
+                  chatId,
+                  chunk: { ...chunk, personaId: run.personaId, personaName: run.personaName }
+                })
+              }
+            },
+            currentAttachments,
+            run.personaPrompts || personaPrompts,
+            run.mcpServers || mcpServers,
+            run.httpTools || httpTools,
+            ragContext
+          )
+          return { personaId: run.personaId, personaName: run.personaName, success: true, result }
+        } catch (err) {
+          logger.error('agent:run persona error', { chatId, personaId: run.personaId, error: err.message })
+          return { personaId: run.personaId, personaName: run.personaName, success: false, error: err.message }
+        } finally {
+          // Emit persona_end
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('agent:chunk', {
+              chatId,
+              chunk: { type: 'persona_end', personaId: run.personaId, personaName: run.personaName }
+            })
+          }
+          if (activeLoops.has(loopKey)) {
+            lastContextSnapshots.set(loopKey, activeLoops.get(loopKey).getContextSnapshot())
+          }
+          activeLoops.delete(loopKey)
+        }
+      })()
+    })
+
+    const results = await Promise.all(promises)
+
+    // Build a combined context snapshot for the inspector (uses first persona's snapshot as base)
+    const personaSnapshots = personaRuns.map(run => {
+      const key = `${chatId}:${run.personaId}`
+      const snap = lastContextSnapshots.get(key)
+      return snap ? { personaName: run.personaName, ...snap } : null
+    }).filter(Boolean)
+    if (personaSnapshots.length > 0) {
+      const base = { ...personaSnapshots[0] }
+      base.model = personaSnapshots.map(s => `${s.personaName}: ${s.model || 'default'}`).join(' | ')
+      lastContextSnapshots.set(chatId, base)
+    }
+
+    return { success: true, results }
+  }
+
+  // ── Single persona (backward compat) ──
+  const loop = new AgentLoop({ ...config, soulsDir: SOULS_DIR })
   activeLoops.set(chatId, loop)
 
   logger.agent('run start', { chatId, model: config.activeModel, msgCount: messages.length, agents: enabledAgents, skills: enabledSkills })
@@ -668,7 +1853,8 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       currentAttachments,
       personaPrompts,
       mcpServers,
-      httpTools
+      httpTools,
+      ragContext
     )
     logger.agent('run done', { chatId, success: result !== undefined, resultLen: typeof result === 'string' ? result.length : 0 })
     return { success: true, result }
@@ -685,10 +1871,17 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
 })
 
 ipcMain.handle('agent:stop', (event, chatId) => {
-  if (chatId && activeLoops.has(chatId)) {
-    activeLoops.get(chatId).stop()
-    activeLoops.delete(chatId)
-    return true
+  if (chatId) {
+    let stopped = false
+    // Stop exact match and all group persona loops (chatId:personaId)
+    for (const [key, loop] of activeLoops) {
+      if (key === chatId || key.startsWith(chatId + ':')) {
+        loop.stop()
+        activeLoops.delete(key)
+        stopped = true
+      }
+    }
+    return stopped
   }
   // Fallback: stop ALL loops (backward compat / stop-all)
   if (!chatId && activeLoops.size > 0) {
@@ -712,7 +1905,7 @@ ipcMain.handle('agent:compact', (event, chatId) => {
 
 ipcMain.handle('agent:compact-standalone', async (event, { chatId, messages, config, enabledAgents, enabledSkills }) => {
   logger.agent('Standalone compaction requested', { chatId, msgCount: messages?.length })
-  const loop = new AgentLoop(config)
+  const loop = new AgentLoop({ ...config, soulsDir: SOULS_DIR })
   try {
     const result = await loop.compactStandalone(
       messages,
@@ -871,35 +2064,37 @@ function readAttachment(rawPath) {
   }
 }
 
+// Guard: prevent concurrent file/folder picker dialogs
+let filePickerOpen = false
+
 /**
  * Show a native Windows file picker via PowerShell.
  * Returns an array of Windows path strings, or [] on cancel.
  */
 function showWindowsFilePicker() {
   return new Promise((resolve) => {
-    // PowerShell script that shows OpenFileDialog + FolderBrowserDialog
-    // User picks files first, then optionally picks a folder
     const ps = `
 Add-Type -AssemblyName System.Windows.Forms
+$owner = New-Object System.Windows.Forms.Form
+$owner.TopMost = $true
+$owner.StartPosition = 'Manual'
+$owner.Location = New-Object System.Drawing.Point(-9999, -9999)
+$owner.Size = New-Object System.Drawing.Size(1, 1)
+$owner.ShowInTaskbar = $false
+$owner.Show()
+$owner.Hide()
+
 $results = @()
 
 $fd = New-Object System.Windows.Forms.OpenFileDialog
 $fd.Multiselect = $true
 $fd.Title = 'Select files to attach'
 $fd.Filter = 'All files (*.*)|*.*|Images (*.png;*.jpg;*.jpeg;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.gif;*.webp|Text files (*.txt;*.md;*.js;*.ts;*.py;*.json;*.yaml;*.yml;*.html;*.css;*.xml;*.csv)|*.txt;*.md;*.js;*.ts;*.py;*.json;*.yaml;*.yml;*.html;*.css;*.xml;*.csv'
-if ($fd.ShowDialog() -eq 'OK') {
+if ($fd.ShowDialog($owner) -eq 'OK') {
   $results += $fd.FileNames
 }
 
-$answer = [System.Windows.Forms.MessageBox]::Show('Do you also want to attach a folder?', 'Attach Folder', 'YesNo', 'Question')
-if ($answer -eq 'Yes') {
-  $dd = New-Object System.Windows.Forms.FolderBrowserDialog
-  $dd.Description = 'Select a folder to attach'
-  if ($dd.ShowDialog() -eq 'OK') {
-    $results += $dd.SelectedPath
-  }
-}
-
+$owner.Close()
 $results -join '|'
 `.trim()
 
@@ -925,14 +2120,24 @@ function showWindowsFolderPicker() {
   return new Promise((resolve) => {
     const ps = `
 Add-Type -AssemblyName System.Windows.Forms
+$owner = New-Object System.Windows.Forms.Form
+$owner.TopMost = $true
+$owner.StartPosition = 'Manual'
+$owner.Location = New-Object System.Drawing.Point(-9999, -9999)
+$owner.Size = New-Object System.Drawing.Size(1, 1)
+$owner.ShowInTaskbar = $false
+$owner.Show()
+$owner.Hide()
+
 $dd = New-Object System.Windows.Forms.FolderBrowserDialog
 $dd.Description = 'Select a folder'
 $dd.ShowNewFolderButton = $true
-if ($dd.ShowDialog() -eq 'OK') {
+if ($dd.ShowDialog($owner) -eq 'OK') {
   $dd.SelectedPath
 } else {
   ''
 }
+$owner.Close()
 `.trim()
 
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps],
@@ -951,23 +2156,29 @@ if ($dd.ShowDialog() -eq 'OK') {
 
 // files:pick — on WSL use native Windows dialog, otherwise GTK
 ipcMain.handle('files:pick', async () => {
-  if (IS_WSL) {
-    try {
-      const winPaths = await showWindowsFilePicker()
-      if (winPaths.length === 0) return []
-      return winPaths.map(wp => readAttachment(wp))
-    } catch (err) {
-      logger.error('Windows file picker failed, falling back to GTK:', err.message)
-      // fall through to GTK dialog
+  if (filePickerOpen) return []
+  filePickerOpen = true
+  try {
+    if (IS_WSL) {
+      try {
+        const winPaths = await showWindowsFilePicker()
+        if (winPaths.length === 0) return []
+        return winPaths.map(wp => readAttachment(wp))
+      } catch (err) {
+        logger.error('Windows file picker failed, falling back to GTK:', err.message)
+        // fall through to GTK dialog
+      }
     }
-  }
 
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openFile', 'openDirectory', 'multiSelections'],
-    title: 'Attach Files or Folders'
-  })
-  if (result.canceled || result.filePaths.length === 0) return []
-  return result.filePaths.map(fp => readAttachment(fp))
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile', 'openDirectory', 'multiSelections'],
+      title: 'Attach Files or Folders'
+    })
+    if (result.canceled || result.filePaths.length === 0) return []
+    return result.filePaths.map(fp => readAttachment(fp))
+  } finally {
+    filePickerOpen = false
+  }
 })
 
 // files:read-for-attachment — single path (from drag-drop), auto-converts Windows paths
@@ -1006,47 +2217,43 @@ function toLinuxPath(p) {
   return p
 }
 
-// Config persistence — stored in .env as OBSIDIAN_VAULT_PATH
+// Config persistence — stored in ~/.sparkai/config.json
 ipcMain.handle('obsidian:get-config', () => {
-  return { vaultPath: process.env.OBSIDIAN_VAULT_PATH || '' }
+  const saved = readJSON(CONFIG_FILE, {})
+  return { vaultPath: saved.obsidianVaultPath || '' }
 })
-ipcMain.handle('obsidian:save-config', (_, config) => {
-  const vaultPath = config.vaultPath || ''
-  process.env.OBSIDIAN_VAULT_PATH = vaultPath
-  // Write back to .env file
-  try {
-    let content = fs.existsSync(ENV_FILE) ? fs.readFileSync(ENV_FILE, 'utf8') : ''
-    if (content.match(/^OBSIDIAN_VAULT_PATH=.*$/m)) {
-      content = content.replace(/^OBSIDIAN_VAULT_PATH=.*$/m, `OBSIDIAN_VAULT_PATH=${vaultPath}`)
-    } else {
-      content = content.trimEnd() + `\nOBSIDIAN_VAULT_PATH=${vaultPath}\n`
-    }
-    fs.writeFileSync(ENV_FILE, content, 'utf8')
-  } catch (err) {
-    logger.error('Failed to write OBSIDIAN_VAULT_PATH to env file:', err.message)
-  }
+ipcMain.handle('obsidian:save-config', async (_, config) => {
+  const saved = readJSON(CONFIG_FILE, {})
+  saved.obsidianVaultPath = config.vaultPath || ''
+  await writeJSONAtomic(CONFIG_FILE, saved)
   return true
 })
 
 // Folder picker — on WSL use native Windows Explorer dialog via PowerShell
 ipcMain.handle('obsidian:pick-folder', async () => {
-  if (IS_WSL) {
-    try {
-      const folder = await showWindowsFolderPicker()
-      if (!folder) return null
-      return folder
-    } catch (err) {
-      logger.error('Windows folder picker failed, falling back to GTK:', err.message)
-      // fall through to GTK dialog
+  if (filePickerOpen) return null
+  filePickerOpen = true
+  try {
+    if (IS_WSL) {
+      try {
+        const folder = await showWindowsFolderPicker()
+        if (!folder) return null
+        return folder
+      } catch (err) {
+        logger.error('Windows folder picker failed, falling back to GTK:', err.message)
+        // fall through to GTK dialog
+      }
     }
-  }
 
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openDirectory'],
-    title: 'Select Obsidian Vault Folder'
-  })
-  if (result.canceled || result.filePaths.length === 0) return null
-  return result.filePaths[0]
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+      title: 'Select Obsidian Vault Folder'
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  } finally {
+    filePickerOpen = false
+  }
 })
 
 // Read directory tree (recursive, .md files + folders only)

@@ -7,7 +7,7 @@
         <div>
           <h1 class="personas-title">Personas</h1>
           <p class="personas-subtitle">
-            Manage AI personalities and user profiles for your chats.
+            Configure AI personalities and user profiles for your chats.
           </p>
         </div>
         <div class="personas-header-actions">
@@ -37,13 +37,13 @@
               </div>
               <div>
                 <h2 class="section-title">System Personas</h2>
-                <p class="section-desc">Define how the AI behaves.</p>
+                <p class="section-desc">Configure how the AI behaves and responds.</p>
               </div>
             </div>
-            <button class="persona-add-btn system" @click="openWizard('system')">
+            <AppButton @click="openWizard('system')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add
-            </button>
+              Configure
+            </AppButton>
           </div>
 
           <div class="personas-grid-scroll">
@@ -85,13 +85,13 @@
               </div>
               <div>
                 <h2 class="section-title">User Personas</h2>
-                <p class="section-desc">Tell the AI who you are.</p>
+                <p class="section-desc">Configure your identity and context for the AI.</p>
               </div>
             </div>
-            <button class="persona-add-btn user" @click="openWizard('user')">
+            <AppButton @click="openWizard('user')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add
-            </button>
+              Configure
+            </AppButton>
           </div>
 
           <div class="personas-grid-scroll">
@@ -130,6 +130,17 @@
       @close="showWizard = false"
       @saved="onSaved"
     />
+
+    <!-- Confirm Delete Modal -->
+    <ConfirmModal
+      v-if="confirmDeleteTarget"
+      title="Delete Persona"
+      :message="`Are you sure you want to delete &quot;${confirmDeleteTarget.name}&quot;? This action cannot be undone.`"
+      confirm-text="Delete"
+      confirm-class="danger"
+      @confirm="executeDelete"
+      @close="confirmDeleteTarget = null"
+    />
   </div>
 </template>
 
@@ -139,6 +150,8 @@ import { usePersonasStore } from '../stores/personas'
 import { PERSONA_AVATARS } from '../components/personas/personaAvatars'
 import PersonaCard from '../components/personas/PersonaCard.vue'
 import PersonaWizard from '../components/personas/PersonaWizard.vue'
+import ConfirmModal from '../components/common/ConfirmModal.vue'
+import AppButton from '../components/common/AppButton.vue'
 
 const personasStore = usePersonasStore()
 
@@ -177,10 +190,17 @@ function onSaved() {
   showWizard.value = false
 }
 
-async function confirmDelete(persona) {
-  if (confirm(`Delete persona "${persona.name}"?`)) {
-    await personasStore.deletePersona(persona.id)
-  }
+const confirmDeleteTarget = ref(null)
+
+function confirmDelete(persona) {
+  confirmDeleteTarget.value = persona
+}
+
+async function executeDelete() {
+  if (!confirmDeleteTarget.value) return
+  const id = confirmDeleteTarget.value.id
+  confirmDeleteTarget.value = null
+  await personasStore.deletePersona(id)
 }
 
 const CIRCLE_COLORS = [
@@ -311,7 +331,8 @@ function getAvatarGradient(persona) {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 .section-icon.system {
-  background: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .section-icon.user {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -372,46 +393,4 @@ function getAvatarGradient(persona) {
   text-align: center;
 }
 
-/* ── Add buttons ─────────────────────────────────────────────────────────── */
-.persona-add-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-}
-.persona-add-btn:active {
-  transform: scale(0.97);
-}
-.persona-add-btn.system {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.persona-add-btn.system:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-}
-.persona-add-btn.user {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.persona-add-btn.user:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .persona-add-btn {
-    transition: none;
-  }
-  .persona-add-btn:active {
-    transform: none;
-  }
-}
 </style>

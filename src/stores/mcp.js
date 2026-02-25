@@ -1,51 +1,76 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { v4 as uuidv4 } from 'uuid'
 
 /**
- * MCP Store — manages MCP server configurations stored in .env as MCP_SERVERS.
+ * MCP Store — manages MCP server configurations.
  *
- * .env format (Claude Desktop style):
- * MCP_SERVERS={"server-name":{"command":"npx","args":["-y","pkg"],"env":{}}}
+ * On-disk format (array):
+ * [{ id, name, description, command, args, env, enabled, updatedAt }]
  *
- * Internal format (flat array for UI convenience):
- * [{ id: "server-name", name: "server-name", command: "npx", args: [...], env: {...} }]
+ * Legacy dict format (Claude Desktop style) is auto-migrated on load:
+ * {"server-name":{"command":"npx","args":["-y","pkg"],"env":{}}}
  */
 export const useMcpStore = defineStore('mcp', () => {
   const servers = ref([])
   const runningStatus = ref({})
 
   /**
-   * Load MCP servers from .env via IPC.
-   * Converts the dict format { name: { command, args, env } }
-   * to an array format for easier UI rendering.
+   * Load MCP servers from disk via IPC.
+   * Handles both array format and legacy dict format.
    */
   async function loadServers() {
-    const dict = await window.electronAPI.mcp.getConfig()
-    servers.value = Object.entries(dict || {}).map(([name, config]) => ({
-      id: name,
-      name,
-      command: config.command || '',
-      args: config.args || [],
-      env: config.env || {},
-      description: config.description || '',
-    }))
+    const raw = await window.electronAPI.mcp.getConfig()
+    if (Array.isArray(raw)) {
+      servers.value = raw.map(s => ({
+        id: s.id || uuidv4(),
+        name: s.name || '',
+        command: s.command || '',
+        args: s.args || [],
+        env: s.env || {},
+        description: s.description || '',
+        enabled: s.enabled !== false,
+        updatedAt: s.updatedAt || Date.now(),
+      }))
+    } else if (raw && typeof raw === 'object') {
+      // Legacy dict format — migrate
+      servers.value = Object.entries(raw).map(([name, config]) => ({
+        id: uuidv4(),
+        name,
+        command: config.command || '',
+        args: config.args || [],
+        env: config.env || {},
+        description: config.description || '',
+        enabled: true,
+        updatedAt: Date.now(),
+      }))
+      // Persist immediately in new array format
+      await persist()
+    } else {
+      servers.value = []
+    }
   }
 
   /**
-   * Save a server (add or update). Persists back to .env.
+   * Save a server (add or update). Persists to disk.
    */
   async function saveServer(server) {
     const idx = servers.value.findIndex(s => s.id === server.id)
+    const entry = {
+      ...server,
+      id: server.id || uuidv4(),
+      updatedAt: Date.now(),
+    }
     if (idx >= 0) {
-      servers.value[idx] = { ...server }
+      servers.value[idx] = entry
     } else {
-      servers.value.push({ ...server, id: server.name })
+      servers.value.push(entry)
     }
     await persist()
   }
 
   /**
-   * Delete a server by id. Persists back to .env.
+   * Delete a server by id. Persists to disk.
    */
   async function deleteServer(id) {
     servers.value = servers.value.filter(s => s.id !== id)
@@ -67,19 +92,10 @@ export const useMcpStore = defineStore('mcp', () => {
   }
 
   /**
-   * Convert internal array back to dict format and save to .env.
+   * Save the servers array to disk.
    */
   async function persist() {
-    const dict = {}
-    for (const s of servers.value) {
-      dict[s.name] = {
-        command: s.command,
-        args: s.args || [],
-        env: s.env || {},
-        ...(s.description ? { description: s.description } : {}),
-      }
-    }
-    await window.electronAPI.mcp.saveConfig(dict)
+    await window.electronAPI.mcp.saveConfig(JSON.parse(JSON.stringify(servers.value)))
   }
 
   return {

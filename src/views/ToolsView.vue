@@ -14,10 +14,14 @@
           <div class="catalog-count-badge">
             {{ toolsStore.tools.length }} tool{{ toolsStore.tools.length !== 1 ? 's' : '' }}
           </div>
-          <button class="catalog-add-btn" @click="openAdd">
+          <AppButton @click="refreshTools" :loading="refreshing">
+            <svg v-if="!refreshing" style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Refresh
+          </AppButton>
+          <AppButton @click="openAdd">
             <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Add Tool
-          </button>
+          </AppButton>
         </div>
       </div>
 
@@ -118,8 +122,8 @@
 
     <!-- Add/Edit Modal -->
     <Teleport to="body">
-      <div v-if="showModal" class="tools-backdrop" @click.self="closeModal">
-        <div class="tools-modal">
+      <div v-if="showModal" class="tools-backdrop">
+        <div class="tools-modal" role="dialog" aria-modal="true">
           <!-- Modal header -->
           <div class="tools-modal-header">
             <div class="tools-modal-header-left">
@@ -209,26 +213,49 @@
           <!-- Modal footer -->
           <div class="tools-modal-footer">
             <div v-if="editingTool" style="flex:1;">
-              <button class="modal-delete-btn" @click="confirmDelete">
+              <AppButton variant="danger-ghost" @click="confirmDelete">
                 <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                 Delete
-              </button>
+              </AppButton>
             </div>
-            <button class="modal-cancel-btn" @click="closeModal">Cancel</button>
-            <button class="modal-save-btn" @click="saveForm" :disabled="!form.name?.trim() || !form.endpoint?.trim()">Save</button>
+            <AppButton variant="secondary" size="modal" @click="closeModal">Cancel</AppButton>
+            <AppButton size="modal" @click="saveForm" :disabled="!form.name?.trim() || !form.endpoint?.trim()">Save</AppButton>
           </div>
         </div>
       </div>
     </Teleport>
 
+    <!-- Confirm Delete Modal -->
+    <ConfirmModal
+      v-if="showConfirmDelete && editingTool"
+      title="Delete Tool"
+      :message="`Are you sure you want to delete &quot;${editingTool.name}&quot;? This action cannot be undone.`"
+      confirm-text="Delete"
+      confirm-class="danger"
+      @confirm="executeDelete"
+      @close="showConfirmDelete = false"
+    />
+
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useToolsStore } from '../stores/tools'
+import ConfirmModal from '../components/common/ConfirmModal.vue'
+import AppButton from '../components/common/AppButton.vue'
 
 const toolsStore = useToolsStore()
+const refreshing = ref(false)
+
+async function refreshTools() {
+  refreshing.value = true
+  try {
+    await toolsStore.loadTools()
+  } finally {
+    refreshing.value = false
+  }
+}
 
 onMounted(async () => {
   await toolsStore.loadTools()
@@ -288,6 +315,29 @@ function closeModal() {
   editingTool.value = null
 }
 
+// Lock body scroll & handle ESC when modal is open
+watch(showModal, (open) => {
+  if (open) {
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', onModalKeydown, true)
+  } else {
+    document.body.style.overflow = ''
+    document.removeEventListener('keydown', onModalKeydown, true)
+  }
+})
+
+function onModalKeydown(e) {
+  if (e.key === 'Escape') {
+    e.stopPropagation()
+    closeModal()
+  }
+}
+
+onUnmounted(() => {
+  document.body.style.overflow = ''
+  document.removeEventListener('keydown', onModalKeydown, true)
+})
+
 function addHeader() {
   form.value.headers.push({ key: '', value: '' })
 }
@@ -314,16 +364,26 @@ async function saveForm() {
     bodyTemplate: form.value.bodyTemplate || '{}',
   }
 
-  await toolsStore.saveTool(toolData)
+  try {
+    await toolsStore.saveTool(toolData)
+  } catch (err) {
+    console.error('Failed to save tool:', err)
+  }
   closeModal()
 }
 
-async function confirmDelete() {
+const showConfirmDelete = ref(false)
+
+function confirmDelete() {
   if (!editingTool.value) return
-  if (confirm(`Delete tool "${editingTool.value.name}"?`)) {
-    await toolsStore.deleteTool(editingTool.value.id)
-    closeModal()
-  }
+  showConfirmDelete.value = true
+}
+
+async function executeDelete() {
+  if (!editingTool.value) return
+  showConfirmDelete.value = false
+  await toolsStore.deleteTool(editingTool.value.id)
+  closeModal()
 }
 
 function truncateEndpoint(ep) {
@@ -375,29 +435,6 @@ function cardGradient() {
   border-radius: 9999px;
   border: 1px solid rgba(229, 229, 234, 0.5);
 }
-.catalog-add-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 12px;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 600;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.catalog-add-btn:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-}
-.catalog-add-btn:active {
-  transform: scale(0.97);
-}
-
 /* ── Search bar ────────────────────────────────────────────────────────────── */
 .catalog-search-wrap {
   position: relative;
@@ -566,6 +603,11 @@ function cardGradient() {
   display: flex;
   align-items: center;
   justify-content: center;
+  animation: tools-backdrop-in 0.2s ease-out;
+}
+@keyframes tools-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .tools-modal {
   width: min(640px, 95vw);
@@ -573,12 +615,15 @@ function cardGradient() {
   background: #FFFFFF;
   border: 1px solid #E5E5EA;
   border-radius: 20px;
-  box-shadow:
-    0 25px 60px rgba(0, 0, 0, 0.18),
-    0 8px 32px rgba(255, 149, 0, 0.08);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: tools-modal-in 0.2s ease-out;
+}
+@keyframes tools-modal-in {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 .tools-modal-header {
   display: flex;
@@ -769,56 +814,10 @@ select.form-input {
 }
 .env-remove-btn:hover { background: #FEE2E2; color: #DC2626; }
 
-/* ── Modal buttons ─────────────────────────────────────────────────────────── */
-.modal-cancel-btn {
-  padding: 8px 18px;
-  border-radius: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body);
-  font-weight: 500;
-  background: #F5F5F5;
-  color: #6B7280;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.modal-cancel-btn:hover { background: #E5E5EA; }
-.modal-save-btn {
-  padding: 8px 22px;
-  border-radius: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body);
-  font-weight: 600;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.modal-save-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
-.modal-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.modal-delete-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 600;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.modal-delete-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
-
 /* ── Reduced motion ─────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .tools-card, .catalog-add-btn { transition: none; }
+  .tools-card { transition: none; }
   .tools-card:hover { transform: none; }
+  .tools-backdrop, .tools-modal { animation: none; }
 }
 </style>

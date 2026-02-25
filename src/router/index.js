@@ -6,6 +6,7 @@ import ConfigView from '../views/ConfigView.vue'
 import NotesView from '../views/NotesView.vue'
 import McpView from '../views/McpView.vue'
 import ToolsView from '../views/ToolsView.vue'
+import KnowledgeView from '../views/KnowledgeView.vue'
 
 export default createRouter({
   history: createWebHashHistory(),
@@ -14,6 +15,7 @@ export default createRouter({
     { path: '/chats',     component: ChatsView },
     { path: '/personas',  component: PersonasView },
     { path: '/skills',    component: SkillsView },
+    { path: '/knowledge', component: KnowledgeView },
     { path: '/mcp',       component: McpView },
     { path: '/tools',     component: ToolsView },
     { path: '/notes',     component: NotesView },

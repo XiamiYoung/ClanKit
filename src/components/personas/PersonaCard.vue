@@ -91,8 +91,7 @@ const fallbackInitial = computed(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 160px;
-  max-height: 240px;
+  height: 200px;
   border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
@@ -137,14 +136,15 @@ const fallbackInitial = computed(() => {
 .persona-card-type.user { background: rgba(0, 0, 0, 0.06); color: #1A1A1A; }
 .persona-card-desc {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); color: #6B7280;
-  line-height: 1.55; margin: 0 0 16px; flex: 1;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  line-height: 1.55; margin: 0 0 16px;
+  max-height: calc(var(--fs-secondary) * 1.55 * 2); /* 2 lines — matches default persona */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .persona-card-footer {
   border-top: 1px solid rgba(229, 229, 234, 0.5); padding-top: 12px; margin-top: auto;
   display: flex; align-items: center; justify-content: space-between;
 }
-.persona-card-badges { display: flex; gap: 6px; }
+.persona-card-badges { display: flex; align-items: center; gap: 6px; }
 .persona-card-default-badge {
   font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
   padding: 2px 8px; border-radius: 9999px;

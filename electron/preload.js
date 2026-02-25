@@ -19,14 +19,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getChats: () => ipcRenderer.invoke('store:get-chats'),
   saveChats: (chats) => ipcRenderer.invoke('store:save-chats', chats),
 
+  // Per-chat granular operations
+  getChatIndex: () => ipcRenderer.invoke('store:get-chat-index'),
+  saveChatIndex: (index) => ipcRenderer.invoke('store:save-chat-index', index),
+  getChat: (id) => ipcRenderer.invoke('store:get-chat', id),
+  saveChat: (chat) => ipcRenderer.invoke('store:save-chat', chat),
+  deleteChat: (id) => ipcRenderer.invoke('store:delete-chat', id),
+
   getConfig: () => ipcRenderer.invoke('store:get-config'),
   saveConfig: (config) => ipcRenderer.invoke('store:save-config', config),
+  getDataPath: () => ipcRenderer.invoke('store:get-data-path'),
 
   getPersonas: () => ipcRenderer.invoke('store:get-personas'),
   savePersonas: (personas) => ipcRenderer.invoke('store:save-personas', personas),
-
-  getMcpServers: () => ipcRenderer.invoke('store:get-mcp-servers'),
-  saveMcpServers: (servers) => ipcRenderer.invoke('store:save-mcp-servers', servers),
 
   // ── MCP Server Management ────────────────────────────────────────────────
   mcp: {
@@ -63,6 +68,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   compactContextStandalone: (params) => ipcRenderer.invoke('agent:compact-standalone', params),
   getContextSnapshot: (chatId) => ipcRenderer.invoke('agent:get-context', chatId),
   onAgentChunk: (callback) => {
+    ipcRenderer.removeAllListeners('agent:chunk')
     ipcRenderer.on('agent:chunk', (_, data) => callback(data))
     return () => ipcRenderer.removeAllListeners('agent:chunk')
   },
@@ -72,6 +78,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readFileForAttachment: (filePath) => ipcRenderer.invoke('files:read-for-attachment', filePath),
   resolveDropPaths: (rawPaths) => ipcRenderer.invoke('files:resolve-drop-paths', rawPaths),
   onFileDropped: (callback) => {
+    ipcRenderer.removeAllListeners('file-dropped')
     ipcRenderer.on('file-dropped', (_, url) => callback(url))
     return () => ipcRenderer.removeAllListeners('file-dropped')
   },
@@ -82,6 +89,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showInFolder: (filePath) => ipcRenderer.invoke('shell:show-in-folder', filePath),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   getClipboardImage: () => ipcRenderer.invoke('clipboard:get-image'),
+
+  // ── Soul Memory ────────────────────────────────────────────────────────
+  souls: {
+    read:   (personaId, type) => ipcRenderer.invoke('souls:read', personaId, type),
+    write:  (personaId, type, content) => ipcRenderer.invoke('souls:write', personaId, type, content),
+    exists: (personaId, type) => ipcRenderer.invoke('souls:exists', personaId, type),
+    list:   (type) => ipcRenderer.invoke('souls:list', type),
+    delete: (personaId, type) => ipcRenderer.invoke('souls:delete', personaId, type),
+  },
+
+  // ── Knowledge / Pinecone RAG ─────────────────────────────────────────────
+  knowledge: {
+    getConfig:           ()       => ipcRenderer.invoke('knowledge:get-config'),
+    saveConfig:          (config) => ipcRenderer.invoke('knowledge:save-config', config),
+    verifyConnection:    (params) => ipcRenderer.invoke('knowledge:verify-connection', params),
+    listIndexes:         (params) => ipcRenderer.invoke('knowledge:list-indexes', params),
+    describeIndex:       (params) => ipcRenderer.invoke('knowledge:describe-index', params),
+    listDocuments:       (params) => ipcRenderer.invoke('knowledge:list-documents', params),
+    listSources:         (params) => ipcRenderer.invoke('knowledge:list-sources', params),
+    pickFiles:           ()       => ipcRenderer.invoke('knowledge:pick-files'),
+    uploadFiles:         (params) => ipcRenderer.invoke('knowledge:upload-files', params),
+    deleteDocument:      (params) => ipcRenderer.invoke('knowledge:delete-document', params),
+    deleteSource:        (params) => ipcRenderer.invoke('knowledge:delete-source', params),
+    getDocumentSummary:  (params) => ipcRenderer.invoke('knowledge:get-document-summary', params),
+    generateEmbeddings:  (params) => ipcRenderer.invoke('knowledge:generate-embeddings', params),
+    query:               (params) => ipcRenderer.invoke('knowledge:query', params),
+  },
 
   // ── Obsidian Vault ──────────────────────────────────────────────────────
   obsidian: {

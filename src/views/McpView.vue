@@ -14,10 +14,14 @@
           <div class="catalog-count-badge">
             {{ mcpStore.servers.length }} server{{ mcpStore.servers.length !== 1 ? 's' : '' }}
           </div>
-          <button class="catalog-add-btn" @click="openAdd">
+          <AppButton @click="refreshServers" :loading="refreshing">
+            <svg v-if="!refreshing" style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Refresh
+          </AppButton>
+          <AppButton @click="openAdd">
             <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Add Server
-          </button>
+          </AppButton>
         </div>
       </div>
 
@@ -122,10 +126,10 @@
       </div>
     </div>
 
-    <!-- ═══ Add/Edit Modal (PersonaWizard-style backdrop) ═══ -->
+    <!-- ═══ Add/Edit Modal ═══ -->
     <Teleport to="body">
-      <div v-if="showModal" class="mcp-backdrop" @click.self="closeModal">
-        <div class="mcp-modal">
+      <div v-if="showModal" class="mcp-backdrop">
+        <div class="mcp-modal" role="dialog" aria-modal="true">
           <!-- Modal header -->
           <div class="mcp-modal-header">
             <div class="mcp-modal-header-left">
@@ -199,8 +203,7 @@
 
             <!-- Test Connection -->
             <div class="test-section">
-              <button
-                class="test-btn"
+              <AppButton
                 @click="runTestConnection"
                 :disabled="!form.command?.trim() || testStatus === 'testing'"
               >
@@ -212,7 +215,7 @@
                   <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                 </svg>
                 {{ testStatus === 'testing' ? 'Testing...' : 'Test Connection' }}
-              </button>
+              </AppButton>
 
               <!-- Test results -->
               <div v-if="testStatus === 'success'" class="test-result success">
@@ -234,26 +237,50 @@
           <!-- Modal footer -->
           <div class="mcp-modal-footer">
             <div v-if="editingServer" style="flex:1;">
-              <button class="modal-delete-btn" @click="confirmDelete">
+              <AppButton variant="danger-ghost" @click="confirmDelete">
                 <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                 Delete
-              </button>
+              </AppButton>
             </div>
-            <button class="modal-cancel-btn" @click="closeModal">Cancel</button>
-            <button class="modal-save-btn" @click="saveForm" :disabled="!form.name?.trim() || !form.command?.trim()">Save</button>
+            <AppButton variant="secondary" size="modal" @click="closeModal">Cancel</AppButton>
+            <AppButton size="modal" @click="saveForm" :disabled="!form.name?.trim() || !form.command?.trim()">Save</AppButton>
           </div>
         </div>
       </div>
     </Teleport>
 
+    <!-- Confirm Delete Modal -->
+    <ConfirmModal
+      v-if="showConfirmDelete && editingServer"
+      title="Delete Server"
+      :message="`Are you sure you want to delete &quot;${editingServer.name}&quot;? This action cannot be undone.`"
+      confirm-text="Delete"
+      confirm-class="danger"
+      @confirm="executeDelete"
+      @close="showConfirmDelete = false"
+    />
+
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useMcpStore } from '../stores/mcp'
+import ConfirmModal from '../components/common/ConfirmModal.vue'
+import AppButton from '../components/common/AppButton.vue'
 
 const mcpStore = useMcpStore()
+const refreshing = ref(false)
+
+async function refreshServers() {
+  refreshing.value = true
+  try {
+    await mcpStore.loadServers()
+    await mcpStore.loadStatus()
+  } finally {
+    refreshing.value = false
+  }
+}
 
 let statusPollInterval = null
 
@@ -268,6 +295,9 @@ onUnmounted(() => {
     clearInterval(statusPollInterval)
     statusPollInterval = null
   }
+  // Clean up modal listeners if component is destroyed while modal is open
+  document.body.style.overflow = ''
+  document.removeEventListener('keydown', onModalKeydown, true)
 })
 
 const searchQuery = ref('')
@@ -329,6 +359,24 @@ function closeModal() {
   editingServer.value = null
 }
 
+// Lock body scroll & handle ESC when modal is open
+watch(showModal, (open) => {
+  if (open) {
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', onModalKeydown, true)
+  } else {
+    document.body.style.overflow = ''
+    document.removeEventListener('keydown', onModalKeydown, true)
+  }
+})
+
+function onModalKeydown(e) {
+  if (e.key === 'Escape') {
+    e.stopPropagation()
+    closeModal()
+  }
+}
+
 function addEnvVar() {
   form.value.envVars.push({ key: '', value: '' })
 }
@@ -358,7 +406,11 @@ async function saveForm() {
     env,
   }
 
-  await mcpStore.saveServer(serverData)
+  try {
+    await mcpStore.saveServer(serverData)
+  } catch (err) {
+    console.error('Failed to save MCP server:', err)
+  }
   closeModal()
 }
 
@@ -399,12 +451,18 @@ async function runTestConnection() {
   }
 }
 
-async function confirmDelete() {
+const showConfirmDelete = ref(false)
+
+function confirmDelete() {
   if (!editingServer.value) return
-  if (confirm(`Delete server "${editingServer.value.name}"?`)) {
-    await mcpStore.deleteServer(editingServer.value.id)
-    closeModal()
-  }
+  showConfirmDelete.value = true
+}
+
+async function executeDelete() {
+  if (!editingServer.value) return
+  showConfirmDelete.value = false
+  await mcpStore.deleteServer(editingServer.value.id)
+  closeModal()
 }
 
 function formatCommand(server) {
@@ -460,29 +518,6 @@ function cardGradient() {
   border-radius: 9999px;
   border: 1px solid rgba(229, 229, 234, 0.5);
 }
-.catalog-add-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 12px;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 600;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.15s;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.catalog-add-btn:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-}
-.catalog-add-btn:active {
-  transform: scale(0.97);
-}
-
 /* ── Search bar ────────────────────────────────────────────────────────────── */
 .catalog-search-wrap {
   position: relative;
@@ -658,6 +693,11 @@ function cardGradient() {
   display: flex;
   align-items: center;
   justify-content: center;
+  animation: mcp-backdrop-in 0.2s ease-out;
+}
+@keyframes mcp-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .mcp-modal {
   width: min(640px, 95vw);
@@ -669,6 +709,11 @@ function cardGradient() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: mcp-modal-in 0.2s ease-out;
+}
+@keyframes mcp-modal-in {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 .mcp-modal-header {
   display: flex;
@@ -728,52 +773,6 @@ function cardGradient() {
   padding: 16px 24px;
   border-top: 1px solid #E5E5EA;
 }
-.modal-cancel-btn {
-  padding: 8px 18px;
-  border-radius: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body);
-  font-weight: 500;
-  background: #F5F5F5;
-  color: #6B7280;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.modal-cancel-btn:hover { background: #E5E5EA; }
-.modal-save-btn {
-  padding: 8px 22px;
-  border-radius: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body);
-  font-weight: 600;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.modal-save-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
-.modal-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.modal-delete-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 600;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.modal-delete-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
-
 /* ── Form fields ───────────────────────────────────────────────────────────── */
 .form-group { margin-bottom: 16px; }
 .form-label {
@@ -905,25 +904,6 @@ function cardGradient() {
   padding-top: 16px;
   border-top: 1px solid #E5E5EA;
 }
-.test-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  border-radius: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 600;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.test-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
-.test-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
 .test-result {
   margin-top: 12px;
   padding: 12px 14px;
@@ -988,8 +968,9 @@ function cardGradient() {
 
 /* ── Reduced motion ─────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .mcp-card, .catalog-add-btn { transition: none; }
+  .mcp-card { transition: none; }
   .mcp-card:hover { transform: none; }
   .spin { animation: none; }
+  .mcp-backdrop, .mcp-modal { animation: none; }
 }
 </style>

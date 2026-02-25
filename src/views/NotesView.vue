@@ -48,17 +48,17 @@
           </h1>
           <span
             class="px-2.5 py-0.5 rounded-lg truncate"
-            style="font-family:'Inter',sans-serif; font-size:var(--fs-caption); color:#9CA3AF; background:#F5F5F5; max-width:300px; border:1px solid #E5E5EA;"
+            style="font-family:'Inter',sans-serif; font-size:var(--fs-caption); color:#fff; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); max-width:300px; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
             :title="store.vaultPath"
           >{{ vaultName }}</span>
         </div>
         <div class="flex items-center gap-2">
           <button
             @click="store.pickVault()"
-            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer"
-            style="color:#9CA3AF; background:#F5F5F5; border:1px solid #E5E5EA; font-family:'Inter',sans-serif;"
-            @mouseenter="e => { e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A' }"
-            @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#9CA3AF' }"
+            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer"
+            style="color:#fff; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); border:none; font-family:'Inter',sans-serif; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
+            @mouseenter="e => { e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }"
+            @mouseleave="e => { e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }"
             title="Change folder"
           >Browse</button>
         </div>
@@ -76,10 +76,10 @@
           <div class="px-3 py-2 flex items-center gap-1 shrink-0" style="border-bottom:1px solid #E5E5EA;">
             <button
               @click="showNewFileInput = true; newItemParent = store.vaultPath"
-              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer"
-              style="color:#007AFF; background:rgba(0,122,255,0.08); border:none; font-family:'Inter',sans-serif;"
-              @mouseenter="e => e.currentTarget.style.background='rgba(0,122,255,0.15)'"
-              @mouseleave="e => e.currentTarget.style.background='rgba(0,122,255,0.08)'"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer"
+              style="color:#fff; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); border:none; font-family:'Inter',sans-serif; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
+              @mouseenter="e => e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'"
+              @mouseleave="e => e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
               title="New file"
             >
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
@@ -87,10 +87,10 @@
             </button>
             <button
               @click="showNewFolderInput = true; newItemParent = store.vaultPath"
-              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer"
-              style="color:#9CA3AF; background:rgba(107,114,128,0.08); border:none; font-family:'Inter',sans-serif;"
-              @mouseenter="e => e.currentTarget.style.background='rgba(107,114,128,0.15)'"
-              @mouseleave="e => e.currentTarget.style.background='rgba(107,114,128,0.08)'"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer"
+              style="color:#fff; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); border:none; font-family:'Inter',sans-serif; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
+              @mouseenter="e => e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'"
+              @mouseleave="e => e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
               title="New folder"
             >
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
@@ -98,10 +98,10 @@
             </button>
             <button
               @click="store.loadTree()"
-              class="ml-auto p-1.5 rounded-md transition-colors cursor-pointer"
-              style="color:#9CA3AF; border:none; background:transparent;"
-              @mouseenter="e => e.currentTarget.style.color='#6B7280'"
-              @mouseleave="e => e.currentTarget.style.color='#9CA3AF'"
+              class="ml-auto p-1.5 rounded-lg transition-all duration-150 cursor-pointer"
+              style="color:#fff; border:none; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
+              @mouseenter="e => e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'"
+              @mouseleave="e => e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
               title="Refresh"
             >
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -280,11 +280,26 @@
         </div>
       </div>
     </template>
+
+    <!-- Confirm Delete Modal -->
+    <ConfirmModal
+      v-if="confirmDeleteTarget"
+      title="Delete Item"
+      :message="`Are you sure you want to delete &quot;${confirmDeleteTarget.name}&quot;? This action cannot be undone.`"
+      confirm-text="Delete"
+      confirm-class="primary"
+      :loading="deleting"
+      loading-text="Deleting…"
+      :error="deleteError"
+      @confirm="executeDelete"
+      @close="closeDeleteDialog"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount, defineComponent, h } from 'vue'
+import ConfirmModal from '../components/common/ConfirmModal.vue'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import DOMPurify from 'dompurify'
@@ -687,8 +702,35 @@ async function handleCreateFolder(dir) {
   newItemName.value = ''
 }
 
-async function handleDeleteItem(itemPath) {
-  await store.deleteItem(itemPath)
+const confirmDeleteTarget = ref(null)
+const deleting = ref(false)
+const deleteError = ref('')
+
+function handleDeleteItem(itemPath) {
+  const parts = itemPath.split(/[/\\]/)
+  const name = parts[parts.length - 1] || itemPath
+  deleteError.value = ''
+  confirmDeleteTarget.value = { path: itemPath, name }
+}
+
+function closeDeleteDialog() {
+  if (deleting.value) return
+  confirmDeleteTarget.value = null
+  deleteError.value = ''
+}
+
+async function executeDelete() {
+  if (!confirmDeleteTarget.value || deleting.value) return
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await store.deleteItem(confirmDeleteTarget.value.path)
+    confirmDeleteTarget.value = null
+  } catch (err) {
+    deleteError.value = err.message || 'Failed to delete item'
+  } finally {
+    deleting.value = false
+  }
 }
 
 // ── TreeNode: recursive file tree component ──
@@ -722,6 +764,7 @@ const TreeNode = defineComponent({
             color: isActive ? '#fff' : '#6B7280',
             boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none',
             borderRadius: isActive ? '8px' : '0',
+            margin: isActive ? '0 8px' : '0',
             fontFamily: "'Inter',sans-serif",
             fontSize: 'var(--fs-secondary)',
           },
@@ -760,9 +803,11 @@ const TreeNode = defineComponent({
 
           // Delete button (on hover)
           hovered.value ? h('button', {
-            style: 'background:none;border:none;color:#EF4444;cursor:pointer;padding:2px;flex-shrink:0;opacity:0.7;',
+            style: 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);border:none;color:#fff;cursor:pointer;padding:4px;flex-shrink:0;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);display:flex;align-items:center;justify-content:center;',
             title: 'Delete',
-            onClick: (e) => { e.stopPropagation(); emit('delete-item', props.node.path) }
+            onClick: (e) => { e.stopPropagation(); emit('delete-item', props.node.path) },
+            onMouseenter: (e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' },
+            onMouseleave: (e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' },
           }, [
             h('svg', { style: 'width:12px;height:12px;', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
               h('polyline', { points: '3 6 5 6 21 6' }),

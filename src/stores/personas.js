@@ -73,6 +73,15 @@ export const usePersonasStore = defineStore('personas', () => {
       list.splice(lastSysIdx + 1, 0, { ...BUILTIN_USER_PERSONA })
     }
 
+    // Backfill optional persona fields for group chat support
+    for (const p of list) {
+      if (p.providerId === undefined) p.providerId = null
+      if (p.modelId === undefined) p.modelId = null
+      if (p.enabledToolIds === undefined) p.enabledToolIds = null
+      if (p.enabledSkillIds === undefined) p.enabledSkillIds = null
+      if (p.mcpServerIds === undefined) p.mcpServerIds = null
+    }
+
     // Ensure at least one default per type
     if (!list.some(p => p.type === 'system' && p.isDefault)) {
       const sys = list.find(p => p.id === BUILTIN_SYSTEM_PERSONA_ID)

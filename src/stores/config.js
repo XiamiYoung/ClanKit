@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, toRaw } from 'vue'
 import { storage } from '../services/storage'
 
 export const useConfigStore = defineStore('config', () => {
@@ -11,12 +11,16 @@ export const useConfigStore = defineStore('config', () => {
     haikuModel:  'anthropic/claude-haiku-latest',
     activeModel: 'sonnet',
     skillsPath:  '',
+    dataPath:    '',
     openrouterApiKey:  '',
     openrouterBaseURL: 'https://openrouter.ai/api',
     openaiApiKey:      '',
     openaiBaseURL:     'https://mlaas.virtuosgames.com',
     openaiModel:       '',
-    defaultProvider:   'anthropic'
+    openrouterDefaultModel:  '',
+    openaiDefaultModel:      '',
+    obsidianVaultPath: '',
+    pineconeApiKey:    ''
   })
 
   const activeModelId = computed(() => {
@@ -27,12 +31,14 @@ export const useConfigStore = defineStore('config', () => {
   })
 
   async function loadConfig() {
-    config.value = await storage.getConfig()
+    const defaults = config.value
+    const saved = await storage.getConfig()
+    config.value = { ...defaults, ...saved }
   }
 
   async function saveConfig(newConfig) {
     config.value = { ...config.value, ...newConfig }
-    await storage.saveConfig(config.value)
+    await storage.saveConfig(JSON.parse(JSON.stringify(toRaw(config.value))))
   }
 
   return { config, activeModelId, loadConfig, saveConfig }

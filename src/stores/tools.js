@@ -2,29 +2,45 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 /**
- * Tools Store — manages HTTP tool configurations stored in .env as HTTP_TOOLS.
+ * Tools Store — manages HTTP tool configurations.
  *
- * .env format:
- * HTTP_TOOLS={"tool-id":{"name":"...","description":"...","category":"...","method":"GET","endpoint":"...","headers":{},"bodyTemplate":"{}"}}
+ * On-disk format (dict):
+ * {"tool-id":{"name":"...","description":"...","category":"...","method":"GET","endpoint":"...","headers":{},"bodyTemplate":"{}"}}
  *
- * Internal format (flat array for UI convenience):
- * [{ id, name, description, category, method, endpoint, headers, bodyTemplate }]
+ * Also handles array format for forward-compat.
  */
 export const useToolsStore = defineStore('tools', () => {
   const tools = ref([])
 
   async function loadTools() {
-    const dict = await window.electronAPI.tools.getConfig()
-    tools.value = Object.entries(dict || {}).map(([id, config]) => ({
-      id,
-      name: config.name || id,
-      description: config.description || '',
-      category: config.category || 'HTTP',
-      method: config.method || 'GET',
-      endpoint: config.endpoint || '',
-      headers: config.headers || {},
-      bodyTemplate: config.bodyTemplate || '{}',
-    }))
+    const raw = await window.electronAPI.tools.getConfig()
+    if (Array.isArray(raw)) {
+      // Array format
+      tools.value = raw.map(t => ({
+        id: t.id || t.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || '',
+        name: t.name || '',
+        description: t.description || '',
+        category: t.category || 'HTTP',
+        method: t.method || 'GET',
+        endpoint: t.endpoint || '',
+        headers: t.headers || {},
+        bodyTemplate: t.bodyTemplate || '{}',
+      }))
+    } else if (raw && typeof raw === 'object') {
+      // Dict format
+      tools.value = Object.entries(raw).map(([id, config]) => ({
+        id,
+        name: config.name || id,
+        description: config.description || '',
+        category: config.category || 'HTTP',
+        method: config.method || 'GET',
+        endpoint: config.endpoint || '',
+        headers: config.headers || {},
+        bodyTemplate: config.bodyTemplate || '{}',
+      }))
+    } else {
+      tools.value = []
+    }
   }
 
   async function saveTool(tool) {
@@ -43,6 +59,7 @@ export const useToolsStore = defineStore('tools', () => {
   }
 
   async function persist() {
+    if (!window.electronAPI?.tools?.saveConfig) return
     const dict = {}
     for (const t of tools.value) {
       dict[t.id] = {
@@ -55,7 +72,11 @@ export const useToolsStore = defineStore('tools', () => {
         bodyTemplate: t.bodyTemplate || '{}',
       }
     }
-    await window.electronAPI.tools.saveConfig(dict)
+    const plain = JSON.parse(JSON.stringify(dict))
+    const result = await window.electronAPI.tools.saveConfig(plain)
+    if (result && !result.success) {
+      console.error('tools:save-config failed:', result.error)
+    }
   }
 
   return {

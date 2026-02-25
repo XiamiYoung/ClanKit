@@ -11,6 +11,8 @@
  *  - Todo manager for complex multi-step task planning
  *  - Skill system for domain-specific system prompts
  */
+const fs = require('fs')
+const path = require('path')
 const { logger } = require('../logger')
 const { AnthropicClient }  = require('./core/AnthropicClient')
 const { OpenAIClient }     = require('./core/OpenAIClient')
@@ -21,6 +23,65 @@ const { TaskManager }      = require('./managers/TaskManager')
 const { mcpManager }       = require('./mcp/McpManager')
 
 // No hardcoded skill prompts — they arrive dynamically from the UI store
+
+// ── Soul Memory Helpers ──────────────────────────────────────────────────────
+const SOUL_KEY_SECTIONS = ['Preferences', 'Communication', 'Technical', 'Projects', 'Personal']
+
+/**
+ * Read a soul file from disk. Returns null if not found.
+ */
+function readSoulFile(soulsDir, personaId, personaType) {
+  if (!soulsDir || !personaId) return null
+  try {
+    const filePath = path.join(soulsDir, personaType, `${personaId}.md`)
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, 'utf8')
+    }
+  } catch (err) {
+    logger.error('readSoulFile error', err.message)
+  }
+  return null
+}
+
+/**
+ * For files > 4KB, extract only the key sections to limit prompt size.
+ */
+function extractKeySections(content) {
+  const lines = content.split('\n')
+  const result = []
+  let currentSection = null
+  let includeSection = false
+
+  for (const line of lines) {
+    const sectionMatch = line.match(/^## (.+)$/)
+    if (sectionMatch) {
+      currentSection = sectionMatch[1]
+      includeSection = SOUL_KEY_SECTIONS.includes(currentSection)
+      if (includeSection) {
+        result.push(line)
+      }
+    } else if (includeSection) {
+      result.push(line)
+    } else if (!currentSection) {
+      // Include header (title, timestamp)
+      result.push(line)
+    }
+  }
+
+  result.push('', '(Some sections omitted for brevity. Use read_soul_memory tool to access full memory.)')
+  return result.join('\n')
+}
+
+/**
+ * Size-gated injection: full for < 4KB, key sections for 4-16KB, warning for > 16KB.
+ */
+function prepareSoulContent(content) {
+  if (!content) return null
+  const size = Buffer.byteLength(content, 'utf8')
+  if (size < 4096) return content
+  if (size < 16384) return extractKeySections(content)
+  return extractKeySections(content) + '\n\n(Warning: Soul memory is large. Consider pruning old entries.)'
+}
 
 class AgentLoop {
   constructor(config) {
@@ -37,7 +98,7 @@ class AgentLoop {
       this.isOpenAI = false
     }
     this.contextManager  = new ContextManager(this.anthropicClient)
-    this.toolRegistry    = new ToolRegistry()
+    this.toolRegistry    = new ToolRegistry(config.soulsDir)
     this.subAgentManager = new SubAgentManager(this.anthropicClient, this.toolRegistry, this.isOpenAI)
     this.taskManager     = new TaskManager()
     this.contextSnapshot = null
@@ -129,37 +190,24 @@ class AgentLoop {
   }
 
   /**
-   * Build the system prompt from base + enabled agents + enabled skills.
+   * Build the system prompt from base + enabled skills + personas + memory.
    *
-   * @param {Array<{id:string, name:string, description?:string}>} enabledAgents
-   *        Agent objects toggled on by the user
+   * @param {Array} enabledAgents  (unused, kept for signature compat)
    * @param {Array<string|{id:string, name:string, systemPrompt?:string}>} enabledSkills
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
-  buildSystemPrompt(enabledAgents, enabledSkills, { systemPersonaPrompt, userPersonaPrompt } = {}) {
+  buildSystemPrompt(enabledAgents, enabledSkills, { systemPersonaPrompt, userPersonaPrompt, systemPersonaId, userPersonaId, groupChatContext } = {}, userSoulContent, systemSoulContent) {
     const basePrompt = (this.config.systemPrompt || '').trim()
       || 'You are SparkAI, a versatile AI assistant running in a desktop application. You help users with a wide range of tasks including research, writing, analysis, coding, creative work, file management, and general knowledge.'
 
     let system = `${basePrompt}
 
 CORE TOOLS (always available):
+- execute_shell: Run shell commands (command + args separated, e.g. command:"ls" args:["/home"])
+- file_operation: Read, write, list, append, search, mkdir, delete files on the filesystem
 - todo_manager: Plan complex tasks with structured todo lists
 - dispatch_subagent: Delegate focused subtasks to specialized sub-agents
 - background_task: Run long operations in the background`
-
-    // List active agents/tools
-    const agentEntries = (enabledAgents || []).map(a => {
-      const name = typeof a === 'string' ? a : a.name
-      const desc = typeof a === 'string' ? '' : (a.description || '')
-      return desc ? `- ${name}: ${desc}` : `- ${name}`
-    })
-
-    if (agentEntries.length > 0) {
-      system += `\n\nACTIVE AGENTS (enabled by user):
-${agentEntries.join('\n')}`
-    } else {
-      system += `\n\nACTIVE AGENTS: None enabled. Only core tools are available.`
-    }
 
     // List active skills — frontier only (name + summary).
     // Full skill content is loaded on demand via the load_skill tool.
@@ -180,13 +228,33 @@ Load a skill when the user's request clearly matches its description.`
       system += `\n\nACTIVE SKILLS: None enabled.`
     }
 
+    // ── SparkAI Data Directory ──
+    const dataPath = this.config.dataPath || path.join(require('os').homedir(), '.sparkai')
+    system += `\n\nSPARKAI DATA DIRECTORY: ${dataPath}
+This is the local data folder for the SparkAI desktop application. Its structure:
+  ${dataPath}/
+  ├── config.json          — App settings (API keys, models, providers, dataPath)
+  ├── mcp-servers.json     — MCP server definitions (array of {id, name, command, args, env, description})
+  ├── tools.json           — HTTP tool definitions ({categories: {catName: {tools: [{id, name, method, endpoint, headers, bodyTemplate, description}]}}})
+  ├── personas.json        — AI persona definitions
+  ├── knowledge.json       — RAG/Pinecone knowledge config
+  ├── chats/               — Per-chat message history
+  └── souls/               — Persistent memory files (system/, users/)
+
+When the user asks you to create or configure MCP servers, HTTP tools, personas, or other settings:
+- You understand the file formats above and can guide the user to create proper entries.
+- For MCP servers: each entry needs {id (uuid), name, command, args (array), env (object), description}. After creation, the user can click Refresh on the MCP page to see updates.
+- For HTTP tools: each tool lives under a category in tools.json. After creation, the user can click Refresh on the Tools page to see updates.
+- Always confirm with the user before modifying these files directly.`
+
     system += `\n\nGUIDELINES:
 - Be concise and precise. Explain your reasoning when using tools.
 - For complex multi-step tasks, ALWAYS create a todo list first using todo_manager.
 - When a subtask is independent and focused, delegate it to a sub-agent.
 - For long-running commands (builds, test suites), use background_task.
-- When asked about your capabilities or tools, report ONLY the agents and skills listed above as active.
-- Always report progress on large tasks.`
+- When asked about your capabilities or tools, report the core tools and any active skills listed above.
+- Always report progress on large tasks.
+- The chat UI has a built-in 3D viewer that automatically renders 3D model URLs (.glb, .gltf, .obj, .stl, .babylon, .fbx). When the user shares a 3D asset URL, acknowledge it — the viewer is already displaying it inline. You can discuss the model, suggest interactions (rotate, zoom, wireframe toggle), or help with 3D-related questions.`
 
     // Append MCP server info if any are enabled
     const mcpServers = this.mcpServers || []
@@ -218,6 +286,82 @@ Use these tools when the user's request matches their description. Pass a 'body'
       system += `\n\n## USER CONTEXT\n${userPersonaPrompt}`
     }
 
+    // Append group chat context if this is a group conversation
+    // This MUST come after the persona prompt to override any conflicting instructions
+    if (groupChatContext) {
+      const { personaName, personaDescription, otherParticipants } = groupChatContext
+      const otherNames = (otherParticipants || []).map(p => p.name)
+      // Build detailed participant profiles
+      const participantProfiles = (otherParticipants || []).map(p => {
+        let profile = `### ${p.name}`
+        if (p.description) profile += ` — ${p.description}`
+        if (p.prompt) profile += `\n${p.prompt}`
+        return profile
+      }).join('\n\n')
+
+      system += `\n\n## GROUP CHAT — MANDATORY OVERRIDE (supersedes all prior instructions)
+You are "${personaName}"${personaDescription ? ` (${personaDescription})` : ''} in a group chat.
+
+### Other participants in this conversation:
+${participantProfiles}
+
+---
+Each participant runs independently and sends their own separate message to the user. YOU ARE ONLY "${personaName}".
+
+RULES YOU MUST FOLLOW:
+1. Respond ONLY as yourself — your voice, your perspective, your expertise.
+2. NEVER write dialogue, quotes, or messages for other participants. Never write "${otherNames[0] || 'OtherName'}:" or simulate what others would say.
+3. DO NOT prefix your response with your own name. No "${personaName}:" label. Just speak directly.
+4. You may reference other participants by name (e.g. "Mark could help with that") but never speak AS them.
+5. Keep your response concise and relevant to your role.`
+    }
+
+    // ── RAG Knowledge Injection ──
+    if (this.ragContext && this.ragContext.length > 0) {
+      const chunks = this.ragContext.map((m, i) =>
+        `[${i + 1}] (score: ${m.score?.toFixed(3) || 'N/A'}${m.documentName ? `, source: ${m.documentName}` : ''})\n${m.text}`
+      ).join('\n\n')
+      system += `\n\n## RELEVANT KNOWLEDGE (from RAG retrieval)
+The following knowledge chunks were retrieved from the user's knowledge base as relevant to the current query. Use this information to inform your response when applicable.
+
+${chunks}
+
+Note: Reference this knowledge naturally in your response. Do not mention "RAG" or "vector search" to the user unless they ask about how the knowledge was retrieved.`
+    }
+
+    // ── Soul Memory Injection ──
+    const injectedUserSoul = prepareSoulContent(userSoulContent)
+    if (injectedUserSoul) {
+      system += `\n\n## USER MEMORY (learned over time)\n${injectedUserSoul}`
+    }
+
+    const injectedSystemSoul = prepareSoulContent(systemSoulContent)
+    if (injectedSystemSoul) {
+      system += `\n\n## PERSONA MEMORY\n${injectedSystemSoul}`
+    }
+
+    // Memory system instructions + persona IDs for targeting
+    system += `\n\nMEMORY SYSTEM:
+You have access to update_soul_memory and read_soul_memory tools to persist learnings over time. There are two memory targets:
+
+USER MEMORY (persona_type: "users", persona_id: "${userPersonaId || '__default_user__'}"):
+- Store facts about the user: preferences, habits, working style, personal info, projects they work on.
+- When the user states a clear preference or fact about themselves, memorize it automatically.
+- Examples: "I prefer dark mode", "I use Vue 3 + Pinia", "My name is Young", "I work on SparkAI".
+
+PERSONA MEMORY (persona_type: "system", persona_id: "${systemPersonaId || '__default_system__'}"):
+- Store learnings about how YOU (this AI persona) should behave, respond, and adapt.
+- When the user gives you feedback on your behavior, tone, format, or approach, memorize it for this persona.
+- Examples: "User wants me to always provide code examples", "Keep responses under 3 paragraphs", "Use TypeScript not JavaScript in examples", "Explain concepts step-by-step for this user".
+- Also store domain knowledge or context relevant to this persona's role that should persist across sessions.
+
+RULES:
+- For ambiguous or sensitive information: ask the user "Should I remember that?" before saving.
+- Never memorize temporary or session-specific context (e.g. "fix this bug" — that's a task, not a memory).
+- Check existing memory with read_soul_memory before adding duplicates.
+- The user can say "remember that..." or "forget that..." to explicitly control memory.
+- Use the correct persona_type and persona_id when calling the tools — user facts go to user memory, behavioral/persona feedback goes to persona memory.`
+
     return system
   }
 
@@ -231,7 +375,6 @@ Use these tools when the user's request matches their description. Pass a 'body'
    */
   _buildConversationMessages(messages, currentAttachments) {
     const msgs = [...messages]
-    if (!currentAttachments || currentAttachments.length === 0) return msgs
 
     // Find the last user message
     let lastUserIdx = -1
@@ -241,32 +384,55 @@ Use these tools when the user's request matches their description. Pass a 'body'
     if (lastUserIdx === -1) return msgs
 
     const userMsg = msgs[lastUserIdx]
+    const textContent = typeof userMsg.content === 'string' ? userMsg.content : ''
+
+    // Detect 3D model URLs in the user message and annotate them
+    const MODEL_URL_RE = /https?:\/\/[^\s<>"')\]]+\.(glb|gltf|obj|stl|babylon|fbx)(\?[^\s<>"')\]]*)?/gi
+    const modelMatches = textContent.match(MODEL_URL_RE)
+
+    // If no attachments and no 3D URLs, return as-is
+    if ((!currentAttachments || currentAttachments.length === 0) && !modelMatches) return msgs
+
     const contentBlocks = []
 
     // Add attachment content blocks before the user's text
-    for (const att of currentAttachments) {
-      if (att.type === 'image' && att.base64 && att.mediaType) {
-        contentBlocks.push({
-          type: 'image',
-          source: { type: 'base64', media_type: att.mediaType, data: att.base64 }
-        })
-      } else if (att.type === 'text' && att.content) {
-        contentBlocks.push({
-          type: 'text',
-          text: `--- Attached file: ${att.name} (${att.path}) ---\n${att.content}\n--- End of ${att.name} ---`
-        })
-      } else if (att.type === 'folder') {
-        contentBlocks.push({
-          type: 'text',
-          text: `[Attached folder: ${att.path}] The user attached this folder for context. ${att.preview || ''}`
-        })
+    if (currentAttachments && currentAttachments.length > 0) {
+      for (const att of currentAttachments) {
+        if (att.type === 'image' && att.base64 && att.mediaType) {
+          contentBlocks.push({
+            type: 'image',
+            source: { type: 'base64', media_type: att.mediaType, data: att.base64 }
+          })
+        } else if (att.type === 'text' && att.content) {
+          contentBlocks.push({
+            type: 'text',
+            text: `--- Attached file: ${att.name} (${att.path}) ---\n${att.content}\n--- End of ${att.name} ---`
+          })
+        } else if (att.type === 'folder') {
+          contentBlocks.push({
+            type: 'text',
+            text: `[Attached folder: ${att.path}] The user attached this folder for context. ${att.preview || ''}`
+          })
+        }
       }
     }
 
     // Add the original user text
-    const textContent = typeof userMsg.content === 'string' ? userMsg.content : ''
     if (textContent) {
       contentBlocks.push({ type: 'text', text: textContent })
+    }
+
+    // Annotate 3D model URLs so the AI knows they're being rendered
+    if (modelMatches) {
+      const uniqueUrls = [...new Set(modelMatches)]
+      const fileNames = uniqueUrls.map(u => {
+        const parts = u.split('/')
+        return parts[parts.length - 1].split('?')[0]
+      })
+      contentBlocks.push({
+        type: 'text',
+        text: `[System: The chat UI is displaying an interactive 3D viewer for: ${fileNames.join(', ')}. The user can rotate, zoom, and toggle wireframe. Acknowledge the 3D model and offer helpful context about it.]`
+      })
     }
 
     msgs[lastUserIdx] = { role: 'user', content: contentBlocks }
@@ -284,7 +450,7 @@ Use these tools when the user's request matches their description. Pass a 'body'
    * @param {{systemPersonaPrompt?:string, userPersonaPrompt?:string}} personaPrompts  Persona prompt texts
    * @returns {string} Final text output
    */
-  async run(messages, enabledAgents, enabledSkills, onChunk, currentAttachments, personaPrompts, mcpServers, httpTools) {
+  async run(messages, enabledAgents, enabledSkills, onChunk, currentAttachments, personaPrompts, mcpServers, httpTools, ragContext) {
     // Store MCP servers for system prompt access
     this.mcpServers = mcpServers || []
     // Store HTTP tools for injection
@@ -301,7 +467,17 @@ Use these tools when the user's request matches their description. Pass a 'body'
       }
     }
 
-    const systemPrompt = this.buildSystemPrompt(enabledAgents, enabledSkills, personaPrompts)
+    // Store RAG context for system prompt injection
+    this.ragContext = ragContext || null
+
+    // ── Load soul memory before building system prompt ──
+    const soulsDir = this.config.soulsDir
+    const userPersonaId = personaPrompts?.userPersonaId
+    const systemPersonaId = personaPrompts?.systemPersonaId
+    const userSoulContent = readSoulFile(soulsDir, userPersonaId, 'users')
+    const systemSoulContent = readSoulFile(soulsDir, systemPersonaId, 'system')
+
+    const systemPrompt = this.buildSystemPrompt(enabledAgents, enabledSkills, personaPrompts, userSoulContent, systemSoulContent)
     const conversationMessages = this._buildConversationMessages(messages, currentAttachments)
     let finalText = ''
 
@@ -671,21 +847,42 @@ Use these tools when the user's request matches their description. Pass a 'body'
           }
 
         } else {
-          // ── Anthropic-format streaming (existing) ──
+          // ── Anthropic-format streaming (with retry on empty-stream errors) ──
+          const MAX_STREAM_RETRIES = 2
           let stream
-          try {
-            if (createParams.betas && createParams.betas.length > 0) {
-              const { betas, ...restParams } = createParams
-              stream = await client.beta.messages.stream({ ...restParams, betas })
-            } else {
-              stream = await client.messages.stream(createParams)
-            }
-          } catch (streamErr) {
-            logger.error('stream open FAILED', streamErr.message, streamErr.status)
-            throw streamErr
-          }
+          let streamAttempt = 0
+          let streamOk = false
 
-          for await (const event of stream) {
+          while (!streamOk && streamAttempt <= MAX_STREAM_RETRIES) {
+            streamAttempt++
+            if (streamAttempt > 1) {
+              const delay = streamAttempt * 1000 // 2s, 3s
+              logger.agent(`Stream retry ${streamAttempt}/${MAX_STREAM_RETRIES + 1}, waiting ${delay}ms...`)
+              await new Promise(r => setTimeout(r, delay))
+            }
+
+            stream = null
+            try {
+              if (createParams.betas && createParams.betas.length > 0) {
+                const { betas, ...restParams } = createParams
+                stream = await client.beta.messages.stream({ ...restParams, betas })
+              } else {
+                stream = await client.messages.stream(createParams)
+              }
+            } catch (streamErr) {
+              logger.error('stream open FAILED', streamErr.message, streamErr.status)
+              if (streamAttempt > MAX_STREAM_RETRIES) throw streamErr
+              continue
+            }
+
+            // Try reading the stream — "no chunks" error surfaces here
+            try {
+              assistantContent = []
+              currentTextBlock = ''
+              currentToolUse = null
+              stopReason = null
+
+              for await (const event of stream) {
             if (this.stopped) break
 
             if (event.type === 'content_block_start') {
@@ -737,34 +934,45 @@ Use these tools when the user's request matches their description. Pass a 'body'
             }
           }
 
-          // Flush any remaining text
-          if (currentTextBlock) {
-            assistantContent.push({ type: 'text', text: currentTextBlock })
-          }
+              // Flush any remaining text
+              if (currentTextBlock) {
+                assistantContent.push({ type: 'text', text: currentTextBlock })
+              }
 
-          // ── Get final message for usage stats ──
-          let finalMessage
-          try {
-            finalMessage = await stream.finalMessage()
-          } catch {
-            // stream may already be consumed
-          }
+              // ── Get final message for usage stats ──
+              let finalMessage
+              try {
+                finalMessage = await stream.finalMessage()
+              } catch {
+                // stream may already be consumed
+              }
 
-          // Update context metrics from usage
-          if (finalMessage) {
-            this.contextManager.updateUsage(finalMessage)
-            onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
+              // Update context metrics from usage
+              if (finalMessage) {
+                this.contextManager.updateUsage(finalMessage)
+                onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
 
-            if (isOpus46 && finalMessage.content) {
-              this.contextManager.appendAssistantContent(conversationMessages, finalMessage.content)
-            } else {
-              conversationMessages.push({ role: 'assistant', content: assistantContent })
+                if (isOpus46 && finalMessage.content) {
+                  this.contextManager.appendAssistantContent(conversationMessages, finalMessage.content)
+                } else {
+                  conversationMessages.push({ role: 'assistant', content: assistantContent })
+                }
+              } else {
+                conversationMessages.push({ role: 'assistant', content: assistantContent })
+              }
+
+              logger.agent('stream end', { iteration, stopReason, tokens: this.contextManager.getMetrics() })
+              streamOk = true // success — exit retry loop
+
+            } catch (streamIterErr) {
+              // "request ended without sending any chunks" surfaces here
+              if (streamIterErr.message && streamIterErr.message.includes('without sending any chunks') && streamAttempt <= MAX_STREAM_RETRIES) {
+                logger.warn(`Stream empty-response error on attempt ${streamAttempt}, will retry`, streamIterErr.message)
+                continue
+              }
+              throw streamIterErr
             }
-          } else {
-            conversationMessages.push({ role: 'assistant', content: assistantContent })
-          }
-
-          logger.agent('stream end', { iteration, stopReason, tokens: this.contextManager.getMetrics() })
+          } // end retry while loop
 
           // ── Handle tool_use stop reason ──
           if (stopReason === 'tool_use' && !this.stopped) {

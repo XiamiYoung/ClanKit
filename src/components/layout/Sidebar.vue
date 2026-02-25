@@ -1,12 +1,12 @@
 <template>
   <nav
     class="flex flex-col shrink-0"
-    style="width: 260px; min-width: 260px; background: #FFFFFF; height: 100%; overflow: hidden; position: relative; z-index: 10; border-right: 1px solid #E5E5EA;"
+    :style="{ width: isCollapsed ? '64px' : '260px', minWidth: isCollapsed ? '64px' : '260px', background: '#FFFFFF', height: '100%', overflow: 'hidden', position: 'relative', zIndex: 10, borderRight: '1px solid #E5E5EA', transition: 'width 0.2s ease, min-width 0.2s ease' }"
     aria-label="Main navigation"
   >
     <!-- Logo / Header -->
-    <div class="px-5 py-5" style="border-bottom: 1px solid #F0F0F0;">
-      <div class="flex items-center gap-2.5">
+    <div :style="{ padding: isCollapsed ? '16px 0' : '16px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'space-between' }">
+      <div v-show="!isCollapsed" class="flex items-center gap-2.5">
         <div
           class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
           style="background: #1A1A1A;"
@@ -19,50 +19,45 @@
           SparkAI
         </span>
       </div>
+      <button @click="toggleCollapse" class="nav-collapse-btn" :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
+        <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="4" y1="6" x2="20" y2="6"/>
+          <line x1="4" y1="12" x2="20" y2="12"/>
+          <line x1="4" y1="18" x2="20" y2="18"/>
+        </svg>
+      </button>
     </div>
 
     <!-- Navigation -->
     <div class="flex-1 px-3 py-3 flex flex-col gap-0.5 overflow-y-auto" style="scrollbar-width:thin;">
-      <p class="nav-section-label">AI Agent</p>
-      <NavItem to="/chats"    :icon="IconChats"    label="Chats"    />
-      <NavItem to="/skills"   :icon="IconSkills"   label="Skills"   />
-      <NavItem to="/mcp"      :icon="IconMcp"      label="MCP Servers" />
-      <NavItem to="/tools"    :icon="IconTools"    label="Tools" />
-      <NavItem to="/personas" :icon="IconPersonas" label="Personas" />
+      <p class="nav-section-label" v-show="!isCollapsed">AI Agent</p>
+      <NavItem to="/chats"    :icon="IconChats"    label="Chats"    :isCollapsed="isCollapsed" />
+      <NavItem to="/skills"   :icon="IconSkills"   label="Skills"   :isCollapsed="isCollapsed" />
+      <NavItem to="/knowledge" :icon="IconKnowledge" label="Knowledge" :isCollapsed="isCollapsed" />
+      <NavItem to="/mcp"      :icon="IconMcp"      label="MCP Servers" :isCollapsed="isCollapsed" />
+      <NavItem to="/tools"    :icon="IconTools"    label="Tools"    :isCollapsed="isCollapsed" />
+      <NavItem to="/personas" :icon="IconPersonas" label="Personas" :isCollapsed="isCollapsed" />
 
-      <p class="nav-section-label" style="margin-top:12px;">Workspace</p>
-      <NavItem to="/notes"     :icon="IconNotes"     label="Notes" />
+      <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:12px;">Workspace</p>
+      <NavItem to="/notes"     :icon="IconNotes"     label="Notes"  :isCollapsed="isCollapsed" />
 
-      <p class="nav-section-label" style="margin-top:12px;">System</p>
-      <NavItem to="/config" :icon="IconConfig" label="Configuration" />
-    </div>
+      <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:12px;">System</p>
+      <NavItem to="/config" :icon="IconConfig" label="Configuration" :isCollapsed="isCollapsed" />
 
-    <!-- Footer -->
-    <div class="px-3 py-3" style="border-top: 1px solid #F0F0F0;">
-      <div
-        class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors duration-150"
-        style="color: #6B7280;"
-        @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
-        @mouseleave="e => e.currentTarget.style.background='transparent'"
-      >
-        <div
-          class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-sm font-semibold"
-          style="background: #1A1A1A;"
-        >S</div>
-        <div class="flex-1 min-w-0">
-          <p style="font-size:var(--fs-secondary);font-weight:600;color:#1A1A1A;font-family:'Inter',sans-serif;">SparkAI</p>
-          <p style="font-size:var(--fs-caption);color:#9CA3AF;font-family:'Inter',sans-serif;">AI Desktop</p>
-        </div>
-      </div>
     </div>
   </nav>
 </template>
 
 <script setup>
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 const route = useRoute()
+
+const isCollapsed = ref(false)
+function toggleCollapse() {
+  isCollapsed.value = !isCollapsed.value
+}
 
 // ── SVG Icon Components ──────────────────────────────────────────────────────
 const IconChats = defineComponent({
@@ -81,6 +76,13 @@ const IconPersonas = defineComponent({
 const IconSkills = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
     h('polygon', { points: '13 2 3 14 12 14 11 22 21 10 12 10 13 2' })
+  ])
+})
+
+const IconKnowledge = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('path', { d: 'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z' }),
+    h('path', { d: 'M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z' })
   ])
 })
 
@@ -113,21 +115,25 @@ const IconConfig = defineComponent({
 
 // ── NavItem Component ────────────────────────────────────────────────────────
 const NavItem = defineComponent({
-  props: { to: String, label: String, icon: Object },
+  props: { to: String, label: String, icon: Object, isCollapsed: { type: Boolean, default: false } },
   setup(props) {
     return () => {
       const isActive = route.path === props.to || route.path.startsWith(props.to + '/')
+      const children = [
+        h(props.icon, { style: 'width:18px;height:18px;flex-shrink:0;' })
+      ]
+      if (!props.isCollapsed) {
+        children.push(h('span', { style: 'font-size:var(--fs-secondary);font-weight:500;' }, props.label))
+      }
       return h(RouterLink, {
         to: props.to,
         class: [
           'nav-item',
           isActive ? 'nav-item-active' : 'nav-item-inactive'
         ],
+        style: props.isCollapsed ? 'justify-content:center;' : '',
         'aria-current': isActive ? 'page' : undefined,
-      }, () => [
-        h(props.icon, { style: 'width:18px;height:18px;flex-shrink:0;' }),
-        h('span', { style: 'font-size:var(--fs-secondary);font-weight:500;' }, props.label)
-      ])
+      }, () => children)
     }
   }
 })
@@ -168,6 +174,25 @@ const NavItem = defineComponent({
 }
 
 .nav-item-inactive:hover {
+  background: #F5F5F5;
+  color: #1A1A1A;
+}
+
+.nav-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #9CA3AF;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-collapse-btn:hover {
   background: #F5F5F5;
   color: #1A1A1A;
 }

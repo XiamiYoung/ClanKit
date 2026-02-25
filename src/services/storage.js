@@ -26,13 +26,16 @@ function browserDefaultConfig() {
     activeModel: 'sonnet',
     openrouterApiKey:  '',
     openrouterBaseURL: 'https://openrouter.ai/api',
-    defaultProvider:   'anthropic',
+    openrouterModel:   '',
+    openaiModel:       '',
+    openrouterDefaultModel: '',
+    openaiDefaultModel:     '',
     systemPrompt:      ''
   }
 }
 
 export const storage = {
-  // ── Chats ──────────────────────────────────────────────────────────────────
+  // ── Chats (bulk — backward compat) ─────────────────────────────────────────
   async getChats() {
     if (isElectron()) return window.electronAPI.getChats()
     return lsGet('sparkai:chats', [])
@@ -40,6 +43,38 @@ export const storage = {
   async saveChats(chats) {
     if (isElectron()) return window.electronAPI.saveChats(chats)
     lsSet('sparkai:chats', chats)
+  },
+
+  // ── Chats (per-chat granular) ─────────────────────────────────────────────
+  async getChatIndex() {
+    if (isElectron()) return window.electronAPI.getChatIndex()
+    // localStorage fallback: extract metadata from full chats
+    const chats = lsGet('sparkai:chats', [])
+    return chats.map(({ messages, ...meta }) => meta)
+  },
+  async saveChatIndex(index) {
+    if (isElectron()) return window.electronAPI.saveChatIndex(index)
+    // localStorage: no-op — index is derived from full chats array
+  },
+  async getChat(id) {
+    if (isElectron()) return window.electronAPI.getChat(id)
+    // localStorage fallback: find in full array
+    const chats = lsGet('sparkai:chats', [])
+    return chats.find(c => c.id === id) || null
+  },
+  async saveChat(chat) {
+    if (isElectron()) return window.electronAPI.saveChat(chat)
+    // localStorage fallback: update in full array
+    const chats = lsGet('sparkai:chats', [])
+    const idx = chats.findIndex(c => c.id === chat.id)
+    if (idx >= 0) chats[idx] = chat
+    else chats.unshift(chat)
+    lsSet('sparkai:chats', chats)
+  },
+  async deleteChat(id) {
+    if (isElectron()) return window.electronAPI.deleteChat(id)
+    const chats = lsGet('sparkai:chats', [])
+    lsSet('sparkai:chats', chats.filter(c => c.id !== id))
   },
 
   // ── Config ─────────────────────────────────────────────────────────────────
@@ -68,14 +103,18 @@ export const storage = {
     lsSet('maestro:personas', personas)
   },
 
-  // ── MCP Servers ──────────────────────────────────────────────────────────────
-  async getMcpServers() {
-    if (isElectron()) return window.electronAPI.getMcpServers()
-    return lsGet('sparkai:mcp-servers', [])
+  // ── Soul Memory ────────────────────────────────────────────────────────────
+  async getSoul(personaId, type) {
+    if (isElectron()) return window.electronAPI.souls.read(personaId, type)
+    return lsGet(`sparkai:soul:${type}:${personaId}`, null)
   },
-  async saveMcpServers(servers) {
-    if (isElectron()) return window.electronAPI.saveMcpServers(servers)
-    lsSet('sparkai:mcp-servers', servers)
+  async saveSoul(personaId, type, content) {
+    if (isElectron()) return window.electronAPI.souls.write(personaId, type, content)
+    lsSet(`sparkai:soul:${type}:${personaId}`, content)
+  },
+  async soulExists(personaId, type) {
+    if (isElectron()) return window.electronAPI.souls.exists(personaId, type)
+    return lsGet(`sparkai:soul:${type}:${personaId}`, null) !== null
   },
 
 }

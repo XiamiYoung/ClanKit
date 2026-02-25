@@ -7,6 +7,7 @@
  */
 const { logger } = require('../../logger')
 const { TodoTool }    = require('./TodoTool')
+const { SoulUpdateTool, SoulReadTool } = require('./SoulTool')
 
 // Map agent IDs → tool class (lazy — not instantiated until enabled)
 const TOOL_CLASS_MAP = {
@@ -17,14 +18,54 @@ const TOOL_CLASS_MAP = {
   'data-analyst':  () => require('./DataTool').DataTool,
 }
 
+// Core tools that are always available (file + shell operations are essential)
+const ALWAYS_ON_AGENTS = ['code-executor', 'file-manager']
+
 // TodoTool is always available (for task planning)
 const todoTool = new TodoTool()
 
+// Soul tools are always available (for persona memory)
+let soulUpdateTool = null
+let soulReadTool = null
+
+function initSoulTools(soulsDir) {
+  if (soulsDir && !soulUpdateTool) {
+    soulUpdateTool = new SoulUpdateTool(soulsDir)
+    soulReadTool = new SoulReadTool(soulsDir)
+  }
+}
+
 class ToolRegistry {
-  constructor() {
+  constructor(soulsDir) {
     this.tools = new Map()
     // Always register the todo tool
     this.registerTool('todo_manager', todoTool)
+    // Always register soul tools if soulsDir is available
+    if (soulsDir) {
+      initSoulTools(soulsDir)
+    }
+    if (soulUpdateTool) {
+      this.registerTool('update_soul_memory', soulUpdateTool)
+      this.registerTool('read_soul_memory', soulReadTool)
+    }
+    // Always register core tools (shell + file operations)
+    this._loadAlwaysOnTools()
+  }
+
+  /** Load always-on core tools (shell + file) */
+  _loadAlwaysOnTools() {
+    for (const agentId of ALWAYS_ON_AGENTS) {
+      const factory = TOOL_CLASS_MAP[agentId]
+      if (factory && !this.tools.has(agentId)) {
+        try {
+          const ToolClass = factory()
+          const instance = new ToolClass()
+          this.registerTool(instance.name, instance)
+        } catch (err) {
+          logger.error('ToolRegistry: failed to load always-on tool', agentId, err.message)
+        }
+      }
+    }
   }
 
   /**
@@ -37,9 +78,18 @@ class ToolRegistry {
     this.tools.clear()
     // Always have todo
     this.registerTool('todo_manager', todoTool)
+    // Always have soul tools
+    if (soulUpdateTool) {
+      this.registerTool('update_soul_memory', soulUpdateTool)
+      this.registerTool('read_soul_memory', soulReadTool)
+    }
+    // Always have core tools (shell + file)
+    this._loadAlwaysOnTools()
 
     for (const entry of enabledAgents) {
       const agentId = typeof entry === 'string' ? entry : entry.id
+      // Skip if already loaded as always-on
+      if (ALWAYS_ON_AGENTS.includes(agentId)) continue
       const factory = TOOL_CLASS_MAP[agentId]
       if (factory) {
         try {

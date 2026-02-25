@@ -1,7 +1,10 @@
 <template>
   <div>
     <!-- ── User message ─────────────────────────────────────────────────────── -->
-    <div v-if="message.role === 'user'" class="prose-sparkai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleCodeCopy" />
+    <template v-if="message.role === 'user'">
+      <div class="prose-sparkai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleCodeCopy" />
+      <BabylonViewer v-for="url in modelUrls" :key="url" :src="url" />
+    </template>
 
     <!-- ── Assistant message ────────────────────────────────────────────────── -->
     <template v-else>
@@ -192,6 +195,9 @@
 
     </template>
 
+      <!-- 3D models detected in assistant message -->
+      <BabylonViewer v-for="url in modelUrls" :key="url" :src="url" />
+
       <!-- Wave bar + duration: outside segments block so it shows even with no content yet -->
       <div v-if="message.streaming" class="flex items-end gap-0.5 h-5 mt-1 pl-1">
         <span v-for="n in 5" :key="n" class="wave-bar" :style="`--bar-color:#4c8446; --bar-glow:#4c844680; animation-delay:${(n-1)*0.13}s;`" />
@@ -213,9 +219,35 @@
 import { ref, computed, reactive, watch, onBeforeUnmount } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import BabylonViewer from './BabylonViewer.vue'
 
 const props = defineProps({
   message: { type: Object, required: true }
+})
+
+// ── 3D asset detection ────────────────────────────────────────────────────────
+const MODEL_EXT_RE = /\.(glb|gltf|obj|stl|babylon|fbx)(\?[^\s)]*)?$/i
+const URL_RE = /https?:\/\/[^\s<>"')\]]+/g
+
+const modelUrls = computed(() => {
+  const text = props.message.content || ''
+  const segs = props.message.segments || []
+  const urls = new Set()
+  // Scan main content
+  const matches = text.match(URL_RE) || []
+  for (const u of matches) {
+    if (MODEL_EXT_RE.test(u)) urls.add(u)
+  }
+  // Scan text segments
+  for (const seg of segs) {
+    if (seg.type === 'text' && seg.content) {
+      const sm = seg.content.match(URL_RE) || []
+      for (const u of sm) {
+        if (MODEL_EXT_RE.test(u)) urls.add(u)
+      }
+    }
+  }
+  return [...urls]
 })
 
 // ── Live elapsed timer ─────────────────────────────────────────────────────
@@ -273,11 +305,13 @@ function renderMarkdown(text) {
     const clean = stripBase64(String(text))
     const raw = marked.parse(clean, { breaks: true, gfm: true })
     const sanitized = DOMPurify.sanitize(raw)
+    // Highlight @mentions
+    const withMentions = sanitized.replace(/@(\w[\w\s]*?\w|\w)\b/g, '<span class="mention">@$1</span>')
     // Wrap <pre><code> blocks with a header bar containing a copy button
-    return sanitized
+    return withMentions
       .replace(/<pre><code(?:\s+class="language-(\w+)")?>/g, (m, lang) => {
         const label = lang ? `<span class="code-lang">${lang}</span>` : ''
-        return `<div class="code-block-wrap"><div class="code-block-header">${label}<span class="code-copy-btn">Copy</span></div><pre><code${lang ? ` class="language-${lang}"` : ''}>`
+        return `<div class="code-block-wrap">${label}<span class="code-copy-btn">Copy</span><pre><code${lang ? ` class="language-${lang}"` : ''}>`
       })
       .replace(/<\/code><\/pre>/g, '</code></pre></div>')
   } catch { return String(text) }
@@ -498,35 +532,40 @@ function diffMarker(type) {
   overflow: hidden;
   border: 1px solid #30363d;
 }
-:deep(.code-block-header) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 12px;
-  background: #1C1C1E;
-  border-bottom: 1px solid #30363d;
-  min-height: 28px;
-}
 :deep(.code-lang) {
-  font-size: 0.7rem;
-  color: #8b949e;
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  font-size: 0.65rem;
+  color: #6b7280;
   font-family: monospace;
   text-transform: lowercase;
+  z-index: 1;
+  pointer-events: none;
 }
 :deep(.code-copy-btn) {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 2;
   font-size: 0.7rem;
-  color: #8b949e;
-  background: transparent;
-  border: 1px solid #30363d;
+  color: #fff;
+  background: #1A1A1A;
+  border: none;
   border-radius: 8px;
-  padding: 2px 8px;
+  padding: 3px 10px;
   cursor: pointer;
-  margin-left: auto;
   user-select: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  transition: background 0.15s, opacity 0.15s;
+  opacity: 0;
+}
+:deep(.code-block-wrap:hover .code-copy-btn) {
+  opacity: 1;
 }
 :deep(.code-copy-btn:hover) {
-  color: #e6edf3;
-  background: #30363d;
+  color: #fff;
+  background: #374151;
 }
 :deep(.code-block-wrap pre) {
   margin: 0;
@@ -582,5 +621,14 @@ function diffMarker(type) {
   0%   { filter: hue-rotate(0deg) brightness(1); }
   50%  { filter: hue-rotate(45deg) brightness(1.15); }
   100% { filter: hue-rotate(0deg) brightness(1); }
+}
+
+/* @Mention highlighting */
+:deep(.mention) {
+  background: rgba(99, 102, 241, 0.15);
+  color: #6366F1;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 600;
 }
 </style>
