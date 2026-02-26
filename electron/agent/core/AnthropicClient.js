@@ -9,11 +9,11 @@ class AnthropicClient {
   constructor(config) {
     this.config = config
     const isOpenRouter = config.baseURL && config.baseURL.includes('openrouter.ai')
-    const key = config.apiKey || process.env.ANTHROPIC_API_KEY || ''
+    const key = config.apiKey || ''
     const clientOpts = {
       baseURL: (config.baseURL && config.baseURL !== 'https://api.anthropic.com')
         ? config.baseURL
-        : (process.env.ANTHROPIC_BASE_URL || undefined)
+        : undefined
     }
     if (isOpenRouter) {
       // OpenRouter expects Authorization: Bearer header, not x-api-key.
@@ -36,9 +36,10 @@ class AnthropicClient {
   resolveModel() {
     const c = this.config
     if (c.customModel) return c.customModel   // Per-chat override
-    if (c.activeModel === 'opus')  return c.opusModel  || 'claude-opus-4-6'
-    if (c.activeModel === 'haiku') return c.haikuModel || 'claude-haiku-4-5'
-    return c.sonnetModel || 'claude-sonnet-4-5'
+    const a = c.anthropic || {}
+    if (a.activeModel === 'opus')  return a.opusModel  || 'claude-opus-4-6'
+    if (a.activeModel === 'haiku') return a.haikuModel || 'claude-haiku-4-5'
+    return a.sonnetModel || 'claude-sonnet-4-5'
   }
 
   /** Check if the resolved model is Opus 4.6 (supports adaptive thinking + compaction) */

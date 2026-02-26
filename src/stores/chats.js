@@ -95,7 +95,7 @@ export const useChatsStore = defineStore('chats', () => {
     }
   }
 
-  async function createChat(title = 'New Chat') {
+  async function createChat(title = 'New Chat', personaConfig = null) {
     const chat = {
       id: uuidv4(),
       title,
@@ -113,6 +113,12 @@ export const useChatsStore = defineStore('chats', () => {
       groupPersonaIds: [],
       groupPersonaOverrides: {},
     }
+    if (personaConfig && personaConfig.length === 1) {
+      chat.systemPersonaId = personaConfig[0]
+    } else if (personaConfig && personaConfig.length >= 2) {
+      chat.isGroupChat = true
+      chat.groupPersonaIds = [...personaConfig]
+    }
     chats.value.unshift(chat)
     activeChatId.value = chat.id
     await persistChat(chat.id)
@@ -120,7 +126,7 @@ export const useChatsStore = defineStore('chats', () => {
     return chat
   }
 
-  async function createChatFromHistory(sourceChatId, title = 'New Chat') {
+  async function createChatFromHistory(sourceChatId, title = 'New Chat', personaOverride = null) {
     const source = chats.value.find(c => c.id === sourceChatId)
     if (!source) return createChat(title)
     // Ensure messages are loaded
@@ -151,6 +157,20 @@ export const useChatsStore = defineStore('chats', () => {
       isGroupChat: source.isGroupChat,
       groupPersonaIds: [...(source.groupPersonaIds || [])],
       groupPersonaOverrides: JSON.parse(JSON.stringify(source.groupPersonaOverrides || {})),
+    }
+    // Override personas if provided
+    if (personaOverride && personaOverride.length > 0) {
+      if (personaOverride.length === 1) {
+        chat.systemPersonaId = personaOverride[0]
+        chat.isGroupChat = false
+        chat.groupPersonaIds = []
+        chat.groupPersonaOverrides = {}
+      } else {
+        chat.isGroupChat = true
+        chat.groupPersonaIds = [...personaOverride]
+        chat.systemPersonaId = null
+        chat.groupPersonaOverrides = {}
+      }
     }
     chats.value.unshift(chat)
     activeChatId.value = chat.id

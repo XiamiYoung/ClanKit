@@ -80,10 +80,11 @@ class MemoryExtractor {
   constructor(config) {
     this.config = config
     const clientOpts = {}
-    if (config.baseURL && config.baseURL !== 'https://api.anthropic.com' && !config.baseURL.includes('openrouter.ai')) {
-      clientOpts.baseURL = config.baseURL
+    const baseURL = config.baseURL || config.anthropic?.baseURL
+    if (baseURL && baseURL !== 'https://api.anthropic.com' && !baseURL.includes('openrouter.ai')) {
+      clientOpts.baseURL = baseURL
     }
-    clientOpts.apiKey = config.apiKey || process.env.ANTHROPIC_API_KEY || ''
+    clientOpts.apiKey = config.apiKey || config.anthropic?.apiKey || ''
     this.client = new Anthropic(clientOpts)
   }
 

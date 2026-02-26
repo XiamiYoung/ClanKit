@@ -17,11 +17,11 @@ export const useModelsStore = defineStore('models', () => {
 
   // ── Anthropic (derived from config) ─────────────────────────────────────
   const anthropicModels = computed(() => {
-    const c = configStore.config
+    const a = configStore.config.anthropic || {}
     return [
-      { id: c.sonnetModel || 'claude-sonnet-4-5', name: 'Sonnet', label: 'Sonnet' },
-      { id: c.opusModel || 'claude-opus-4-6', name: 'Opus', label: 'Opus' },
-      { id: c.haikuModel || 'claude-haiku-4-5', name: 'Haiku', label: 'Haiku' },
+      { id: a.sonnetModel || 'claude-sonnet-4-5', name: 'Sonnet', label: 'Sonnet' },
+      { id: a.opusModel || 'claude-opus-4-6', name: 'Opus', label: 'Opus' },
+      { id: a.haikuModel || 'claude-haiku-4-5', name: 'Haiku', label: 'Haiku' },
     ]
   })
 
@@ -29,13 +29,13 @@ export const useModelsStore = defineStore('models', () => {
 
   async function fetchOpenRouterModels() {
     if (!window.electronAPI?.fetchOpenRouterModels) return
-    const c = configStore.config
-    if (!c.openrouterApiKey) return
+    const or = configStore.config.openrouter || {}
+    if (!or.apiKey) return
     openrouterLoading.value = true
     try {
       const result = await window.electronAPI.fetchOpenRouterModels({
-        apiKey: c.openrouterApiKey,
-        baseURL: c.openrouterBaseURL,
+        apiKey: or.apiKey,
+        baseURL: or.baseURL,
       })
       if (result.success) {
         openrouterModels.value = result.models
@@ -50,13 +50,13 @@ export const useModelsStore = defineStore('models', () => {
 
   async function fetchOpenAIModels() {
     if (!window.electronAPI?.fetchOpenAIModels) return
-    const c = configStore.config
-    if (!c.openaiApiKey) return
+    const oa = configStore.config.openai || {}
+    if (!oa.apiKey) return
     openaiLoading.value = true
     try {
       const result = await window.electronAPI.fetchOpenAIModels({
-        apiKey: c.openaiApiKey,
-        baseURL: c.openaiBaseURL,
+        apiKey: oa.apiKey,
+        baseURL: oa.baseURL,
       })
       if (result.success) {
         openaiModels.value = result.models
@@ -80,21 +80,23 @@ export const useModelsStore = defineStore('models', () => {
   function getDefaultModelLabel(provider) {
     const c = configStore.config
     if (provider === 'openai') {
-      if (c.openaiDefaultModel) return c.openaiDefaultModel
-      if (c.openaiModel) return c.openaiModel
+      const oa = c.openai || {}
+      if (oa.openaiDefaultModel) return oa.openaiDefaultModel
+      if (oa.model) return oa.model
       if (openaiModels.value.length) return openaiModels.value[0].id
       return 'Not set'
     }
     if (provider === 'openrouter') {
-      if (c.openrouterDefaultModel) return c.openrouterDefaultModel
-      if (c.openrouterModel) return c.openrouterModel
+      const or = c.openrouter || {}
+      if (or.defaultModel) return or.defaultModel
       if (openrouterModels.value.length) return openrouterModels.value[0].id
       return 'Not set'
     }
     // Anthropic — use activeModel resolution
-    if (c.activeModel === 'opus') return c.opusModel || 'claude-opus-4-6'
-    if (c.activeModel === 'haiku') return c.haikuModel || 'claude-haiku-4-5'
-    return c.sonnetModel || 'claude-sonnet-4-5'
+    const a = c.anthropic || {}
+    if (a.activeModel === 'opus') return a.opusModel || 'claude-opus-4-6'
+    if (a.activeModel === 'haiku') return a.haikuModel || 'claude-haiku-4-5'
+    return a.sonnetModel || 'claude-sonnet-4-5'
   }
 
   return {

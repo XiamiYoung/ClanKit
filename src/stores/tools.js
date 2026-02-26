@@ -71,6 +71,14 @@ export const useToolsStore = defineStore('tools', () => {
     if (!normalized.id) {
       normalized.id = tool.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
     }
+    // Duplicate name check (case-insensitive) — skip the tool being edited
+    const nameLower = normalized.name.toLowerCase()
+    const dup = tools.value.find(t =>
+      t.id !== normalized.id && t.name.toLowerCase() === nameLower
+    )
+    if (dup) {
+      throw new Error(`A tool named "${dup.name}" already exists.`)
+    }
     const idx = tools.value.findIndex(t => t.id === normalized.id)
     if (idx >= 0) {
       tools.value[idx] = normalized

@@ -77,7 +77,6 @@ export const usePersonasStore = defineStore('personas', () => {
     for (const p of list) {
       if (p.providerId === undefined) p.providerId = null
       if (p.modelId === undefined) p.modelId = null
-      if (p.enabledToolIds === undefined) p.enabledToolIds = null
       if (p.enabledSkillIds === undefined) p.enabledSkillIds = null
       if (p.mcpServerIds === undefined) p.mcpServerIds = null
     }

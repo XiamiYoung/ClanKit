@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="wiz-header">
         <div class="wiz-header-left">
-          <div class="wiz-header-icon" :style="{ background: 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }">
+          <div class="wiz-header-icon" :style="{ background: 'linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }">
             <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path v-if="type === 'system'" d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1M9 16h0M15 16h0" />
               <path v-else d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
@@ -77,26 +77,6 @@
                   Continue
                 </button>
               </div>
-              <!-- Tool mapping (system personas only) -->
-              <div v-if="msg.toolPicker && msg.active" class="wiz-tool-picker">
-                <ComboBox
-                  v-if="toolComboOptions.length > 0"
-                  :model-value="form.enabledToolIds"
-                  :options="toolComboOptions"
-                  placeholder="Search tools..."
-                  :multiple="true"
-                  @update:model-value="form.enabledToolIds = $event"
-                />
-                <div v-else class="wiz-tool-empty">No HTTP tools configured yet.</div>
-                <div class="wiz-tool-actions">
-                  <button class="wiz-option-btn" @click="selectAllTools">All</button>
-                  <button class="wiz-option-btn" @click="clearAllTools">None</button>
-                  <button class="wiz-option-done" @click="confirmTools">
-                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                    Continue ({{ form.enabledToolIds.length }} selected)
-                  </button>
-                </div>
-              </div>
             </div>
           </template>
 
@@ -131,7 +111,7 @@
       </div>
 
       <!-- Preview & Save area (final step) -->
-      <div v-if="showPreview" class="wiz-preview-bar">
+      <div v-if="showPreview" class="wiz-preview-body">
         <!-- Avatar display + change button -->
         <div class="wiz-preview-avatar-row">
           <div class="wiz-preview-avatar">
@@ -140,7 +120,7 @@
           </div>
           <button class="wiz-change-avatar-btn" @click="showAvatarPicker = true">Change Avatar</button>
         </div>
-        <!-- Provider / Model / Tools config (system personas) — above prompt -->
+        <!-- Provider / Model config (system personas) — above prompt -->
         <div v-if="type === 'system'" class="wiz-preview-config">
           <!-- Provider -->
           <div class="wpc-section">
@@ -164,19 +144,6 @@
               placeholder="Search models..."
               @update:model-value="onModelComboChange"
             />
-          </div>
-          <!-- Tools -->
-          <div class="wpc-section">
-            <div class="wpc-label">Tools <span class="wpc-tool-count">{{ form.enabledToolIds.length }}/{{ availableTools.length }}</span></div>
-            <ComboBox
-              v-if="availableTools.length > 0"
-              :model-value="form.enabledToolIds"
-              :options="toolComboOptions"
-              placeholder="Search tools..."
-              :multiple="true"
-              @update:model-value="form.enabledToolIds = $event"
-            />
-            <div v-else class="wpc-tool-empty">No HTTP tools configured yet.</div>
           </div>
         </div>
         <!-- Generated prompt -->
@@ -205,12 +172,16 @@
             @click="revertEnhance"
           >Revert</AppButton>
         </div>
-        <div class="wiz-preview-actions">
-          <AppButton variant="secondary" size="modal" @click="$emit('close')">Cancel</AppButton>
-          <AppButton size="modal" :disabled="!form.generatedPrompt.trim() || saving" :loading="saving" @click="save">
-            {{ saving ? 'Saving...' : editPersona ? 'Save Changes' : 'Create Persona' }}
-          </AppButton>
-        </div>
+      </div>
+
+      <!-- Footer with actions (matches ccm-footer) -->
+      <div v-if="showPreview" class="wiz-footer">
+        <button class="wiz-cancel-btn" @click="$emit('close')">Cancel</button>
+        <button
+          class="wiz-done-btn"
+          :disabled="!form.generatedPrompt.trim() || saving"
+          @click="save"
+        >{{ saving ? 'Saving...' : editPersona ? 'Save Changes' : 'Create Persona' }}</button>
       </div>
     </div>
 
@@ -227,7 +198,6 @@
 <script setup>
 import { ref, reactive, nextTick, computed, onMounted } from 'vue'
 import { usePersonasStore } from '../../stores/personas'
-import { useToolsStore } from '../../stores/tools'
 import { useConfigStore } from '../../stores/config'
 import { useModelsStore } from '../../stores/models'
 import { getAvatarDataUri } from './personaAvatars'
@@ -242,7 +212,6 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'saved'])
 const personasStore = usePersonasStore()
-const toolsStore = useToolsStore()
 const configStore = useConfigStore()
 const modelsStore = useModelsStore()
 
@@ -264,7 +233,6 @@ const form = reactive({
   generatedPrompt: '',
   providerId: 'anthropic',
   modelId: '',
-  enabledToolIds: [],
 })
 
 // Chat conversation state
@@ -278,9 +246,6 @@ const inputPlaceholder = ref('')
 const enhancing = ref(false)
 const preEnhancePrompt = ref(null)
 
-// Available tools from store
-const availableTools = computed(() => toolsStore.tools || [])
-
 // ComboBox options for model selector (adapts modelsStore shape to ComboBox shape)
 const modelComboOptions = computed(() => {
   const p = form.providerId || 'anthropic'
@@ -290,15 +255,6 @@ const modelComboOptions = computed(() => {
     detail: m.id,
   }))
 })
-
-// ComboBox options for tools multi-selector
-const toolComboOptions = computed(() =>
-  availableTools.value.map(t => ({
-    id: t.id,
-    name: t.name,
-    detail: t.description || 'HTTP tool',
-  }))
-)
 
 function onModelComboChange(val) {
   form.modelId = val
@@ -356,11 +312,6 @@ const systemFlow = [
     ai: "Select the <strong>AI provider and model</strong> for this persona. You can leave defaults to inherit from global config.",
     field: 'providerModel',
     type: 'provider_picker',
-  },
-  {
-    ai: "Which <strong>HTTP tools</strong> should this persona have access to? Select the ones you want, or skip.",
-    field: 'tools',
-    type: 'tool_picker',
   },
 ]
 
@@ -440,8 +391,6 @@ function advanceConversation() {
     aiOpts.avatarPicker = true
   } else if (q.type === 'provider_picker') {
     aiOpts.providerPicker = true
-  } else if (q.type === 'tool_picker') {
-    aiOpts.toolPicker = true
   }
 
   pushAI(q.ai, aiOpts)
@@ -528,29 +477,6 @@ function onPreviewProviderChange(prov) {
   form.providerId = prov
   const defaultModel = getDefaultModelForProvider(prov)
   form.modelId = defaultModel
-}
-
-// ── Tool picker ──────────────────────────────────────────────────────────
-
-function toggleToolId(id) {
-  const idx = form.enabledToolIds.indexOf(id)
-  if (idx >= 0) form.enabledToolIds.splice(idx, 1)
-  else form.enabledToolIds.push(id)
-}
-
-function selectAllTools() {
-  form.enabledToolIds = availableTools.value.map(t => t.id)
-}
-
-function clearAllTools() {
-  form.enabledToolIds = []
-}
-
-function confirmTools() {
-  pushUser(`${form.enabledToolIds.length} tool(s) selected`)
-  deactivateLastAI()
-  conversationStep.value++
-  setTimeout(() => advanceConversation(), 350)
 }
 
 // ── Avatar ────────────────────────────────────────────────────────────────
@@ -693,7 +619,6 @@ async function save() {
       prompt: form.generatedPrompt.trim(),
       providerId: form.providerId || null,
       modelId: form.modelId || null,
-      enabledToolIds: form.enabledToolIds.length > 0 ? [...form.enabledToolIds] : null,
     }
     await personasStore.savePersona(persona)
     emit('saved')
@@ -714,7 +639,6 @@ onMounted(() => {
     form.generatedPrompt = props.editPersona.prompt || ''
     form.providerId = props.editPersona.providerId || 'anthropic'
     form.modelId = props.editPersona.modelId || ''
-    form.enabledToolIds = props.editPersona.enabledToolIds ? [...props.editPersona.enabledToolIds] : []
     showPreview.value = true
   } else {
     advanceConversation()
@@ -733,18 +657,27 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  animation: wiz-fade 0.15s ease-out;
 }
+@keyframes wiz-fade { from { opacity: 0; } to { opacity: 1; } }
 
 .wiz-modal {
-  width: min(1100px, 90vw);
-  height: 92vh;
+  width: 900px;
+  max-width: 95vw;
+  height: 85vh;
+  max-height: 85vh;
   background: #0F0F0F;
   border: 1px solid #2A2A2A;
   border-radius: 20px;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: wiz-enter 0.2s ease-out;
+}
+@keyframes wiz-enter {
+  from { opacity: 0; transform: scale(0.95) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 /* -- Header ---------------------------------------------------------------- */
@@ -752,42 +685,44 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 18px 24px;
   border-bottom: 1px solid #1F1F1F;
+  flex-shrink: 0;
 }
 .wiz-header-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .wiz-header-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .wiz-title {
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-subtitle);
+  font-size: var(--fs-section);
   font-weight: 700;
   color: #FFFFFF;
   margin: 0;
 }
 .wiz-close-btn {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
   background: transparent;
-  color: #9CA3AF;
+  color: #6B7280;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: all 0.12s;
 }
 .wiz-close-btn:hover { background: #1F1F1F; color: #FFFFFF; }
 
@@ -795,7 +730,7 @@ onMounted(() => {
 .wiz-chat {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -913,33 +848,11 @@ onMounted(() => {
   border-color: #4B5563;
 }
 
-/* -- Tool picker ----------------------------------------------------------- */
-.wiz-tool-picker {
-  margin-top: 10px;
-  padding: 10px 12px;
-  background: #1A1A1A;
-  border-radius: 10px;
-  border: 1px solid #2A2A2A;
-}
-.wiz-tool-empty {
-  padding: 12px;
-  text-align: center;
-  color: #4B5563;
-  font-size: 0.85rem;
-}
-.wiz-tool-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid #2A2A2A;
-}
-
 /* -- Input bar ------------------------------------------------------------- */
 .wiz-input-bar {
   display: flex; align-items: flex-end; gap: 8px;
-  padding: 12px 16px; border-top: 1px solid #1F1F1F; background: #0A0A0A;
+  padding: 14px 24px; border-top: 1px solid #1F1F1F; background: #0A0A0A;
+  flex-shrink: 0;
 }
 .wiz-input {
   flex: 1; padding: 10px 14px; border: 1px solid #2A2A2A; border-radius: 10px;
@@ -959,10 +872,13 @@ onMounted(() => {
 .wiz-send-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .wiz-send-btn:disabled { background: #2A2A2A; color: #4B5563; cursor: not-allowed; }
 
-/* -- Preview bar ----------------------------------------------------------- */
-.wiz-preview-bar {
-  border-top: 1px solid #1F1F1F; padding: 14px 16px; background: #0A0A0A;
+/* -- Preview body (scrollable content area) -------------------------------- */
+.wiz-preview-body {
+  border-top: 1px solid #1F1F1F; padding: 20px 24px; background: #0A0A0A;
   flex: 1; min-height: 0; display: flex; flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
 }
 .wiz-preview-avatar-row {
   display: flex;
@@ -1007,10 +923,10 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-/* -- Preview config (provider/model/tools — spc-style) --------------------- */
+/* -- Preview config (provider/model) ---------------------------------------- */
 .wiz-preview-config {
-  margin-bottom: 12px;
-  padding: 10px 12px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
   background: #1A1A1A;
   border-radius: 10px;
   border: 1px solid #2A2A2A;
@@ -1033,16 +949,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.wpc-tool-count {
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: 0;
-  padding: 1px 7px;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 .wpc-btn-row {
   display: flex;
@@ -1073,18 +979,99 @@ onMounted(() => {
   border-color: transparent;
   box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
-.wpc-tool-empty {
-  padding: 8px;
-  text-align: center;
-  color: #4B5563;
-  font-size: 11px;
+/* -- Footer (matches ccm-footer) ------------------------------------------- */
+.wiz-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 24px;
+  border-top: 1px solid #1F1F1F;
+  background: #0A0A0A;
+  flex-shrink: 0;
+}
+.wiz-cancel-btn {
+  padding: 8px 20px;
+  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  background: transparent;
+  color: #6B7280;
+  border: 1px solid #2A2A2A;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.wiz-cancel-btn:hover {
+  border-color: #4B5563;
+  color: #9CA3AF;
+  background: #1A1A1A;
+}
+.wiz-done-btn {
+  padding: 8px 24px;
+  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  color: #FFFFFF;
+  border: 1px solid #374151;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.wiz-done-btn:hover {
+  background: linear-gradient(135deg, #2D2D2D 0%, #374151 40%, #6B7280 100%);
+  border-color: #4B5563;
+}
+.wiz-done-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.wiz-preview-actions {
-  display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; flex-shrink: 0;
+/* -- ComboBox dark overrides (inside wizard) ------------------------------- */
+.wiz-preview-body :deep(.combo-box),
+.wiz-chat :deep(.combo-box) {
+  background: #111111;
+  border-color: #2A2A2A;
+}
+.wiz-preview-body :deep(.combo-box:focus-within),
+.wiz-chat :deep(.combo-box:focus-within) {
+  border-color: #4B5563;
+  box-shadow: 0 0 0 3px rgba(75, 85, 99, 0.2);
+}
+.wiz-preview-body :deep(.combo-input),
+.wiz-preview-body :deep(.combo-multi-input),
+.wiz-chat :deep(.combo-input),
+.wiz-chat :deep(.combo-multi-input) {
+  color: #FFFFFF;
+}
+.wiz-preview-body :deep(.combo-input::placeholder),
+.wiz-preview-body :deep(.combo-multi-input::placeholder),
+.wiz-chat :deep(.combo-input::placeholder),
+.wiz-chat :deep(.combo-multi-input::placeholder) {
+  color: #4B5563;
+}
+.wiz-preview-body :deep(.combo-dropdown),
+.wiz-chat :deep(.combo-dropdown) {
+  background: #1A1A1A;
+  border-color: #2A2A2A;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.wiz-preview-body :deep(.combo-option-name),
+.wiz-chat :deep(.combo-option-name) {
+  color: #9CA3AF;
+}
+.wiz-preview-body :deep(.combo-option:hover),
+.wiz-chat :deep(.combo-option:hover) {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #374151 100%);
+}
+.wiz-preview-body :deep(.combo-option:hover .combo-option-name),
+.wiz-chat :deep(.combo-option:hover .combo-option-name) {
+  color: #FFFFFF;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wiz-option-btn, .wiz-pick-avatar-btn, .wiz-send-btn { transition: none; animation: none; }
+  .wiz-backdrop, .wiz-modal, .wiz-option-btn, .wiz-pick-avatar-btn, .wiz-send-btn { transition: none; animation: none; }
 }
 </style>

@@ -125,7 +125,7 @@ const filtered = computed(() => {
       (o.detail || '').toLowerCase().includes(q)
     )
   }
-  return list.slice(0, 20)
+  return list.slice(0, 50)
 })
 
 // ── Actions ───────────────────────────────────────────────────────────────

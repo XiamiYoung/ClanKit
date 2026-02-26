@@ -3,7 +3,7 @@ const isWSL = process.platform === 'linux';
 
 const env = {
   ...process.env,
-  NODE_ENV: 'development',
+  ELECTRON_DEV: 'true',
   ...(isWSL && {
     DISPLAY: process.env.DISPLAY || ':0',
     WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY || 'wayland-0',

@@ -18,19 +18,26 @@ function lsSet(key, value) {
 // ── Default config (fallback for non-Electron / localStorage mode) ──────────
 function browserDefaultConfig() {
   return {
-    apiKey:      '',
-    baseURL:     'https://api.anthropic.com',
-    sonnetModel: 'anthropic/claude-sonnet-latest',
-    opusModel:   'anthropic/claude-opus-latest',
-    haikuModel:  'anthropic/claude-3-5-haiku-20241022',
-    activeModel: 'sonnet',
-    openrouterApiKey:  '',
-    openrouterBaseURL: 'https://openrouter.ai/api',
-    openrouterModel:   '',
-    openaiModel:       '',
-    openrouterDefaultModel: '',
-    openaiDefaultModel:     '',
-    systemPrompt:      ''
+    anthropic: {
+      apiKey:      '',
+      baseURL:     'https://api.anthropic.com',
+      sonnetModel: 'anthropic/claude-sonnet-latest',
+      opusModel:   'anthropic/claude-opus-latest',
+      haikuModel:  'anthropic/claude-3-5-haiku-20241022',
+      activeModel: 'sonnet',
+    },
+    openrouter: {
+      apiKey:  '',
+      baseURL: 'https://openrouter.ai/api',
+      defaultModel: '',
+    },
+    openai: {
+      apiKey:       '',
+      baseURL:      'https://mlaas.virtuosgames.com',
+      model:        '',
+      openaiDefaultModel: '',
+    },
+    systemPrompt: ''
   }
 }
 
@@ -86,7 +93,13 @@ export const storage = {
     const nonEmpty = Object.fromEntries(
       Object.entries(saved).filter(([, v]) => v !== '' && v !== null && v !== undefined)
     )
-    return { ...defaults, ...nonEmpty }
+    return {
+      ...defaults,
+      ...nonEmpty,
+      anthropic:  { ...defaults.anthropic,  ...saved.anthropic },
+      openrouter: { ...defaults.openrouter, ...saved.openrouter },
+      openai:     { ...defaults.openai,     ...saved.openai },
+    }
   },
   async saveConfig(config) {
     if (isElectron()) return window.electronAPI.saveConfig(config)

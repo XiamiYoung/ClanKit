@@ -12,6 +12,9 @@
       @select-chat="gridSelectChat"
       @swap-chat="gridSwapChat"
       @maximize-chat="gridMaximizeChat"
+      @open-chat-settings="gridOpenChatSettings"
+      @open-soul-viewer="(id, type, name) => openSoulViewer(id, type, name)"
+      @remove-group-persona="(cId, pid) => requestRemoveGroupPersona(cId, pid)"
     />
 
     <!-- ── Chat List Sidebar (single mode) ────────────────────────────────── -->
@@ -145,245 +148,13 @@
       </div>
 
       <template v-if="chatsStore.activeChat">
-        <!-- Chat Header -->
-        <div class="chat-header">
-          <svg style="width:22px;height:22px;color:#1A1A1A;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          <h1 class="chat-header-title">{{ chatsStore.activeChat.title }}</h1>
-
-          <!-- Persona selectors (unified — always supports multiple system personas) -->
-          <div class="header-section persona-section">
-            <!-- ── User persona section (left) ── -->
-            <div class="persona-group">
-              <div class="persona-card-wrap" ref="usrChipWrap">
-                <div class="persona-card user" @click.stop="togglePopover('user')" @mouseenter="showPersonaTooltip($event, resolvedUserPersonaId)" @mouseleave="hidePersonaTooltip">
-                  <div class="persona-card-avatar">
-                    <img v-if="activeUserAvatarDataUri" :src="activeUserAvatarDataUri" alt="" class="persona-card-avatar-img" />
-                    <div v-else class="persona-card-avatar-default user">
-                      <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    </div>
-                  </div>
-                  <div class="persona-card-info">
-                    <span class="persona-card-name">{{ activeUserPersonaName }}</span>
-                    <span v-if="activeUserPersona?.description" class="persona-card-desc">{{ activeUserPersona.description }}</span>
-                  </div>
-                  <button
-                    class="persona-card-summary-btn"
-                    @click.stop="openSoulViewer(activeUserPersona?.id || '__default_user__', 'users', activeUserPersona?.name || 'User')"
-                    title="View summary"
-                  >
-                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
-                      <line x1="10" y1="22" x2="14" y2="22"/>
-                    </svg>
-                  </button>
-                </div>
-                <!-- User popover -->
-                <div v-if="showUsrPopover" class="persona-popover" @click.stop>
-                  <div class="persona-popover-header">User Persona</div>
-                  <button
-                    v-for="p in sortedUserPersonas"
-                    :key="p.id"
-                    class="persona-popover-item has-description"
-                    :class="{ selected: resolvedUserPersonaId === p.id }"
-                    @click="selectPersona('user', p.isDefault ? null : p.id)"
-                  >
-                    <div class="persona-popover-avatar-wrap">
-                      <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:36px;height:36px;border-radius:50%;" />
-                      <span v-else class="persona-popover-avatar-fallback">{{ p.name.charAt(0) }}</span>
-                    </div>
-                    <div class="persona-popover-item-text">
-                      <span>{{ p.name }}</span>
-                      <span v-if="p.description" class="persona-popover-item-desc">{{ p.description }}</span>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Section divider -->
-            <div class="persona-section-divider"></div>
-
-            <!-- ── System personas section (right, Teams-style) ── -->
-            <div class="persona-group system-group">
-              <!-- Overlapping avatar stack -->
-              <div class="sys-avatar-stack">
-                <div
-                  v-for="(pid, idx) in visibleSystemPersonaIds"
-                  :key="pid"
-                  class="sys-avatar-item"
-                  :class="{ active: sysPersonaConfigId === pid }"
-                  :style="{ zIndex: activeSystemPersonaIds.length - idx }"
-                  @click.stop="openSysPersonaConfig(pid)"
-                  @mouseenter="showPersonaTooltip($event, pid)"
-                  @mouseleave="hidePersonaTooltip"
-                >
-                  <img v-if="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" :src="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" alt="" class="sys-avatar-img" />
-                  <span v-else class="sys-avatar-fallback">{{ (personasStore.getPersonaById(pid)?.name || '?').charAt(0) }}</span>
-                  <button
-                    v-if="activeSystemPersonaIds.length > 1"
-                    class="sys-avatar-remove"
-                    @click.stop="requestRemoveGroupPersona(chatsStore.activeChatId, pid)"
-                  >
-                    <svg style="width:8px;height:8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  </button>
-                </div>
-                <!-- Overflow count -->
-                <div
-                  v-if="overflowSystemCount > 0"
-                  class="sys-avatar-item sys-avatar-overflow"
-                  :style="{ zIndex: 0 }"
-                  @click.stop="showGroupAddPopover = !showGroupAddPopover"
-                >
-                  <span class="sys-avatar-fallback">+{{ overflowSystemCount }}</span>
-                </div>
-              </div>
-
-              <!-- Active persona name label -->
-              <div
-                v-if="activeSystemPersonaIds.length === 1"
-                class="sys-persona-label"
-                @click.stop="openSysPersonaConfig(activeSystemPersonaIds[0])"
-                @mouseenter="showPersonaTooltip($event, activeSystemPersonaIds[0])"
-                @mouseleave="hidePersonaTooltip"
-              >
-                <span class="sys-persona-name">{{ personasStore.getPersonaById(activeSystemPersonaIds[0])?.name || 'Unknown' }}</span>
-                <span v-if="personasStore.getPersonaById(activeSystemPersonaIds[0])?.description" class="sys-persona-desc">{{ personasStore.getPersonaById(activeSystemPersonaIds[0]).description }}</span>
-              </div>
-              <div v-else-if="activeSystemPersonaIds.length > 1" class="sys-persona-label">
-                <span class="sys-persona-name">{{ activeSystemPersonaIds.length }} personas</span>
-              </div>
-
-              <!-- Summary button (single persona) -->
-              <button
-                v-if="activeSystemPersonaIds.length === 1"
-                class="persona-card-summary-btn"
-                @click.stop="openSoulViewer(activeSystemPersonaIds[0], 'system', personasStore.getPersonaById(activeSystemPersonaIds[0])?.name || 'System')"
-                title="View summary"
-              >
-                <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
-                  <line x1="10" y1="22" x2="14" y2="22"/>
-                </svg>
-              </button>
-
-              <!-- Configure persona button + combobox -->
-              <div class="persona-chip-wrap" ref="groupAddChipWrap">
-                <button class="sys-add-btn" @click.stop="openPersonaCombobox" title="Configure personas">
-                  <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
-                <div v-if="showGroupAddPopover" class="sys-combobox" @click.stop>
-                  <div class="sys-combobox-search">
-                    <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                    <input
-                      ref="personaSearchEl"
-                      v-model="personaSearchQuery"
-                      type="text"
-                      placeholder="Search personas..."
-                      class="sys-combobox-input"
-                    />
-                  </div>
-                  <div class="sys-combobox-list">
-                    <label
-                      v-for="p in filteredSystemPersonas"
-                      :key="p.id"
-                      class="sys-combobox-item"
-                      :class="{ selected: activeSystemPersonaIds.includes(p.id) }"
-                    >
-                      <div class="sys-combobox-check">
-                        <input
-                          type="checkbox"
-                          :checked="activeSystemPersonaIds.includes(p.id)"
-                          @change="toggleSystemPersona(p.id)"
-                        />
-                        <svg v-if="activeSystemPersonaIds.includes(p.id)" class="sys-combobox-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                      </div>
-                      <div class="sys-combobox-avatar">
-                        <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" class="sys-combobox-avatar-img" />
-                        <span v-else class="sys-combobox-avatar-fallback">{{ p.name.charAt(0) }}</span>
-                      </div>
-                      <div class="sys-combobox-info">
-                        <span class="sys-combobox-name">{{ p.name }}</span>
-                        <span v-if="p.description" class="sys-combobox-desc">{{ p.description }}</span>
-                      </div>
-                    </label>
-                    <div v-if="filteredSystemPersonas.length === 0" class="sys-combobox-empty">No personas match your search</div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Config popover (anchored to the system group) -->
-              <div v-if="sysPersonaConfigId" class="sys-persona-config-popover" @click.stop>
-                <div class="spc-header">
-                  <span class="spc-header-name">{{ personasStore.getPersonaById(sysPersonaConfigId)?.name || 'Persona' }}</span>
-                  <span v-if="personasStore.getPersonaById(sysPersonaConfigId)?.description" class="spc-header-desc">{{ personasStore.getPersonaById(sysPersonaConfigId).description }}</span>
-                  <button v-if="activeSystemPersonaIds.length > 1" class="persona-card-summary-btn" style="margin-left:auto;" @click.stop="openSoulViewer(sysPersonaConfigId, 'system', personasStore.getPersonaById(sysPersonaConfigId)?.name || 'System')" title="View summary">
-                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
-                      <line x1="10" y1="22" x2="14" y2="22"/>
-                    </svg>
-                  </button>
-                </div>
-                <div class="spc-section">
-                  <div class="spc-label">Provider</div>
-                  <div class="spc-btn-row">
-                    <button
-                      v-for="prov in ['anthropic', 'openrouter', 'openai']"
-                      :key="prov"
-                      class="spc-btn"
-                      :class="{ active: (personasStore.getPersonaById(sysPersonaConfigId)?.providerId || 'anthropic') === prov }"
-                      @click="setSysPersonaProvider(sysPersonaConfigId, prov)"
-                    >{{ prov === 'anthropic' ? 'Anthropic' : prov === 'openrouter' ? 'OpenRouter' : 'OpenAI' }}</button>
-                  </div>
-                </div>
-                <div class="spc-section">
-                  <div class="spc-label">Model</div>
-                  <input
-                    v-if="sysConfigProvider !== 'anthropic'"
-                    v-model="sysConfigModelFilter"
-                    type="text"
-                    placeholder="Search models..."
-                    class="spc-search"
-                    @click.stop
-                  />
-                  <div class="spc-model-list">
-                    <button class="spc-model-item" :class="{ active: !personasStore.getPersonaById(sysPersonaConfigId)?.modelId }" @click="setSysPersonaModel(sysPersonaConfigId, null)">
-                      <span>Default</span>
-                      <span class="spc-model-id">{{ sysConfigDefaultModelLabel }}</span>
-                    </button>
-                    <button
-                      v-for="m in sysConfigModelOptions"
-                      :key="m.id"
-                      class="spc-model-item"
-                      :class="{ active: personasStore.getPersonaById(sysPersonaConfigId)?.modelId === m.id }"
-                      @click="setSysPersonaModel(sysPersonaConfigId, m.id)"
-                    >
-                      <span>{{ m.name || m.label || m.id }}</span>
-                      <span v-if="m.id !== (m.name || m.label)" class="spc-model-id">{{ m.id }}</span>
-                    </button>
-                  </div>
-                </div>
-                <!-- Tools now controlled at chat level (row 2 header chips) -->
-              </div>
-            </div>
-          </div>
-          <!-- Chat Settings button -->
-          <div class="chat-config-btn-wrap">
-            <button class="chat-config-btn" @click="showChatConfigModal = true">
-              <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-              <span class="chat-config-btn-label">Chat Settings</span>
-            </button>
-            <!-- Hover tooltip summary -->
-            <div class="chat-config-tooltip">
-              <div class="chat-config-tooltip-row"><span class="cct-key">Provider</span><span class="cct-val">{{ effectiveProviderLabel }}</span></div>
-              <div class="chat-config-tooltip-row"><span class="cct-key">Model</span><span class="cct-val">{{ effectiveModelLabel }}</span></div>
-              <div class="chat-config-tooltip-row"><span class="cct-key">Tools</span><span class="cct-val">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }} ({{ formatTokens(toolsTokenEstimate) }})</span></div>
-              <div class="chat-config-tooltip-row"><span class="cct-key">MCP</span><span class="cct-val">{{ enabledMcpServers.length }}/{{ mcpStore.servers.length }} ({{ formatTokens(mcpTokenEstimate) }})</span></div>
-              <div class="chat-config-tooltip-row"><span class="cct-key">RAG</span><span class="cct-val">{{ ragEnabledCount }} index{{ ragEnabledCount !== 1 ? 'es' : '' }}</span></div>
-            </div>
-          </div>
-        </div>
+        <!-- Chat Header (shared component) -->
+        <ChatHeader
+          :chatId="chatsStore.activeChatId"
+          @open-chat-settings="showChatConfigModal = true"
+          @open-soul-viewer="(id, type, name) => openSoulViewer(id, type, name)"
+          @remove-group-persona="(cId, pid) => requestRemoveGroupPersona(cId, pid)"
+        />
 
         <!-- ── Context Window Usage Bar (always visible) ────────────────────── -->
         <div class="chat-context-bar">
@@ -730,460 +501,319 @@
           </div>
         </div>
 
-        <!-- ── Activity Terminal Strip ─────────────────────────────────────── -->
-<!-- Messages -->
-        <div ref="messagesEl" class="chat-messages" @scroll="onMessagesScroll">
-          <!-- Loading state -->
-          <div v-if="chatsStore.activeChat.messages === null" class="chat-loading-state">
-            <div class="chat-loading-spinner"></div>
-            <span class="chat-loading-text">Loading messages</span>
-          </div>
-          <!-- Empty state -->
-          <div v-else-if="chatsStore.activeChat.messages.length === 0" class="chat-empty-state">
-            <div class="chat-empty-icon">
-              <svg style="width:36px;height:36px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-            </div>
-            <div>
-              <p class="chat-empty-title">Start a conversation</p>
-              <p class="chat-empty-subtitle">Type a message below to begin</p>
-            </div>
-          </div>
-
-          <!-- Message list -->
-          <template v-else>
-            <!-- Load earlier messages -->
-            <div v-if="hasHiddenMessages" class="flex justify-center pb-2">
-              <button
-                @click="loadMoreMessages"
-                class="px-4 py-1.5 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer"
-                style="background:#F5F5F5; color:#1A1A1A; border:1px solid #E5E5EA;"
-                @mouseenter="e => e.currentTarget.style.background='rgba(0,122,255,0.1)'"
-                @mouseleave="e => e.currentTarget.style.background='#F5F5F5'"
-              >
-                Show earlier messages ({{ chatsStore.activeChat.messages.length - visibleMessages.length }} hidden)
-              </button>
-            </div>
+        <!-- ── Messages (shared ChatWindow) + Input ────────────────────────── -->
+        <ChatWindow
+          ref="chatWindowRef"
+          :chatId="chatsStore.activeChatId"
+          :showQuote="true"
+          :showDelete="true"
+          @send="handleChatWindowSend"
+          @stop="stopAgent"
+          @quote="quoteMessage"
+          @delete-message="requestDeleteMessage"
+        >
+          <template #input>
+            <!-- Queued prompts list -->
             <div
-              v-for="msg in visibleMessages"
-              :key="msg.id"
-              :class="[
-                'flex gap-3 animate-fade-in',
-                msg.role === 'user' ? 'justify-end' : 'justify-start'
-              ]"
+              v-if="pendingQueue.length > 0"
+              class="shrink-0 px-4 py-2 space-y-1.5"
+              style="background:#F5F5F5; border-top:1px solid #E5E5EA;"
             >
-              <!-- Assistant avatar + name chip -->
+              <div class="flex items-center gap-1.5" style="color:#6B7280; font-size:var(--fs-small); font-weight:600;">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                Queued ({{ pendingQueue.length }})
+              </div>
               <div
-                v-if="msg.role === 'assistant'"
-                class="msg-avatar-col"
+                v-for="(item, idx) in pendingQueue"
+                :key="idx"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+                style="background:#FFFFFF; color:#6B7280; border:1px solid #E5E5EA; font-size:var(--fs-small);"
               >
-                <div
-                  class="msg-avatar-wrap"
-                  @mouseenter="showMsgAvatarTooltip($event, msg)"
-                  @mouseleave="hideMsgAvatarTooltip"
+                <span class="shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#fff; font-size:10px; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);">{{ idx + 1 }}</span>
+                <span class="flex-1 truncate">{{ item.text.slice(0, 80) }}{{ item.text.length > 80 ? '…' : '' }}</span>
+                <span v-if="item.attachments?.length" style="opacity:0.7;">{{ item.attachments.length }} file{{ item.attachments.length !== 1 ? 's' : '' }}</span>
+                <button
+                  @click="removeFromQueue(idx)"
+                  class="shrink-0 cursor-pointer"
+                  style="color:#9CA3AF; opacity:0.5;"
+                  @mouseenter="e => e.currentTarget.style.opacity='1'"
+                  @mouseleave="e => e.currentTarget.style.opacity='0.5'"
+                  title="Remove from queue"
                 >
-                  <img v-if="msg.personaId && getAvatarDataUriForPersona(personasStore.getPersonaById(msg.personaId))" :src="getAvatarDataUriForPersona(personasStore.getPersonaById(msg.personaId))" alt="" class="msg-avatar-img" />
-                  <img v-else-if="activeSystemAvatarDataUri" :src="activeSystemAvatarDataUri" alt="" class="msg-avatar-img" />
-                  <div v-else class="msg-avatar-fallback system">
-                    <svg style="width:22px;height:22px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1M9 16h0M15 16h0"/>
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Memory Suggestions Banner -->
+            <Transition name="memory-banner">
+              <div
+                v-if="pendingMemorySuggestions.length > 0"
+                class="memory-banner"
+              >
+                <div class="memory-banner-header">
+                  <div class="memory-banner-title">
+                    <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
+                      <line x1="10" y1="22" x2="14" y2="22"/>
                     </svg>
+                    <span>Memories detected</span>
+                    <span class="memory-banner-count">{{ pendingMemorySuggestions.length }}</span>
+                  </div>
+                  <div class="memory-banner-actions">
+                    <button class="memory-banner-btn accept-all" @click="acceptAllMemories">Accept All</button>
+                    <button class="memory-banner-btn dismiss-all" @click="dismissAllMemories">Dismiss All</button>
                   </div>
                 </div>
-                <span class="msg-name-chip">{{ getMsgAssistantName(msg) }}</span>
+                <div class="memory-banner-list">
+                  <div
+                    v-for="item in pendingMemorySuggestions"
+                    :key="item.id"
+                    class="memory-banner-item"
+                  >
+                    <div class="memory-banner-item-content">
+                      <span class="memory-banner-target" :class="item.target">{{ item.target === 'user' ? 'You' : 'AI' }}</span>
+                      <span class="memory-banner-section">{{ item.section }}</span>
+                      <span class="memory-banner-entry">{{ item.entry }}</span>
+                    </div>
+                    <div class="memory-banner-item-actions">
+                      <button class="memory-item-btn accept" @click="acceptMemory(item)" title="Accept">
+                        <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      </button>
+                      <button class="memory-item-btn dismiss" @click="dismissMemory(item)" title="Dismiss">
+                        <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+
+            <!-- Input Area -->
+            <div class="chat-input-area">
+              <!-- Attachment preview strip -->
+              <div
+                v-if="attachments.length > 0"
+                class="flex flex-wrap gap-1.5 mb-2 px-1"
+              >
+                <div
+                  v-for="att in attachments"
+                  :key="att.id"
+                  class="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs max-w-[200px]"
+                  :style="att.type === 'image'
+                    ? 'background:rgba(0,122,255,0.1); color:#0056CC; border:1px solid #93C5FD;'
+                    : att.type === 'folder'
+                      ? 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'
+                      : att.type === 'error'
+                        ? 'background:#FEE2E2; color:#991B1B; border:1px solid #FCA5A5;'
+                        : 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'"
+                >
+                  <!-- Type icon -->
+                  <svg v-if="att.type === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  <svg v-else-if="att.type === 'folder'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  <svg v-else-if="att.type === 'error'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                  </svg>
+                  <svg v-else class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  <span class="truncate">{{ att.name }}</span>
+                  <!-- Remove button -->
+                  <button
+                    @click="removeAttachment(att.id)"
+                    class="w-4 h-4 rounded flex items-center justify-center shrink-0 cursor-pointer transition-colors"
+                    style="color:inherit; opacity:0.6;"
+                    @mouseenter="e => e.currentTarget.style.opacity='1'"
+                    @mouseleave="e => e.currentTarget.style.opacity='0.6'"
+                    aria-label="Remove attachment"
+                  >
+                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
 
-              <!-- Message bubble -->
+              <!-- Quote preview -->
               <div
-                :class="[
-                  'relative group/bubble max-w-[75%]',
-                  msg.role === 'assistant' ? 'min-w-[50%]' : ''
-                ]"
+                v-if="quotedMessage"
+                class="flex items-start gap-2 px-3 py-2 rounded-t-xl"
+                style="background:rgba(0,122,255,0.06); border:1px solid #E5E5EA; border-bottom:none;"
               >
-                <!-- Action buttons (top-right, visible on hover) -->
-                <div
-                  v-if="!msg.streaming"
-                  class="absolute -top-2 right-1 z-10 flex items-center gap-1 opacity-0 group-hover/bubble:opacity-100 transition-all duration-150"
-                >
-                  <!-- Quote button -->
-                  <button
-                    v-if="msg.content"
-                    @click="quoteMessage(msg)"
-                    class="msg-action-btn"
-                    title="Quote message"
-                    aria-label="Quote message"
-                  >
-                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-1.5 mb-0.5">
+                    <svg class="w-3.5 h-3.5 shrink-0" style="color:#1A1A1A;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21z"/>
                       <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3z"/>
                     </svg>
-                  </button>
-                  <!-- Copy button -->
-                  <button
-                    v-if="msg.content"
-                    @click="copyMessage(msg)"
-                    class="msg-action-btn"
-                    :title="copiedId === msg.id ? 'Copied!' : 'Copy message'"
-                    aria-label="Copy message"
-                  >
-                    <svg v-if="copiedId === msg.id" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                    <svg v-else class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                    </svg>
-                  </button>
-                  <!-- Delete button -->
-                  <button
-                    @click="requestDeleteMessage(msg)"
-                    class="msg-action-btn msg-action-btn-delete"
-                    title="Delete message"
-                    aria-label="Delete message"
-                  >
-                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="3 6 5 6 21 6"/>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                      <line x1="10" y1="11" x2="10" y2="17"/>
-                      <line x1="14" y1="11" x2="14" y2="17"/>
-                    </svg>
-                  </button>
+                    <span style="font-size:var(--fs-small); font-weight:600; color:#0056CC;">
+                      {{ getQuotedSenderName(quotedMessage) }}
+                    </span>
+                  </div>
+                  <p class="truncate" style="font-size:var(--fs-secondary); color:#6B7280; margin:0;">
+                    {{ quotedMessage.content?.slice(0, 150) }}{{ (quotedMessage.content?.length ?? 0) > 150 ? '...' : '' }}
+                  </p>
                 </div>
-
-                <div
-                  class="msg-bubble"
-                  :class="msg.role === 'user' ? 'msg-bubble-user' : 'msg-bubble-assistant'"
+                <button
+                  @click="clearQuote"
+                  class="w-5 h-5 rounded flex items-center justify-center shrink-0 cursor-pointer"
+                  style="color:#9CA3AF;"
+                  @mouseenter="e => e.currentTarget.style.color='#1A1A1A'"
+                  @mouseleave="e => e.currentTarget.style.color='#9CA3AF'"
+                  aria-label="Remove quote"
+                  title="Remove quote"
                 >
-                  <MessageRenderer :message="msg" />
-                </div>
-                <div
-                  class="msg-timestamp"
-                  :style="msg.role === 'user' ? 'text-align:right;' : 'text-align:left;'"
-                >
-                  {{ formatTime(msg.timestamp) }}
-                </div>
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
               </div>
 
-              <!-- User avatar + name chip -->
-              <div v-if="msg.role === 'user'" class="msg-avatar-col">
-                <div
-                  class="msg-avatar-wrap"
-                  @mouseenter="showUserAvatarTooltip($event)"
-                  @mouseleave="hideMsgAvatarTooltip"
+              <div
+                class="chat-input-box"
+                :class="{ focused: inputFocused, 'has-quote': quotedMessage }"
+              >
+                <!-- Attach button -->
+                <button
+                  @click="pickFiles"
+                  :disabled="activeRunning"
+                  class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
+                  style="background:#F5F5F5; color:#9CA3AF;"
+                  @mouseenter="e => { if (!activeRunning) e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A'; }"
+                  @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#9CA3AF'; }"
+                  aria-label="Attach files"
+                  title="Attach files or folders"
                 >
-                  <img v-if="activeUserAvatarDataUri" :src="activeUserAvatarDataUri" alt="" class="msg-avatar-img" />
-                  <div v-else class="msg-avatar-fallback user">
-                    <svg style="width:22px;height:22px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                    </svg>
+                  <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                  </svg>
+                </button>
+                <div class="flex-1 relative" style="min-width:0;">
+                  <textarea
+                    ref="inputEl"
+                    v-model="inputText"
+                    @keydown="onInputKeydown"
+                    @input="onInputChange"
+                    @paste="onPaste"
+                    @focus="inputFocused = true"
+                    @blur="onInputBlur"
+                    :placeholder="isGroupChat ? 'Type a message… (use @name to target a persona)' : 'Type your message here… (paste file paths to attach)'"
+                    rows="3"
+                    class="w-full bg-transparent resize-none outline-none leading-relaxed overflow-y-auto"
+                    style="color:#1A1A1A; font-size:var(--fs-body); min-height:72px; max-height:200px;"
+                  />
+                  <!-- @Mention autocomplete popup -->
+                  <div
+                    v-if="showMentionPopup && mentionSuggestions.length > 0"
+                    class="mention-popup"
+                  >
+                    <div class="mention-popup-header">
+                      <span>Personas</span>
+                      <span class="mention-popup-hint">↑↓ navigate · ↵ select</span>
+                    </div>
+                    <div class="mention-popup-list">
+                      <button
+                        v-for="(s, idx) in mentionSuggestions"
+                        :key="s.id"
+                        class="mention-popup-item"
+                        :class="{ active: mentionActiveIndex === idx }"
+                        @mousedown.prevent="insertMention(s)"
+                        @mouseenter="showMentionTooltip($event, s)"
+                        @mouseleave="hideMentionTooltip"
+                      >
+                        <div class="mention-popup-avatar">
+                          <img v-if="getAvatarDataUriForPersona(s)" :src="getAvatarDataUriForPersona(s)" alt="" class="mention-popup-avatar-img" />
+                          <span v-else class="mention-popup-initial">{{ s.name.charAt(0) }}</span>
+                        </div>
+                        <div class="mention-popup-body">
+                          <div class="mention-popup-name-row">
+                            <span class="mention-popup-name">{{ s.name }}</span>
+                            <span v-if="getPersonaProviderLabel(s.id)" class="mention-popup-meta">{{ getPersonaProviderLabel(s.id) }}</span>
+                          </div>
+                          <span v-if="s.description" class="mention-popup-desc">{{ s.description }}</span>
+                        </div>
+                      </button>
+                      <button
+                        class="mention-popup-item mention-popup-item-all"
+                        :class="{ active: mentionActiveIndex === mentionSuggestions.length }"
+                        @mousedown.prevent="insertMentionAll"
+                      >
+                        <div class="mention-popup-avatar">
+                          <span class="mention-popup-initial mention-popup-initial-all">@</span>
+                        </div>
+                        <div class="mention-popup-body">
+                          <span class="mention-popup-name">all</span>
+                          <span class="mention-popup-desc">Broadcast to all personas</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                  <!-- Fixed-position tooltip for @mention persona description -->
+                  <div
+                    v-if="mentionTooltip.visible && mentionTooltip.source === 'mention'"
+                    class="mention-tooltip-fixed"
+                    :style="{ top: mentionTooltip.y + 'px', left: mentionTooltip.x + 'px' }"
+                  >
+                    <div class="mention-tooltip-name">{{ mentionTooltip.name }}</div>
+                    <div class="mention-tooltip-text">{{ mentionTooltip.text }}</div>
                   </div>
                 </div>
-                <span class="msg-name-chip">{{ activeUserPersonaName }}</span>
+                <!-- Stop button (visible while running) -->
+                <button
+                  v-if="activeRunning"
+                  @click="stopAgent"
+                  class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
+                  style="background:rgba(255,59,48,0.08); color:#FF3B30; box-shadow:0 1px 3px rgba(0,0,0,0.04);"
+                  @mouseenter="e => e.currentTarget.style.background='rgba(255,59,48,0.12)'"
+                  @mouseleave="e => e.currentTarget.style.background='rgba(255,59,48,0.08)'"
+                  aria-label="Stop agent"
+                  title="Stop agent"
+                >
+                  <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                </button>
+                <!-- Send button (always visible) -->
+                <button
+                  @click="sendMessage"
+                  :disabled="!inputText.trim() && attachments.length === 0"
+                  class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
+                  :style="inputText.trim() || attachments.length > 0
+                    ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
+                    : 'background:#E5E5EA; color:#9CA3AF; cursor:not-allowed;'"
+                  aria-label="Send message"
+                  :title="activeRunning ? 'Queue message (will send after current run)' : 'Send message'"
+                >
+                  <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="22" y1="2" x2="11" y2="13"/>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="flex items-center justify-between mt-1.5 px-1">
+                <div class="flex items-center gap-2 text-xs" style="color:#9CA3AF;">
+                  <span>{{ enabledSkills.length }} skill{{ enabledSkills.length !== 1 ? 's' : '' }} active</span>
+                  <span v-if="attachments.length > 0" style="color:#1A1A1A; font-weight:500;">{{ attachments.length }} file{{ attachments.length !== 1 ? 's' : '' }} attached</span>
+                  <span v-if="isGroupChat && stickyTargetLabel" class="sticky-target-indicator">
+                    <span class="sticky-target-label">Talking to <strong>{{ stickyTargetLabel }}</strong></span>
+                    <button class="sticky-target-clear" @click="clearStickyTarget" title="Reset to all">
+                      <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </span>
+                </div>
+                <p class="text-xs" style="color:#9CA3AF;">
+                  Enter to send · Shift+Enter for newline · Ctrl+Shift+A attach
+                </p>
               </div>
             </div>
           </template>
-        </div>
-
-        <!-- Queued prompts list -->
-        <div
-          v-if="pendingQueue.length > 0"
-          class="shrink-0 px-4 py-2 space-y-1.5"
-          style="background:#F5F5F5; border-top:1px solid #E5E5EA;"
-        >
-          <div class="flex items-center gap-1.5" style="color:#6B7280; font-size:var(--fs-small); font-weight:600;">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-            </svg>
-            Queued ({{ pendingQueue.length }})
-          </div>
-          <div
-            v-for="(item, idx) in pendingQueue"
-            :key="idx"
-            class="flex items-center gap-2 px-3 py-1.5 rounded-lg"
-            style="background:#FFFFFF; color:#6B7280; border:1px solid #E5E5EA; font-size:var(--fs-small);"
-          >
-            <span class="shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#fff; font-size:10px; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);">{{ idx + 1 }}</span>
-            <span class="flex-1 truncate">{{ item.text.slice(0, 80) }}{{ item.text.length > 80 ? '…' : '' }}</span>
-            <span v-if="item.attachments?.length" style="opacity:0.7;">{{ item.attachments.length }} file{{ item.attachments.length !== 1 ? 's' : '' }}</span>
-            <button
-              @click="removeFromQueue(idx)"
-              class="shrink-0 cursor-pointer"
-              style="color:#9CA3AF; opacity:0.5;"
-              @mouseenter="e => e.currentTarget.style.opacity='1'"
-              @mouseleave="e => e.currentTarget.style.opacity='0.5'"
-              title="Remove from queue"
-            >
-              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <!-- Memory Suggestions Banner -->
-        <Transition name="memory-banner">
-          <div
-            v-if="pendingMemorySuggestions.length > 0"
-            class="memory-banner"
-          >
-            <div class="memory-banner-header">
-              <div class="memory-banner-title">
-                <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
-                  <line x1="10" y1="22" x2="14" y2="22"/>
-                </svg>
-                <span>Memories detected</span>
-                <span class="memory-banner-count">{{ pendingMemorySuggestions.length }}</span>
-              </div>
-              <div class="memory-banner-actions">
-                <button class="memory-banner-btn accept-all" @click="acceptAllMemories">Accept All</button>
-                <button class="memory-banner-btn dismiss-all" @click="dismissAllMemories">Dismiss All</button>
-              </div>
-            </div>
-            <div class="memory-banner-list">
-              <div
-                v-for="item in pendingMemorySuggestions"
-                :key="item.id"
-                class="memory-banner-item"
-              >
-                <div class="memory-banner-item-content">
-                  <span class="memory-banner-target" :class="item.target">{{ item.target === 'user' ? 'You' : 'AI' }}</span>
-                  <span class="memory-banner-section">{{ item.section }}</span>
-                  <span class="memory-banner-entry">{{ item.entry }}</span>
-                </div>
-                <div class="memory-banner-item-actions">
-                  <button class="memory-item-btn accept" @click="acceptMemory(item)" title="Accept">
-                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                  </button>
-                  <button class="memory-item-btn dismiss" @click="dismissMemory(item)" title="Dismiss">
-                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Transition>
-
-        <!-- Input Area -->
-        <div class="chat-input-area">
-          <!-- Attachment preview strip -->
-          <div
-            v-if="attachments.length > 0"
-            class="flex flex-wrap gap-1.5 mb-2 px-1"
-          >
-            <div
-              v-for="att in attachments"
-              :key="att.id"
-              class="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs max-w-[200px]"
-              :style="att.type === 'image'
-                ? 'background:rgba(0,122,255,0.1); color:#0056CC; border:1px solid #93C5FD;'
-                : att.type === 'folder'
-                  ? 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'
-                  : att.type === 'error'
-                    ? 'background:#FEE2E2; color:#991B1B; border:1px solid #FCA5A5;'
-                    : 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'"
-            >
-              <!-- Type icon -->
-              <svg v-if="att.type === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-              </svg>
-              <svg v-else-if="att.type === 'folder'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-              </svg>
-              <svg v-else-if="att.type === 'error'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
-              </svg>
-              <svg v-else class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-              </svg>
-              <span class="truncate">{{ att.name }}</span>
-              <!-- Remove button -->
-              <button
-                @click="removeAttachment(att.id)"
-                class="w-4 h-4 rounded flex items-center justify-center shrink-0 cursor-pointer transition-colors"
-                style="color:inherit; opacity:0.6;"
-                @mouseenter="e => e.currentTarget.style.opacity='1'"
-                @mouseleave="e => e.currentTarget.style.opacity='0.6'"
-                aria-label="Remove attachment"
-              >
-                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- Quote preview -->
-          <div
-            v-if="quotedMessage"
-            class="flex items-start gap-2 px-3 py-2 rounded-t-xl"
-            style="background:rgba(0,122,255,0.06); border:1px solid #E5E5EA; border-bottom:none;"
-          >
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-1.5 mb-0.5">
-                <svg class="w-3.5 h-3.5 shrink-0" style="color:#1A1A1A;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21z"/>
-                  <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3z"/>
-                </svg>
-                <span style="font-size:var(--fs-small); font-weight:600; color:#0056CC;">
-                  {{ getQuotedSenderName(quotedMessage) }}
-                </span>
-              </div>
-              <p class="truncate" style="font-size:var(--fs-secondary); color:#6B7280; margin:0;">
-                {{ quotedMessage.content?.slice(0, 150) }}{{ (quotedMessage.content?.length ?? 0) > 150 ? '...' : '' }}
-              </p>
-            </div>
-            <button
-              @click="clearQuote"
-              class="w-5 h-5 rounded flex items-center justify-center shrink-0 cursor-pointer"
-              style="color:#9CA3AF;"
-              @mouseenter="e => e.currentTarget.style.color='#1A1A1A'"
-              @mouseleave="e => e.currentTarget.style.color='#9CA3AF'"
-              aria-label="Remove quote"
-              title="Remove quote"
-            >
-              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
-          </div>
-
-          <div
-            class="chat-input-box"
-            :class="{ focused: inputFocused, 'has-quote': quotedMessage }"
-          >
-            <!-- Attach button -->
-            <button
-              @click="pickFiles"
-              :disabled="activeRunning"
-              class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
-              style="background:#F5F5F5; color:#9CA3AF;"
-              @mouseenter="e => { if (!activeRunning) e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A'; }"
-              @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#9CA3AF'; }"
-              aria-label="Attach files"
-              title="Attach files or folders"
-            >
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-              </svg>
-            </button>
-            <div class="flex-1 relative" style="min-width:0;">
-              <textarea
-                ref="inputEl"
-                v-model="inputText"
-                @keydown="onInputKeydown"
-                @input="onInputChange"
-                @paste="onPaste"
-                @focus="inputFocused = true"
-                @blur="onInputBlur"
-                :placeholder="isGroupChat ? 'Type a message… (use @name to target a persona)' : 'Type your message here… (paste file paths to attach)'"
-                rows="3"
-                class="w-full bg-transparent resize-none outline-none leading-relaxed overflow-y-auto"
-                style="color:#1A1A1A; font-size:var(--fs-body); min-height:72px; max-height:200px;"
-              />
-              <!-- @Mention autocomplete popup -->
-              <div
-                v-if="showMentionPopup && mentionSuggestions.length > 0"
-                class="mention-popup"
-              >
-                <div class="mention-popup-header">
-                  <span>Personas</span>
-                  <span class="mention-popup-hint">↑↓ navigate · ↵ select</span>
-                </div>
-                <div class="mention-popup-list">
-                  <button
-                    v-for="(s, idx) in mentionSuggestions"
-                    :key="s.id"
-                    class="mention-popup-item"
-                    :class="{ active: mentionActiveIndex === idx }"
-                    @mousedown.prevent="insertMention(s)"
-                    @mouseenter="showMentionTooltip($event, s)"
-                    @mouseleave="hideMentionTooltip"
-                  >
-                    <div class="mention-popup-avatar">
-                      <img v-if="getAvatarDataUriForPersona(s)" :src="getAvatarDataUriForPersona(s)" alt="" class="mention-popup-avatar-img" />
-                      <span v-else class="mention-popup-initial">{{ s.name.charAt(0) }}</span>
-                    </div>
-                    <div class="mention-popup-body">
-                      <div class="mention-popup-name-row">
-                        <span class="mention-popup-name">{{ s.name }}</span>
-                        <span v-if="getPersonaProviderLabel(s.id)" class="mention-popup-meta">{{ getPersonaProviderLabel(s.id) }}</span>
-                      </div>
-                      <span v-if="s.description" class="mention-popup-desc">{{ s.description }}</span>
-                    </div>
-                  </button>
-                  <button
-                    class="mention-popup-item mention-popup-item-all"
-                    :class="{ active: mentionActiveIndex === mentionSuggestions.length }"
-                    @mousedown.prevent="insertMentionAll"
-                  >
-                    <div class="mention-popup-avatar">
-                      <span class="mention-popup-initial mention-popup-initial-all">@</span>
-                    </div>
-                    <div class="mention-popup-body">
-                      <span class="mention-popup-name">all</span>
-                      <span class="mention-popup-desc">Broadcast to all personas</span>
-                    </div>
-                  </button>
-                </div>
-              </div>
-              <!-- Fixed-position tooltip for @mention persona description -->
-              <div
-                v-if="mentionTooltip.visible && mentionTooltip.source === 'mention'"
-                class="mention-tooltip-fixed"
-                :style="{ top: mentionTooltip.y + 'px', left: mentionTooltip.x + 'px' }"
-              >
-                <div class="mention-tooltip-name">{{ mentionTooltip.name }}</div>
-                <div class="mention-tooltip-text">{{ mentionTooltip.text }}</div>
-              </div>
-            </div>
-            <!-- Stop button (visible while running) -->
-            <button
-              v-if="activeRunning"
-              @click="stopAgent"
-              class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
-              style="background:rgba(255,59,48,0.08); color:#FF3B30; box-shadow:0 1px 3px rgba(0,0,0,0.04);"
-              @mouseenter="e => e.currentTarget.style.background='rgba(255,59,48,0.12)'"
-              @mouseleave="e => e.currentTarget.style.background='rgba(255,59,48,0.08)'"
-              aria-label="Stop agent"
-              title="Stop agent"
-            >
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-            </button>
-            <!-- Send button (always visible) -->
-            <button
-              @click="sendMessage"
-              :disabled="!inputText.trim() && attachments.length === 0"
-              class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
-              :style="inputText.trim() || attachments.length > 0
-                ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
-                : 'background:#E5E5EA; color:#9CA3AF; cursor:not-allowed;'"
-              aria-label="Send message"
-              :title="activeRunning ? 'Queue message (will send after current run)' : 'Send message'"
-            >
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="22" y1="2" x2="11" y2="13"/>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-              </svg>
-            </button>
-          </div>
-          <div class="flex items-center justify-between mt-1.5 px-1">
-            <div class="flex items-center gap-2 text-xs" style="color:#9CA3AF;">
-              <span>{{ enabledSkills.length }} skill{{ enabledSkills.length !== 1 ? 's' : '' }} active</span>
-              <span v-if="attachments.length > 0" style="color:#1A1A1A; font-weight:500;">{{ attachments.length }} file{{ attachments.length !== 1 ? 's' : '' }} attached</span>
-              <span v-if="isGroupChat && stickyTargetLabel" class="sticky-target-indicator">
-                <span class="sticky-target-label">Talking to <strong>{{ stickyTargetLabel }}</strong></span>
-                <button class="sticky-target-clear" @click="clearStickyTarget" title="Reset to all">
-                  <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-              </span>
-            </div>
-            <p class="text-xs" style="color:#9CA3AF;">
-              Enter to send · Shift+Enter for newline · Ctrl+Shift+A attach
-            </p>
-          </div>
-        </div>
+        </ChatWindow>
       </template>
 
       <!-- No chat selected / loading -->
@@ -1615,7 +1245,7 @@
             <div
               class="newchat-source-item newchat-name-row"
               :class="{ selected: newChatSourceId === null }"
-              @click="newChatSourceId = null"
+              @click="selectNewChatSource(null)"
             >
               <svg style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -1625,22 +1255,44 @@
                 type="text"
                 placeholder="Empty Chat"
                 class="newchat-name-input"
-                @click.stop="newChatSourceId = null"
+                @click.stop="selectNewChatSource(null)"
               />
-              <span style="font-size:var(--fs-small); flex-shrink:0;" :style="{ color: newChatSourceId === null ? 'rgba(255,255,255,0.6)' : '#9CA3AF' }">Start fresh</span>
+              <button class="newchat-persona-cfg-btn" @click.stop="showNewChatPersonaPopover = true" title="Configure personas">
+                <div class="newchat-persona-cfg-avatars" v-if="newChatPersonaIds.length > 0">
+                  <template v-for="(pid, i) in newChatPersonaIds.slice(0, 3)" :key="pid">
+                    <img v-if="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" :src="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" alt="" class="newchat-persona-cfg-avatar-img" :style="{ zIndex: 10 - i }" />
+                    <span v-else class="newchat-persona-cfg-avatar-fb" :style="{ zIndex: 10 - i }">{{ (personasStore.getPersonaById(pid)?.name || '?').charAt(0) }}</span>
+                  </template>
+                  <span v-if="newChatPersonaIds.length > 3" class="newchat-persona-cfg-avatar-fb newchat-persona-cfg-overflow" :style="{ zIndex: 5 }">+{{ newChatPersonaIds.length - 3 }}</span>
+                </div>
+                <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+              </button>
             </div>
             <button
               v-for="chat in chatsStore.chats"
               :key="chat.id"
               class="newchat-source-item"
               :class="{ selected: newChatSourceId === chat.id }"
-              @click="newChatSourceId = chat.id"
+              @click="selectNewChatSource(chat.id)"
             >
               <svg style="width:16px;height:16px;color:#9CA3AF;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
               <span class="newchat-source-title">{{ chat.title }}</span>
-              <span style="font-size:var(--fs-small); color:#9CA3AF;">Copy history</span>
+              <div class="newchat-persona-cfg-btn" role="button" @click.stop="selectNewChatSource(chat.id); showNewChatPersonaPopover = true" title="Configure personas">
+                <div class="newchat-persona-cfg-avatars" v-if="newChatSourceId === chat.id && newChatPersonaIds.length > 0">
+                  <template v-for="(pid, i) in newChatPersonaIds.slice(0, 3)" :key="pid">
+                    <img v-if="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" :src="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" alt="" class="newchat-persona-cfg-avatar-img" :style="{ zIndex: 10 - i }" />
+                    <span v-else class="newchat-persona-cfg-avatar-fb" :style="{ zIndex: 10 - i }">{{ (personasStore.getPersonaById(pid)?.name || '?').charAt(0) }}</span>
+                  </template>
+                  <span v-if="newChatPersonaIds.length > 3" class="newchat-persona-cfg-avatar-fb newchat-persona-cfg-overflow" :style="{ zIndex: 5 }">+{{ newChatPersonaIds.length - 3 }}</span>
+                </div>
+                <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+              </div>
             </button>
           </div>
         </div>
@@ -1650,6 +1302,75 @@
         </div>
       </div>
     </div>
+
+  <!-- New Chat Persona Picker Dialog (dark, CCM-style) -->
+  <Teleport to="body">
+    <div v-if="showNewChatPersonaPopover" class="ncp-backdrop" @click.self="showNewChatPersonaPopover = false">
+      <div class="ncp-dialog">
+        <!-- Header -->
+        <div class="ncp-header">
+          <div class="ncp-header-left">
+            <div class="ncp-header-icon">
+              <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+            </div>
+            <h2 class="ncp-title">Choose Personas</h2>
+            <span class="ncp-badge">{{ newChatPersonaIds.length }} selected</span>
+          </div>
+          <button class="ncp-close" @click="showNewChatPersonaPopover = false">
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- Search -->
+        <div class="ncp-search-bar">
+          <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input
+            ref="newChatPersonaSearchEl"
+            v-model="newChatPersonaSearch"
+            type="text"
+            placeholder="Search personas..."
+            class="ncp-search-input"
+            @keydown.stop
+          />
+          <button v-if="newChatPersonaSearch" class="ncp-search-clear" @click="newChatPersonaSearch = ''">
+            <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- Persona list -->
+        <div class="ncp-list">
+          <label
+            v-for="p in filteredNewChatPersonas"
+            :key="p.id"
+            class="ncp-item"
+            :class="{ selected: newChatPersonaIds.includes(p.id) }"
+          >
+            <div class="ncp-check">
+              <input type="checkbox" :checked="newChatPersonaIds.includes(p.id)" @change="toggleNewChatPersona(p.id)" />
+              <svg v-if="newChatPersonaIds.includes(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="ncp-avatar">
+              <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" class="ncp-avatar-img" />
+              <span v-else class="ncp-avatar-fallback">{{ p.name.charAt(0) }}</span>
+            </div>
+            <div class="ncp-info">
+              <span class="ncp-name">{{ p.name }}</span>
+              <span v-if="p.description" class="ncp-desc">{{ p.description }}</span>
+            </div>
+          </label>
+          <div v-if="filteredNewChatPersonas.length === 0" class="ncp-empty">No personas match your search</div>
+        </div>
+
+        <!-- Footer -->
+        <div class="ncp-footer">
+          <span class="ncp-footer-hint">{{ newChatPersonaIds.length === 0 ? 'Default persona' : newChatPersonaIds.length === 1 ? '1 persona (single mode)' : newChatPersonaIds.length + ' personas (group mode)' }}</span>
+          <button class="ncp-done-btn" @click="showNewChatPersonaPopover = false">Done</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- Soul Viewer Modal -->
   <SoulViewer
@@ -1678,16 +1399,9 @@
     @close="confirmDeleteTarget = null"
   />
 
-  <!-- Teleport persona header tooltip to body so it escapes all stacking contexts -->
+  <!-- Teleport tooltips to body so they escape all stacking contexts -->
   <Teleport to="body">
-    <div
-      v-if="mentionTooltip.visible && mentionTooltip.source === 'header'"
-      class="persona-header-tooltip-fixed"
-      :style="{ top: mentionTooltip.y + 'px', left: mentionTooltip.x + 'px' }"
-    >
-      <div class="persona-header-tooltip-name">{{ mentionTooltip.name }}</div>
-      <div class="persona-header-tooltip-text">{{ mentionTooltip.text }}</div>
-    </div>
+    <!-- Header persona tooltip now handled by ChatHeader component -->
     <div
       v-if="mentionTooltip.visible && mentionTooltip.source === 'message'"
       :class="['msg-avatar-tooltip-fixed', mentionTooltip.side === 'left' ? 'tooltip-left' : 'tooltip-right']"
@@ -1713,6 +1427,8 @@ import { getAvatarDataUri } from '../components/personas/personaAvatars'
 import SoulViewer from '../components/personas/SoulViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import MessageRenderer from '../components/chat/MessageRenderer.vue'
+import ChatWindow from '../components/chat/ChatWindow.vue'
+import ChatHeader from '../components/chat/ChatHeader.vue'
 import { parseMentions } from '../utils/mentions'
 import { v4 as uuidv4 } from 'uuid'
 import AppButton from '../components/common/AppButton.vue'
@@ -1792,11 +1508,17 @@ function gridSwapChat(oldChatId, newChatId) {
   gridChatIds.value = newIds
 }
 
+function gridOpenChatSettings(chatId) {
+  chatsStore.setActiveChat(chatId)
+  showChatConfigModal.value = true
+}
+
 const inputText = ref('')
 const attachments = ref([])
 const isDragOver = ref(false)
 const inputEl = ref(null)
 const messagesEl = ref(null)
+const chatWindowRef = ref(null)
 const renameInput = ref(null)
 const showRenameModal = ref(false)
 const editingChatId = ref(null)
@@ -1886,30 +1608,8 @@ function startResize(e) {
   document.addEventListener('mouseup', onMouseUp)
 }
 
-// ── Group chat state ──
-const showGroupAddPopover = ref(false)
+// Group chat popover state moved to ChatHeader
 const showGroupPersonaConfigId = ref(null)
-const groupAddChipWrap = ref(null)
-const personaSearchEl = ref(null)
-const personaSearchQuery = ref('')
-
-const filteredSystemPersonas = computed(() => {
-  const q = personaSearchQuery.value.toLowerCase().trim()
-  const list = sortedSystemPersonas.value
-  if (!q) return list
-  return list.filter(p =>
-    p.name.toLowerCase().includes(q) ||
-    (p.description && p.description.toLowerCase().includes(q))
-  )
-})
-
-function openPersonaCombobox() {
-  showGroupAddPopover.value = !showGroupAddPopover.value
-  if (showGroupAddPopover.value) {
-    personaSearchQuery.value = ''
-    nextTick(() => personaSearchEl.value?.focus())
-  }
-}
 
 // @Mention autocomplete state
 const showMentionPopup = ref(false)
@@ -1933,27 +1633,7 @@ function hideMentionTooltip() {
   mentionTooltip.visible = false
 }
 
-// Persona header tooltip
-function showPersonaTooltip(event, pid) {
-  const persona = personasStore.getPersonaById(pid)
-  if (!persona?.description) { mentionTooltip.visible = false; return }
-  const rect = event.currentTarget.getBoundingClientRect()
-  mentionTooltip.source = 'header'
-  mentionTooltip.name = persona.name
-  mentionTooltip.text = persona.description
-  // Position below, clamped to stay within viewport
-  const tooltipWidth = 280
-  let left = rect.left + rect.width / 2
-  // Prevent overflow off left/right edges
-  left = Math.max(tooltipWidth / 2 + 8, Math.min(left, window.innerWidth - tooltipWidth / 2 - 8))
-  mentionTooltip.x = left
-  mentionTooltip.y = rect.bottom + 10
-  mentionTooltip.visible = true
-}
-
-function hidePersonaTooltip() {
-  mentionTooltip.visible = false
-}
+// Persona header tooltip moved to ChatHeader (has its own tooltip state)
 
 // Chat message avatar tooltip
 function showMsgAvatarTooltip(event, msg) {
@@ -2217,10 +1897,10 @@ onErrorCaptured((err, instance, info) => {
 const enabledSkills = computed(() => skillsStore.skills.map(s => s.id))
 const enabledSkillObjects = computed(() => skillsStore.allSkillObjects)
 const debugModelId = computed(() => {
-  const c = configStore.config
-  if (c.activeModel === 'opus')  return c.opusModel  || '(unset)'
-  if (c.activeModel === 'haiku') return c.haikuModel || '(unset)'
-  return c.sonnetModel || '(unset)'
+  const a = configStore.config.anthropic || {}
+  if (a.activeModel === 'opus')  return a.opusModel  || '(unset)'
+  if (a.activeModel === 'haiku') return a.haikuModel || '(unset)'
+  return a.sonnetModel || '(unset)'
 })
 
 // Visible messages: show last N messages, but always include the final user+assistant pair
@@ -2322,22 +2002,80 @@ const filteredChats = computed(() => {
 const showNewChatModal = ref(false)
 const newChatSourceId = ref(null)
 const newChatName = ref('')
+const newChatPersonaIds = ref([])
+const showNewChatPersonaPopover = ref(false)
+const newChatPersonaSearch = ref('')
+const newChatPersonaSearchEl = ref(null)
+
+const filteredNewChatPersonas = computed(() => {
+  const q = newChatPersonaSearch.value.toLowerCase().trim()
+  const list = sortedSystemPersonas.value
+  if (!q) return list
+  return list.filter(p =>
+    p.name.toLowerCase().includes(q) ||
+    (p.description && p.description.toLowerCase().includes(q))
+  )
+})
+
+watch(showNewChatPersonaPopover, (open) => {
+  if (open) {
+    newChatPersonaSearch.value = ''
+    nextTick(() => newChatPersonaSearchEl.value?.focus())
+  }
+})
+
+function defaultPersonaIds() {
+  const def = personasStore.defaultSystemPersona
+  return def ? [def.id] : []
+}
+
+function selectNewChatSource(chatId) {
+  newChatSourceId.value = chatId
+  showNewChatPersonaPopover.value = false
+  if (chatId) {
+    const source = chatsStore.chats.find(c => c.id === chatId)
+    if (source) {
+      if (source.isGroupChat && source.groupPersonaIds?.length > 0) {
+        newChatPersonaIds.value = [...source.groupPersonaIds]
+      } else if (source.systemPersonaId) {
+        newChatPersonaIds.value = [source.systemPersonaId]
+      } else {
+        newChatPersonaIds.value = defaultPersonaIds()
+      }
+    }
+  } else {
+    newChatPersonaIds.value = defaultPersonaIds()
+  }
+}
+
+function toggleNewChatPersona(personaId) {
+  const idx = newChatPersonaIds.value.indexOf(personaId)
+  if (idx >= 0) {
+    newChatPersonaIds.value.splice(idx, 1)
+  } else {
+    newChatPersonaIds.value.push(personaId)
+  }
+}
 
 function newChat() {
   showNewChatModal.value = true
   newChatSourceId.value = null
   newChatName.value = ''
+  newChatPersonaIds.value = defaultPersonaIds()
+  showNewChatPersonaPopover.value = false
+  newChatPersonaSearch.value = ''
 }
 
 async function confirmNewChat() {
   showNewChatModal.value = false
+  const personaCfg = newChatPersonaIds.value.length > 0 ? [...newChatPersonaIds.value] : null
   if (newChatSourceId.value) {
     const source = chatsStore.chats.find(c => c.id === newChatSourceId.value)
     const title = source ? `${source.title} (copy)` : 'New Chat'
-    await chatsStore.createChatFromHistory(newChatSourceId.value, title)
+    await chatsStore.createChatFromHistory(newChatSourceId.value, title, personaCfg)
   } else {
     const title = newChatName.value.trim() || 'New Chat'
-    await chatsStore.createChat(title)
+    await chatsStore.createChat(title, personaCfg)
   }
   nextTick(() => inputEl.value?.focus())
 }
@@ -2346,6 +2084,9 @@ function cancelNewChat() {
   showNewChatModal.value = false
   newChatSourceId.value = null
   newChatName.value = ''
+  newChatPersonaIds.value = []
+  showNewChatPersonaPopover.value = false
+  newChatPersonaSearch.value = ''
 }
 
 const confirmDeleteTarget = ref(null) // { type: 'chat'|'groupPersona', id, pid?, label }
@@ -2413,95 +2154,9 @@ async function handleSoulViewerUpdatePersona(updates) {
   soulViewerTarget.value.personaDescription = updated.description ?? soulViewerTarget.value.personaDescription
 }
 
-// ── System persona config popover ────────────────────────────────────────
-const sysPersonaConfigId = ref(null) // persona ID whose config popover is open
-const sysConfigModelFilter = ref('')
+// System persona config popover state moved to ChatHeader
 
-function openSysPersonaConfig(pid) {
-  if (sysPersonaConfigId.value === pid) {
-    sysPersonaConfigId.value = null
-  } else {
-    sysPersonaConfigId.value = pid
-    sysConfigModelFilter.value = ''
-    // Pre-fetch models for the persona's provider
-    const persona = personasStore.getPersonaById(pid)
-    const prov = persona?.providerId || 'anthropic'
-    if (prov === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
-    if (prov === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
-  }
-}
-
-function closeSysPersonaConfig() {
-  sysPersonaConfigId.value = null
-}
-
-function getSysConfigPersona() {
-  if (!sysPersonaConfigId.value) return null
-  return personasStore.getPersonaById(sysPersonaConfigId.value)
-}
-
-function setSysPersonaProvider(pid, provider) {
-  const persona = personasStore.getPersonaById(pid)
-  if (!persona) return
-  personasStore.savePersona({ ...persona, providerId: provider || null, modelId: null })
-  // Fetch models for the new provider
-  if (provider === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
-  if (provider === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
-}
-
-function setSysPersonaModel(pid, model) {
-  const persona = personasStore.getPersonaById(pid)
-  if (!persona) return
-  personasStore.savePersona({ ...persona, modelId: model || null })
-}
-
-// Per-persona tool mapping removed — tools controlled at chat level
-
-const sysConfigProvider = computed(() => {
-  const p = getSysConfigPersona()
-  return p?.providerId || 'anthropic'
-})
-
-const sysConfigDefaultModelLabel = computed(() => {
-  // Show what the persona will actually use: chat model > global model
-  const chatModel = chatsStore.activeChat?.model
-  if (chatModel) return chatModel
-  return modelsStore.getDefaultModelLabel(sysConfigProvider.value)
-})
-
-const sysConfigModelOptions = computed(() => {
-  const provider = sysConfigProvider.value
-  const q = sysConfigModelFilter.value.trim().toLowerCase()
-  const models = modelsStore.getModelsForProvider(provider)
-  if (!q) return models
-  return models.filter(m =>
-    (m.name || '').toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
-  )
-})
-
-// sysConfigToolIds removed — tools controlled at chat level
-
-// ── Persona chip popovers ───────────────────────────────────────────────
-const showSysPopover = ref(false)
-const showUsrPopover = ref(false)
-const sysChipWrap = ref(null)
-const usrChipWrap = ref(null)
-
-function togglePopover(type) {
-  if (type === 'system') {
-    showSysPopover.value = !showSysPopover.value
-    showUsrPopover.value = false
-  } else {
-    showUsrPopover.value = !showUsrPopover.value
-    showSysPopover.value = false
-  }
-}
-
-function selectPersona(type, id) {
-  if (chatsStore.activeChatId) chatsStore.setChatPersona(chatsStore.activeChatId, type, id)
-  showSysPopover.value = false
-  showUsrPopover.value = false
-}
+// ── Persona chip popovers (moved to ChatHeader) ──
 
 function getAvatarDataUriForPersona(persona) {
   if (!persona?.avatar) return null
@@ -2516,28 +2171,9 @@ const activeUserPersona = computed(() => {
   const id = chatsStore.activeChat?.userPersonaId
   return id ? personasStore.getPersonaById(id) : personasStore.defaultUserPersona
 })
-const activeSystemAvatarDataUri = computed(() => getAvatarDataUriForPersona(activeSystemPersona.value))
-const activeUserAvatarDataUri = computed(() => getAvatarDataUriForPersona(activeUserPersona.value))
-const activeSystemPersonaName = computed(() => activeSystemPersona.value?.name || 'Default')
-const activeUserPersonaName = computed(() => activeUserPersona.value?.name || 'Default')
-
-// Resolved persona IDs (for popover selection highlight)
-const resolvedSystemPersonaId = computed(() => {
-  const id = chatsStore.activeChat?.systemPersonaId
-  return id || personasStore.defaultSystemPersona?.id || null
-})
-const resolvedUserPersonaId = computed(() => {
-  const id = chatsStore.activeChat?.userPersonaId
-  return id || personasStore.defaultUserPersona?.id || null
-})
-
-// Sorted persona lists (default first)
-const sortedSystemPersonas = computed(() =>
-  [...personasStore.systemPersonas].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
-)
-const sortedUserPersonas = computed(() =>
-  [...personasStore.userPersonas].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
-)
+// Header-only display computed removed (moved to ChatHeader):
+// activeSystemAvatarDataUri, activeUserAvatarDataUri, activeSystemPersonaName, activeUserPersonaName
+// resolvedSystemPersonaId, resolvedUserPersonaId, sortedSystemPersonas, sortedUserPersonas
 
 // ── Active system persona IDs (unified — single or multi) ────────────────
 const activeSystemPersonaIds = computed(() => {
@@ -2550,43 +2186,27 @@ const activeSystemPersonaIds = computed(() => {
   return id ? [id] : []
 })
 
-const MAX_VISIBLE_AVATARS = 4
-const visibleSystemPersonaIds = computed(() => activeSystemPersonaIds.value.slice(0, MAX_VISIBLE_AVATARS))
-const overflowSystemCount = computed(() => Math.max(0, activeSystemPersonaIds.value.length - MAX_VISIBLE_AVATARS))
+// MAX_VISIBLE_AVATARS, visibleSystemPersonaIds, overflowSystemCount moved to ChatHeader
 
+// toggleSystemPersona moved to ChatHeader
+
+// getPersonaProviderLabel kept — also used in mention popup
 function getPersonaProviderLabel(personaId) {
   const persona = personasStore.getPersonaById(personaId)
   if (!persona) return 'Default'
   const provider = persona.providerId || 'anthropic'
   const model = persona.modelId || ''
   if (model) {
-    // Show shortened model name
     const short = model.split('/').pop().split(':')[0]
     return `${provider} · ${short}`
   }
   return provider
 }
 
-// getPersonaToolCount removed — tools controlled at chat level
-
-function toggleSystemPersona(personaId) {
-  const chatId = chatsStore.activeChatId
-  if (!chatId) return
-  const chat = chatsStore.activeChat
-  const currentIds = activeSystemPersonaIds.value
-
-  if (currentIds.includes(personaId)) {
-    // Don't allow removing the last persona
-    if (currentIds.length <= 1) return
-    chatsStore.removeGroupPersona(chatId, personaId)
-  } else {
-    // Enable group mode if needed and add persona
-    if (!chat.isGroupChat) {
-      chatsStore.toggleGroupMode(chatId, true)
-    }
-    chatsStore.addGroupPersona(chatId, personaId)
-  }
-}
+// sortedSystemPersonas kept — used in new chat persona picker
+const sortedSystemPersonas = computed(() =>
+  [...personasStore.systemPersonas].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
+)
 
 // ── Provider / Model chip popovers ────────────────────────────────────────
 const showProviderPopover = ref(false)
@@ -2669,15 +2289,11 @@ const effectiveModelLabel = computed(() => {
 function toggleProviderPopover() {
   showProviderPopover.value = !showProviderPopover.value
   showModelPopover.value = false
-  showSysPopover.value = false
-  showUsrPopover.value = false
 }
 
 function toggleModelPopover() {
   showModelPopover.value = !showModelPopover.value
   showProviderPopover.value = false
-  showSysPopover.value = false
-  showUsrPopover.value = false
   chatModelFilter.value = ''
   // Fetch models if needed
   if (showModelPopover.value && effectiveProvider.value === 'openrouter' && !modelsStore.openrouterCached) {
@@ -2714,27 +2330,14 @@ function selectModel(model) {
 }
 
 
-// Close popovers on outside click
+// Close popovers on outside click (persona header popovers now handled by ChatHeader)
 function handlePopoverOutsideClick(e) {
-  if (sysChipWrap.value && !sysChipWrap.value.contains(e.target)) showSysPopover.value = false
-  if (usrChipWrap.value && !usrChipWrap.value.contains(e.target)) showUsrPopover.value = false
   if (providerChipWrap.value && !providerChipWrap.value.contains(e.target)) showProviderPopover.value = false
   if (modelChipWrap.value && !modelChipWrap.value.contains(e.target)) showModelPopover.value = false
   if (ragChipWrap.value && !ragChipWrap.value.contains(e.target)) showRagPopover.value = false
-  if (groupAddChipWrap.value && !groupAddChipWrap.value.contains(e.target)) showGroupAddPopover.value = false
-  // Close persona config popover on outside click
   if (showGroupPersonaConfigId.value) {
     const configPopover = document.querySelector('.group-persona-config-popover')
     if (configPopover && !configPopover.contains(e.target)) showGroupPersonaConfigId.value = null
-  }
-  // Close system persona config popover on outside click
-  if (sysPersonaConfigId.value) {
-    const el = document.querySelector('.sys-persona-config-popover')
-    if (el && !el.contains(e.target)) {
-      // Check if click was on the persona card itself (toggle handled separately)
-      const card = e.target.closest('.persona-card.system')
-      if (!card) sysPersonaConfigId.value = null
-    }
   }
 }
 
@@ -3061,15 +2664,19 @@ function removeFromQueue(idx) {
 function scrollToBottom (force = false, forChatId = null) {
   // If called for a specific chat, only scroll if that chat is currently visible
   if (forChatId && forChatId !== chatsStore.activeChatId) return
-  if (!force && userScrolled.value) return   // user scrolled up — don't force scroll
+  // Delegate to ChatWindow's exposed scrollToBottom if available
+  if (chatWindowRef.value?.scrollToBottom) {
+    chatWindowRef.value.scrollToBottom(force)
+    return
+  }
+  // Fallback: direct scroll (for cases where ChatWindow isn't mounted yet)
+  if (!force && userScrolled.value) return
   programmaticScrollCount++
-  // Double nextTick: first waits for Vue reactivity, second waits for DOM render
   nextTick(() => {
     nextTick(() => {
       if (messagesEl.value) {
         messagesEl.value.scrollTop = messagesEl.value.scrollHeight
       }
-      // Decrement after the browser processes the scroll event
       requestAnimationFrame(() => { programmaticScrollCount = Math.max(0, programmaticScrollCount - 1) })
     })
   })
@@ -3118,12 +2725,22 @@ function quoteMessage(msg) {
 
 function getQuotedSenderName(q) {
   if (!q) return 'Assistant'
-  if (q.role === 'user') return 'You'
+  const ac = chatsStore.activeChat
+  if (q.role === 'user') {
+    const uid = ac?.userPersonaId
+    const up = uid ? personasStore.getPersonaById(uid) : personasStore.defaultUserPersona
+    return up?.name || 'You'
+  }
   if (q.personaId) {
     const p = personasStore.getPersonaById(q.personaId)
     if (p?.name) return p.name
   }
-  return 'Assistant'
+  const sysId = ac?.systemPersonaId
+  if (sysId) {
+    const p = personasStore.getPersonaById(sysId)
+    if (p?.name) return p.name
+  }
+  return personasStore.defaultSystemPersona?.name || 'Assistant'
 }
 
 function clearQuote() {
@@ -3366,6 +2983,12 @@ function dismissAllMemories() {
   items.forEach(i => { if (i.status === 'pending') i.status = 'dismissed' })
 }
 
+// Bridge for ChatWindow's send event (only fires if default input is used)
+function handleChatWindowSend(text) {
+  if (text) inputText.value = text
+  sendMessage()
+}
+
 async function sendMessage() {
   const rawText = inputText.value.trim()
   const hasAttachments = attachments.value.length > 0
@@ -3509,20 +3132,23 @@ async function sendMessage() {
   const cfg = { ...configStore.config }
   // Resolve per-chat provider/model overrides
   const chatProvider = targetChat.provider || 'anthropic'
-  if (chatProvider === 'openrouter') {
-    cfg.apiKey = cfg.openrouterApiKey
-    cfg.baseURL = cfg.openrouterBaseURL
+  if (chatProvider === 'anthropic') {
+    cfg.apiKey = cfg.anthropic?.apiKey || ''
+    cfg.baseURL = cfg.anthropic?.baseURL || 'https://api.anthropic.com'
+  } else if (chatProvider === 'openrouter') {
+    cfg.apiKey = cfg.openrouter?.apiKey || ''
+    cfg.baseURL = cfg.openrouter?.baseURL || 'https://openrouter.ai/api'
   } else if (chatProvider === 'openai') {
-    cfg.openaiApiKey = cfg.openaiApiKey || ''
-    cfg.openaiBaseURL = cfg.openaiBaseURL || 'https://mlaas.virtuosgames.com'
+    cfg.openaiApiKey = cfg.openai?.apiKey || ''
+    cfg.openaiBaseURL = cfg.openai?.baseURL || 'https://mlaas.virtuosgames.com'
     cfg._resolvedProvider = 'openai'
     cfg.defaultProvider = 'openai'
   }
   if (targetChat.model) {
     cfg.customModel = targetChat.model
   }
-  dbg(`runAgent → chatId=${chatId} provider=${chatProvider} model=${targetChat.model || cfg.activeModel} msgs=${apiMessages.length} skills=[${enabledSkills.value.join(',')||'none'}] group=${isGroup}`)
-  dbg(`config → baseURL=${cfg.baseURL} apiKey=${cfg.apiKey ? cfg.apiKey.slice(0,8)+'…' : '(empty)'} sonnet=${cfg.sonnetModel}`)
+  dbg(`runAgent → chatId=${chatId} provider=${chatProvider} model=${targetChat.model || cfg.anthropic?.activeModel} msgs=${apiMessages.length} skills=[${enabledSkills.value.join(',')||'none'}] group=${isGroup}`)
+  dbg(`config → baseURL=${cfg.baseURL} apiKey=${cfg.apiKey ? cfg.apiKey.slice(0,8)+'…' : '(empty)'} sonnet=${cfg.anthropic?.sonnetModel}`)
 
   // Chunks are handled by the persistent handleChunk listener registered in onMounted
 
@@ -3581,12 +3207,15 @@ async function sendMessage() {
         // Resolve per-persona config (persona defaults → chat overrides → global)
         const personaCfg = { ...cfg }
         const resolvedProvider = overrides.providerId || persona.providerId || chatProvider
-        if (resolvedProvider === 'openrouter') {
-          personaCfg.apiKey = cfg.openrouterApiKey
-          personaCfg.baseURL = cfg.openrouterBaseURL
+        if (resolvedProvider === 'anthropic') {
+          personaCfg.apiKey = cfg.anthropic?.apiKey || ''
+          personaCfg.baseURL = cfg.anthropic?.baseURL || 'https://api.anthropic.com'
+        } else if (resolvedProvider === 'openrouter') {
+          personaCfg.apiKey = cfg.openrouter?.apiKey || ''
+          personaCfg.baseURL = cfg.openrouter?.baseURL || 'https://openrouter.ai/api'
         } else if (resolvedProvider === 'openai') {
-          personaCfg.openaiApiKey = cfg.openaiApiKey || ''
-          personaCfg.openaiBaseURL = cfg.openaiBaseURL || 'https://mlaas.virtuosgames.com'
+          personaCfg.openaiApiKey = cfg.openai?.apiKey || ''
+          personaCfg.openaiBaseURL = cfg.openai?.baseURL || 'https://mlaas.virtuosgames.com'
           personaCfg._resolvedProvider = 'openai'
           personaCfg.defaultProvider = 'openai'
         }
@@ -3677,12 +3306,15 @@ async function sendMessage() {
       // Persona inherits chat-level model when its own is null
       const personaModel = sysPersona?.modelId || (chatsStore.activeChat?.model || null)
       const singleCfg = { ...cfg }
-      if (personaProvider === 'openrouter') {
-        singleCfg.apiKey = cfg.openrouterApiKey
-        singleCfg.baseURL = cfg.openrouterBaseURL
+      if (personaProvider === 'anthropic') {
+        singleCfg.apiKey = cfg.anthropic?.apiKey || ''
+        singleCfg.baseURL = cfg.anthropic?.baseURL || 'https://api.anthropic.com'
+      } else if (personaProvider === 'openrouter') {
+        singleCfg.apiKey = cfg.openrouter?.apiKey || ''
+        singleCfg.baseURL = cfg.openrouter?.baseURL || 'https://openrouter.ai/api'
       } else if (personaProvider === 'openai') {
-        singleCfg.openaiApiKey = cfg.openaiApiKey || ''
-        singleCfg.openaiBaseURL = cfg.openaiBaseURL || 'https://mlaas.virtuosgames.com'
+        singleCfg.openaiApiKey = cfg.openai?.apiKey || ''
+        singleCfg.openaiBaseURL = cfg.openai?.baseURL || 'https://mlaas.virtuosgames.com'
         singleCfg._resolvedProvider = 'openai'
         singleCfg.defaultProvider = 'openai'
       }
@@ -4352,106 +3984,7 @@ onUnmounted(() => {
 }
 
 /* ── Chat header ────────────────────────────────────────────────────────── */
-.chat-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  flex-shrink: 0;
-  background: #FFFFFF;
-  border-bottom: 1px solid #E5E5EA;
-  position: relative;
-  z-index: 20;
-}
-.chat-header-title {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-subtitle);
-  font-weight: 700;
-  color: #1A1A1A;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin: 0;
-  flex-shrink: 1;
-  min-width: 0;
-}
-
-/* ── Chat config button (replaces 5 chips) ──────────────────────────────── */
-.chat-config-btn-wrap {
-  position: relative;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-.chat-config-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px 6px 10px;
-  border-radius: 9999px;
-  border: none;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-  cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s;
-  font-family: 'Inter', sans-serif;
-  height: 36px;
-}
-.chat-config-btn:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
-}
-.chat-config-btn-label {
-  font-family: 'JetBrains Mono', 'SF Mono', monospace;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Tooltip on hover */
-.chat-config-tooltip {
-  display: none;
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  background: #1A1A1A;
-  border-radius: 10px;
-  padding: 10px 14px;
-  min-width: 220px;
-  z-index: 50;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
-  pointer-events: none;
-}
-.chat-config-btn-wrap:hover .chat-config-tooltip {
-  display: block;
-}
-.chat-config-tooltip-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  padding: 2px 0;
-}
-.cct-key {
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(255,255,255,0.5);
-  white-space: nowrap;
-}
-.cct-val {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 600;
-  color: #FFFFFF;
-  white-space: nowrap;
-  text-align: right;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 160px;
-}
+/* ── Chat header + config button + tooltip CSS moved to ChatHeader.vue ── */
 .chat-header-btn {
   padding: 5px 12px;
   border-radius: 8px;
@@ -4698,853 +4231,8 @@ onUnmounted(() => {
   box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
 }
 
-/* ── Header sections ────────────────────────────────────────────────────── */
-.header-section {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.header-divider {
-  width: 1px;
-  height: 24px;
-  background: rgba(255,255,255,0.2);
-  flex-shrink: 0;
-}
-/* (right-group chip styles removed — replaced by chat config modal) */
-
-/* ── Persona bar (shared wrapper) ───────────────────────────────────────── */
-.persona-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  margin-right: 8px;
-}
-
-/* ── Persona section layout ──────────────────────────────────────────── */
-.persona-section {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  z-index: 2;
-  pointer-events: auto;
-}
-.persona-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  position: relative;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  padding: 4px 8px;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.persona-section-divider {
-  display: none;
-}
-
-/* ── User persona card (left side) ───────────────────────────────────── */
-.persona-card-wrap {
-  position: relative;
-}
-.persona-card {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  transition: none;
-  font-family: 'Inter', sans-serif;
-  position: relative;
-}
-.persona-card-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.persona-card-avatar-img {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.persona-card-avatar-default {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.persona-card-avatar-default.user {
-  background: rgba(255,255,255,0.15);
-}
-.persona-card-info {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  min-width: 0;
-}
-.persona-card-name {
-  font-size: 11px;
-  font-weight: 600;
-  color: #FFFFFF;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.persona-card-desc {
-  font-size: 10px;
-  font-weight: 500;
-  color: rgba(255,255,255,0.6);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 80px;
-}
-.persona-card-summary-btn {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255,255,255,0.15);
-  color: rgba(255,255,255,0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s;
-  flex-shrink: 0;
-}
-.persona-card-summary-btn:hover {
-  background: rgba(255,255,255,0.25);
-  color: #FFFFFF;
-  transform: scale(1.1);
-}
-
-/* ── System personas: Teams-style avatar stack ───────────────────────── */
-.sys-avatar-stack {
-  display: flex;
-  align-items: center;
-}
-.sys-avatar-item {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.2);
-  margin-left: -8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  position: relative;
-  transition: transform 0.15s, box-shadow 0.15s;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  overflow: visible;
-  flex-shrink: 0;
-}
-.sys-avatar-stack > .sys-avatar-item:first-child {
-  margin-left: 0;
-}
-.sys-avatar-item:hover {
-  transform: scale(1.12);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  z-index: 20 !important;
-}
-.sys-avatar-item.active {
-  box-shadow: 0 0 0 2px #1A1A1A;
-  z-index: 20 !important;
-}
-.sys-avatar-img {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.sys-avatar-fallback {
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-  user-select: none;
-}
-.sys-avatar-overflow {
-  background: #6B7280;
-  cursor: pointer;
-}
-.sys-avatar-remove {
-  position: absolute;
-  top: -3px;
-  right: -3px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #EF4444;
-  color: #fff;
-  border: 1.5px solid rgba(255,255,255,0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s;
-  z-index: 10;
-}
-.sys-avatar-item:hover .sys-avatar-remove {
-  opacity: 1;
-}
-
-/* System persona name label */
-.sys-persona-label {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  cursor: pointer;
-  margin-left: 4px;
-  flex-shrink: 0;
-}
-.sys-persona-name {
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  color: #FFFFFF;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.sys-persona-desc {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 500;
-  color: rgba(255,255,255,0.6);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100px;
-}
-
-/* Add persona button */
-.sys-add-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1.5px dashed rgba(255,255,255,0.3);
-  background: transparent;
-  color: rgba(255,255,255,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s;
-  flex-shrink: 0;
-}
-.sys-add-btn:hover {
-  border-color: rgba(255,255,255,0.6);
-  color: #FFFFFF;
-  background: rgba(255,255,255,0.1);
-}
-
-/* ── System persona combobox (add dropdown) ──────────────────────────── */
-.sys-combobox {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  width: 320px;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  border-radius: 14px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06);
-  z-index: 60;
-  overflow: hidden;
-}
-.sys-combobox-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 1px solid #F0F0F0;
-  color: #9CA3AF;
-}
-.sys-combobox-input {
-  flex: 1;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  color: #1A1A1A;
-}
-.sys-combobox-input::placeholder {
-  color: #D1D1D6;
-}
-.sys-combobox-list {
-  max-height: 340px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.sys-combobox-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: all 0.12s;
-  border-radius: 10px;
-  border: 1px solid transparent;
-}
-.sys-combobox-item:hover {
-  background: #F5F5F5;
-  border-color: #E5E5EA;
-}
-.sys-combobox-item.selected {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: transparent;
-}
-.sys-combobox-item.selected:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-}
-.sys-combobox-check {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  border: 1.5px solid #D1D1D6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  position: relative;
-  transition: all 0.12s;
-}
-.sys-combobox-item.selected .sys-combobox-check {
-  background: rgba(255,255,255,0.2);
-  border-color: rgba(255,255,255,0.4);
-}
-.sys-combobox-check input {
-  position: absolute;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  margin: 0;
-}
-.sys-combobox-check-icon {
-  width: 12px;
-  height: 12px;
-  color: #fff;
-}
-.sys-combobox-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #374151 0%, #4B5563 100%);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-.sys-combobox-item.selected .sys-combobox-avatar {
-  box-shadow: 0 1px 4px rgba(255,255,255,0.15);
-}
-.sys-combobox-avatar-img {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.sys-combobox-avatar-fallback {
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  user-select: none;
-}
-.sys-combobox-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-.sys-combobox-name {
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  color: #1A1A1A;
-}
-.sys-combobox-item.selected .sys-combobox-name {
-  color: #fff;
-}
-.sys-combobox-desc {
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 400;
-  color: #374151;
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.sys-combobox-item.selected .sys-combobox-desc {
-  color: rgba(255,255,255,0.65);
-}
-.sys-combobox-empty {
-  padding: 20px 14px;
-  text-align: center;
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  color: #9CA3AF;
-}
-
-/* ── System persona config popover ───────────────────────────────────── */
-.sys-persona-config-popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 300px;
-  max-height: 420px;
-  overflow-y: auto;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  border-radius: 14px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
-  z-index: 60;
-  padding: 10px;
-  scrollbar-width: thin;
-}
-.spc-header {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 2px 2px 8px;
-  border-bottom: 1px solid #E5E5EA;
-  margin-bottom: 10px;
-}
-.spc-header-name {
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  font-weight: 700;
-  color: #1A1A1A;
-}
-.spc-header-desc {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 500;
-  color: #9CA3AF;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.spc-section {
-  margin-bottom: 10px;
-}
-.spc-section:last-child {
-  margin-bottom: 0;
-}
-.spc-label {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #9CA3AF;
-  padding: 0 2px 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.spc-tool-count {
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: 0;
-}
-.spc-btn-row {
-  display: flex;
-  gap: 4px;
-}
-.spc-btn {
-  flex: 1;
-  padding: 5px 8px;
-  border-radius: 8px;
-  border: 1px solid #E5E5EA;
-  background: #FAFAFA;
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  color: #6B7280;
-  cursor: pointer;
-  transition: all 0.12s;
-  text-align: center;
-}
-.spc-btn:hover {
-  border-color: #9CA3AF;
-  background: #F5F5F5;
-}
-.spc-btn.active {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-}
-.spc-search {
-  width: 100%;
-  padding: 5px 8px;
-  border: 1px solid #E5E5EA;
-  border-radius: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  outline: none;
-  background: #FAFAFA;
-  color: #1A1A1A;
-  margin-bottom: 4px;
-  box-sizing: border-box;
-  transition: border-color 0.15s;
-}
-.spc-search::placeholder { color: #9CA3AF; }
-.spc-search:focus { border-color: #1A1A1A; }
-.spc-model-list {
-  max-height: 140px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.spc-model-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 5px 8px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  color: #1A1A1A;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.1s;
-}
-.spc-model-item:hover { background: #F5F5F5; }
-.spc-model-item.active {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
-}
-.spc-model-id {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  color: #9CA3AF;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.spc-model-item.active .spc-model-id { color: rgba(255,255,255,0.5); }
-.spc-tool-actions {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-.spc-link {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  color: #6B7280;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.spc-link:hover { color: #1A1A1A; }
-.spc-tool-list {
-  max-height: 120px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.spc-tool-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  border-radius: 6px;
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  color: #1A1A1A;
-  cursor: pointer;
-  transition: background 0.1s;
-}
-.spc-tool-item:hover { background: #F5F5F5; }
-
-/* ── Persona chip (legacy) ───────────────────────────────────────────── */
-.persona-chip-wrap {
-  position: relative;
-}
-.persona-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px 4px 4px;
-  border-radius: 9999px;
-  border: 1px solid #E5E5EA;
-  background: #FFFFFF;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
-  font-family: 'Inter', sans-serif;
-  height: 36px;
-}
-.persona-chip:hover {
-  border-color: #9CA3AF;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}
-.persona-chip.active {
-  border-color: #1A1A1A;
-  box-shadow: 0 0 0 2px rgba(0,0,0,0.08);
-}
-.persona-chip-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.persona-chip-avatar-img {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.persona-chip-avatar-default {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.persona-chip-avatar-default.system {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.persona-chip-avatar-default.user {
-  background: #007AFF;
-}
-.persona-chip-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #6B7280;
-  max-width: 220px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.persona-chip-arrow {
-  width: 14px;
-  height: 14px;
-  color: #9CA3AF;
-  flex-shrink: 0;
-}
-
-/* ── Soul memory button ──────────────────────────────────────────────── */
-.soul-memory-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: 1px solid #E5E5EA;
-  background: #FFFFFF;
-  color: #9CA3AF;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s;
-  flex-shrink: 0;
-}
-.soul-memory-btn:hover {
-  background: #F5F5F5;
-  color: #1A1A1A;
-  border-color: #D1D1D6;
-}
-
-/* ── Popover dropdown ─────────────────────────────────────────────────── */
-.persona-popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 280px;
-  max-height: 360px;
-  overflow-y: auto;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  z-index: 50;
-  padding: 6px;
-  scrollbar-width: thin;
-}
-.persona-popover-header {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #9CA3AF;
-  padding: 8px 10px 4px;
-}
-.persona-popover-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  color: #1A1A1A;
-  transition: background 0.12s;
-  text-align: left;
-}
-.persona-popover-item:hover {
-  background: #F5F5F5;
-}
-.persona-popover-item.selected {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.persona-popover-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.persona-popover-avatar-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.persona-popover-avatar-fallback {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: #9CA3AF;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
-}
-.persona-popover-item.selected .persona-popover-avatar-fallback {
-  background: rgba(255,255,255,0.15);
-}
-
-/* ── Popover item with description ─────────────────────────────────────── */
-.persona-popover-item.has-description {
-  align-items: flex-start;
-  padding: 10px;
-}
-.persona-popover-item-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.persona-popover-item-desc {
-  font-size: 11px;
-  font-weight: 400;
-  color: #374151;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.persona-popover-item.selected .persona-popover-item-desc {
-  color: rgba(255,255,255,0.6);
-}
-
-/* ── Persona hover tooltip ─────────────────────────────────────────────── */
-.persona-tooltip {
-  display: none;
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 220px;
-  max-width: 320px;
-  padding: 10px 14px;
-  background: rgba(0, 0, 0, 0.92);
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-  z-index: 60;
-  pointer-events: none;
-  text-align: left;
-}
-.persona-tooltip::before {
-  content: '';
-  position: absolute;
-  top: -5px;
-  left: 50%;
-  transform: translateX(-50%);
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 5px solid rgba(0, 0, 0, 0.92);
-}
-.persona-chip:hover .persona-tooltip {
-  display: block;
-}
-.persona-chip.active:hover .persona-tooltip {
-  display: none;
-}
-.persona-tooltip-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #F5F5F5;
-  margin-bottom: 4px;
-  letter-spacing: 0.01em;
-}
-.persona-tooltip-desc {
-  font-size: 12px;
-  font-weight: 400;
-  color: #D1D1D6;
-  line-height: 1.5;
-}
-
+/* ── Header persona CSS moved to ChatHeader.vue ── */
+/* Keeping only .chat-header-btn which may be reused */
 /* ── Model chip ────────────────────────────────────────────────────────── */
 .model-chip {
   padding: 4px 10px 4px 4px;
@@ -6257,6 +4945,236 @@ onUnmounted(() => {
 .newchat-name-row { cursor: pointer; }
 .newchat-name-row svg { color: #6B7280; }
 .newchat-name-row.selected svg { color: #FFFFFF !important; }
+
+/* ── New chat source item persona config button ──────────────────────── */
+.newchat-persona-cfg-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid #2A2A2A;
+  background: #1A1A1A;
+  color: #6B7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  padding: 0;
+}
+.newchat-persona-cfg-btn:hover {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border-color: #374151;
+  color: #FFFFFF;
+}
+.newchat-source-item.selected .newchat-persona-cfg-btn {
+  border-color: #4B5563;
+}
+.newchat-persona-cfg-avatars {
+  display: flex;
+  align-items: center;
+}
+.newchat-persona-cfg-avatar-img {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid #1A1A1A;
+}
+.newchat-persona-cfg-avatar-img + .newchat-persona-cfg-avatar-img,
+.newchat-persona-cfg-avatar-img + .newchat-persona-cfg-avatar-fb,
+.newchat-persona-cfg-avatar-fb + .newchat-persona-cfg-avatar-img,
+.newchat-persona-cfg-avatar-fb + .newchat-persona-cfg-avatar-fb {
+  margin-left: -6px;
+}
+.newchat-persona-cfg-avatar-fb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #2A2A2A;
+  border: 1.5px solid #1A1A1A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  font-weight: 600;
+  color: #9CA3AF;
+}
+.newchat-persona-cfg-overflow {
+  background: #333;
+  font-size: 7px;
+}
+
+/* ── New Chat Persona Picker Dialog (dark, CCM-style) ────────────────── */
+.ncp-backdrop {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  animation: ccm-fade 0.15s ease-out;
+}
+.ncp-dialog {
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 20px;
+  width: 480px;
+  max-width: 95vw;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 80px rgba(0,0,0,0.5);
+  animation: ccm-enter 0.2s ease-out;
+  overflow: hidden;
+}
+
+/* Header */
+.ncp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 24px; border-bottom: 1px solid #1F1F1F; flex-shrink: 0;
+}
+.ncp-header-left { display: flex; align-items: center; gap: 12px; }
+.ncp-header-icon {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.ncp-title {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-section);
+  font-weight: 700; color: #FFFFFF; margin: 0;
+}
+.ncp-badge {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 6px;
+  background: #1F1F1F; color: #9CA3AF;
+  font-family: 'Inter', sans-serif;
+}
+.ncp-close {
+  width: 34px; height: 34px; border-radius: 8px; border: none;
+  background: transparent; color: #6B7280; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.12s;
+}
+.ncp-close:hover { background: #1F1F1F; color: #FFFFFF; }
+
+/* Search */
+.ncp-search-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 24px; border-bottom: 1px solid #1F1F1F;
+  color: #6B7280; flex-shrink: 0;
+}
+.ncp-search-input {
+  flex: 1; border: none; outline: none;
+  font-family: 'Inter', sans-serif; font-size: 13px;
+  background: transparent; color: #FFFFFF;
+}
+.ncp-search-input::placeholder { color: #4B5563; }
+.ncp-search-clear {
+  width: 22px; height: 22px; border-radius: 6px; border: none;
+  background: transparent; color: #6B7280; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.12s;
+}
+.ncp-search-clear:hover { background: #1F1F1F; color: #FFFFFF; }
+
+/* List */
+.ncp-list {
+  flex: 1; overflow-y: auto; padding: 8px 12px;
+  display: flex; flex-direction: column; gap: 4px;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+}
+.ncp-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px;
+  cursor: pointer; transition: all 0.12s;
+  border: 1px solid transparent;
+}
+.ncp-item:hover {
+  background: #1A1A1A; border-color: #2A2A2A;
+}
+.ncp-item.selected {
+  background: linear-gradient(135deg, #1A1A1A 0%, #1F2937 100%);
+  border-color: #374151;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.2);
+}
+.ncp-item.selected:hover {
+  background: linear-gradient(135deg, #1F1F1F 0%, #2D3748 100%);
+}
+
+/* Check */
+.ncp-check {
+  width: 18px; height: 18px; border-radius: 5px;
+  border: 1.5px solid #4B5563; background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; flex-shrink: 0; transition: all 0.12s;
+}
+.ncp-item.selected .ncp-check {
+  background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.4);
+}
+.ncp-check input {
+  position: absolute; opacity: 0; width: 100%; height: 100%;
+  cursor: pointer; margin: 0;
+}
+.ncp-check-icon { width: 12px; height: 12px; color: #fff; }
+
+/* Avatar */
+.ncp-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  background: #1F1F1F; flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.ncp-item.selected .ncp-avatar {
+  box-shadow: 0 1px 4px rgba(255,255,255,0.1);
+}
+.ncp-avatar-img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+.ncp-avatar-fallback {
+  font-family: 'Inter', sans-serif; font-size: 14px;
+  font-weight: 600; color: #6B7280; user-select: none;
+}
+
+/* Info */
+.ncp-info {
+  display: flex; flex-direction: column; gap: 1px;
+  min-width: 0; flex: 1;
+}
+.ncp-name {
+  font-family: 'Inter', sans-serif; font-size: 13px;
+  font-weight: 600; color: #E5E5EA;
+}
+.ncp-item.selected .ncp-name { color: #FFFFFF; }
+.ncp-desc {
+  font-family: 'Inter', sans-serif; font-size: 11px;
+  color: #6B7280; line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ncp-item.selected .ncp-desc { color: rgba(255,255,255,0.55); }
+.ncp-empty {
+  padding: 32px 14px; text-align: center;
+  font-family: 'Inter', sans-serif; font-size: 13px; color: #4B5563;
+}
+
+/* Footer */
+.ncp-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; border-top: 1px solid #1F1F1F;
+  background: #0A0A0A; flex-shrink: 0;
+}
+.ncp-footer-hint {
+  font-family: 'Inter', sans-serif; font-size: 12px; color: #4B5563;
+}
+.ncp-done-btn {
+  padding: 8px 24px; border-radius: 10px;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  color: #FFFFFF; border: 1px solid #374151; cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.ncp-done-btn:hover {
+  background: linear-gradient(135deg, #2D2D2D 0%, #374151 40%, #6B7280 100%);
+  border-color: #4B5563;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .chat-sidebar-new-btn,

@@ -76,7 +76,7 @@ spark_ai/
 ## Commands
 
 ```bash
-# Development (Vite + Electron with hot reload)
+# Development (Vite dev server + Electron, no hot reload for Electron main process)
 npm run dev
 
 # Build Vue frontend
@@ -85,6 +85,8 @@ npm run build
 # Run Electron standalone (after build)
 npm run electron
 ```
+
+> **No Electron hot reload:** The dev script does **not** auto-restart the Electron main process when files in `electron/` change. Vue renderer changes are still picked up by Vite HMR. Changes to `electron/main.js`, `electron/preload.js`, or any file under `electron/agent/` require a manual app restart.
 
 ## Architecture & Conventions
 
@@ -162,12 +164,14 @@ background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 
 This gradient appears on:
 - **AppButton** (`variant="primary"`) — all primary action buttons
+- **Back buttons** — all "back" / "return" navigation buttons
 - **ComboBox chips** — selected value chips (single and multi-select)
 - **ComboBox dropdown hover/selected** — option hover and selected states
 - **Sidebar active nav item** — currently selected navigation link
 - **ConfirmModal** primary action button
 - **Empty state icons** — large icon containers on empty pages
 - **Section icons** — persona type section headers
+- **Dark dialogs/dropdowns** — floating panels (header icons, hover states, search focus)
 
 Text on gradient surfaces is always `#FFFFFF`. Secondary text on gradients uses `rgba(255,255,255,0.6)`.
 
@@ -253,6 +257,121 @@ Text on gradient surfaces is always `#FFFFFF`. Secondary text on gradients uses 
 - Title: `--fs-section`, weight 700
 - Description: `--fs-body`, color `#9CA3AF`, line-height 1.6
 
+#### Back Buttons
+
+All "back" / "return" navigation buttons use the **black gradient** style to stay visually consistent with other primary interactive elements:
+
+```css
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px 6px 10px;
+  border: none;
+  border-radius: var(--radius-sm, 8px);
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary, 0.875rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+.back-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
+}
+```
+
+- Include a chevron-left SVG icon (14–16px) before the label text
+- Label should be short and descriptive (e.g., "Single View", "Skills")
+- Examples: grid-to-single-view button (`ChatGridLayout`), skill-detail-to-catalog button (`SkillsView`)
+
+#### Refresh / Action Buttons
+
+All toolbar action buttons (refresh, new file, new folder) use the **black gradient** style, matching the app's signature look:
+
+```css
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm, 8px);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+.action-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
+}
+```
+
+- Icon-only variants use `padding: 6px` (square) instead of `6px 14px`
+- Text+icon variants include a 14-16px SVG icon before the label
+- Examples: NotesView tree toolbar (File, Folder, Refresh), SkillsView catalog refresh, SkillsView sidebar refresh
+
+#### Dark Dialogs / Dropdowns
+
+Floating panels that appear over dark or mixed content (swap-chat dropdown, settings popovers) use a **dark theme** consistent with the app's dark gradient identity:
+
+```css
+.dark-dialog {
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 16px;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.2);
+  animation: dialogEnter 0.15s ease-out;
+}
+/* Header */
+.dark-dialog-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #1F1F1F;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+/* Header icon */
+.dark-dialog-header-icon {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+/* Search bar */
+.dark-dialog-search {
+  background: #1A1A1A;
+  border: 1px solid #2A2A2A;
+  border-radius: 10px;
+  color: #FFFFFF;
+}
+.dark-dialog-search:focus-within { border-color: #4B5563; }
+.dark-dialog-search::placeholder { color: #6B7280; }
+/* List items */
+.dark-dialog-item {
+  color: #9CA3AF;
+  border-radius: 10px;
+}
+.dark-dialog-item:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #374151 100%);
+  color: #FFFFFF;
+}
+/* Scrollbar */
+scrollbar-width: thin;
+::-webkit-scrollbar-thumb { background: #374151; }
+```
+
+- Use `<Teleport to="body">` with `position: fixed` + `z-index: 9999` when the dialog must escape `overflow: hidden` containers (e.g., grid cells)
+- Move CSS for teleported elements to an **unscoped** `<style>` block (scoped styles don't apply outside the component DOM)
+- Entry animation: `scale(0.96) translateY(4px) → scale(1) translateY(0)` with opacity fade, 150ms ease-out
+- Examples: swap-chat dropdown (`ChatGridPanel`), Chat Settings tooltip (`ChatHeader`)
+
 ### Animations & Transitions
 
 - **Default transition:** `all 0.15s ease` (buttons, nav items, inputs)
@@ -314,6 +433,7 @@ All views follow a consistent structure:
 - Never store sensitive keys in the renderer; they live in `.env` or `config.json` on disk
 - WSL2 compatibility: fontconfig for emoji, path handling in preload
 - Chat persistence is debounced (300ms) — don't call `persistChat` in tight loops
+- **Restart notification:** When any change touches files that require an app restart to take effect (anything under `electron/` — `main.js`, `preload.js`, `agent/`, etc.), end your message to the user with a **red-colored** notice: <span style="color:#EF4444;">**⟳ This change requires restarting the app to take effect.**</span>
 
 ## Core Principles
 

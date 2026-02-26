@@ -1,0 +1,795 @@
+<template>
+  <div class="cw-root">
+    <!-- Messages area -->
+    <div ref="messagesEl" class="cw-messages" @scroll="onScroll">
+      <!-- Loading state -->
+      <div v-if="chat?.messages === null" class="cw-placeholder">
+        <div class="cw-spinner"></div>
+        <span class="cw-placeholder-text">Loading messages</span>
+      </div>
+      <!-- Empty state -->
+      <div v-else-if="!chat?.messages?.length" class="cw-placeholder">
+        <div class="cw-empty-icon">
+          <svg style="width:36px;height:36px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="cw-empty-title">Start a conversation</p>
+          <p class="cw-empty-subtitle">Type a message below to begin</p>
+        </div>
+      </div>
+
+      <!-- Message list -->
+      <template v-else>
+        <!-- Load earlier messages -->
+        <div v-if="hasHiddenMessages" class="flex justify-center pb-2">
+          <button
+            @click="loadMoreMessages"
+            class="px-4 py-1.5 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer"
+            style="background:#F5F5F5; color:#1A1A1A; border:1px solid #E5E5EA;"
+            @mouseenter="e => e.currentTarget.style.background='rgba(0,122,255,0.1)'"
+            @mouseleave="e => e.currentTarget.style.background='#F5F5F5'"
+          >
+            Show earlier messages ({{ chat.messages.length - visibleMessages.length }} hidden)
+          </button>
+        </div>
+        <div
+          v-for="msg in visibleMessages"
+          :key="msg.id"
+          :class="[
+            'flex gap-3 cw-animate-fade-in',
+            msg.role === 'user' ? 'justify-end' : 'justify-start'
+          ]"
+        >
+          <!-- Assistant avatar + name chip -->
+          <div v-if="msg.role === 'assistant'" class="cw-msg-avatar-col">
+            <div class="cw-msg-avatar-wrap">
+              <img v-if="getSystemAvatar(msg)" :src="getSystemAvatar(msg)" alt="" class="cw-msg-avatar-img" />
+              <div v-else class="cw-msg-avatar-fallback system">
+                <svg style="width:22px;height:22px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1M9 16h0M15 16h0"/>
+                </svg>
+              </div>
+            </div>
+            <span class="cw-msg-name-chip">{{ getMsgAssistantName(msg) }}</span>
+          </div>
+
+          <!-- Message bubble -->
+          <div
+            :class="[
+              'relative group/bubble max-w-[75%]',
+              msg.role === 'assistant' ? 'min-w-[50%]' : ''
+            ]"
+          >
+            <!-- Hover action buttons -->
+            <div
+              v-if="!msg.streaming"
+              class="absolute -top-2 right-1 z-10 flex items-center gap-1 opacity-0 group-hover/bubble:opacity-100 transition-all duration-150"
+            >
+              <!-- Quote button -->
+              <button
+                v-if="showQuote && msg.content"
+                @click="quoteMessage(msg)"
+                class="cw-msg-action-btn"
+                title="Quote message"
+                aria-label="Quote message"
+              >
+                <svg class="w-3.5 h-3.5" style="transform:rotate(180deg);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21z"/>
+                  <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3z"/>
+                </svg>
+              </button>
+              <!-- Copy button -->
+              <button
+                v-if="msg.content"
+                @click="copyMessage(msg)"
+                class="cw-msg-action-btn"
+                :title="copiedId === msg.id ? 'Copied!' : 'Copy message'"
+                aria-label="Copy message"
+              >
+                <svg v-if="copiedId === msg.id" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <svg v-else class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+              <!-- Delete button -->
+              <button
+                v-if="showDelete"
+                @click="$emit('delete-message', msg)"
+                class="cw-msg-action-btn cw-msg-action-btn-delete"
+                title="Delete message"
+                aria-label="Delete message"
+              >
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  <line x1="10" y1="11" x2="10" y2="17"/>
+                  <line x1="14" y1="11" x2="14" y2="17"/>
+                </svg>
+              </button>
+            </div>
+
+            <div
+              class="cw-msg-bubble"
+              :class="msg.role === 'user' ? 'cw-msg-bubble-user' : 'cw-msg-bubble-assistant'"
+            >
+              <div v-if="msg.streaming && (!msg.content && (!msg.segments || msg.segments.length === 0))" class="cw-thinking">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+              </div>
+              <div :class="msg.role === 'user' ? 'user-content' : 'prose-sparkai'">
+                <MessageRenderer :message="msg" />
+              </div>
+            </div>
+            <div
+              class="cw-msg-timestamp"
+              :style="msg.role === 'user' ? 'text-align:right;' : 'text-align:left;'"
+            >
+              {{ formatTime(msg.timestamp) }}
+            </div>
+          </div>
+
+          <!-- User avatar + name chip -->
+          <div v-if="msg.role === 'user'" class="cw-msg-avatar-col">
+            <div class="cw-msg-avatar-wrap">
+              <img v-if="userAvatarUri" :src="userAvatarUri" alt="" class="cw-msg-avatar-img" />
+              <div v-else class="cw-msg-avatar-fallback user">
+                <svg style="width:22px;height:22px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+              </div>
+            </div>
+            <span class="cw-msg-name-chip">{{ userPersonaName }}</span>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Input area: use default slot for custom input, or built-in basic input -->
+    <slot name="input" :isRunning="isRunning" :inputText="defaultInputText" :sendMessage="defaultSend" :stopChat="defaultStop">
+      <div class="cw-input-area">
+        <!-- Quote preview -->
+        <div
+          v-if="quotedMessage"
+          class="flex items-start gap-2 px-3 py-2"
+          style="background:rgba(0,122,255,0.06); border-bottom:1px solid #E5E5EA;"
+        >
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5 mb-0.5">
+              <svg class="w-3.5 h-3.5 shrink-0" style="color:#1A1A1A;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21z"/>
+                <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3z"/>
+              </svg>
+              <span style="font-size:var(--fs-small); font-weight:600; color:#0056CC;">
+                {{ getQuotedSenderName(quotedMessage) }}
+              </span>
+            </div>
+            <p class="truncate" style="font-size:var(--fs-secondary); color:#6B7280; margin:0;">
+              {{ quotedMessage.content?.slice(0, 150) }}{{ (quotedMessage.content?.length ?? 0) > 150 ? '...' : '' }}
+            </p>
+          </div>
+          <button
+            @click="clearQuote"
+            class="w-5 h-5 rounded flex items-center justify-center shrink-0 cursor-pointer"
+            style="color:#9CA3AF; background:none; border:none;"
+            @mouseenter="e => e.currentTarget.style.color='#1A1A1A'"
+            @mouseleave="e => e.currentTarget.style.color='#9CA3AF'"
+            aria-label="Remove quote"
+            title="Remove quote"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <!-- Attachment preview strip -->
+        <div v-if="attachments.length > 0" class="cw-attachments">
+          <div v-for="att in attachments" :key="att.id" class="cw-att-chip">
+            <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <span class="cw-att-name">{{ att.name }}</span>
+            <button class="cw-att-remove" @click="removeAttachment(att.id)" title="Remove">
+              <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="cw-input-box" :class="{ focused: inputFocused }">
+          <!-- Attach button -->
+          <button
+            @click="pickFiles"
+            :disabled="isRunning"
+            class="cw-btn attach"
+            aria-label="Attach files"
+            title="Attach files"
+          >
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+          </button>
+          <textarea
+            ref="inputEl"
+            v-model="defaultInputText"
+            @keydown="onKeydown"
+            @focus="inputFocused = true"
+            @blur="inputFocused = false"
+            placeholder="Type your message here..."
+            rows="2"
+            class="cw-textarea"
+          />
+          <!-- Stop -->
+          <button v-if="isRunning" @click.stop="defaultStop" class="cw-btn stop" aria-label="Stop" title="Stop agent">
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          </button>
+          <!-- Send -->
+          <button
+            @click.stop="defaultSend"
+            :disabled="!defaultInputText.trim() && attachments.length === 0"
+            class="cw-btn send"
+            :class="{ active: defaultInputText.trim() || attachments.length > 0 }"
+            aria-label="Send"
+            :title="isRunning ? 'Queue message' : 'Send message'"
+          >
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </slot>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { useChatsStore } from '../../stores/chats'
+import { usePersonasStore } from '../../stores/personas'
+import { getAvatarDataUri } from '../personas/personaAvatars'
+import MessageRenderer from './MessageRenderer.vue'
+
+const props = defineProps({
+  chatId: { type: String, required: true },
+  showQuote: { type: Boolean, default: false },
+  showDelete: { type: Boolean, default: false },
+})
+
+const emit = defineEmits(['send', 'stop', 'quote', 'delete-message', 'send-with-attachments'])
+
+const chatsStore = useChatsStore()
+const personasStore = usePersonasStore()
+
+const messagesEl = ref(null)
+const inputEl = ref(null)
+const inputFocused = ref(false)
+const defaultInputText = ref('')
+const copiedId = ref(null)
+const attachments = ref([])
+const userScrolled = ref(false)
+let programmaticScrollCount = 0
+const visibleLimit = ref(25)
+const quotedMessage = ref(null)
+
+const chat = computed(() => chatsStore.chats.find(c => c.id === props.chatId) || null)
+const isRunning = computed(() => chat.value?.isRunning ?? false)
+
+// ── Persona helpers ──
+function getAvatarUri(persona) {
+  if (!persona?.avatar) return null
+  return getAvatarDataUri(persona.avatar)
+}
+
+function getSystemAvatar(msg) {
+  const pid = msg.personaId || chat.value?.systemPersonaId
+  const persona = pid ? personasStore.getPersonaById(pid) : personasStore.defaultSystemPersona
+  return getAvatarUri(persona)
+}
+
+function getMsgAssistantName(msg) {
+  const pid = msg.personaId || systemPersonaIds.value[0]
+  const persona = pid ? personasStore.getPersonaById(pid) : null
+  return persona?.name || msg.personaName || 'Assistant'
+}
+
+const userPersona = computed(() => {
+  const id = chat.value?.userPersonaId
+  return id ? personasStore.getPersonaById(id) : personasStore.defaultUserPersona
+})
+const userPersonaName = computed(() => userPersona.value?.name || 'User')
+const userAvatarUri = computed(() => getAvatarUri(userPersona.value))
+
+const systemPersonaIds = computed(() => {
+  const c = chat.value
+  if (!c) return []
+  if (c.groupPersonaIds?.length) return c.groupPersonaIds
+  const id = c.systemPersonaId || personasStore.defaultSystemPersona?.id
+  return id ? [id] : []
+})
+
+// ── Visible messages with limit ──
+const visibleMessages = computed(() => {
+  const all = chat.value?.messages ?? []
+  if (all.length <= visibleLimit.value) return all
+  return all.slice(all.length - visibleLimit.value)
+})
+const hasHiddenMessages = computed(() => {
+  const all = chat.value?.messages ?? []
+  return all.length > visibleLimit.value
+})
+function loadMoreMessages() {
+  visibleLimit.value += 25
+}
+
+// ── Time formatter ──
+function formatTime(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  const Y = d.getFullYear()
+  const M = String(d.getMonth() + 1).padStart(2, '0')
+  const D = String(d.getDate()).padStart(2, '0')
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${Y}-${M}-${D} ${h}:${m}`
+}
+
+// ── Copy ──
+async function copyMessage(msg) {
+  try {
+    let text = msg.content || ''
+    if (msg.segments?.length) {
+      text = msg.segments.filter(s => s.type === 'text').map(s => s.content).join('\n\n').trim()
+    }
+    await navigator.clipboard.writeText(text)
+    copiedId.value = msg.id
+    setTimeout(() => { copiedId.value = null }, 2000)
+  } catch (e) {
+    console.error('Copy failed', e)
+  }
+}
+
+// ── Quote ──
+function quoteMessage(msg) {
+  const content = msg.content || ''
+  quotedMessage.value = { role: msg.role, content, personaId: msg.personaId || null }
+  emit('quote', msg)
+  nextTick(() => inputEl.value?.focus())
+}
+
+function getQuotedSenderName(q) {
+  if (!q) return 'Assistant'
+  if (q.role === 'user') return userPersonaName.value
+  if (q.personaId) {
+    const p = personasStore.getPersonaById(q.personaId)
+    if (p) return p.name
+  }
+  // Fall back to the chat's system persona
+  const sysId = chat.value?.systemPersonaId
+  if (sysId) {
+    const p = personasStore.getPersonaById(sysId)
+    if (p) return p.name
+  }
+  return personasStore.defaultSystemPersona?.name || 'Assistant'
+}
+
+function clearQuote() {
+  quotedMessage.value = null
+}
+
+// ── Scroll management ──
+function scrollToBottom(force = false) {
+  if (!force && userScrolled.value) return
+  programmaticScrollCount++
+  nextTick(() => {
+    nextTick(() => {
+      if (messagesEl.value) {
+        messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+      }
+      requestAnimationFrame(() => {
+        programmaticScrollCount = Math.max(0, programmaticScrollCount - 1)
+      })
+    })
+  })
+}
+
+function onScroll() {
+  if (programmaticScrollCount > 0) return
+  const el = messagesEl.value
+  if (!el) return
+  const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+  userScrolled.value = distFromBottom > 60
+}
+
+// Watch message count changes for auto-scroll
+watch(() => chat.value?.messages?.length, () => { scrollToBottom() }, { flush: 'post' })
+// Watch last message content length for streaming auto-scroll
+watch(() => {
+  const msgs = chat.value?.messages
+  if (!msgs?.length) return 0
+  return msgs[msgs.length - 1]?.content?.length ?? 0
+}, () => { scrollToBottom() }, { flush: 'post' })
+
+// When messages finish lazy-loading (null → array), scroll to bottom
+watch(() => chat.value?.messages, (msgs, oldMsgs) => {
+  if (oldMsgs === null && Array.isArray(msgs)) {
+    scrollToBottom(true)
+  }
+})
+
+// Reset scroll state when chatId changes
+watch(() => props.chatId, () => {
+  userScrolled.value = false
+  visibleLimit.value = 25
+  scrollToBottom(true)
+})
+
+// ── Lifecycle ──
+onMounted(async () => {
+  await chatsStore.ensureMessages(props.chatId)
+  scrollToBottom(true)
+})
+
+// ── File attachment ──
+async function pickFiles() {
+  if (!window.electronAPI?.pickFiles) return
+  try {
+    const results = await window.electronAPI.pickFiles()
+    if (results && results.length > 0) {
+      attachments.value.push(...results)
+    }
+  } catch (err) {
+    console.error('pickFiles error:', err.message)
+  }
+}
+
+function removeAttachment(id) {
+  attachments.value = attachments.value.filter(a => a.id !== id)
+}
+
+// ── Default input handlers (used when no custom input slot is provided) ──
+function onKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    defaultSend()
+  }
+}
+
+function defaultSend() {
+  const rawText = defaultInputText.value.trim()
+  const hasAttachments = attachments.value.length > 0
+  if (!rawText && !hasAttachments) return
+
+  // Prepend quoted message if present
+  let text = rawText
+  if (quotedMessage.value) {
+    const quotedName = getQuotedSenderName(quotedMessage.value)
+    text = `> **${quotedName}:** ${quotedMessage.value.content.slice(0, 500)}${quotedMessage.value.content.length > 500 ? '...' : ''}\n\n${rawText}`
+    quotedMessage.value = null
+  }
+
+  const pendingAttachments = [...attachments.value]
+  defaultInputText.value = ''
+  attachments.value = []
+  inputFocused.value = false
+  userScrolled.value = false
+  if (hasAttachments) {
+    emit('send-with-attachments', text, pendingAttachments)
+  } else {
+    emit('send', text)
+  }
+}
+
+function defaultStop() {
+  emit('stop')
+}
+
+// Expose scrollToBottom so parents can trigger it
+defineExpose({ scrollToBottom })
+</script>
+
+<style scoped>
+.cw-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ── Messages area ── */
+.cw-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scrollbar-width: thin;
+  background: #FFFFFF;
+  min-height: 0;
+}
+
+/* Scrollbar — dark / wide */
+.cw-messages::-webkit-scrollbar { width: 10px; }
+.cw-messages::-webkit-scrollbar-track { background: #F2F2F7; border-radius: 5px; }
+.cw-messages::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #1A1A1A 0%, #374151 100%); border-radius: 5px; border: 2px solid #F2F2F7; }
+.cw-messages::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #0F0F0F 0%, #1A1A1A 100%); }
+
+/* ── Placeholder / empty / loading ── */
+.cw-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  height: 100%;
+  text-align: center;
+}
+.cw-placeholder-text {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  color: #1A1A1A;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.cw-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #E5E5EA;
+  border-top-color: #1A1A1A;
+  border-radius: 50%;
+  animation: cw-spin 0.7s linear infinite;
+}
+@keyframes cw-spin { to { transform: rotate(360deg); } }
+
+.cw-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+.cw-empty-title {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-section);
+  font-weight: 700;
+  color: #1A1A1A;
+  margin: 0;
+}
+.cw-empty-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  color: #9CA3AF;
+  margin: 4px 0 0;
+}
+
+/* ── Message avatars ── */
+.cw-msg-avatar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.cw-msg-avatar-wrap { flex-shrink: 0; }
+.cw-msg-avatar-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.cw-msg-avatar-fallback {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.cw-msg-avatar-fallback.system {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+.cw-msg-avatar-fallback.user {
+  background: #007AFF;
+}
+.cw-msg-name-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  background: #1A1A1A;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* ── Hover action buttons ── */
+.cw-msg-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: #1A1A1A;
+  color: #fff;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  transition: background 0.15s;
+}
+.cw-msg-action-btn:hover { background: #374151; }
+.cw-msg-action-btn-delete:hover { background: #DC2626; }
+
+/* ── Message bubbles ── */
+.cw-msg-bubble {
+  padding: 14px 18px;
+  line-height: 1.65;
+  border-radius: 18px;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+}
+.cw-msg-bubble :deep(> div:last-child p:last-child),
+.cw-msg-bubble :deep(> div:last-child ul:last-child),
+.cw-msg-bubble :deep(> div:last-child ol:last-child) {
+  margin-bottom: 0;
+}
+.cw-msg-bubble-user {
+  background: linear-gradient(135deg, #4338CA 0%, #6366F1 50%, #818CF8 100%);
+  color: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 4px 16px rgba(99,102,241,0.25), 0 1px 4px rgba(67,56,202,0.15);
+}
+.cw-msg-bubble-user :deep(*) { color: #FFFFFF !important; }
+.cw-msg-bubble-assistant {
+  background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
+  border: none;
+  color: #1A1A1A;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.03);
+  border-radius: 18px;
+}
+
+/* ── Timestamp ── */
+.cw-msg-timestamp {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  color: #9CA3AF;
+  margin-top: 3px;
+}
+
+/* ── Thinking dots ── */
+.cw-thinking { display: flex; gap: 3px; padding: 4px 0; }
+.cw-thinking .dot { width: 5px; height: 5px; border-radius: 50%; background: #9CA3AF; animation: cw-bounce 1s ease-in-out infinite; }
+.cw-thinking .dot:nth-child(2) { animation-delay: 0.15s; }
+.cw-thinking .dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes cw-bounce { 0%,80%,100%{transform:translateY(0);} 40%{transform:translateY(-4px);} }
+
+/* ── Fade-in animation ── */
+@keyframes cw-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.cw-animate-fade-in { animation: cw-fade-in 0.2s ease-out; }
+
+/* ── Attachment preview strip ── */
+.cw-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px 0;
+  background: #FFFFFF;
+  border-top: 1px solid #E5E5EA;
+}
+.cw-att-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: #F5F5F5;
+  border: 1px solid #E5E5EA;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: #1A1A1A;
+  max-width: 200px;
+}
+.cw-att-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.cw-att-remove {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: #E5E5EA;
+  color: #6B7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s;
+}
+.cw-att-remove:hover {
+  background: #EF4444;
+  color: #FFFFFF;
+}
+
+/* ── Input area (default slot fallback) ── */
+.cw-input-area {
+  padding: 10px 16px 12px;
+  flex-shrink: 0;
+  background: #FFFFFF;
+  border-top: 1px solid #E5E5EA;
+}
+.cw-input-box {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  border-radius: 14px;
+  padding: 10px 14px;
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.cw-input-box.focused {
+  border-color: #1A1A1A;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
+}
+.cw-textarea {
+  flex: 1;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body, 0.9375rem);
+  color: var(--text-primary, #1A1A1A);
+  line-height: 1.5;
+  min-height: 44px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.cw-textarea::placeholder { color: var(--text-muted, #9CA3AF); }
+
+.cw-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+}
+.cw-btn.attach { background: #F5F5F5; color: #9CA3AF; }
+.cw-btn.attach:hover { background: #E5E5EA; color: #1A1A1A; }
+.cw-btn.attach:disabled { opacity: 0.4; cursor: not-allowed; }
+.cw-btn.stop { background: rgba(255,59,48,0.08); color: #FF3B30; }
+.cw-btn.stop:hover { background: rgba(255,59,48,0.14); }
+.cw-btn.send { background: #E5E5EA; color: #9CA3AF; cursor: not-allowed; }
+.cw-btn.send.active {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+.cw-btn.send.active:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
+.cw-btn:disabled { cursor: not-allowed; }
+</style>

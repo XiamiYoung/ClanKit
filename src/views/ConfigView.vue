@@ -41,10 +41,37 @@
                 Data Path
                 <span class="form-label-hint">SPARKAI_DATA_PATH</span>
               </label>
-              <input id="dataPath" v-model="form.dataPath" type="text" :placeholder="defaultDataPath" class="field font-mono" />
+              <div class="input-with-trailing-btn">
+                <input id="dataPath" v-model="form.dataPath" type="text" :placeholder="defaultDataPath" class="field font-mono" />
+                <button class="open-folder-btn" @click="openInExplorer(form.dataPath || defaultDataPath)" title="Open in file explorer">
+                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  </svg>
+                </button>
+              </div>
               <p class="hint">
                 Directory where SparkAI stores all data (config, chats, personas, MCP servers, tools, souls).
+                Stored in .env — requires restart to take effect.
                 Default: <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultDataPath }}</code>
+              </p>
+            </div>
+
+            <div class="form-group">
+              <label for="artyfactPath" class="form-label">
+                Artifact Path
+                <span class="form-label-hint">SPARKAI_ARTYFACT_PATH</span>
+              </label>
+              <div class="input-with-trailing-btn">
+                <input id="artyfactPath" v-model="form.artyfactPath" type="text" :placeholder="defaultArtyfactPath" class="field font-mono" />
+                <button class="open-folder-btn" @click="openInExplorer(form.artyfactPath || defaultArtyfactPath)" title="Open in file explorer">
+                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  </svg>
+                </button>
+              </div>
+              <p class="hint">
+                Directory where the AI creates artifacts (markdown, temp files, docs, exports) during chats.
+                Default: <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultArtyfactPath }}</code>
               </p>
             </div>
           </div>
@@ -95,7 +122,7 @@
               <div class="input-with-action">
                 <input
                   id="apiKey"
-                  v-model="form.apiKey"
+                  v-model="form.anthropic.apiKey"
                   :type="showKey ? 'text' : 'password'"
                   placeholder="sk-ant-…"
                   class="field font-mono"
@@ -119,7 +146,7 @@
                 Base URL
                 <span class="form-label-hint">ANTHROPIC_BASE_URL</span>
               </label>
-              <input id="baseURL" v-model="form.baseURL" type="url" placeholder="https://api.anthropic.com" class="field" />
+              <input id="baseURL" v-model="form.anthropic.baseURL" type="url" placeholder="https://api.anthropic.com" class="field" />
               <p class="hint">Change for custom backends: LiteLLM, Ollama, corporate proxy, etc.</p>
             </div>
 
@@ -135,15 +162,15 @@
             <div class="models-grid">
               <div class="form-group compact">
                 <label for="sonnetModel" class="form-label">Sonnet Model</label>
-                <input id="sonnetModel" v-model="form.sonnetModel" type="text" placeholder="anthropic/claude-sonnet-latest" class="field font-mono" />
+                <input id="sonnetModel" v-model="form.anthropic.sonnetModel" type="text" placeholder="anthropic/claude-sonnet-latest" class="field font-mono" />
               </div>
               <div class="form-group compact">
                 <label for="opusModel" class="form-label">Opus Model</label>
-                <input id="opusModel" v-model="form.opusModel" type="text" placeholder="anthropic/claude-opus-latest" class="field font-mono" />
+                <input id="opusModel" v-model="form.anthropic.opusModel" type="text" placeholder="anthropic/claude-opus-latest" class="field font-mono" />
               </div>
               <div class="form-group compact">
                 <label for="haikuModel" class="form-label">Haiku Model</label>
-                <input id="haikuModel" v-model="form.haikuModel" type="text" placeholder="anthropic/claude-3-5-haiku-20241022" class="field font-mono" />
+                <input id="haikuModel" v-model="form.anthropic.haikuModel" type="text" placeholder="anthropic/claude-3-5-haiku-20241022" class="field font-mono" />
               </div>
             </div>
 
@@ -152,7 +179,7 @@
             <div class="form-group">
               <label class="form-label">Default Model</label>
               <ComboBox
-                :model-value="form.activeModel"
+                :model-value="form.anthropic.activeModel"
                 :options="anthropicComboOptions"
                 :chip-label-override="anthropicDefaultPlaceholder"
                 placeholder="Search models..."
@@ -195,7 +222,7 @@
                 API Key <span class="form-label-hint">OPENROUTER_API_KEY</span>
               </label>
               <div class="input-with-action">
-                <input id="openrouterApiKey" v-model="form.openrouterApiKey" :type="showOpenRouterKey ? 'text' : 'password'" placeholder="sk-or-…" class="field font-mono" />
+                <input id="openrouterApiKey" v-model="form.openrouter.apiKey" :type="showOpenRouterKey ? 'text' : 'password'" placeholder="sk-or-…" class="field font-mono" />
                 <button @click="showOpenRouterKey = !showOpenRouterKey" class="field-action-btn" :aria-label="showOpenRouterKey ? 'Hide key' : 'Show key'">
                   <svg v-if="!showOpenRouterKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                   <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -206,7 +233,7 @@
 
             <div class="form-group">
               <label for="openrouterBaseURL" class="form-label">Base URL</label>
-              <input id="openrouterBaseURL" v-model="form.openrouterBaseURL" type="url" placeholder="https://openrouter.ai/api" class="field" />
+              <input id="openrouterBaseURL" v-model="form.openrouter.baseURL" type="url" placeholder="https://openrouter.ai/api" class="field" />
               <p class="hint">OpenRouter base URL (without /v1 — the SDK adds it). Change only for custom proxies.</p>
             </div>
 
@@ -217,7 +244,7 @@
                 <p class="form-section-title">Available Models</p>
                 <p class="hint" style="margin-top:2px;">{{ modelsStore.openrouterModels.length > 0 ? `${modelsStore.openrouterModels.length} models loaded` : 'Enter API key and fetch models' }}</p>
               </div>
-              <AppButton size="compact" @click="fetchOrModels" :disabled="orModelsFetching || !form.openrouterApiKey" :loading="orModelsFetching">
+              <AppButton size="compact" @click="fetchOrModels" :disabled="orModelsFetching || !form.openrouter.apiKey" :loading="orModelsFetching">
                 <svg v-if="!orModelsFetching" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
                 {{ orModelsFetching ? 'Fetching…' : 'Fetch Models' }}
               </AppButton>
@@ -262,7 +289,7 @@
             <div class="form-group">
               <label class="form-label">Default Model</label>
               <ComboBox
-                :model-value="form.openrouterModel"
+                :model-value="form.openrouter.defaultModel"
                 :options="openrouterComboOptions"
                 placeholder="Search models..."
                 @update:model-value="onOrDefaultChange"
@@ -278,7 +305,7 @@
                 API Key <span class="form-label-hint">x-api-key</span>
               </label>
               <div class="input-with-action">
-                <input id="openaiApiKey" v-model="form.openaiApiKey" :type="showOpenAIKey ? 'text' : 'password'" placeholder="your-openai-api-key" class="field font-mono" />
+                <input id="openaiApiKey" v-model="form.openai.apiKey" :type="showOpenAIKey ? 'text' : 'password'" placeholder="your-openai-api-key" class="field font-mono" />
                 <button @click="showOpenAIKey = !showOpenAIKey" class="field-action-btn" :aria-label="showOpenAIKey ? 'Hide key' : 'Show key'">
                   <svg v-if="!showOpenAIKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                   <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -289,7 +316,7 @@
 
             <div class="form-group">
               <label for="openaiBaseURL" class="form-label">Base URL</label>
-              <input id="openaiBaseURL" v-model="form.openaiBaseURL" type="url" placeholder="https://mlaas.virtuosgames.com" class="field" />
+              <input id="openaiBaseURL" v-model="form.openai.baseURL" type="url" placeholder="https://mlaas.virtuosgames.com" class="field" />
               <p class="hint">OpenAI base URL (without /proxy/openai/v1 — added automatically)</p>
             </div>
 
@@ -300,7 +327,7 @@
                 <p class="form-section-title">Available Models</p>
                 <p class="hint" style="margin-top:2px;">{{ modelsStore.openaiModels.length > 0 ? `${modelsStore.openaiModels.length} models loaded` : 'Enter API key and fetch models' }}</p>
               </div>
-              <AppButton size="compact" @click="fetchOpenAIModelsLocal" :disabled="openaiModelsFetching || !form.openaiApiKey" :loading="openaiModelsFetching">
+              <AppButton size="compact" @click="fetchOpenAIModelsLocal" :disabled="openaiModelsFetching || !form.openai.apiKey" :loading="openaiModelsFetching">
                 <svg v-if="!openaiModelsFetching" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
                 {{ openaiModelsFetching ? 'Fetching…' : 'Fetch Models' }}
               </AppButton>
@@ -345,7 +372,7 @@
             <div class="form-group">
               <label class="form-label">Default Model</label>
               <ComboBox
-                :model-value="form.openaiModel"
+                :model-value="form.openai.model"
                 :options="openaiComboOptions"
                 placeholder="Search models..."
                 @update:model-value="onOpenaiDefaultChange"
@@ -465,9 +492,14 @@ const configStore = useConfigStore()
 const modelsStore = useModelsStore()
 
 const isElectron = !!(typeof window !== 'undefined' && window.electronAPI)
+
+function openInExplorer(path) {
+  if (!path || !window.electronAPI?.showInFolder) return
+  window.electronAPI.showInFolder(path)
+}
 const showKey  = ref(false)
 const showOpenRouterKey = ref(false)
-const activeTopTab = ref('models')
+const activeTopTab = ref('general')
 const activeProviderTab = ref('anthropic')
 
 // Per-tab save state
@@ -508,6 +540,10 @@ const savedKnowledgeMsg = ref('')
 
 // General tab state
 const defaultDataPath = ref('')
+const defaultArtyfactPath = computed(() => {
+  const dp = form.dataPath || defaultDataPath.value
+  return dp ? `${dp}/artyfact` : ''
+})
 const savingGeneral = ref(false)
 const savedGeneralMsg = ref('')
 
@@ -590,19 +626,19 @@ const filteredOpenAIModels = computed(() => {
 // ── ComboBox options for default model selectors ────────────────────────────
 const anthropicComboOptions = computed(() => {
   const list = []
-  if (form.sonnetModel) list.push({ id: 'sonnet', name: 'Sonnet', detail: form.sonnetModel })
-  if (form.opusModel) list.push({ id: 'opus', name: 'Opus', detail: form.opusModel })
-  if (form.haikuModel) list.push({ id: 'haiku', name: 'Haiku', detail: form.haikuModel })
+  if (form.anthropic.sonnetModel) list.push({ id: 'sonnet', name: 'Sonnet', detail: form.anthropic.sonnetModel })
+  if (form.anthropic.opusModel) list.push({ id: 'opus', name: 'Opus', detail: form.anthropic.opusModel })
+  if (form.anthropic.haikuModel) list.push({ id: 'haiku', name: 'Haiku', detail: form.anthropic.haikuModel })
   return list
 })
 
 const anthropicDefaultPlaceholder = computed(() => {
-  const m = anthropicComboOptions.value.find(m => m.id === form.activeModel)
+  const m = anthropicComboOptions.value.find(m => m.id === form.anthropic.activeModel)
   return m ? `${m.name} (${m.detail})` : 'Select a model...'
 })
 
 function onAnthropicDefaultChange(val) {
-  form.activeModel = val
+  form.anthropic.activeModel = val
 }
 
 const openrouterComboOptions = computed(() =>
@@ -610,8 +646,7 @@ const openrouterComboOptions = computed(() =>
 )
 
 function onOrDefaultChange(val) {
-  form.openrouterModel = val
-  form.openrouterDefaultModel = val
+  form.openrouter.defaultModel = val
 }
 
 const openaiComboOptions = computed(() =>
@@ -619,46 +654,55 @@ const openaiComboOptions = computed(() =>
 )
 
 function onOpenaiDefaultChange(val) {
-  form.openaiModel = val
-  form.openaiDefaultModel = val
+  form.openai.model = val
+  form.openai.openaiDefaultModel = val
 }
 
 function modelIdPreview(which) {
-  if (which === 'opus')  return form.opusModel  || '—'
-  if (which === 'haiku') return form.haikuModel || '—'
-  return form.sonnetModel || '—'
+  if (which === 'opus')  return form.anthropic.opusModel  || '—'
+  if (which === 'haiku') return form.anthropic.haikuModel || '—'
+  return form.anthropic.sonnetModel || '—'
 }
 
 const form = reactive({
-  apiKey:      '',
-  baseURL:     '',
-  sonnetModel: '',
-  opusModel:   '',
-  haikuModel:  '',
-  activeModel: 'sonnet',
+  anthropic: {
+    apiKey:      '',
+    baseURL:     '',
+    sonnetModel: '',
+    opusModel:   '',
+    haikuModel:  '',
+    activeModel: 'sonnet',
+  },
+  openrouter: {
+    apiKey:  '',
+    baseURL: 'https://openrouter.ai/api',
+    defaultModel: '',
+  },
+  openai: {
+    apiKey:       '',
+    baseURL:      'https://mlaas.virtuosgames.com',
+    model:        '',
+    openaiDefaultModel: '',
+  },
   skillsPath:  '',
-  openrouterApiKey:  '',
-  openrouterBaseURL: 'https://openrouter.ai/api',
-  openrouterModel:   '',
-  openrouterDefaultModel: '',
-  openaiApiKey:      '',
-  openaiBaseURL:     'https://mlaas.virtuosgames.com',
-  openaiModel:       '',
-  openaiDefaultModel: '',
   pineconeApiKey:      '',
   ragEnabled:          true,
   dataPath:            '',
+  artyfactPath:        '',
 })
 
 onMounted(async () => {
   const c = JSON.parse(JSON.stringify(configStore.config))
   delete c.defaultProvider
-  Object.assign(form, c)
-  if (!form.openrouterDefaultModel && form.openrouterModel) {
-    form.openrouterDefaultModel = form.openrouterModel
-  }
-  if (!form.openaiDefaultModel && form.openaiModel) {
-    form.openaiDefaultModel = form.openaiModel
+  // Deep-merge nested provider objects
+  if (c.anthropic)  Object.assign(form.anthropic, c.anthropic)
+  if (c.openrouter) Object.assign(form.openrouter, c.openrouter)
+  if (c.openai)     Object.assign(form.openai, c.openai)
+  // Merge top-level scalar fields
+  for (const key of Object.keys(c)) {
+    if (key !== 'anthropic' && key !== 'openrouter' && key !== 'openai' && key in form) {
+      form[key] = c[key]
+    }
   }
   // Load Pinecone config from .env via knowledge IPC
   if (window.electronAPI?.knowledge?.getConfig) {
@@ -666,23 +710,21 @@ onMounted(async () => {
     form.pineconeApiKey = kc.pineconeApiKey || ''
     form.ragEnabled = kc.ragEnabled !== false
   }
-  // Load default data path from main process
+  // Load data path from .env via main process
   if (window.electronAPI?.getDataPath) {
     const info = await window.electronAPI.getDataPath()
     defaultDataPath.value = info.defaultDataPath || ''
-    if (!form.dataPath) {
-      form.dataPath = info.dataPath || info.defaultDataPath || ''
-    }
+    form.dataPath = info.dataPath || info.defaultDataPath || ''
   }
 })
 
 async function fetchOrModels() {
   if (!window.electronAPI?.fetchOpenRouterModels) { orModelsFetchError.value = 'Not running inside Electron.'; return }
-  if (!form.openrouterApiKey) { orModelsFetchError.value = 'Enter an API key first.'; return }
+  if (!form.openrouter.apiKey) { orModelsFetchError.value = 'Enter an API key first.'; return }
   orModelsFetching.value = true
   orModelsFetchError.value = ''
   try {
-    const result = await window.electronAPI.fetchOpenRouterModels({ apiKey: form.openrouterApiKey, baseURL: form.openrouterBaseURL })
+    const result = await window.electronAPI.fetchOpenRouterModels({ apiKey: form.openrouter.apiKey, baseURL: form.openrouter.baseURL })
     if (result.success) { modelsStore.openrouterModels = result.models; modelsStore.openrouterCached = true; orSelectedTestModel.value = '' }
     else { orModelsFetchError.value = result.error || 'Unknown error' }
   } catch (err) { orModelsFetchError.value = err.message }
@@ -691,11 +733,11 @@ async function fetchOrModels() {
 
 async function fetchOpenAIModelsLocal() {
   if (!window.electronAPI?.fetchOpenAIModels) { openaiModelsFetchError.value = 'Not running inside Electron.'; return }
-  if (!form.openaiApiKey) { openaiModelsFetchError.value = 'Enter an API key first.'; return }
+  if (!form.openai.apiKey) { openaiModelsFetchError.value = 'Enter an API key first.'; return }
   openaiModelsFetching.value = true
   openaiModelsFetchError.value = ''
   try {
-    const result = await window.electronAPI.fetchOpenAIModels({ apiKey: form.openaiApiKey, baseURL: form.openaiBaseURL })
+    const result = await window.electronAPI.fetchOpenAIModels({ apiKey: form.openai.apiKey, baseURL: form.openai.baseURL })
     if (result.success) { modelsStore.openaiModels = result.models; modelsStore.openaiCached = true; openaiSelectedTestModel.value = '' }
     else { openaiModelsFetchError.value = result.error || 'Unknown error' }
   } catch (err) { openaiModelsFetchError.value = err.message }
@@ -705,13 +747,19 @@ async function fetchOpenAIModelsLocal() {
 async function saveGeneral() {
   savingGeneral.value = true
   try {
-    await configStore.saveConfig({ dataPath: String(form.dataPath) })
-    savedGeneralMsg.value = { ok: true, text: 'Saved successfully' }
+    // Save dataPath to .env (not config.json)
+    if (window.electronAPI?.saveDataPath) {
+      const result = await window.electronAPI.saveDataPath(String(form.dataPath))
+      if (!result.success) throw new Error(result.error || 'Failed to save data path')
+    }
+    // Save artyfactPath to config.json
+    await configStore.saveConfig({ artyfactPath: String(form.artyfactPath) })
+    savedGeneralMsg.value = { ok: true, text: 'Saved — restart app for data path changes' }
   } catch (err) {
     savedGeneralMsg.value = { ok: false, text: err.message || 'Save failed' }
   } finally {
     savingGeneral.value = false
-    setTimeout(() => { savedGeneralMsg.value = '' }, 3000)
+    setTimeout(() => { savedGeneralMsg.value = '' }, 4000)
   }
 }
 
@@ -720,6 +768,7 @@ async function saveModels() {
   try {
     const modelFields = JSON.parse(JSON.stringify(form))
     delete modelFields.skillsPath
+    delete modelFields.dataPath
     await configStore.saveConfig(modelFields)
     savedModelsMsg.value = { ok: true, text: 'Saved successfully' }
   } catch (err) {
@@ -797,11 +846,12 @@ async function testConnection(provider) {
     testingAnthropic.value = true; testResultAnthropic.value = null; testAbortAnthropic = false
     const timer = setTimeout(() => stopTest('anthropic'), TEST_TIMEOUT_MS)
     try {
-      const res = await window.electronAPI.runAgent({ chatId: 'test', messages: [{ role: 'user', content: 'Reply with exactly: OK' }], config: { ...form }, enabledAgents: [], enabledSkills: [] })
+      const testCfg = JSON.parse(JSON.stringify({ ...form, apiKey: form.anthropic.apiKey, baseURL: form.anthropic.baseURL }))
+      const res = await window.electronAPI.runAgent({ chatId: 'test', messages: [{ role: 'user', content: 'Reply with exactly: OK' }], config: testCfg, enabledAgents: [], enabledSkills: [] })
       clearTimeout(timer)
       testResultAnthropic.value = testAbortAnthropic
         ? { ok: false, message: 'Test stopped.' }
-        : res.success ? { ok: true, message: `Connected · ${modelIdPreview(form.activeModel)} · "${res.result?.substring(0, 60)}"` } : { ok: false, message: res.error }
+        : res.success ? { ok: true, message: `Connected · ${modelIdPreview(form.anthropic.activeModel)} · "${res.result?.substring(0, 60)}"` } : { ok: false, message: res.error }
     } catch (err) { clearTimeout(timer); testResultAnthropic.value = testAbortAnthropic ? { ok: false, message: 'Test stopped.' } : { ok: false, message: err.message } }
     finally { testingAnthropic.value = false }
   } else if (provider === 'openai') {
@@ -810,7 +860,7 @@ async function testConnection(provider) {
     if (!testModel) { testResultOpenAI.value = { ok: false, message: 'Select a model from the list above first.' }; testingOpenAI.value = false; return }
     const timer = setTimeout(() => stopTest('openai'), TEST_TIMEOUT_MS)
     try {
-      const res = await window.electronAPI.runAgent({ chatId: 'test-openai', messages: [{ role: 'user', content: 'Reply with exactly: OK' }], config: { ...form, openaiApiKey: form.openaiApiKey, openaiBaseURL: form.openaiBaseURL, customModel: testModel, _resolvedProvider: 'openai' }, enabledAgents: [], enabledSkills: [] })
+      const res = await window.electronAPI.runAgent({ chatId: 'test-openai', messages: [{ role: 'user', content: 'Reply with exactly: OK' }], config: JSON.parse(JSON.stringify({ ...form, openaiApiKey: form.openai.apiKey, openaiBaseURL: form.openai.baseURL, customModel: testModel, _resolvedProvider: 'openai' })), enabledAgents: [], enabledSkills: [] })
       clearTimeout(timer)
       testResultOpenAI.value = testAbortOpenAI
         ? { ok: false, message: 'Test stopped.' }
@@ -823,7 +873,7 @@ async function testConnection(provider) {
     if (!testModel) { testResultOpenRouter.value = { ok: false, message: 'Select a model from the list above first.' }; testingOpenRouter.value = false; return }
     const timer = setTimeout(() => stopTest('openrouter'), TEST_TIMEOUT_MS)
     try {
-      const res = await window.electronAPI.runAgent({ chatId: 'test-openrouter', messages: [{ role: 'user', content: 'Reply with exactly: OK' }], config: { ...form, apiKey: form.openrouterApiKey, baseURL: form.openrouterBaseURL, customModel: testModel }, enabledAgents: [], enabledSkills: [] })
+      const res = await window.electronAPI.runAgent({ chatId: 'test-openrouter', messages: [{ role: 'user', content: 'Reply with exactly: OK' }], config: JSON.parse(JSON.stringify({ ...form, apiKey: form.openrouter.apiKey, baseURL: form.openrouter.baseURL, customModel: testModel })), enabledAgents: [], enabledSkills: [] })
       clearTimeout(timer)
       testResultOpenRouter.value = testAbortOpenRouter
         ? { ok: false, message: 'Test stopped.' }
@@ -906,6 +956,21 @@ async function testConnection(provider) {
   padding: 4px; border-radius: 4px; transition: color 0.15s;
 }
 .field-action-btn:hover { color: var(--accent); }
+
+/* ── Input with trailing button ────────────────────────────────────────── */
+.input-with-trailing-btn { display: flex; gap: 6px; align-items: stretch; }
+.input-with-trailing-btn .field { flex: 1; }
+.open-folder-btn {
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 10px; border: none; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF; cursor: pointer; transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+.open-folder-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
+}
 .field-action-btn.danger:hover { color: #FF3B30; }
 
 /* ── Icon sizes ─────────────────────────────────────────────────────────── */
@@ -923,11 +988,12 @@ async function testConnection(provider) {
 .test-result {
   display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; padding: 10px 14px;
   border-radius: var(--radius-sm); font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
+  font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
-.test-result.success { background: rgba(0,122,255,0.06); border: 1px solid rgba(0,122,255,0.3); color: var(--text-primary); }
-.test-result.success .icon-sm { color: var(--accent); }
-.test-result.error { background: rgba(255,59,48,0.05); border: 1px solid rgba(255,59,48,0.3); color: #FF3B30; }
-.test-result.error .icon-sm { color: #FF3B30; }
+.test-result.success { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color: #FFFFFF; }
+.test-result.success .icon-sm { color: #FFFFFF; }
+.test-result.error { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); color: #FF6B6B; }
+.test-result.error .icon-sm { color: #FF6B6B; }
 
 /* ── Save row ───────────────────────────────────────────────────────────── */
 .save-row { display: flex; align-items: center; gap: 12px; }
@@ -936,8 +1002,8 @@ async function testConnection(provider) {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
   padding: 6px 14px; border-radius: 8px; animation: fadeIn 0.2s ease;
 }
-.save-indicator.success { background: rgba(52,199,89,0.1); color: #34C759; }
-.save-indicator.error { background: rgba(255,59,48,0.08); color: #FF3B30; }
+.save-indicator.success { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color: #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); }
+.save-indicator.error { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); color: #FF6B6B; box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(2px); }

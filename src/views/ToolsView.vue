@@ -124,7 +124,7 @@
             class="tools-card"
           >
             <!-- Gradient accent bar -->
-            <div class="tools-card-accent" :style="{ background: accentForType(tool.type) }"></div>
+            <div class="tools-card-accent"></div>
 
             <div class="tools-card-body">
               <!-- Default row — top of card body -->
@@ -138,7 +138,7 @@
 
               <!-- Icon + title row -->
               <div class="tools-card-title-row">
-                <div class="tools-card-icon" :style="{ background: iconBgForType(tool.type) }">
+                <div class="tools-card-icon">
                   <!-- HTTP icon: globe -->
                   <svg v-if="tool.type === 'http' || !tool.type" style="width:18px;height:18px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
@@ -156,7 +156,7 @@
                   <h3 class="tools-card-name">{{ tool.name }}</h3>
                 </div>
                 <!-- Type badge -->
-                <span class="tools-type-badge" :class="'type-' + (tool.type || 'http')">
+                <span class="tools-type-badge">
                   {{ typeLabelMap[tool.type || 'http'] }}
                 </span>
               </div>
@@ -169,7 +169,7 @@
                 <div class="tools-card-footer-info">
                   <!-- HTTP footer -->
                   <template v-if="tool.type === 'http' || !tool.type">
-                    <span class="tools-card-method" :class="'method-' + (tool.method || 'GET').toLowerCase()">
+                    <span class="tools-card-method">
                       {{ tool.method || 'GET' }}
                     </span>
                     <span class="tools-card-endpoint" :title="tool.endpoint">
@@ -178,7 +178,7 @@
                   </template>
                   <!-- Code footer -->
                   <template v-else-if="tool.type === 'code'">
-                    <span class="tools-card-method method-code">
+                    <span class="tools-card-method">
                       {{ (tool.language || 'javascript').toUpperCase().slice(0, 4) }}
                     </span>
                     <span class="tools-card-endpoint">
@@ -187,7 +187,7 @@
                   </template>
                   <!-- Prompt footer -->
                   <template v-else>
-                    <span class="tools-card-method method-prompt">
+                    <span class="tools-card-method">
                       TMPL
                     </span>
                     <span class="tools-card-endpoint">
@@ -354,6 +354,12 @@
             </template>
           </div>
 
+          <!-- Save error -->
+          <div v-if="saveError" class="save-error">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            {{ saveError }}
+          </div>
+
           <!-- Modal footer -->
           <div class="tools-modal-footer">
             <div v-if="editingTool" style="flex:1;">
@@ -439,6 +445,7 @@ const searchQuery = ref('')
 const typeFilter = ref('')
 const showModal = ref(false)
 const editingTool = ref(null)
+const saveError = ref('')
 
 const form = ref(emptyForm())
 
@@ -505,11 +512,13 @@ const canSave = computed(() => {
 function openAdd() {
   editingTool.value = null
   form.value = emptyForm()
+  saveError.value = ''
   showModal.value = true
 }
 
 function openEdit(tool) {
   editingTool.value = tool
+  saveError.value = ''
   const base = {
     id: tool.id,
     name: tool.name || '',
@@ -597,7 +606,8 @@ async function saveForm() {
   try {
     await toolsStore.saveTool(toolData)
   } catch (err) {
-    console.error('Failed to save tool:', err)
+    saveError.value = err.message || 'Failed to save tool'
+    return
   }
   closeModal()
 }
@@ -621,17 +631,6 @@ function truncateEndpoint(ep) {
   return ep.length > 50 ? ep.slice(0, 47) + '...' : ep
 }
 
-function accentForType(type) {
-  if (type === 'code') return 'linear-gradient(135deg, #16A34A 0%, #22C55E 100%)'
-  if (type === 'prompt') return 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)'
-  return 'linear-gradient(135deg, #2563EB 0%, #60A5FA 100%)'
-}
-
-function iconBgForType(type) {
-  if (type === 'code') return 'linear-gradient(135deg, #16A34A 0%, #22C55E 100%)'
-  if (type === 'prompt') return 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)'
-  return 'linear-gradient(135deg, #2563EB 0%, #60A5FA 100%)'
-}
 </script>
 
 <style scoped>
@@ -801,7 +800,10 @@ function iconBgForType(type) {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 .tools-card:active { transform: translateY(-1px); transition-duration: 0.1s; }
-.tools-card-accent { height: 4px; width: 100%; flex-shrink: 0; }
+.tools-card-accent {
+  height: 4px; width: 100%; flex-shrink: 0;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+}
 .tools-card-body { padding: 20px 20px 16px; display: flex; flex-direction: column; flex: 1; }
 
 /* ── Default row — top of card body ───────────────────────────────────────── */
@@ -828,6 +830,7 @@ function iconBgForType(type) {
   border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .tools-card-name {
@@ -839,7 +842,7 @@ function iconBgForType(type) {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* ── Type badges ───────────────────────────────────────────────────────────── */
+/* ── Type badge ────────────────────────────────────────────────────────────── */
 .tools-type-badge {
   display: inline-flex;
   align-items: center;
@@ -849,18 +852,9 @@ function iconBgForType(type) {
   padding: 2px 8px;
   border-radius: 6px;
   flex-shrink: 0;
-}
-.tools-type-badge.type-http {
-  background: #EFF6FF;
-  color: #2563EB;
-}
-.tools-type-badge.type-code {
-  background: #F0FDF4;
-  color: #16A34A;
-}
-.tools-type-badge.type-prompt {
-  background: #F5F3FF;
-  color: #7C3AED;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
 .tools-card-desc {
@@ -898,13 +892,10 @@ function iconBgForType(type) {
   padding: 2px 6px;
   border-radius: 4px;
   flex-shrink: 0;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
-.method-get { background: #EFF6FF; color: #2563EB; }
-.method-post { background: #FEF3C7; color: #D97706; }
-.method-put { background: #FFF7ED; color: #EA580C; }
-.method-delete { background: #FEF2F2; color: #DC2626; }
-.method-code { background: #F0FDF4; color: #16A34A; }
-.method-prompt { background: #F5F3FF; color: #7C3AED; }
 .tools-card-endpoint {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: var(--fs-caption);
@@ -958,6 +949,12 @@ function iconBgForType(type) {
 .tools-modal-body {
   flex: 1; overflow-y: auto; padding: 24px;
   scrollbar-width: thin; scrollbar-color: #333 transparent;
+}
+.save-error {
+  display: flex; align-items: center; gap: 8px; margin: 0 24px 0;
+  padding: 10px 14px; border-radius: var(--radius-sm, 8px);
+  background: rgba(255,59,48,0.1); border: 1px solid rgba(255,59,48,0.3);
+  color: #FF6B6B; font-size: var(--fs-secondary, 0.875rem); font-family: 'Inter', sans-serif;
 }
 .tools-modal-footer {
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;

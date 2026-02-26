@@ -32,13 +32,13 @@
     <div class="flex-1 px-3 py-3 flex flex-col gap-0.5 overflow-y-auto" style="scrollbar-width:thin;">
       <p class="nav-section-label" v-show="!isCollapsed">AI Agent</p>
       <NavItem to="/chats"    :icon="IconChats"    label="Chats"    :isCollapsed="isCollapsed" />
-      <NavItem to="/skills"   :icon="IconSkills"   label="Skills"   :isCollapsed="isCollapsed" />
-      <NavItem to="/knowledge" :icon="IconKnowledge" label="Knowledge" :isCollapsed="isCollapsed" />
-      <NavItem to="/mcp"      :icon="IconMcp"      label="MCP Servers" :isCollapsed="isCollapsed" />
       <NavItem to="/tools"    :icon="IconTools"    label="Tools"    :isCollapsed="isCollapsed" />
+      <NavItem to="/skills"   :icon="IconSkills"   label="Skills"   :isCollapsed="isCollapsed" />
+      <NavItem to="/mcp"      :icon="IconMcp"      label="MCP Servers" :isCollapsed="isCollapsed" />
+      <NavItem to="/knowledge" :icon="IconKnowledge" label="Knowledge" :isCollapsed="isCollapsed" />
       <NavItem to="/personas" :icon="IconPersonas" label="Personas" :isCollapsed="isCollapsed" />
-
       <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:12px;">Workspace</p>
+      <NavItem to="/news"     :icon="IconNews"     label="News"     :isCollapsed="isCollapsed" />
       <NavItem to="/notes"     :icon="IconNotes"     label="Notes"  :isCollapsed="isCollapsed" />
 
       <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:12px;">System</p>
@@ -60,6 +60,15 @@ function toggleCollapse() {
 }
 
 // ── SVG Icon Components ──────────────────────────────────────────────────────
+const IconNews = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('path', { d: 'M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2' }),
+    h('line', { x1: '10', y1: '6', x2: '18', y2: '6' }),
+    h('line', { x1: '10', y1: '10', x2: '18', y2: '10' }),
+    h('line', { x1: '10', y1: '14', x2: '14', y2: '14' })
+  ])
+})
+
 const IconChats = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
     h('path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' })

@@ -12,8 +12,8 @@ const { logger } = require('../../logger')
 class OpenAIClient {
   constructor(config) {
     this.config = config
-    const baseURL = (config.openaiBaseURL || config.baseURL || 'https://mlaas.virtuosgames.com').replace(/\/+$/, '')
-    const apiKey = config.openaiApiKey || config.apiKey || ''
+    const baseURL = (config.openaiBaseURL || config.openai?.baseURL || config.baseURL || 'https://mlaas.virtuosgames.com').replace(/\/+$/, '')
+    const apiKey = config.openaiApiKey || config.openai?.apiKey || config.apiKey || ''
     this.client = new OpenAI({
       baseURL: baseURL + '/proxy/openai/v1',
       apiKey: 'dummy',               // SDK requires a non-empty string
@@ -29,7 +29,7 @@ class OpenAIClient {
   resolveModel() {
     const c = this.config
     if (c.customModel) return c.customModel
-    return c.openaiModel || 'gpt-4o'
+    return c.openaiModel || c.openai?.model || 'gpt-4o'
   }
 
   /** OpenAI endpoints don't support Opus 4.6 compaction */

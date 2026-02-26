@@ -55,12 +55,20 @@ export const useMcpStore = defineStore('mcp', () => {
    * Save a server (add or update). Persists to disk.
    */
   async function saveServer(server) {
-    const idx = servers.value.findIndex(s => s.id === server.id)
     const entry = {
       ...server,
       id: server.id || uuidv4(),
       updatedAt: Date.now(),
     }
+    // Duplicate name check (case-insensitive) — skip the server being edited
+    const nameLower = (entry.name || '').toLowerCase()
+    const dup = servers.value.find(s =>
+      s.id !== entry.id && (s.name || '').toLowerCase() === nameLower
+    )
+    if (dup) {
+      throw new Error(`A server named "${dup.name}" already exists.`)
+    }
+    const idx = servers.value.findIndex(s => s.id === entry.id)
     if (idx >= 0) {
       servers.value[idx] = entry
     } else {

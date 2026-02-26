@@ -10,7 +10,7 @@ if (process.platform === 'linux') {
   process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts.conf')
 }
 
-const { app, BrowserWindow, ipcMain, dialog, shell, screen, protocol, net } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, shell, screen, protocol, net, session } = require('electron')
 const os = require('os')
 const { execFile } = require('child_process')
 const { logger, LOG_DIR } = require('./logger')
@@ -75,13 +75,14 @@ const { logger, LOG_DIR } = require('./logger')
   commitPending()
 })()
 
-logger.info('=== SparkAI starting ===', 'NODE_ENV=' + process.env.NODE_ENV)
+logger.info('=== SparkAI starting ===')
 
-const isDev = process.env.NODE_ENV !== 'production'
+// Dev mode: run-electron.js sets ELECTRON_DEV=true
+const isDev = process.env.ELECTRON_DEV === 'true'
 
 // ─── Storage ────────────────────────────────────────────────────────────────
 const DEFAULT_DATA_PATH = path.join(os.homedir(), '.sparkai')
-const DATA_DIR = DEFAULT_DATA_PATH
+const DATA_DIR = process.env.SPARKAI_DATA_PATH || DEFAULT_DATA_PATH
 const CHATS_FILE = path.join(DATA_DIR, 'chats.json')
 const CHATS_DIR = path.join(DATA_DIR, 'chats')
 const CHATS_INDEX_FILE = path.join(CHATS_DIR, 'index.json')
@@ -127,11 +128,11 @@ function writeJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8')
 }
 
-// ─── Atomic async JSON write (write to .tmp then rename) ─────────────────────
+// ─── Atomic async JSON write (write to unique .tmp then rename) ───────────────
 async function writeJSONAtomic(file, data) {
   const dir = path.dirname(file)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmp = file + '.tmp'
+  const tmp = file + `.tmp.${process.pid}.${Date.now()}`
   await fs.promises.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
   await fs.promises.rename(tmp, file)
 }
@@ -207,27 +208,69 @@ async function migrateChatsIfNeeded() {
 async function migrateEnvDataIfNeeded() {
   // a) Migrate config values from .env → config.json (one-time seed)
   const cfg = readJSON(CONFIG_FILE, {})
-  if (!cfg.apiKey) {
-    let changed = false
-    const envMap = {
-      apiKey:       'ANTHROPIC_API_KEY',
-      baseURL:      'ANTHROPIC_BASE_URL',
-      sonnetModel:  'ANTHROPIC_DEFAULT_SONNET_MODEL',
-      opusModel:    'ANTHROPIC_DEFAULT_OPUS_MODEL',
-      haikuModel:   'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-      openrouterApiKey:  'OPENROUTER_API_KEY',
-      openrouterBaseURL: 'OPENROUTER_BASE_URL',
-      openaiApiKey:      'OPENAI_API_KEY',
-      openaiBaseURL:     'OPENAI_BASE_URL',
-      systemPrompt:      'SPARK_SYSTEM_PROMPT',
-      obsidianVaultPath: 'OBSIDIAN_VAULT_PATH',
-      pineconeApiKey:    'PINECONE_API_KEY'
+  // Migrate flat keys → nested structure if config still has old flat layout
+  if (cfg.apiKey || cfg.openrouterApiKey || cfg.openaiApiKey) {
+    if (!cfg.anthropic) cfg.anthropic = {}
+    if (!cfg.openrouter) cfg.openrouter = {}
+    if (!cfg.openai) cfg.openai = {}
+    const flatToNested = {
+      apiKey:       ['anthropic', 'apiKey'],
+      baseURL:      ['anthropic', 'baseURL'],
+      sonnetModel:  ['anthropic', 'sonnetModel'],
+      opusModel:    ['anthropic', 'opusModel'],
+      haikuModel:   ['anthropic', 'haikuModel'],
+      activeModel:  ['anthropic', 'activeModel'],
+      openrouterApiKey:      ['openrouter', 'apiKey'],
+      openrouterBaseURL:     ['openrouter', 'baseURL'],
+      openrouterDefaultModel:['openrouter', 'defaultModel'],
+      openaiApiKey:          ['openai', 'apiKey'],
+      openaiBaseURL:         ['openai', 'baseURL'],
+      openaiModel:           ['openai', 'model'],
+      openaiDefaultModel:    ['openai', 'openaiDefaultModel'],
     }
-    for (const [cfgKey, envKey] of Object.entries(envMap)) {
+    let migrated = false
+    for (const [flatKey, [group, nestedKey]] of Object.entries(flatToNested)) {
+      if (cfg[flatKey] !== undefined && cfg[flatKey] !== '') {
+        if (!cfg[group][nestedKey]) {
+          cfg[group][nestedKey] = cfg[flatKey]
+          migrated = true
+        }
+        delete cfg[flatKey]
+      }
+    }
+    if (migrated) {
+      writeJSON(CONFIG_FILE, cfg)
+      logger.info('Migrated flat config keys to nested provider structure')
+    }
+  }
+  if (!cfg.anthropic?.apiKey) {
+    let changed = false
+    // Env → nested config migration
+    const envMap = {
+      'anthropic.apiKey':      'ANTHROPIC_API_KEY',
+      'anthropic.baseURL':     'ANTHROPIC_BASE_URL',
+      'anthropic.sonnetModel': 'ANTHROPIC_DEFAULT_SONNET_MODEL',
+      'anthropic.opusModel':   'ANTHROPIC_DEFAULT_OPUS_MODEL',
+      'anthropic.haikuModel':  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+      'openrouter.apiKey':     'OPENROUTER_API_KEY',
+      'openrouter.baseURL':    'OPENROUTER_BASE_URL',
+      'openai.apiKey':         'OPENAI_API_KEY',
+      'openai.baseURL':        'OPENAI_BASE_URL',
+      systemPrompt:            'SPARK_SYSTEM_PROMPT',
+      obsidianVaultPath:       'OBSIDIAN_VAULT_PATH',
+      pineconeApiKey:          'PINECONE_API_KEY'
+    }
+    if (!cfg.anthropic)  cfg.anthropic = {}
+    if (!cfg.openrouter) cfg.openrouter = {}
+    if (!cfg.openai)     cfg.openai = {}
+    for (const [cfgPath, envKey] of Object.entries(envMap)) {
       const envVal = process.env[envKey]
-      if (envVal && !cfg[cfgKey]) {
-        cfg[cfgKey] = envVal
-        changed = true
+      if (!envVal) continue
+      if (cfgPath.includes('.')) {
+        const [group, key] = cfgPath.split('.')
+        if (!cfg[group][key]) { cfg[group][key] = envVal; changed = true }
+      } else {
+        if (!cfg[cfgPath]) { cfg[cfgPath] = envVal; changed = true }
       }
     }
     // Also migrate pineconeApiKey from knowledge.json (old location) → config.json
@@ -243,7 +286,7 @@ async function migrateEnvDataIfNeeded() {
       logger.info('Migrated env/user data into config.json')
     }
   } else {
-    // Config already has apiKey — still check if pineconeApiKey needs moving from knowledge.json
+    // Config already has anthropic.apiKey — still check if pineconeApiKey needs moving from knowledge.json
     const knowledge = readJSON(KNOWLEDGE_FILE, {})
     if (knowledge.pineconeApiKey) {
       if (!cfg.pineconeApiKey) cfg.pineconeApiKey = knowledge.pineconeApiKey
@@ -281,30 +324,63 @@ async function migrateEnvDataIfNeeded() {
       logger.error('Failed to parse HTTP_TOOLS env var:', err.message)
     }
   }
+
+  // d) Migrate dataPath from config.json → .env (one-time)
+  const cfgForDp = readJSON(CONFIG_FILE, {})
+  if (cfgForDp.dataPath && cfgForDp.dataPath !== DEFAULT_DATA_PATH) {
+    // Write to .env if not already there
+    if (!process.env.SPARKAI_DATA_PATH) {
+      let envLines = []
+      if (fs.existsSync(ENV_FILE)) {
+        envLines = fs.readFileSync(ENV_FILE, 'utf8').split('\n')
+      }
+      const hasLine = envLines.some(l => l.trim().startsWith('SPARKAI_DATA_PATH='))
+      if (!hasLine) {
+        envLines.push('# Data directory for SparkAI', `SPARKAI_DATA_PATH=${cfgForDp.dataPath}`)
+        fs.writeFileSync(ENV_FILE, envLines.join('\n'), 'utf8')
+        logger.info('Migrated dataPath from config.json to .env:', cfgForDp.dataPath)
+      }
+    }
+    // Remove dataPath from config.json
+    delete cfgForDp.dataPath
+    writeJSON(CONFIG_FILE, cfgForDp)
+    logger.info('Removed dataPath from config.json (now lives in .env)')
+  } else if (cfgForDp.dataPath) {
+    // It was the default — just remove it from config.json, no need to write to .env
+    delete cfgForDp.dataPath
+    writeJSON(CONFIG_FILE, cfgForDp)
+  }
 }
 
 // ─── Default Data ───────────────────────────────────────────────────────────
 const DEFAULT_CONFIG = {
-  apiKey:       '',
-  baseURL:      'https://api.anthropic.com',
-  sonnetModel:  'claude-sonnet-4-5',
-  opusModel:    'claude-opus-4-6',
-  haikuModel:   'claude-haiku-3-5',
-  activeModel:  'sonnet',
+  anthropic: {
+    apiKey:       '',
+    baseURL:      'https://api.anthropic.com',
+    sonnetModel:  'claude-sonnet-4-5',
+    opusModel:    'claude-opus-4-6',
+    haikuModel:   'claude-haiku-3-5',
+    activeModel:  'sonnet',
+  },
+  openrouter: {
+    apiKey:  '',
+    baseURL: 'https://openrouter.ai/api',
+    defaultModel: '',
+  },
+  openai: {
+    apiKey:       '',
+    baseURL:      'https://mlaas.virtuosgames.com',
+    model:        '',
+    openaiDefaultModel: '',
+  },
   skillsPath:   '',
-  dataPath:     DEFAULT_DATA_PATH,
-  openrouterApiKey:  '',
-  openrouterBaseURL: 'https://openrouter.ai/api',
-  openaiApiKey:      '',
-  openaiBaseURL:     'https://mlaas.virtuosgames.com',
-  openaiModel:       '',
-  openrouterDefaultModel: '',
-  openaiDefaultModel:     '',
   defaultProvider:   'anthropic',
   systemPrompt:      '',
   obsidianVaultPath: '',
-  pineconeApiKey:    ''
+  pineconeApiKey:    '',
+  newsFeeds: []
 }
+
 
 // ─── Main Window ────────────────────────────────────────────────────────────
 let mainWindow
@@ -325,7 +401,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: false,
+      webviewTag: true
     }
   })
 
@@ -380,6 +457,34 @@ app.whenReady().then(async () => {
   await migrateChatsIfNeeded()
   await migrateEnvDataIfNeeded()
   createWindow()
+
+  // ── Content Security Policy ──
+  // Only apply restrictive CSP to the app's own pages, not to external sites
+  // loaded inside <webview> (they need their own CSS/JS/fonts to render properly).
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const url = details.url || ''
+    const isAppPage = url.startsWith('http://localhost:') || url.startsWith('file://')
+    if (isAppPage) {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self';" +
+            " script-src 'self';" +
+            " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
+            " font-src 'self' data: https://fonts.gstatic.com;" +
+            " img-src 'self' data: blob: https: vault-asset:;" +
+            " connect-src 'self' https: http://localhost:* ws://localhost:*;" +
+            " media-src 'self' data: blob:;" +
+            " worker-src 'self' blob:;"
+          ]
+        }
+      })
+    } else {
+      callback({ responseHeaders: details.responseHeaders })
+    }
+  })
+
   logger.info('Window created. Log dir:', LOG_DIR)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -468,30 +573,80 @@ ipcMain.handle('store:save-chats', async (_, chats) => {
 
 ipcMain.handle('store:get-config', () => {
   const saved = readJSON(CONFIG_FILE, {})
-  // Only let saved non-empty values override defaults.
+  // Only let saved non-empty values override defaults (top-level scalars).
   const nonEmpty = Object.fromEntries(
     Object.entries(saved).filter(([, v]) => v !== '' && v !== null && v !== undefined)
   )
-  const result = { ...DEFAULT_CONFIG, ...nonEmpty }
+  const result = {
+    ...DEFAULT_CONFIG,
+    ...nonEmpty,
+    anthropic:  { ...DEFAULT_CONFIG.anthropic,  ...saved.anthropic },
+    openrouter: { ...DEFAULT_CONFIG.openrouter, ...saved.openrouter },
+    openai:     { ...DEFAULT_CONFIG.openai,     ...saved.openai },
+  }
   logger.info('store:get-config', {
-    baseURL: result.baseURL,
-    hasApiKey: !!(result.apiKey),
-    apiKeyPrefix: result.apiKey ? result.apiKey.slice(0, 8) + '…' : '(empty)',
-    sonnetModel: result.sonnetModel,
-    activeModel: result.activeModel,
+    baseURL: result.anthropic?.baseURL,
+    hasApiKey: !!(result.anthropic?.apiKey),
+    apiKeyPrefix: result.anthropic?.apiKey ? result.anthropic.apiKey.slice(0, 8) + '…' : '(empty)',
+    sonnetModel: result.anthropic?.sonnetModel,
+    activeModel: result.anthropic?.activeModel,
     defaultProvider: result.defaultProvider,
-    hasOpenRouterKey: !!(result.openrouterApiKey),
-    openrouterBaseURL: result.openrouterBaseURL
+    hasOpenRouterKey: !!(result.openrouter?.apiKey),
+    openrouterBaseURL: result.openrouter?.baseURL
   })
   return result
 })
-ipcMain.handle('store:save-config', (_, config) => { writeJSON(CONFIG_FILE, config); return true })
+ipcMain.handle('store:save-config', (_, config) => {
+  delete config.dataPath  // dataPath lives in .env, not config.json
+  // Read-merge-write: merge incoming config into existing file to avoid
+  // clobbering keys that the renderer didn't modify (e.g. newsFeeds).
+  const existing = readJSON(CONFIG_FILE, {})
+  const merged = {
+    ...existing,
+    ...config,
+    // Deep-merge nested provider objects
+    anthropic:  { ...(existing.anthropic || {}),  ...(config.anthropic || {}) },
+    openrouter: { ...(existing.openrouter || {}), ...(config.openrouter || {}) },
+    openai:     { ...(existing.openai || {}),     ...(config.openai || {}) },
+  }
+  writeJSON(CONFIG_FILE, merged)
+  return true
+})
 
 ipcMain.handle('store:get-data-path', () => ({
   dataPath: DATA_DIR,
   defaultDataPath: DEFAULT_DATA_PATH,
   platform: process.platform,
 }))
+
+// Save SPARKAI_DATA_PATH to .env file
+ipcMain.handle('store:save-data-path', (_, newDataPath) => {
+  try {
+    const envPath = ENV_FILE
+    let lines = []
+    if (fs.existsSync(envPath)) {
+      lines = fs.readFileSync(envPath, 'utf8').split('\n')
+    }
+    // Replace or append SPARKAI_DATA_PATH
+    let found = false
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim().startsWith('SPARKAI_DATA_PATH=')) {
+        lines[i] = `SPARKAI_DATA_PATH=${newDataPath}`
+        found = true
+        break
+      }
+    }
+    if (!found) {
+      lines.push('# Data directory for SparkAI', `SPARKAI_DATA_PATH=${newDataPath}`)
+    }
+    fs.writeFileSync(envPath, lines.join('\n'), 'utf8')
+    logger.info('Saved SPARKAI_DATA_PATH to .env:', newDataPath)
+    return { success: true }
+  } catch (err) {
+    logger.error('Failed to save SPARKAI_DATA_PATH to .env:', err.message)
+    return { success: false, error: err.message }
+  }
+})
 
 ipcMain.handle('store:get-personas', () => readJSON(PERSONAS_FILE, []))
 ipcMain.handle('store:save-personas', (_, personas) => { writeJSON(PERSONAS_FILE, personas); return true })
@@ -919,8 +1074,8 @@ ipcMain.handle('knowledge:upload-files', async (_, { apiKey, indexName, filePath
     const idxCfg = (knowledgeCfg.indexConfigs || {})[indexName] || {}
     const embProvider = idxCfg.embeddingProvider || knowledgeCfg.embeddingProvider || 'openai'
     const embModel = idxCfg.embeddingModel || knowledgeCfg.embeddingModel || 'text-embedding-3-small'
-    const embApiKey = embProvider === 'openrouter' ? cfg.openrouterApiKey : cfg.openaiApiKey
-    const embBaseURL = embProvider === 'openrouter' ? cfg.openrouterBaseURL : cfg.openaiBaseURL
+    const embApiKey = embProvider === 'openrouter' ? cfg.openrouter?.apiKey : cfg.openai?.apiKey
+    const embBaseURL = embProvider === 'openrouter' ? cfg.openrouter?.baseURL : cfg.openai?.baseURL
 
     // Get Pinecone index host and dimension for upsert
     let indexHost = null
@@ -1162,11 +1317,11 @@ async function generateEmbedding({ text, provider, model, apiKey, baseURL, dimen
   } else {
     // OpenAI or OpenAI-compatible
     const cfg = readJSON(CONFIG_FILE, {})
-    const base = (baseURL || cfg.openaiBaseURL || 'https://api.openai.com').replace(/\/+$/, '')
+    const base = (baseURL || cfg.openai?.baseURL || 'https://api.openai.com').replace(/\/+$/, '')
     // Use standard OpenAI endpoint path
     const isStandardOpenAI = base.includes('api.openai.com')
     url = isStandardOpenAI ? base + '/v1/embeddings' : base + '/proxy/openai/v1/embeddings'
-    const key = apiKey || cfg.openaiApiKey || ''
+    const key = apiKey || cfg.openai?.apiKey || ''
     headers = {
       'Content-Type': 'application/json'
     }
@@ -1319,11 +1474,11 @@ async function queryRAG({ query, pineconeApiKey, pineconeIndexName, topK, embedd
 
   const cfg = readJSON(CONFIG_FILE, {})
   const embeddingApiKey = embeddingProvider === 'openrouter'
-    ? cfg.openrouterApiKey
-    : cfg.openaiApiKey
+    ? cfg.openrouter?.apiKey
+    : cfg.openai?.apiKey
   const embeddingBaseURL = embeddingProvider === 'openrouter'
-    ? cfg.openrouterBaseURL
-    : cfg.openaiBaseURL
+    ? cfg.openrouter?.baseURL
+    : cfg.openai?.baseURL
 
   // Get index host and dimension
   const { host: indexHost, dimension: indexDimension } = await getPineconeIndexInfo(pineconeApiKey, pineconeIndexName)
@@ -1465,6 +1620,122 @@ ipcMain.handle('openai:fetch-models', async (_, { apiKey, baseURL }) => {
   } catch (err) {
     logger.error('openai:fetch-models error', err.message)
     return { success: false, error: err.message, models: [] }
+  }
+})
+
+// ─── IPC: News RSS Feed Fetching ─────────────────────────────────────────────
+ipcMain.handle('news:fetch-feeds', async (_, feedConfigs) => {
+  if (!Array.isArray(feedConfigs) || feedConfigs.length === 0) {
+    return { success: false, error: 'No feed configs provided', feeds: [] }
+  }
+  const https = require('https')
+  const http = require('http')
+
+  function fetchFeed(feed) {
+    return new Promise((resolve) => {
+      try {
+      const url = feed.url
+      if (!url || typeof url !== 'string') {
+        return resolve({ feed, body: '', error: 'Invalid or missing URL' })
+      }
+      const fetcher = url.startsWith('https') ? https : http
+      const req = fetcher.get(url, {
+        headers: { 'User-Agent': 'SparkAI/1.0 RSS Reader', 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
+        timeout: 15000
+      }, (res) => {
+        // Follow redirects (301, 302, 307, 308)
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          try {
+            // Resolve relative redirects against the original URL
+            const redirectUrl = new URL(res.headers.location, url).href
+            const rFetcher = redirectUrl.startsWith('https') ? https : http
+            const rReq = rFetcher.get(redirectUrl, {
+              headers: { 'User-Agent': 'SparkAI/1.0 RSS Reader', 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
+              timeout: 15000
+            }, (rRes) => {
+              let body = ''
+              rRes.on('data', chunk => { body += chunk })
+              rRes.on('end', () => resolve({ feed, body, status: rRes.statusCode }))
+            })
+            rReq.on('error', (err) => resolve({ feed, body: '', error: err.message }))
+            rReq.on('timeout', () => { rReq.destroy(); resolve({ feed, body: '', error: 'Request timed out' }) })
+          } catch (redirectErr) {
+            resolve({ feed, body: '', error: 'Redirect error: ' + (redirectErr.message || 'Invalid redirect URL') })
+          }
+          return
+        }
+        let body = ''
+        res.on('data', chunk => { body += chunk })
+        res.on('end', () => resolve({ feed, body, status: res.statusCode }))
+      })
+      req.on('error', (err) => resolve({ feed, body: '', error: err.message }))
+      req.on('timeout', () => { req.destroy(); resolve({ feed, body: '', error: 'Request timed out' }) })
+      } catch (err) {
+        resolve({ feed, body: '', error: err.message || 'Fetch error' })
+      }
+    })
+  }
+
+  function parseArticles(xml) {
+    const articles = []
+    // Try RSS <item> blocks first
+    const rssItems = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) || []
+    if (rssItems.length > 0) {
+      for (const item of rssItems) {
+        const title = (item.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i) || [])[1] || ''
+        const link = (item.match(/<link[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/i) || [])[1] || ''
+        const date = (item.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i) || [])[1] ||
+                     (item.match(/<dc:date[^>]*>([\s\S]*?)<\/dc:date>/i) || [])[1] || ''
+        const summary = (item.match(/<description[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i) || [])[1] || ''
+        articles.push({
+          title: title.replace(/<[^>]+>/g, '').trim(),
+          link: link.replace(/<[^>]+>/g, '').trim(),
+          date: date.trim(),
+          summary: summary.replace(/<[^>]+>/g, '').trim().slice(0, 300)
+        })
+      }
+      return articles
+    }
+    // Try Atom <entry> blocks
+    const atomEntries = xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi) || []
+    for (const entry of atomEntries) {
+      const title = (entry.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i) || [])[1] || ''
+      const linkMatch = entry.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/?>/i) || entry.match(/<link[^>]*>([\s\S]*?)<\/link>/i) || []
+      const link = linkMatch[1] || ''
+      const date = (entry.match(/<published[^>]*>([\s\S]*?)<\/published>/i) || [])[1] ||
+                   (entry.match(/<updated[^>]*>([\s\S]*?)<\/updated>/i) || [])[1] || ''
+      const summary = (entry.match(/<summary[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/summary>/i) || [])[1] ||
+                      (entry.match(/<content[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/content>/i) || [])[1] || ''
+      articles.push({
+        title: title.replace(/<[^>]+>/g, '').trim(),
+        link: link.trim(),
+        date: date.trim(),
+        summary: summary.replace(/<[^>]+>/g, '').trim().slice(0, 300)
+      })
+    }
+    return articles
+  }
+
+  try {
+    const results = await Promise.allSettled(feedConfigs.map(f => fetchFeed(f)))
+    const feeds = results.map((r) => {
+      if (r.status === 'rejected') {
+        return { id: 'unknown', name: 'Unknown', articles: [], error: r.reason?.message || 'Fetch failed' }
+      }
+      const { feed, body, error, status } = r.value
+      if (error) {
+        return { id: feed.id, name: feed.name, articles: [], error }
+      }
+      if (status >= 400) {
+        return { id: feed.id, name: feed.name, articles: [], error: `HTTP ${status}` }
+      }
+      const articles = parseArticles(body)
+      return { id: feed.id, name: feed.name, articles }
+    })
+    return { success: true, feeds }
+  } catch (err) {
+    logger.error('news:fetch-feeds error', err.message)
+    return { success: false, error: err.message, feeds: [] }
   }
 })
 
@@ -1629,6 +1900,15 @@ ipcMain.handle('skills:read-file', (_, rawPath) => {
   }
 })
 
+ipcMain.handle('skills:write-file', (_, rawPath, content) => {
+  try {
+    fs.writeFileSync(toLinuxPath(rawPath), content, 'utf8')
+    return { success: true }
+  } catch (err) {
+    return { error: err.message }
+  }
+})
+
 ipcMain.handle('skills:load-all-prompts', (_, dirPath) => {
   const dir = resolveSkillsPath(dirPath)
   try {
@@ -1694,7 +1974,7 @@ function readSoulFileSync(personaId, personaType) {
 async function runMemoryExtraction(event, chatId, messages, config, personaPrompts, participants) {
   try {
     // Only run for Anthropic provider (needs Anthropic API key for Haiku)
-    const apiKey = config.apiKey || process.env.ANTHROPIC_API_KEY
+    const apiKey = config.apiKey || config.anthropic?.apiKey
     if (!apiKey) return
 
     // Extract last user message + last assistant response
@@ -1744,13 +2024,13 @@ async function runMemoryExtraction(event, chatId, messages, config, personaPromp
 logger.info('IPC handlers registered: agent:run, agent:stop')
 
 ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts, mcpServers, httpTools, personaRuns, knowledgeConfig }) => {
-  logger.agent('IPC agent:run received', { chatId, model: config?.activeModel, msgCount: messages?.length, personaRuns: personaRuns?.length || 0 })
+  logger.agent('IPC agent:run received', { chatId, model: config?.anthropic?.activeModel || config?.activeModel, msgCount: messages?.length, personaRuns: personaRuns?.length || 0 })
   logger.agent('config snapshot', {
     baseURL: config?.baseURL,
     hasApiKey: !!(config?.apiKey),
     apiKeyPrefix: config?.apiKey ? config.apiKey.slice(0, 8) + '…' : '(empty)',
-    sonnetModel: config?.sonnetModel,
-    activeModel: config?.activeModel,
+    sonnetModel: config?.anthropic?.sonnetModel,
+    activeModel: config?.anthropic?.activeModel,
     customModel: config?.customModel || null,
     provider: config?.defaultProvider || 'anthropic'
   })
@@ -1923,7 +2203,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   const loop = new AgentLoop({ ...config, soulsDir: SOULS_DIR })
   activeLoops.set(chatId, loop)
 
-  logger.agent('run start', { chatId, model: config.activeModel, msgCount: messages.length, agents: enabledAgents, skills: enabledSkills })
+  logger.agent('run start', { chatId, model: config.anthropic?.activeModel || config.activeModel, msgCount: messages.length, agents: enabledAgents, skills: enabledSkills })
 
   try {
     const result = await loop.run(
@@ -2556,7 +2836,7 @@ function isWSL() {
 // Helper: Linux path to Windows path
 function toWindowsPath(linuxPath) {
   const { execSync } = require('child_process')
-  return execSync('wslpath -w "' + linuxPath + '"').toString().trim()
+  return execSync('wslpath -w "' + linuxPath + '"').toString().trim().replace(/\\$/, '')
 }
 
 // Helper: resolve ~ in path
@@ -2571,7 +2851,7 @@ ipcMain.handle('shell:open-file', async (_, filePath) => {
     const resolved = resolvePath(filePath)
     if (isWSL()) {
       const { execSync } = require('child_process')
-      execSync('explorer.exe "' + toWindowsPath(resolved) + '")')
+      execSync('explorer.exe "' + toWindowsPath(resolved) + '"')
       return { success: true }
     }
     const result = await shell.openPath(resolved)

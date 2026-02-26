@@ -229,7 +229,8 @@ Load a skill when the user's request clearly matches its description.`
     }
 
     // ── SparkAI Data Directory ──
-    const dataPath = this.config.dataPath || path.join(require('os').homedir(), '.sparkai')
+    const dataPath = process.env.SPARKAI_DATA_PATH || path.join(require('os').homedir(), '.sparkai')
+    const artyfactPath = this.config.artyfactPath || path.join(dataPath, 'artyfact')
     system += `\n\nSPARKAI DATA DIRECTORY: ${dataPath}
 This is the local data folder for the SparkAI desktop application. Its structure:
   ${dataPath}/
@@ -239,7 +240,11 @@ This is the local data folder for the SparkAI desktop application. Its structure
   ├── personas.json        — AI persona definitions
   ├── knowledge.json       — RAG/Pinecone knowledge config
   ├── chats/               — Per-chat message history
-  └── souls/               — Persistent memory files (system/, users/)
+  ├── souls/               — Persistent memory files (system/, users/)
+  └── artyfact/            — AI-generated artifacts (see below)
+
+ARTIFACT PATH: ${artyfactPath}
+This is the default directory for ALL artifacts you create during chats. Whenever you generate files such as markdown documents, reports, temp files, exported docs, code snippets, or any other output files — ALWAYS write them to this directory (create subdirectories as needed). The directory will be auto-created on first write. Use descriptive filenames and organize by type when appropriate (e.g. ${artyfactPath}/docs/, ${artyfactPath}/exports/).
 
 When the user asks you to create or configure MCP servers, HTTP tools, personas, or other settings:
 - You understand the file formats above and can guide the user to create proper entries.

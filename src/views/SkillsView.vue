@@ -147,7 +147,7 @@
       <!-- Header with back button -->
       <div class="detail-header">
         <button @click="goBack" class="detail-back-btn">
-          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
           Skills
@@ -172,6 +172,20 @@
             <span class="detail-sidebar-path" :title="selectedSkill.path">
               {{ selectedSkill.path }}
             </span>
+          </div>
+
+          <!-- Tree toolbar -->
+          <div class="px-3 py-2 flex items-center gap-1 shrink-0" style="border-bottom:1px solid #E5E5EA;">
+            <button
+              @click="refreshTree"
+              class="ml-auto p-1.5 rounded-lg transition-all duration-150 cursor-pointer"
+              style="color:#fff; border:none; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
+              @mouseenter="e => e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'"
+              @mouseleave="e => e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
+              title="Refresh"
+            >
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </button>
           </div>
 
           <!-- File tree -->
@@ -208,32 +222,112 @@
 
           <!-- File open -->
           <template v-else>
-            <!-- File tab bar -->
-            <div class="detail-file-tab">
-              <div class="detail-file-tab-inner">
-                <svg style="width:14px;height:14px;color:#1A1A1A;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                </svg>
-                <span class="detail-file-name">{{ activeFileName }}</span>
-                <span v-if="isMarkdownFile" class="detail-file-badge">MD</span>
+            <!-- File header bar -->
+            <div
+              class="px-4 py-2.5 shrink-0 flex items-center gap-3"
+              style="border-bottom:1px solid #E5E5EA; background:#F9F9F9;"
+            >
+              <svg style="width:16px;height:16px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <span style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#1A1A1A;">
+                {{ activeFileName }}
+              </span>
+              <div class="ml-auto flex items-center gap-2">
+                <!-- Auto-save indicator -->
+                <span
+                  v-if="saving"
+                  class="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
+                  style="background:rgba(0,122,255,0.1); color:#007AFF; font-family:'Inter',sans-serif;"
+                >
+                  <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
+                  saving
+                </span>
+
+                <!-- Copy source (markdown files only) -->
+                <button
+                  v-if="isMarkdownFile"
+                  @click="copySource"
+                  class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                  style="color:#9CA3AF; background:#F5F5F5; border:1px solid #E5E5EA; font-family:'Inter',sans-serif;"
+                  @mouseenter="e => { e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A' }"
+                  @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#9CA3AF' }"
+                  title="Copy markdown source"
+                >
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  {{ copied ? 'Copied' : 'Copy' }}
+                </button>
+
+                <!-- Mode toggle (markdown files only) -->
+                <div
+                  v-if="isMarkdownFile"
+                  class="flex rounded-lg overflow-hidden"
+                  style="border:1px solid #E5E5EA;"
+                >
+                  <button
+                    @click="editMode = false"
+                    class="px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
+                    :style="!editMode
+                      ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#fff; border:none; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
+                      : 'background:#fff; color:#9CA3AF; border:none;'"
+                    style="font-family:'Inter',sans-serif;"
+                  >Formatted</button>
+                  <button
+                    @click="editMode = true"
+                    class="px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
+                    :style="editMode
+                      ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#fff; border:none; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
+                      : 'background:#fff; color:#9CA3AF; border:none;'"
+                    style="font-family:'Inter',sans-serif;"
+                  >Source</button>
+                </div>
               </div>
             </div>
 
             <!-- Content area -->
-            <div class="detail-content-scroll">
-              <div v-if="loadingFile" style="color:#9CA3AF; font-family:'Inter',sans-serif; font-size:var(--fs-body);">Loading...</div>
-              <div v-else-if="fileError" style="color:#dc2626; font-family:'Inter',sans-serif; font-size:var(--fs-body);">{{ fileError }}</div>
-              <!-- Markdown rendering -->
+            <template v-if="loadingFile">
+              <div class="flex-1 flex items-center justify-center">
+                <p style="color:#9CA3AF; font-family:'Inter',sans-serif; font-size:var(--fs-body);">Loading...</p>
+              </div>
+            </template>
+            <template v-else-if="fileError">
+              <div class="flex-1 flex items-center justify-center">
+                <p style="color:#dc2626; font-family:'Inter',sans-serif; font-size:var(--fs-body);">{{ fileError }}</p>
+              </div>
+            </template>
+
+            <!-- Markdown: Formatted mode (editable rich preview) -->
+            <div
+              v-else-if="isMarkdownFile && !editMode"
+              class="flex-1 overflow-y-auto py-6"
+              style="scrollbar-width:thin; display:flex; justify-content:center;"
+            >
               <div
-                v-else-if="isMarkdownFile"
+                ref="formattedEl"
+                contenteditable="true"
                 class="prose-skills"
-                v-html="renderedMarkdown"
-              />
-              <!-- Raw content -->
-              <pre
-                v-else
-                class="detail-raw-code"
-              >{{ fileContent }}</pre>
+                style="outline:none; cursor:text;"
+                v-html="formattedHtml"
+                @input="onFormattedInput"
+              ></div>
+            </div>
+
+            <!-- Markdown: Source mode (textarea) -->
+            <div
+              v-else-if="isMarkdownFile && editMode"
+              class="flex-1 overflow-y-auto"
+              style="scrollbar-width:thin; display:flex; justify-content:center;"
+            >
+              <textarea
+                v-model="editorContent"
+                class="skills-source-editor"
+                spellcheck="false"
+              ></textarea>
+            </div>
+
+            <!-- Non-markdown: read-only raw view -->
+            <div v-else class="detail-content-scroll">
+              <pre class="detail-raw-code">{{ fileContent }}</pre>
             </div>
           </template>
         </div>
@@ -244,9 +338,11 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, defineComponent, h } from 'vue'
+import { ref, computed, reactive, watch, onBeforeUnmount, defineComponent, h } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import TurndownService from 'turndown'
+import { gfm } from 'turndown-plugin-gfm'
 import { useSkillsStore } from '../stores/skills'
 import { useConfigStore } from '../stores/config'
 
@@ -341,15 +437,83 @@ const isMarkdownFile = computed(() => {
   return activeFileName.value.endsWith('.md')
 })
 
+// ── Editing state ──
+const editorContent = ref('')
+const editMode = ref(false)
+const saving = ref(false)
+const copied = ref(false)
+let copiedTimer = null
+const formattedEl = ref(null)
+const formattedHtml = ref('')
+let autoSaveTimer = null
+let editingFormatted = false
+
+// Turndown: HTML → Markdown converter (with GFM tables, strikethrough, etc.)
+const turndown = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+  bulletListMarker: '-',
+  emDelimiter: '*',
+  strongDelimiter: '**',
+  hr: '---',
+})
+turndown.use(gfm)
+
 marked.use({ gfm: true, breaks: true })
 
-const renderedMarkdown = computed(() => {
-  if (!fileContent.value) return ''
+function refreshFormattedHtml() {
+  if (!editorContent.value) { formattedHtml.value = ''; return }
   try {
-    const raw = marked.parse(fileContent.value)
-    return DOMPurify.sanitize(raw)
-  } catch { return '' }
+    const raw = marked.parse(editorContent.value)
+    formattedHtml.value = DOMPurify.sanitize(raw)
+  } catch { formattedHtml.value = '' }
+}
+
+const renderedMarkdown = computed(() => {
+  return formattedHtml.value
 })
+
+// Auto-save (800ms debounce)
+function scheduleAutoSave() {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+  autoSaveTimer = setTimeout(async () => {
+    if (!activeFilePath.value || !window.electronAPI?.skills?.writeFile) return
+    saving.value = true
+    try {
+      await window.electronAPI.skills.writeFile(activeFilePath.value, editorContent.value)
+    } catch {}
+    saving.value = false
+  }, 800)
+}
+
+// Sync editorContent changes → auto-save + re-render
+watch(editorContent, (val) => {
+  if (val !== fileContent.value) {
+    fileContent.value = val
+    scheduleAutoSave()
+  }
+  if (!editingFormatted) refreshFormattedHtml()
+})
+
+onBeforeUnmount(() => {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+  if (copiedTimer) clearTimeout(copiedTimer)
+})
+
+function onFormattedInput(e) {
+  editingFormatted = true
+  const html = e.target.innerHTML
+  const md = turndown.turndown(html)
+  editorContent.value = md
+  editingFormatted = false
+}
+
+function copySource() {
+  navigator.clipboard.writeText(editorContent.value).catch(() => {})
+  copied.value = true
+  if (copiedTimer) clearTimeout(copiedTimer)
+  copiedTimer = setTimeout(() => { copied.value = false }, 2000)
+}
 
 async function refresh() {
   await skillsStore.loadSkills(configStore.config.skillsPath)
@@ -394,8 +558,10 @@ async function openFile(filePath, fileName) {
   activeFilePath.value = filePath
   activeFileName.value = fileName
   fileContent.value = ''
+  editorContent.value = ''
   fileError.value = null
   loadingFile.value = true
+  editMode.value = false
   if (!window.electronAPI?.skills?.readFile) return
   try {
     const result = await window.electronAPI.skills.readFile(filePath)
@@ -403,6 +569,8 @@ async function openFile(filePath, fileName) {
       fileError.value = result.error
     } else {
       fileContent.value = result.content
+      editorContent.value = result.content
+      refreshFormattedHtml()
     }
   } catch (err) {
     fileError.value = err.message
@@ -411,11 +579,20 @@ async function openFile(filePath, fileName) {
   }
 }
 
+async function refreshTree() {
+  if (!selectedSkill.value || !window.electronAPI?.skills?.readTree) return
+  try {
+    fileTree.value = await window.electronAPI.skills.readTree(selectedSkill.value.path)
+  } catch {
+    fileTree.value = []
+  }
+}
+
 function toggleFolder(folderPath) {
   expandedFolders[folderPath] = !expandedFolders[folderPath]
 }
 
-// ── SkillTreeNode: recursive file tree component ──
+// ── SkillTreeNode: recursive file tree component (matches NotesView TreeNode) ──
 const SkillTreeNode = defineComponent({
   name: 'SkillTreeNode',
   props: {
@@ -441,10 +618,11 @@ const SkillTreeNode = defineComponent({
           class: 'flex items-center gap-2 py-1.5 pr-2 cursor-pointer',
           style: {
             paddingLeft: indent + 'px',
-            background: isActive ? 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' : (hovered.value ? 'rgba(0, 0, 0, 0.02)' : 'transparent'),
-            borderRight: isActive ? '2px solid #1A1A1A' : '2px solid transparent',
+            background: isActive ? 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' : (hovered.value ? 'rgba(0,0,0,0.03)' : 'transparent'),
             color: isActive ? '#fff' : '#6B7280',
             boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            borderRadius: isActive ? '8px' : '0',
+            margin: isActive ? '0 8px' : '0',
             fontFamily: "'Inter',sans-serif",
             fontSize: 'var(--fs-secondary)',
             transition: 'background 0.15s, color 0.15s, box-shadow 0.15s',
@@ -458,7 +636,7 @@ const SkillTreeNode = defineComponent({
         }, [
           isDir ? h('svg', {
             style: {
-              width: '12px', height: '12px', flexShrink: 0, color: '#9CA3AF',
+              width: '12px', height: '12px', flexShrink: 0, color: isActive ? '#fff' : '#9CA3AF',
               transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
               transition: 'transform 0.15s'
             },
@@ -466,10 +644,10 @@ const SkillTreeNode = defineComponent({
           }, [h('polyline', { points: '9 18 15 12 9 6' })]) : h('span', { style: 'width:12px;display:inline-block;' }),
 
           isDir
-            ? h('svg', { style: 'width:14px;height:14px;flex-shrink:0;color:#6B7280;', viewBox: '0 0 24 24', fill: 'currentColor' }, [
+            ? h('svg', { style: `width:16px;height:16px;flex-shrink:0;color:${isActive ? '#fff' : '#6B7280'};`, viewBox: '0 0 24 24', fill: 'currentColor' }, [
                 h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })
               ])
-            : h('svg', { style: 'width:14px;height:14px;flex-shrink:0;color:' + (isActive ? '#fff' : '#9CA3AF') + ';', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+            : h('svg', { style: `width:16px;height:16px;flex-shrink:0;color:${isActive ? '#fff' : '#9CA3AF'};`, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
                 h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
                 h('polyline', { points: '14 2 14 8 20 8' })
               ]),
@@ -477,7 +655,7 @@ const SkillTreeNode = defineComponent({
           h('span', {
             class: 'truncate flex-1',
             style: { fontWeight: isDir ? '600' : '400' }
-          }, props.node.name)
+          }, props.node.name.replace(/\.md$/, ''))
         ])
       )
 
@@ -530,19 +708,20 @@ const SkillTreeNode = defineComponent({
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm, 8px);
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  font-weight: 500;
-  color: #9CA3AF;
-  background: #F5F5F5;
-  border: 1px solid #E5E5EA;
+  font-weight: 600;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border: none;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .catalog-refresh-btn:hover {
-  background: #E5E5EA;
-  color: #1A1A1A;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
 }
 
 /* ── Search bar ────────────────────────────────────────────────────────── */
@@ -770,22 +949,22 @@ const SkillTreeNode = defineComponent({
 .detail-back-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 10px;
+  gap: 5px;
+  padding: 5px 12px 5px 8px;
+  border-radius: var(--radius-sm, 8px);
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 500;
-  color: #9CA3AF;
-  background: #F5F5F5;
-  border: 1px solid #E5E5EA;
+  font-size: var(--fs-caption, 0.8125rem);
+  font-weight: 600;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border: none;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .detail-back-btn:hover {
-  background: #E5E5EA;
-  color: #1A1A1A;
-  border-color: #D1D1D6;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
 }
 .detail-divider {
   width: 1px;
@@ -833,7 +1012,7 @@ const SkillTreeNode = defineComponent({
   overflow: hidden;
   width: 260px;
   min-width: 260px;
-  background: #F5F5F5;
+  background: #F9F9F9;
   border-right: 1px solid #E5E5EA;
 }
 .detail-sidebar-header {
@@ -1013,4 +1192,23 @@ const SkillTreeNode = defineComponent({
 .prose-skills table { border-collapse: collapse; margin: 0 0 18px; width: 100%; border-radius: 10px; overflow: hidden; }
 .prose-skills th, .prose-skills td { border: 1px solid #E5E5EA; padding: 9px 14px; text-align: left; }
 .prose-skills th { background: rgba(0, 0, 0, 0.02); font-weight: 600; color: #1A1A1A; }
+
+/* ── Source editor (textarea) ──────────────────────────────────────────── */
+.skills-source-editor {
+  width: 95%;
+  max-width: 95%;
+  height: 100%;
+  resize: none;
+  outline: none;
+  padding: 24px 0;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: var(--fs-secondary);
+  line-height: 1.7;
+  color: #1A1A1A;
+  background: #fff;
+  border: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
 </style>

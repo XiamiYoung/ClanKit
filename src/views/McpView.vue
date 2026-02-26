@@ -244,6 +244,12 @@
             </div>
           </div>
 
+          <!-- Save error -->
+          <div v-if="saveError" class="save-error">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            {{ saveError }}
+          </div>
+
           <!-- Modal footer -->
           <div class="mcp-modal-footer">
             <div v-if="editingServer" style="flex:1;">
@@ -335,6 +341,7 @@ onUnmounted(() => {
 const searchQuery = ref('')
 const showModal = ref(false)
 const editingServer = ref(null)
+const saveError = ref('')
 
 const testStatus = ref('')   // '' | 'testing' | 'success' | 'error'
 const testTools = ref([])
@@ -372,6 +379,7 @@ const filteredServers = computed(() => {
 function openAdd() {
   editingServer.value = null
   form.value = emptyForm()
+  saveError.value = ''
   testStatus.value = ''
   testTools.value = []
   testError.value = ''
@@ -380,6 +388,7 @@ function openAdd() {
 
 function openEdit(server) {
   editingServer.value = server
+  saveError.value = ''
   form.value = {
     id: server.id,
     name: server.name || '',
@@ -449,7 +458,8 @@ async function saveForm() {
   try {
     await mcpStore.saveServer(serverData)
   } catch (err) {
-    console.error('Failed to save MCP server:', err)
+    saveError.value = err.message || 'Failed to save server'
+    return
   }
   closeModal()
 }
@@ -790,6 +800,12 @@ function cardGradient() {
   flex: 1; overflow-y: auto; padding: 24px;
   scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
+.save-error {
+  display: flex; align-items: center; gap: 8px; margin: 0 24px 0;
+  padding: 10px 14px; border-radius: var(--radius-sm, 8px);
+  background: rgba(255,59,48,0.1); border: 1px solid rgba(255,59,48,0.3);
+  color: #FF6B6B; font-size: var(--fs-secondary, 0.875rem); font-family: 'Inter', sans-serif;
+}
 .mcp-modal-footer {
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;
   padding: 16px 24px; border-top: 1px solid #1F1F1F; background: #0A0A0A;
@@ -866,24 +882,24 @@ function cardGradient() {
 
 /* ── Test Connection ───────────────────────────────────────────────────────── */
 .test-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid #1F1F1F; }
-.test-result { margin-top: 12px; padding: 12px 14px; border-radius: 10px; }
-.test-result.success { background: rgba(52,199,89,0.1); border: 1px solid rgba(52,199,89,0.2); }
-.test-result.error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); }
+.test-result { margin-top: 12px; padding: 12px 14px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); }
+.test-result.success { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
+.test-result.error { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .test-result-title { font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600; margin: 0 0 8px; }
-.test-result.success .test-result-title { color: #4ADE80; }
-.test-result.error .test-result-title { color: #FCA5A5; }
+.test-result.success .test-result-title { color: #FFFFFF; }
+.test-result.error .test-result-title { color: #FF6B6B; }
 .test-result-error {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
-  color: #FCA5A5; margin: 0; word-break: break-word;
+  color: #FF6B6B; margin: 0; word-break: break-word;
 }
 .test-tools-list { display: flex; flex-direction: column; gap: 4px; }
 .test-tool-item { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; }
 .test-tool-name {
   font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px;
-  font-weight: 600; color: #4ADE80; flex-shrink: 0;
+  font-weight: 600; color: #FFFFFF; flex-shrink: 0;
 }
 .test-tool-desc {
-  font-family: 'Inter', sans-serif; font-size: var(--fs-caption); color: #4B5563;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption); color: rgba(255,255,255,0.6);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 

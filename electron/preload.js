@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getConfig: () => ipcRenderer.invoke('store:get-config'),
   saveConfig: (config) => ipcRenderer.invoke('store:save-config', config),
   getDataPath: () => ipcRenderer.invoke('store:get-data-path'),
+  saveDataPath: (dataPath) => ipcRenderer.invoke('store:save-data-path', dataPath),
 
   getPersonas: () => ipcRenderer.invoke('store:get-personas'),
   savePersonas: (personas) => ipcRenderer.invoke('store:save-personas', personas),
@@ -58,6 +59,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     scanDir:        (dirPath)   => ipcRenderer.invoke('skills:scan-dir', dirPath),
     readTree:       (skillPath) => ipcRenderer.invoke('skills:read-tree', skillPath),
     readFile:       (filePath)  => ipcRenderer.invoke('skills:read-file', filePath),
+    writeFile:      (filePath, content) => ipcRenderer.invoke('skills:write-file', filePath, content),
     loadAllPrompts: (dirPath)   => ipcRenderer.invoke('skills:load-all-prompts', dirPath),
   },
 
@@ -120,6 +122,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getDocumentSummary:  (params) => ipcRenderer.invoke('knowledge:get-document-summary', params),
     generateEmbeddings:  (params) => ipcRenderer.invoke('knowledge:generate-embeddings', params),
     query:               (params) => ipcRenderer.invoke('knowledge:query', params),
+  },
+
+  // ── News RSS Feeds ─────────────────────────────────────────────────────
+  news: {
+    fetchFeeds: (feeds) => ipcRenderer.invoke('news:fetch-feeds', feeds),
   },
 
   // ── Obsidian Vault ──────────────────────────────────────────────────────

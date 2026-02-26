@@ -2,7 +2,7 @@
   <div>
     <!-- ── User message ─────────────────────────────────────────────────────── -->
     <template v-if="message.role === 'user'">
-      <div class="prose-sparkai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleCodeCopy" />
+      <div class="prose-sparkai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleContentClick" />
       <BabylonViewer v-for="url in modelUrls" :key="url" :src="url" />
     </template>
 
@@ -54,7 +54,7 @@
     <template v-for="(seg, i) in message.segments" :key="i">
 
       <!-- Text segment -->
-      <div v-if="seg.type === 'text'" class="prose-sparkai" style="max-width:none;" v-html="renderMarkdown(seg.content)" @click="handleCodeCopy" />
+      <div v-if="seg.type === 'text'" class="prose-sparkai" style="max-width:none;" v-html="renderMarkdown(seg.content)" @click="handleContentClick" />
 
       <!-- File diff (file_operation write/append) -->
       <div v-else-if="seg.type === 'tool' && isFileWrite(seg)" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #d1d5db; font-size:0.78rem;">
@@ -299,6 +299,38 @@ function stripBase64(text) {
 }
 
 // ── Markdown renderer ────────────────────────────────────────────────────────
+// File-path regex: matches files with known extensions OR directory paths (trailing / or \)
+// Files:  ~/path/file.ext, /abs/path/file.ext, C:\path\file.ext, \\server\share\file.ext
+// Dirs:   ~/dir/sub/, /abs/path/dir/, C:\path\dir\, \\server\share\  (2+ segments)
+const FILE_PATH_RE = /(?:(?:~\/[\w.\/\-]+|\/(?:[\w.\-]+\/)+[\w.\-]+|[A-Z]:\\(?:[\w.\-]+\\)*[\w.\-]+|\\\\[\w.\-]+(?:\\[\w.\-]+)+)\.(?:md|txt|json|js|ts|jsx|tsx|py|rb|go|rs|java|c|cpp|h|hpp|css|scss|html|xml|yaml|yml|toml|ini|cfg|conf|log|csv|sql|sh|bash|zsh|env|vue|svelte)|(?:~\/(?:[\w.\-]+\/)+|\/(?:[\w.\-]+\/){2,}|[A-Z]:\\(?:[\w.\-]+\\){2,}|\\\\[\w.\-]+(?:\\[\w.\-]+)+\\)(?=[\s.,;:!?)'"}\]]|$))/g
+
+function injectFilePathChips(html) {
+  // Split HTML into tags vs text runs so we never match inside tags or <pre>/<a>
+  // Note: inline <code> is intentionally allowed so backtick-wrapped paths get chips
+  const parts = html.split(/(<[^>]+>)/g)
+  let insidePre = 0 // depth counter for <pre>
+  let insideA = 0   // depth counter for <a>
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i]
+    if (p.startsWith('<')) {
+      const tag = p.toLowerCase()
+      if (/^<pre[\s>]/.test(tag)) insidePre++
+      else if (/^<\/pre>/.test(tag)) insidePre = Math.max(0, insidePre - 1)
+      if (/^<a[\s>]/.test(tag)) insideA++
+      else if (/^<\/a>/.test(tag)) insideA = Math.max(0, insideA - 1)
+      continue
+    }
+    if (insidePre > 0 || insideA > 0) continue
+    // Replace file paths in this text node — path text + small open-folder button after it
+    parts[i] = p.replace(FILE_PATH_RE, (match) => {
+      const escaped = match.replace(/"/g, '&quot;')
+      return `<span class="file-path-chip">${match}</span><span class="file-path-open-btn" data-path="${escaped}" title="Open in file explorer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>`
+    })
+  }
+  // Unwrap <code> tags that now contain only a file-path chip (from backtick-wrapped paths)
+  return parts.join('').replace(/<code>(<span class="file-path-chip">.*?<\/span>)<\/code>/g, '$1')
+}
+
 function renderMarkdown(text) {
   if (!text) return ''
   try {
@@ -308,17 +340,34 @@ function renderMarkdown(text) {
     // Highlight @mentions
     const withMentions = sanitized.replace(/@(\w[\w\s]*?\w|\w)\b/g, '<span class="mention">@$1</span>')
     // Wrap <pre><code> blocks with a header bar containing a copy button
-    return withMentions
+    const withCodeBlocks = withMentions
       .replace(/<pre><code(?:\s+class="language-(\w+)")?>/g, (m, lang) => {
         const label = lang ? `<span class="code-lang">${lang}</span>` : ''
         return `<div class="code-block-wrap">${label}<span class="code-copy-btn">Copy</span><pre><code${lang ? ` class="language-${lang}"` : ''}>`
       })
       .replace(/<\/code><\/pre>/g, '</code></pre></div>')
+    // Inject file-path chips (skipping paths inside code/pre/a)
+    return injectFilePathChips(withCodeBlocks)
   } catch { return String(text) }
 }
 
-// ── Copy handler for code blocks (event delegation) ──────────────────────────
-function handleCodeCopy(e) {
+// ── Click handler for code-copy + file-path open (event delegation) ──────────
+function handleContentClick(e) {
+  // File path open button — directories open directly, files open parent folder
+  const fpBtn = e.target.closest('.file-path-open-btn')
+  if (fpBtn) {
+    const filePath = fpBtn.dataset.path
+    if (filePath) {
+      const isDir = /[/\\]$/.test(filePath)
+      if (isDir && window.electronAPI?.openFile) {
+        window.electronAPI.openFile(filePath)
+      } else if (window.electronAPI?.showInFolder) {
+        window.electronAPI.showInFolder(filePath)
+      }
+    }
+    return
+  }
+  // Code block copy button
   const btn = e.target.closest('.code-copy-btn')
   if (!btn) return
   const wrap = btn.closest('.code-block-wrap')
@@ -630,5 +679,54 @@ function diffMarker(type) {
   padding: 1px 4px;
   border-radius: 4px;
   font-weight: 600;
+}
+
+/* ── File path chip (inline styled text) ──────────────────────────────────── */
+:deep(.file-path-chip) {
+  display: inline;
+  padding: 2px 6px;
+  margin: 0 1px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border, #E5E5EA);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  color: inherit;
+}
+/* ── File path open button (small icon after the path, macOS blue) ─────────── */
+:deep(.file-path-open-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 3px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, #56CCF2 0%, #2F80ED 100%);
+  color: #FFFFFF;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 4px rgba(47,128,237,0.25);
+}
+:deep(.file-path-open-btn:hover) {
+  background: linear-gradient(135deg, #6DD5F5 0%, #4A9AF5 100%);
+  box-shadow: 0 2px 8px rgba(47,128,237,0.35);
+}
+:deep(.file-path-open-btn svg) {
+  display: block;
+}
+/* User bubble overrides (light text on dark background) */
+.user-content :deep(.file-path-chip) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+}
+.user-content :deep(.file-path-open-btn) {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: none;
+}
+.user-content :deep(.file-path-open-btn:hover) {
+  background: rgba(255, 255, 255, 0.35);
 }
 </style>
