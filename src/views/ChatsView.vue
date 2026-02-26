@@ -1,20 +1,47 @@
 <template>
   <div class="h-full flex chats-page">
-    <!-- ── Chat List Sidebar ──────────────────────────────────────────────── -->
-    <aside class="chat-sidebar" :style="{ width: sidebarWidth + 'px' }">
+    <!-- ── Grid Mode ──────────────────────────────────────────────────────── -->
+    <ChatGridLayout
+      v-if="gridMode"
+      class="flex-1 min-w-0"
+      :gridCount="gridCount"
+      :gridChatIds="gridChatIds"
+      @update:gridCount="gridCount = $event"
+      @exit-grid="exitGridMode"
+      @new-chat="gridNewChat"
+      @select-chat="gridSelectChat"
+      @swap-chat="gridSwapChat"
+      @maximize-chat="gridMaximizeChat"
+    />
+
+    <!-- ── Chat List Sidebar (single mode) ────────────────────────────────── -->
+    <aside v-if="!gridMode" class="chat-sidebar" :style="{ width: sidebarWidth + 'px' }">
       <!-- Header -->
       <div class="chat-sidebar-header">
         <span class="chat-sidebar-title">Chats</span>
-        <button
-          @click="newChat"
-          class="chat-sidebar-new-btn"
-          aria-label="New chat"
-          title="New chat"
-        >
-          <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
+        <div class="flex items-center gap-1">
+          <button
+            @click="enterGridMode"
+            class="chat-sidebar-new-btn"
+            :class="{ 'grid-toggle-active': gridMode }"
+            aria-label="Grid view"
+            title="Multi-chat grid view"
+          >
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+          </button>
+          <button
+            @click="newChat"
+            class="chat-sidebar-new-btn"
+            aria-label="New chat"
+            title="New chat"
+          >
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <!-- Search Filter -->
@@ -57,7 +84,7 @@
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
 
-          <span v-if="(chat.isRunning && chat.id !== chatsStore.activeChatId) || chatsStore.unreadChatIds.has(chat.id)" class="chat-unread-spinner"></span>
+          <span v-if="((chat.isRunning && chat.id !== chatsStore.activeChatId) || chatsStore.unreadChatIds.has(chat.id)) && !chatsStore.completedChatIds.has(chat.id)" class="chat-unread-spinner"></span>
 
           <span class="chat-sidebar-item-title">{{ chat.title }}</span>
 
@@ -88,12 +115,14 @@
 
     <!-- Resize handle -->
     <div
+      v-if="!gridMode"
       class="chat-sidebar-resize"
       @mousedown.prevent="startResize"
     ></div>
 
-    <!-- ── Chat Window ─────────────────────────────────────────────────────── -->
+    <!-- ── Chat Window (single mode) ──────────────────────────────────────── -->
     <div
+      v-if="!gridMode"
       class="flex-1 min-w-0 flex flex-col relative chat-window"
       @dragenter.prevent="onDragEnter"
       @dragover.prevent="onDragOver"
@@ -335,132 +364,23 @@
                     </button>
                   </div>
                 </div>
-                <div class="spc-section">
-                  <div class="spc-label">Tools <span class="spc-tool-count">{{ sysConfigToolIds.size }}/{{ toolsStore.tools.length }}</span></div>
-                  <div class="spc-tool-actions">
-                    <button class="spc-link" @click="setSysPersonaAllTools(sysPersonaConfigId, true)">All</button>
-                    <button class="spc-link" @click="setSysPersonaAllTools(sysPersonaConfigId, false)">None</button>
-                  </div>
-                  <div class="spc-tool-list">
-                    <label v-for="t in toolsStore.tools" :key="t.id" class="spc-tool-item">
-                      <input type="checkbox" :checked="sysConfigToolIds.has(t.id)" @change="toggleSysPersonaTool(sysPersonaConfigId, t.id)" style="accent-color:#1A1A1A;" />
-                      <span>{{ t.name }}</span>
-                    </label>
-                  </div>
-                </div>
+                <!-- Tools now controlled at chat level (row 2 header chips) -->
               </div>
             </div>
           </div>
-          <!-- Right section: Default Provider | Model | Tools -->
-          <div class="right-group">
-            <!-- Provider chip -->
-            <div class="persona-chip-wrap" ref="providerChipWrap">
-              <button class="persona-chip" :class="{ active: showProviderPopover }" @click.stop="toggleProviderPopover" title="Default Provider">
-                <div class="model-chip-icon">
-                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                  </svg>
-                </div>
-                <span class="model-chip-label">{{ effectiveProviderLabel }}</span>
-                <svg class="persona-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-              <div v-if="showProviderPopover" class="persona-popover" @click.stop>
-                <div class="persona-popover-header">Provider</div>
-                <button class="persona-popover-item" :class="{ selected: !chatsStore.activeChat?.provider || chatsStore.activeChat?.provider === 'anthropic' }" @click="selectProvider('anthropic')"><span>Anthropic</span></button>
-                <button class="persona-popover-item" :class="{ selected: chatsStore.activeChat?.provider === 'openrouter' }" @click="selectProvider('openrouter')"><span>OpenRouter</span></button>
-                <button class="persona-popover-item" :class="{ selected: chatsStore.activeChat?.provider === 'openai' }" @click="selectProvider('openai')"><span>OpenAI</span></button>
-              </div>
-            </div>
-
-            <div class="header-divider"></div>
-
-            <!-- Model chip -->
-            <div class="persona-chip-wrap" ref="modelChipWrap">
-              <button class="persona-chip model-chip" :class="{ active: showModelPopover }" @click.stop="toggleModelPopover" title="Default Model">
-                <div class="model-chip-icon">
-                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4z"/><circle cx="9" cy="15" r="1"/><circle cx="15" cy="15" r="1"/>
-                  </svg>
-                </div>
-                <span class="model-chip-label">{{ effectiveModelLabel }}</span>
-                <svg class="persona-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-              <div v-if="showModelPopover" class="persona-popover model-popover" @click.stop>
-                <div class="persona-popover-header">Model</div>
-                <div v-if="effectiveProvider === 'openrouter' || effectiveProvider === 'openai'" style="padding:4px 6px;">
-                  <input v-model="chatModelFilter" type="text" placeholder="Search models..." class="model-filter-input" @click.stop />
-                </div>
-                <div class="model-popover-list">
-                  <button class="model-popover-item" :class="{ selected: !chatsStore.activeChat?.model }" @click="selectModel(null)">
-                    <div class="model-item-info"><span class="model-item-name">Default</span><span class="model-item-id">{{ defaultModelLabel }}</span></div>
-                  </button>
-                  <template v-if="effectiveProvider === 'openrouter'">
-                    <div v-if="modelsStore.openrouterLoading" class="model-popover-status">Loading models...</div>
-                    <button v-for="m in filteredChatOpenRouterModels" :key="m.id" class="model-popover-item" :class="{ selected: chatsStore.activeChat?.model === m.id }" @click="selectModel(m.id)">
-                      <div class="model-item-info"><span class="model-item-name">{{ m.name || m.id }}</span><span class="model-item-id">{{ m.id }}</span></div>
-                    </button>
-                  </template>
-                  <template v-else-if="effectiveProvider === 'openai'">
-                    <div v-if="modelsStore.openaiLoading" class="model-popover-status">Loading models...</div>
-                    <button v-for="m in filteredChatOpenAIModels" :key="m.id" class="model-popover-item" :class="{ selected: chatsStore.activeChat?.model === m.id }" @click="selectModel(m.id)">
-                      <div class="model-item-info"><span class="model-item-name">{{ m.name || m.id }}</span><span class="model-item-id">{{ m.id }}</span></div>
-                    </button>
-                  </template>
-                  <template v-else>
-                    <button v-for="opt in anthropicModelChoices" :key="opt.id" class="model-popover-item" :class="{ selected: chatsStore.activeChat?.model === opt.id }" @click="selectModel(opt.id)">
-                      <div class="model-item-info"><span class="model-item-name">{{ opt.label }}</span><span class="model-item-id">{{ opt.id }}</span></div>
-                    </button>
-                  </template>
-                </div>
-              </div>
-            </div>
-
-            <div class="header-divider"></div>
-
-            <!-- Tools chip -->
-            <div class="persona-chip-wrap">
-              <button class="persona-chip tools-chip" @click="showToolsModal = true" title="Default Tools">
-                <div class="model-chip-icon">
-                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-                  </svg>
-                </div>
-                <span class="persona-chip-name">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }} tools</span>
-              </button>
-            </div>
-
-            <div class="header-divider"></div>
-
-            <!-- RAG chip -->
-            <div class="persona-chip-wrap" ref="ragChipWrap">
-              <button class="persona-chip rag-chip" :class="{ active: showRagPopover }" @click.stop="showRagPopover = !showRagPopover" title="RAG Knowledge">
-                <div class="model-chip-icon">
-                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                  </svg>
-                </div>
-                <span class="persona-chip-name">{{ ragEnabledCount }} RAG</span>
-              </button>
-              <div v-if="showRagPopover" class="rag-popover" @click.stop>
-                <div class="rag-popover-header">
-                  <span>RAG Knowledge</span>
-                  <span class="rag-popover-status" :class="knowledgeStore.ragEnabled ? 'rag-on' : 'rag-off'">{{ knowledgeStore.ragEnabled ? 'Enabled' : 'Disabled' }}</span>
-                </div>
-                <div v-if="ragEnabledIndexes.length === 0" class="rag-popover-empty">
-                  No indexes enabled. Go to Knowledge page to configure.
-                </div>
-                <div v-else class="rag-popover-list">
-                  <div v-for="idx in ragEnabledIndexes" :key="idx.name" class="rag-popover-item">
-                    <div class="rag-popover-item-name">{{ idx.name }}</div>
-                    <div class="rag-popover-item-meta">
-                      {{ idx.embeddingProvider === 'openrouter' ? 'OpenRouter' : 'OpenAI' }}
-                      / {{ idx.embeddingModel }}
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <!-- Chat Settings button -->
+          <div class="chat-config-btn-wrap">
+            <button class="chat-config-btn" @click="showChatConfigModal = true">
+              <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span class="chat-config-btn-label">Chat Settings</span>
+            </button>
+            <!-- Hover tooltip summary -->
+            <div class="chat-config-tooltip">
+              <div class="chat-config-tooltip-row"><span class="cct-key">Provider</span><span class="cct-val">{{ effectiveProviderLabel }}</span></div>
+              <div class="chat-config-tooltip-row"><span class="cct-key">Model</span><span class="cct-val">{{ effectiveModelLabel }}</span></div>
+              <div class="chat-config-tooltip-row"><span class="cct-key">Tools</span><span class="cct-val">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }} ({{ formatTokens(toolsTokenEstimate) }})</span></div>
+              <div class="chat-config-tooltip-row"><span class="cct-key">MCP</span><span class="cct-val">{{ enabledMcpServers.length }}/{{ mcpStore.servers.length }} ({{ formatTokens(mcpTokenEstimate) }})</span></div>
+              <div class="chat-config-tooltip-row"><span class="cct-key">RAG</span><span class="cct-val">{{ ragEnabledCount }} index{{ ragEnabledCount !== 1 ? 'es' : '' }}</span></div>
             </div>
           </div>
         </div>
@@ -1001,6 +921,50 @@
           </div>
         </div>
 
+        <!-- Memory Suggestions Banner -->
+        <Transition name="memory-banner">
+          <div
+            v-if="pendingMemorySuggestions.length > 0"
+            class="memory-banner"
+          >
+            <div class="memory-banner-header">
+              <div class="memory-banner-title">
+                <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
+                  <line x1="10" y1="22" x2="14" y2="22"/>
+                </svg>
+                <span>Memories detected</span>
+                <span class="memory-banner-count">{{ pendingMemorySuggestions.length }}</span>
+              </div>
+              <div class="memory-banner-actions">
+                <button class="memory-banner-btn accept-all" @click="acceptAllMemories">Accept All</button>
+                <button class="memory-banner-btn dismiss-all" @click="dismissAllMemories">Dismiss All</button>
+              </div>
+            </div>
+            <div class="memory-banner-list">
+              <div
+                v-for="item in pendingMemorySuggestions"
+                :key="item.id"
+                class="memory-banner-item"
+              >
+                <div class="memory-banner-item-content">
+                  <span class="memory-banner-target" :class="item.target">{{ item.target === 'user' ? 'You' : 'AI' }}</span>
+                  <span class="memory-banner-section">{{ item.section }}</span>
+                  <span class="memory-banner-entry">{{ item.entry }}</span>
+                </div>
+                <div class="memory-banner-item-actions">
+                  <button class="memory-item-btn accept" @click="acceptMemory(item)" title="Accept">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  </button>
+                  <button class="memory-item-btn dismiss" @click="dismissMemory(item)" title="Dismiss">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
         <!-- Input Area -->
         <div class="chat-input-area">
           <!-- Attachment preview strip -->
@@ -1318,13 +1282,288 @@
                 <span class="tools-select-row-name">{{ tool.name }}</span>
                 <span class="tools-select-row-desc">{{ tool.description || 'No description' }}</span>
               </div>
-              <span class="tools-select-row-cat">{{ tool.category || 'HTTP' }}</span>
+              <span class="tools-select-row-cat" :class="'tools-select-type-' + (tool.type || 'http')">{{ {http:'HTTP',code:'Code',prompt:'Prompt'}[tool.type || 'http'] }}</span>
             </label>
           </div>
 
           <!-- Footer -->
           <div class="tools-select-footer">
             <AppButton size="modal" @click="showToolsModal = false">Done</AppButton>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ── MCP Selection Modal ──────────────────────────────────────────── -->
+    <Teleport to="body">
+      <div v-if="showMcpModal" class="tools-select-backdrop" @click.self="showMcpModal = false">
+        <div class="tools-select-modal">
+          <!-- Header -->
+          <div class="tools-select-header">
+            <div class="tools-select-header-left">
+              <div class="tools-select-header-icon">
+                <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </div>
+              <h2 class="tools-select-title">Select MCP Servers</h2>
+              <span class="tools-select-count">{{ enabledMcpServers.length }} enabled</span>
+            </div>
+            <button class="tools-select-close" @click="showMcpModal = false">
+              <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+
+          <!-- Filter bar -->
+          <div class="tools-select-filters">
+            <div class="tools-select-search-wrap">
+              <svg style="width:14px;height:14px;color:#9CA3AF;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              <input
+                v-model="mcpSearchQuery"
+                type="text"
+                placeholder="Filter servers..."
+                class="tools-select-search"
+              />
+            </div>
+            <div class="tools-select-actions">
+              <button class="tools-select-action-btn" @click="enableAllMcp">Enable All</button>
+              <button class="tools-select-action-btn" @click="disableAllMcp">Disable All</button>
+            </div>
+          </div>
+
+          <!-- Server list -->
+          <div class="tools-select-list">
+            <div v-if="mcpStore.servers.length === 0" class="tools-select-empty">
+              <p>No MCP servers configured. Go to the MCP page to add servers.</p>
+            </div>
+            <div v-else-if="filteredModalMcpServers.length === 0" class="tools-select-empty">
+              <p>No servers match your filter.</p>
+            </div>
+            <label
+              v-for="server in filteredModalMcpServers"
+              :key="server.id"
+              class="tools-select-row"
+              :class="{ enabled: chatEnabledMcpIds.has(server.id) }"
+            >
+              <input
+                type="checkbox"
+                :checked="chatEnabledMcpIds.has(server.id)"
+                @change="toggleMcp(server.id)"
+                class="tools-select-checkbox"
+              />
+              <div class="tools-select-row-info">
+                <span class="tools-select-row-name">{{ server.name }}</span>
+                <span class="tools-select-row-desc">{{ server.description || 'No description' }}</span>
+              </div>
+              <span class="tools-select-row-cat tools-select-type-http" style="font-size:10px;">
+                {{ mcpStore.runningStatus[server.id] ? 'Running' : 'Stopped' }}
+              </span>
+            </label>
+          </div>
+
+          <!-- Footer -->
+          <div class="tools-select-footer">
+            <span style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-caption); color:#9CA3AF;">
+              {{ formatTokens(mcpTokenEstimate) }} tokens ({{ tokenPercentage(mcpTokenEstimate) }}%)
+            </span>
+            <AppButton size="modal" @click="showMcpModal = false">Done</AppButton>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ── Chat Settings Modal (dark theme) ──────────────────────────────── -->
+    <Teleport to="body">
+      <div v-if="showChatConfigModal" class="ccm-backdrop" @click.self="showChatConfigModal = false">
+        <div class="ccm-dialog">
+          <!-- Header -->
+          <div class="ccm-header">
+            <div class="ccm-header-left">
+              <div class="ccm-header-icon">
+                <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              </div>
+              <h2 class="ccm-title">Chat Settings</h2>
+            </div>
+            <button class="ccm-close" @click="showChatConfigModal = false">
+              <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+
+          <!-- Tab bar -->
+          <div class="ccm-tabs">
+            <button class="ccm-tab" :class="{ active: ccmActiveTab === 'model' }" @click="ccmActiveTab = 'model'">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              Model
+            </button>
+            <button class="ccm-tab" :class="{ active: ccmActiveTab === 'tools' }" @click="ccmActiveTab = 'tools'">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              Tools
+              <span class="ccm-tab-badge">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }}</span>
+            </button>
+            <button class="ccm-tab" :class="{ active: ccmActiveTab === 'mcp' }" @click="ccmActiveTab = 'mcp'">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>
+              MCP
+              <span class="ccm-tab-badge">{{ enabledMcpServers.length }}/{{ mcpStore.servers.length }}</span>
+            </button>
+            <button class="ccm-tab" :class="{ active: ccmActiveTab === 'rag' }" @click="ccmActiveTab = 'rag'">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+              RAG
+            </button>
+          </div>
+
+          <!-- Body -->
+          <div class="ccm-body">
+
+            <!-- ═══ MODEL TAB ═══ -->
+            <div v-if="ccmActiveTab === 'model'" class="ccm-tab-content">
+              <!-- Provider -->
+              <div class="ccm-dark-section">
+                <div class="ccm-dark-section-label">Provider</div>
+                <div class="ccm-provider-btns">
+                  <button v-for="prov in [{ id: 'anthropic', label: 'Anthropic' }, { id: 'openrouter', label: 'OpenRouter' }, { id: 'openai', label: 'OpenAI' }]" :key="prov.id"
+                    class="ccm-provider-btn" :class="{ active: effectiveProvider === prov.id }"
+                    @click="selectProvider(prov.id)">{{ prov.label }}</button>
+                </div>
+              </div>
+              <!-- Model -->
+              <div class="ccm-dark-section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+                <div class="ccm-dark-section-label">Model <span class="ccm-dark-badge">{{ effectiveModelLabel }}</span></div>
+                <div v-if="effectiveProvider === 'openrouter' || effectiveProvider === 'openai'" style="margin-bottom:8px;">
+                  <input v-model="chatModelFilter" type="text" placeholder="Search models..." class="ccm-model-search" @click.stop />
+                </div>
+                <div class="ccm-model-list">
+                  <button class="ccm-model-item" :class="{ active: !chatsStore.activeChat?.model }" @click="selectModel(null)">
+                    <span>Default</span><span class="ccm-model-id">{{ defaultModelLabel }}</span>
+                  </button>
+                  <template v-if="effectiveProvider === 'openrouter'">
+                    <div v-if="modelsStore.openrouterLoading" class="ccm-model-loading">Loading models...</div>
+                    <button v-for="m in filteredChatOpenRouterModels" :key="m.id" class="ccm-model-item" :class="{ active: chatsStore.activeChat?.model === m.id }" @click="selectModel(m.id)">
+                      <span>{{ m.name || m.id }}</span><span class="ccm-model-id">{{ m.id }}</span>
+                    </button>
+                  </template>
+                  <template v-else-if="effectiveProvider === 'openai'">
+                    <div v-if="modelsStore.openaiLoading" class="ccm-model-loading">Loading models...</div>
+                    <button v-for="m in filteredChatOpenAIModels" :key="m.id" class="ccm-model-item" :class="{ active: chatsStore.activeChat?.model === m.id }" @click="selectModel(m.id)">
+                      <span>{{ m.name || m.id }}</span><span class="ccm-model-id">{{ m.id }}</span>
+                    </button>
+                  </template>
+                  <template v-else>
+                    <button v-for="opt in anthropicModelChoices" :key="opt.id" class="ccm-model-item" :class="{ active: chatsStore.activeChat?.model === opt.id }" @click="selectModel(opt.id)">
+                      <span>{{ opt.label }}</span><span class="ccm-model-id">{{ opt.id }}</span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <!-- ═══ TOOLS TAB ═══ -->
+            <div v-else-if="ccmActiveTab === 'tools'" class="ccm-tab-content">
+              <!-- Search + actions bar -->
+              <div class="ccm-list-toolbar">
+                <div class="ccm-list-search-wrap">
+                  <svg style="width:14px;height:14px;color:#6B7280;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  <input v-model="ccmToolSearch" type="text" placeholder="Search tools..." class="ccm-list-search" />
+                </div>
+                <div class="ccm-list-actions">
+                  <button class="ccm-list-action-btn" @click="enableAllTools">All</button>
+                  <button class="ccm-list-action-btn" @click="disableAllTools">None</button>
+                </div>
+                <span class="ccm-list-summary">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }} enabled · {{ formatTokens(toolsTokenEstimate) }}</span>
+              </div>
+              <!-- Tool list -->
+              <div class="ccm-item-list">
+                <div v-if="toolsStore.tools.length === 0" class="ccm-list-empty">No tools configured. Go to the Tools page to add tools.</div>
+                <div v-else-if="ccmFilteredTools.length === 0" class="ccm-list-empty">No tools match "{{ ccmToolSearch }}"</div>
+                <div
+                  v-for="t in ccmFilteredTools"
+                  :key="t.id"
+                  class="ccm-item-card"
+                  :class="{ enabled: chatEnabledToolIds.has(t.id) }"
+                  @click="toggleTool(t.id)"
+                >
+                  <div class="ccm-item-card-info">
+                    <div class="ccm-item-card-top">
+                      <span class="ccm-item-card-name">{{ t.name }}</span>
+                      <span class="ccm-item-card-type" :class="'ccm-type-' + (t.type || 'http')">{{ {http:'HTTP',code:'Code',prompt:'Prompt'}[t.type || 'http'] }}</span>
+                    </div>
+                    <span class="ccm-item-card-desc">{{ t.description || 'No description' }}</span>
+                  </div>
+                  <label class="ccm-toggle" @click.stop>
+                    <input type="checkbox" :checked="chatEnabledToolIds.has(t.id)" @change="toggleTool(t.id)" />
+                    <span class="ccm-toggle-track"><span class="ccm-toggle-thumb"></span></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- ═══ MCP TAB ═══ -->
+            <div v-else-if="ccmActiveTab === 'mcp'" class="ccm-tab-content">
+              <!-- Search + actions bar -->
+              <div class="ccm-list-toolbar">
+                <div class="ccm-list-search-wrap">
+                  <svg style="width:14px;height:14px;color:#6B7280;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  <input v-model="ccmMcpSearch" type="text" placeholder="Search MCP servers..." class="ccm-list-search" />
+                </div>
+                <div class="ccm-list-actions">
+                  <button class="ccm-list-action-btn" @click="enableAllMcp">All</button>
+                  <button class="ccm-list-action-btn" @click="disableAllMcp">None</button>
+                </div>
+                <span class="ccm-list-summary">{{ enabledMcpServers.length }}/{{ mcpStore.servers.length }} enabled · {{ formatTokens(mcpTokenEstimate) }}</span>
+              </div>
+              <!-- MCP list -->
+              <div class="ccm-item-list">
+                <div v-if="mcpStore.servers.length === 0" class="ccm-list-empty">No MCP servers configured. Go to the MCP page to add servers.</div>
+                <div v-else-if="ccmFilteredMcp.length === 0" class="ccm-list-empty">No servers match "{{ ccmMcpSearch }}"</div>
+                <div
+                  v-for="s in ccmFilteredMcp"
+                  :key="s.id"
+                  class="ccm-item-card"
+                  :class="{ enabled: chatEnabledMcpIds.has(s.id) }"
+                  @click="toggleMcp(s.id)"
+                >
+                  <div class="ccm-item-card-info">
+                    <div class="ccm-item-card-top">
+                      <span class="ccm-item-card-name">{{ s.name }}</span>
+                      <span class="ccm-item-card-status" :class="mcpStore.runningStatus[s.id] ? 'status-running' : 'status-stopped'">
+                        <span class="ccm-status-dot"></span>
+                        {{ mcpStore.runningStatus[s.id] ? 'Running' : 'Stopped' }}
+                      </span>
+                    </div>
+                    <span class="ccm-item-card-desc">{{ s.description || 'No description' }}</span>
+                  </div>
+                  <label class="ccm-toggle" @click.stop>
+                    <input type="checkbox" :checked="chatEnabledMcpIds.has(s.id)" @change="toggleMcp(s.id)" />
+                    <span class="ccm-toggle-track"><span class="ccm-toggle-thumb"></span></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- ═══ RAG TAB ═══ -->
+            <div v-else-if="ccmActiveTab === 'rag'" class="ccm-tab-content">
+              <div class="ccm-dark-section">
+                <div class="ccm-dark-section-label">
+                  Knowledge Base
+                  <span class="ccm-dark-badge" :class="knowledgeStore.ragEnabled ? 'badge-on' : 'badge-off'">{{ knowledgeStore.ragEnabled ? 'Enabled' : 'Disabled' }}</span>
+                </div>
+                <div v-if="ragEnabledIndexes.length === 0" class="ccm-list-empty" style="margin-top:12px;">No indexes enabled. Go to Knowledge page to configure.</div>
+                <div v-else class="ccm-rag-list">
+                  <div v-for="idx in ragEnabledIndexes" :key="idx.name" class="ccm-rag-item">
+                    <span class="ccm-rag-name">{{ idx.name }}</span>
+                    <span class="ccm-rag-meta">{{ idx.embeddingProvider === 'openrouter' ? 'OpenRouter' : 'OpenAI' }} / {{ idx.embeddingModel }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="ccm-footer">
+            <span class="ccm-footer-tokens">{{ formatTokens(toolsTokenEstimate + mcpTokenEstimate) }} tokens total ({{ tokenPercentage(toolsTokenEstimate + mcpTokenEstimate) }}% of context)</span>
+            <button class="ccm-done-btn" @click="showChatConfigModal = false">Done</button>
           </div>
         </div>
       </div>
@@ -1360,8 +1599,8 @@
   </div>
 
   <!-- New Chat Modal -->
-    <div v-if="showNewChatModal" class="rename-backdrop" @click.self="cancelNewChat">
-      <div class="rename-modal" style="width:min(460px, 90vw);" @keydown.escape="cancelNewChat">
+    <div v-if="showNewChatModal" class="rename-backdrop">
+      <div class="rename-modal" style="width:min(460px, 90vw);" @keydown.escape="cancelNewChat" @keydown.enter="confirmNewChat">
         <div class="rename-header">
           <h3 class="rename-title">New Chat</h3>
           <button class="rename-close-btn" @click="cancelNewChat" aria-label="Close">
@@ -1369,21 +1608,27 @@
           </button>
         </div>
         <div style="padding:16px 20px;">
-          <p style="font-size:var(--fs-body); color:#1A1A1A; margin:0 0 12px;">
+          <p style="font-size:var(--fs-body); color:#9CA3AF; margin:0 0 12px;">
             Optionally copy message history from an existing chat.
           </p>
           <div class="newchat-source-list">
-            <button
-              class="newchat-source-item"
+            <div
+              class="newchat-source-item newchat-name-row"
               :class="{ selected: newChatSourceId === null }"
               @click="newChatSourceId = null"
             >
-              <svg style="width:16px;height:16px;color:#9CA3AF;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
-              <span class="newchat-source-title">Empty chat</span>
-              <span style="font-size:var(--fs-small); color:#9CA3AF;">Start fresh</span>
-            </button>
+              <input
+                v-model="newChatName"
+                type="text"
+                placeholder="Empty Chat"
+                class="newchat-name-input"
+                @click.stop="newChatSourceId = null"
+              />
+              <span style="font-size:var(--fs-small); flex-shrink:0;" :style="{ color: newChatSourceId === null ? 'rgba(255,255,255,0.6)' : '#9CA3AF' }">Start fresh</span>
+            </div>
             <button
               v-for="chat in chatsStore.chats"
               :key="chat.id"
@@ -1471,6 +1716,8 @@ import MessageRenderer from '../components/chat/MessageRenderer.vue'
 import { parseMentions } from '../utils/mentions'
 import { v4 as uuidv4 } from 'uuid'
 import AppButton from '../components/common/AppButton.vue'
+import ChatGridLayout from '../components/chat/ChatGridLayout.vue'
+import { estimateToolTokens, estimateMcpTokens, formatTokens, tokenPercentage } from '../utils/tokenEstimate'
 
 const chatsStore = useChatsStore()
 const skillsStore = useSkillsStore()
@@ -1480,6 +1727,70 @@ const mcpStore = useMcpStore()
 const toolsStore = useToolsStore()
 const modelsStore = useModelsStore()
 const knowledgeStore = useKnowledgeStore()
+
+// ── Grid mode state ──
+const gridMode = ref(false)
+const gridCount = ref(4)
+const gridChatIds = ref([])
+
+function refreshGridChatIds() {
+  const sorted = [...chatsStore.chats].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+  gridChatIds.value = sorted.slice(0, gridCount.value).map(c => c.id)
+}
+
+watch(gridCount, (newCount) => {
+  // When count increases, fill new slots from recent chats not already in grid
+  // When count decreases, truncate
+  const current = gridChatIds.value
+  if (newCount <= current.length) {
+    gridChatIds.value = current.slice(0, newCount)
+  } else {
+    const sorted = [...chatsStore.chats].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    const extras = sorted.filter(c => !current.includes(c.id)).map(c => c.id)
+    gridChatIds.value = [...current, ...extras].slice(0, newCount)
+  }
+})
+
+function enterGridMode() {
+  // Only recalculate if grid hasn't been initialized or all IDs are stale
+  const validIds = gridChatIds.value.filter(id => chatsStore.chats.some(c => c.id === id))
+  if (validIds.length === 0) {
+    refreshGridChatIds()
+  } else {
+    gridChatIds.value = validIds.slice(0, gridCount.value)
+  }
+  gridMode.value = true
+}
+
+function exitGridMode() {
+  gridMode.value = false
+}
+
+function gridMaximizeChat(chatId) {
+  // Switch to single view with this chat selected, preserving grid order
+  chatsStore.setActiveChat(chatId)
+  gridMode.value = false
+}
+
+async function gridNewChat() {
+  const chat = await chatsStore.createChat('New Chat')
+  if (chat) {
+    chatsStore.setActiveChat(chat.id)
+    gridChatIds.value = [chat.id, ...gridChatIds.value.filter(id => id !== chat.id)].slice(0, gridCount.value)
+  }
+}
+
+function gridSelectChat(chatId) {
+  chatsStore.setActiveChat(chatId)
+}
+
+function gridSwapChat(oldChatId, newChatId) {
+  const idx = gridChatIds.value.indexOf(oldChatId)
+  if (idx === -1) return
+  const newIds = [...gridChatIds.value]
+  newIds[idx] = newChatId
+  gridChatIds.value = newIds
+}
 
 const inputText = ref('')
 const attachments = ref([])
@@ -1495,6 +1806,10 @@ const inputFocused = ref(false)
 const perChatActivityLines = reactive(new Map())
 const copiedId = ref(null)
 const quotedMessage = ref(null)  // { role, content } of the message being quoted
+
+// ── Memory suggestions (post-turn extraction) ──────────────────────────────
+const memorySuggestions = ref(new Map()) // chatId → [{id, target, personaType, personaId, section, entry, status}]
+let memoryAutoDismissTimer = null
 
 // ── Drag & drop reorder ──────────────────────────────────────────────────────
 const dragIndex = ref(null)
@@ -1712,16 +2027,77 @@ const mentionSuggestions = computed(() => {
 
 // ── HTTP Tools modal state ──
 const showToolsModal = ref(false)
+const showChatConfigModal = ref(false)
+const ccmActiveTab = ref('model')
+const ccmToolSearch = ref('')
+const ccmMcpSearch = ref('')
+
+const ccmFilteredTools = computed(() => {
+  const q = ccmToolSearch.value.toLowerCase()
+  let list = toolsStore.tools
+  if (q) {
+    list = list.filter(t =>
+      t.name?.toLowerCase().includes(q) ||
+      t.description?.toLowerCase().includes(q) ||
+      (t.type || 'http').includes(q)
+    )
+  }
+  // Sort: enabled first, then alphabetical
+  return [...list].sort((a, b) => {
+    const aE = chatEnabledToolIds.value.has(a.id) ? 0 : 1
+    const bE = chatEnabledToolIds.value.has(b.id) ? 0 : 1
+    if (aE !== bE) return aE - bE
+    return (a.name || '').localeCompare(b.name || '')
+  })
+})
+
+const ccmFilteredMcp = computed(() => {
+  const q = ccmMcpSearch.value.toLowerCase()
+  let list = mcpStore.servers
+  if (q) {
+    list = list.filter(s =>
+      s.name?.toLowerCase().includes(q) ||
+      s.description?.toLowerCase().includes(q)
+    )
+  }
+  return [...list].sort((a, b) => {
+    const aE = chatEnabledMcpIds.value.has(a.id) ? 0 : 1
+    const bE = chatEnabledMcpIds.value.has(b.id) ? 0 : 1
+    if (aE !== bE) return aE - bE
+    return (a.name || '').localeCompare(b.name || '')
+  })
+})
+
+// Fetch models when config modal opens (for OpenRouter/OpenAI providers)
+watch(showChatConfigModal, (open) => {
+  if (!open) return
+  ccmActiveTab.value = 'model'
+  chatModelFilter.value = ''
+  if (effectiveProvider.value === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
+  if (effectiveProvider.value === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
+})
 const chatEnabledToolIds = ref(new Set())
 const toolsSearchQuery = ref('')
 const toolsCategoryFilter = ref('')
 
-// Default all tools to enabled when tools list changes
-watch(() => toolsStore.tools.length, (len) => {
-  if (len > 0 && chatEnabledToolIds.value.size === 0) {
-    chatEnabledToolIds.value = new Set(toolsStore.tools.map(t => t.id))
+// Auto-enable tools: initialize from global defaults, add newly discovered tools
+watch(() => toolsStore.tools.map(t => t.id), (allIds) => {
+  if (allIds.length === 0) return
+  if (chatEnabledToolIds.value.size === 0) {
+    // First load — use global defaults or all tools
+    const defaults = configStore.config.defaultToolIds
+    chatEnabledToolIds.value = defaults
+      ? new Set(defaults.filter(id => allIds.includes(id)))
+      : new Set(allIds)
+  } else {
+    // Add any new tools that weren't in the set yet
+    const s = new Set(chatEnabledToolIds.value)
+    for (const id of allIds) {
+      if (!s.has(id)) s.add(id)
+    }
+    chatEnabledToolIds.value = s
   }
-})
+}, { deep: true })
 
 const toolsCategories = computed(() => {
   const cats = new Set()
@@ -1761,6 +2137,68 @@ function enableAllTools() {
 function disableAllTools() {
   chatEnabledToolIds.value = new Set()
 }
+
+// Token estimate for tools chip tooltip
+const toolsTokenEstimate = computed(() =>
+  enabledHttpTools.value.reduce((sum, t) => sum + estimateToolTokens(t), 0)
+)
+
+// ── MCP Selection modal state ──
+const showMcpModal = ref(false)
+const chatEnabledMcpIds = ref(new Set())
+const mcpSearchQuery = ref('')
+
+// Auto-enable MCP servers: initialize from global defaults
+watch(() => mcpStore.servers.map(s => s.id), (allIds) => {
+  if (allIds.length === 0) return
+  if (chatEnabledMcpIds.value.size === 0) {
+    const defaults = configStore.config.defaultMcpServerIds
+    chatEnabledMcpIds.value = defaults
+      ? new Set(defaults.filter(id => allIds.includes(id)))
+      : new Set(allIds)
+  } else {
+    // Add any new servers that weren't in the set yet
+    const s = new Set(chatEnabledMcpIds.value)
+    for (const id of allIds) {
+      if (!s.has(id)) s.add(id)
+    }
+    chatEnabledMcpIds.value = s
+  }
+}, { deep: true })
+
+const enabledMcpServers = computed(() =>
+  mcpStore.servers.filter(s => chatEnabledMcpIds.value.has(s.id))
+)
+
+const filteredModalMcpServers = computed(() => {
+  const q = mcpSearchQuery.value.toLowerCase()
+  if (!q) return mcpStore.servers
+  return mcpStore.servers.filter(s =>
+    s.name?.toLowerCase().includes(q) ||
+    s.description?.toLowerCase().includes(q)
+  )
+})
+
+function toggleMcp(id) {
+  const s = new Set(chatEnabledMcpIds.value)
+  if (s.has(id)) s.delete(id); else s.add(id)
+  chatEnabledMcpIds.value = s
+}
+function enableAllMcp() {
+  chatEnabledMcpIds.value = new Set(mcpStore.servers.map(s => s.id))
+}
+function disableAllMcp() {
+  chatEnabledMcpIds.value = new Set()
+}
+
+// Token estimate for MCP chip tooltip
+const mcpTokenEstimate = computed(() =>
+  enabledMcpServers.value.reduce((sum, s) => {
+    const status = mcpStore.runningStatus[s.id]
+    const toolCount = status?.toolCount ?? 10
+    return sum + estimateMcpTokens(s, toolCount)
+  }, 0)
+)
 
 // Per-chat state — reads from the active chat object in the store
 const activeRunning = computed(() => chatsStore.activeChat?.isRunning ?? false)
@@ -1883,10 +2321,12 @@ const filteredChats = computed(() => {
 // ── Chat Management ──────────────────────────────────────────────────────────
 const showNewChatModal = ref(false)
 const newChatSourceId = ref(null)
+const newChatName = ref('')
 
 function newChat() {
   showNewChatModal.value = true
   newChatSourceId.value = null
+  newChatName.value = ''
 }
 
 async function confirmNewChat() {
@@ -1896,7 +2336,8 @@ async function confirmNewChat() {
     const title = source ? `${source.title} (copy)` : 'New Chat'
     await chatsStore.createChatFromHistory(newChatSourceId.value, title)
   } else {
-    await chatsStore.createChat()
+    const title = newChatName.value.trim() || 'New Chat'
+    await chatsStore.createChat(title)
   }
   nextTick(() => inputEl.value?.focus())
 }
@@ -1904,6 +2345,7 @@ async function confirmNewChat() {
 function cancelNewChat() {
   showNewChatModal.value = false
   newChatSourceId.value = null
+  newChatName.value = ''
 }
 
 const confirmDeleteTarget = ref(null) // { type: 'chat'|'groupPersona', id, pid?, label }
@@ -2013,30 +2455,19 @@ function setSysPersonaModel(pid, model) {
   personasStore.savePersona({ ...persona, modelId: model || null })
 }
 
-function toggleSysPersonaTool(pid, toolId) {
-  const persona = personasStore.getPersonaById(pid)
-  if (!persona) return
-  const current = persona.enabledToolIds ? [...persona.enabledToolIds] : toolsStore.tools.map(t => t.id)
-  const idx = current.indexOf(toolId)
-  if (idx >= 0) current.splice(idx, 1)
-  else current.push(toolId)
-  personasStore.savePersona({ ...persona, enabledToolIds: current })
-}
-
-function setSysPersonaAllTools(pid, enabled) {
-  const persona = personasStore.getPersonaById(pid)
-  if (!persona) return
-  personasStore.savePersona({ ...persona, enabledToolIds: enabled ? toolsStore.tools.map(t => t.id) : [] })
-}
+// Per-persona tool mapping removed — tools controlled at chat level
 
 const sysConfigProvider = computed(() => {
   const p = getSysConfigPersona()
   return p?.providerId || 'anthropic'
 })
 
-const sysConfigDefaultModelLabel = computed(() =>
-  modelsStore.getDefaultModelLabel(sysConfigProvider.value)
-)
+const sysConfigDefaultModelLabel = computed(() => {
+  // Show what the persona will actually use: chat model > global model
+  const chatModel = chatsStore.activeChat?.model
+  if (chatModel) return chatModel
+  return modelsStore.getDefaultModelLabel(sysConfigProvider.value)
+})
 
 const sysConfigModelOptions = computed(() => {
   const provider = sysConfigProvider.value
@@ -2048,11 +2479,7 @@ const sysConfigModelOptions = computed(() => {
   )
 })
 
-const sysConfigToolIds = computed(() => {
-  const p = getSysConfigPersona()
-  if (!p?.enabledToolIds) return new Set(toolsStore.tools.map(t => t.id))
-  return new Set(p.enabledToolIds)
-})
+// sysConfigToolIds removed — tools controlled at chat level
 
 // ── Persona chip popovers ───────────────────────────────────────────────
 const showSysPopover = ref(false)
@@ -2140,11 +2567,7 @@ function getPersonaProviderLabel(personaId) {
   return provider
 }
 
-function getPersonaToolCount(personaId) {
-  const persona = personasStore.getPersonaById(personaId)
-  if (!persona?.enabledToolIds) return toolsStore.tools.length
-  return persona.enabledToolIds.length
-}
+// getPersonaToolCount removed — tools controlled at chat level
 
 function toggleSystemPersona(personaId) {
   const chatId = chatsStore.activeChatId
@@ -2767,6 +3190,24 @@ function flushSegments(key) {
 }
 
 function handleChunk(cId, chunk) {
+  // ── Memory suggestions (post-turn extraction) ──
+  if (chunk.type === 'memory_suggestions') {
+    const items = (chunk.items || []).map((m, idx) => ({
+      id: `${cId}-mem-${Date.now()}-${idx}`,
+      target: m.target,
+      personaType: m.personaType,
+      personaId: m.personaId,
+      section: m.section,
+      entry: m.entry,
+      status: 'pending',
+    }))
+    if (items.length > 0) {
+      memorySuggestions.value.set(cId, items)
+      scheduleMemoryAutoDismiss(cId)
+    }
+    return
+  }
+
   const targetChat = chatsStore.chats.find(c => c.id === cId)
   if (!targetChat || !targetChat.messages) return
 
@@ -2877,6 +3318,53 @@ function handleChunk(cId, chunk) {
 
 // flushSegments for group chat needs to find message by routeKey (chatId:personaId)
 // Override flushSegments to handle both single and group keys
+
+// ── Memory suggestions helpers ─────────────────────────────────────────────
+const pendingMemorySuggestions = computed(() => {
+  const items = memorySuggestions.value.get(chatsStore.activeChatId) || []
+  return items.filter(i => i.status === 'pending')
+})
+
+function scheduleMemoryAutoDismiss(chatId) {
+  if (memoryAutoDismissTimer) clearTimeout(memoryAutoDismissTimer)
+  memoryAutoDismissTimer = setTimeout(() => {
+    const items = memorySuggestions.value.get(chatId)
+    if (items) {
+      items.forEach(i => { if (i.status === 'pending') i.status = 'dismissed' })
+    }
+  }, 30000)
+}
+
+async function acceptMemory(item) {
+  if (!window.electronAPI?.memory?.accept) return
+  item.status = 'accepted'
+  try {
+    await window.electronAPI.memory.accept({
+      personaId: item.personaId,
+      personaType: item.personaType,
+      section: item.section,
+      entry: item.entry,
+    })
+  } catch (err) {
+    dbg(`Memory accept failed: ${err.message}`, 'error')
+  }
+}
+
+function dismissMemory(item) {
+  item.status = 'dismissed'
+}
+
+async function acceptAllMemories() {
+  const items = memorySuggestions.value.get(chatsStore.activeChatId) || []
+  for (const item of items) {
+    if (item.status === 'pending') await acceptMemory(item)
+  }
+}
+
+function dismissAllMemories() {
+  const items = memorySuggestions.value.get(chatsStore.activeChatId) || []
+  items.forEach(i => { if (i.status === 'pending') i.status = 'dismissed' })
+}
 
 async function sendMessage() {
   const rawText = inputText.value.trim()
@@ -3102,7 +3590,8 @@ async function sendMessage() {
           personaCfg._resolvedProvider = 'openai'
           personaCfg.defaultProvider = 'openai'
         }
-        const resolvedModel = overrides.modelId || persona.modelId
+        // Persona inherits chat model when its own is null
+        const resolvedModel = overrides.modelId || persona.modelId || (targetChat.model || null)
         if (resolvedModel) personaCfg.customModel = resolvedModel
 
         // Build persona prompts with group chat context (include full persona profiles)
@@ -3110,7 +3599,7 @@ async function sendMessage() {
           .filter(id => id !== pid)
           .map(id => {
             const p = personasStore.getPersonaById(id)
-            return { name: p?.name || 'Unknown', description: p?.description || '', prompt: p?.prompt || '' }
+            return { id, name: p?.name || 'Unknown', description: p?.description || '', prompt: p?.prompt || '' }
           })
         const personaPrompts = {
           systemPersonaPrompt: persona.prompt || '',
@@ -3120,11 +3609,6 @@ async function sendMessage() {
           groupChatContext: { personaName: persona.name, personaDescription: persona.description || '', otherParticipants }
         }
 
-        // Resolve per-persona tools
-        const personaToolList = persona.enabledToolIds
-          ? toolsStore.tools.filter(t => persona.enabledToolIds.includes(t.id))
-          : enabledHttpTools.value
-
         return {
           personaId: pid,
           personaName: persona.name,
@@ -3132,8 +3616,8 @@ async function sendMessage() {
           enabledAgents: [],
           enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
           personaPrompts,
-          mcpServers: JSON.parse(JSON.stringify(mcpStore.servers)),
-          httpTools: JSON.parse(JSON.stringify(personaToolList)),
+          mcpServers: JSON.parse(JSON.stringify(enabledMcpServers.value)),
+          httpTools: JSON.parse(JSON.stringify(enabledHttpTools.value)),
         }
       }).filter(Boolean)
 
@@ -3146,7 +3630,7 @@ async function sendMessage() {
         enabledAgents: [],
         enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
         ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
-        mcpServers: JSON.parse(JSON.stringify(mcpStore.servers)),
+        mcpServers: JSON.parse(JSON.stringify(enabledMcpServers.value)),
         httpTools: JSON.parse(JSON.stringify(enabledHttpTools.value)),
         personaRuns,
         knowledgeConfig: {
@@ -3188,9 +3672,10 @@ async function sendMessage() {
       resolvedPersonaPrompts.systemPersonaId = sysPersona?.id || '__default_system__'
       resolvedPersonaPrompts.userPersonaId = usrPersona?.id || '__default_user__'
 
-      // Resolve per-persona provider/model/tools
+      // Resolve per-persona provider/model (tools now chat-level only)
       const personaProvider = sysPersona?.providerId || chatProvider
-      const personaModel = sysPersona?.modelId
+      // Persona inherits chat-level model when its own is null
+      const personaModel = sysPersona?.modelId || (chatsStore.activeChat?.model || null)
       const singleCfg = { ...cfg }
       if (personaProvider === 'openrouter') {
         singleCfg.apiKey = cfg.openrouterApiKey
@@ -3203,11 +3688,6 @@ async function sendMessage() {
       }
       if (personaModel) singleCfg.customModel = personaModel
 
-      // Resolve per-persona tools
-      const personaTools = sysPersona?.enabledToolIds
-        ? toolsStore.tools.filter(t => sysPersona.enabledToolIds.includes(t.id))
-        : enabledHttpTools.value
-
       dbg('Invoking window.electronAPI.runAgent…')
       const res = await window.electronAPI.runAgent({
         chatId,
@@ -3217,8 +3697,8 @@ async function sendMessage() {
         enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
         ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
         personaPrompts: resolvedPersonaPrompts,
-        mcpServers: JSON.parse(JSON.stringify(mcpStore.servers)),
-        httpTools: JSON.parse(JSON.stringify(personaTools)),
+        mcpServers: JSON.parse(JSON.stringify(enabledMcpServers.value)),
+        httpTools: JSON.parse(JSON.stringify(enabledHttpTools.value)),
         knowledgeConfig: {
           ragEnabled: knowledgeStore.ragEnabled,
           pineconeApiKey: knowledgeStore.pineconeApiKey,
@@ -3277,6 +3757,14 @@ async function sendMessage() {
   } finally {
     dbg('Agent loop done. isRunning → false')
     if (streamingTimer) { clearInterval(streamingTimer); streamingTimer = null; streamingSeconds.value = 0 }
+
+    // Use fresh lookup to guarantee we clear the live reactive object
+    // (targetChat ref could theoretically become stale if the array was mutated)
+    const finChat = chatsStore.chats.find(c => c.id === chatId)
+    if (finChat) {
+      finChat.isRunning = false
+      finChat.isThinking = false
+    }
     targetChat.isRunning = false
     targetChat.isThinking = false
 
@@ -3292,6 +3780,16 @@ async function sendMessage() {
       if (key.startsWith(chatId + ':')) {
         perChatStreamingMsgId.delete(key)
         perChatStreamingSegments.delete(key)
+      }
+    }
+
+    // Also clear streaming flag on any remaining streaming messages (safety net)
+    if (finChat?.messages) {
+      for (const m of finChat.messages) {
+        if (m.streaming) {
+          m.streaming = false
+          if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
+        }
       }
     }
 
@@ -3339,6 +3837,14 @@ async function sendMessage() {
     }
     perChatStreamingMsgId.delete(chatId)
     perChatStreamingSegments.delete(chatId)
+  } finally {
+    // Last-resort safety net: always ensure isRunning is cleared for this chat
+    const safetyChat = chatsStore.chats.find(c => c.id === chatId)
+    if (safetyChat && safetyChat.isRunning) {
+      dbg('SAFETY NET: isRunning was still true after outer catch — force-clearing', 'warn')
+      safetyChat.isRunning = false
+      safetyChat.isThinking = false
+    }
   }
 }
 
@@ -3510,9 +4016,19 @@ onMounted(async () => {
   // Load tools in background — don't block the view
   toolsStore.loadTools().then(() => {
     if (toolsStore.tools.length > 0 && chatEnabledToolIds.value.size === 0) {
-      chatEnabledToolIds.value = new Set(toolsStore.tools.map(t => t.id))
+      const defaults = configStore.config.defaultToolIds
+      chatEnabledToolIds.value = defaults
+        ? new Set(defaults.filter(id => toolsStore.tools.some(t => t.id === id)))
+        : new Set(toolsStore.tools.map(t => t.id))
     }
   })
+  // Initialize MCP from defaults
+  if (mcpStore.servers.length > 0 && chatEnabledMcpIds.value.size === 0) {
+    const mcpDefaults = configStore.config.defaultMcpServerIds
+    chatEnabledMcpIds.value = mcpDefaults
+      ? new Set(mcpDefaults.filter(id => mcpStore.servers.some(s => s.id === id)))
+      : new Set(mcpStore.servers.map(s => s.id))
+  }
   scrollToBottom()
   nextTick(() => inputEl.value?.focus())
   document.addEventListener('click', handlePopoverOutsideClick)
@@ -3549,6 +4065,11 @@ onUnmounted(() => {
   if (fileDropUnsubscribe) {
     fileDropUnsubscribe()
     fileDropUnsubscribe = null
+  }
+
+  if (memoryAutoDismissTimer) {
+    clearTimeout(memoryAutoDismissTimer)
+    memoryAutoDismissTimer = null
   }
 })
 </script>
@@ -3620,6 +4141,10 @@ onUnmounted(() => {
 }
 .chat-sidebar-new-btn:active {
   transform: translateY(0);
+}
+.chat-sidebar-new-btn.grid-toggle-active {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 0 0 2px rgba(0,122,255,0.4), 0 2px 8px rgba(0,0,0,0.12);
 }
 /* ── Chat filter ────────────────────────────────────────────────────────── */
 .chat-sidebar-filter {
@@ -3850,6 +4375,83 @@ onUnmounted(() => {
   flex-shrink: 1;
   min-width: 0;
 }
+
+/* ── Chat config button (replaces 5 chips) ──────────────────────────────── */
+.chat-config-btn-wrap {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.chat-config-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 10px;
+  border-radius: 9999px;
+  border: none;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  font-family: 'Inter', sans-serif;
+  height: 36px;
+}
+.chat-config-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
+}
+.chat-config-btn-label {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Tooltip on hover */
+.chat-config-tooltip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #1A1A1A;
+  border-radius: 10px;
+  padding: 10px 14px;
+  min-width: 220px;
+  z-index: 50;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  pointer-events: none;
+}
+.chat-config-btn-wrap:hover .chat-config-tooltip {
+  display: block;
+}
+.chat-config-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 2px 0;
+}
+.cct-key {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.5);
+  white-space: nowrap;
+}
+.cct-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: #FFFFFF;
+  white-space: nowrap;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
 .chat-header-btn {
   padding: 5px 12px;
   border-radius: 8px;
@@ -3988,9 +4590,6 @@ onUnmounted(() => {
   letter-spacing: -0.01em;
   line-height: 1.5;
   white-space: nowrap;
-  max-width: 64px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .msg-avatar-img {
   width: 44px;
@@ -4111,50 +4710,7 @@ onUnmounted(() => {
   background: rgba(255,255,255,0.2);
   flex-shrink: 0;
 }
-.tools-section .persona-chip {
-  padding: 4px 10px 4px 4px;
-}
-.right-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-/* Black gradient style for all right-group chips */
-.right-group .persona-chip {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: transparent;
-  color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.right-group .persona-chip:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  border-color: transparent;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
-}
-.right-group .persona-chip.active {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: transparent;
-  box-shadow: 0 0 0 2px rgba(0,0,0,0.2);
-}
-.right-group .model-chip-icon {
-  background: rgba(255,255,255,0.15);
-  color: #FFFFFF;
-  box-shadow: none;
-}
-.right-group .model-chip-label {
-  color: #FFFFFF;
-}
-.right-group .persona-chip-name {
-  color: #FFFFFF;
-}
-.right-group .persona-chip-arrow {
-  color: rgba(255,255,255,0.7);
-}
-.provider-section {
-  gap: 6px;
-}
+/* (right-group chip styles removed — replaced by chat config modal) */
 
 /* ── Persona bar (shared wrapper) ───────────────────────────────────────── */
 .persona-bar {
@@ -4354,8 +4910,8 @@ onUnmounted(() => {
   align-items: baseline;
   gap: 4px;
   cursor: pointer;
-  min-width: 0;
   margin-left: 4px;
+  flex-shrink: 0;
 }
 .sys-persona-name {
   font-family: 'Inter', sans-serif;
@@ -4363,6 +4919,7 @@ onUnmounted(() => {
   font-weight: 600;
   color: #FFFFFF;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 .sys-persona-desc {
   font-family: 'Inter', sans-serif;
@@ -5131,346 +5688,543 @@ onUnmounted(() => {
 
 /* ── Tools selection modal ─────────────────────────────────────────────── */
 .tools-select-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
 }
 .tools-select-modal {
-  width: min(560px, 95vw);
-  max-height: 80vh;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  width: min(560px, 95vw); max-height: 80vh;
+  background: #0F0F0F; border: 1px solid #2A2A2A;
+  border-radius: 20px; box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: tsel-enter 0.2s ease-out;
+}
+@keyframes tsel-enter {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .tools-select-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid #E5E5EA;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid #1F1F1F;
 }
-.tools-select-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+.tools-select-header-left { display: flex; align-items: center; gap: 10px; }
 .tools-select-header-icon {
-  width: 30px; height: 30px;
-  border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 .tools-select-title {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-subtitle);
-  font-weight: 700;
-  color: #1A1A1A;
-  margin: 0;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-subtitle);
+  font-weight: 700; color: #FFFFFF; margin: 0;
 }
 .tools-select-count {
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  color: #6B7280;
-  background: #F5F5F5;
-  padding: 2px 8px;
-  border-radius: 6px;
+  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+  color: #9CA3AF; background: #1A1A1A; padding: 2px 8px; border-radius: 6px;
+  border: 1px solid #2A2A2A;
 }
 .tools-select-close {
-  width: 32px; height: 32px;
-  border-radius: 8px;
+  width: 32px; height: 32px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  border: none; background: transparent; color: #9CA3AF; cursor: pointer;
-  transition: background 0.15s;
+  border: none; background: transparent; color: #6B7280; cursor: pointer; transition: all 0.15s;
 }
-.tools-select-close:hover { background: #F5F5F5; }
+.tools-select-close:hover { background: #1F1F1F; color: #FFFFFF; }
 
 .tools-select-filters {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 20px;
-  border-bottom: 1px solid #F5F5F5;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 20px; border-bottom: 1px solid #1F1F1F;
 }
 .tools-select-search-wrap {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border-radius: 8px;
-  border: 1px solid #E5E5EA;
-  background: #fff;
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; border-radius: 8px;
+  border: 1px solid #2A2A2A; background: #1A1A1A;
 }
+.tools-select-search-wrap:focus-within { border-color: #4B5563; }
 .tools-select-search {
-  flex: 1;
-  border: none;
-  outline: none;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  color: #1A1A1A;
-  background: transparent;
+  flex: 1; border: none; outline: none;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
+  color: #FFFFFF; background: transparent;
 }
-.tools-select-search::placeholder { color: #9CA3AF; }
-.tools-select-actions {
-  display: flex;
-  gap: 6px;
-}
+.tools-select-search::placeholder { color: #4B5563; }
+.tools-select-actions { display: flex; gap: 6px; }
 .tools-select-action-btn {
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  border: 1px solid #E5E5EA;
-  background: #F2F2F7;
-  color: #6B7280;
-  cursor: pointer;
-  transition: background 0.15s;
-  white-space: nowrap;
+  padding: 5px 10px; border-radius: 6px;
+  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+  border: 1px solid #2A2A2A; background: #1A1A1A; color: #6B7280;
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
 }
-.tools-select-action-btn:hover { background: #E5E5EA; }
+.tools-select-action-btn:hover { background: #222222; color: #FFFFFF; border-color: #374151; }
 
 .tools-select-categories {
-  display: flex;
-  gap: 6px;
-  padding: 8px 20px;
-  border-bottom: 1px solid #F5F5F5;
-  flex-wrap: wrap;
+  display: flex; gap: 6px; padding: 8px 20px;
+  border-bottom: 1px solid #1F1F1F; flex-wrap: wrap;
 }
 .tools-cat-chip {
-  padding: 3px 10px;
-  border-radius: 6px;
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  border: 1px solid #E5E5EA;
-  background: #F2F2F7;
-  color: #9CA3AF;
-  cursor: pointer;
-  transition: all 0.15s;
+  padding: 3px 10px; border-radius: 6px;
+  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+  border: 1px solid #2A2A2A; background: #1A1A1A; color: #4B5563;
+  cursor: pointer; transition: all 0.15s;
 }
 .tools-cat-chip.active {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
-  border-color: #1A1A1A;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  color: #fff; border-color: #374151;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
-.tools-cat-chip:hover:not(.active) { background: #E5E5EA; }
+.tools-cat-chip:hover:not(.active) { background: #222222; color: #9CA3AF; border-color: #374151; }
 
 .tools-select-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 12px;
-  scrollbar-width: thin;
+  flex: 1; overflow-y: auto; padding: 8px 12px;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
-.tools-select-empty {
-  padding: 32px 20px;
-  text-align: center;
-}
+.tools-select-empty { padding: 32px 20px; text-align: center; }
 .tools-select-empty p {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  color: #9CA3AF;
-  margin: 0;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); color: #4B5563; margin: 0;
 }
 .tools-select-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  border: 1px solid #E5E5EA;
-  background: #FFFFFF;
-  margin-bottom: 6px;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 12px; cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid #1F1F1F; background: #1A1A1A; margin-bottom: 6px;
 }
 .tools-select-row:hover {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: #1A1A1A;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  background: #222222; border-color: #2A2A2A;
 }
-.tools-select-row:hover .tools-select-row-name,
-.tools-select-row:hover .tools-select-row-desc,
-.tools-select-row:hover .tools-select-row-cat {
-  color: #FFFFFF;
-}
-.tools-select-row:hover .tools-select-row-cat {
-  background: rgba(255,255,255,0.15);
-}
+.tools-select-row:hover .tools-select-row-name { color: #FFFFFF; }
+.tools-select-row:hover .tools-select-row-desc { color: #9CA3AF; }
+.tools-select-row:hover .tools-select-row-cat { background: rgba(255,255,255,0.1); color: #FFFFFF; }
 .tools-select-row.enabled {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: #1A1A1A;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  background: linear-gradient(135deg, #1A1A1A 0%, #1F2937 100%);
+  border-color: #374151;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.2);
 }
-.tools-select-row.enabled .tools-select-row-name,
-.tools-select-row.enabled .tools-select-row-desc,
-.tools-select-row.enabled .tools-select-row-cat {
-  color: #FFFFFF;
-}
-.tools-select-row.enabled .tools-select-row-cat {
-  background: rgba(255,255,255,0.15);
-}
+.tools-select-row.enabled .tools-select-row-name { color: #FFFFFF; }
+.tools-select-row.enabled .tools-select-row-desc { color: #9CA3AF; }
+.tools-select-row.enabled .tools-select-row-cat { background: rgba(255,255,255,0.1); color: #FFFFFF; }
 .tools-select-checkbox {
-  width: 16px; height: 16px;
-  accent-color: #1A1A1A;
-  flex-shrink: 0;
-  cursor: pointer;
+  width: 16px; height: 16px; accent-color: #FFFFFF; flex-shrink: 0; cursor: pointer;
 }
 .tools-select-row:hover .tools-select-checkbox,
-.tools-select-row.enabled .tools-select-checkbox {
-  accent-color: #FFFFFF;
-}
+.tools-select-row.enabled .tools-select-checkbox { accent-color: #FFFFFF; }
 .tools-select-row-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
 }
 .tools-select-row-name {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body);
-  font-weight: 600;
-  color: #1A1A1A;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body);
+  font-weight: 600; color: #9CA3AF;
 }
 .tools-select-row-desc {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-caption);
-  color: #9CA3AF;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption);
+  color: #4B5563; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tools-select-row-cat {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  color: #6B7280;
-  background: #F5F5F5;
-  padding: 2px 6px;
-  border-radius: 4px;
-  flex-shrink: 0;
+  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
+  color: #4B5563; background: #111111; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
 }
+.tools-select-type-http { background: rgba(37,99,235,0.15); color: #60A5FA; }
+.tools-select-type-code { background: rgba(22,163,74,0.15); color: #4ADE80; }
+.tools-select-type-prompt { background: rgba(124,58,237,0.15); color: #A78BFA; }
 .tools-select-footer {
+  display: flex; justify-content: flex-end; align-items: center; gap: 12px;
+  padding: 12px 20px; border-top: 1px solid #1F1F1F; background: #0A0A0A;
+}
+
+/* ── Chat Settings Modal (dark theme) ──────────────────────────────────── */
+.ccm-backdrop {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  animation: ccm-fade 0.15s ease-out;
+}
+@keyframes ccm-fade { from { opacity: 0; } to { opacity: 1; } }
+.ccm-dialog {
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 20px;
+  width: 900px;
+  max-width: 95vw;
+  height: 85vh;
+  max-height: 85vh;
   display: flex;
-  justify-content: flex-end;
-  padding: 12px 20px;
-  border-top: 1px solid #E5E5EA;
+  flex-direction: column;
+  box-shadow: 0 25px 80px rgba(0,0,0,0.5);
+  animation: ccm-enter 0.2s ease-out;
+  overflow: hidden;
+}
+@keyframes ccm-enter {
+  from { opacity: 0; transform: scale(0.95) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Header */
+.ccm-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 24px; border-bottom: 1px solid #1F1F1F; flex-shrink: 0;
+}
+.ccm-header-left { display: flex; align-items: center; gap: 12px; }
+.ccm-header-icon {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.ccm-title {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-section);
+  font-weight: 700; color: #FFFFFF; margin: 0;
+}
+.ccm-close {
+  width: 34px; height: 34px; border-radius: 8px; border: none;
+  background: transparent; color: #6B7280; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.12s;
+}
+.ccm-close:hover { background: #1F1F1F; color: #FFFFFF; }
+
+/* Tab bar */
+.ccm-tabs {
+  display: flex; gap: 4px; padding: 8px 24px;
+  border-bottom: 1px solid #1F1F1F; flex-shrink: 0;
+}
+.ccm-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 8px;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
+  color: #6B7280; background: transparent; border: none; cursor: pointer;
+  transition: all 0.15s;
+}
+.ccm-tab:hover { color: #9CA3AF; background: #1A1A1A; }
+.ccm-tab.active {
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.ccm-tab-badge {
+  font-size: 10px; font-weight: 700;
+  padding: 1px 6px; border-radius: 4px;
+  background: rgba(255,255,255,0.1); color: inherit;
+}
+.ccm-tab.active .ccm-tab-badge {
+  background: rgba(255,255,255,0.15);
+}
+
+/* Body */
+.ccm-body {
+  flex: 1; overflow: hidden; display: flex; flex-direction: column;
+}
+.ccm-tab-content {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+  padding: 20px 24px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+/* Dark sections (used in Model & RAG tabs) */
+.ccm-dark-section {
+  margin-bottom: 20px;
+}
+.ccm-dark-section-label {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
+  font-weight: 600; color: #9CA3AF; margin-bottom: 10px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.ccm-dark-badge {
+  font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0;
+  padding: 2px 8px; border-radius: 6px;
+  background: #1F1F1F; color: #9CA3AF;
+  font-family: 'JetBrains Mono', monospace;
+}
+.ccm-dark-badge.badge-on { background: #064E3B; color: #6EE7B7; }
+.ccm-dark-badge.badge-off { background: #451A1A; color: #FCA5A5; }
+
+/* Provider buttons (dark) */
+.ccm-provider-btns {
+  display: flex; gap: 8px;
+}
+.ccm-provider-btn {
+  flex: 1; padding: 10px 0; border-radius: 10px;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
+  border: 1px solid #2A2A2A; background: #1A1A1A; color: #6B7280;
+  cursor: pointer; transition: all 0.15s; text-align: center;
+}
+.ccm-provider-btn:hover { border-color: #4B5563; color: #9CA3AF; }
+.ccm-provider-btn.active {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  border-color: #4B5563; color: #FFFFFF;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+
+/* Model search (dark) */
+.ccm-model-search {
+  width: 100%; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid #2A2A2A; background: #1A1A1A;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption); outline: none;
+  color: #FFFFFF; transition: border-color 0.15s;
+}
+.ccm-model-search:focus { border-color: #4B5563; box-shadow: 0 0 0 3px rgba(75,85,99,0.2); }
+.ccm-model-search::placeholder { color: #4B5563; }
+
+/* Model list (dark) */
+.ccm-model-list {
+  flex: 1; overflow-y: auto;
+  border: 1px solid #2A2A2A; border-radius: 12px;
+  display: flex; flex-direction: column;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+  background: #1A1A1A;
+}
+.ccm-model-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 10px 14px; border: none; background: transparent;
+  cursor: pointer; font-family: 'Inter', sans-serif; font-size: var(--fs-caption);
+  font-weight: 500; color: #9CA3AF; text-align: left;
+  transition: all 0.12s; border-bottom: 1px solid #1F1F1F;
+}
+.ccm-model-item:last-child { border-bottom: none; }
+.ccm-model-item:first-child { border-radius: 11px 11px 0 0; }
+.ccm-model-item:last-child { border-radius: 0 0 11px 11px; }
+.ccm-model-item:hover { background: #222222; color: #FFFFFF; }
+.ccm-model-item.active {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  color: #FFFFFF;
+}
+.ccm-model-item.active .ccm-model-id { color: rgba(255,255,255,0.4); }
+.ccm-model-id {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  color: #4B5563; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 200px;
+}
+.ccm-model-loading {
+  padding: 16px; text-align: center; font-size: var(--fs-caption); color: #4B5563;
+}
+
+/* ── Tools/MCP list toolbar ────────────────────────────────────────────── */
+.ccm-list-toolbar {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px; flex-shrink: 0;
+}
+.ccm-list-search-wrap {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 10px;
+  border: 1px solid #2A2A2A; background: #1A1A1A;
+  transition: border-color 0.15s;
+}
+.ccm-list-search-wrap:focus-within { border-color: #4B5563; }
+.ccm-list-search-wrap:focus-within svg { color: #9CA3AF; }
+.ccm-list-search {
+  flex: 1; border: none; outline: none;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
+  color: #FFFFFF; background: transparent;
+}
+.ccm-list-search::placeholder { color: #4B5563; }
+.ccm-list-actions {
+  display: flex; gap: 4px;
+}
+.ccm-list-action-btn {
+  padding: 6px 12px; border-radius: 8px;
+  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+  border: 1px solid #2A2A2A; background: #1A1A1A; color: #6B7280;
+  cursor: pointer; transition: all 0.12s; white-space: nowrap;
+}
+.ccm-list-action-btn:hover { border-color: #4B5563; color: #FFFFFF; background: #222222; }
+.ccm-list-summary {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: #4B5563; white-space: nowrap; flex-shrink: 0;
+}
+
+/* ── Item cards (Tools/MCP) ────────────────────────────────────────────── */
+.ccm-item-list {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+}
+.ccm-item-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px; border-radius: 12px;
+  border: 1px solid #1F1F1F; background: #1A1A1A;
+  cursor: pointer; transition: all 0.15s;
+}
+.ccm-item-card:hover {
+  border-color: #2A2A2A; background: #222222;
+}
+.ccm-item-card.enabled {
+  border-color: #374151;
+  background: linear-gradient(135deg, #1A1A1A 0%, #1F2937 100%);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.2);
+}
+.ccm-item-card-info {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;
+}
+.ccm-item-card-top {
+  display: flex; align-items: center; gap: 8px;
+}
+.ccm-item-card-name {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body);
+  font-weight: 600; color: #FFFFFF;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ccm-item-card:not(.enabled) .ccm-item-card-name { color: #9CA3AF; }
+.ccm-item-card-type {
+  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
+  padding: 1px 6px; border-radius: 4px; flex-shrink: 0;
+}
+.ccm-type-http { background: rgba(37,99,235,0.15); color: #60A5FA; }
+.ccm-type-code { background: rgba(22,163,74,0.15); color: #4ADE80; }
+.ccm-type-prompt { background: rgba(124,58,237,0.15); color: #A78BFA; }
+
+.ccm-item-card-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
+  padding: 1px 6px; border-radius: 4px; flex-shrink: 0;
+}
+.ccm-item-card-status.status-running { background: rgba(52,199,89,0.15); color: #4ADE80; }
+.ccm-item-card-status.status-stopped { background: rgba(107,114,128,0.15); color: #6B7280; }
+.ccm-status-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+}
+.status-running .ccm-status-dot { background: #4ADE80; }
+.status-stopped .ccm-status-dot { background: #4B5563; }
+
+.ccm-item-card-desc {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption);
+  color: #4B5563; line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ccm-item-card.enabled .ccm-item-card-desc { color: #6B7280; }
+
+/* Toggle switch (dark) */
+.ccm-toggle {
+  display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0;
+}
+.ccm-toggle input { display: none; }
+.ccm-toggle-track {
+  position: relative; width: 38px; height: 22px;
+  border-radius: 11px; background: #2A2A2A;
+  transition: background 0.2s;
+}
+.ccm-toggle input:checked + .ccm-toggle-track {
+  background: linear-gradient(135deg, #374151 0%, #4B5563 100%);
+}
+.ccm-toggle-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #6B7280; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: transform 0.2s, background 0.2s;
+}
+.ccm-toggle input:checked + .ccm-toggle-track .ccm-toggle-thumb {
+  transform: translateX(16px); background: #FFFFFF;
+}
+
+/* List empty */
+.ccm-list-empty {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
+  color: #4B5563; text-align: center; padding: 40px 20px;
+}
+
+/* RAG list (dark) */
+.ccm-rag-list {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.ccm-rag-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 10px 14px; border-radius: 10px;
+  background: #1A1A1A; border: 1px solid #1F1F1F;
+}
+.ccm-rag-name {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
+  font-weight: 600; color: #FFFFFF;
+}
+.ccm-rag-meta {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #4B5563;
+}
+
+/* Footer (dark) */
+.ccm-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; border-top: 1px solid #1F1F1F;
+  background: #0A0A0A; flex-shrink: 0;
+}
+.ccm-footer-tokens {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #4B5563;
+}
+.ccm-done-btn {
+  padding: 8px 24px; border-radius: 10px;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  color: #FFFFFF; border: 1px solid #374151; cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.ccm-done-btn:hover {
+  background: linear-gradient(135deg, #2D2D2D 0%, #374151 40%, #6B7280 100%);
+  border-color: #4B5563;
 }
 
 /* ── Reduced motion ─────────────────────────────────────────────────────── */
 /* ── Rename modal ───────────────────────────────────────────────────────── */
 .rename-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
 }
 .rename-modal {
   width: min(420px, 90vw);
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  background: #0F0F0F; border: 1px solid #2A2A2A;
+  border-radius: 16px; box-shadow: 0 25px 60px rgba(0,0,0,0.5);
   overflow: hidden;
+  animation: rename-enter 0.2s ease-out;
+}
+@keyframes rename-enter {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .rename-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid #E5E5EA;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid #1F1F1F;
 }
 .rename-title {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-subtitle);
-  font-weight: 700;
-  color: #1A1A1A;
-  margin: 0;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-subtitle);
+  font-weight: 700; color: #FFFFFF; margin: 0;
 }
 .rename-close-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: #9CA3AF;
-  cursor: pointer;
-  transition: background 0.15s;
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: #6B7280;
+  cursor: pointer; transition: all 0.15s;
 }
-.rename-close-btn:hover { background: #F5F5F5; }
-.rename-body {
-  padding: 16px 20px;
-}
+.rename-close-btn:hover { background: #1F1F1F; color: #FFFFFF; }
+.rename-body { padding: 16px 20px; }
 .rename-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1.5px solid #E5E5EA;
-  border-radius: 10px;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body);
-  color: #1A1A1A;
-  background: #fff;
-  outline: none;
-  resize: none;
-  line-height: 1.5;
-  box-sizing: border-box;
+  width: 100%; padding: 10px 14px;
+  border: 1px solid #2A2A2A; border-radius: 10px;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body);
+  color: #FFFFFF; background: #1A1A1A; outline: none;
+  resize: none; line-height: 1.5; box-sizing: border-box;
   transition: border-color 0.15s;
 }
-.rename-input:focus { border-color: #1A1A1A; }
+.rename-input::placeholder { color: #4B5563; }
+.rename-input:focus { border-color: #4B5563; }
 .rename-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  display: flex; justify-content: flex-end; gap: 8px;
   padding: 12px 20px 16px;
 }
 
 /* ── New chat source list ──────────────────────────────────────────────── */
 .newchat-source-list {
-  max-height: 260px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  max-height: 260px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 4px;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
 .newchat-source-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1.5px solid #E5E5EA;
-  background: #fff;
-  cursor: pointer;
-  transition: all 0.15s;
-  text-align: left;
-  width: 100%;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 10px;
+  border: 1px solid #1F1F1F; background: #1A1A1A;
+  cursor: pointer; transition: all 0.15s;
+  text-align: left; width: 100%;
   font-family: 'Inter', sans-serif;
 }
 .newchat-source-item:hover {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: transparent;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  background: #222222; border-color: #2A2A2A;
 }
 .newchat-source-item:hover .newchat-source-title,
 .newchat-source-item:hover span,
@@ -5478,9 +6232,9 @@ onUnmounted(() => {
   color: #FFFFFF !important;
 }
 .newchat-source-item.selected {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: transparent;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  background: linear-gradient(135deg, #1A1A1A 0%, #1F2937 100%);
+  border-color: #374151;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.2);
 }
 .newchat-source-item.selected .newchat-source-title,
 .newchat-source-item.selected span,
@@ -5488,15 +6242,21 @@ onUnmounted(() => {
   color: #FFFFFF !important;
 }
 .newchat-source-title {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-body);
-  font-weight: 600;
-  color: #1A1A1A;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 1; min-width: 0;
+  font-size: var(--fs-body); font-weight: 600; color: #9CA3AF;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.newchat-name-input {
+  flex: 1; min-width: 0; padding: 6px 10px;
+  border-radius: 8px; border: 1px solid #2A2A2A;
+  background: #111111;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body);
+  font-weight: 600; color: #FFFFFF; outline: none;
+}
+.newchat-name-input::placeholder { color: #4B5563; font-weight: 500; }
+.newchat-name-row { cursor: pointer; }
+.newchat-name-row svg { color: #6B7280; }
+.newchat-name-row.selected svg { color: #FFFFFF !important; }
 
 @media (prefers-reduced-motion: reduce) {
   .chat-sidebar-new-btn,
@@ -5993,5 +6753,175 @@ onUnmounted(() => {
   font-size: 11px;
   color: #9CA3AF;
   margin-top: 2px;
+}
+
+/* ── Memory Suggestions Banner ──────────────────────────────────────────── */
+.memory-banner {
+  flex-shrink: 0;
+  margin: 0 20px;
+  padding: 10px 14px;
+  background: var(--bg-card, #FFFFFF);
+  border: 1px solid var(--border, #E5E5EA);
+  border-radius: var(--radius-md, 12px);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+}
+.memory-banner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.memory-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary, 0.875rem);
+  font-weight: 600;
+  color: var(--text-primary, #1A1A1A);
+}
+.memory-banner-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 600;
+}
+.memory-banner-actions {
+  display: flex;
+  gap: 6px;
+}
+.memory-banner-btn {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small, 0.75rem);
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm, 8px);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.memory-banner-btn.accept-all {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+.memory-banner-btn.accept-all:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+}
+.memory-banner-btn.dismiss-all {
+  background: #F5F5F5;
+  color: var(--text-secondary, #6B7280);
+}
+.memory-banner-btn.dismiss-all:hover {
+  background: #E5E5EA;
+  color: var(--text-primary, #1A1A1A);
+}
+.memory-banner-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.memory-banner-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm, 8px);
+  background: #F9FAFB;
+  border: 1px solid #F3F4F6;
+}
+.memory-banner-item-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.memory-banner-target {
+  flex-shrink: 0;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.memory-banner-target.user {
+  background: rgba(0, 122, 255, 0.1);
+  color: #007AFF;
+}
+.memory-banner-target.system {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8B5CF6;
+}
+.memory-banner-section {
+  flex-shrink: 0;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small, 0.75rem);
+  color: var(--text-muted, #9CA3AF);
+  font-weight: 500;
+}
+.memory-banner-entry {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary, 0.875rem);
+  color: var(--text-primary, #1A1A1A);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.memory-banner-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.memory-item-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.memory-item-btn.accept {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16A34A;
+}
+.memory-item-btn.accept:hover {
+  background: rgba(34, 197, 94, 0.2);
+}
+.memory-item-btn.dismiss {
+  background: rgba(239, 68, 68, 0.08);
+  color: #EF4444;
+}
+.memory-item-btn.dismiss:hover {
+  background: rgba(239, 68, 68, 0.16);
+}
+
+/* Memory banner transition */
+.memory-banner-enter-active {
+  transition: all 0.2s ease-out;
+}
+.memory-banner-leave-active {
+  transition: all 0.15s ease-in;
+}
+.memory-banner-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.memory-banner-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 </style>

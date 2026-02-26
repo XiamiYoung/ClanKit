@@ -87,142 +87,95 @@ function confirm() {
 
 <style scoped>
 .avpicker-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
 }
 .avpicker-dialog {
-  width: min(900px, 92vw);
-  max-height: 88vh;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  border-radius: 20px;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  width: min(900px, 92vw); max-height: 88vh;
+  background: #0F0F0F; border: 1px solid #2A2A2A;
+  border-radius: 20px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: avpicker-enter 0.2s ease-out;
+}
+@keyframes avpicker-enter {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .avpicker-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 24px;
-  border-bottom: 1px solid #E5E5EA;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 24px; border-bottom: 1px solid #1F1F1F;
 }
 .avpicker-title {
-  font-family: 'Inter', sans-serif;
-  font-size: 18px;
-  font-weight: 700;
-  color: #1A1A1A;
-  margin: 0;
+  font-family: 'Inter', sans-serif; font-size: 18px; font-weight: 700;
+  color: #FFFFFF; margin: 0;
 }
 .avpicker-close {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: #9CA3AF;
-  cursor: pointer;
-  transition: background 0.15s;
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: #6B7280;
+  cursor: pointer; transition: all 0.15s;
 }
-.avpicker-close:hover {
-  background: #F5F5F5;
-}
+.avpicker-close:hover { background: #1F1F1F; color: #FFFFFF; }
 .avpicker-grid-wrap {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 24px;
-  scrollbar-width: thin;
+  flex: 1; overflow-y: auto; padding: 20px 24px;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
 .avpicker-grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 12px;
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;
 }
 @media (max-width: 800px) {
   .avpicker-grid { grid-template-columns: repeat(4, 1fr); }
 }
 .avpicker-item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  border-radius: 14px;
-  border: 2.5px solid transparent;
-  background: transparent;
-  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  padding: 8px; border-radius: 14px; border: 2.5px solid transparent;
+  background: transparent; cursor: pointer;
   transition: border-color 0.15s, background 0.15s, transform 0.15s;
 }
 .avpicker-item:hover {
-  background: rgba(0, 122, 255, 0.04);
-  border-color: rgba(0, 122, 255, 0.2);
+  background: rgba(75, 85, 99, 0.15); border-color: rgba(75, 85, 99, 0.4);
   transform: scale(1.04);
 }
 .avpicker-item.selected {
-  border-color: #1A1A1A;
-  background: rgba(0, 122, 255, 0.08);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+  border-color: #FFFFFF; background: rgba(75, 85, 99, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
 }
 .avpicker-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 14px 24px;
-  border-top: 1px solid #E5E5EA;
-  background: #F9F9F9;
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 14px 24px; border-top: 1px solid #1F1F1F; background: #0A0A0A;
 }
 .avpicker-btn {
-  padding: 8px 20px;
-  border-radius: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  transition: background 0.15s;
+  padding: 8px 20px; border-radius: 8px;
+  font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600;
+  cursor: pointer; border: none; transition: all 0.15s;
 }
 .avpicker-btn.primary {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-  color: #fff;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  color: #fff; border: 1px solid #374151;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
-.avpicker-btn.primary:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
-.avpicker-btn.primary:disabled { background: #9CA3AF; cursor: not-allowed; }
+.avpicker-btn.primary:hover { background: linear-gradient(135deg, #2D2D2D 0%, #374151 40%, #6B7280 100%); }
+.avpicker-btn.primary:disabled { background: #2A2A2A; color: #4B5563; cursor: not-allowed; border-color: #2A2A2A; }
 .avpicker-btn.shuffle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #fff;
-  color: #1A1A1A;
-  border: 1.5px solid #1A1A1A;
+  display: flex; align-items: center; gap: 6px;
+  background: #1A1A1A; color: #FFFFFF; border: 1.5px solid #374151;
 }
-.avpicker-btn.shuffle:hover { background: rgba(0, 122, 255, 0.06); }
+.avpicker-btn.shuffle:hover { background: #222222; border-color: #4B5563; }
 .avpicker-btn.defaults {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #fff;
-  color: #6B7280;
-  border: 1.5px solid #D1D1D6;
+  display: flex; align-items: center; gap: 6px;
+  background: #1A1A1A; color: #6B7280; border: 1.5px solid #2A2A2A;
 }
-.avpicker-btn.defaults:hover { background: #F5F5F5; border-color: #9CA3AF; }
+.avpicker-btn.defaults:hover { background: #222222; border-color: #374151; color: #9CA3AF; }
 .avpicker-btn.secondary {
-  background: #F5F5F5;
-  color: #6B7280;
+  background: #1A1A1A; color: #9CA3AF; border: 1px solid #2A2A2A;
 }
-.avpicker-btn.secondary:hover { background: #E5E5EA; }
+.avpicker-btn.secondary:hover { background: #222222; color: #FFFFFF; border-color: #374151; }
 
 @media (prefers-reduced-motion: reduce) {
   .avpicker-item { transition: none; }
   .avpicker-item:hover { transform: none; }
+  .avpicker-dialog { animation: none; }
 }
 </style>

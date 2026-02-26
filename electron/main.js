@@ -555,6 +555,18 @@ ipcMain.handle('souls:delete', (_, personaId, type) => {
   }
 })
 
+// ─── IPC: Memory Accept (post-turn extraction) ─────────────────────────────
+const { SoulUpdateTool: SoulUpdateToolForMemory } = require('./agent/tools/SoulTool')
+ipcMain.handle('memory:accept', async (_, { personaId, personaType, section, entry }) => {
+  try {
+    const tool = new SoulUpdateToolForMemory(SOULS_DIR)
+    return await tool.execute({ persona_id: personaId, persona_type: personaType, section, action: 'add', entry })
+  } catch (err) {
+    logger.error('memory:accept error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
 // ─── IPC: MCP Server Configuration (~/.sparkai/mcp-servers.json) ─────────────
 
 ipcMain.handle('mcp:get-config', () => readJSON(MCP_SERVERS_FILE, {}))
@@ -1659,8 +1671,75 @@ ipcMain.handle('shell:exec', async (_, { cmd, args }) => {
 // ─── IPC: Agent Loop ─────────────────────────────────────────────────────────
 const { AgentLoop } = require('./agent/agentLoop')
 const { mcpManager } = require('./agent/mcp/McpManager')
+const { MemoryExtractor } = require('./agent/core/MemoryExtractor')
 const activeLoops = new Map()          // chatId → AgentLoop
 const lastContextSnapshots = new Map() // chatId → snapshot
+
+/** Read a soul file from disk. Returns null if not found. */
+function readSoulFileSync(personaId, personaType) {
+  if (!personaId) return null
+  try {
+    const filePath = path.join(SOULS_DIR, personaType, `${personaId}.md`)
+    if (fs.existsSync(filePath)) return fs.readFileSync(filePath, 'utf8')
+  } catch (err) {
+    logger.error('readSoulFileSync error', err.message)
+  }
+  return null
+}
+
+/**
+ * Run post-turn memory extraction via Haiku.
+ * Non-fatal — failures are logged and silently ignored.
+ */
+async function runMemoryExtraction(event, chatId, messages, config, personaPrompts, participants) {
+  try {
+    // Only run for Anthropic provider (needs Anthropic API key for Haiku)
+    const apiKey = config.apiKey || process.env.ANTHROPIC_API_KEY
+    if (!apiKey) return
+
+    // Extract last user message + last assistant response
+    const reversed = [...messages].reverse()
+    const lastUser = reversed.find(m => m.role === 'user')
+    const lastAssistant = reversed.find(m => m.role === 'assistant')
+    if (!lastUser || !lastAssistant) return
+
+    const lastUserText = typeof lastUser.content === 'string'
+      ? lastUser.content
+      : (Array.isArray(lastUser.content) ? lastUser.content.filter(b => b.type === 'text').map(b => b.text).join(' ') : '')
+    const lastAssistantText = typeof lastAssistant.content === 'string'
+      ? lastAssistant.content
+      : (Array.isArray(lastAssistant.content) ? lastAssistant.content.filter(b => b.type === 'text').map(b => b.text).join(' ') : '')
+
+    if (!lastUserText.trim() || !lastAssistantText.trim()) return
+
+    const userPersonaId = personaPrompts?.userPersonaId || '__default_user__'
+    const systemPersonaId = personaPrompts?.systemPersonaId || '__default_system__'
+
+    const userSoulContent = readSoulFileSync(userPersonaId, 'users')
+    const systemSoulContent = readSoulFileSync(systemPersonaId, 'system')
+
+    const extractor = new MemoryExtractor({ apiKey })
+    const suggestions = await extractor.extract({
+      lastUserMessage: lastUserText,
+      lastAssistantMessage: lastAssistantText,
+      userSoulContent,
+      systemSoulContent,
+      userPersonaId,
+      systemPersonaId,
+      participants: participants || null,
+    })
+
+    if (suggestions.length > 0 && !event.sender.isDestroyed()) {
+      event.sender.send('agent:chunk', {
+        chatId,
+        chunk: { type: 'memory_suggestions', items: suggestions }
+      })
+      logger.agent('Memory extraction', { chatId, count: suggestions.length })
+    }
+  } catch (err) {
+    logger.error('Memory extraction failed (non-fatal)', { chatId, error: err.message })
+  }
+}
 
 logger.info('IPC handlers registered: agent:run, agent:stop')
 
@@ -1831,6 +1910,12 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       lastContextSnapshots.set(chatId, base)
     }
 
+    // Fire-and-forget memory extraction for group chat — pass all participants for routing
+    if (personaRuns.length > 0) {
+      const groupParticipants = personaRuns.map(r => ({ id: r.personaId, name: r.personaName, type: 'system' }))
+      runMemoryExtraction(event, chatId, messages, config, personaRuns[0].personaPrompts || personaPrompts, groupParticipants)
+    }
+
     return { success: true, results }
   }
 
@@ -1857,6 +1942,11 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       ragContext
     )
     logger.agent('run done', { chatId, success: result !== undefined, resultLen: typeof result === 'string' ? result.length : 0 })
+    // Fire-and-forget memory extraction — single persona as participant for routing
+    const singleParticipants = personaPrompts?.systemPersonaId
+      ? [{ id: personaPrompts.systemPersonaId, name: personaPrompts.groupChatContext?.personaName || 'Assistant', type: 'system' }]
+      : null
+    runMemoryExtraction(event, chatId, messages, config, personaPrompts, singleParticipants)
     return { success: true, result }
   } catch (err) {
     logger.error('agent:run error', { chatId, error: err.message })

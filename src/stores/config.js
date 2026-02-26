@@ -20,7 +20,9 @@ export const useConfigStore = defineStore('config', () => {
     openrouterDefaultModel:  '',
     openaiDefaultModel:      '',
     obsidianVaultPath: '',
-    pineconeApiKey:    ''
+    pineconeApiKey:    '',
+    defaultToolIds:    null,       // null = all tools enabled by default; array = specific IDs
+    defaultMcpServerIds: null,     // null = all MCP servers enabled by default; array = specific IDs
   })
 
   const activeModelId = computed(() => {

@@ -2,53 +2,80 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 /**
- * Tools Store — manages HTTP tool configurations.
+ * Tools Store — manages tool configurations for HTTP, Code Snippet, and Prompt tools.
+ *
+ * Tool schema:
+ *   All types:  { id, name, description, category, type: 'http'|'code'|'prompt' }
+ *   HTTP:       + { method, endpoint, headers, bodyTemplate }
+ *   Code:       + { language: 'javascript'|'python'|'bash', code }
+ *   Prompt:     + { promptText }
  *
  * On-disk format (dict):
- * {"tool-id":{"name":"...","description":"...","category":"...","method":"GET","endpoint":"...","headers":{},"bodyTemplate":"{}"}}
+ * {"tool-id":{"name":"...","type":"http",...}}
  *
  * Also handles array format for forward-compat.
  */
 export const useToolsStore = defineStore('tools', () => {
   const tools = ref([])
 
+  function normalizeTool(t) {
+    const type = t.type || 'http'
+    const base = {
+      id: t.id || t.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || '',
+      name: t.name || '',
+      description: t.description || '',
+      category: t.category || '',
+      type,
+    }
+
+    if (type === 'code') {
+      return {
+        ...base,
+        language: t.language || 'javascript',
+        code: t.code || '',
+      }
+    }
+
+    if (type === 'prompt') {
+      return {
+        ...base,
+        promptText: t.promptText || '',
+      }
+    }
+
+    // HTTP (default)
+    return {
+      ...base,
+      method: t.method || 'GET',
+      endpoint: t.endpoint || '',
+      headers: t.headers || {},
+      bodyTemplate: t.bodyTemplate || '{}',
+    }
+  }
+
   async function loadTools() {
     const raw = await window.electronAPI.tools.getConfig()
     if (Array.isArray(raw)) {
-      // Array format
-      tools.value = raw.map(t => ({
-        id: t.id || t.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || '',
-        name: t.name || '',
-        description: t.description || '',
-        category: t.category || 'HTTP',
-        method: t.method || 'GET',
-        endpoint: t.endpoint || '',
-        headers: t.headers || {},
-        bodyTemplate: t.bodyTemplate || '{}',
-      }))
+      tools.value = raw.map(t => normalizeTool(t))
     } else if (raw && typeof raw === 'object') {
-      // Dict format
-      tools.value = Object.entries(raw).map(([id, config]) => ({
-        id,
-        name: config.name || id,
-        description: config.description || '',
-        category: config.category || 'HTTP',
-        method: config.method || 'GET',
-        endpoint: config.endpoint || '',
-        headers: config.headers || {},
-        bodyTemplate: config.bodyTemplate || '{}',
-      }))
+      tools.value = Object.entries(raw).map(([id, config]) =>
+        normalizeTool({ ...config, id })
+      )
     } else {
       tools.value = []
     }
   }
 
   async function saveTool(tool) {
-    const idx = tools.value.findIndex(t => t.id === tool.id)
+    const normalized = normalizeTool(tool)
+    if (!normalized.id) {
+      normalized.id = tool.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    }
+    const idx = tools.value.findIndex(t => t.id === normalized.id)
     if (idx >= 0) {
-      tools.value[idx] = { ...tool }
+      tools.value[idx] = normalized
     } else {
-      tools.value.push({ ...tool, id: tool.id || tool.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') })
+      tools.value.push(normalized)
     }
     await persist()
   }
@@ -62,15 +89,27 @@ export const useToolsStore = defineStore('tools', () => {
     if (!window.electronAPI?.tools?.saveConfig) return
     const dict = {}
     for (const t of tools.value) {
-      dict[t.id] = {
+      const entry = {
         name: t.name,
         description: t.description || '',
-        category: t.category || 'HTTP',
-        method: t.method || 'GET',
-        endpoint: t.endpoint,
-        headers: t.headers || {},
-        bodyTemplate: t.bodyTemplate || '{}',
+        category: t.category || '',
+        type: t.type || 'http',
       }
+
+      if (t.type === 'code') {
+        entry.language = t.language || 'javascript'
+        entry.code = t.code || ''
+      } else if (t.type === 'prompt') {
+        entry.promptText = t.promptText || ''
+      } else {
+        // HTTP
+        entry.method = t.method || 'GET'
+        entry.endpoint = t.endpoint || ''
+        entry.headers = t.headers || {}
+        entry.bodyTemplate = t.bodyTemplate || '{}'
+      }
+
+      dict[t.id] = entry
     }
     const plain = JSON.parse(JSON.stringify(dict))
     const result = await window.electronAPI.tools.saveConfig(plain)

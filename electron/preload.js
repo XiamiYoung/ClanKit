@@ -99,6 +99,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (personaId, type) => ipcRenderer.invoke('souls:delete', personaId, type),
   },
 
+  // ── Memory Extraction ─────────────────────────────────────────────────
+  memory: {
+    accept: (params) => ipcRenderer.invoke('memory:accept', params),
+  },
+
   // ── Knowledge / Pinecone RAG ─────────────────────────────────────────────
   knowledge: {
     getConfig:           ()       => ipcRenderer.invoke('knowledge:get-config'),

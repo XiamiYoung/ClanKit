@@ -196,7 +196,7 @@ class AgentLoop {
    * @param {Array<string|{id:string, name:string, systemPrompt?:string}>} enabledSkills
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
-  buildSystemPrompt(enabledAgents, enabledSkills, { systemPersonaPrompt, userPersonaPrompt, systemPersonaId, userPersonaId, groupChatContext } = {}, userSoulContent, systemSoulContent) {
+  buildSystemPrompt(enabledAgents, enabledSkills, { systemPersonaPrompt, userPersonaPrompt, systemPersonaId, userPersonaId, groupChatContext } = {}, userSoulContent, systemSoulContent, participantSouls) {
     const basePrompt = (this.config.systemPrompt || '').trim()
       || 'You are SparkAI, a versatile AI assistant running in a desktop application. You help users with a wide range of tasks including research, writing, analysis, coding, creative work, file management, and general knowledge.'
 
@@ -267,15 +267,37 @@ ${mcpEntries.join('\n')}
 Use MCP tools when the user's request involves external services or integrations.`
     }
 
-    // Append HTTP tools info if any are enabled
-    const httpTools = this.httpTools || []
-    if (httpTools.length > 0) {
-      const toolEntries = httpTools.map(t =>
+    // Append user-defined tools info if any are enabled
+    const allUserTools = this.httpTools || []
+    const httpToolsList = allUserTools.filter(t => (t.type || 'http') === 'http')
+    const codeToolsList = allUserTools.filter(t => t.type === 'code')
+    const promptToolsList = allUserTools.filter(t => t.type === 'prompt')
+
+    if (httpToolsList.length > 0) {
+      const toolEntries = httpToolsList.map(t =>
         `- http_${t.id}: [${t.method}] ${t.endpoint} — ${t.description || t.name}`
       )
       system += `\n\nHTTP TOOLS (user-defined API endpoints):
 ${toolEntries.join('\n')}
 Use these tools when the user's request matches their description. Pass a 'body' object if the endpoint requires request data.`
+    }
+
+    if (codeToolsList.length > 0) {
+      const toolEntries = codeToolsList.map(t =>
+        `- code_${t.id}: [${(t.language || 'javascript').toUpperCase()}] ${t.description || t.name}`
+      )
+      system += `\n\nCODE REFERENCE TOOLS (user-defined code snippets):
+${toolEntries.join('\n')}
+Call these tools to retrieve reference code. Use execute_shell to run similar code based on the reference.`
+    }
+
+    if (promptToolsList.length > 0) {
+      const toolEntries = promptToolsList.map(t =>
+        `- prompt_${t.id}: ${t.description || t.name}`
+      )
+      system += `\n\nPROMPT TOOLS (user-defined prompt templates):
+${toolEntries.join('\n')}
+Call these tools to retrieve prompt templates or reusable instructions on demand.`
     }
 
     // Append persona context if provided
@@ -296,6 +318,12 @@ Use these tools when the user's request matches their description. Pass a 'body'
         let profile = `### ${p.name}`
         if (p.description) profile += ` — ${p.description}`
         if (p.prompt) profile += `\n${p.prompt}`
+        // Append participant's soul memory if available
+        const soul = (participantSouls || []).find(s => s.name === p.name)
+        if (soul?.content) {
+          const trimmed = prepareSoulContent(soul.content)
+          if (trimmed) profile += `\n\n**${p.name}'s Memory:**\n${trimmed}`
+        }
         return profile
       }).join('\n\n')
 
@@ -477,7 +505,18 @@ RULES:
     const userSoulContent = readSoulFile(soulsDir, userPersonaId, 'users')
     const systemSoulContent = readSoulFile(soulsDir, systemPersonaId, 'system')
 
-    const systemPrompt = this.buildSystemPrompt(enabledAgents, enabledSkills, personaPrompts, userSoulContent, systemSoulContent)
+    // Load soul content for other group chat participants
+    const participantSouls = []
+    if (personaPrompts?.groupChatContext?.otherParticipants) {
+      for (const p of personaPrompts.groupChatContext.otherParticipants) {
+        if (p.id) {
+          const content = readSoulFile(soulsDir, p.id, 'system')
+          if (content) participantSouls.push({ name: p.name, content })
+        }
+      }
+    }
+
+    const systemPrompt = this.buildSystemPrompt(enabledAgents, enabledSkills, personaPrompts, userSoulContent, systemSoulContent, participantSouls)
     const conversationMessages = this._buildConversationMessages(messages, currentAttachments)
     let finalText = ''
 
@@ -526,24 +565,57 @@ RULES:
       }
     }
 
-    // Inject HTTP tools from user-defined catalog
-    const httpToolMap = new Map() // toolName → tool config
+    // Inject user-defined tools from catalog (HTTP, Code, Prompt)
+    const httpToolMap = new Map()   // toolName → tool config
+    const codeToolMap = new Map()   // toolName → tool config
+    const promptToolMap = new Map() // toolName → tool config
+
     if (this.httpTools.length > 0) {
       for (const tool of this.httpTools) {
-        const fullName = `http_${tool.id}`
-        httpToolMap.set(fullName, tool)
-        allToolsAnthropic.push({
-          name: fullName,
-          description: `[HTTP: ${tool.category || 'HTTP'}] ${tool.description || tool.name}`,
-          input_schema: {
-            type: 'object',
-            properties: {
-              body: { type: 'object', description: 'Request body (JSON). Merged with the tool\'s body template.' }
+        const toolType = tool.type || 'http'
+
+        if (toolType === 'code') {
+          const fullName = `code_${tool.id}`
+          codeToolMap.set(fullName, tool)
+          allToolsAnthropic.push({
+            name: fullName,
+            description: `[Code: ${tool.language || 'javascript'}] ${tool.description || tool.name}\n\nReference code:\n\`\`\`${tool.language || 'javascript'}\n${tool.code || ''}\n\`\`\``,
+            input_schema: {
+              type: 'object',
+              properties: {
+                input: { type: 'string', description: 'Input or context for the code reference' }
+              }
             }
-          }
-        })
+          })
+        } else if (toolType === 'prompt') {
+          const fullName = `prompt_${tool.id}`
+          promptToolMap.set(fullName, tool)
+          allToolsAnthropic.push({
+            name: fullName,
+            description: `[Prompt] ${tool.description || tool.name}. Call this tool to retrieve the prompt/template.`,
+            input_schema: {
+              type: 'object',
+              properties: {}
+            }
+          })
+        } else {
+          // HTTP (default)
+          const fullName = `http_${tool.id}`
+          httpToolMap.set(fullName, tool)
+          allToolsAnthropic.push({
+            name: fullName,
+            description: `[HTTP: ${tool.category || 'HTTP'}] ${tool.description || tool.name}`,
+            input_schema: {
+              type: 'object',
+              properties: {
+                body: { type: 'object', description: 'Request body (JSON). Merged with the tool\'s body template.' }
+              }
+            }
+          })
+        }
       }
-      logger.agent('HTTP tools injected', { count: this.httpTools.length })
+      const counts = { http: httpToolMap.size, code: codeToolMap.size, prompt: promptToolMap.size }
+      logger.agent('User tools injected', counts)
     }
 
     // Convert tools to the correct format for the provider
@@ -815,6 +887,12 @@ RULES:
                 result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput)
               } else if (httpToolMap.has(toolName)) {
                 result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
+              } else if (codeToolMap.has(toolName)) {
+                const codeTool = codeToolMap.get(toolName)
+                result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
+              } else if (promptToolMap.has(toolName)) {
+                const promptTool = promptToolMap.get(toolName)
+                result = { success: true, data: promptTool.promptText || '' }
               } else {
                 result = await this.toolRegistry.execute(toolName, toolInput)
               }
@@ -1008,6 +1086,12 @@ RULES:
                 result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput)
               } else if (httpToolMap.has(toolName)) {
                 result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
+              } else if (codeToolMap.has(toolName)) {
+                const codeTool = codeToolMap.get(toolName)
+                result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
+              } else if (promptToolMap.has(toolName)) {
+                const promptTool = promptToolMap.get(toolName)
+                result = { success: true, data: promptTool.promptText || '' }
               } else {
                 result = await this.toolRegistry.execute(toolName, toolInput)
               }

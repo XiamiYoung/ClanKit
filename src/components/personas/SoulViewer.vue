@@ -208,274 +208,147 @@ onMounted(loadContent)
 
 <style scoped>
 .soul-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
 }
-
 .soul-modal {
-  width: min(700px, 90vw);
-  max-height: 85vh;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  border-radius: 20px;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  width: min(700px, 90vw); max-height: 85vh;
+  background: #0F0F0F; border: 1px solid #2A2A2A;
+  border-radius: 20px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: soul-enter 0.2s ease-out;
+}
+@keyframes soul-enter {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .soul-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid #E5E5EA;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid #1F1F1F;
 }
-.soul-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+.soul-header-left { display: flex; align-items: center; gap: 10px; }
 .soul-header-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 8px;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 .soul-title {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-subtitle, 0.95rem);
-  font-weight: 700;
-  color: #1A1A1A;
-  margin: 0;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-subtitle, 0.95rem);
+  font-weight: 700; color: #FFFFFF; margin: 0;
 }
 .soul-meta {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary, 0.75rem);
-  color: #9CA3AF;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.75rem); color: #4B5563;
 }
 .soul-close-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: #9CA3AF;
-  cursor: pointer;
-  transition: background 0.15s;
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: #6B7280; cursor: pointer; transition: all 0.15s;
 }
-.soul-close-btn:hover { background: #F5F5F5; }
+.soul-close-btn:hover { background: #1F1F1F; color: #FFFFFF; }
 
 .soul-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  scrollbar-width: thin;
-  min-height: 200px;
+  flex: 1; overflow-y: auto; padding: 20px;
+  scrollbar-width: thin; scrollbar-color: #333 transparent; min-height: 200px;
 }
 
-/* ── Persona info card ──────────────────────────────────────────────── */
+/* Persona info card */
 .soul-persona-card {
-  background: #F9FAFB;
-  border: 1px solid #E5E5EA;
-  border-radius: 12px;
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 16px;
+  background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 12px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;
 }
-.soul-persona-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
+.soul-persona-field { display: flex; flex-direction: column; gap: 4px; }
 .soul-persona-label {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #9CA3AF;
+  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em; color: #4B5563;
 }
 .soul-persona-value {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body, 0.875rem);
-  color: #374151;
-  line-height: 1.5;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body, 0.875rem);
+  color: #9CA3AF; line-height: 1.5;
 }
 .soul-persona-prompt {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: var(--fs-secondary, 0.8rem);
-  color: #374151;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.6;
-  max-height: 150px;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-secondary, 0.8rem);
+  color: #9CA3AF; background: #111111; border: 1px solid #2A2A2A; border-radius: 8px;
+  padding: 10px 12px; margin: 0; white-space: pre-wrap; word-break: break-word;
+  line-height: 1.6; max-height: 150px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
 .soul-btn-inline {
-  align-self: flex-start;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  color: #6B7280;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  cursor: pointer;
-  transition: all 0.12s;
-  margin-top: 4px;
+  align-self: flex-start; padding: 4px 10px; border-radius: 6px;
+  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+  color: #6B7280; background: #1A1A1A; border: 1px solid #2A2A2A;
+  cursor: pointer; transition: all 0.12s; margin-top: 4px;
 }
-.soul-btn-inline:hover {
-  background: #F5F5F5;
-  color: #1A1A1A;
-  border-color: #D1D1D6;
-}
-.soul-prompt-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 6px;
-}
+.soul-btn-inline:hover { background: #222222; color: #FFFFFF; border-color: #374151; }
+.soul-prompt-actions { display: flex; gap: 6px; margin-top: 6px; }
 
-/* ── Divider ────────────────────────────────────────────────────────── */
+/* Divider */
 .soul-divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
 }
 .soul-divider-label {
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #1A1A1A;
-  white-space: nowrap;
+  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em; color: #FFFFFF; white-space: nowrap;
 }
 .soul-divider-meta {
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  color: #9CA3AF;
-  white-space: nowrap;
+  font-family: 'Inter', sans-serif; font-size: 11px; color: #4B5563; white-space: nowrap;
 }
-.soul-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: #E5E5EA;
-}
+.soul-divider::after { content: ''; flex: 1; height: 1px; background: #1F1F1F; }
 
-/* ── Empty state ────────────────────────────────────────────────────── */
+/* Empty state */
 .soul-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 80px;
-  color: #9CA3AF;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body, 0.875rem);
-  text-align: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 80px; color: #4B5563; font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body, 0.875rem); text-align: center;
 }
 .soul-empty p { margin: 4px 0; }
-.soul-empty-hint {
-  font-size: var(--fs-secondary, 0.75rem);
-  color: #D1D1D6;
-  max-width: 300px;
-}
+.soul-empty-hint { font-size: var(--fs-secondary, 0.75rem); color: #374151; max-width: 300px; }
 
 .soul-rendered {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body, 0.875rem);
-  color: #1A1A1A;
-  line-height: 1.6;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body, 0.875rem);
+  color: #D1D5DB; line-height: 1.6;
 }
-.soul-rendered :deep(h1) { font-size: 1.25rem; font-weight: 700; margin: 0 0 8px; }
-.soul-rendered :deep(h2) { font-size: 1rem; font-weight: 600; margin: 16px 0 6px; color: #374151; }
+.soul-rendered :deep(h1) { font-size: 1.25rem; font-weight: 700; margin: 0 0 8px; color: #FFFFFF; }
+.soul-rendered :deep(h2) { font-size: 1rem; font-weight: 600; margin: 16px 0 6px; color: #9CA3AF; }
 .soul-rendered :deep(ul) { padding-left: 20px; margin: 4px 0; }
 .soul-rendered :deep(li) { margin: 2px 0; }
-.soul-rendered :deep(blockquote) { border-left: 3px solid #E5E5EA; padding-left: 12px; color: #6B7280; margin: 8px 0; }
-.soul-rendered :deep(code) { font-family: 'JetBrains Mono', monospace; font-size: 0.85em; background: #F5F5F5; padding: 1px 4px; border-radius: 3px; }
+.soul-rendered :deep(blockquote) { border-left: 3px solid #2A2A2A; padding-left: 12px; color: #6B7280; margin: 8px 0; }
+.soul-rendered :deep(code) { font-family: 'JetBrains Mono', monospace; font-size: 0.85em; background: #1A1A1A; padding: 1px 4px; border-radius: 3px; color: #D1D5DB; }
 
 .soul-editor {
-  width: 100%;
-  min-height: 120px;
-  padding: 12px;
-  border: 1px solid #E5E5EA;
-  border-radius: 10px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: var(--fs-secondary, 0.8rem);
-  color: #1A1A1A;
-  background: #FAFAFA;
-  outline: none;
-  resize: vertical;
-  line-height: 1.6;
-  box-sizing: border-box;
-  transition: border-color 0.15s;
+  width: 100%; min-height: 120px; padding: 12px;
+  border: 1px solid #2A2A2A; border-radius: 10px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-secondary, 0.8rem);
+  color: #FFFFFF; background: #1A1A1A; outline: none; resize: vertical;
+  line-height: 1.6; box-sizing: border-box; transition: border-color 0.15s;
 }
-.soul-editor:focus { border-color: #1A1A1A; }
+.soul-editor:focus { border-color: #4B5563; }
 
 .soul-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  border-top: 1px solid #E5E5EA;
-  background: #F9F9F9;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; border-top: 1px solid #1F1F1F; background: #0A0A0A;
 }
-.soul-footer-left, .soul-footer-right {
-  display: flex;
-  gap: 8px;
-}
+.soul-footer-left, .soul-footer-right { display: flex; gap: 8px; }
 
 .soul-btn {
-  padding: 7px 16px;
-  border-radius: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary, 0.8rem);
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  transition: background 0.15s;
+  padding: 7px 16px; border-radius: 8px;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.8rem);
+  font-weight: 600; cursor: pointer; border: none; transition: all 0.15s;
 }
 .soul-btn.primary {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  color: #fff; border: 1px solid #374151;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
-.soul-btn.primary:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
+.soul-btn.primary:hover { background: linear-gradient(135deg, #2D2D2D 0%, #374151 40%, #6B7280 100%); }
 .soul-btn.secondary {
-  background: #F5F5F5;
-  color: #6B7280;
-  border: 1px solid #E5E5EA;
+  background: #1A1A1A; color: #9CA3AF; border: 1px solid #2A2A2A;
 }
-.soul-btn.secondary:hover { background: #E5E5EA; }
+.soul-btn.secondary:hover { background: #222222; color: #FFFFFF; border-color: #374151; }
 .soul-btn.danger {
-  background: transparent;
-  color: #EF4444;
-  border: 1px solid #FECACA;
+  background: transparent; color: #EF4444; border: 1px solid rgba(239,68,68,0.3);
 }
-.soul-btn.danger:hover { background: #FEF2F2; }
+.soul-btn.danger:hover { background: rgba(239,68,68,0.1); }
 </style>

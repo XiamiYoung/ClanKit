@@ -569,7 +569,7 @@ function diffMarker(type) {
 }
 :deep(.code-block-wrap pre) {
   margin: 0;
-  padding: 12px;
+  padding: 32px 12px 12px;
   background: #1C1C1E;
   overflow-x: auto;
 }
