@@ -511,6 +511,9 @@
           @stop="stopAgent"
           @quote="quoteMessage"
           @delete-message="requestDeleteMessage"
+          :on-approve-plan="approvePlan"
+          :on-reject-plan="rejectPlan"
+          :on-refine-plan="refinePlan"
         >
           <template #input>
             <!-- Queued prompts list -->
@@ -1007,7 +1010,7 @@
 
     <!-- ── Chat Settings Modal (dark theme) ──────────────────────────────── -->
     <Teleport to="body">
-      <div v-if="showChatConfigModal" class="ccm-backdrop" @click.self="showChatConfigModal = false">
+      <div v-if="showChatConfigModal" class="ccm-backdrop" @click.self="cancelChatSettings">
         <div class="ccm-dialog">
           <!-- Header -->
           <div class="ccm-header">
@@ -1017,7 +1020,7 @@
               </div>
               <h2 class="ccm-title">Chat Settings</h2>
             </div>
-            <button class="ccm-close" @click="showChatConfigModal = false">
+            <button class="ccm-close" @click="cancelChatSettings">
               <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
@@ -1086,6 +1089,22 @@
                     </button>
                   </template>
                 </div>
+              </div>
+              <!-- Working Path -->
+              <div class="ccm-dark-section">
+                <div class="ccm-dark-section-label">Working Path <span class="ccm-dark-badge">Artifact Directory</span></div>
+                <div class="ccm-working-path-row">
+                  <input
+                    v-model="draftWorkingPath"
+                    type="text"
+                    :placeholder="configStore.config.artyfactPath || '~/.sparkai/artyfact'"
+                    class="ccm-working-path-input"
+                  />
+                  <button class="ccm-working-path-browse" @click="browseWorkingPath" title="Browse folder">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  </button>
+                </div>
+                <span class="ccm-working-path-hint">Leave empty to use the global default path.</span>
               </div>
             </div>
 
@@ -1193,7 +1212,10 @@
           <!-- Footer -->
           <div class="ccm-footer">
             <span class="ccm-footer-tokens">{{ formatTokens(toolsTokenEstimate + mcpTokenEstimate) }} tokens total ({{ tokenPercentage(toolsTokenEstimate + mcpTokenEstimate) }}% of context)</span>
-            <button class="ccm-done-btn" @click="showChatConfigModal = false">Done</button>
+            <div class="ccm-footer-actions">
+              <button class="ccm-cancel-btn" @click="cancelChatSettings">Cancel</button>
+              <button class="ccm-save-btn" @click="saveChatSettings">Save</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1748,27 +1770,105 @@ const ccmFilteredMcp = computed(() => {
   })
 })
 
+// Snapshot of draft state before modal opens (for cancel/revert)
+let _draftSnapshot = null
+
 // Fetch models when config modal opens (for OpenRouter/OpenAI providers)
 watch(showChatConfigModal, (open) => {
   if (!open) return
   ccmActiveTab.value = 'model'
   chatModelFilter.value = ''
+  _loadDraftFromChat()
+  // Snapshot for cancel
+  _draftSnapshot = {
+    enabledToolIds: new Set(chatEnabledToolIds.value),
+    enabledMcpIds: new Set(chatEnabledMcpIds.value),
+    workingPath: draftWorkingPath.value,
+  }
   if (effectiveProvider.value === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
   if (effectiveProvider.value === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
 })
+
+function saveChatSettings() {
+  const chatId = chatsStore.activeChatId
+  if (!chatId) return
+  chatsStore.setChatSettings(chatId, {
+    enabledToolIds: [...chatEnabledToolIds.value],
+    enabledMcpIds: [...chatEnabledMcpIds.value],
+    workingPath: draftWorkingPath.value || null,
+  })
+  _draftSnapshot = null
+  showChatConfigModal.value = false
+}
+
+function cancelChatSettings() {
+  // Revert draft to snapshot
+  if (_draftSnapshot) {
+    chatEnabledToolIds.value = _draftSnapshot.enabledToolIds
+    chatEnabledMcpIds.value = _draftSnapshot.enabledMcpIds
+    draftWorkingPath.value = _draftSnapshot.workingPath
+  }
+  _draftSnapshot = null
+  showChatConfigModal.value = false
+}
+
+async function browseWorkingPath() {
+  if (!window.electronAPI?.obsidian?.pickFolder) return
+  const result = await window.electronAPI.obsidian.pickFolder()
+  if (result) draftWorkingPath.value = result
+}
 const chatEnabledToolIds = ref(new Set())
 const toolsSearchQuery = ref('')
 const toolsCategoryFilter = ref('')
+const draftWorkingPath = ref('')
 
-// Auto-enable tools: initialize from global defaults, add newly discovered tools
+// Resolve default tool IDs (global defaults or all tools)
+function _defaultToolIds() {
+  const allIds = toolsStore.tools.map(t => t.id)
+  const defaults = configStore.config.defaultToolIds
+  return defaults
+    ? new Set(defaults.filter(id => allIds.includes(id)))
+    : new Set(allIds)
+}
+// Resolve default MCP IDs (global defaults or all servers)
+function _defaultMcpIds() {
+  const allIds = mcpStore.servers.map(s => s.id)
+  const defaults = configStore.config.defaultMcpServerIds
+  return defaults
+    ? new Set(defaults.filter(id => allIds.includes(id)))
+    : new Set(allIds)
+}
+
+// Load draft state from the active chat's persisted settings
+function _loadDraftFromChat() {
+  const chat = chatsStore.activeChat
+  if (!chat) return
+  // Tools
+  const allToolIds = toolsStore.tools.map(t => t.id)
+  if (chat.enabledToolIds) {
+    chatEnabledToolIds.value = new Set(chat.enabledToolIds.filter(id => allToolIds.includes(id)))
+  } else {
+    chatEnabledToolIds.value = _defaultToolIds()
+  }
+  // MCP
+  const allMcpIds = mcpStore.servers.map(s => s.id)
+  if (chat.enabledMcpIds) {
+    chatEnabledMcpIds.value = new Set(chat.enabledMcpIds.filter(id => allMcpIds.includes(id)))
+  } else {
+    chatEnabledMcpIds.value = _defaultMcpIds()
+  }
+  // Working path
+  draftWorkingPath.value = chat.workingPath || ''
+}
+
+// Auto-enable tools: initialize from chat or global defaults, add newly discovered tools
 watch(() => toolsStore.tools.map(t => t.id), (allIds) => {
   if (allIds.length === 0) return
-  if (chatEnabledToolIds.value.size === 0) {
-    // First load — use global defaults or all tools
-    const defaults = configStore.config.defaultToolIds
-    chatEnabledToolIds.value = defaults
-      ? new Set(defaults.filter(id => allIds.includes(id)))
-      : new Set(allIds)
+  const chat = chatsStore.activeChat
+  if (chat?.enabledToolIds) {
+    chatEnabledToolIds.value = new Set(chat.enabledToolIds.filter(id => allIds.includes(id)))
+  } else if (chatEnabledToolIds.value.size === 0) {
+    chatEnabledToolIds.value = _defaultToolIds()
   } else {
     // Add any new tools that weren't in the set yet
     const s = new Set(chatEnabledToolIds.value)
@@ -1828,14 +1928,14 @@ const showMcpModal = ref(false)
 const chatEnabledMcpIds = ref(new Set())
 const mcpSearchQuery = ref('')
 
-// Auto-enable MCP servers: initialize from global defaults
+// Auto-enable MCP servers: initialize from chat or global defaults
 watch(() => mcpStore.servers.map(s => s.id), (allIds) => {
   if (allIds.length === 0) return
-  if (chatEnabledMcpIds.value.size === 0) {
-    const defaults = configStore.config.defaultMcpServerIds
-    chatEnabledMcpIds.value = defaults
-      ? new Set(defaults.filter(id => allIds.includes(id)))
-      : new Set(allIds)
+  const chat = chatsStore.activeChat
+  if (chat?.enabledMcpIds) {
+    chatEnabledMcpIds.value = new Set(chat.enabledMcpIds.filter(id => allIds.includes(id)))
+  } else if (chatEnabledMcpIds.value.size === 0) {
+    chatEnabledMcpIds.value = _defaultMcpIds()
   } else {
     // Add any new servers that weren't in the set yet
     const s = new Set(chatEnabledMcpIds.value)
@@ -1879,6 +1979,28 @@ const mcpTokenEstimate = computed(() =>
     return sum + estimateMcpTokens(s, toolCount)
   }, 0)
 )
+
+// Persisted per-chat tool/MCP selections — used by runAgent() (reads from chat object, not draft)
+const persistedEnabledToolIds = computed(() => {
+  const chat = chatsStore.activeChat
+  if (chat?.enabledToolIds) return new Set(chat.enabledToolIds)
+  return _defaultToolIds()
+})
+const persistedEnabledHttpTools = computed(() =>
+  toolsStore.tools.filter(t => persistedEnabledToolIds.value.has(t.id))
+)
+const persistedEnabledMcpIds = computed(() => {
+  const chat = chatsStore.activeChat
+  if (chat?.enabledMcpIds) return new Set(chat.enabledMcpIds)
+  return _defaultMcpIds()
+})
+const persistedEnabledMcpServers = computed(() =>
+  mcpStore.servers.filter(s => persistedEnabledMcpIds.value.has(s.id))
+)
+const persistedWorkingPath = computed(() => {
+  const chat = chatsStore.activeChat
+  return chat?.workingPath || configStore.config.artyfactPath || ''
+})
 
 // Per-chat state — reads from the active chat object in the store
 const activeRunning = computed(() => chatsStore.activeChat?.isRunning ?? false)
@@ -2825,6 +2947,18 @@ function handleChunk(cId, chunk) {
     return
   }
 
+  if (chunk.type === 'plan_submitted') {
+    const chat = chatsStore.chats.find(c => c.id === cId)
+    if (chat?.messages) {
+      const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
+      if (msg) {
+        msg.planData  = chunk.plan
+        msg.planState = 'pending'
+      }
+    }
+    return
+  }
+
   const targetChat = chatsStore.chats.find(c => c.id === cId)
   if (!targetChat || !targetChat.messages) return
 
@@ -3147,6 +3281,10 @@ async function sendMessage() {
   if (targetChat.model) {
     cfg.customModel = targetChat.model
   }
+  // Per-chat working path (artifact directory)
+  if (targetChat.workingPath) {
+    cfg.chatWorkingPath = targetChat.workingPath
+  }
   dbg(`runAgent → chatId=${chatId} provider=${chatProvider} model=${targetChat.model || cfg.anthropic?.activeModel} msgs=${apiMessages.length} skills=[${enabledSkills.value.join(',')||'none'}] group=${isGroup}`)
   dbg(`config → baseURL=${cfg.baseURL} apiKey=${cfg.apiKey ? cfg.apiKey.slice(0,8)+'…' : '(empty)'} sonnet=${cfg.anthropic?.sonnetModel}`)
 
@@ -3245,8 +3383,8 @@ async function sendMessage() {
           enabledAgents: [],
           enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
           personaPrompts,
-          mcpServers: JSON.parse(JSON.stringify(enabledMcpServers.value)),
-          httpTools: JSON.parse(JSON.stringify(enabledHttpTools.value)),
+          mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
+          httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
         }
       }).filter(Boolean)
 
@@ -3259,8 +3397,8 @@ async function sendMessage() {
         enabledAgents: [],
         enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
         ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
-        mcpServers: JSON.parse(JSON.stringify(enabledMcpServers.value)),
-        httpTools: JSON.parse(JSON.stringify(enabledHttpTools.value)),
+        mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
+        httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
         personaRuns,
         knowledgeConfig: {
           ragEnabled: knowledgeStore.ragEnabled,
@@ -3321,7 +3459,7 @@ async function sendMessage() {
       if (personaModel) singleCfg.customModel = personaModel
 
       dbg('Invoking window.electronAPI.runAgent…')
-      const res = await window.electronAPI.runAgent({
+      const agentRunParams = {
         chatId,
         messages: JSON.parse(JSON.stringify(apiMessages)),
         config: JSON.parse(JSON.stringify(singleCfg)),
@@ -3329,8 +3467,8 @@ async function sendMessage() {
         enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
         ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
         personaPrompts: resolvedPersonaPrompts,
-        mcpServers: JSON.parse(JSON.stringify(enabledMcpServers.value)),
-        httpTools: JSON.parse(JSON.stringify(enabledHttpTools.value)),
+        mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
+        httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
         knowledgeConfig: {
           ragEnabled: knowledgeStore.ragEnabled,
           pineconeApiKey: knowledgeStore.pineconeApiKey,
@@ -3339,7 +3477,9 @@ async function sendMessage() {
           embeddingModel: knowledgeStore.embeddingModel,
           indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs))
         },
-      })
+      }
+      chatsStore.storePlanRunParams(chatId, agentRunParams)
+      const res = await window.electronAPI.runAgent(agentRunParams)
 
       dbg(`runAgent returned → success=${res.success} resultLen=${res.result?.length ?? 0} error=${res.error ?? 'none'}`, res.success ? 'success' : 'error')
 
@@ -3496,6 +3636,82 @@ async function stopAgent() {
   }
 }
 
+// ── Plan Approval Functions ────────────────────────────────────────────────────
+async function approvePlan(msg) {
+  const chatId = chatsStore.activeChatId
+  chatsStore.setPlanState(chatId, msg.id, 'approved')
+
+  const savedParams = chatsStore.getPlanRunParams(chatId)
+  if (!savedParams) return
+
+  // Format plan as injected text
+  const injectedPlan = `Title: ${msg.planData.title}\n` +
+    msg.planData.steps.map((s, i) => `${i + 1}. ${s.label}`).join('\n')
+
+  // Create a new streaming assistant message
+  const newMsgId = uuidv4()
+  const chat = chatsStore.chats.find(c => c.id === chatId)
+  if (!chat?.messages) return
+
+  chat.messages.push({
+    id: newMsgId,
+    role: 'assistant',
+    content: '',
+    streaming: true,
+    streamingStartedAt: Date.now(),
+    segments: []
+  })
+  chat.isRunning = true
+  perChatStreamingSegments.set(chatId, [])
+  perChatStreamingMsgId.set(chatId, newMsgId)
+  scrollToBottom()
+
+  try {
+    const res = await window.electronAPI.runAgent({ ...savedParams, injectedPlan })
+
+    const finalSegments = perChatStreamingSegments.get(chatId) || []
+    const execMsg = chat.messages.find(m => m.id === newMsgId)
+    if (execMsg) {
+      execMsg.streaming = false
+      execMsg.segments = finalSegments.map(s => ({ ...s }))
+      execMsg.content = finalSegments.filter(s => s.type === 'text').map(s => s.content).join('')
+      if (!execMsg.content && res.result) {
+        execMsg.segments = [{ type: 'text', content: res.result }]
+        execMsg.content = res.result
+      }
+      if (!res.success) {
+        execMsg.segments = [{ type: 'text', content: `Error: ${res.error}` }]
+        execMsg.content = `Error: ${res.error}`
+      }
+      if (execMsg.streamingStartedAt) execMsg.durationMs = Date.now() - execMsg.streamingStartedAt
+    }
+  } catch (err) {
+    const execMsg = chat.messages.find(m => m.id === newMsgId)
+    if (execMsg) {
+      execMsg.streaming = false
+      execMsg.segments = [{ type: 'text', content: `Error: ${err.message}` }]
+      execMsg.content = `Error: ${err.message}`
+    }
+  } finally {
+    chat.isRunning = false
+    perChatStreamingMsgId.delete(chatId)
+    perChatStreamingSegments.delete(chatId)
+    await chatsStore.persist?.()
+    scrollToBottom()
+  }
+}
+
+function rejectPlan(msg) {
+  chatsStore.setPlanState(chatsStore.activeChatId, msg.id, 'rejected')
+}
+
+function refinePlan(msg) {
+  chatsStore.setPlanState(chatsStore.activeChatId, msg.id, 'rejected')
+  // Pre-fill the textarea with a refinement prompt and focus
+  inputText.value = 'Refine the plan: '
+  nextTick(() => inputEl.value?.focus())
+}
+
 async function compactContext() {
   const chatId = chatsStore.activeChatId
   if (!chatId) return
@@ -3585,6 +3801,9 @@ watch(() => chatsStore.activeChatId, () => {
   quotedMessage.value = null
   stickyTarget.value = null
 
+  // Reload per-chat tool/MCP/workingPath draft state from the new chat
+  _loadDraftFromChat()
+
   // Scroll after messages are rendered (handles both already-loaded and lazy-loaded cases)
   scrollToBottom(true)
   nextTick(() => {
@@ -3645,22 +3864,12 @@ async function handleInterceptedFileDrop(url) {
 onMounted(async () => {
   personasStore.loadPersonas()
   await knowledgeStore.loadConfig()
-  // Load tools in background — don't block the view
+  // Load tools in background — then sync draft from active chat
   toolsStore.loadTools().then(() => {
-    if (toolsStore.tools.length > 0 && chatEnabledToolIds.value.size === 0) {
-      const defaults = configStore.config.defaultToolIds
-      chatEnabledToolIds.value = defaults
-        ? new Set(defaults.filter(id => toolsStore.tools.some(t => t.id === id)))
-        : new Set(toolsStore.tools.map(t => t.id))
-    }
+    _loadDraftFromChat()
   })
-  // Initialize MCP from defaults
-  if (mcpStore.servers.length > 0 && chatEnabledMcpIds.value.size === 0) {
-    const mcpDefaults = configStore.config.defaultMcpServerIds
-    chatEnabledMcpIds.value = mcpDefaults
-      ? new Set(mcpDefaults.filter(id => mcpStore.servers.some(s => s.id === id)))
-      : new Set(mcpStore.servers.map(s => s.id))
-  }
+  // Initialize MCP from active chat or defaults
+  _loadDraftFromChat()
   scrollToBottom()
   nextTick(() => inputEl.value?.focus())
   document.addEventListener('click', handlePopoverOutsideClick)
@@ -4834,17 +5043,55 @@ onUnmounted(() => {
 .ccm-footer-tokens {
   font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #4B5563;
 }
-.ccm-done-btn {
+.ccm-footer-actions {
+  display: flex; gap: 8px; align-items: center;
+}
+.ccm-cancel-btn {
+  padding: 8px 20px; border-radius: 10px;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
+  background: #1A1A1A; color: #9CA3AF; border: 1px solid #2A2A2A; cursor: pointer;
+  transition: all 0.15s;
+}
+.ccm-cancel-btn:hover {
+  background: #2A2A2A; color: #FFFFFF; border-color: #374151;
+}
+.ccm-save-btn {
   padding: 8px 24px; border-radius: 10px;
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF; border: 1px solid #374151; cursor: pointer;
   transition: all 0.15s;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
-.ccm-done-btn:hover {
-  background: linear-gradient(135deg, #2D2D2D 0%, #374151 40%, #6B7280 100%);
+.ccm-save-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   border-color: #4B5563;
+}
+
+/* Working path field */
+.ccm-working-path-row {
+  display: flex; gap: 8px; align-items: center;
+}
+.ccm-working-path-input {
+  flex: 1; padding: 8px 12px; border-radius: 8px;
+  background: #1A1A1A; border: 1px solid #2A2A2A;
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  color: #FFFFFF; outline: none; transition: border-color 0.15s;
+}
+.ccm-working-path-input:focus { border-color: #4B5563; }
+.ccm-working-path-input::placeholder { color: #4B5563; }
+.ccm-working-path-browse {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 8px;
+  background: #1A1A1A; border: 1px solid #2A2A2A;
+  color: #9CA3AF; cursor: pointer; transition: all 0.15s; flex-shrink: 0;
+}
+.ccm-working-path-browse:hover {
+  background: #2A2A2A; border-color: #374151; color: #FFFFFF;
+}
+.ccm-working-path-hint {
+  font-family: 'Inter', sans-serif; font-size: 11px; color: #4B5563;
+  margin-top: 4px; display: block;
 }
 
 /* ── Reduced motion ─────────────────────────────────────────────────────── */
