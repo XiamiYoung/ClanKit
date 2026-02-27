@@ -34,6 +34,9 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.groupPersonaIds === undefined) chat.groupPersonaIds = []
     if (chat.isGroupChat === undefined) chat.isGroupChat = false
     if (chat.groupPersonaOverrides === undefined) chat.groupPersonaOverrides = {}
+    if (chat.workingPath === undefined) chat.workingPath = null
+    if (chat.enabledToolIds === undefined) chat.enabledToolIds = null    // null = "use defaults"
+    if (chat.enabledMcpIds === undefined) chat.enabledMcpIds = null      // null = "use defaults"
     // messages === null means "not loaded yet" (lazy)
     if (chat.messages) {
       for (const msg of chat.messages) {
@@ -112,6 +115,9 @@ export const useChatsStore = defineStore('chats', () => {
       isGroupChat: false,
       groupPersonaIds: [],
       groupPersonaOverrides: {},
+      workingPath: null,
+      enabledToolIds: null,
+      enabledMcpIds: null,
     }
     if (personaConfig && personaConfig.length === 1) {
       chat.systemPersonaId = personaConfig[0]
@@ -157,6 +163,9 @@ export const useChatsStore = defineStore('chats', () => {
       isGroupChat: source.isGroupChat,
       groupPersonaIds: [...(source.groupPersonaIds || [])],
       groupPersonaOverrides: JSON.parse(JSON.stringify(source.groupPersonaOverrides || {})),
+      workingPath: source.workingPath || null,
+      enabledToolIds: source.enabledToolIds ? [...source.enabledToolIds] : null,
+      enabledMcpIds: source.enabledMcpIds ? [...source.enabledMcpIds] : null,
     }
     // Override personas if provided
     if (personaOverride && personaOverride.length > 0) {
@@ -321,6 +330,17 @@ export const useChatsStore = defineStore('chats', () => {
     await persistIndex()
   }
 
+  async function setChatSettings(chatId, settings) {
+    const chat = chats.value.find(c => c.id === chatId)
+    if (!chat) return
+    if ('workingPath' in settings) chat.workingPath = settings.workingPath
+    if ('enabledToolIds' in settings) chat.enabledToolIds = settings.enabledToolIds
+    if ('enabledMcpIds' in settings) chat.enabledMcpIds = settings.enabledMcpIds
+    chat.updatedAt = Date.now()
+    // persistChat → store:save-chat already updates the index, no separate persistIndex needed
+    await persistChat(chatId)
+  }
+
   async function deleteMessage(chatId, messageId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat || !chat.messages) return
@@ -474,6 +494,12 @@ export const useChatsStore = defineStore('chats', () => {
       }
     } else if (chunk.type === 'thinking_start') {
       chat.isThinking = true
+    } else if (chunk.type === 'plan_submitted') {
+      const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
+      if (msg) {
+        msg.planData  = chunk.plan   // { title, steps: [{ label }] }
+        msg.planState = 'pending'    // 'pending' | 'approved' | 'rejected'
+      }
     } else if (chunk.type === 'context_update' && chunk.metrics) {
       chat.contextMetrics = { ...chunk.metrics }
     }
@@ -508,13 +534,35 @@ export const useChatsStore = defineStore('chats', () => {
     completedChatIds.value = s
   }
 
+  function setPlanState(chatId, msgId, state) {
+    const chat = chats.value.find(c => c.id === chatId)
+    if (!chat?.messages) return
+    const msg = chat.messages.find(m => m.id === msgId)
+    if (msg) {
+      msg.planState = state
+      debouncedPersistChat(chatId)
+    }
+  }
+
+  // keyed by chatId — holds last runAgent params for plan approval re-run
+  const _planRunParams = {}
+
+  function storePlanRunParams(chatId, params) {
+    _planRunParams[chatId] = params
+  }
+
+  function getPlanRunParams(chatId) {
+    return _planRunParams[chatId] || null
+  }
+
   return {
     chats, activeChatId, activeChat, isLoading, unreadChatIds, completedChatIds,
     loadChats, createChat, createChatFromHistory, removeChat, renameChat,
     setActiveChat, addMessage, updateLastAssistantMessage, setChatPersona,
-    setChatProvider, setChatModel, deleteMessage, clearChat, persist, ensureMessages,
+    setChatProvider, setChatModel, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
     setGroupPersonas, toggleGroupMode, setGroupPersonaOverride,
     removeGroupPersona, addGroupPersona, reorderChats,
-    initChunkListener, setUiChunkCallback, clearUiChunkCallback, markAsRead, markCompleted
+    initChunkListener, setUiChunkCallback, clearUiChunkCallback, markAsRead, markCompleted,
+    setPlanState, storePlanRunParams, getPlanRunParams,
   }
 })
