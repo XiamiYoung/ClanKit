@@ -172,7 +172,8 @@ const editor = useEditor({
   editorProps: {
     attributes: {
       class: 'outline-none leading-relaxed',
-      style: 'color:#1A1A1A; font-size:var(--fs-body); min-height:72px; max-height:200px; overflow-y:auto; padding:8px 12px;'
+      style: 'color:#1A1A1A; font-size:var(--fs-body); min-height:72px; max-height:200px; overflow-y:auto; padding:8px 12px;',
+      spellcheck: 'true'
     },
     handleKeyDown(view, event) {
       // Enter without shift = submit
@@ -269,7 +270,15 @@ function isEmpty() {
   return editor.value?.isEmpty ?? true
 }
 
-defineExpose({ focus, clear, isEmpty, getMarkdown: () => getMarkdown(editor.value) })
+/** Set editor content and move cursor to end */
+function prefill(text) {
+  if (!editor.value) return
+  editor.value.commands.setContent(text ? markdownToHtml(text) : '')
+  editor.value.commands.focus('end')
+  emit('update:modelValue', text || '')
+}
+
+defineExpose({ focus, clear, isEmpty, prefill, getMarkdown: () => getMarkdown(editor.value) })
 
 onBeforeUnmount(() => {
   editor.value?.destroy()

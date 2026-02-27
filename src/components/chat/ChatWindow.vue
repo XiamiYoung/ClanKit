@@ -43,7 +43,10 @@
           ]"
         >
           <!-- Assistant avatar + name chip -->
-          <div v-if="msg.role === 'assistant'" class="cw-msg-avatar-col">
+          <div v-if="msg.role === 'assistant'" class="cw-msg-avatar-col"
+            @mouseenter="showAvatarTooltip($event, msg)"
+            @mouseleave="hideAvatarTooltip"
+          >
             <div class="cw-msg-avatar-wrap">
               <img v-if="getSystemAvatar(msg)" :src="getSystemAvatar(msg)" alt="" class="cw-msg-avatar-img" />
               <div v-else class="cw-msg-avatar-fallback system">
@@ -123,6 +126,14 @@
               <div :class="msg.role === 'user' ? 'user-content' : 'prose-sparkai'">
                 <MessageRenderer :message="msg" />
               </div>
+              <PlanCard
+                v-if="msg.planData"
+                :plan="msg.planData"
+                :state="msg.planState || 'pending'"
+                @approve="props.onApprovePlan?.(msg)"
+                @refine="props.onRefinePlan?.(msg)"
+                @reject="props.onRejectPlan?.(msg)"
+              />
             </div>
             <div
               class="cw-msg-timestamp"
@@ -133,7 +144,10 @@
           </div>
 
           <!-- User avatar + name chip -->
-          <div v-if="msg.role === 'user'" class="cw-msg-avatar-col">
+          <div v-if="msg.role === 'user'" class="cw-msg-avatar-col"
+            @mouseenter="showAvatarTooltip($event, msg)"
+            @mouseleave="hideAvatarTooltip"
+          >
             <div class="cw-msg-avatar-wrap">
               <img v-if="userAvatarUri" :src="userAvatarUri" alt="" class="cw-msg-avatar-img" />
               <div v-else class="cw-msg-avatar-fallback user">
@@ -241,19 +255,35 @@
       </div>
     </slot>
   </div>
+
+  <!-- Floating persona tooltip (Teleport to body so it escapes overflow) -->
+  <Teleport to="body">
+    <div
+      v-if="avatarTooltip.visible"
+      class="cw-avatar-tooltip-fixed"
+      :style="{ top: avatarTooltip.y + 'px', left: avatarTooltip.x + 'px' }"
+    >
+      <div class="cw-avatar-tooltip-name">{{ avatarTooltip.name }}</div>
+      <div v-if="avatarTooltip.desc" class="cw-avatar-tooltip-desc">{{ avatarTooltip.desc }}</div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useChatsStore } from '../../stores/chats'
 import { usePersonasStore } from '../../stores/personas'
 import { getAvatarDataUri } from '../personas/personaAvatars'
 import MessageRenderer from './MessageRenderer.vue'
+import PlanCard from './PlanCard.vue'
 
 const props = defineProps({
   chatId: { type: String, required: true },
   showQuote: { type: Boolean, default: false },
   showDelete: { type: Boolean, default: false },
+  onApprovePlan: { type: Function, default: null },
+  onRejectPlan:  { type: Function, default: null },
+  onRefinePlan:  { type: Function, default: null },
 })
 
 const emit = defineEmits(['send', 'stop', 'quote', 'delete-message', 'send-with-attachments'])
@@ -307,6 +337,33 @@ const systemPersonaIds = computed(() => {
   const id = c.systemPersonaId || personasStore.defaultSystemPersona?.id
   return id ? [id] : []
 })
+
+// ── Avatar tooltip ──
+const avatarTooltip = reactive({ visible: false, name: '', desc: '', x: 0, y: 0 })
+
+function showAvatarTooltip(event, msg) {
+  let persona
+  if (msg.role === 'user') {
+    persona = userPersona.value
+  } else {
+    const pid = msg.personaId || chat.value?.systemPersonaId
+    persona = pid ? personasStore.getPersonaById(pid) : personasStore.defaultSystemPersona
+  }
+  if (!persona) { avatarTooltip.visible = false; return }
+  const rect = event.currentTarget.getBoundingClientRect()
+  avatarTooltip.name = persona.name || (msg.role === 'user' ? 'User' : 'Assistant')
+  avatarTooltip.desc = persona.description || ''
+  const tooltipWidth = 280
+  let left = rect.left + rect.width / 2
+  left = Math.max(tooltipWidth / 2 + 8, Math.min(left, window.innerWidth - tooltipWidth / 2 - 8))
+  avatarTooltip.x = left
+  avatarTooltip.y = rect.top - 8
+  avatarTooltip.visible = true
+}
+
+function hideAvatarTooltip() {
+  avatarTooltip.visible = false
+}
 
 // ── Visible messages with limit ──
 const visibleMessages = computed(() => {
@@ -792,4 +849,34 @@ defineExpose({ scrollToBottom })
 }
 .cw-btn.send.active:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .cw-btn:disabled { cursor: not-allowed; }
+</style>
+
+<!-- Unscoped styles for teleported avatar tooltip -->
+<style>
+.cw-avatar-tooltip-fixed {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  min-width: 140px;
+  max-width: 280px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.92);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+.cw-avatar-tooltip-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #F5F5F5;
+}
+.cw-avatar-tooltip-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  color: #D1D1D6;
+  line-height: 1.45;
+  margin-top: 3px;
+}
 </style>
