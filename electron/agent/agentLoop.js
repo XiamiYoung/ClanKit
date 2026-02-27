@@ -230,7 +230,7 @@ Load a skill when the user's request clearly matches its description.`
 
     // ── SparkAI Data Directory ──
     const dataPath = process.env.SPARKAI_DATA_PATH || path.join(require('os').homedir(), '.sparkai')
-    const artyfactPath = this.config.artyfactPath || path.join(dataPath, 'artyfact')
+    const artyfactPath = this.config.chatWorkingPath || this.config.artyfactPath || path.join(dataPath, 'artyfact')
     system += `\n\nSPARKAI DATA DIRECTORY: ${dataPath}
 This is the local data folder for the SparkAI desktop application. Its structure:
   ${dataPath}/
@@ -251,6 +251,32 @@ When the user asks you to create or configure MCP servers, HTTP tools, personas,
 - For MCP servers: each entry needs {id (uuid), name, command, args (array), env (object), description}. After creation, the user can click Refresh on the MCP page to see updates.
 - For HTTP tools: each tool lives under a category in tools.json. After creation, the user can click Refresh on the Tools page to see updates.
 - Always confirm with the user before modifying these files directly.`
+
+    // ── Notes Vault Path + Markdown Placement ──
+    const vaultPath = this.config.obsidianVaultPath
+    if (vaultPath) {
+      let subfolders = []
+      try {
+        const entries = fs.readdirSync(vaultPath, { withFileTypes: true })
+        subfolders = entries.filter(e => e.isDirectory()).map(e => e.name).sort()
+      } catch (err) {
+        logger.error('Failed to read notes vault subfolders', err.message)
+      }
+
+      const subfolderList = subfolders.length > 0
+        ? subfolders.map(f => `  - ${f}/`).join('\n')
+        : '  (no subfolders)'
+
+      system += `\n\nNOTES VAULT PATH: ${vaultPath}
+This is the user's personal notes folder (markdown files). Subfolders:
+${subfolderList}
+
+MARKDOWN FILE PLACEMENT:
+When generating .md markdown files (documents, reports, notes, summaries, analyses, etc.), ALWAYS ask the user where to save them by presenting these options:
+1. Notes vault: ${vaultPath} (with subfolder options: ${subfolders.length > 0 ? subfolders.join(', ') : 'root'})
+2. Artifact docs: ${artyfactPath}/docs/
+Then write the file to the chosen location. For non-.md files, continue using the artifact path as default.`
+    }
 
     system += `\n\nGUIDELINES:
 - Be concise and precise. Explain your reasoning when using tools.
@@ -394,6 +420,11 @@ RULES:
 - Check existing memory with read_soul_memory before adding duplicates.
 - The user can say "remember that..." or "forget that..." to explicitly control memory.
 - Use the correct persona_type and persona_id when calling the tools — user facts go to user memory, behavioral/persona feedback goes to persona memory.`
+
+    // ── Injected approved plan ──
+    if (this.config.injectedPlan) {
+      system += `\n\n## APPROVED PLAN (execute this now)\nThe user has approved the following plan. Execute it step by step. Do not call submit_plan again.\n\n${this.config.injectedPlan}`
+    }
 
     return system
   }
@@ -549,6 +580,33 @@ RULES:
         }
       })
     }
+
+    // Always available — model self-selects when to plan
+    allToolsAnthropic.push({
+      name: 'submit_plan',
+      description: 'Before executing any tools on a complex or multi-step task, call this to present a structured plan to the user for approval. Use when the task requires 3 or more distinct steps, modifies multiple files, or has irreversible effects. Do NOT call for simple single-step tasks.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'Short plan title (e.g. "Refactor authentication module")'
+          },
+          steps: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                label: { type: 'string', description: 'One-line description of this step' }
+              },
+              required: ['label']
+            },
+            description: 'Ordered list of steps to execute'
+          }
+        },
+        required: ['title', 'steps']
+      }
+    })
 
     // Inject MCP tools from configured servers (dynamic discovery via subprocess)
     const mcpToolMap = new Map() // toolName → { serverId, serverName, tool }
@@ -898,6 +956,12 @@ RULES:
               } else if (promptToolMap.has(toolName)) {
                 const promptTool = promptToolMap.get(toolName)
                 result = { success: true, data: promptTool.promptText || '' }
+              } else if (toolName === 'submit_plan') {
+                onChunk({ type: 'plan_submitted', plan: toolInput })
+                result = { success: true, status: 'awaiting_approval' }
+                toolResults.push({ tool_call_id: block.id, content: JSON.stringify(result) })
+                this._planPending = true
+                continue
               } else {
                 result = await this.toolRegistry.execute(toolName, toolInput)
               }
@@ -924,6 +988,12 @@ RULES:
                   content: tr.content
                 }]
               })
+            }
+
+            // If a plan was submitted, break — wait for user approval
+            if (this._planPending) {
+              this._planPending = false
+              break
             }
           } else {
             break
@@ -1097,6 +1167,16 @@ RULES:
               } else if (promptToolMap.has(toolName)) {
                 const promptTool = promptToolMap.get(toolName)
                 result = { success: true, data: promptTool.promptText || '' }
+              } else if (toolName === 'submit_plan') {
+                onChunk({ type: 'plan_submitted', plan: toolInput })
+                result = { success: true, status: 'awaiting_approval' }
+                toolResults.push({
+                  type: 'tool_result',
+                  tool_use_id: block.id,
+                  content: JSON.stringify(result)
+                })
+                this._planPending = true
+                continue
               } else {
                 result = await this.toolRegistry.execute(toolName, toolInput)
               }
@@ -1120,6 +1200,12 @@ RULES:
             }
 
             conversationMessages.push({ role: 'user', content: toolResults })
+
+            // If a plan was submitted, break — wait for user approval
+            if (this._planPending) {
+              this._planPending = false
+              break
+            }
 
           } else {
             break
