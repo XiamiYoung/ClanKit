@@ -10,7 +10,7 @@ if (process.platform === 'linux') {
   process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts.conf')
 }
 
-const { app, BrowserWindow, ipcMain, dialog, shell, screen, protocol, net, session } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, shell, screen, protocol, net, session, Menu } = require('electron')
 const os = require('os')
 const { execFile } = require('child_process')
 const { logger, LOG_DIR } = require('./logger')
@@ -129,12 +129,23 @@ function writeJSON(file, data) {
 }
 
 // ─── Atomic async JSON write (write to unique .tmp then rename) ───────────────
-async function writeJSONAtomic(file, data) {
+async function writeJSONAtomic(file, data, _retries = 2) {
   const dir = path.dirname(file)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   const tmp = file + `.tmp.${process.pid}.${Date.now()}`
-  await fs.promises.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
-  await fs.promises.rename(tmp, file)
+  try {
+    await fs.promises.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
+    await fs.promises.rename(tmp, file)
+  } catch (err) {
+    // Clean up orphaned tmp file
+    try { await fs.promises.unlink(tmp) } catch {}
+    // Retry on ENOENT (WSL2 filesystem race) or EPERM
+    if (_retries > 0 && (err.code === 'ENOENT' || err.code === 'EPERM')) {
+      await new Promise(r => setTimeout(r, 50))
+      return writeJSONAtomic(file, data, _retries - 1)
+    }
+    throw err
+  }
 }
 
 async function readJSONAsync(file, fallback) {
@@ -402,7 +413,8 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      webviewTag: true
+      webviewTag: true,
+      spellcheck: true
     }
   })
 
@@ -413,6 +425,55 @@ function createWindow() {
   }
 
   mainWindow.on('closed', () => { mainWindow = null })
+
+  // ── Set spellcheck language ──
+  mainWindow.webContents.session.setSpellCheckerLanguages(['en-US'])
+
+  // ── Right-click context menu with spell check + standard edit actions ──
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    const menuItems = []
+
+    // Spell check suggestions (if the right-clicked word is misspelled)
+    if (params.misspelledWord && params.dictionarySuggestions.length > 0) {
+      for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
+        menuItems.push({
+          label: suggestion,
+          click: () => mainWindow.webContents.replaceMisspelling(suggestion)
+        })
+      }
+      menuItems.push({ type: 'separator' })
+      menuItems.push({
+        label: 'Add to Dictionary',
+        click: () => mainWindow.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
+      })
+      menuItems.push({ type: 'separator' })
+    }
+
+    // Standard edit actions
+    if (params.isEditable) {
+      menuItems.push(
+        { label: 'Undo',      role: 'undo',      enabled: params.editFlags.canUndo },
+        { label: 'Redo',      role: 'redo',      enabled: params.editFlags.canRedo },
+        { type: 'separator' },
+        { label: 'Cut',       role: 'cut',       enabled: params.editFlags.canCut },
+        { label: 'Copy',      role: 'copy',      enabled: params.editFlags.canCopy },
+        { label: 'Paste',     role: 'paste',     enabled: params.editFlags.canPaste },
+        { label: 'Delete',    role: 'delete',    enabled: params.editFlags.canDelete },
+        { type: 'separator' },
+        { label: 'Select All', role: 'selectAll', enabled: params.editFlags.canSelectAll }
+      )
+    } else if (params.selectionText) {
+      // Non-editable area with selection: show Copy
+      menuItems.push(
+        { label: 'Copy', role: 'copy', enabled: params.editFlags.canCopy }
+      )
+    }
+
+    if (menuItems.length > 0) {
+      const menu = Menu.buildFromTemplate(menuItems)
+      menu.popup()
+    }
+  })
 
   // ── Prevent Electron from navigating away from the app ──
   // Block ALL navigations that would leave the SPA. file:// drops are forwarded
@@ -759,8 +820,6 @@ ipcMain.handle('knowledge:get-config', () => {
     pineconeApiKey:    cfg.pineconeApiKey || '',
     pineconeIndexName: saved.pineconeIndexName || '',
     ragEnabled:        saved.ragEnabled !== undefined ? saved.ragEnabled : true,
-    embeddingProvider: saved.embeddingProvider || 'openai',
-    embeddingModel:    saved.embeddingModel || 'text-embedding-3-small',
     indexConfigs:      saved.indexConfigs || {}
   }
 })
@@ -777,8 +836,6 @@ ipcMain.handle('knowledge:save-config', async (_, config) => {
     const saved = readJSON(KNOWLEDGE_FILE, {})
     if (config.pineconeIndexName !== undefined) saved.pineconeIndexName = config.pineconeIndexName
     if (config.ragEnabled !== undefined)        saved.ragEnabled = config.ragEnabled
-    if (config.embeddingProvider !== undefined)  saved.embeddingProvider = config.embeddingProvider
-    if (config.embeddingModel !== undefined)     saved.embeddingModel = config.embeddingModel
     if (config.indexConfigs !== undefined)       saved.indexConfigs = config.indexConfigs
     writeJSON(KNOWLEDGE_FILE, saved)
     return { success: true }
@@ -2023,7 +2080,7 @@ async function runMemoryExtraction(event, chatId, messages, config, personaPromp
 
 logger.info('IPC handlers registered: agent:run, agent:stop')
 
-ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts, mcpServers, httpTools, personaRuns, knowledgeConfig }) => {
+ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts, mcpServers, httpTools, personaRuns, knowledgeConfig, injectedPlan }) => {
   logger.agent('IPC agent:run received', { chatId, model: config?.anthropic?.activeModel || config?.activeModel, msgCount: messages?.length, personaRuns: personaRuns?.length || 0 })
   logger.agent('config snapshot', {
     baseURL: config?.baseURL,
@@ -2072,12 +2129,12 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
           .filter(([, cfg]) => cfg.enabled)
           .map(([name, cfg]) => ({ name, embeddingProvider: cfg.embeddingProvider, embeddingModel: cfg.embeddingModel }))
 
-        // Fallback: if no indexConfigs yet, use the selected index with global embedding config
+        // Fallback: if no indexConfigs yet, use the selected index with default embedding config
         if (enabledIndexes.length === 0 && knowledgeConfig.pineconeIndexName) {
           enabledIndexes.push({
             name: knowledgeConfig.pineconeIndexName,
-            embeddingProvider: knowledgeConfig.embeddingProvider || 'openai',
-            embeddingModel: knowledgeConfig.embeddingModel || 'text-embedding-3-small'
+            embeddingProvider: 'openai',
+            embeddingModel: 'text-embedding-3-small'
           })
         }
 
@@ -2133,6 +2190,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     const promises = personaRuns.map(run => {
       const loopKey = `${chatId}:${run.personaId}`
       const loopConfig = { ...(run.config || config), soulsDir: SOULS_DIR }
+      if (injectedPlan) loopConfig.injectedPlan = injectedPlan
       const loop = new AgentLoop(loopConfig)
       activeLoops.set(loopKey, loop)
 
@@ -2200,7 +2258,9 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   }
 
   // ── Single persona (backward compat) ──
-  const loop = new AgentLoop({ ...config, soulsDir: SOULS_DIR })
+  const loopConfig = { ...config, soulsDir: SOULS_DIR }
+  if (injectedPlan) loopConfig.injectedPlan = injectedPlan
+  const loop = new AgentLoop(loopConfig)
   activeLoops.set(chatId, loop)
 
   logger.agent('run start', { chatId, model: config.anthropic?.activeModel || config.activeModel, msgCount: messages.length, agents: enabledAgents, skills: enabledSkills })
@@ -2291,6 +2351,25 @@ ipcMain.handle('agent:compact-standalone', async (event, { chatId, messages, con
     return { success: true, ...result }
   } catch (err) {
     logger.error('agent:compact-standalone error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// ── Lightweight one-shot LLM call (for AI Enhance features) ─────────────────
+ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
+  try {
+    const { AnthropicClient } = require('./agent/core/AnthropicClient')
+    const ac = new AnthropicClient(config)
+    const client = ac.getClient()
+    const response = await client.messages.create({
+      model: ac.resolveModel(),
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    })
+    const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+    return { success: true, text }
+  } catch (err) {
+    logger.error('agent:enhance-prompt error', err.message)
     return { success: false, error: err.message }
   }
 })
