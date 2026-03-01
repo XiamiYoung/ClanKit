@@ -69,6 +69,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   compactContext: (chatId) => ipcRenderer.invoke('agent:compact', chatId),
   compactContextStandalone: (params) => ipcRenderer.invoke('agent:compact-standalone', params),
   getContextSnapshot: (chatId) => ipcRenderer.invoke('agent:get-context', chatId),
+  enhancePrompt: (params) => ipcRenderer.invoke('agent:enhance-prompt', params),
   onAgentChunk: (callback) => {
     ipcRenderer.removeAllListeners('agent:chunk')
     ipcRenderer.on('agent:chunk', (_, data) => callback(data))
@@ -141,7 +142,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readImageBase64: (filePath)        => ipcRenderer.invoke('obsidian:read-image-base64', filePath),
     createFile:   (dir, name)          => ipcRenderer.invoke('obsidian:create-file', dir, name),
     createFolder: (dir, name)          => ipcRenderer.invoke('obsidian:create-folder', dir, name),
+    createDrawio: (dir, name)          => ipcRenderer.invoke('obsidian:create-drawio', dir, name),
     deleteFile:   (filePath)           => ipcRenderer.invoke('obsidian:delete-file', filePath),
     rename:       (oldPath, newPath)   => ipcRenderer.invoke('obsidian:rename', oldPath, newPath),
-  }
+  },
+
+  // ── Draw.io ─────────────────────────────────────────────────────────────────
+  drawio: {
+    getFramePath:    () => ipcRenderer.invoke('drawio:get-frame-path'),
+    getPreloadPath:  () => ipcRenderer.invoke('drawio:get-preload-path'),
+  },
 })

@@ -26,58 +26,26 @@
     <div class="knowledge-content">
       <div class="knowledge-content-inner">
 
-        <!-- Embedding Configuration (single row, always visible when API key exists) -->
-        <div v-if="hasApiKey" class="config-card embedding-config-row-card">
-          <div class="embedding-config-row">
-            <div class="embedding-config-left">
-              <div class="section-icon-sm">
-                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-                </svg>
-              </div>
-              <div class="embedding-field embedding-provider-field">
-                <label class="form-label-inline">Provider</label>
-                <ComboBox
-                  :model-value="knowledgeStore.embeddingProvider"
-                  :options="embeddingProviderOptions"
-                  placeholder="Select provider..."
-                  @update:model-value="onEmbeddingProviderChange"
-                />
-              </div>
-              <div class="embedding-field embedding-model-field">
-                <label class="form-label-inline">Model</label>
-                <ComboBox
-                  :model-value="knowledgeStore.embeddingModel"
-                  :options="embeddingModelOptions"
-                  placeholder="Select embedding model..."
-                  :disabled="embeddingModelsLoading"
-                  @update:model-value="onEmbeddingModelChange"
-                />
-              </div>
-            </div>
-            <div class="embedding-config-right">
+        <!-- Connection status bar -->
+        <div class="config-card top-bar-card">
+          <div class="top-bar-row">
+            <!-- RAG Retrieval switch on left -->
+            <div class="embedding-rag-left">
               <span class="switch-title">RAG Retrieval</span>
               <button class="switch-track" :class="{ active: knowledgeStore.ragEnabled && hasApiKey }" :disabled="!hasApiKey" @click="toggleRag">
                 <span class="switch-thumb"></span>
               </button>
               <span v-if="saveMsg" class="save-msg" :class="saveMsg.ok ? 'save-ok' : 'save-err'">{{ saveMsg.text }}</span>
             </div>
-          </div>
-        </div>
-
-        <!-- Connection status bar -->
-        <div class="config-card top-bar-card">
-          <div class="top-bar-row">
-            <div class="status-left">
+            <!-- Connection status on right -->
+            <div class="status-right">
               <span class="status-dot" :class="statusDotClass"></span>
               <span class="status-label">{{ connectionLabel }}</span>
+              <router-link v-if="!hasApiKey" to="/config" class="btn-primary compact">
+                Go to Configuration
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </router-link>
             </div>
-
-            <router-link v-if="!hasApiKey" to="/config" class="btn-primary compact">
-              Go to Configuration
-              <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-            </router-link>
           </div>
         </div>
 
@@ -139,6 +107,54 @@
 
               <!-- Index detail card -->
               <template v-else>
+
+                <!-- Embedding config card (per-index, above index info) -->
+                <div class="config-card embedding-index-card">
+                  <div class="embedding-index-row">
+                    <!-- Provider -->
+                    <div class="embedding-field embedding-provider-field">
+                      <label class="form-label-inline">Provider</label>
+                      <ComboBox
+                        :model-value="knowledgeStore.embeddingProvider"
+                        :options="embeddingProviderOptions"
+                        placeholder="Select provider..."
+                        @update:model-value="onEmbeddingProviderChange"
+                      />
+                    </div>
+                    <!-- Model -->
+                    <div class="embedding-field embedding-model-field">
+                      <label class="form-label-inline">Model</label>
+                      <ComboBox
+                        :model-value="knowledgeStore.embeddingModel"
+                        :options="embeddingModelOptions"
+                        placeholder="Select embedding model..."
+                        :disabled="embeddingModelsLoading"
+                        @update:model-value="onEmbeddingModelChange"
+                      />
+                    </div>
+                    <!-- Save button -->
+                    <AppButton size="compact" :loading="embeddingSaving" @click="saveEmbeddingConfig">
+                      <svg v-if="!embeddingSaving" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                      </svg>
+                      Save
+                    </AppButton>
+                  </div>
+                  <!-- Warning when no model selected, or selection differs from recorded embedding model -->
+                  <div v-if="embeddingModelMismatch" class="embedding-msg embedding-msg-warning">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <span v-if="!knowledgeStore.embeddingModel">No embedding model selected. Select a provider and model before uploading or querying.</span>
+                    <span v-else>Selected model differs from the recorded embedding model ({{ currentIndexConfig?.embeddingModel }}). Changing it will break retrieval unless you re-embed all documents.</span>
+                  </div>
+                  <!-- Error messages (e.g. model not found in list) -->
+                  <div v-else-if="embeddingError" class="embedding-msg embedding-msg-error">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    {{ embeddingError }}
+                  </div>
+                </div>
+
                 <div class="config-card">
                   <!-- Header row: title + enable switch + upload button -->
                   <div class="detail-header-row">
@@ -400,7 +416,15 @@ onMounted(async () => {
   if (knowledgeStore.connectionStatus === 'disconnected') {
     await refreshAll()
   }
-  // Fetch embedding models for the active provider on page load
+  // Sync embedding config from the already-selected index (if any)
+  const selectedIndex = knowledgeStore.pineconeIndexName
+  if (selectedIndex) {
+    const cfg = knowledgeStore.getIndexConfig(selectedIndex)
+    if (cfg && cfg.embeddingProvider) {
+      knowledgeStore.embeddingProvider = cfg.embeddingProvider
+      knowledgeStore.embeddingModel = cfg.embeddingModel || knowledgeStore.embeddingModel
+    }
+  }
   await fetchEmbeddingModels(knowledgeStore.embeddingProvider)
 })
 
@@ -413,6 +437,30 @@ const deleteSourceTarget = ref(null)
 const isDeletingSource = ref(false)
 const isRefreshing = ref(false)
 const saveMsg = ref(null)
+const embeddingError = ref(null)
+const embeddingSaving = ref(false)
+
+// True when no model is selected, or the selection differs from the recorded index config
+const embeddingModelMismatch = computed(() => {
+  if (!knowledgeStore.embeddingModel) return true
+  const cfg = currentIndexConfig.value
+  if (!cfg || !cfg.embeddingModel) return false
+  return (
+    knowledgeStore.embeddingModel !== cfg.embeddingModel ||
+    knowledgeStore.embeddingProvider !== cfg.embeddingProvider
+  )
+})
+
+async function saveEmbeddingConfig() {
+  const indexName = knowledgeStore.pineconeIndexName
+  if (!indexName) return
+  embeddingSaving.value = true
+  try {
+    await knowledgeStore.saveIndexEmbeddingConfig(indexName)
+  } finally {
+    embeddingSaving.value = false
+  }
+}
 
 // ── Embedding config ──
 const embeddingProviderOptions = [
@@ -452,21 +500,20 @@ const embeddingModelOptions = computed(() => {
 })
 
 async function onEmbeddingProviderChange(provider) {
+  embeddingError.value = null
   knowledgeStore.embeddingProvider = provider
   await fetchEmbeddingModels(provider)
-  // Re-select: keep current model if it exists in the new list, otherwise pick the first
+  // If current model isn't valid for this provider, pick the first available
   const currentModel = knowledgeStore.embeddingModel
   const available = embeddingModelOptions.value
-  const stillValid = available.some(m => m.id === currentModel)
-  if (!stillValid && available.length > 0) {
+  if (!available.some(m => m.id === currentModel) && available.length > 0) {
     knowledgeStore.embeddingModel = available[0].id
   }
-  await knowledgeStore.saveConfig()
 }
 
-async function onEmbeddingModelChange(modelId) {
+function onEmbeddingModelChange(modelId) {
+  embeddingError.value = null
   knowledgeStore.embeddingModel = modelId
-  await knowledgeStore.saveConfig()
 }
 
 // ── Test RAG ──
@@ -560,7 +607,22 @@ async function refreshAll() {
 }
 
 async function onIndexChange(indexName) {
+  embeddingError.value = null
   await knowledgeStore.selectIndex(indexName)
+
+  const cfg = knowledgeStore.getIndexConfig(indexName)
+  if (cfg && cfg.embeddingProvider) {
+    // Sync dropdowns to this index's recorded config
+    const provider = cfg.embeddingProvider
+    knowledgeStore.embeddingProvider = provider
+    await fetchEmbeddingModels(provider)
+    knowledgeStore.embeddingModel = cfg.embeddingModel || knowledgeStore.embeddingModel
+    // Warn only if model is recorded but not found in the provider's list
+    const available = embeddingModelOptions.value
+    if (cfg.embeddingModel && available.length > 0 && !available.some(m => m.id === cfg.embeddingModel)) {
+      embeddingError.value = `Recorded model "${cfg.embeddingModel}" was not found in the model list.`
+    }
+  }
 }
 
 async function pickAndUploadFiles() {
@@ -646,20 +708,19 @@ function formatDate(ts) {
 .knowledge-content { flex: 1; overflow-y: auto; padding: 24px 32px 32px; scrollbar-width: thin; }
 .knowledge-content-inner { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 
-/* ── Embedding Configuration (single row above connection bar) ────────────── */
-.embedding-config-row-card { padding: 14px 20px; }
-.embedding-config-row {
-  display: flex; align-items: center; gap: 16px;
+/* ── Embedding config (per-index card, above index info) ─────────────────── */
+.embedding-index-card { padding: 14px 20px; }
+.embedding-index-row {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
 }
-.embedding-config-left {
-  display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0;
-}
-.embedding-config-right {
-  display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto;
+.embedding-index-row > :last-child { margin-left: auto; }
+.embedding-rag-left {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
 }
 .embedding-field {
   display: flex; align-items: center; gap: 8px;
 }
+.embedding-provider-field { min-width: 180px; max-width: 260px; }
 .embedding-model-field {
   flex: 1; min-width: 200px; max-width: 360px;
 }
@@ -667,18 +728,28 @@ function formatDate(ts) {
   font-family: 'Inter', sans-serif; font-size: var(--fs-caption); font-weight: 600;
   color: var(--text-muted); white-space: nowrap;
 }
-
-@media (max-width: 900px) {
-  .embedding-config-row { flex-wrap: wrap; }
-  .embedding-config-left { flex-wrap: wrap; }
-  .embedding-model-field { min-width: 160px; }
+.embedding-msg {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px;
+  padding: 8px 12px; border-radius: var(--radius-sm);
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption); font-weight: 500;
+  line-height: 1.4;
 }
+.embedding-msg-error {
+  background: rgba(255, 59, 48, 0.08); border: 1px solid rgba(255, 59, 48, 0.2);
+  color: #FF3B30;
+}
+.embedding-msg-warning {
+  background: rgba(255, 149, 0, 0.08); border: 1px solid rgba(255, 149, 0, 0.2);
+  color: #FF9500;
+}
+.embedding-msg .icon-xs { flex-shrink: 0; }
 
-/* ── Top bar (connection status) ─────────────────────────────────────── */
+/* ── Top bar (connection status + RAG switch) ────────────────────────── */
 .top-bar-card { padding: 14px 20px; }
 .top-bar-row {
-  display: flex; align-items: center; gap: 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
 }
+.status-right { display: flex; align-items: center; gap: 8px; }
 
 /* ── Config card (reuses ConfigView pattern) ─────────────────────────────── */
 .config-card {
@@ -686,8 +757,7 @@ function formatDate(ts) {
   padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
 }
 
-/* ── Status row ──────────────────────────────────────────────────────────── */
-.status-left { display: flex; align-items: center; gap: 8px; }
+/* ── Status elements ─────────────────────────────────────────────────────── */
 .status-label { font-family: 'Inter', sans-serif; font-size: var(--fs-body); font-weight: 600; color: var(--text-primary); }
 .status-dot {
   width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
@@ -774,14 +844,14 @@ function formatDate(ts) {
 
 /* ── Index two-panel layout ──────────────────────────────────────────────── */
 .index-layout {
-  display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: start;
+  display: grid; grid-template-columns: 260px 1fr; gap: 20px; align-items: stretch;
 }
 @media (max-width: 900px) {
   .index-layout { grid-template-columns: 1fr; }
 }
 
 /* ── Index list panel (left) ─────────────────────────────────────────────── */
-.index-list-panel { padding: 16px; display: flex; flex-direction: column; min-height: 480px; max-height: calc(100vh - 280px); }
+.index-list-panel { padding: 16px; display: flex; flex-direction: column; height: 100%; }
 .index-list-header {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-shrink: 0;
 }
@@ -968,9 +1038,6 @@ function formatDate(ts) {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); color: #9CA3AF;
   margin: 4px 0 0; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
 }
-
-/* ── Embedding provider combo ────────────────────────────────────────── */
-.embedding-provider-field { min-width: 200px; max-width: 280px; }
 
 /* ── Input field (scoped override for black style) ──────────────────── */
 .field {

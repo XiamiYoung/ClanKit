@@ -236,6 +236,16 @@ Text on gradient surfaces is always `#FFFFFF`. Secondary text on gradients uses 
 - Footer: gray background `#F9F9F9` with border-top
 - `confirmClass="danger"` for destructive actions, `"primary"` for non-destructive
 
+#### Modals (General Rules)
+- All modals are **true modals** — they do NOT close on backdrop click. Users must explicitly dismiss via Cancel, X button, or Escape key.
+- Use `<Teleport to="body">` with `position: fixed` + `z-index: 200`
+- Dark themed: `#0F0F0F` background, `#2A2A2A` borders, white text
+- Header: icon in gradient container + title + close button
+- Footer: `#0A0A0A` background with border-top, Cancel (dark gray) + primary action (black gradient)
+- Inputs: `#1A1A1A` background, `#2A2A2A` border, focus `#4B5563` border
+- Teleported elements require an **unscoped** `<style>` block (scoped styles don't apply outside the component DOM)
+- Entry animation: `scale(0.95) translateY(8px) → scale(1) translateY(0)` with opacity fade, 200ms ease-out
+
 #### Sidebar (`src/components/layout/Sidebar.vue`)
 - Collapsible (260px expanded, 64px collapsed) with smooth transition
 - Active item: black gradient background with white text

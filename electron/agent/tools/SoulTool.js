@@ -23,7 +23,7 @@ const SECTIONS = [
   'Projects',
   'Personal',
   'Interaction Notes',
-  'Session Log',
+  'Memory Updates Log',
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -213,9 +213,9 @@ class SoulUpdateTool extends BaseTool {
     // Update timestamp
     updateTimestamp(headerLines)
 
-    // Append to Session Log
-    if (sections.has('Session Log')) {
-      const logLines = sections.get('Session Log')
+    // Append to Memory Updates Log
+    if (sections.has('Memory Updates Log')) {
+      const logLines = sections.get('Memory Updates Log')
       let insertIdx = logLines.length
       while (insertIdx > 0 && logLines[insertIdx - 1].trim() === '') insertIdx--
       logLines.splice(insertIdx, 0, `- [${dateStamp()}] ${action}: ${entry}`)

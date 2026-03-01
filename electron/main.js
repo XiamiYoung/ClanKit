@@ -524,7 +524,9 @@ app.whenReady().then(async () => {
   // loaded inside <webview> (they need their own CSS/JS/fonts to render properly).
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const url = details.url || ''
-    const isAppPage = url.startsWith('http://localhost:') || url.startsWith('file://')
+    // drawio-frame.html needs its own permissive CSP — never override it
+    const isDrawioFrame = url.includes('drawio-frame.html')
+    const isAppPage = !isDrawioFrame && (url.startsWith('http://localhost:') || url.startsWith('file://'))
     if (isAppPage) {
       callback({
         responseHeaders: {
@@ -2738,7 +2740,7 @@ ipcMain.handle('obsidian:read-tree', (_, rawDir) => {
       if (entry.isDirectory()) {
         const children = readDir(fullPath, depth + 1)
         items.push({ name: entry.name, path: fullPath, type: 'dir', children })
-      } else if (entry.name.endsWith('.md')) {
+      } else if (entry.name.endsWith('.md') || entry.name.endsWith('.drawio')) {
         items.push({ name: entry.name, path: fullPath, type: 'file' })
       }
     }
@@ -2871,6 +2873,30 @@ ipcMain.handle('obsidian:create-folder', (_, rawDir, name) => {
   } catch (err) {
     return { error: err.message }
   }
+})
+
+// Create a new blank draw.io diagram file
+ipcMain.handle('obsidian:create-drawio', (_, rawDir, name) => {
+  try {
+    const safeName = name.endsWith('.drawio') ? name : name + '.drawio'
+    const filePath = path.join(toLinuxPath(rawDir), safeName)
+    if (fs.existsSync(filePath)) return { error: 'File already exists' }
+    const blankXml = '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>'
+    fs.writeFileSync(filePath, blankXml, 'utf8')
+    return { success: true, path: filePath }
+  } catch (err) {
+    return { error: err.message }
+  }
+})
+
+// Return the path to the local bridge page that wraps draw.io in an iframe
+ipcMain.handle('drawio:get-frame-path', () => {
+  return path.join(__dirname, 'drawio-frame.html')
+})
+
+// Return the path to the drawio-preload script
+ipcMain.handle('drawio:get-preload-path', () => {
+  return path.join(__dirname, 'drawio-preload.js')
 })
 
 // Delete a file or empty folder

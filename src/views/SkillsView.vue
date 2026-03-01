@@ -164,8 +164,13 @@
       <!-- File explorer + content viewer -->
       <div class="flex-1 flex overflow-hidden">
 
-        <!-- LEFT: File tree sidebar -->
-        <div class="detail-sidebar">
+        <!-- LEFT: File tree sidebar (resizable) -->
+        <div class="detail-sidebar" :style="{ width: skillsSidebarWidth + 'px' }">
+          <!-- Resize handle -->
+          <div
+            class="skills-resize-handle"
+            @mousedown="startSkillsResize"
+          ></div>
           <!-- Tree header -->
           <div class="detail-sidebar-header">
             <span class="detail-sidebar-label">Files</span>
@@ -592,6 +597,31 @@ function toggleFolder(folderPath) {
   expandedFolders[folderPath] = !expandedFolders[folderPath]
 }
 
+// ── Resizable sidebar ──
+const skillsSidebarWidth = ref(260)
+
+function startSkillsResize(e) {
+  e.preventDefault()
+  const startX = e.clientX
+  const startW = skillsSidebarWidth.value
+
+  function onMouseMove(ev) {
+    const delta = ev.clientX - startX
+    const newW = Math.min(600, Math.max(180, startW + delta))
+    skillsSidebarWidth.value = newW
+  }
+  function onMouseUp() {
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
 // ── SkillTreeNode: recursive file tree component (matches NotesView TreeNode) ──
 const SkillTreeNode = defineComponent({
   name: 'SkillTreeNode',
@@ -624,7 +654,7 @@ const SkillTreeNode = defineComponent({
             borderRadius: isActive ? '8px' : '0',
             margin: isActive ? '0 8px' : '0',
             fontFamily: "'Inter',sans-serif",
-            fontSize: 'var(--fs-secondary)',
+            fontSize: 'var(--fs-body)',
             transition: 'background 0.15s, color 0.15s, box-shadow 0.15s',
           },
           onClick: () => {
@@ -636,18 +666,18 @@ const SkillTreeNode = defineComponent({
         }, [
           isDir ? h('svg', {
             style: {
-              width: '12px', height: '12px', flexShrink: 0, color: isActive ? '#fff' : '#9CA3AF',
+              width: '14px', height: '14px', flexShrink: 0, color: isActive ? '#fff' : '#9CA3AF',
               transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
               transition: 'transform 0.15s'
             },
             viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2'
-          }, [h('polyline', { points: '9 18 15 12 9 6' })]) : h('span', { style: 'width:12px;display:inline-block;' }),
+          }, [h('polyline', { points: '9 18 15 12 9 6' })]) : h('span', { style: 'width:14px;display:inline-block;' }),
 
           isDir
-            ? h('svg', { style: `width:16px;height:16px;flex-shrink:0;color:${isActive ? '#fff' : '#6B7280'};`, viewBox: '0 0 24 24', fill: 'currentColor' }, [
+            ? h('svg', { style: `width:18px;height:18px;flex-shrink:0;color:${isActive ? '#fff' : '#6B7280'};`, viewBox: '0 0 24 24', fill: 'currentColor' }, [
                 h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })
               ])
-            : h('svg', { style: `width:16px;height:16px;flex-shrink:0;color:${isActive ? '#fff' : '#9CA3AF'};`, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+            : h('svg', { style: `width:18px;height:18px;flex-shrink:0;color:${isActive ? '#fff' : '#9CA3AF'};`, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
                 h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
                 h('polyline', { points: '14 2 14 8 20 8' })
               ]),
@@ -1010,10 +1040,28 @@ const SkillTreeNode = defineComponent({
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  width: 260px;
-  min-width: 260px;
+  min-width: 180px;
+  max-width: 600px;
   background: #F9F9F9;
-  border-right: 1px solid #E5E5EA;
+  border-right: none;
+  position: relative;
+}
+
+/* Resize handle */
+.skills-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: #E5E5EA;
+  transition: background 0.15s;
+}
+.skills-resize-handle:hover,
+.skills-resize-handle:active {
+  background: #007AFF;
 }
 .detail-sidebar-header {
   padding: 10px 14px;

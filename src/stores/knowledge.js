@@ -49,8 +49,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
       pineconeApiKey.value = config.pineconeApiKey || ''
       pineconeIndexName.value = config.pineconeIndexName || ''
       ragEnabled.value = config.ragEnabled !== false
-      embeddingProvider.value = config.embeddingProvider || 'openai'
-      embeddingModel.value = config.embeddingModel || 'text-embedding-3-small'
       indexConfigs.value = config.indexConfigs || {}
     } catch (err) {
       console.error('Failed to load knowledge config:', err)
@@ -63,8 +61,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
       await window.electronAPI.knowledge.saveConfig({
         pineconeIndexName: pineconeIndexName.value,
         ragEnabled: ragEnabled.value,
-        embeddingProvider: embeddingProvider.value,
-        embeddingModel: embeddingModel.value,
         indexConfigs: JSON.parse(JSON.stringify(indexConfigs.value))
       })
     } catch (err) {

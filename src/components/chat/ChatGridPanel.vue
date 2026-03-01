@@ -9,11 +9,13 @@
       @open-soul-viewer="(id, type, name) => $emit('open-soul-viewer', id, type, name)"
       @remove-group-persona="(cId, pid) => $emit('remove-group-persona', cId, pid)"
     >
-      <template #actions>
+      <template #row-bottom-left>
         <span v-if="isRunning" class="gp-running-badge">
           <span class="gp-running-dot"></span>
           Running
         </span>
+      </template>
+      <template #actions>
         <!-- Maximize (black gradient style) -->
         <button class="gp-maximize-btn" @click.stop="$emit('maximize')" title="Open in single view">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -196,6 +198,7 @@ async function onSend(text, pendingAttachments = []) {
   else if (chatProvider === 'openrouter') { cfg.apiKey = cfg.openrouter?.apiKey || ''; cfg.baseURL = cfg.openrouter?.baseURL || 'https://openrouter.ai/api' }
   else if (chatProvider === 'openai') { cfg.openaiApiKey = cfg.openai?.apiKey || ''; cfg.openaiBaseURL = cfg.openai?.baseURL || 'https://mlaas.virtuosgames.com'; cfg._resolvedProvider = 'openai'; cfg.defaultProvider = 'openai' }
   if (targetChat.model) cfg.customModel = targetChat.model
+  if (targetChat.workingPath) cfg.chatWorkingPath = targetChat.workingPath
   const sysPersona = targetChat.systemPersonaId ? personasStore.getPersonaById(targetChat.systemPersonaId) : personasStore.defaultSystemPersona
   const usrPersona = targetChat.userPersonaId ? personasStore.getPersonaById(targetChat.userPersonaId) : personasStore.defaultUserPersona
   const personaPrompts = {}
@@ -215,8 +218,14 @@ async function onSend(text, pendingAttachments = []) {
       chatId, messages: JSON.parse(JSON.stringify(apiMessages)), config: JSON.parse(JSON.stringify(singleCfg)),
       enabledAgents: [], enabledSkills: JSON.parse(JSON.stringify(skillsStore.allSkillObjects)), personaPrompts,
       ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
-      mcpServers: mcpStore.servers.map(s => JSON.parse(JSON.stringify(s))),
-      httpTools: toolsStore.tools.map(t => JSON.parse(JSON.stringify(t))),
+      mcpServers: (targetChat.enabledMcpIds
+        ? mcpStore.servers.filter(s => targetChat.enabledMcpIds.includes(s.id))
+        : mcpStore.servers
+      ).map(s => JSON.parse(JSON.stringify(s))),
+      httpTools: (targetChat.enabledToolIds
+        ? toolsStore.tools.filter(t => targetChat.enabledToolIds.includes(t.id))
+        : toolsStore.tools
+      ).map(t => JSON.parse(JSON.stringify(t))),
       knowledgeConfig: { ragEnabled: knowledgeStore.ragEnabled, pineconeApiKey: knowledgeStore.pineconeApiKey, pineconeIndexName: knowledgeStore.pineconeIndexName, embeddingProvider: knowledgeStore.embeddingProvider, embeddingModel: knowledgeStore.embeddingModel, indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs)) },
     })
     if (targetChat.messages) {

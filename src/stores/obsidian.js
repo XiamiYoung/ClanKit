@@ -87,6 +87,13 @@ export const useObsidianStore = defineStore('obsidian', () => {
     return result
   }
 
+  async function createDrawio(dir, name) {
+    const result = await window.electronAPI.obsidian.createDrawio(dir, name)
+    if (result.error) { console.error('Failed to create drawio:', result.error); return result }
+    await loadTree()
+    return result
+  }
+
   async function createFolder(dir, name) {
     const result = await window.electronAPI.obsidian.createFolder(dir, name)
     if (result.error) { console.error('Failed to create folder:', result.error); return result }
@@ -129,6 +136,6 @@ export const useObsidianStore = defineStore('obsidian', () => {
   return {
     vaultPath, fileTree, activeFile, expandedFolders,
     loadConfig, pickVault, setVaultManually, loadTree, openFile, saveFile, updateContent,
-    createFile, createFolder, deleteItem, renameItem, toggleFolder
+    createFile, createDrawio, createFolder, deleteItem, renameItem, toggleFolder
   }
 })

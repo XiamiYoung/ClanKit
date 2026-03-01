@@ -31,6 +31,12 @@ export const useConfigStore = defineStore('config', () => {
     defaultMcpServerIds: null,     // null = all MCP servers enabled by default; array = specific IDs
     newsFeeds:         [],         // populated from config.json at startup
     feedSelection:     [],         // array of 6 feed IDs for the news cards
+    topStoriesCriteria: {
+      highKeywords: 'artificial intelligence, ai, ai-powered, llm, gpt, claude, gemini, machine learning, deep learning, neural net, chatbot, generative ai, large language model, openai, anthropic, deepmind, foundation model, computer vision, natural language',
+      medKeywords: 'robot, automation, algorithm, model, agent, chip, gpu, inference, training, transformer, diffusion, autonomous, self-driving, copilot, coding, benchmark, reasoning',
+      breakingKeywords: 'breaking, exclusive, announces, launches, reveals, introduces, unveils, raises, acquires, partnership',
+      timeWindowHours: 24,
+    },
   })
 
   const activeModelId = computed(() => {

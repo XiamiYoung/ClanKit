@@ -1,0 +1,653 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/27.0.9 Chrome/134.0.6998.205 Electron/35.4.0 Safari/537.36" version="27.0.9">
+  <diagram name="Agent Loop Architectures" id="agent-loops-v2">
+    <mxGraphModel dx="1816" dy="1035" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;font style=&quot;font-size: 48px;&quot;&gt;&lt;b&gt;AI Agent Loop 架构全面对比&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="350" y="20" width="1500" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="&lt;font style=&quot;font-size: 18px; color: #6B7280;&quot;&gt;Agent Loop Architectures — Comparison, Use Cases &amp;amp; Products&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="550" y="85" width="1100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="title-sep" value="" style="endArrow=none;html=1;rounded=0;strokeWidth=5;strokeColor=#1A1A1A;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="40" y="130" as="sourcePoint" />
+            <mxPoint x="2160" y="130" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="spectrum-bar" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#E5E7EB;strokeWidth=2;arcSize=50;" parent="1" vertex="1">
+          <mxGeometry x="40" y="145" width="2120" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="spectrum-gradient" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=none;arcSize=50;gradientColor=#EF4444;gradientDirection=east;" parent="1" vertex="1">
+          <mxGeometry x="42" y="147" width="2116" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="spectrum-left" value="&lt;font style=&quot;font-size: 13px;&quot; color=&quot;#FFFFFF&quot;&gt;&lt;b&gt;简单 Simple · 低成本 Low Cost&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="60" y="148" width="300" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="spectrum-right" value="&lt;font style=&quot;font-size: 13px;&quot; color=&quot;#FFFFFF&quot;&gt;&lt;b&gt;复杂 Complex · 高成本 High Cost&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=right;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1840" y="148" width="300" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;strokeWidth=3;arcSize=6;" parent="1" vertex="1">
+          <mxGeometry x="40" y="210" width="690" height="530" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-badge" value="&lt;font style=&quot;font-size: 11px;&quot; color=&quot;#FFFFFF&quot;&gt;&lt;b&gt;★ SparkAI 当前使用&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9C27B0;strokeColor=none;arcSize=50;" parent="1" vertex="1">
+          <mxGeometry x="484" y="218" width="145" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-num" value="&lt;font style=&quot;font-size: 28px;&quot; color=&quot;#FF9800&quot;&gt;&lt;b&gt;1&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="52" y="215" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-title" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;&lt;b&gt;Tool-Use Loop&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size: 13px; color: #6B7280;&quot;&gt;工具调用循环 · Native API Tool Calling&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="90" y="215" width="380" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-user" value="&lt;b&gt;User 用户&lt;/b&gt;" style="shape=ellipse;whiteSpace=wrap;html=1;fillColor=#E8EAF6;strokeColor=#5C6BC0;strokeWidth=2;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="70" y="275" width="95" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-llm" value="&lt;b&gt;LLM&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;大语言模型&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FF9800;strokeColor=#E65100;strokeWidth=2;fontColor=#FFFFFF;fontSize=12;" parent="1" vertex="1">
+          <mxGeometry x="245" y="273" width="110" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-decision" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;stop_reason?&lt;/b&gt;&lt;/font&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FF9800;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="240" y="355" width="120" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-tools" value="&lt;b&gt;Execute&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;执行工具&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=#2E7D32;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="440" y="363.5" width="100" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-result" value="&lt;b&gt;tool_result&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;strokeWidth=2;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="440" y="275" width="100" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-output" value="&lt;b&gt;Output&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;最终输出&lt;/font&gt;" style="shape=ellipse;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#4CAF50;strokeWidth=2;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="70" y="365" width="95" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-c1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#FF9800;" parent="1" source="tl-user" target="tl-llm" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-c2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#FF9800;" parent="1" source="tl-llm" target="tl-decision" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-c3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#4CAF50;" parent="1" source="tl-decision" target="tl-tools" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-c3l" value="&lt;font style=&quot;font-size: 9px;&quot; color=&quot;#4CAF50&quot;&gt;&lt;b&gt;tool_use&lt;/b&gt;&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="tl-c3" vertex="1" connectable="0">
+          <mxGeometry x="-0.1" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="tl-c4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#EF4444;" parent="1" source="tl-decision" target="tl-output" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-c4l" value="&lt;font style=&quot;font-size: 9px;&quot; color=&quot;#EF4444&quot;&gt;&lt;b&gt;end_turn&lt;/b&gt;&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="tl-c4" vertex="1" connectable="0">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint x="12" y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="tl-c5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#1976D2;" parent="1" source="tl-tools" target="tl-result" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-c6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#1976D2;dashed=1;" parent="1" source="tl-result" target="tl-llm" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="490" y="294" />
+              <mxPoint x="490" y="260" />
+              <mxPoint x="290" y="260" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="tl-c6l" value="&lt;font style=&quot;font-size: 9px;&quot; color=&quot;#1976D2&quot;&gt;&lt;b&gt;loop 循环&lt;/b&gt;&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="tl-c6" vertex="1" connectable="0">
+          <mxGeometry x="0.2" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="tl-prod-title" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;市场产品 Products&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="60" y="432" width="200" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-p1" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;ChatGPT&lt;/b&gt; OpenAI&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="60" y="458" width="110" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-p2" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Claude&lt;/b&gt; Anthropic&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="178" y="458" width="110" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-p3" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Cursor&lt;/b&gt; IDE&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="296" y="458" width="100" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-p4" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Copilot&lt;/b&gt; MS&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="404" y="458" width="100" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-p5" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Windsurf&lt;/b&gt; Google&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="512" y="458" width="110" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-p6" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Gemini&lt;/b&gt; Google&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="60" y="492" width="110" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-p7" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Bedrock&lt;/b&gt; AWS&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="178" y="492" width="110" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-p8" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Codex&lt;/b&gt; OpenAI&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="296" y="492" width="100" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-scene-title" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;适用场景 Scenarios&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="60" y="530" width="200" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-scenes" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;• 通用 AI 聊天 General Chat&lt;br&gt;• 代码辅助 Code Assistance&lt;br&gt;• 文件/Shell 操作 File Ops&lt;br&gt;• API 集成 API Integration&lt;br&gt;• 客服机器人 Chatbots&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#FFFDE7;strokeColor=#FDD835;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+          <mxGeometry x="60" y="556" width="280" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-rating" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;复杂度&lt;/b&gt; ★☆☆☆☆&lt;br&gt;&lt;b&gt;成本&lt;/b&gt;　 ★★☆☆☆&lt;br&gt;&lt;b&gt;推理&lt;/b&gt;　 ★★★☆☆&lt;br&gt;&lt;b&gt;就绪度&lt;/b&gt; ★★★★★&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#FFF3E0;strokeColor=#FFB74D;spacingLeft=8;spacingTop=6;" parent="1" vertex="1">
+          <mxGeometry x="370" y="556" width="150" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="tl-key" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;核心机制:&lt;/b&gt; API 原生 tool_call JSON&lt;br&gt;&lt;b&gt;推理方式:&lt;/b&gt; 模型内部 (不可见)&lt;br&gt;&lt;b&gt;循环控制:&lt;/b&gt; stop_reason 字段&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#FFF3E0;strokeColor=#FFB74D;spacingLeft=8;spacingTop=6;" parent="1" vertex="1">
+          <mxGeometry x="540" y="556" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;strokeWidth=3;arcSize=6;" parent="1" vertex="1">
+          <mxGeometry x="760" y="210" width="660" height="530" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-num" value="&lt;font style=&quot;font-size: 28px;&quot; color=&quot;#1976D2&quot;&gt;&lt;b&gt;2&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="772" y="215" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-title" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;&lt;b&gt;ReAct&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size: 13px; color: #6B7280;&quot;&gt;推理+行动 · Reasoning + Acting (Yao 2022)&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="810" y="215" width="400" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-thought" value="&lt;b&gt;Thought&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;思考推理&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1976D2;strokeColor=#0D47A1;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="790" y="278" width="105" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-action" value="&lt;b&gt;Action&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;执行动作&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=#2E7D32;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="965" y="278" width="105" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-obs" value="&lt;b&gt;Observation&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;观察结果&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FF9800;strokeColor=#E65100;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="1140" y="278" width="110" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-c1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#1976D2;" parent="1" source="ra-thought" target="ra-action" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-c2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#4CAF50;" parent="1" source="ra-action" target="ra-obs" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-c3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#FF9800;exitX=0.5;exitY=1;entryX=0.5;entryY=1;" parent="1" source="ra-obs" target="ra-thought" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1195" y="348" />
+              <mxPoint x="843" y="348" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ra-c3l" value="&lt;font style=&quot;font-size: 10px; color: #FF9800;&quot;&gt;&lt;b&gt;循环 Loop&lt;/b&gt;&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="ra-c3" vertex="1" connectable="0">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ra-example" value="&lt;font style=&quot;font-size: 10px; font-family: monospace;&quot;&gt;&lt;font color=&quot;#1565C0&quot;&gt;&lt;b&gt;Thought:&lt;/b&gt;&lt;/font&gt; I need to search for...&lt;br&gt;&lt;font color=&quot;#2E7D32&quot;&gt;&lt;b&gt;Action:&lt;/b&gt;&lt;/font&gt; search[&quot;query&quot;]&lt;br&gt;&lt;font color=&quot;#E65100&quot;&gt;&lt;b&gt;Observation:&lt;/b&gt;&lt;/font&gt; Results show...&lt;br&gt;&lt;font color=&quot;#1565C0&quot;&gt;&lt;b&gt;Thought:&lt;/b&gt;&lt;/font&gt; Now I know the answer&lt;br&gt;&lt;font color=&quot;#2E7D32&quot;&gt;&lt;b&gt;Action:&lt;/b&gt;&lt;/font&gt; finish[&quot;answer&quot;]&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#F5F5F5;strokeColor=#BDBDBD;spacingLeft=8;spacingTop=6;spacingRight=8;" parent="1" vertex="1">
+          <mxGeometry x="790" y="374" width="280" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-diff" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;vs Tool-Use:&lt;/b&gt;&lt;br&gt;ReAct 用&lt;font color=&quot;#1976D2&quot;&gt;文本格式&lt;/font&gt;输出推理&lt;br&gt;Tool-Use 用&lt;font color=&quot;#FF9800&quot;&gt;API JSON&lt;/font&gt;调用工具&lt;br&gt;&lt;br&gt;现代 extended thinking 已&lt;br&gt;将 Thought 内化到模型中&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#F3E5F5;strokeColor=#CE93D8;spacingLeft=8;spacingTop=6;" parent="1" vertex="1">
+          <mxGeometry x="1090" y="374" width="195" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-prod-title" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;市场产品 Products&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="780" y="476" width="200" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-p1" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;LangChain&lt;/b&gt; ReAct&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="780" y="502" width="120" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-p2" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;LangGraph&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="908" y="502" width="100" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-p3" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Vertex AI&lt;/b&gt; Google&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1016" y="502" width="120" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-p4" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;HuggingFace&lt;/b&gt; Agents&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1144" y="502" width="128" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-scenes" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;• 多跳知识问答 Multi-hop QA&lt;br&gt;• 可解释性要求 Explainability&lt;br&gt;• 教育场景 Education&lt;br&gt;• 信息检索+推理 Retrieval+Reasoning&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#E1F5FE;strokeColor=#4FC3F7;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+          <mxGeometry x="780" y="556" width="280" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="ra-rating" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;复杂度&lt;/b&gt; ★★☆☆☆&lt;br&gt;&lt;b&gt;成本&lt;/b&gt;　 ★★☆☆☆&lt;br&gt;&lt;b&gt;推理&lt;/b&gt;　 ★★★★☆&lt;br&gt;&lt;b&gt;就绪度&lt;/b&gt; ★★★★☆&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#E3F2FD;strokeColor=#90CAF9;spacingLeft=8;spacingTop=6;" parent="1" vertex="1">
+          <mxGeometry x="1090" y="556" width="150" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#9C27B0;strokeWidth=3;arcSize=6;" parent="1" vertex="1">
+          <mxGeometry x="1450" y="210" width="710" height="530" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-num" value="&lt;font style=&quot;font-size: 28px;&quot; color=&quot;#9C27B0&quot;&gt;&lt;b&gt;3&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1462" y="215" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-title" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;&lt;b&gt;Plan-and-Execute&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size: 13px; color: #6B7280;&quot;&gt;计划执行 · Plan → Execute → Re-plan&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1500" y="215" width="400" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-planner" value="&lt;b&gt;Planner&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;规划器&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9C27B0;strokeColor=#6A1B9A;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="1480" y="280" width="105" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-plan" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Plan&lt;/b&gt;&lt;br&gt;Step 1&lt;br&gt;Step 2&lt;br&gt;Step 3&lt;/font&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=12;fillColor=#F3E5F5;strokeColor=#9C27B0;" parent="1" vertex="1">
+          <mxGeometry x="1640" y="270" width="90" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-executor" value="&lt;b&gt;Executor&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;执行器&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=#2E7D32;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="1790" y="280" width="105" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-s1" value="&lt;font style=&quot;font-size: 9px;&quot;&gt;Step 1 ✓&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#4CAF50;strokeWidth=1;" parent="1" vertex="1">
+          <mxGeometry x="1930" y="272" width="80" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-s2" value="&lt;font style=&quot;font-size: 9px;&quot;&gt;Step 2 ✓&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#4CAF50;strokeWidth=1;" parent="1" vertex="1">
+          <mxGeometry x="1930" y="302" width="80" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-s3" value="&lt;font style=&quot;font-size: 9px;&quot;&gt;Step 3 ✗&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#EF4444;strokeWidth=1;" parent="1" vertex="1">
+          <mxGeometry x="1930" y="332" width="80" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-replan" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Re-plan&lt;/b&gt;&lt;br&gt;重新规划&lt;/font&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FCE4EC;strokeColor=#9C27B0;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="1640" y="365" width="110" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-c1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#9C27B0;" parent="1" source="pe-planner" target="pe-plan" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-c2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#9C27B0;" parent="1" source="pe-plan" target="pe-executor" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-c3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#4CAF50;" parent="1" source="pe-executor" target="pe-s1" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-c6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#EF4444;dashed=1;exitX=0.5;exitY=1;" parent="1" source="pe-s3" target="pe-replan" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1970" y="370" />
+              <mxPoint x="1770" y="370" />
+              <mxPoint x="1770" y="398" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="pe-c6l" value="&lt;font style=&quot;font-size: 9px; color: #EF4444;&quot;&gt;fail&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontStyle=1;" parent="pe-c6" vertex="1" connectable="0">
+          <mxGeometry x="-0.5" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="pe-c7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#FF9800;dashed=1;" parent="1" source="pe-replan" target="pe-planner" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1533" y="398" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="pe-prod-title" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;市场产品 Products&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1470" y="446" width="200" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-p1" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Devin&lt;/b&gt; Cognition&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1470" y="472" width="115" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-p2" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Claude Code&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1593" y="472" width="110" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-p3" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Codex&lt;/b&gt; OpenAI&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1711" y="472" width="110" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-p4" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Magentic-One&lt;/b&gt; MS&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1470" y="506" width="135" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-p5" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Google ADK&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1613" y="506" width="100" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-p6" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;BabyAGI&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1721" y="506" width="80" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-scenes" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;• 完整功能开发 Full Feature Dev&lt;br&gt;• 大型重构 Large Refactoring&lt;br&gt;• 项目管理 Project Management&lt;br&gt;• 研究报告 Research Reports&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#F3E5F5;strokeColor=#CE93D8;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+          <mxGeometry x="1470" y="556" width="280" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="pe-rating" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;复杂度&lt;/b&gt; ★★★☆☆&lt;br&gt;&lt;b&gt;成本&lt;/b&gt;　 ★★★☆☆&lt;br&gt;&lt;b&gt;推理&lt;/b&gt;　 ★★★★☆&lt;br&gt;&lt;b&gt;就绪度&lt;/b&gt; ★★★★☆&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#F3E5F5;strokeColor=#CE93D8;spacingLeft=8;spacingTop=6;" parent="1" vertex="1">
+          <mxGeometry x="1780" y="556" width="150" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#EF4444;strokeWidth=3;arcSize=6;" parent="1" vertex="1">
+          <mxGeometry x="40" y="770" width="690" height="490" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-num" value="&lt;font style=&quot;font-size: 28px;&quot; color=&quot;#EF4444&quot;&gt;&lt;b&gt;4&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="52" y="775" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-title" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;&lt;b&gt;Reflexion&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size: 13px; color: #6B7280;&quot;&gt;反思循环 · Self-Reflect → Retry (Shinn 2023)&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="90" y="775" width="420" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-actor" value="&lt;b&gt;Actor&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;行动者&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EF4444;strokeColor=#B71C1C;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="75" y="838" width="100" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-env" value="&lt;b&gt;Env&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;环境&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=#2E7D32;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="260" y="838" width="90" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-eval" value="&lt;b&gt;Evaluator&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;评估器&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FF9800;strokeColor=#E65100;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="430" y="838" width="105" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-reflect" value="&lt;b&gt;Self-Reflect&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;自我反思&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9C27B0;strokeColor=#6A1B9A;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="430" y="930" width="105" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-memory" value="&lt;b&gt;Memory&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;反思记忆&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=8;fillColor=#FCE4EC;strokeColor=#EF4444;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="262" y="926" width="85" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-c1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#EF4444;" parent="1" source="rf-actor" target="rf-env" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-c1l" value="&lt;font style=&quot;font-size: 9px;&quot; color=&quot;#EF4444&quot;&gt;&lt;b&gt;act&lt;/b&gt;&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="rf-c1" vertex="1" connectable="0">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rf-c2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#4CAF50;" parent="1" source="rf-env" target="rf-eval" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-c3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#FF9800;" parent="1" source="rf-eval" target="rf-reflect" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-c3l" value="&lt;font style=&quot;font-size: 9px;&quot; color=&quot;#FF9800&quot;&gt;&lt;b&gt;fail&lt;/b&gt;&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="rf-c3" vertex="1" connectable="0">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rf-c4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#9C27B0;" parent="1" source="rf-reflect" target="rf-memory" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-c5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#9C27B0;dashed=1;" parent="1" source="rf-memory" target="rf-actor" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="125" y="953" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rf-c5l" value="&lt;font style=&quot;font-size: 9px;&quot; color=&quot;#9C27B0&quot;&gt;&lt;b&gt;retry with memory 带记忆重试&lt;/b&gt;&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="rf-c5" vertex="1" connectable="0">
+          <mxGeometry x="0.1" relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rf-p1" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;LangGraph&lt;/b&gt; Reflexion&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="60" y="1000" width="130" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-p2" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Vertex AI&lt;/b&gt; Gen-Critic&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="198" y="1000" width="135" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-p3" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Agent Lightning&lt;/b&gt; MS&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="341" y="1000" width="140" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-note" value="&lt;font style=&quot;font-size: 10px; color: #9CA3AF;&quot;&gt;&lt;i&gt;注: 纯 Reflexion 无大规模独立产品，思想已被吸收进其他混合架构&lt;/i&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="60" y="1030" width="460" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-scenes" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;• 代码生成+测试 Code Gen+Test&lt;br&gt;• 数学推理 Math Reasoning&lt;br&gt;• 文案迭代 Content Iteration&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#FFEBEE;strokeColor=#EF9A9A;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+          <mxGeometry x="60" y="1060" width="280" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="rf-rating" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;复杂度&lt;/b&gt; ★★★☆☆&lt;br&gt;&lt;b&gt;成本&lt;/b&gt;　 ★★★★☆&lt;br&gt;&lt;b&gt;推理&lt;/b&gt;　 ★★★★★&lt;br&gt;&lt;b&gt;就绪度&lt;/b&gt; ★★☆☆☆&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#FFEBEE;strokeColor=#EF9A9A;spacingLeft=8;spacingTop=6;" parent="1" vertex="1">
+          <mxGeometry x="370" y="1060" width="150" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#4CAF50;strokeWidth=3;arcSize=6;" parent="1" vertex="1">
+          <mxGeometry x="760" y="770" width="660" height="490" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-num" value="&lt;font style=&quot;font-size: 28px;&quot; color=&quot;#4CAF50&quot;&gt;&lt;b&gt;5&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="772" y="775" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-title" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;&lt;b&gt;Multi-Agent&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size: 13px; color: #6B7280;&quot;&gt;多智能体 · Orchestrator → Specialized Agents&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="810" y="775" width="420" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-orch" value="&lt;b&gt;Orchestrator&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 9px;&quot;&gt;编排者&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A1A1A;strokeColor=#000000;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="990" y="835" width="125" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-a1" value="&lt;b&gt;Coder&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 8px;&quot;&gt;编码专家&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=#2E7D32;strokeWidth=2;fontColor=#FFFFFF;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="810" y="925" width="95" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-a2" value="&lt;b&gt;Researcher&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 8px;&quot;&gt;研究专家&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1976D2;strokeColor=#0D47A1;strokeWidth=2;fontColor=#FFFFFF;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1005" y="925" width="95" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-a3" value="&lt;b&gt;Critic&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 8px;&quot;&gt;审查专家&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FF9800;strokeColor=#E65100;strokeWidth=2;fontColor=#FFFFFF;fontSize=10;" parent="1" vertex="1">
+          <mxGeometry x="1200" y="925" width="95" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-comm" value="&lt;font style=&quot;font-size: 9px;&quot;&gt;&lt;b&gt;Agent Communication 智能体通信&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FBC02D;strokeWidth=1;dashed=1;" parent="1" vertex="1">
+          <mxGeometry x="850" y="985" width="395" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-c1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#4CAF50;" parent="1" source="ma-orch" target="ma-a1" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-c2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#1976D2;" parent="1" source="ma-orch" target="ma-a2" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-c2l" value="&lt;font style=&quot;font-size: 9px;&quot;&gt;&lt;b&gt;delegate 委派&lt;/b&gt;&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#1A1A1A;" parent="ma-c2" vertex="1" connectable="0">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="-5" y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ma-c3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#FF9800;" parent="1" source="ma-orch" target="ma-a3" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-c4" style="edgeStyle=none;rounded=1;html=1;strokeWidth=1;strokeColor=#FBC02D;dashed=1;" parent="1" source="ma-a1" target="ma-a2" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-c5" style="edgeStyle=none;rounded=1;html=1;strokeWidth=1;strokeColor=#FBC02D;dashed=1;" parent="1" source="ma-a2" target="ma-a3" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-p1" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;AutoGen&lt;/b&gt; MS&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;" parent="1" vertex="1">
+          <mxGeometry x="780" y="1030" width="95" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-p2" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;CrewAI&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;" parent="1" vertex="1">
+          <mxGeometry x="883" y="1030" width="80" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-p3" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;MetaGPT&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;" parent="1" vertex="1">
+          <mxGeometry x="971" y="1030" width="85" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-p4" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;ChatDev&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;" parent="1" vertex="1">
+          <mxGeometry x="1064" y="1030" width="80" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-p5" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Google ADK&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;" parent="1" vertex="1">
+          <mxGeometry x="1152" y="1030" width="100" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-p6" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Magentic-One&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;" parent="1" vertex="1">
+          <mxGeometry x="1260" y="1030" width="110" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-scenes" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;• 软件公司模拟 Simulated Dev Team&lt;br&gt;• 企业工作流 Enterprise Workflow&lt;br&gt;• 内容流水线 Content Pipeline&lt;br&gt;• 安全运维 SecOps Automation&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#E8F5E9;strokeColor=#A5D6A7;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+          <mxGeometry x="780" y="1075" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="ma-rating" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;复杂度&lt;/b&gt; ★★★★★&lt;br&gt;&lt;b&gt;成本&lt;/b&gt;　 ★★★★★&lt;br&gt;&lt;b&gt;推理&lt;/b&gt;　 ★★★★★&lt;br&gt;&lt;b&gt;就绪度&lt;/b&gt; ★★★☆☆&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#E8F5E9;strokeColor=#A5D6A7;spacingLeft=8;spacingTop=6;" parent="1" vertex="1">
+          <mxGeometry x="1110" y="1075" width="150" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FBC02D;strokeWidth=3;arcSize=6;" parent="1" vertex="1">
+          <mxGeometry x="1450" y="770" width="710" height="490" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-num" value="&lt;font style=&quot;font-size: 28px;&quot; color=&quot;#F9A825&quot;&gt;&lt;b&gt;6&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1462" y="775" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-title" value="&lt;font style=&quot;font-size: 18px;&quot;&gt;&lt;b&gt;LATS&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size: 13px; color: #6B7280;&quot;&gt;语言智能体树搜索 · Tree Search + MCTS (Zhou 2023)&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1500" y="775" width="450" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-root" value="&lt;b&gt;Root&lt;/b&gt;" style="shape=ellipse;whiteSpace=wrap;html=1;fillColor=#FBC02D;strokeColor=#F57F17;strokeWidth=2;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="1740" y="835" width="70" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-a" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;A&lt;/b&gt; 0.8&lt;/font&gt;" style="shape=ellipse;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=#2E7D32;strokeWidth=2;fontColor=#FFF;" parent="1" vertex="1">
+          <mxGeometry x="1570" y="910" width="65" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-b" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;B&lt;/b&gt; 0.6&lt;/font&gt;" style="shape=ellipse;whiteSpace=wrap;html=1;fillColor=#FF9800;strokeColor=#E65100;strokeWidth=2;fontColor=#FFF;" parent="1" vertex="1">
+          <mxGeometry x="1742" y="910" width="65" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-c" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;C&lt;/b&gt; 0.3&lt;/font&gt;" style="shape=ellipse;whiteSpace=wrap;html=1;fillColor=#EF4444;strokeColor=#B71C1C;strokeWidth=2;fontColor=#FFF;" parent="1" vertex="1">
+          <mxGeometry x="1910" y="910" width="65" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-a1" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;A1&lt;/b&gt; 0.9&lt;/font&gt;" style="shape=ellipse;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=#2E7D32;strokeWidth=3;fontColor=#FFF;" parent="1" vertex="1">
+          <mxGeometry x="1510" y="975" width="65" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-a2" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;A2&lt;/b&gt; 0.5&lt;/font&gt;" style="shape=ellipse;whiteSpace=wrap;html=1;fillColor=#FF9800;strokeColor=#E65100;strokeWidth=1;fontColor=#FFF;" parent="1" vertex="1">
+          <mxGeometry x="1630" y="975" width="65" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-best" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;Best: A→A1&lt;/b&gt;&lt;br&gt;最优路径&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=#2E7D32;strokeWidth=2;fontColor=#FFFFFF;" parent="1" vertex="1">
+          <mxGeometry x="1488" y="1038" width="110" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-prune" value="&lt;font style=&quot;font-size: 10px; color: #EF4444;&quot;&gt;✗ 剪枝 Prune&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1898" y="955" width="90" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-eval" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Evaluate&lt;/b&gt; 评估打分&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FBC02D;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="1800" y="975" width="120" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-tc1" style="edgeStyle=none;rounded=1;html=1;strokeWidth=2;strokeColor=#4CAF50;" parent="1" source="lt-root" target="lt-a" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-tc2" style="edgeStyle=none;rounded=1;html=1;strokeWidth=2;strokeColor=#FF9800;" parent="1" source="lt-root" target="lt-b" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-tc3" style="edgeStyle=none;rounded=1;html=1;strokeWidth=1;strokeColor=#EF4444;dashed=1;" parent="1" source="lt-root" target="lt-c" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-tc4" style="edgeStyle=none;rounded=1;html=1;strokeWidth=2;strokeColor=#4CAF50;" parent="1" source="lt-a" target="lt-a1" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-tc5" style="edgeStyle=none;rounded=1;html=1;strokeWidth=1;strokeColor=#FF9800;dashed=1;" parent="1" source="lt-a" target="lt-a2" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-tc6" style="edgeStyle=none;rounded=1;html=1;strokeWidth=3;strokeColor=#4CAF50;" parent="1" source="lt-a1" target="lt-best" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-p1" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;LangGraph&lt;/b&gt; LATS&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;" parent="1" vertex="1">
+          <mxGeometry x="1470" y="1088" width="120" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-p2" value="&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;b&gt;Tree of Thoughts&lt;/b&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E5E5EA;" parent="1" vertex="1">
+          <mxGeometry x="1598" y="1088" width="130" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-note" value="&lt;font style=&quot;font-size: 10px; color: #9CA3AF;&quot;&gt;&lt;i&gt;注: 无大规模生产部署，主要停留在学术研究阶段&lt;/i&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1470" y="1118" width="400" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-scenes" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;• 复杂推理 Complex Reasoning&lt;br&gt;• 代码竞赛 Competitive Programming&lt;br&gt;• 策略优化 Strategy Optimization&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#FFF8E1;strokeColor=#FFE082;spacingLeft=8;spacingTop=4;" parent="1" vertex="1">
+          <mxGeometry x="1470" y="1145" width="280" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="lt-rating" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;复杂度&lt;/b&gt; ★★★★★&lt;br&gt;&lt;b&gt;成本&lt;/b&gt;　 ★★★★★&lt;br&gt;&lt;b&gt;推理&lt;/b&gt;　 ★★★★★&lt;br&gt;&lt;b&gt;就绪度&lt;/b&gt; ★☆☆☆☆&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fillColor=#FFF8E1;strokeColor=#FFE082;spacingLeft=8;spacingTop=6;" parent="1" vertex="1">
+          <mxGeometry x="1780" y="1145" width="150" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="hybrid-sep" value="" style="endArrow=none;html=1;rounded=0;strokeWidth=3;strokeColor=#1A1A1A;dashed=1;dashPattern=12 8;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="40" y="1290" as="sourcePoint" />
+            <mxPoint x="2160" y="1290" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hybrid-title" value="&lt;font style=&quot;font-size: 22px;&quot;&gt;&lt;b&gt;2025-2026 新兴混合架构 Hybrid Architectures&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="550" y="1305" width="1100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="hybrid-sub" value="&lt;font style=&quot;font-size: 13px; color: #6B7280;&quot;&gt;现代 Agent 混合多种模式，不再拘泥于单一架构&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="650" y="1338" width="900" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="h-openai" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#424242;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="40" y="1375" width="500" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="h-openai-t" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;&lt;b&gt;OpenAI Agents SDK&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="55" y="1380" width="300" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="h-openai-c" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;Runner 循环 → 三种结果:&lt;br&gt;&lt;b&gt;① Final Output&lt;/b&gt; → 结束&lt;br&gt;&lt;b&gt;② Tool Call&lt;/b&gt; → 执行 → 继续循环&lt;br&gt;&lt;b&gt;③ Handoff&lt;/b&gt; → 切换到另一个 Agent&lt;br&gt;&lt;br&gt;&lt;b&gt;产品:&lt;/b&gt; ChatGPT · Codex · Agent Builder&lt;br&gt;&lt;b&gt;创新:&lt;/b&gt; Handoff 机制 + MCP 一等支持&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;spacingLeft=15;spacingTop=2;" parent="1" vertex="1">
+          <mxGeometry x="50" y="1405" width="480" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="h-anthropic" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#E65100;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="570" y="1375" width="500" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="h-anthropic-t" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;&lt;b&gt;Anthropic Claude Code / Cowork&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="585" y="1380" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="h-anthropic-c" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;Tool-Use Loop + Skills 系统:&lt;br&gt;&lt;b&gt;基础循环:&lt;/b&gt; LLM ←→ Tools (File/Shell/Git/Web)&lt;br&gt;&lt;b&gt;Skills 层:&lt;/b&gt; Prompt 模板 + 上下文注入&lt;br&gt;&lt;b&gt;双通道:&lt;/b&gt; isMeta 控制内容显示&lt;br&gt;&lt;br&gt;&lt;b&gt;产品:&lt;/b&gt; Claude Code ($10亿+ ARR) · Cowork&lt;br&gt;&lt;b&gt;创新:&lt;/b&gt; Skills 将通用→专业 Agent，无需改代码&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;spacingLeft=15;spacingTop=2;" parent="1" vertex="1">
+          <mxGeometry x="580" y="1405" width="480" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="h-google" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="1100" y="1375" width="500" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="h-google-t" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;&lt;b&gt;Google ADK + A2A Protocol&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1115" y="1380" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="h-google-c" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;三种 Agent: LLM + Workflow + Custom&lt;br&gt;&lt;b&gt;编排:&lt;/b&gt; Sequential / Parallel / Loop Agent&lt;br&gt;&lt;b&gt;通信:&lt;/b&gt; Session State + LLM 委派 + 显式调用&lt;br&gt;&lt;b&gt;协议:&lt;/b&gt; MCP (工具) + A2A (Agent 通信)&lt;br&gt;&lt;br&gt;&lt;b&gt;产品:&lt;/b&gt; Vertex AI · Gemini · Windsurf&lt;br&gt;&lt;b&gt;创新:&lt;/b&gt; A2A 跨框架 Agent 通信标准&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;spacingLeft=15;spacingTop=2;" parent="1" vertex="1">
+          <mxGeometry x="1110" y="1405" width="480" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="h-ms" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="1630" y="1375" width="530" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="h-ms-t" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;&lt;b&gt;Microsoft Agent Framework&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1645" y="1380" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="h-ms-c" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;Semantic Kernel + AutoGen = 统一框架&lt;br&gt;&lt;b&gt;Magentic-One 双账本:&lt;/b&gt;&lt;br&gt;　Task Ledger (外环) → 高层计划&lt;br&gt;　Progress Ledger (内环) → 步骤追踪&lt;br&gt;&lt;br&gt;&lt;b&gt;产品:&lt;/b&gt; Copilot · AutoGen · Magentic-One&lt;br&gt;&lt;b&gt;创新:&lt;/b&gt; 图工作流 + 时间旅行调试&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;spacingLeft=15;spacingTop=2;" parent="1" vertex="1">
+          <mxGeometry x="1640" y="1405" width="510" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-sep" value="" style="endArrow=none;html=1;rounded=0;strokeWidth=3;strokeColor=#1A1A1A;dashed=1;dashPattern=12 8;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="40" y="1555" as="sourcePoint" />
+            <mxPoint x="2160" y="1555" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dt-title" value="&lt;font style=&quot;font-size: 22px;&quot;&gt;&lt;b&gt;如何选择？Decision Tree&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="550" y="1570" width="1100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-q1" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;你的任务是什么？&lt;/b&gt;&lt;br&gt;What is your task?&lt;/font&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#1A1A1A;fontColor=#FFFFFF;strokeColor=#000000;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="430" y="1620" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-simple" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;简单工具调用/聊天&lt;br&gt;Simple tool use&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;strokeWidth=2;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="60" y="1636" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-simple-a" value="&lt;font style=&quot;font-size: 13px;&quot; color=&quot;#FF9800&quot;&gt;&lt;b&gt;→ Tool-Use Loop ✅&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="60" y="1690" width="200" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-c1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#FF9800;" parent="1" source="dt-q1" target="dt-simple" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-explain" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;需要展示推理&lt;br&gt;Explainability&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;strokeWidth=2;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="430" y="1750" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-explain-a" value="&lt;font style=&quot;font-size: 13px;&quot; color=&quot;#1976D2&quot;&gt;&lt;b&gt;→ ReAct ✅&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="600" y="1762" width="150" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-c2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#1976D2;" parent="1" source="dt-q1" target="dt-explain" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-complex" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;复杂多步骤&lt;/b&gt;&lt;br&gt;Complex multi-step&lt;/font&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#9E9E9E;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="810" y="1620" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-c3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#9E9E9E;" parent="1" source="dt-q1" target="dt-complex" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-plan" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;需要预先规划&lt;br&gt;Need planning&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#9C27B0;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="780" y="1750" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-plan-a" value="&lt;font style=&quot;font-size: 12px;&quot; color=&quot;#9C27B0&quot;&gt;&lt;b&gt;→ Plan-Execute ✅&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="928" y="1762" width="170" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-reflect" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;需要试错学习&lt;br&gt;Learn from errors&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#EF4444;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="1110" y="1635" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-reflect-a" value="&lt;font style=&quot;font-size: 12px;&quot; color=&quot;#EF4444&quot;&gt;&lt;b&gt;→ Reflexion ✅&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1258" y="1648" width="150" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-multi" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;多专家协作&lt;br&gt;Multiple experts&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#4CAF50;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="1110" y="1710" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-multi-a" value="&lt;font style=&quot;font-size: 12px;&quot; color=&quot;#4CAF50&quot;&gt;&lt;b&gt;→ Multi-Agent ✅&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1258" y="1722" width="170" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-c4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#9C27B0;" parent="1" source="dt-complex" target="dt-plan" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-c5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#EF4444;" parent="1" source="dt-complex" target="dt-reflect" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-c6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;strokeColor=#4CAF50;" parent="1" source="dt-complex" target="dt-multi" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-optimal" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;需要最优解 (不计成本)&lt;br&gt;Optimal solution&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FBC02D;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="1430" y="1635" width="170" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-optimal-a" value="&lt;font style=&quot;font-size: 12px;&quot; color=&quot;#F9A825&quot;&gt;&lt;b&gt;→ LATS ✅&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1608" y="1648" width="120" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="dt-default" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;不确定？&lt;/b&gt; 从 Tool-Use Loop 开始，按需叠加&lt;br&gt;&lt;font color=&quot;#6B7280&quot;&gt;Start simple, add patterns as needed&lt;/font&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A1A1A;fontColor=#FFFFFF;strokeColor=#000000;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="1430" y="1730" width="310" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="trend-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#9E9E9E;strokeWidth=2;arcSize=4;" parent="1" vertex="1">
+          <mxGeometry x="40" y="1820" width="2120" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="trend-title" value="&lt;font style=&quot;font-size: 16px;&quot;&gt;&lt;b&gt;行业趋势 Key Trends 2025-2026&lt;/b&gt;&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="650" y="1825" width="900" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="trend-1" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;模式融合&lt;/b&gt;&lt;br&gt;Convergence&lt;br&gt;&lt;font color=&quot;#6B7280&quot;&gt;混合多种架构&lt;/font&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E0E0E0;strokeWidth=1;" parent="1" vertex="1">
+          <mxGeometry x="60" y="1860" width="140" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="trend-2" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;协议标准化&lt;/b&gt;&lt;br&gt;MCP + A2A&lt;br&gt;&lt;font color=&quot;#6B7280&quot;&gt;Agent 的 USB-C&lt;/font&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E0E0E0;strokeWidth=1;" parent="1" vertex="1">
+          <mxGeometry x="240" y="1860" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="trend-3" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;评估即架构&lt;/b&gt;&lt;br&gt;Eval as Arch&lt;br&gt;&lt;font color=&quot;#6B7280&quot;&gt;嵌入流水线的反馈环&lt;/font&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E0E0E0;strokeWidth=1;" parent="1" vertex="1">
+          <mxGeometry x="430" y="1860" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="trend-4" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;编码 Agent 爆发&lt;/b&gt;&lt;br&gt;Coding Agents&lt;br&gt;&lt;font color=&quot;#6B7280&quot;&gt;Claude Code $10亿+ ARR&lt;/font&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E0E0E0;strokeWidth=1;" parent="1" vertex="1">
+          <mxGeometry x="630" y="1860" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="trend-5" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;持久记忆&lt;/b&gt;&lt;br&gt;Persistent Memory&lt;br&gt;&lt;font color=&quot;#6B7280&quot;&gt;跨 Session 上下文&lt;/font&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E0E0E0;strokeWidth=1;" parent="1" vertex="1">
+          <mxGeometry x="840" y="1860" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="trend-6" value="&lt;font style=&quot;font-size: 11px;&quot;&gt;&lt;b&gt;52% 企业部署&lt;/b&gt;&lt;br&gt;Enterprise Adoption&lt;br&gt;&lt;font color=&quot;#6B7280&quot;&gt;39% 部署 10+ Agent&lt;/font&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E0E0E0;strokeWidth=1;" parent="1" vertex="1">
+          <mxGeometry x="1030" y="1860" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="summary" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;&lt;b&gt;结论:&lt;/b&gt; 没有「最好」的 Agent Loop — 只有最适合你场景的。从 Tool-Use Loop 开始，按需叠加 Plan、Reflect、Multi-Agent 能力。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A1A1A;fontColor=#FFFFFF;strokeColor=none;arcSize=8;" parent="1" vertex="1">
+          <mxGeometry x="1240" y="1865" width="900" height="50" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -48,6 +48,7 @@
 
     <!-- Row 2: Personas (right-aligned, left of Chat Settings) + Chat Settings button -->
     <div class="ch-row-bottom">
+      <slot name="row-bottom-left" />
       <div class="ch-row-bottom-right">
         <!-- Persona selectors -->
         <div class="persona-section">
@@ -276,6 +277,7 @@
             <div class="chat-config-tooltip-row"><span class="cct-key">Tools</span><span class="cct-val">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }} ({{ formatTokens(toolsTokenEstimate) }})</span></div>
             <div class="chat-config-tooltip-row"><span class="cct-key">MCP</span><span class="cct-val">{{ enabledMcpServers.length }}/{{ mcpStore.servers.length }} ({{ formatTokens(mcpTokenEstimate) }})</span></div>
             <div class="chat-config-tooltip-row"><span class="cct-key">RAG</span><span class="cct-val">{{ ragEnabledCount }} index{{ ragEnabledCount !== 1 ? 'es' : '' }}</span></div>
+            <div class="chat-config-tooltip-row"><span class="cct-key">Path</span><span class="cct-val">{{ effectiveWorkingPath }}</span></div>
           </div>
         </div>
       </div>
@@ -577,6 +579,10 @@ const mcpTokenEstimate = computed(() =>
 const ragEnabledCount = computed(() => {
   const configs = knowledgeStore.indexConfigs
   return Object.values(configs).filter(c => c.enabled).length
+})
+
+const effectiveWorkingPath = computed(() => {
+  return chat.value?.workingPath || configStore.config.artyfactPath || '~/.sparkai/artyfact'
 })
 
 // ── Click-outside handler ──

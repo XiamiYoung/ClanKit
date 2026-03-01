@@ -18,7 +18,7 @@
           Notes
         </h2>
         <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; margin:0 0 24px; line-height:1.6;">
-          Select a folder to use as your vault. All markdown files in the folder will be available for viewing and editing.
+          Select a folder to use as your vault. Markdown and draw.io diagram files will be available for viewing and editing.
         </p>
         <button
           @click="store.pickVault()"
@@ -67,35 +67,19 @@
       <!-- Main content: file tree + editor -->
       <div class="flex-1 flex overflow-hidden">
 
-        <!-- ── LEFT: File Tree Panel ── -->
+        <!-- ── LEFT: File Tree Panel (resizable) ── -->
         <div
           class="shrink-0 flex flex-col overflow-hidden"
-          style="width:280px; min-width:280px; background:#F9F9F9; border-right:1px solid #E5E5EA;"
+          :style="{ width: notesSidebarWidth + 'px', minWidth: '180px', maxWidth: '600px', background: '#F9F9F9', borderRight: 'none', position: 'relative' }"
         >
+          <!-- Resize handle -->
+          <div
+            class="notes-resize-handle"
+            @mousedown="startNotesResize"
+          ></div>
           <!-- Tree toolbar -->
           <div class="px-3 py-2 flex items-center gap-1 shrink-0" style="border-bottom:1px solid #E5E5EA;">
-            <button
-              @click="showNewFileInput = true; newItemParent = store.vaultPath"
-              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer"
-              style="color:#fff; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); border:none; font-family:'Inter',sans-serif; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
-              @mouseenter="e => e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'"
-              @mouseleave="e => e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
-              title="New file"
-            >
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-              File
-            </button>
-            <button
-              @click="showNewFolderInput = true; newItemParent = store.vaultPath"
-              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer"
-              style="color:#fff; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); border:none; font-family:'Inter',sans-serif; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
-              @mouseenter="e => e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'"
-              @mouseleave="e => e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
-              title="New folder"
-            >
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-              Folder
-            </button>
+            <span style="font-family:'Inter',sans-serif;font-size:var(--fs-caption);color:#9CA3AF;">Right-click to add files</span>
             <button
               @click="store.loadTree()"
               class="ml-auto p-1.5 rounded-lg transition-all duration-150 cursor-pointer"
@@ -108,38 +92,18 @@
             </button>
           </div>
 
-          <!-- New file input (at root) -->
-          <div v-if="showNewFileInput && newItemParent === store.vaultPath" class="px-3 py-2" style="border-bottom:1px solid #E5E5EA;">
-            <input
-              ref="newFileInputRef"
-              v-model="newItemName"
-              @keydown.enter="handleCreateFile(store.vaultPath)"
-              @keydown.escape="showNewFileInput = false; newItemName = ''"
-              @blur="showNewFileInput = false; newItemName = ''"
-              placeholder="filename.md"
-              class="w-full px-2 py-1 rounded text-sm"
-              style="border:1px solid #007AFF; outline:none; font-family:'Inter',sans-serif; font-size:var(--fs-caption);"
-            />
-          </div>
-
-          <!-- New folder input (at root) -->
-          <div v-if="showNewFolderInput && newItemParent === store.vaultPath" class="px-3 py-2" style="border-bottom:1px solid #E5E5EA;">
-            <input
-              ref="newFolderInputRef"
-              v-model="newItemName"
-              @keydown.enter="handleCreateFolder(store.vaultPath)"
-              @keydown.escape="showNewFolderInput = false; newItemName = ''"
-              @blur="showNewFolderInput = false; newItemName = ''"
-              placeholder="folder name"
-              class="w-full px-2 py-1 rounded text-sm"
-              style="border:1px solid #007AFF; outline:none; font-family:'Inter',sans-serif; font-size:var(--fs-caption);"
-            />
-          </div>
-
-          <!-- File tree -->
-          <div class="flex-1 overflow-y-auto py-1" style="scrollbar-width:thin;">
+          <!-- File tree (root drop zone) -->
+          <div
+            class="flex-1 overflow-y-auto py-1"
+            style="scrollbar-width:thin;"
+            @dragover.prevent="onRootDragOver"
+            @dragleave="onRootDragLeave"
+            @drop.prevent="handleRootDrop"
+            @contextmenu.prevent="openContextMenu($event, store.vaultPath, '')"
+            :class="{ 'root-drag-over': rootDragOver }"
+          >
             <div v-if="store.fileTree.length === 0" class="px-4 py-8 text-center">
-              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">No markdown files found</p>
+              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">No files found</p>
             </div>
             <TreeNode
               v-for="node in store.fileTree"
@@ -151,6 +115,8 @@
               @select-file="(p, n) => store.openFile(p, n)"
               @toggle-folder="(p) => store.toggleFolder(p)"
               @delete-item="handleDeleteItem"
+              @move-item="handleMoveItem"
+              @context-menu="(e, node) => openContextMenu(e, node.path, node.type)"
             />
           </div>
         </div>
@@ -175,14 +141,19 @@
               class="px-4 py-2.5 shrink-0 flex items-center gap-3"
               style="border-bottom:1px solid #E5E5EA; background:#F9F9F9;"
             >
-              <svg style="width:16px;height:16px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <!-- Diagram icon for .drawio files -->
+              <svg v-if="isDrawio" style="width:16px;height:16px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+              </svg>
+              <!-- Document icon for .md files -->
+              <svg v-else style="width:16px;height:16px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
               </svg>
               <span style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#1A1A1A;">
                 {{ store.activeFile.name }}
               </span>
               <div class="ml-auto flex items-center gap-2">
-                <!-- Auto-save indicator -->
+                <!-- Auto-save indicator (shared) -->
                 <span
                   v-if="saving"
                   class="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
@@ -192,8 +163,9 @@
                   saving
                 </span>
 
-                <!-- Copy source -->
+                <!-- Copy source (markdown only) -->
                 <button
+                  v-if="!isDrawio"
                   @click="copySource"
                   class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
                   style="color:#9CA3AF; background:#F5F5F5; border:1px solid #E5E5EA; font-family:'Inter',sans-serif;"
@@ -205,8 +177,9 @@
                   {{ copied ? 'Copied' : 'Copy' }}
                 </button>
 
-                <!-- Mode toggle -->
+                <!-- Mode toggle (markdown only) -->
                 <div
+                  v-if="!isDrawio"
                   class="flex rounded-lg overflow-hidden"
                   style="border:1px solid #E5E5EA;"
                 >
@@ -230,9 +203,18 @@
               </div>
             </div>
 
-            <!-- Formatted mode (editable rich preview) -->
+            <!-- Draw.io editor panel -->
+            <DrawioEditor
+              v-if="isDrawio"
+              :xml="store.activeFile.content"
+              :file-path="store.activeFile.path"
+              @save="onDrawioSave"
+              style="flex:1;overflow:hidden;"
+            />
+
+            <!-- Formatted mode (editable rich preview) — markdown only -->
             <div
-              v-if="!editMode"
+              v-else-if="!editMode"
               class="flex-1 overflow-y-auto py-6"
               style="scrollbar-width:thin; display:flex; justify-content:center;"
               @click="handlePreviewClick"
@@ -264,7 +246,7 @@
               </div>
             </div>
 
-            <!-- Source mode (raw markdown editor) -->
+            <!-- Source mode (raw markdown editor) — markdown only -->
             <div
               v-else
               class="flex-1 overflow-y-auto"
@@ -280,6 +262,74 @@
         </div>
       </div>
     </template>
+
+    <!-- ── Context Menu ── -->
+    <Teleport to="body">
+      <!-- Overlay to capture outside clicks -->
+      <div v-if="ctxMenu.visible" class="notes-ctx-overlay" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu" />
+
+      <!-- Context menu -->
+      <div
+        v-if="ctxMenu.visible"
+        class="notes-ctx-menu"
+        :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }"
+        @click.stop
+      >
+        <!-- Create options: shown for dirs and background (no target) -->
+        <template v-if="ctxMenu.targetType !== 'file'">
+          <button class="ctx-item" @click="startCtxAction('newFile', ctxMenu.targetPath)">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            New File
+          </button>
+          <button class="ctx-item" @click="startCtxAction('newDiagram', ctxMenu.targetPath)">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            New Diagram
+          </button>
+          <button class="ctx-item" @click="startCtxAction('newFolder', ctxMenu.targetPath)">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            New Folder
+          </button>
+          <div v-if="ctxMenu.targetType === 'dir'" class="ctx-divider" />
+        </template>
+
+        <!-- Item actions: shown when a specific file or folder is right-clicked -->
+        <template v-if="ctxMenu.targetType">
+          <button class="ctx-item" @click="startCtxAction('rename', ctxMenu.targetPath)">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Rename
+          </button>
+          <button class="ctx-item ctx-danger" @click="handleDeleteItem(ctxMenu.targetPath); closeContextMenu()">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Delete
+          </button>
+        </template>
+      </div>
+
+      <!-- New item / Rename dialog -->
+      <div
+        v-if="ctxAction.visible"
+        class="notes-ctx-dialog"
+        :style="{ top: Math.min(ctxAction.y, window.innerHeight - 150) + 'px', left: Math.min(ctxAction.x, window.innerWidth - 280) + 'px' }"
+        @click.stop
+        @keydown.escape="cancelCtxAction"
+      >
+        <div class="ctx-dialog-title">{{ ctxActionLabel }}</div>
+        <input
+          ref="ctxInputRef"
+          v-model="ctxInputValue"
+          class="ctx-dialog-input"
+          :placeholder="ctxActionPlaceholder"
+          @keydown.enter="commitCtxAction"
+          @keydown.escape="cancelCtxAction"
+        />
+        <div class="ctx-dialog-footer">
+          <button class="ctx-dialog-cancel" @click="cancelCtxAction">Cancel</button>
+          <button class="ctx-dialog-confirm" @click="commitCtxAction">
+            {{ ctxAction.type === 'rename' ? 'Rename' : 'Create' }}
+          </button>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Confirm Delete Modal -->
     <ConfirmModal
@@ -300,6 +350,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount, defineComponent, h } from 'vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import DrawioEditor from '../components/notes/DrawioEditor.vue'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import DOMPurify from 'dompurify'
@@ -348,12 +399,30 @@ turndown.addRule('local-images', {
     return `![${alt}](${src}${title ? ` "${title}"` : ''})`
   }
 })
-const showNewFileInput = ref(false)
-const showNewFolderInput = ref(false)
-const newItemParent = ref('')
-const newItemName = ref('')
-const newFileInputRef = ref(null)
-const newFolderInputRef = ref(null)
+const isDrawio = computed(() => store.activeFile?.name?.endsWith('.drawio') ?? false)
+
+// ── Context menu state ──
+const ctxMenu = ref({ visible: false, x: 0, y: 0, targetPath: '', targetType: '' })
+const ctxAction = ref({ visible: false, type: '', parent: '', targetPath: '', x: 0, y: 0 })
+const ctxInputValue = ref('')
+const ctxInputRef = ref(null)
+
+const ctxActionLabel = computed(() => {
+  const t = ctxAction.value.type
+  if (t === 'newFile')    return 'New Markdown File'
+  if (t === 'newDiagram') return 'New Diagram'
+  if (t === 'newFolder')  return 'New Folder'
+  if (t === 'rename')     return 'Rename'
+  return ''
+})
+
+const ctxActionPlaceholder = computed(() => {
+  const t = ctxAction.value.type
+  if (t === 'newFile')    return 'note.md'
+  if (t === 'newDiagram') return 'diagram.drawio'
+  if (t === 'newFolder')  return 'folder name'
+  return ''
+})
 
 // Vault display name (last folder in path)
 const vaultName = computed(() => {
@@ -611,9 +680,10 @@ watch(editMode, async (val) => {
   if (!val) await refreshFormattedHtml()
 })
 
-// Auto-focus new file/folder inputs
-watch(showNewFileInput, async (v) => { if (v) { await nextTick(); newFileInputRef.value?.focus() } })
-watch(showNewFolderInput, async (v) => { if (v) { await nextTick(); newFolderInputRef.value?.focus() } })
+// Auto-focus context action input when it appears
+watch(() => ctxAction.value.visible, async (v) => {
+  if (v) { await nextTick(); ctxInputRef.value?.focus() }
+})
 
 async function copySource() {
   if (!store.activeFile?.content) return
@@ -688,18 +758,66 @@ async function handlePreviewClick(e) {
   showLinkError(`Cannot open link: ${href}`)
 }
 
-async function handleCreateFile(dir) {
-  if (!newItemName.value.trim()) return
-  await store.createFile(dir, newItemName.value.trim())
-  showNewFileInput.value = false
-  newItemName.value = ''
+async function onDrawioSave(xml) {
+  store.updateContent(xml)
+  saving.value = true
+  await store.saveFile()
+  saving.value = false
 }
 
-async function handleCreateFolder(dir) {
-  if (!newItemName.value.trim()) return
-  await store.createFolder(dir, newItemName.value.trim())
-  showNewFolderInput.value = false
-  newItemName.value = ''
+// ── Context menu handlers ──
+function openContextMenu(e, targetPath, targetType) {
+  e.preventDefault?.()
+  e.stopPropagation?.()
+  const x = Math.min(e.clientX, window.innerWidth - 210)
+  const y = Math.min(e.clientY, window.innerHeight - 220)
+  ctxMenu.value = { visible: true, x, y, targetPath, targetType }
+}
+
+function closeContextMenu() {
+  ctxMenu.value.visible = false
+}
+
+function startCtxAction(type, pathArg) {
+  const pos = { x: ctxMenu.value.x, y: ctxMenu.value.y }
+  closeContextMenu()
+  // For rename: parent = folder containing the item, targetPath = item itself
+  // For new*:   parent = directory to create in,      targetPath = ''
+  const parent = type === 'rename'
+    ? pathArg.replace(/[/\\][^/\\]+$/, '') || store.vaultPath
+    : pathArg
+  const currentName = type === 'rename' ? pathArg.split(/[/\\]/).pop() : ''
+  ctxInputValue.value = currentName.replace(/\.[^.]+$/, '') // strip extension for rename
+  ctxAction.value = { visible: true, type, parent, targetPath: type === 'rename' ? pathArg : '', x: pos.x, y: pos.y }
+}
+
+function cancelCtxAction() {
+  ctxAction.value.visible = false
+  ctxInputValue.value = ''
+}
+
+async function commitCtxAction() {
+  const { type, parent, targetPath } = ctxAction.value
+  const rawName = ctxInputValue.value.trim()
+  if (!rawName) return
+  cancelCtxAction()
+
+  if (type === 'newFile') {
+    await store.createFile(parent, rawName)
+  } else if (type === 'newDiagram') {
+    const result = await store.createDrawio(parent, rawName)
+    if (result?.path) {
+      const parts = result.path.split(/[/\\]/)
+      await store.openFile(result.path, parts[parts.length - 1])
+    }
+  } else if (type === 'newFolder') {
+    await store.createFolder(parent, rawName)
+  } else if (type === 'rename') {
+    // Preserve original extension if user didn't supply one
+    const origExt = targetPath.match(/(\.[^./\\]+)$/)?.[1] || ''
+    const newName = rawName.includes('.') ? rawName : rawName + origExt
+    await store.renameItem(targetPath, parent + '/' + newName)
+  }
 }
 
 const confirmDeleteTarget = ref(null)
@@ -733,6 +851,68 @@ async function executeDelete() {
   }
 }
 
+// ── Resizable sidebar ──
+const notesSidebarWidth = ref(280)
+let resizing = false
+
+function startNotesResize(e) {
+  e.preventDefault()
+  resizing = true
+  const startX = e.clientX
+  const startW = notesSidebarWidth.value
+
+  function onMouseMove(ev) {
+    const delta = ev.clientX - startX
+    const newW = Math.min(600, Math.max(180, startW + delta))
+    notesSidebarWidth.value = newW
+  }
+  function onMouseUp() {
+    resizing = false
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
+// ── Drag-and-drop: move items between folders ──
+const rootDragOver = ref(false)
+
+async function handleMoveItem(sourcePath, destFolderPath) {
+  const fileName = sourcePath.split(/[/\\]/).pop()
+  const newPath = destFolderPath + '/' + fileName
+  // Don't move to the same location
+  if (sourcePath === newPath) return
+  try {
+    await store.renameItem(sourcePath, newPath)
+  } catch (err) {
+    console.error('Move failed:', err)
+  }
+}
+
+function onRootDragOver(e) {
+  e.dataTransfer.dropEffect = 'move'
+  rootDragOver.value = true
+}
+
+function onRootDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    rootDragOver.value = false
+  }
+}
+
+function handleRootDrop(e) {
+  rootDragOver.value = false
+  const sourcePath = e.dataTransfer.getData('text/plain')
+  if (!sourcePath || !store.vaultPath) return
+  // Move to vault root
+  handleMoveItem(sourcePath, store.vaultPath)
+}
+
 // ── TreeNode: recursive file tree component ──
 const TreeNode = defineComponent({
   name: 'TreeNode',
@@ -742,9 +922,10 @@ const TreeNode = defineComponent({
     activePath: String,
     expandedFolders: Object
   },
-  emits: ['select-file', 'toggle-folder', 'delete-item'],
+  emits: ['select-file', 'toggle-folder', 'delete-item', 'move-item', 'context-menu'],
   setup(props, { emit }) {
     const hovered = ref(false)
+    const dragOver = ref(false)
 
     return () => {
       const isDir = props.node.type === 'dir'
@@ -754,43 +935,90 @@ const TreeNode = defineComponent({
 
       const children = []
 
+      // Drag-and-drop event handlers
+      const dragEvents = {
+        draggable: true,
+        onDragstart: (e) => {
+          e.dataTransfer.setData('text/plain', props.node.path)
+          e.dataTransfer.setData('application/x-node-type', props.node.type)
+          e.dataTransfer.effectAllowed = 'move'
+          e.currentTarget.classList.add('tree-dragging')
+        },
+        onDragend: (e) => {
+          e.currentTarget.classList.remove('tree-dragging')
+        },
+      }
+
+      // Drop target events (folders only)
+      if (isDir) {
+        dragEvents.onDragover = (e) => {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          dragOver.value = true
+        }
+        dragEvents.onDragleave = (e) => {
+          // Only reset if leaving the element itself (not entering a child)
+          if (!e.currentTarget.contains(e.relatedTarget)) {
+            dragOver.value = false
+          }
+        }
+        dragEvents.onDrop = (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          dragOver.value = false
+          const sourcePath = e.dataTransfer.getData('text/plain')
+          if (!sourcePath) return
+          const destFolder = props.node.path
+          // Prevent dropping onto self or into own subtree
+          if (sourcePath === destFolder || destFolder.startsWith(sourcePath + '/')) return
+          emit('move-item', sourcePath, destFolder)
+        }
+      }
+
+      // Row background: drag-over highlight takes priority
+      let rowBg = isActive ? 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' : (hovered.value ? 'rgba(0,0,0,0.03)' : 'transparent')
+      if (dragOver.value && isDir) rowBg = 'rgba(0, 122, 255, 0.12)'
+
       // Main row
       children.push(
         h('div', {
           class: 'flex items-center gap-2 py-1.5 pr-2 cursor-pointer transition-colors duration-100 group relative',
           style: {
             paddingLeft: indent + 'px',
-            background: isActive ? 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' : (hovered.value ? 'rgba(0,0,0,0.03)' : 'transparent'),
+            background: rowBg,
             color: isActive ? '#fff' : '#6B7280',
             boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none',
-            borderRadius: isActive ? '8px' : '0',
-            margin: isActive ? '0 8px' : '0',
+            borderRadius: (isActive || (dragOver.value && isDir)) ? '8px' : '0',
+            margin: (isActive || (dragOver.value && isDir)) ? '0 8px' : '0',
             fontFamily: "'Inter',sans-serif",
-            fontSize: 'var(--fs-secondary)',
+            fontSize: 'var(--fs-body)',
+            border: dragOver.value && isDir ? '1px dashed #007AFF' : '1px solid transparent',
           },
           onClick: () => {
             if (isDir) emit('toggle-folder', props.node.path)
             else emit('select-file', props.node.path, props.node.name)
           },
+          onContextmenu: (e) => { e.preventDefault(); e.stopPropagation(); emit('context-menu', e, props.node) },
           onMouseenter: () => { hovered.value = true },
           onMouseleave: () => { hovered.value = false },
+          ...dragEvents,
         }, [
           // Chevron for folders
           isDir ? h('svg', {
             style: {
-              width: '12px', height: '12px', flexShrink: 0, color: isActive ? '#fff' : '#9CA3AF',
+              width: '14px', height: '14px', flexShrink: 0, color: isActive ? '#fff' : '#9CA3AF',
               transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
               transition: 'transform 0.15s'
             },
             viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2'
-          }, [h('polyline', { points: '9 18 15 12 9 6' })]) : h('span', { style: 'width:12px;display:inline-block;' }),
+          }, [h('polyline', { points: '9 18 15 12 9 6' })]) : h('span', { style: 'width:14px;display:inline-block;' }),
 
           // Icon
           isDir
-            ? h('svg', { style: `width:16px;height:16px;flex-shrink:0;color:${isActive ? '#fff' : '#6B7280'};`, viewBox: '0 0 24 24', fill: 'currentColor' }, [
+            ? h('svg', { style: `width:18px;height:18px;flex-shrink:0;color:${isActive ? '#fff' : '#6B7280'};`, viewBox: '0 0 24 24', fill: 'currentColor' }, [
                 h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })
               ])
-            : h('svg', { style: `width:16px;height:16px;flex-shrink:0;color:${isActive ? '#fff' : '#9CA3AF'};`, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+            : h('svg', { style: `width:18px;height:18px;flex-shrink:0;color:${isActive ? '#fff' : '#9CA3AF'};`, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
                 h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
                 h('polyline', { points: '14 2 14 8 20 8' })
               ]),
@@ -799,7 +1027,7 @@ const TreeNode = defineComponent({
           h('span', {
             class: 'truncate flex-1',
             style: { fontWeight: isDir ? '600' : '400' }
-          }, props.node.name.replace(/\.md$/, '')),
+          }, props.node.name.replace(/\.md$/, '').replace(/\.drawio$/, '')),
 
           // Delete button (on hover)
           hovered.value ? h('button', {
@@ -829,6 +1057,8 @@ const TreeNode = defineComponent({
               'onSelect-file': (p, n) => emit('select-file', p, n),
               'onToggle-folder': (p) => emit('toggle-folder', p),
               'onDelete-item': (p) => emit('delete-item', p),
+              'onMove-item': (src, dest) => emit('move-item', src, dest),
+              'onContext-menu': (e, node) => emit('context-menu', e, node),
             })
           )
         }
@@ -916,4 +1146,135 @@ const TreeNode = defineComponent({
 .prose-obsidian th, .prose-obsidian td { border: 1px solid #E5E5EA; padding: 8px 12px; text-align: left; }
 .prose-obsidian th { background: #F9F9F9; font-weight: 600; }
 .prose-obsidian img { max-width: 100%; border-radius: 8px; }
+
+/* ── Context menu ── */
+.notes-ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+}
+.notes-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 10px;
+  padding: 4px;
+  min-width: 180px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
+  animation: ctxEnter 0.1s ease-out;
+}
+@keyframes ctxEnter {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1)  translateY(0); }
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #E5E5EA;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+.ctx-item:hover { background: #1F1F1F; color: #FFFFFF; }
+.ctx-item.ctx-danger { color: #FF453A; }
+.ctx-item.ctx-danger:hover { background: rgba(255,69,58,0.15); }
+.ctx-divider { height: 1px; background: #2A2A2A; margin: 4px 0; }
+
+/* ── Context action dialog ── */
+.notes-ctx-dialog {
+  position: fixed;
+  z-index: 9999;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 12px;
+  padding: 16px;
+  width: 260px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  animation: ctxEnter 0.15s ease-out;
+}
+.ctx-dialog-title {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: #FFFFFF;
+  margin-bottom: 10px;
+}
+.ctx-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  background: #1A1A1A;
+  border: 1px solid #2A2A2A;
+  border-radius: 8px;
+  color: #FFFFFF;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--fs-secondary);
+  outline: none;
+}
+.ctx-dialog-input:focus { border-color: #4B5563; }
+.ctx-dialog-input::placeholder { color: #4B5563; }
+.ctx-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.ctx-dialog-cancel {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #2A2A2A;
+  background: transparent;
+  color: #9CA3AF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  cursor: pointer;
+}
+.ctx-dialog-cancel:hover { background: #1A1A1A; color: #FFFFFF; }
+.ctx-dialog-confirm {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.ctx-dialog-confirm:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
+
+/* Drag-and-drop states */
+.tree-dragging {
+  opacity: 0.4;
+}
+.root-drag-over {
+  background: rgba(0, 122, 255, 0.04);
+}
+
+/* Resize handle */
+.notes-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: #E5E5EA;
+  transition: background 0.15s;
+}
+.notes-resize-handle:hover,
+.notes-resize-handle:active {
+  background: #007AFF;
+}
 </style>
