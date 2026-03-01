@@ -87,12 +87,14 @@
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
 
-          <span v-if="((chat.isRunning && chat.id !== chatsStore.activeChatId) || chatsStore.unreadChatIds.has(chat.id)) && !chatsStore.completedChatIds.has(chat.id)" class="chat-unread-spinner"></span>
+          <span v-if="((chat.isRunning && chat.id !== chatsStore.activeChatId) || chatsStore.unreadChatIds.has(chat.id)) && !chatsStore.completedChatIds.has(chat.id) && !chatsStore.pendingPermissionChatIds.has(chat.id)" class="chat-unread-spinner"></span>
 
           <span class="chat-sidebar-item-title">{{ chat.title }}</span>
 
+          <!-- Approval chip (permission awaiting user) -->
+          <span v-if="chatsStore.pendingPermissionChatIds.has(chat.id) && chat.id !== chatsStore.activeChatId" class="chat-approval-chip">Approval</span>
           <!-- Completed chip (only when not the active chat) -->
-          <span v-if="chatsStore.completedChatIds.has(chat.id) && chat.id !== chatsStore.activeChatId" class="chat-completed-chip">Done</span>
+          <span v-else-if="chatsStore.completedChatIds.has(chat.id) && chat.id !== chatsStore.activeChatId" class="chat-completed-chip">Done</span>
 
           <!-- Actions -->
           <div
@@ -235,7 +237,7 @@
         >
           <div
             class="relative flex flex-col rounded-2xl overflow-hidden"
-            style="background:#FFFFFF; border:1px solid #E5E5EA; border-radius:16px; width:680px; max-width:90vw; max-height:85vh; box-shadow:0 8px 32px rgba(0,0,0,0.12);"
+            style="background:#FFFFFF; border:1px solid #E5E5EA; border-radius:16px; width:80vw; max-height:85vh; box-shadow:0 8px 32px rgba(0,0,0,0.12);"
           >
             <!-- Header -->
             <div class="flex items-center justify-between px-5 py-3 shrink-0" style="border-bottom:1px solid #E5E5EA;">
@@ -482,7 +484,7 @@
                     </span>
                   </div>
                   <!-- Log entries (last 100) -->
-                  <div style="max-height:300px; overflow-y:auto; background:#1A1A1A; font-family:'JetBrains Mono',monospace;">
+                  <div ref="debugLogEl" style="max-height:300px; overflow-y:auto; background:#1A1A1A; font-family:'JetBrains Mono',monospace;">
                     <div class="px-3 py-2 space-y-0.5">
                       <div v-if="debugLog.length === 0" style="color:#6B7280; font-size:var(--fs-secondary);">No events yet — send a message to start logging.</div>
                       <div
@@ -1027,6 +1029,14 @@
 
           <!-- Tab bar -->
           <div class="ccm-tabs">
+            <button class="ccm-tab" :class="{ active: ccmActiveTab === 'general' }" @click="ccmActiveTab = 'general'">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              General
+            </button>
+            <button class="ccm-tab" :class="{ active: ccmActiveTab === 'permissions' }" @click="ccmActiveTab = 'permissions'">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Permissions
+            </button>
             <button class="ccm-tab" :class="{ active: ccmActiveTab === 'model' }" @click="ccmActiveTab = 'model'">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
               Model
@@ -1050,20 +1060,52 @@
           <!-- Body -->
           <div class="ccm-body">
 
-            <!-- ═══ MODEL TAB ═══ -->
-            <div v-if="ccmActiveTab === 'model'" class="ccm-tab-content">
-              <!-- Provider -->
+            <!-- ═══ GENERAL TAB ═══ -->
+            <div v-if="ccmActiveTab === 'general'" class="ccm-tab-content">
               <div class="ccm-dark-section">
-                <div class="ccm-dark-section-label">Provider</div>
-                <div class="ccm-provider-btns">
-                  <button v-for="prov in [{ id: 'anthropic', label: 'Anthropic' }, { id: 'openrouter', label: 'OpenRouter' }, { id: 'openai', label: 'OpenAI' }]" :key="prov.id"
-                    class="ccm-provider-btn" :class="{ active: effectiveProvider === prov.id }"
-                    @click="selectProvider(prov.id)">{{ prov.label }}</button>
+                <div class="ccm-dark-section-label">Working Path <span class="ccm-dark-badge">Artifact Directory</span></div>
+                <div class="ccm-working-path-row">
+                  <input
+                    v-model="draftWorkingPath"
+                    type="text"
+                    :placeholder="configStore.config.artyfactPath || '~/.sparkai/artyfact'"
+                    class="ccm-working-path-input"
+                  />
+                  <button class="ccm-working-path-browse" @click="browseWorkingPath" title="Browse folder">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  </button>
+                </div>
+                <span class="ccm-working-path-hint">Leave empty to use the global default path.</span>
+              </div>
+            </div>
+
+            <!-- ═══ MODEL TAB ═══ -->
+            <div v-else-if="ccmActiveTab === 'model'" class="ccm-tab-content">
+              <!-- Step 1: Provider -->
+              <div class="ccm-dark-section">
+                <div class="ccm-dark-section-label">
+                  <span class="ccm-step-num">1</span> Provider
+                  <span class="ccm-dark-badge">{{ effectiveProviderLabel }}</span>
+                </div>
+                <div class="ccm-provider-cards">
+                  <button v-for="prov in [
+                    { id: 'anthropic',  label: 'Anthropic',  sub: 'Claude models' },
+                    { id: 'openrouter', label: 'OpenRouter', sub: 'Multi-provider' },
+                    { id: 'openai',     label: 'OpenAI',     sub: 'GPT / custom' }
+                  ]" :key="prov.id"
+                    class="ccm-provider-card" :class="{ active: effectiveProvider === prov.id }"
+                    @click="selectProvider(prov.id)">
+                    <span class="ccm-provider-card-name">{{ prov.label }}</span>
+                    <span class="ccm-provider-card-sub">{{ prov.sub }}</span>
+                  </button>
                 </div>
               </div>
-              <!-- Model -->
+              <!-- Step 2: Model -->
               <div class="ccm-dark-section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-                <div class="ccm-dark-section-label">Model <span class="ccm-dark-badge">{{ effectiveModelLabel }}</span></div>
+                <div class="ccm-dark-section-label">
+                  <span class="ccm-step-num">2</span> Model
+                  <span class="ccm-dark-badge">{{ effectiveModelLabel }}</span>
+                </div>
                 <div v-if="effectiveProvider === 'openrouter' || effectiveProvider === 'openai'" style="margin-bottom:8px;">
                   <input v-model="chatModelFilter" type="text" placeholder="Search models..." class="ccm-model-search" @click.stop />
                 </div>
@@ -1089,22 +1131,6 @@
                     </button>
                   </template>
                 </div>
-              </div>
-              <!-- Working Path -->
-              <div class="ccm-dark-section">
-                <div class="ccm-dark-section-label">Working Path <span class="ccm-dark-badge">Artifact Directory</span></div>
-                <div class="ccm-working-path-row">
-                  <input
-                    v-model="draftWorkingPath"
-                    type="text"
-                    :placeholder="configStore.config.artyfactPath || '~/.sparkai/artyfact'"
-                    class="ccm-working-path-input"
-                  />
-                  <button class="ccm-working-path-browse" @click="browseWorkingPath" title="Browse folder">
-                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                  </button>
-                </div>
-                <span class="ccm-working-path-hint">Leave empty to use the global default path.</span>
               </div>
             </div>
 
@@ -1203,6 +1229,123 @@
                   <div v-for="idx in ragEnabledIndexes" :key="idx.name" class="ccm-rag-item">
                     <span class="ccm-rag-name">{{ idx.name }}</span>
                     <span class="ccm-rag-meta">{{ idx.embeddingProvider === 'openrouter' ? 'OpenRouter' : 'OpenAI' }} / {{ idx.embeddingModel }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- ═══ PERMISSIONS TAB ═══ -->
+            <div v-else-if="ccmActiveTab === 'permissions'" class="ccm-tab-content">
+              <!-- Mode selector -->
+              <div class="ccm-dark-section">
+                <div class="ccm-dark-section-label">Permission Mode</div>
+                <div class="ccm-provider-btns">
+                  <button v-for="m in [{ id: 'inherit', label: 'Inherit' }, { id: 'chat_only', label: 'Chat Only' }, { id: 'all_permissions', label: 'All Permissions' }]"
+                    :key="m.id"
+                    class="ccm-provider-btn" :class="{ active: draftPermissionMode === m.id }"
+                    @click="draftPermissionMode = m.id">{{ m.label }}</button>
+                </div>
+                <p class="ccm-perm-mode-hint">
+                  <template v-if="draftPermissionMode === 'inherit'">Uses the global mode from Config → Security. Chat allow list runs on top.</template>
+                  <template v-else-if="draftPermissionMode === 'chat_only'">Agent must ask permission before running shell commands or writing files. Only this chat's allow list applies.</template>
+                  <template v-else>Agent can run any tool without asking. Danger blocks below still apply unless removed for this chat.</template>
+                </p>
+              </div>
+
+              <!-- INHERIT: Chat allow list on top, then global allow list (read-only) -->
+              <template v-if="draftPermissionMode === 'inherit'">
+                <!-- Chat Allow List (editable) -->
+                <div class="ccm-dark-section" style="flex:0 0 auto;">
+                  <div class="ccm-dark-section-label">Chat Allow List <span class="ccm-dark-badge">{{ draftChatAllowList.length }}</span></div>
+                  <p class="ccm-perm-mode-hint" style="margin-bottom:8px;">Commands allowed for this chat only, in addition to the global list.</p>
+                  <div class="ccm-allow-list">
+                    <div v-if="draftChatAllowList.length === 0" class="ccm-list-empty">No entries yet.</div>
+                    <div v-for="(entry, idx) in draftChatAllowList" :key="entry.id || idx" class="ccm-allow-entry">
+                      <div class="ccm-allow-entry-info">
+                        <span class="ccm-allow-pattern">{{ entry.pattern }}</span>
+                        <span v-if="entry.description" class="ccm-allow-desc">{{ entry.description }}</span>
+                      </div>
+                      <button class="ccm-allow-delete" @click="removeChatAllowEntry(idx)" title="Remove">
+                        <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="ccm-allow-add-row">
+                    <input v-model="newAllowPattern" type="text" placeholder="Pattern (e.g. ls *)" class="ccm-allow-input" @keydown.enter.prevent="addChatAllowEntry" />
+                    <input v-model="newAllowDesc" type="text" placeholder="Description" class="ccm-allow-input" @keydown.enter.prevent="addChatAllowEntry" />
+                    <button class="ccm-allow-add-btn" @click="addChatAllowEntry" :disabled="!newAllowPattern.trim()">Add</button>
+                  </div>
+                </div>
+                <!-- Global Allow List (read-only) -->
+                <div class="ccm-dark-section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+                  <div class="ccm-dark-section-label">
+                    Global Allow List <span class="ccm-dark-badge">{{ (configStore.config.sandboxConfig?.sandboxAllowList || []).length }}</span>
+                  </div>
+                  <p class="ccm-perm-mode-hint" style="margin-bottom:8px;">Inherited from Config → Security. Edit there to change.</p>
+                  <div class="ccm-allow-list">
+                    <div v-if="!(configStore.config.sandboxConfig?.sandboxAllowList || []).length" class="ccm-list-empty">No global entries yet.</div>
+                    <div v-for="entry in (configStore.config.sandboxConfig?.sandboxAllowList || [])" :key="entry.id" class="ccm-allow-entry ccm-allow-entry-readonly">
+                      <div class="ccm-allow-entry-info">
+                        <span class="ccm-allow-pattern">{{ entry.pattern }}</span>
+                        <span v-if="entry.description" class="ccm-allow-desc">{{ entry.description }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- CHAT ONLY: Chat Allow List only -->
+              <div v-else-if="draftPermissionMode === 'chat_only'" class="ccm-dark-section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+                <div class="ccm-dark-section-label">Chat Allow List <span class="ccm-dark-badge">{{ draftChatAllowList.length }}</span></div>
+                <p class="ccm-perm-mode-hint" style="margin-bottom:8px;">Commands that bypass permission prompts for this chat only.</p>
+                <div class="ccm-allow-list">
+                  <div v-if="draftChatAllowList.length === 0" class="ccm-list-empty">No entries yet.</div>
+                  <div v-for="(entry, idx) in draftChatAllowList" :key="entry.id || idx" class="ccm-allow-entry">
+                    <div class="ccm-allow-entry-info">
+                      <span class="ccm-allow-pattern">{{ entry.pattern }}</span>
+                      <span v-if="entry.description" class="ccm-allow-desc">{{ entry.description }}</span>
+                    </div>
+                    <button class="ccm-allow-delete" @click="removeChatAllowEntry(idx)" title="Remove">
+                      <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="ccm-allow-add-row">
+                  <input v-model="newAllowPattern" type="text" placeholder="Pattern (e.g. ls *)" class="ccm-allow-input" @keydown.enter.prevent="addChatAllowEntry" />
+                  <input v-model="newAllowDesc" type="text" placeholder="Description" class="ccm-allow-input" @keydown.enter.prevent="addChatAllowEntry" />
+                  <button class="ccm-allow-add-btn" @click="addChatAllowEntry" :disabled="!newAllowPattern.trim()">Add</button>
+                </div>
+              </div>
+
+              <!-- ALL PERMISSIONS: Danger block list with per-chat removals -->
+              <div v-else class="ccm-dark-section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+                <div class="ccm-dark-section-label">
+                  Danger Block List
+                  <span class="ccm-dark-badge" style="background:rgba(239,68,68,0.2);color:#f87171;">{{ (configStore.config.sandboxConfig?.dangerBlockList || []).length }}</span>
+                </div>
+                <p class="ccm-perm-mode-hint" style="margin-bottom:8px;">These are still blocked even in All Permissions mode. Remove an entry to allow it for this chat only — does not affect global config.</p>
+                <div class="ccm-allow-list">
+                  <div v-if="!(configStore.config.sandboxConfig?.dangerBlockList || []).length" class="ccm-list-empty">No danger block entries in global config.</div>
+                  <div v-for="entry in (configStore.config.sandboxConfig?.dangerBlockList || [])" :key="entry.id"
+                    class="ccm-allow-entry"
+                    :class="draftChatDangerOverrides.includes(entry.pattern) ? 'ccm-danger-overridden' : ''">
+                    <div class="ccm-allow-entry-info">
+                      <span class="ccm-allow-pattern" style="color:#f87171;">{{ entry.pattern }}</span>
+                      <span v-if="entry.description" class="ccm-allow-desc">{{ entry.description }}</span>
+                    </div>
+                    <!-- Not yet overridden: show "Remove for this chat" -->
+                    <button v-if="!draftChatDangerOverrides.includes(entry.pattern)"
+                      class="ccm-allow-delete ccm-danger-remove-btn"
+                      @click="addChatDangerOverride(entry.pattern)"
+                      title="Allow for this chat">
+                      <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                    <!-- Already overridden: show "Undo" -->
+                    <button v-else
+                      class="ccm-allow-add-btn"
+                      style="font-size:0.65rem;padding:3px 8px;"
+                      @click="removeChatDangerOverride(entry.pattern)">
+                      Undo
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1598,6 +1741,21 @@ const showContextInspector = ref(false)
 const contextSnapshot = computed(() => perChatSnapshots.get(chatsStore.activeChatId) ?? null)
 const expandedMessages = reactive({})
 const inspectorSections = reactive({ metrics: true, system: false, personas: false, messages: false, tools: false, debugLog: false })
+const debugLogEl = ref(null)
+
+function scrollDebugToBottom() {
+  nextTick(() => {
+    if (debugLogEl.value) debugLogEl.value.scrollTop = debugLogEl.value.scrollHeight
+  })
+}
+
+// Auto-scroll debug log: on new entries (when section is open)
+watch(debugLog, () => { if (inspectorSections.debugLog) scrollDebugToBottom() }, { deep: true })
+// Auto-scroll debug log: when section is expanded
+watch(() => inspectorSections.debugLog, (open) => { if (open) scrollDebugToBottom() })
+// Auto-scroll debug log: when inspector dialog opens (if section is already open)
+watch(showContextInspector, (open) => { if (open && inspectorSections.debugLog) scrollDebugToBottom() })
+
 const perChatQueue = reactive(new Map()) // chatId → [{text, attachments}]
 const pendingQueue = computed(() => perChatQueue.get(chatsStore.activeChatId) ?? [])
 const isCompacting = ref(false)
@@ -1730,9 +1888,38 @@ const mentionSuggestions = computed(() => {
 // ── HTTP Tools modal state ──
 const showToolsModal = ref(false)
 const showChatConfigModal = ref(false)
-const ccmActiveTab = ref('model')
+const ccmActiveTab = ref('general')
 const ccmToolSearch = ref('')
 const ccmMcpSearch = ref('')
+
+// ── Permissions tab draft state ──
+const draftPermissionMode = ref('inherit')
+const draftChatAllowList = ref([])
+const draftChatDangerOverrides = ref([]) // patterns un-blocked for this chat in all_permissions mode
+const newAllowPattern = ref('')
+const newAllowDesc = ref('')
+
+function addChatAllowEntry() {
+  const pattern = newAllowPattern.value.trim()
+  if (!pattern) return
+  draftChatAllowList.value.push({ id: `chat-allow-${Date.now()}`, pattern, description: newAllowDesc.value.trim() })
+  newAllowPattern.value = ''
+  newAllowDesc.value = ''
+}
+
+function removeChatAllowEntry(idx) {
+  draftChatAllowList.value.splice(idx, 1)
+}
+
+function addChatDangerOverride(pattern) {
+  if (!draftChatDangerOverrides.value.includes(pattern))
+    draftChatDangerOverrides.value.push(pattern)
+}
+
+function removeChatDangerOverride(pattern) {
+  const idx = draftChatDangerOverrides.value.indexOf(pattern)
+  if (idx !== -1) draftChatDangerOverrides.value.splice(idx, 1)
+}
 
 const ccmFilteredTools = computed(() => {
   const q = ccmToolSearch.value.toLowerCase()
@@ -1776,7 +1963,7 @@ let _draftSnapshot = null
 // Fetch models when config modal opens (for OpenRouter/OpenAI providers)
 watch(showChatConfigModal, (open) => {
   if (!open) return
-  ccmActiveTab.value = 'model'
+  ccmActiveTab.value = 'general'
   chatModelFilter.value = ''
   _loadDraftFromChat()
   // Snapshot for cancel
@@ -1784,6 +1971,9 @@ watch(showChatConfigModal, (open) => {
     enabledToolIds: new Set(chatEnabledToolIds.value),
     enabledMcpIds: new Set(chatEnabledMcpIds.value),
     workingPath: draftWorkingPath.value,
+    permissionMode: draftPermissionMode.value,
+    chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
+    chatDangerOverrides: JSON.parse(JSON.stringify(draftChatDangerOverrides.value)),
   }
   if (effectiveProvider.value === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
   if (effectiveProvider.value === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
@@ -1796,6 +1986,9 @@ function saveChatSettings() {
     enabledToolIds: [...chatEnabledToolIds.value],
     enabledMcpIds: [...chatEnabledMcpIds.value],
     workingPath: draftWorkingPath.value || null,
+    permissionMode: draftPermissionMode.value,
+    chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
+    chatDangerOverrides: JSON.parse(JSON.stringify(draftChatDangerOverrides.value)),
   })
   _draftSnapshot = null
   showChatConfigModal.value = false
@@ -1807,6 +2000,9 @@ function cancelChatSettings() {
     chatEnabledToolIds.value = _draftSnapshot.enabledToolIds
     chatEnabledMcpIds.value = _draftSnapshot.enabledMcpIds
     draftWorkingPath.value = _draftSnapshot.workingPath
+    draftPermissionMode.value = _draftSnapshot.permissionMode
+    draftChatAllowList.value = _draftSnapshot.chatAllowList
+    draftChatDangerOverrides.value = _draftSnapshot.chatDangerOverrides
   }
   _draftSnapshot = null
   showChatConfigModal.value = false
@@ -1859,6 +2055,12 @@ function _loadDraftFromChat() {
   }
   // Working path
   draftWorkingPath.value = chat.workingPath || ''
+  // Permissions
+  draftPermissionMode.value = chat.permissionMode || 'inherit'
+  draftChatAllowList.value = JSON.parse(JSON.stringify(chat.chatAllowList || []))
+  draftChatDangerOverrides.value = JSON.parse(JSON.stringify(chat.chatDangerOverrides || []))
+  newAllowPattern.value = ''
+  newAllowDesc.value = ''
 }
 
 // Auto-enable tools: initialize from chat or global defaults, add newly discovered tools
@@ -2923,7 +3125,16 @@ function flushSegments(key) {
   const segments = perChatStreamingSegments.get(key) || []
   const msg = chat.messages.find(m => m.id === msgId)
   if (!msg) return
-  msg.segments = segments.map(s => ({ ...s }))
+  // Preserve resolved permission statuses — the user may have clicked a button before
+  // the agent finishes, mutating msg.segments[i].status. Don't overwrite with 'pending'.
+  const prevSegs = msg.segments || []
+  msg.segments = segments.map(s => {
+    if (s.type === 'permission') {
+      const live = prevSegs.find(p => p.type === 'permission' && p.blockId === s.blockId)
+      if (live && live.status !== 'pending') return { ...s, status: live.status }
+    }
+    return { ...s }
+  })
   msg.content = segments.filter(s => s.type === 'text').map(s => s.content).join('')
   msg.streaming = true
 }
@@ -3050,6 +3261,21 @@ function handleChunk(cId, chunk) {
     }
     flushSegments(routeKey)
     scrollToBottom(false, cId)
+  } else if (chunk.type === 'permission_request') {
+    const segments = perChatStreamingSegments.get(routeKey) || []
+    segments.push({
+      type: 'permission',
+      blockId: chunk.blockId,
+      toolName: chunk.toolName,
+      command: chunk.command,
+      toolInput: chunk.toolInput,
+      chatId: cId,
+      status: 'pending',
+    })
+    perChatStreamingSegments.set(routeKey, segments)
+    flushSegments(routeKey)
+    scrollToBottom(false, cId)
+    chatsStore.markPermissionPending(cId)
   } else if (chunk.type === 'context_update') {
     if (chunk.metrics) {
       targetChat.contextMetrics = { ...chunk.metrics }
@@ -3400,6 +3626,9 @@ async function sendMessage() {
         mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
         httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
         personaRuns,
+        chatPermissionMode: targetChat.permissionMode || 'inherit',
+        chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
+        chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
         knowledgeConfig: {
           ragEnabled: knowledgeStore.ragEnabled,
           pineconeApiKey: knowledgeStore.pineconeApiKey,
@@ -3469,6 +3698,9 @@ async function sendMessage() {
         personaPrompts: resolvedPersonaPrompts,
         mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
         httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
+        chatPermissionMode: targetChat.permissionMode || 'inherit',
+        chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
+        chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
         knowledgeConfig: {
           ragEnabled: knowledgeStore.ragEnabled,
           pineconeApiKey: knowledgeStore.pineconeApiKey,
@@ -3490,10 +3722,21 @@ async function sendMessage() {
         const msg = chat.messages.find(m => m.id === streamingMsgId)
         if (msg) {
           if (res.success) {
-            msg.segments = finalSegments.map(s => ({ ...s }))
+            // Merge permission segment statuses from the live msg (user may have clicked buttons
+            // during the run, mutating msg.segments[i].status). perChatStreamingSegments still
+            // holds the original 'pending' status, so we carry over the resolved status here.
+            const prevSegs = msg.segments || []
+            msg.segments = finalSegments.map((s, i) => {
+              if (s.type === 'permission') {
+                const live = prevSegs.find(p => p.type === 'permission' && p.blockId === s.blockId)
+                if (live && live.status !== 'pending') return { ...s, status: live.status }
+              }
+              return { ...s }
+            })
             msg.content = finalSegments.filter(s => s.type === 'text').map(s => s.content).join('')
             if (!msg.content && res.result) {
-              msg.segments = [{ type: 'text', content: res.result }]
+              // Append text segment rather than replacing so permission/tool segments are kept
+              msg.segments.push({ type: 'text', content: res.result })
               msg.content = res.result
             }
           } else {
@@ -3995,55 +4238,63 @@ onUnmounted(() => {
 }
 .chat-filter-input {
   width: 100%;
-  padding: 8px 32px 8px 34px;
-  border: none;
+  padding: 9px 32px 9px 38px;
+  border: 1px solid #E5E5EA;
   border-radius: 10px;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  font-weight: 500;
-  color: #FFFFFF;
+  font-weight: 400;
+  color: #1A1A1A;
   outline: none;
   box-sizing: border-box;
-  transition: box-shadow 0.15s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 .chat-filter-input::placeholder {
-  color: rgba(255, 255, 255, 0.45);
+  color: #9CA3AF;
+}
+.chat-filter-input:hover {
+  border-color: #9CA3AF;
 }
 .chat-filter-input:focus {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.16), 0 2px 4px rgba(0,0,0,0.1);
+  border-color: #007AFF;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
 }
 .chat-filter-icon {
   position: absolute;
   left: 22px;
   top: 50%;
   transform: translateY(-50%);
-  width: 14px;
-  height: 14px;
-  color: rgba(255, 255, 255, 0.45);
+  width: 16px;
+  height: 16px;
+  color: #9CA3AF;
   pointer-events: none;
+  transition: color 0.2s;
+}
+.chat-sidebar-filter:focus-within .chat-filter-icon {
+  color: #007AFF;
 }
 .chat-filter-clear {
   position: absolute;
   right: 18px;
   top: 50%;
   transform: translateY(-50%);
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.7);
+  border-radius: 6px;
+  background: transparent;
+  color: #9CA3AF;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 .chat-filter-clear:hover {
-  background: rgba(255, 255, 255, 0.25);
-  color: #FFFFFF;
+  background: #F5F5F5;
+  color: #6B7280;
 }
 
 .chat-sidebar-list {
@@ -4132,6 +4383,22 @@ onUnmounted(() => {
 }
 .chat-sidebar-item.active .chat-completed-chip {
   background: rgba(255, 255, 255, 0.2);
+}
+.chat-approval-chip {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  background: #EF4444;
+  color: #fff;
+  letter-spacing: 0.01em;
+  animation: approval-pulse 1.5s ease-in-out infinite;
+}
+@keyframes approval-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
 }
 .chat-sidebar-item-actions {
   display: flex;
@@ -4835,7 +5102,7 @@ onUnmounted(() => {
 .ccm-dark-badge.badge-on { background: #064E3B; color: #6EE7B7; }
 .ccm-dark-badge.badge-off { background: #451A1A; color: #FCA5A5; }
 
-/* Provider buttons (dark) */
+/* Provider buttons (dark) — used in Permissions tab */
 .ccm-provider-btns {
   display: flex; gap: 8px;
 }
@@ -4851,6 +5118,43 @@ onUnmounted(() => {
   border-color: #4B5563; color: #FFFFFF;
   box-shadow: 0 2px 12px rgba(0,0,0,0.3);
 }
+
+/* Step number badge */
+.ccm-step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: linear-gradient(135deg, #1A1A1A 0%, #374151 100%);
+  color: #FFFFFF; font-size: 10px; font-weight: 700;
+  margin-right: 4px; flex-shrink: 0;
+}
+
+/* Provider cards (Model tab — 2-level selection) */
+.ccm-provider-cards {
+  display: flex; gap: 8px;
+}
+.ccm-provider-card {
+  flex: 1; padding: 12px 10px; border-radius: 10px;
+  border: 1px solid #2A2A2A; background: #1A1A1A;
+  cursor: pointer; transition: all 0.15s; text-align: center;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.ccm-provider-card:hover { border-color: #4B5563; }
+.ccm-provider-card.active {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  border-color: #4B5563;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+.ccm-provider-card-name {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
+  color: #9CA3AF; transition: color 0.15s;
+}
+.ccm-provider-card.active .ccm-provider-card-name { color: #FFFFFF; }
+.ccm-provider-card-sub {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-small);
+  color: #4B5563; transition: color 0.15s;
+}
+.ccm-provider-card.active .ccm-provider-card-sub { color: rgba(255,255,255,0.5); }
+.ccm-provider-card:hover:not(.active) .ccm-provider-card-name { color: #D1D5DB; }
 
 /* Model search (dark) */
 .ccm-model-search {
@@ -5092,6 +5396,62 @@ onUnmounted(() => {
 .ccm-working-path-hint {
   font-family: 'Inter', sans-serif; font-size: 11px; color: #4B5563;
   margin-top: 4px; display: block;
+}
+
+/* ── Permissions tab ──────────────────────────────────────────────────── */
+.ccm-perm-mode-hint {
+  font-family: 'Inter', sans-serif; font-size: 11px; color: #6B7280;
+  margin: 4px 0 0; display: block;
+}
+.ccm-allow-list {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;
+}
+.ccm-allow-entry {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 10px; background: #1A1A1A; border: 1px solid #2A2A2A;
+  border-radius: 8px;
+}
+.ccm-allow-entry-info {
+  display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;
+}
+.ccm-allow-pattern {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+  color: #60a5fa; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ccm-allow-desc {
+  font-size: 0.68rem; color: #6B7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ccm-allow-delete {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; flex-shrink: 0;
+  background: rgba(255,59,48,0.08); border: 1px solid rgba(255,59,48,0.2);
+  border-radius: 6px; color: #FF3B30; cursor: pointer; transition: all 0.15s;
+}
+.ccm-allow-delete:hover { background: rgba(255,59,48,0.18); }
+.ccm-allow-add-row {
+  display: flex; gap: 6px; align-items: center;
+}
+.ccm-allow-input {
+  flex: 1; min-width: 0; padding: 5px 9px; background: #1A1A1A;
+  border: 1px solid #2A2A2A; border-radius: 8px; color: #FFFFFF;
+  font-family: 'Inter', sans-serif; font-size: 0.75rem; outline: none;
+  transition: border-color 0.15s;
+}
+.ccm-allow-input:focus { border-color: #4B5563; }
+.ccm-allow-input::placeholder { color: #4B5563; }
+.ccm-allow-add-btn {
+  padding: 5px 12px; background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border: none; border-radius: 8px; color: #FFFFFF; font-family: 'Inter', sans-serif;
+  font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.ccm-allow-add-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
+.ccm-allow-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ccm-allow-entry-readonly { opacity: 0.6; pointer-events: none; }
+.ccm-danger-overridden { opacity: 0.4; }
+.ccm-danger-overridden .ccm-allow-pattern { text-decoration: line-through; }
+.ccm-danger-remove-btn {
+  background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.2); color: #f87171;
 }
 
 /* ── Reduced motion ─────────────────────────────────────────────────────── */

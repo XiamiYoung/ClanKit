@@ -476,6 +476,117 @@
           </div>
         </template>
 
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- Security tab -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <template v-if="activeTopTab === 'security'">
+
+          <!-- Global Mode -->
+          <div class="config-card">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">Global Sandbox Mode</label>
+              <p class="hint" style="margin-bottom:12px;">Controls how the agent handles shell commands and file writes across all chats. Per-chat settings can override this.</p>
+              <div class="sec-mode-btns">
+                <button
+                  class="sec-mode-btn"
+                  :class="{ active: sandboxForm.defaultMode === 'sandbox' }"
+                  @click="sandboxForm.defaultMode = 'sandbox'"
+                >
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                  Sandbox
+                  <span class="sec-mode-badge">Default</span>
+                </button>
+                <button
+                  class="sec-mode-btn"
+                  :class="{ active: sandboxForm.defaultMode === 'all_permissions' }"
+                  @click="sandboxForm.defaultMode = 'all_permissions'"
+                >
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  </svg>
+                  All Permissions
+                </button>
+              </div>
+              <p class="hint" style="margin-top:8px;">
+                <template v-if="sandboxForm.defaultMode === 'sandbox'">Agent will ask before running shell commands or writing files. Use the allow list below to pre-approve safe patterns.</template>
+                <template v-else>Agent can run any command freely. Only the danger block list below can restrict it.</template>
+              </p>
+            </div>
+          </div>
+
+          <!-- Conditional list: Allow list (Sandbox) or Block list (All Permissions) -->
+          <div class="config-card">
+
+            <!-- Sandbox → Global Allow List -->
+            <template v-if="sandboxForm.defaultMode === 'sandbox'">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Global Allow List <span class="sec-count-badge">{{ sandboxForm.sandboxAllowList.length }}</span></label>
+                <p class="hint" style="margin-bottom:10px;">Commands that bypass the permission prompt for all chats. Use glob patterns — <code class="inline-code">*</code> matches anything.</p>
+                <div class="sec-list">
+                  <div v-if="sandboxForm.sandboxAllowList.length === 0" class="sec-list-empty">No allow list entries yet. Add patterns below.</div>
+                  <div v-for="(entry, idx) in sandboxForm.sandboxAllowList" :key="entry.id || idx" class="sec-list-entry">
+                    <div class="sec-entry-info">
+                      <span class="sec-entry-pattern">{{ entry.pattern }}</span>
+                      <span v-if="entry.description" class="sec-entry-desc">{{ entry.description }}</span>
+                    </div>
+                    <button class="sec-entry-delete allow" @click="removeAllowEntry(idx)" title="Remove">
+                      <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="sec-add-row">
+                  <input v-model="newAllowPattern" type="text" placeholder="Pattern (e.g. ls *)" class="sec-add-input" @keydown.enter.prevent="addAllowEntry" />
+                  <input v-model="newAllowDesc" type="text" placeholder="Description" class="sec-add-input" @keydown.enter.prevent="addAllowEntry" />
+                  <button class="sec-add-btn" @click="addAllowEntry" :disabled="!newAllowPattern.trim()">Add</button>
+                </div>
+              </div>
+            </template>
+
+            <!-- All Permissions → Danger Block List -->
+            <template v-else>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Danger Block List <span class="sec-count-badge danger">{{ sandboxForm.dangerBlockList.length }}</span></label>
+                <p class="hint" style="margin-bottom:10px;">Commands that are always blocked, even in All Permissions mode. Protects against destructive operations.</p>
+                <div class="sec-list">
+                  <div v-if="sandboxForm.dangerBlockList.length === 0" class="sec-list-empty">No block list entries.</div>
+                  <div v-for="(entry, idx) in sandboxForm.dangerBlockList" :key="entry.id || idx" class="sec-list-entry">
+                    <div class="sec-entry-info">
+                      <span class="sec-entry-pattern danger">{{ entry.pattern }}</span>
+                      <span v-if="entry.description" class="sec-entry-desc">{{ entry.description }}</span>
+                    </div>
+                    <button class="sec-entry-delete danger" @click="removeDangerEntry(idx)" title="Remove">
+                      <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="sec-add-row">
+                  <input v-model="newDangerPattern" type="text" placeholder="Pattern (e.g. rm -rf *)" class="sec-add-input" @keydown.enter.prevent="addDangerEntry" />
+                  <input v-model="newDangerDesc" type="text" placeholder="Description" class="sec-add-input" @keydown.enter.prevent="addDangerEntry" />
+                  <button class="sec-add-btn danger" @click="addDangerEntry" :disabled="!newDangerPattern.trim()">Add</button>
+                </div>
+              </div>
+            </template>
+
+          </div>
+
+          <div class="save-row">
+            <AppButton size="save" @click="saveSecurity" :disabled="savingSecurity" :loading="savingSecurity">
+              <svg v-if="!savingSecurity" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+              </svg>
+              {{ savingSecurity ? 'Saving...' : 'Save Changes' }}
+            </AppButton>
+            <span v-if="savedSecurityMsg" class="save-indicator" :class="savedSecurityMsg.ok ? 'success' : 'error'">
+              <svg v-if="savedSecurityMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              {{ savedSecurityMsg.text }}
+            </span>
+          </div>
+        </template>
+
       </div>
     </div>
   </div>
@@ -538,6 +649,49 @@ const testResultPinecone = ref(null)
 const savingKnowledge = ref(false)
 const savedKnowledgeMsg = ref('')
 
+// Security tab state
+const savingSecurity = ref(false)
+const savedSecurityMsg = ref(null)
+const sandboxForm = reactive({
+  defaultMode: 'sandbox',
+  sandboxAllowList: [],
+  dangerBlockList: [],
+})
+const newAllowPattern = ref('')
+const newAllowDesc = ref('')
+const newDangerPattern = ref('')
+const newDangerDesc = ref('')
+
+function addAllowEntry() {
+  const p = newAllowPattern.value.trim()
+  if (!p) return
+  sandboxForm.sandboxAllowList.push({ id: `manual-${Date.now()}`, pattern: p, description: newAllowDesc.value.trim() })
+  newAllowPattern.value = ''
+  newAllowDesc.value = ''
+}
+function removeAllowEntry(idx) { sandboxForm.sandboxAllowList.splice(idx, 1) }
+function addDangerEntry() {
+  const p = newDangerPattern.value.trim()
+  if (!p) return
+  sandboxForm.dangerBlockList.push({ id: `manual-${Date.now()}`, pattern: p, description: newDangerDesc.value.trim() })
+  newDangerPattern.value = ''
+  newDangerDesc.value = ''
+}
+function removeDangerEntry(idx) { sandboxForm.dangerBlockList.splice(idx, 1) }
+
+async function saveSecurity() {
+  savingSecurity.value = true
+  try {
+    await configStore.saveConfig({ sandboxConfig: JSON.parse(JSON.stringify(sandboxForm)) })
+    savedSecurityMsg.value = { ok: true, text: 'Saved successfully' }
+  } catch (err) {
+    savedSecurityMsg.value = { ok: false, text: err.message || 'Save failed' }
+  } finally {
+    savingSecurity.value = false
+    setTimeout(() => { savedSecurityMsg.value = null }, 3000)
+  }
+}
+
 // General tab state
 const defaultDataPath = ref('')
 const defaultArtyfactPath = computed(() => {
@@ -570,6 +724,11 @@ const IconKnowledge = defineComponent({
     h('path', { d: 'M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z' })
   ])
 })
+const IconSecurity = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('path', { d: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' })
+  ])
+})
 
 // Top-level tabs
 const topTabs = [
@@ -577,6 +736,7 @@ const topTabs = [
   { value: 'models', label: 'AI Models', icon: IconModels },
   { value: 'skills', label: 'AI Skills', icon: IconSkills },
   { value: 'knowledge', label: 'AI Knowledge', icon: IconKnowledge },
+  { value: 'security', label: 'Security', icon: IconSecurity },
 ]
 
 // Provider icon components
@@ -716,6 +876,17 @@ onMounted(async () => {
     defaultDataPath.value = info.defaultDataPath || ''
     form.dataPath = info.dataPath || info.defaultDataPath || ''
   }
+  // Load env-backed paths (skillsPath, artyfactPath)
+  if (window.electronAPI?.getEnvPaths) {
+    const envPaths = await window.electronAPI.getEnvPaths()
+    form.skillsPath  = envPaths.skillsPath  || ''
+    form.artyfactPath = envPaths.artyfactPath || ''
+  }
+  // Load sandboxConfig for security tab
+  const sc = c.sandboxConfig || {}
+  sandboxForm.defaultMode = sc.defaultMode || 'sandbox'
+  sandboxForm.sandboxAllowList = JSON.parse(JSON.stringify(sc.sandboxAllowList || []))
+  sandboxForm.dangerBlockList  = JSON.parse(JSON.stringify(sc.dangerBlockList  || []))
 })
 
 async function fetchOrModels() {
@@ -752,8 +923,8 @@ async function saveGeneral() {
       const result = await window.electronAPI.saveDataPath(String(form.dataPath))
       if (!result.success) throw new Error(result.error || 'Failed to save data path')
     }
-    // Save artyfactPath to config.json
-    await configStore.saveConfig({ artyfactPath: String(form.artyfactPath) })
+    // Save artyfactPath to .env
+    await configStore.saveEnvPath('artyfactPath', String(form.artyfactPath))
     savedGeneralMsg.value = { ok: true, text: 'Saved — restart app for data path changes' }
   } catch (err) {
     savedGeneralMsg.value = { ok: false, text: err.message || 'Save failed' }
@@ -769,6 +940,8 @@ async function saveModels() {
     const modelFields = JSON.parse(JSON.stringify(form))
     delete modelFields.skillsPath
     delete modelFields.dataPath
+    delete modelFields.artyfactPath
+    delete modelFields.DoCPath
     await configStore.saveConfig(modelFields)
     savedModelsMsg.value = { ok: true, text: 'Saved successfully' }
   } catch (err) {
@@ -782,7 +955,7 @@ async function saveModels() {
 async function saveSkills() {
   savingSkills.value = true
   try {
-    await configStore.saveConfig({ skillsPath: String(form.skillsPath) })
+    await configStore.saveEnvPath('skillsPath', String(form.skillsPath))
     savedSkillsMsg.value = { ok: true, text: 'Saved successfully' }
   } catch (err) {
     savedSkillsMsg.value = { ok: false, text: err.message || 'Save failed' }
@@ -1009,4 +1182,102 @@ async function testConnection(provider) {
   from { opacity: 0; transform: translateY(2px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Inline code ────────────────────────────────────────────────────────── */
+.inline-code {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.85em;
+  background: var(--accent-light, rgba(0,122,255,0.08)); color: var(--accent, #007AFF);
+  padding: 1px 4px; border-radius: 4px;
+}
+
+/* ── Security tab ───────────────────────────────────────────────────────── */
+.sec-mode-btns {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.sec-mode-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 8px; border: 1px solid #E5E5EA;
+  background: #FFFFFF; color: #6B7280; font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary); font-weight: 600; cursor: pointer;
+  transition: all 0.15s ease;
+}
+.sec-mode-btn:hover { border-color: #1A1A1A; color: #1A1A1A; }
+.sec-mode-btn.active {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border-color: transparent; color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+.sec-mode-badge {
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.04em;
+  background: rgba(255,255,255,0.15); padding: 1px 5px; border-radius: 99px;
+}
+.sec-mode-btn:not(.active) .sec-mode-badge {
+  background: #F0F0F0; color: #9CA3AF;
+}
+.sec-count-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  background: #F0F0F0; color: #6B7280;
+  border-radius: 99px; font-size: 0.65rem; font-weight: 700;
+  margin-left: 6px; vertical-align: middle;
+}
+.sec-count-badge.danger { background: rgba(239,68,68,0.1); color: #DC2626; }
+.sec-list {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;
+  max-height: 220px; overflow-y: auto;
+}
+.sec-list-empty {
+  font-size: var(--fs-caption); color: #9CA3AF;
+  padding: 8px 0; font-style: italic;
+}
+.sec-list-entry {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 7px 10px; background: #F9F9F9; border: 1px solid #E5E5EA;
+  border-radius: 8px;
+}
+.sec-entry-info {
+  display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;
+}
+.sec-entry-pattern {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
+  color: #1A1A1A; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sec-entry-pattern.danger { color: #DC2626; }
+.sec-entry-desc {
+  font-size: var(--fs-small); color: #9CA3AF;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sec-entry-delete {
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; flex-shrink: 0;
+  background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 6px; color: #DC2626; cursor: pointer; transition: all 0.15s;
+}
+.sec-entry-delete:hover { background: rgba(239,68,68,0.18); }
+.sec-add-row {
+  display: flex; gap: 6px; align-items: center; margin-top: 2px;
+}
+.sec-add-input {
+  flex: 1; min-width: 0; padding: 6px 10px;
+  background: #FFFFFF; border: 1px solid #E5E5EA;
+  border-radius: 8px; color: #1A1A1A;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption); outline: none;
+  transition: border-color 0.15s;
+}
+.sec-add-input:focus { border-color: #1A1A1A; }
+.sec-add-input::placeholder { color: #9CA3AF; }
+.sec-add-btn {
+  padding: 6px 14px; background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border: none; border-radius: 8px; color: #FFFFFF; font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption); font-weight: 600; cursor: pointer; transition: all 0.15s;
+  white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.sec-add-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
+.sec-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.sec-add-btn.danger {
+  background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+  color: #DC2626; box-shadow: none;
+}
+.sec-add-btn.danger:hover { background: rgba(239,68,68,0.18); }
 </style>

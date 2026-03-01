@@ -212,7 +212,7 @@
             </div>
 
             <!-- Test Connection -->
-            <div class="test-section">
+            <div ref="testResultEl" class="test-section">
               <AppButton
                 @click="runTestConnection"
                 :disabled="!form.command?.trim() || testStatus === 'testing'"
@@ -280,7 +280,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useMcpStore } from '../stores/mcp'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
@@ -346,6 +346,7 @@ const saveError = ref('')
 const testStatus = ref('')   // '' | 'testing' | 'success' | 'error'
 const testTools = ref([])
 const testError = ref('')
+const testResultEl = ref(null)
 
 const form = ref(emptyForm())
 
@@ -499,6 +500,7 @@ async function runTestConnection() {
     testStatus.value = 'error'
     testError.value = err.message || 'Failed to test connection'
   }
+  nextTick(() => testResultEl.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
 }
 
 const showConfirmDelete = ref(false)

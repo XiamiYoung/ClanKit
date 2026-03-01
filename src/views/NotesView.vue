@@ -15,7 +15,7 @@
           </svg>
         </div>
         <h2 style="font-family:'Inter',serif; font-size:var(--fs-page-title); font-weight:700; color:#1A1A1A; margin:0 0 8px;">
-          Notes
+          Documents
         </h2>
         <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; margin:0 0 24px; line-height:1.6;">
           Select a folder to use as your vault. Markdown and draw.io diagram files will be available for viewing and editing.
@@ -44,7 +44,7 @@
       >
         <div class="flex items-center gap-3">
           <h1 style="font-family:'Inter',serif; font-size:var(--fs-section); font-weight:600; color:#1A1A1A; margin:0;">
-            Notes
+            Documents
           </h1>
           <span
             class="px-2.5 py-0.5 rounded-lg truncate"
@@ -122,7 +122,9 @@
         </div>
 
         <!-- ── RIGHT: Editor / Preview Panel ── -->
-        <div class="flex-1 flex flex-col overflow-hidden" style="background:#fff;">
+        <div class="flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;">
+          <!-- Resize blocker: covers the panel during sidebar drag so the webview doesn't swallow mousemove events -->
+          <div v-if="isResizing" style="position:absolute;inset:0;z-index:50;cursor:col-resize;"></div>
 
           <!-- No file selected -->
           <div v-if="!store.activeFile" class="flex-1 flex items-center justify-center">
@@ -279,7 +281,7 @@
         <template v-if="ctxMenu.targetType !== 'file'">
           <button class="ctx-item" @click="startCtxAction('newFile', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-            New File
+            New Markdown
           </button>
           <button class="ctx-item" @click="startCtxAction('newDiagram', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -309,7 +311,7 @@
       <div
         v-if="ctxAction.visible"
         class="notes-ctx-dialog"
-        :style="{ top: Math.min(ctxAction.y, window.innerHeight - 150) + 'px', left: Math.min(ctxAction.x, window.innerWidth - 280) + 'px' }"
+        :style="{ top: ctxAction.y + 'px', left: ctxAction.x + 'px', width: ctxDialogWidth + 'px' }"
         @click.stop
         @keydown.escape="cancelCtxAction"
       >
@@ -407,6 +409,10 @@ const ctxAction = ref({ visible: false, type: '', parent: '', targetPath: '', x:
 const ctxInputValue = ref('')
 const ctxInputRef = ref(null)
 
+// Dialog width: grows with the input value, clamped between 280px and 640px.
+// ~9.5px per char for JetBrains Mono at --fs-secondary + 64px for padding/borders.
+const ctxDialogWidth = computed(() => Math.max(280, Math.min(640, ctxInputValue.value.length * 9.5 + 64)))
+
 const ctxActionLabel = computed(() => {
   const t = ctxAction.value.type
   if (t === 'newFile')    return 'New Markdown File'
@@ -468,7 +474,18 @@ onBeforeUnmount(() => {
 })
 
 
-// Markdown rendering — custom image renderer marks relative images with data-relpath for post-processing
+// GitHub-style heading slug — lowercase, strip non-word chars, spaces to hyphens.
+// Matches the anchor format used in hand-written Markdown TOCs.
+function slugify(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N} \-_]/gu, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+}
+
+// Markdown rendering — custom renderers for images and headings
 // marked 12.x passes positional args: (href, title, text)
 const renderer = new marked.Renderer()
 renderer.image = function (href, title, text) {
@@ -479,6 +496,10 @@ renderer.image = function (href, title, text) {
     return `<img src="" data-relpath="${href}" data-abspath="${absPath}" alt="${text || ''}"${title ? ` title="${title}"` : ''} />`
   }
   return `<img src="${href}" alt="${text || ''}"${title ? ` title="${title}"` : ''} />`
+}
+renderer.heading = function (text, level) {
+  const id = slugify(text.replace(/<[^>]+>/g, ''))
+  return `<h${level} id="${id}">${text}</h${level}>\n`
 }
 marked.use({ gfm: true, breaks: true, renderer })
 
@@ -716,6 +737,16 @@ async function handlePreviewClick(e) {
   const href = el.getAttribute('href') || ''
   const fullUrl = el.href // resolved by browser
 
+  // Anchor link (same page #fragment) — must be checked before external URL
+  // because in dev mode el.href resolves to http://localhost:...#fragment.
+  // marked URL-encodes hrefs, so decode before getElementById lookup.
+  if (href.startsWith('#')) {
+    const id = decodeURIComponent(href.slice(1))
+    const target = document.getElementById(id)
+    if (target) target.scrollIntoView({ behavior: 'smooth' })
+    return
+  }
+
   // External URL — open in system browser
   if (fullUrl.startsWith('http://') || fullUrl.startsWith('https://')) {
     try {
@@ -744,13 +775,6 @@ async function handlePreviewClick(e) {
     } catch (err) {
       showLinkError(`Could not open note: ${mdPath}`)
     }
-    return
-  }
-
-  // Anchor link (same page #fragment)
-  if (href.startsWith('#')) {
-    const target = document.getElementById(href.slice(1))
-    if (target) target.scrollIntoView({ behavior: 'smooth' })
     return
   }
 
@@ -787,7 +811,7 @@ function startCtxAction(type, pathArg) {
     ? pathArg.replace(/[/\\][^/\\]+$/, '') || store.vaultPath
     : pathArg
   const currentName = type === 'rename' ? pathArg.split(/[/\\]/).pop() : ''
-  ctxInputValue.value = currentName.replace(/\.[^.]+$/, '') // strip extension for rename
+  ctxInputValue.value = currentName
   ctxAction.value = { visible: true, type, parent, targetPath: type === 'rename' ? pathArg : '', x: pos.x, y: pos.y }
 }
 
@@ -813,7 +837,6 @@ async function commitCtxAction() {
   } else if (type === 'newFolder') {
     await store.createFolder(parent, rawName)
   } else if (type === 'rename') {
-    // Preserve original extension if user didn't supply one
     const origExt = targetPath.match(/(\.[^./\\]+)$/)?.[1] || ''
     const newName = rawName.includes('.') ? rawName : rawName + origExt
     await store.renameItem(targetPath, parent + '/' + newName)
@@ -853,11 +876,11 @@ async function executeDelete() {
 
 // ── Resizable sidebar ──
 const notesSidebarWidth = ref(280)
-let resizing = false
+const isResizing = ref(false)
 
 function startNotesResize(e) {
   e.preventDefault()
-  resizing = true
+  isResizing.value = true
   const startX = e.clientX
   const startW = notesSidebarWidth.value
 
@@ -867,7 +890,7 @@ function startNotesResize(e) {
     notesSidebarWidth.value = newW
   }
   function onMouseUp() {
-    resizing = false
+    isResizing.value = false
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
     document.body.style.cursor = ''
@@ -1027,7 +1050,7 @@ const TreeNode = defineComponent({
           h('span', {
             class: 'truncate flex-1',
             style: { fontWeight: isDir ? '600' : '400' }
-          }, props.node.name.replace(/\.md$/, '').replace(/\.drawio$/, '')),
+          }, props.node.name),
 
           // Delete button (on hover)
           hovered.value ? h('button', {
@@ -1197,7 +1220,6 @@ const TreeNode = defineComponent({
   border: 1px solid #2A2A2A;
   border-radius: 12px;
   padding: 16px;
-  width: 260px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.5);
   animation: ctxEnter 0.15s ease-out;
 }

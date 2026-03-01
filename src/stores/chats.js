@@ -9,6 +9,7 @@ export const useChatsStore = defineStore('chats', () => {
   const isLoading = ref(false)
   const unreadChatIds = ref(new Set())
   const completedChatIds = ref(new Set())
+  const pendingPermissionChatIds = ref(new Set())
 
   // UI chunk callback — set by ChatsView when mounted, cleared on unmount
   let _uiChunkCallback = null
@@ -37,6 +38,10 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.workingPath === undefined) chat.workingPath = null
     if (chat.enabledToolIds === undefined) chat.enabledToolIds = null    // null = "use defaults"
     if (chat.enabledMcpIds === undefined) chat.enabledMcpIds = null      // null = "use defaults"
+    if (chat.permissionMode === undefined) chat.permissionMode = 'inherit'
+    if (chat.permissionMode === 'sandbox') chat.permissionMode = 'chat_only' // migrate old value
+    if (chat.chatAllowList === undefined) chat.chatAllowList = []
+    if (chat.chatDangerOverrides === undefined) chat.chatDangerOverrides = []
     // messages === null means "not loaded yet" (lazy)
     if (chat.messages) {
       for (const msg of chat.messages) {
@@ -336,6 +341,9 @@ export const useChatsStore = defineStore('chats', () => {
     if ('workingPath' in settings) chat.workingPath = settings.workingPath
     if ('enabledToolIds' in settings) chat.enabledToolIds = settings.enabledToolIds
     if ('enabledMcpIds' in settings) chat.enabledMcpIds = settings.enabledMcpIds
+    if ('permissionMode' in settings) chat.permissionMode = settings.permissionMode
+    if ('chatAllowList' in settings) chat.chatAllowList = settings.chatAllowList
+    if ('chatDangerOverrides' in settings) chat.chatDangerOverrides = settings.chatDangerOverrides
     chat.updatedAt = Date.now()
     // persistChat → store:save-chat already updates the index, no separate persistIndex needed
     await persistChat(chatId)
@@ -532,6 +540,25 @@ export const useChatsStore = defineStore('chats', () => {
     const s = new Set(completedChatIds.value)
     s.add(chatId)
     completedChatIds.value = s
+    // Clear any pending permission indicator
+    if (pendingPermissionChatIds.value.has(chatId)) {
+      const p = new Set(pendingPermissionChatIds.value)
+      p.delete(chatId)
+      pendingPermissionChatIds.value = p
+    }
+  }
+
+  function markPermissionPending(chatId) {
+    const s = new Set(pendingPermissionChatIds.value)
+    s.add(chatId)
+    pendingPermissionChatIds.value = s
+  }
+
+  function clearPermissionPending(chatId) {
+    if (!pendingPermissionChatIds.value.has(chatId)) return
+    const s = new Set(pendingPermissionChatIds.value)
+    s.delete(chatId)
+    pendingPermissionChatIds.value = s
   }
 
   function setPlanState(chatId, msgId, state) {
@@ -556,13 +583,14 @@ export const useChatsStore = defineStore('chats', () => {
   }
 
   return {
-    chats, activeChatId, activeChat, isLoading, unreadChatIds, completedChatIds,
+    chats, activeChatId, activeChat, isLoading, unreadChatIds, completedChatIds, pendingPermissionChatIds,
     loadChats, createChat, createChatFromHistory, removeChat, renameChat,
     setActiveChat, addMessage, updateLastAssistantMessage, setChatPersona,
     setChatProvider, setChatModel, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
     setGroupPersonas, toggleGroupMode, setGroupPersonaOverride,
     removeGroupPersona, addGroupPersona, reorderChats,
     initChunkListener, setUiChunkCallback, clearUiChunkCallback, markAsRead, markCompleted,
+    markPermissionPending, clearPermissionPending,
     setPlanState, storePlanRunParams, getPlanRunParams,
   }
 })

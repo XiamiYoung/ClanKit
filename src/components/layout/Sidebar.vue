@@ -7,14 +7,12 @@
     <!-- Logo / Header -->
     <div :style="{ padding: isCollapsed ? '16px 0' : '16px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'space-between' }">
       <div v-show="!isCollapsed" class="flex items-center gap-2.5">
-        <div
-          class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-          style="background: #1A1A1A;"
-        >
-          <svg style="width:18px;height:18px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-          </svg>
-        </div>
+        <img
+          src="/icon.png"
+          alt="SparkAI"
+          class="w-9 h-9 rounded-xl shrink-0"
+          style="object-fit:contain;"
+        />
         <span style="font-family:'Inter','Figtree',system-ui,sans-serif; font-size:var(--fs-subtitle); font-weight:700; color:#1A1A1A; letter-spacing:-0.02em;">
           SparkAI
         </span>
@@ -39,7 +37,7 @@
       <NavItem to="/personas" :icon="IconPersonas" label="Personas" :isCollapsed="isCollapsed" />
       <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:12px;">Workspace</p>
       <NavItem to="/news"     :icon="IconNews"     label="News"     :isCollapsed="isCollapsed" />
-      <NavItem to="/notes"     :icon="IconNotes"     label="Notes"  :isCollapsed="isCollapsed" />
+      <NavItem to="/notes"     :icon="IconNotes"     label="Documents"  :isCollapsed="isCollapsed" />
 
       <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:12px;">System</p>
       <NavItem to="/config" :icon="IconConfig" label="Configuration" :isCollapsed="isCollapsed" />

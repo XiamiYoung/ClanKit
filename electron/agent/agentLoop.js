@@ -21,6 +21,7 @@ const { ToolRegistry }     = require('./tools/ToolRegistry')
 const { SubAgentManager }  = require('./managers/SubAgentManager')
 const { TaskManager }      = require('./managers/TaskManager')
 const { mcpManager }       = require('./mcp/McpManager')
+const { PermissionGate }   = require('./tools/PermissionGate')
 
 // No hardcoded skill prompts — they arrive dynamically from the UI store
 
@@ -102,8 +103,34 @@ class AgentLoop {
     this.subAgentManager = new SubAgentManager(this.anthropicClient, this.toolRegistry, this.isOpenAI)
     this.taskManager     = new TaskManager()
     this.contextSnapshot = null
+    this._pendingPermissions = new Map() // blockId → resolve function
 
-    logger.agent('AgentLoop init', { model: this.anthropicClient.resolveModel(), isOpenAI: this.isOpenAI })
+    // Build permission gate from config
+    const sandboxCfg = config.sandboxConfig || {}
+    const chatDangerOverrides = config.chatDangerOverrides || []
+    // Remove patterns the user has un-blocked for this chat
+    const effectiveDangerList = (sandboxCfg.dangerBlockList || []).filter(
+      e => !chatDangerOverrides.includes(e.pattern)
+    )
+    this.permissionGate = new PermissionGate({
+      globalMode: sandboxCfg.defaultMode || 'sandbox',
+      sandboxAllowList: sandboxCfg.sandboxAllowList || [],
+      dangerBlockList: effectiveDangerList,
+      chatMode: config.chatPermissionMode || 'inherit',
+      chatAllowList: config.chatAllowList || [],
+    })
+
+    logger.agent('AgentLoop init', {
+      model: this.anthropicClient.resolveModel(),
+      isOpenAI: this.isOpenAI,
+      permissionGate: {
+        globalMode: sandboxCfg.defaultMode || 'sandbox',
+        chatMode: config.chatPermissionMode || 'inherit',
+        sandboxAllowList: (sandboxCfg.sandboxAllowList || []).map(e => e.pattern),
+        chatAllowList: (config.chatAllowList || []).map(e => e.pattern),
+        dangerBlockList: effectiveDangerList.map(e => e.pattern),
+      }
+    })
   }
 
   stop() {
@@ -112,6 +139,84 @@ class AgentLoop {
 
   requestCompaction() {
     this._compactionRequested = true
+  }
+
+  /**
+   * Called by main process when user responds to a permission prompt.
+   * decision: 'allow_chat' | 'allow_global' | 'reject'
+   * pattern:  the command string to add to the allow list
+   */
+  resolvePermission(blockId, decision, pattern) {
+    const resolve = this._pendingPermissions.get(blockId)
+    if (!resolve) {
+      logger.warn('resolvePermission: no pending promise for blockId', blockId)
+      return
+    }
+    // Update in-memory allow list so subsequent calls skip the prompt
+    if (decision === 'allow_chat' && pattern) {
+      this.permissionGate.addToAllowList(pattern, 'chat')
+    } else if (decision === 'allow_global' && pattern) {
+      this.permissionGate.addToAllowList(pattern, 'global')
+    }
+    resolve(decision)
+  }
+
+  /**
+   * Helper: check permission for a tool call, emitting a prompt if needed.
+   * Returns the decision string: 'allow' | 'reject' | null (for 'block' — handled internally)
+   * On 'block' it returns the error result directly.
+   */
+  async _checkPermission(toolName, toolInput, onChunk) {
+    const RESTRICTED_FILE_OPS = ['write', 'append', 'delete', 'mkdir']
+    const isMcp = toolName.startsWith('mcp_')
+
+    // Only check: execute_shell, file_operation (write/append/delete/mkdir), mcp_*
+    const needsCheck = toolName === 'execute_shell'
+      || (toolName === 'file_operation' && RESTRICTED_FILE_OPS.includes(toolInput.operation))
+      || isMcp
+
+    if (!needsCheck) return { decision: 'allow' }
+
+    const check = this.permissionGate.check(toolName, toolInput)
+
+    if (check.decision === 'block') {
+      logger.agent('PermissionGate: BLOCK', { toolName, commandStr: check.commandStr, reason: check.reason })
+      return {
+        decision: 'block',
+        result: { error: `Operation blocked: matches danger list pattern. Remove it from Config → Security → Danger Block List to allow. (matched: "${check.commandStr}")` }
+      }
+    }
+
+    if (check.decision === 'allow') {
+      logger.agent('PermissionGate: ALLOW', { toolName, commandStr: check.commandStr, reason: check.reason })
+      return { decision: 'allow' }
+    }
+
+    // decision === 'ask' — pause and prompt the user
+    const blockId = require('crypto').randomUUID()
+    logger.agent('PermissionGate: ASK', { toolName, commandStr: check.commandStr, blockId })
+
+    const userDecision = await new Promise((resolve) => {
+      this._pendingPermissions.set(blockId, resolve)
+      onChunk({
+        type: 'permission_request',
+        blockId,
+        toolName,
+        command: check.commandStr,
+        toolInput,
+      })
+    })
+    this._pendingPermissions.delete(blockId)
+
+    if (userDecision === 'reject') {
+      return {
+        decision: 'reject',
+        result: { error: 'Operation rejected by user' }
+      }
+    }
+
+    // allow_chat or allow_global — proceed with execution
+    return { decision: 'allow' }
   }
 
   getContextSnapshot() {
@@ -230,7 +335,7 @@ Load a skill when the user's request clearly matches its description.`
 
     // ── SparkAI Data Directory ──
     const dataPath = process.env.SPARKAI_DATA_PATH || path.join(require('os').homedir(), '.sparkai')
-    const artyfactPath = this.config.chatWorkingPath || this.config.artyfactPath || path.join(dataPath, 'artyfact')
+    const artyfactPath = this.config.chatWorkingPath || process.env.ARTYFACT_PATH || this.config.artyfactPath || path.join(dataPath, 'artyfact')
     system += `\n\nSPARKAI DATA DIRECTORY: ${dataPath}
 This is the local data folder for the SparkAI desktop application. Its structure:
   ${dataPath}/
@@ -253,7 +358,7 @@ When the user asks you to create or configure MCP servers, HTTP tools, personas,
 - Always confirm with the user before modifying these files directly.`
 
     // ── Notes Vault Path + Markdown Placement ──
-    const vaultPath = this.config.obsidianVaultPath
+    const vaultPath = process.env.DOC_PATH || this.config.obsidianVaultPath || this.config.DoCPath
     if (vaultPath) {
       let subfolders = []
       try {
@@ -946,8 +1051,14 @@ RULES:
               } else if (toolName === 'background_task') {
                 result = await this.taskManager.execute(toolInput)
               } else if (mcpToolMap.has(toolName)) {
-                const { serverId, tool } = mcpToolMap.get(toolName)
-                result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput)
+                // Permission check for MCP tools
+                const permCheckMcp = await this._checkPermission(toolName, toolInput, onChunk)
+                if (permCheckMcp.decision === 'block' || permCheckMcp.decision === 'reject') {
+                  result = permCheckMcp.result
+                } else {
+                  const { serverId, tool } = mcpToolMap.get(toolName)
+                  result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput)
+                }
               } else if (httpToolMap.has(toolName)) {
                 result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
               } else if (codeToolMap.has(toolName)) {
@@ -963,7 +1074,13 @@ RULES:
                 this._planPending = true
                 continue
               } else {
-                result = await this.toolRegistry.execute(toolName, toolInput)
+                // Permission check for execute_shell and file_operation (write/append/delete/mkdir)
+                const permCheck = await this._checkPermission(toolName, toolInput, onChunk)
+                if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
+                  result = permCheck.result
+                } else {
+                  result = await this.toolRegistry.execute(toolName, toolInput)
+                }
               }
               // Extract MCP images before they hit conversation context
               const mcpImages = result?._mcpImages
@@ -1157,8 +1274,14 @@ RULES:
               } else if (toolName === 'background_task') {
                 result = await this.taskManager.execute(toolInput)
               } else if (mcpToolMap.has(toolName)) {
-                const { serverId, tool } = mcpToolMap.get(toolName)
-                result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput)
+                // Permission check for MCP tools
+                const permCheck = await this._checkPermission(toolName, toolInput, onChunk)
+                if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
+                  result = permCheck.result
+                } else {
+                  const { serverId, tool } = mcpToolMap.get(toolName)
+                  result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput)
+                }
               } else if (httpToolMap.has(toolName)) {
                 result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
               } else if (codeToolMap.has(toolName)) {
@@ -1178,7 +1301,13 @@ RULES:
                 this._planPending = true
                 continue
               } else {
-                result = await this.toolRegistry.execute(toolName, toolInput)
+                // Permission check for execute_shell and file_operation (write/append/delete/mkdir)
+                const permCheck = await this._checkPermission(toolName, toolInput, onChunk)
+                if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
+                  result = permCheck.result
+                } else {
+                  result = await this.toolRegistry.execute(toolName, toolInput)
+                }
               }
 
               // Extract MCP images before they hit conversation context

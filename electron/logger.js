@@ -2,7 +2,7 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 
-const LOG_DIR = path.join(__dirname, '..', 'logs')
+const LOG_DIR = path.join(os.homedir(), '.sparkai', 'logs')
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
 
 function logFile() {

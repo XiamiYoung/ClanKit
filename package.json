@@ -7,7 +7,75 @@
     "dev": "concurrently \"vite\" \"wait-on tcp:5173 && node scripts/run-electron.js\"",
     "build": "vite build",
     "preview": "vite preview",
-    "electron": "node scripts/run-electron.js"
+    "electron": "node scripts/run-electron.js",
+    "dist:win": "npm run build && npx electron-builder --win",
+    "dist:mac": "npm run build && npx electron-builder --mac",
+    "dist:all": "npm run build && npx electron-builder --win --mac",
+    "dist:linux": "npm run build && npx electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.sparkai.app",
+    "productName": "SparkAI",
+    "directories": {
+      "output": "dist-release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "electron/fonts.conf"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icons/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SparkAI"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icons/icon.png"
+    },
+    "dmg": {
+      "title": "SparkAI",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "icon": "build/icons/icon.png"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -36,7 +104,9 @@
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "electron": "^31.0.0",
+    "electron-builder": "^26.8.1",
     "postcss": "^8.4.38",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.3",
     "vite": "^5.2.0",
     "wait-on": "^7.2.0"

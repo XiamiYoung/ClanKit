@@ -31,6 +31,7 @@ Thumbs.db
 
 # Electron
 release/
+dist-release/
 
 # Backup files
 *.bak

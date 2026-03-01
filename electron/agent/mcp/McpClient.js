@@ -41,6 +41,7 @@ class McpClient {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: spawnEnv,
       windowsHide: true,
+      shell: process.platform === 'win32',
     })
 
     this.process.stdout.on('data', (chunk) => this._onStdoutData(chunk))

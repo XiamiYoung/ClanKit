@@ -5,10 +5,10 @@
       <!-- Header: back button + page title -->
       <div class="embedded-header">
         <button class="back-btn" @click="closeEmbedded">
-          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
-          <span>News Feeds</span>
+          <span>Back</span>
         </button>
         <span v-if="wvPageTitle" class="embedded-page-title">{{ wvPageTitle }}</span>
       </div>
@@ -863,7 +863,9 @@ onMounted(async () => {
 }
 
 .back-btn {
-  padding: 6px 14px 6px 10px;
+  padding: 4px 10px 4px 7px;
+  font-size: var(--fs-caption);
+  gap: 4px;
 }
 
 /* ── Top Stories ──────────────────────────────────────────────────────── */

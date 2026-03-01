@@ -24,13 +24,27 @@ export const useConfigStore = defineStore('config', () => {
       openaiDefaultModel: '',
     },
     skillsPath:  '',
-    obsidianVaultPath: '',
-    artyfactPath:      '',
+    DoCPath:     '',
+    artyfactPath: '',
     pineconeApiKey:    '',
     defaultToolIds:    null,       // null = all tools enabled by default; array = specific IDs
     defaultMcpServerIds: null,     // null = all MCP servers enabled by default; array = specific IDs
     newsFeeds:         [],         // populated from config.json at startup
     feedSelection:     [],         // array of 6 feed IDs for the news cards
+    sandboxConfig: {
+      defaultMode: 'sandbox',
+      sandboxAllowList: [],
+      dangerBlockList: [
+        { id: 'danger-1', pattern: 'rm -rf *',        description: 'Recursive force delete' },
+        { id: 'danger-2', pattern: 'sudo *',           description: 'Superuser commands' },
+        { id: 'danger-3', pattern: 'curl * | *sh',     description: 'Remote script execution' },
+        { id: 'danger-4', pattern: 'curl * | bash',    description: 'Remote bash execution' },
+        { id: 'danger-5', pattern: 'wget * | bash',    description: 'Remote bash execution' },
+        { id: 'danger-6', pattern: ':(){ :|:& };:',    description: 'Fork bomb' },
+        { id: 'danger-7', pattern: 'dd if=/dev/zero *',description: 'Disk wipe' },
+        { id: 'danger-8', pattern: 'mkfs.*',           description: 'Format filesystem' },
+      ],
+    },
     topStoriesCriteria: {
       highKeywords: 'artificial intelligence, ai, ai-powered, llm, gpt, claude, gemini, machine learning, deep learning, neural net, chatbot, generative ai, large language model, openai, anthropic, deepmind, foundation model, computer vision, natural language',
       medKeywords: 'robot, automation, algorithm, model, agent, chip, gpu, inference, training, transformer, diffusion, autonomous, self-driving, copilot, coding, benchmark, reasoning',
@@ -51,13 +65,36 @@ export const useConfigStore = defineStore('config', () => {
     const defaults = config.value
     const saved = await storage.getConfig()
     // Deep-merge nested provider objects
+    const savedSandbox = saved.sandboxConfig || {}
     config.value = {
       ...defaults,
       ...saved,
       anthropic:  { ...defaults.anthropic,  ...saved.anthropic },
       openrouter: { ...defaults.openrouter, ...saved.openrouter },
       openai:     { ...defaults.openai,     ...saved.openai },
+      sandboxConfig: {
+        ...defaults.sandboxConfig,
+        ...savedSandbox,
+        sandboxAllowList: savedSandbox.sandboxAllowList || [],
+        dangerBlockList: (savedSandbox.dangerBlockList && savedSandbox.dangerBlockList.length > 0)
+          ? savedSandbox.dangerBlockList
+          : defaults.sandboxConfig.dangerBlockList,
+      },
     }
+    // Also load the env-backed paths
+    await loadEnvPaths()
+  }
+
+  async function loadEnvPaths() {
+    if (!window.electronAPI?.getEnvPaths) return
+    const paths = await window.electronAPI.getEnvPaths()
+    config.value = { ...config.value, ...paths }
+  }
+
+  async function saveEnvPath(key, value) {
+    if (!window.electronAPI?.saveEnvPath) return
+    await window.electronAPI.saveEnvPath(key, value)
+    config.value = { ...config.value, [key]: value }
   }
 
   async function saveConfig(newConfig) {
@@ -72,5 +109,5 @@ export const useConfigStore = defineStore('config', () => {
     await storage.saveConfig(JSON.parse(JSON.stringify(toRaw(config.value))))
   }
 
-  return { config, activeModelId, loadConfig, saveConfig }
+  return { config, activeModelId, loadConfig, loadEnvPaths, saveEnvPath, saveConfig }
 })

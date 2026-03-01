@@ -3,7 +3,7 @@ const fs = require('fs')
 const { v4: uuidv4 } = require('uuid')
 
 // Point Chromium's fontconfig at our bundled fonts.conf BEFORE electron is
-// required — this is the only hook that runs before Chromium initialises its
+// required -- this is the only hook that runs before Chromium initialises its
 // font subsystem. On Linux/WSL2 this makes Segoe UI Emoji available so the
 // renderer can display emoji without any user system changes.
 if (process.platform === 'linux') {
@@ -18,61 +18,75 @@ const { logger, LOG_DIR } = require('./logger')
 // Load .env into the Electron main process using a direct parser.
 // dotenv v17 has ESM-first issues in Electron; plain fs is 100% reliable.
 // Supports multi-line JSON values (brace-balanced accumulation).
+// Two-pass strategy: load the default .env first (to discover SPARKAI_DATA_PATH),
+// then if DATA_DIR differs, also load DATA_DIR/.env. SPARKAI_DATA_PATH is the
+// only runtime key still stored in .env; all other paths live in config.json.
 ;(function loadEnv() {
-  const envFile = path.join(__dirname, '..', '.env')
-  if (!fs.existsSync(envFile)) return
-  const lines = fs.readFileSync(envFile, 'utf8').split('\n')
-  let pendingKey = null
-  let pendingVal = ''
-  let braceDepth = 0
+  function parseFile(filePath) {
+    if (!filePath || !fs.existsSync(filePath)) return
+    const lines = fs.readFileSync(filePath, 'utf8').split('\n')
+    let pendingKey = null
+    let pendingVal = ''
+    let braceDepth = 0
 
-  function commitPending() {
-    if (pendingKey) {
-      process.env[pendingKey] = pendingVal.trim()
-      pendingKey = null
-      pendingVal = ''
-      braceDepth = 0
+    function commitPending() {
+      if (pendingKey) {
+        process.env[pendingKey] = pendingVal.trim()
+        pendingKey = null
+        pendingVal = ''
+        braceDepth = 0
+      }
     }
+
+    for (const line of lines) {
+      if (pendingKey && braceDepth > 0) {
+        pendingVal += '\n' + line
+        for (const ch of line) {
+          if (ch === '{' || ch === '[') braceDepth++
+          else if (ch === '}' || ch === ']') braceDepth--
+        }
+        if (braceDepth <= 0) commitPending()
+        continue
+      }
+
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const idx = trimmed.indexOf('=')
+      if (idx === -1) continue
+      const key = trimmed.slice(0, idx).trim()
+      const val = trimmed.slice(idx + 1).trim()
+
+      if (val.startsWith('{') || val.startsWith('[')) {
+        pendingKey = key
+        pendingVal = val
+        braceDepth = 0
+        for (const ch of val) {
+          if (ch === '{' || ch === '[') braceDepth++
+          else if (ch === '}' || ch === ']') braceDepth--
+        }
+        if (braceDepth <= 0) commitPending()
+      } else {
+        process.env[key] = val
+      }
+    }
+    commitPending()
   }
 
-  for (const line of lines) {
-    // If accumulating a multi-line value, keep appending
-    if (pendingKey && braceDepth > 0) {
-      pendingVal += '\n' + line
-      for (const ch of line) {
-        if (ch === '{' || ch === '[') braceDepth++
-        else if (ch === '}' || ch === ']') braceDepth--
-      }
-      if (braceDepth <= 0) commitPending()
-      continue
-    }
+  // Pass 1: load the default user env (or project fallback in dev).
+  // This is needed to discover SPARKAI_DATA_PATH.
+  const defaultUserEnv = path.join(os.homedir(), '.sparkai', '.env')
+  const projectEnv     = path.join(__dirname, '..', '.env')
+  if (fs.existsSync(defaultUserEnv)) parseFile(defaultUserEnv)
+  else parseFile(projectEnv)
 
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-    const idx = trimmed.indexOf('=')
-    if (idx === -1) continue
-    const key = trimmed.slice(0, idx).trim()
-    const val = trimmed.slice(idx + 1).trim()
-
-    // Check if value starts a multi-line JSON block
-    if (val.startsWith('{') || val.startsWith('[')) {
-      pendingKey = key
-      pendingVal = val
-      braceDepth = 0
-      for (const ch of val) {
-        if (ch === '{' || ch === '[') braceDepth++
-        else if (ch === '}' || ch === ']') braceDepth--
-      }
-      if (braceDepth <= 0) {
-        commitPending()
-      }
-      // else keep accumulating on next lines
-    } else {
-      process.env[key] = val
+  // Pass 2: if SPARKAI_DATA_PATH points to a different directory, also load
+  // that .env so any remaining keys there (e.g. SPARKAI_DATA_PATH itself) are not missed.
+  if (process.env.SPARKAI_DATA_PATH) {
+    const dataEnv = path.join(process.env.SPARKAI_DATA_PATH, '.env')
+    if (dataEnv !== defaultUserEnv && dataEnv !== projectEnv) {
+      parseFile(dataEnv)
     }
   }
-  // Flush anything left (malformed, but don't lose it)
-  commitPending()
 })()
 
 logger.info('=== SparkAI starting ===')
@@ -80,7 +94,7 @@ logger.info('=== SparkAI starting ===')
 // Dev mode: run-electron.js sets ELECTRON_DEV=true
 const isDev = process.env.ELECTRON_DEV === 'true'
 
-// ─── Storage ────────────────────────────────────────────────────────────────
+// --- Storage ----------------------------------------------------------------
 const DEFAULT_DATA_PATH = path.join(os.homedir(), '.sparkai')
 const DATA_DIR = process.env.SPARKAI_DATA_PATH || DEFAULT_DATA_PATH
 const CHATS_FILE = path.join(DATA_DIR, 'chats.json')
@@ -92,7 +106,39 @@ const MCP_SERVERS_FILE = path.join(DATA_DIR, 'mcp-servers.json')
 const TOOLS_FILE = path.join(DATA_DIR, 'tools.json')
 const SOULS_DIR = path.join(DATA_DIR, 'souls')
 const KNOWLEDGE_FILE = path.join(DATA_DIR, 'knowledge.json')
-const ENV_FILE = path.join(__dirname, '..', '.env')
+const ENV_FILE = path.join(DATA_DIR, '.env')
+
+// --- Env-backed path accessors -----------------------------------------------
+// These three paths are stored in config.json under SPARKAI_DATA_PATH.
+function getEnvPaths() {
+  const cfg = readJSON(CONFIG_FILE, {})
+  return {
+    skillsPath:   cfg.skillsPath   || '',
+    DoCPath:      cfg.DoCPath      || '',
+    artyfactPath: cfg.artyfactPath || '',
+  }
+}
+
+/** Write or replace a single key=value line in .env */
+function saveEnvKey(key, value) {
+  let lines = []
+  if (fs.existsSync(ENV_FILE)) {
+    lines = fs.readFileSync(ENV_FILE, 'utf8').split('\n')
+  }
+  const prefix = `${key}=`
+  let found = false
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim().startsWith(prefix)) {
+      lines[i] = `${key}=${value}`
+      found = true
+      break
+    }
+  }
+  if (!found) lines.push(`${key}=${value}`)
+  fs.writeFileSync(ENV_FILE, lines.join('\n'), 'utf8')
+  process.env[key] = value
+  logger.info(`Saved ${key} to .env:`, value)
+}
 
 const OLD_DATA_DIR = path.join(os.homedir(), '.maestro-agent')
 
@@ -128,7 +174,7 @@ function writeJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8')
 }
 
-// ─── Atomic async JSON write (write to unique .tmp then rename) ───────────────
+// --- Atomic async JSON write (write to unique .tmp then rename) ---------------
 async function writeJSONAtomic(file, data, _retries = 2) {
   const dir = path.dirname(file)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
@@ -157,20 +203,20 @@ async function readJSONAsync(file, fallback) {
   }
 }
 
-// ─── Chat index helpers ──────────────────────────────────────────────────────
+// --- Chat index helpers ------------------------------------------------------
 function chatMetaFromChat(chat) {
   const { messages, ...meta } = chat
   return meta
 }
 
-// ─── Migration: monolithic chats.json → per-chat files ───────────────────────
+// --- Migration: monolithic chats.json -> per-chat files -----------------------
 async function migrateChatsIfNeeded() {
   const chatsDir = CHATS_DIR
   const indexFile = CHATS_INDEX_FILE
   const oldFile = CHATS_FILE
 
   if (fs.existsSync(chatsDir) && fs.existsSync(indexFile)) {
-    // Already migrated — clean up any leftover .tmp files
+    // Already migrated -- clean up any leftover .tmp files
     try {
       const files = await fs.promises.readdir(chatsDir)
       for (const f of files) {
@@ -210,16 +256,16 @@ async function migrateChatsIfNeeded() {
       }
     }
   } else {
-    // Fresh install — create empty index
+    // Fresh install -- create empty index
     await writeJSONAtomic(indexFile, [])
   }
 }
 
-// ─── Migration: .env user data → JSON files ──────────────────────────────────
+// --- Migration: .env user data -> JSON files ----------------------------------
 async function migrateEnvDataIfNeeded() {
-  // a) Migrate config values from .env → config.json (one-time seed)
+  // a) Migrate config values from .env -> config.json (one-time seed)
   const cfg = readJSON(CONFIG_FILE, {})
-  // Migrate flat keys → nested structure if config still has old flat layout
+  // Migrate flat keys -> nested structure if config still has old flat layout
   if (cfg.apiKey || cfg.openrouterApiKey || cfg.openaiApiKey) {
     if (!cfg.anthropic) cfg.anthropic = {}
     if (!cfg.openrouter) cfg.openrouter = {}
@@ -256,7 +302,7 @@ async function migrateEnvDataIfNeeded() {
   }
   if (!cfg.anthropic?.apiKey) {
     let changed = false
-    // Env → nested config migration
+    // Env -> nested config migration
     const envMap = {
       'anthropic.apiKey':      'ANTHROPIC_API_KEY',
       'anthropic.baseURL':     'ANTHROPIC_BASE_URL',
@@ -284,7 +330,7 @@ async function migrateEnvDataIfNeeded() {
         if (!cfg[cfgPath]) { cfg[cfgPath] = envVal; changed = true }
       }
     }
-    // Also migrate pineconeApiKey from knowledge.json (old location) → config.json
+    // Also migrate pineconeApiKey from knowledge.json (old location) -> config.json
     const knowledge = readJSON(KNOWLEDGE_FILE, {})
     if (knowledge.pineconeApiKey && !cfg.pineconeApiKey) {
       cfg.pineconeApiKey = knowledge.pineconeApiKey
@@ -297,7 +343,7 @@ async function migrateEnvDataIfNeeded() {
       logger.info('Migrated env/user data into config.json')
     }
   } else {
-    // Config already has anthropic.apiKey — still check if pineconeApiKey needs moving from knowledge.json
+    // Config already has anthropic.apiKey -- still check if pineconeApiKey needs moving from knowledge.json
     const knowledge = readJSON(KNOWLEDGE_FILE, {})
     if (knowledge.pineconeApiKey) {
       if (!cfg.pineconeApiKey) cfg.pineconeApiKey = knowledge.pineconeApiKey
@@ -308,7 +354,7 @@ async function migrateEnvDataIfNeeded() {
     }
   }
 
-  // b) Migrate MCP_SERVERS env var → mcp-servers.json
+  // b) Migrate MCP_SERVERS env var -> mcp-servers.json
   const mcpData = readJSON(MCP_SERVERS_FILE, null)
   if ((mcpData === null || (typeof mcpData === 'object' && Object.keys(mcpData).length === 0)) && process.env.MCP_SERVERS) {
     try {
@@ -322,7 +368,7 @@ async function migrateEnvDataIfNeeded() {
     }
   }
 
-  // c) Migrate HTTP_TOOLS env var → tools.json
+  // c) Migrate HTTP_TOOLS env var -> tools.json
   const toolsData = readJSON(TOOLS_FILE, null)
   if (toolsData === null && process.env.HTTP_TOOLS) {
     try {
@@ -336,7 +382,7 @@ async function migrateEnvDataIfNeeded() {
     }
   }
 
-  // d) Migrate dataPath from config.json → .env (one-time)
+  // d) Migrate dataPath from config.json -> .env (one-time)
   const cfgForDp = readJSON(CONFIG_FILE, {})
   if (cfgForDp.dataPath && cfgForDp.dataPath !== DEFAULT_DATA_PATH) {
     // Write to .env if not already there
@@ -357,13 +403,14 @@ async function migrateEnvDataIfNeeded() {
     writeJSON(CONFIG_FILE, cfgForDp)
     logger.info('Removed dataPath from config.json (now lives in .env)')
   } else if (cfgForDp.dataPath) {
-    // It was the default — just remove it from config.json, no need to write to .env
+    // It was the default -- just remove it from config.json, no need to write to .env
     delete cfgForDp.dataPath
     writeJSON(CONFIG_FILE, cfgForDp)
   }
+
 }
 
-// ─── Default Data ───────────────────────────────────────────────────────────
+// --- Default Data -----------------------------------------------------------
 const DEFAULT_CONFIG = {
   anthropic: {
     apiKey:       '',
@@ -384,16 +431,31 @@ const DEFAULT_CONFIG = {
     model:        '',
     openaiDefaultModel: '',
   },
-  skillsPath:   '',
   defaultProvider:   'anthropic',
   systemPrompt:      '',
-  obsidianVaultPath: '',
+  skillsPath:        '',
+  DoCPath:           '',
+  artyfactPath:      '',
   pineconeApiKey:    '',
-  newsFeeds: []
+  newsFeeds: [],
+  sandboxConfig: {
+    defaultMode: 'sandbox',
+    sandboxAllowList: [],
+    dangerBlockList: [
+      { id: 'danger-1', pattern: 'rm -rf *', description: 'Recursive force delete' },
+      { id: 'danger-2', pattern: 'sudo *', description: 'Superuser commands' },
+      { id: 'danger-3', pattern: 'curl * | *sh', description: 'Remote script execution' },
+      { id: 'danger-4', pattern: 'curl * | bash', description: 'Remote bash execution' },
+      { id: 'danger-5', pattern: 'wget * | bash', description: 'Remote bash execution' },
+      { id: 'danger-6', pattern: ':(){ :|:& };:', description: 'Fork bomb' },
+      { id: 'danger-7', pattern: 'dd if=/dev/zero *', description: 'Disk wipe' },
+      { id: 'danger-8', pattern: 'mkfs.*', description: 'Format filesystem' },
+    ]
+  }
 }
 
 
-// ─── Main Window ────────────────────────────────────────────────────────────
+// --- Main Window ------------------------------------------------------------
 let mainWindow
 
 function createWindow() {
@@ -402,6 +464,7 @@ function createWindow() {
   const winH = Math.round(screenH * 4 / 5)
 
   mainWindow = new BrowserWindow({
+    icon: path.join(__dirname, '../public/icon.png'),
     width: winW,
     height: winH,
     x: Math.round((screenW - winW) / 2),
@@ -426,10 +489,10 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null })
 
-  // ── Set spellcheck language ──
+  // -- Set spellcheck language --
   mainWindow.webContents.session.setSpellCheckerLanguages(['en-US'])
 
-  // ── Right-click context menu with spell check + standard edit actions ──
+  // -- Right-click context menu with spell check + standard edit actions --
   mainWindow.webContents.on('context-menu', (event, params) => {
     const menuItems = []
 
@@ -475,7 +538,7 @@ function createWindow() {
     }
   })
 
-  // ── Prevent Electron from navigating away from the app ──
+  // -- Prevent Electron from navigating away from the app --
   // Block ALL navigations that would leave the SPA. file:// drops are forwarded
   // as attachments; http(s) links are opened in the system browser instead.
   mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -507,7 +570,7 @@ protocol.registerSchemesAsPrivileged([{
 }])
 
 app.whenReady().then(async () => {
-  // Handle vault-asset:// requests → serve files from disk
+  // Handle vault-asset:// requests -> serve files from disk
   // URL format: vault-asset:///absolute/path/to/file
   protocol.handle('vault-asset', (request) => {
     const filePath = decodeURIComponent(new URL(request.url).pathname)
@@ -519,12 +582,12 @@ app.whenReady().then(async () => {
   await migrateEnvDataIfNeeded()
   createWindow()
 
-  // ── Content Security Policy ──
+  // -- Content Security Policy --
   // Only apply restrictive CSP to the app's own pages, not to external sites
   // loaded inside <webview> (they need their own CSS/JS/fonts to render properly).
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const url = details.url || ''
-    // drawio-frame.html needs its own permissive CSP — never override it
+    // drawio-frame.html needs its own permissive CSP -- never override it
     const isDrawioFrame = url.includes('drawio-frame.html')
     const isAppPage = !isDrawioFrame && (url.startsWith('http://localhost:') || url.startsWith('file://'))
     if (isAppPage) {
@@ -562,9 +625,9 @@ app.on('before-quit', () => {
   mcpManager.stopAll().catch(err => logger.error('MCP cleanup error:', err.message))
 })
 
-// ─── IPC: Storage ───────────────────────────────────────────────────────────
+// --- IPC: Storage -----------------------------------------------------------
 
-// ── Per-chat granular operations ─────────────────────────────────────────────
+// -- Per-chat granular operations ---------------------------------------------
 ipcMain.handle('store:get-chat-index', async () => {
   return readJSONAsync(CHATS_INDEX_FILE, [])
 })
@@ -607,7 +670,7 @@ ipcMain.handle('store:delete-chat', async (_, chatId) => {
   return true
 })
 
-// ── Backward-compatible bulk operations (reads per-chat files) ───────────────
+// -- Backward-compatible bulk operations (reads per-chat files) ---------------
 ipcMain.handle('store:get-chats', async () => {
   const index = await readJSONAsync(CHATS_INDEX_FILE, null)
   if (index === null) {
@@ -640,17 +703,27 @@ ipcMain.handle('store:get-config', () => {
   const nonEmpty = Object.fromEntries(
     Object.entries(saved).filter(([, v]) => v !== '' && v !== null && v !== undefined)
   )
+  const savedSandbox = saved.sandboxConfig || {}
   const result = {
     ...DEFAULT_CONFIG,
     ...nonEmpty,
     anthropic:  { ...DEFAULT_CONFIG.anthropic,  ...saved.anthropic },
     openrouter: { ...DEFAULT_CONFIG.openrouter, ...saved.openrouter },
     openai:     { ...DEFAULT_CONFIG.openai,     ...saved.openai },
+    sandboxConfig: {
+      ...DEFAULT_CONFIG.sandboxConfig,
+      ...savedSandbox,
+      sandboxAllowList: savedSandbox.sandboxAllowList || [],
+      // Keep default dangerBlockList if saved is empty (user hasn't customised it)
+      dangerBlockList: (savedSandbox.dangerBlockList && savedSandbox.dangerBlockList.length > 0)
+        ? savedSandbox.dangerBlockList
+        : DEFAULT_CONFIG.sandboxConfig.dangerBlockList,
+    },
   }
   logger.info('store:get-config', {
     baseURL: result.anthropic?.baseURL,
     hasApiKey: !!(result.anthropic?.apiKey),
-    apiKeyPrefix: result.anthropic?.apiKey ? result.anthropic.apiKey.slice(0, 8) + '…' : '(empty)',
+    apiKeyPrefix: result.anthropic?.apiKey ? result.anthropic.apiKey.slice(0, 8) + '...' : '(empty)',
     sonnetModel: result.anthropic?.sonnetModel,
     activeModel: result.anthropic?.activeModel,
     defaultProvider: result.defaultProvider,
@@ -660,7 +733,9 @@ ipcMain.handle('store:get-config', () => {
   return result
 })
 ipcMain.handle('store:save-config', (_, config) => {
-  delete config.dataPath  // dataPath lives in .env, not config.json
+  // dataPath lives in .env (as SPARKAI_DATA_PATH), not config.json
+  delete config.dataPath
+  delete config.obsidianVaultPath
   // Read-merge-write: merge incoming config into existing file to avoid
   // clobbering keys that the renderer didn't modify (e.g. newsFeeds).
   const existing = readJSON(CONFIG_FILE, {})
@@ -711,10 +786,27 @@ ipcMain.handle('store:save-data-path', (_, newDataPath) => {
   }
 })
 
+// --- IPC: Config-backed paths (skillsPath, DoCPath, artyfactPath) ------------
+// These three paths are stored in config.json under SPARKAI_DATA_PATH.
+ipcMain.handle('store:get-env-paths', () => getEnvPaths())
+ipcMain.handle('store:save-env-path', (_, key, value) => {
+  const allowed = ['skillsPath', 'DoCPath', 'artyfactPath']
+  if (!allowed.includes(key)) return { success: false, error: 'Unknown path key' }
+  try {
+    const existing = readJSON(CONFIG_FILE, {})
+    existing[key] = value
+    writeJSON(CONFIG_FILE, existing)
+    return { success: true }
+  } catch (err) {
+    logger.error(`Failed to save ${key} to config.json:`, err.message)
+    return { success: false, error: err.message }
+  }
+})
+
 ipcMain.handle('store:get-personas', () => readJSON(PERSONAS_FILE, []))
 ipcMain.handle('store:save-personas', (_, personas) => { writeJSON(PERSONAS_FILE, personas); return true })
 
-// ─── IPC: Soul Memory Files ─────────────────────────────────────────────────
+// --- IPC: Soul Memory Files -------------------------------------------------
 function ensureSoulsDir(type) {
   const dir = path.join(SOULS_DIR, type)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
@@ -773,7 +865,7 @@ ipcMain.handle('souls:delete', (_, personaId, type) => {
   }
 })
 
-// ─── IPC: Memory Accept (post-turn extraction) ─────────────────────────────
+// --- IPC: Memory Accept (post-turn extraction) -----------------------------
 const { SoulUpdateTool: SoulUpdateToolForMemory } = require('./agent/tools/SoulTool')
 ipcMain.handle('memory:accept', async (_, { personaId, personaType, section, entry }) => {
   try {
@@ -785,7 +877,7 @@ ipcMain.handle('memory:accept', async (_, { personaId, personaType, section, ent
   }
 })
 
-// ─── IPC: MCP Server Configuration (~/.sparkai/mcp-servers.json) ─────────────
+// --- IPC: MCP Server Configuration (~/.sparkai/mcp-servers.json) -------------
 
 ipcMain.handle('mcp:get-config', () => readJSON(MCP_SERVERS_FILE, {}))
 
@@ -799,7 +891,7 @@ ipcMain.handle('mcp:save-config', async (_, mcpServers) => {
   }
 })
 
-// ─── IPC: HTTP Tools Configuration (~/.sparkai/tools.json) ───────────────────
+// --- IPC: HTTP Tools Configuration (~/.sparkai/tools.json) -------------------
 
 ipcMain.handle('tools:get-config', () => readJSON(TOOLS_FILE, {}))
 
@@ -813,7 +905,7 @@ ipcMain.handle('tools:save-config', async (_, toolsConfig) => {
   }
 })
 
-// ─── IPC: Knowledge / Pinecone RAG ──────────────────────────────────────────
+// --- IPC: Knowledge / Pinecone RAG ------------------------------------------
 
 ipcMain.handle('knowledge:get-config', () => {
   const cfg = readJSON(CONFIG_FILE, {})
@@ -876,7 +968,7 @@ ipcMain.handle('knowledge:verify-connection', async (_, { apiKey }) => {
     })
     const count = (data.indexes || []).length
     logger.info('knowledge:verify-connection success', { indexCount: count })
-    return { success: true, message: `Connected — ${count} index${count !== 1 ? 'es' : ''} found` }
+    return { success: true, message: `Connected -- ${count} index${count !== 1 ? 'es' : ''} found` }
   } catch (err) {
     logger.error('knowledge:verify-connection error', err.message)
     return { success: false, error: err.message }
@@ -1129,7 +1221,7 @@ ipcMain.handle('knowledge:upload-files', async (_, { apiKey, indexName, filePath
     const cfg = readJSON(CONFIG_FILE, {})
     const results = []
 
-    // Resolve embedding config — prefer per-index config to stay consistent with RAG query
+    // Resolve embedding config -- prefer per-index config to stay consistent with RAG query
     const idxCfg = (knowledgeCfg.indexConfigs || {})[indexName] || {}
     const embProvider = idxCfg.embeddingProvider || knowledgeCfg.embeddingProvider || 'openai'
     const embModel = idxCfg.embeddingModel || knowledgeCfg.embeddingModel || 'text-embedding-3-small'
@@ -1306,13 +1398,13 @@ ipcMain.handle('knowledge:delete-source', async (_, { apiKey, indexName, sourceN
         deleted = true
         logger.info('knowledge:delete-source', { indexName, sourceName, field })
       } catch (err) {
-        // Filter-based delete may fail on pod indexes — continue trying other fields
+        // Filter-based delete may fail on pod indexes -- continue trying other fields
         logger.warn(`knowledge:delete-source filter on ${field} failed:`, err.message)
       }
     }
 
     if (!deleted) {
-      return { success: false, error: 'Failed to delete vectors — metadata filter not supported on this index type' }
+      return { success: false, error: 'Failed to delete vectors -- metadata filter not supported on this index type' }
     }
 
     // Also remove from local docs list if matching
@@ -1356,7 +1448,7 @@ ipcMain.handle('knowledge:get-document-summary', async (_, { documentId }) => {
   }
 })
 
-// ── Embedding generation helper ──────────────────────────────────────────────
+// -- Embedding generation helper ----------------------------------------------
 async function generateEmbedding({ text, provider, model, apiKey, baseURL, dimensions }) {
   const https = require('https')
   const http = require('http')
@@ -1430,7 +1522,7 @@ async function generateEmbedding({ text, provider, model, apiKey, baseURL, dimen
   return embedding
 }
 
-// ── Pinecone index info resolver (cached) ────────────────────────────────────
+// -- Pinecone index info resolver (cached) ------------------------------------
 const indexInfoCache = new Map()
 
 async function getPineconeIndexInfo(apiKey, indexName) {
@@ -1465,7 +1557,7 @@ async function getPineconeIndexInfo(apiKey, indexName) {
   return info
 }
 
-// ── Pinecone upsert helper ───────────────────────────────────────────────────
+// -- Pinecone upsert helper ---------------------------------------------------
 async function pineconeUpsert(apiKey, indexHost, vectors) {
   const https = require('https')
   const body = JSON.stringify({ vectors })
@@ -1495,7 +1587,7 @@ async function pineconeUpsert(apiKey, indexHost, vectors) {
   })
 }
 
-// ── Pinecone query helper ────────────────────────────────────────────────────
+// -- Pinecone query helper ----------------------------------------------------
 async function pineconeQuery(apiKey, indexHost, vector, topK = 5) {
   const https = require('https')
   const body = JSON.stringify({ vector, topK, includeMetadata: true })
@@ -1525,7 +1617,7 @@ async function pineconeQuery(apiKey, indexHost, vector, topK = 5) {
   })
 }
 
-// ── RAG query logic (shared between IPC and agent:run) ───────────────────────
+// -- RAG query logic (shared between IPC and agent:run) -----------------------
 async function queryRAG({ query, pineconeApiKey, pineconeIndexName, topK, embeddingProvider, embeddingModel }) {
   if (!pineconeApiKey || !pineconeIndexName || !query) {
     return { success: false, error: 'Missing required parameters', matches: [] }
@@ -1598,7 +1690,7 @@ ipcMain.handle('mcp:test-connection', async (_, config) => {
   }
 })
 
-// ─── IPC: OpenRouter Model Fetching ──────────────────────────────────────────
+// --- IPC: OpenRouter Model Fetching ------------------------------------------
 ipcMain.handle('openrouter:fetch-models', async (_, { apiKey, baseURL }) => {
   const url = (baseURL || 'https://openrouter.ai/api').replace(/\/+$/, '') + '/v1/models'
   try {
@@ -1640,7 +1732,7 @@ ipcMain.handle('openrouter:fetch-models', async (_, { apiKey, baseURL }) => {
   }
 })
 
-// ─── IPC: OpenAI Model Fetching ──────────────────────────────────────────────
+// --- IPC: OpenAI Model Fetching ----------------------------------------------
 ipcMain.handle('openai:fetch-models', async (_, { apiKey, baseURL }) => {
   const base = (baseURL || 'https://mlaas.virtuosgames.com').replace(/\/+$/, '')
   const url = base + '/proxy/openai/v1/models'
@@ -1682,7 +1774,7 @@ ipcMain.handle('openai:fetch-models', async (_, { apiKey, baseURL }) => {
   }
 })
 
-// ─── IPC: News RSS Feed Fetching ─────────────────────────────────────────────
+// --- IPC: News RSS Feed Fetching ---------------------------------------------
 ipcMain.handle('news:fetch-feeds', async (_, feedConfigs) => {
   if (!Array.isArray(feedConfigs) || feedConfigs.length === 0) {
     return { success: false, error: 'No feed configs provided', feeds: [] }
@@ -1798,7 +1890,7 @@ ipcMain.handle('news:fetch-feeds', async (_, feedConfigs) => {
   }
 })
 
-// ─── IPC: Skills (filesystem-based) ─────────────────────────────────────────
+// --- IPC: Skills (filesystem-based) -----------------------------------------
 
 /**
  * Resolve skills directory path.
@@ -1996,7 +2088,7 @@ ipcMain.handle('skills:load-all-prompts', (_, dirPath) => {
   }
 })
 
-// ─── IPC: Shell Execution ────────────────────────────────────────────────────
+// --- IPC: Shell Execution ----------------------------------------------------
 // Uses execFile (not exec) to prevent shell injection - command and args separated
 ipcMain.handle('shell:exec', async (_, { cmd, args }) => {
   return new Promise((resolve) => {
@@ -2007,12 +2099,12 @@ ipcMain.handle('shell:exec', async (_, { cmd, args }) => {
   })
 })
 
-// ─── IPC: Agent Loop ─────────────────────────────────────────────────────────
+// --- IPC: Agent Loop ---------------------------------------------------------
 const { AgentLoop } = require('./agent/agentLoop')
 const { mcpManager } = require('./agent/mcp/McpManager')
 const { MemoryExtractor } = require('./agent/core/MemoryExtractor')
-const activeLoops = new Map()          // chatId → AgentLoop
-const lastContextSnapshots = new Map() // chatId → snapshot
+const activeLoops = new Map()          // chatId -> AgentLoop
+const lastContextSnapshots = new Map() // chatId -> snapshot
 
 /** Read a soul file from disk. Returns null if not found. */
 function readSoulFileSync(personaId, personaType) {
@@ -2028,7 +2120,7 @@ function readSoulFileSync(personaId, personaType) {
 
 /**
  * Run post-turn memory extraction via Haiku.
- * Non-fatal — failures are logged and silently ignored.
+ * Non-fatal -- failures are logged and silently ignored.
  */
 async function runMemoryExtraction(event, chatId, messages, config, personaPrompts, participants) {
   try {
@@ -2082,12 +2174,12 @@ async function runMemoryExtraction(event, chatId, messages, config, personaPromp
 
 logger.info('IPC handlers registered: agent:run, agent:stop')
 
-ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts, mcpServers, httpTools, personaRuns, knowledgeConfig, injectedPlan }) => {
+ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts, mcpServers, httpTools, personaRuns, knowledgeConfig, injectedPlan, chatPermissionMode, chatAllowList, chatDangerOverrides }) => {
   logger.agent('IPC agent:run received', { chatId, model: config?.anthropic?.activeModel || config?.activeModel, msgCount: messages?.length, personaRuns: personaRuns?.length || 0 })
   logger.agent('config snapshot', {
     baseURL: config?.baseURL,
     hasApiKey: !!(config?.apiKey),
-    apiKeyPrefix: config?.apiKey ? config.apiKey.slice(0, 8) + '…' : '(empty)',
+    apiKeyPrefix: config?.apiKey ? config.apiKey.slice(0, 8) + '...' : '(empty)',
     sonnetModel: config?.anthropic?.sonnetModel,
     activeModel: config?.anthropic?.activeModel,
     customModel: config?.customModel || null,
@@ -2102,7 +2194,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     }
   }
 
-  // ── RAG retrieval (if enabled) ──
+  // -- RAG retrieval (if enabled) --
   // Merge with file-based config so we always have the latest indexConfigs
   if (knowledgeConfig) {
     const fileCfg = readJSON(KNOWLEDGE_FILE, {})
@@ -2170,10 +2262,10 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       }
     } catch (err) {
       logger.error('RAG retrieval error (non-fatal)', { chatId, error: err.message })
-      // Non-fatal — continue without RAG context
+      // Non-fatal -- continue without RAG context
     }
   }
-  // ── Group chat: one or more persona runs (concurrent) ──
+  // -- Group chat: one or more persona runs (concurrent) --
   if (personaRuns && personaRuns.length >= 1) {
     logger.agent('Group chat mode (concurrent)', { chatId, personaCount: personaRuns.length })
     const baseMessages = [...messages]
@@ -2189,10 +2281,14 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     }
 
     // Launch all persona loops concurrently
+    const groupCfg = readJSON(CONFIG_FILE, {})
     const promises = personaRuns.map(run => {
       const loopKey = `${chatId}:${run.personaId}`
       const loopConfig = { ...(run.config || config), soulsDir: SOULS_DIR }
       if (injectedPlan) loopConfig.injectedPlan = injectedPlan
+      loopConfig.sandboxConfig = groupCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
+      loopConfig.chatPermissionMode = params.chatPermissionMode || 'inherit'
+      loopConfig.chatAllowList = params.chatAllowList || []
       const loop = new AgentLoop(loopConfig)
       activeLoops.set(loopKey, loop)
 
@@ -2250,7 +2346,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       lastContextSnapshots.set(chatId, base)
     }
 
-    // Fire-and-forget memory extraction for group chat — pass all participants for routing
+    // Fire-and-forget memory extraction for group chat -- pass all participants for routing
     if (personaRuns.length > 0) {
       const groupParticipants = personaRuns.map(r => ({ id: r.personaId, name: r.personaName, type: 'system' }))
       runMemoryExtraction(event, chatId, messages, config, personaRuns[0].personaPrompts || personaPrompts, groupParticipants)
@@ -2259,9 +2355,14 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     return { success: true, results }
   }
 
-  // ── Single persona (backward compat) ──
+  // -- Single persona (backward compat) --
+  const fullCfg = readJSON(CONFIG_FILE, {})
   const loopConfig = { ...config, soulsDir: SOULS_DIR }
   if (injectedPlan) loopConfig.injectedPlan = injectedPlan
+  loopConfig.sandboxConfig = fullCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
+  loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
+  loopConfig.chatAllowList = chatAllowList || []
+  loopConfig.chatDangerOverrides = chatDangerOverrides || []
   const loop = new AgentLoop(loopConfig)
   activeLoops.set(chatId, loop)
 
@@ -2284,7 +2385,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       ragContext
     )
     logger.agent('run done', { chatId, success: result !== undefined, resultLen: typeof result === 'string' ? result.length : 0 })
-    // Fire-and-forget memory extraction — single persona as participant for routing
+    // Fire-and-forget memory extraction -- single persona as participant for routing
     const singleParticipants = personaPrompts?.systemPersonaId
       ? [{ id: personaPrompts.systemPersonaId, name: personaPrompts.groupChatContext?.personaName || 'Assistant', type: 'system' }]
       : null
@@ -2326,6 +2427,63 @@ ipcMain.handle('agent:stop', (event, chatId) => {
   return false
 })
 
+ipcMain.handle('agent:permission-response', (event, chatId, { blockId, decision, pattern }) => {
+  // Try exact chatId match first, then chatId:personaId prefix
+  let loop = activeLoops.get(chatId)
+  if (!loop) {
+    // Check group persona loops
+    for (const [key, l] of activeLoops) {
+      if (key.startsWith(chatId + ':')) { loop = l; break }
+    }
+  }
+  if (!loop) {
+    logger.warn('agent:permission-response: no active loop for chatId', chatId)
+    return { success: false, error: 'No active loop' }
+  }
+  loop.resolvePermission(blockId, decision, pattern)
+
+  // Persist allow_chat -> chat's chatAllowList in its JSON file
+  if (decision === 'allow_chat' && pattern) {
+    try {
+      const chatFile = path.join(CHATS_DIR, `${chatId}.json`)
+      const chat = readJSON(chatFile, null)
+      if (chat) {
+        if (!Array.isArray(chat.chatAllowList)) chat.chatAllowList = []
+        const exists = chat.chatAllowList.some(e => e.pattern === pattern)
+        if (!exists) {
+          const newEntry = { id: require('crypto').randomUUID(), pattern, description: 'Auto-added from chat approval' }
+          chat.chatAllowList.push(newEntry)
+          writeJSON(chatFile, chat)
+          return { success: true, newChatAllowEntry: newEntry }
+        }
+      }
+    } catch (err) {
+      logger.error('agent:permission-response allow_chat persist error', err.message)
+    }
+  }
+
+  // Persist allow_global -> global sandboxAllowList in config.json
+  if (decision === 'allow_global' && pattern) {
+    try {
+      const cfg = readJSON(CONFIG_FILE, {})
+      if (!cfg.sandboxConfig) cfg.sandboxConfig = { defaultMode: 'sandbox', sandboxAllowList: [] }
+      if (!cfg.sandboxConfig.sandboxAllowList) cfg.sandboxConfig.sandboxAllowList = []
+      const exists = cfg.sandboxConfig.sandboxAllowList.some(e => e.pattern === pattern)
+      if (!exists) {
+        cfg.sandboxConfig.sandboxAllowList.push({
+          id: require('crypto').randomUUID(),
+          pattern,
+          description: 'Auto-added from chat approval'
+        })
+        writeJSON(CONFIG_FILE, cfg)
+      }
+    } catch (err) {
+      logger.error('agent:permission-response persist error', err.message)
+    }
+  }
+  return { success: true }
+})
+
 ipcMain.handle('agent:compact', (event, chatId) => {
   const loop = chatId ? activeLoops.get(chatId) : null
   if (loop && typeof loop.requestCompaction === 'function') {
@@ -2357,7 +2515,7 @@ ipcMain.handle('agent:compact-standalone', async (event, { chatId, messages, con
   }
 })
 
-// ── Lightweight one-shot LLM call (for AI Enhance features) ─────────────────
+// -- Lightweight one-shot LLM call (for AI Enhance features) -----------------
 ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
   try {
     const { AnthropicClient } = require('./agent/core/AnthropicClient')
@@ -2382,7 +2540,7 @@ ipcMain.handle('agent:get-context', (event, chatId) => {
   return null
 })
 
-// ─── IPC: File Attachments ──────────────────────────────────────────────────
+// --- IPC: File Attachments --------------------------------------------------
 
 const MEDIA_TYPES = {
   '.png': 'image/png',
@@ -2410,7 +2568,7 @@ const IS_WSL = (() => {
   return false
 })()
 
-logger.info('WSL detection:', IS_WSL ? 'YES — will use PowerShell file dialogs' : 'NO')
+logger.info('WSL detection:', IS_WSL ? 'YES -- will use PowerShell file dialogs' : 'NO')
 
 /**
  * Convert a Windows path to its WSL2 mount equivalent.
@@ -2423,7 +2581,7 @@ function toWslPath(inputPath) {
 
   // Strip file:// URI prefix
   if (p.startsWith('file:///')) {
-    p = decodeURIComponent(p.slice(7))  // file:///C:/foo → C:/foo
+    p = decodeURIComponent(p.slice(7))  // file:///C:/foo -> C:/foo
   } else if (p.startsWith('file://')) {
     p = decodeURIComponent(p.slice(5))
   }
@@ -2441,7 +2599,7 @@ function toWslPath(inputPath) {
     return `/mnt/${drive}/${rest}`.replace(/\/+$/, '') || `/mnt/${drive}`
   }
 
-  // UNC \\wsl$\distro\path → /path  (already inside WSL)
+  // UNC \\wsl$\distro\path -> /path  (already inside WSL)
   const wslUncMatch = p.match(/^\\\\wsl\$\\[^\\]+\\(.*)$/)
   if (wslUncMatch) {
     return '/' + wslUncMatch[1].replace(/\\/g, '/')
@@ -2459,7 +2617,7 @@ function readAttachment(rawPath) {
   try {
     const stat = fs.statSync(filePath)
 
-    // ── Folder ──
+    // -- Folder --
     if (stat.isDirectory()) {
       let listing = ''
       try {
@@ -2480,7 +2638,7 @@ function readAttachment(rawPath) {
 
     const ext = path.extname(name).toLowerCase()
 
-    // ── Image ──
+    // -- Image --
     if (IMAGE_EXTS.has(ext)) {
       if (stat.size > MAX_IMAGE_SIZE) {
         return { id, name, path: filePath, type: 'error', error: `Image too large (${(stat.size / 1024 / 1024).toFixed(1)} MB, max 20 MB)`, preview: name }
@@ -2494,7 +2652,7 @@ function readAttachment(rawPath) {
       }
     }
 
-    // ── Text / code file ──
+    // -- Text / code file --
     if (stat.size > MAX_TEXT_SIZE) {
       return { id, name, path: filePath, type: 'error', error: `File too large (${(stat.size / 1024 / 1024).toFixed(1)} MB, max 1 MB)`, preview: name }
     }
@@ -2502,7 +2660,7 @@ function readAttachment(rawPath) {
     // Binary detection: check for null bytes in the first 8KB
     const sample = buf.subarray(0, 8192)
     if (sample.includes(0)) {
-      return { id, name, path: filePath, type: 'error', error: 'Binary file — not supported', preview: name }
+      return { id, name, path: filePath, type: 'error', error: 'Binary file -- not supported', preview: name }
     }
     const content = buf.toString('utf8')
     return {
@@ -2605,7 +2763,7 @@ $owner.Close()
   })
 }
 
-// files:pick — on WSL use native Windows dialog, otherwise GTK
+// files:pick -- on WSL use native Windows dialog, otherwise GTK
 ipcMain.handle('files:pick', async () => {
   if (filePickerOpen) return []
   filePickerOpen = true
@@ -2632,12 +2790,12 @@ ipcMain.handle('files:pick', async () => {
   }
 })
 
-// files:read-for-attachment — single path (from drag-drop), auto-converts Windows paths
+// files:read-for-attachment -- single path (from drag-drop), auto-converts Windows paths
 ipcMain.handle('files:read-for-attachment', (_, filePath) => {
   return readAttachment(filePath)
 })
 
-// files:resolve-drop-paths — resolve multiple raw strings from a drag-drop event
+// files:resolve-drop-paths -- resolve multiple raw strings from a drag-drop event
 // Accepts array of raw path strings (Windows or Linux), returns attachment objects
 ipcMain.handle('files:resolve-drop-paths', (_, rawPaths) => {
   if (!Array.isArray(rawPaths)) return []
@@ -2647,7 +2805,7 @@ ipcMain.handle('files:resolve-drop-paths', (_, rawPaths) => {
     .map(p => readAttachment(p))
 })
 
-// ─── IPC: Obsidian Vault ──────────────────────────────────────────────────────
+// --- IPC: Obsidian Vault ------------------------------------------------------
 
 // Normalize paths for the current platform.
 // On WSL: convert Windows drive paths (D:\notes) to WSL mount paths (/mnt/d/notes).
@@ -2668,19 +2826,19 @@ function toLinuxPath(p) {
   return p
 }
 
-// Config persistence — stored in ~/.sparkai/config.json
+// Config persistence -- DoCPath stored in config.json
 ipcMain.handle('obsidian:get-config', () => {
-  const saved = readJSON(CONFIG_FILE, {})
-  return { vaultPath: saved.obsidianVaultPath || '' }
+  const cfg = readJSON(CONFIG_FILE, {})
+  return { vaultPath: cfg.DoCPath || '' }
 })
 ipcMain.handle('obsidian:save-config', async (_, config) => {
-  const saved = readJSON(CONFIG_FILE, {})
-  saved.obsidianVaultPath = config.vaultPath || ''
-  await writeJSONAtomic(CONFIG_FILE, saved)
+  const existing = readJSON(CONFIG_FILE, {})
+  existing.DoCPath = config.vaultPath || ''
+  writeJSON(CONFIG_FILE, existing)
   return true
 })
 
-// Folder picker — on WSL use native Windows Explorer dialog via PowerShell
+// Folder picker -- on WSL use native Windows Explorer dialog via PowerShell
 ipcMain.handle('obsidian:pick-folder', async () => {
   if (filePickerOpen) return null
   filePickerOpen = true
@@ -2721,7 +2879,7 @@ ipcMain.handle('obsidian:read-tree', (_, rawDir) => {
       if (!fs.existsSync(dirPath)) return []
       entries = fs.readdirSync(dirPath, { withFileTypes: true })
     } catch {
-      // Permission denied or other read error — skip this directory
+      // Permission denied or other read error -- skip this directory
       return []
     }
     const items = []
@@ -2928,7 +3086,7 @@ ipcMain.handle('obsidian:rename', (_, rawOld, rawNew) => {
   }
 })
 
-// ── File Reveal / Open ───────────────────────────────────────────────────────
+// -- File Reveal / Open -------------------------------------------------------
 
 // Helper: detect WSL
 function isWSL() {
@@ -2990,3 +3148,4 @@ ipcMain.handle('shell:show-in-folder', (_, filePath) => {
     return { error: err.message }
   }
 })
+

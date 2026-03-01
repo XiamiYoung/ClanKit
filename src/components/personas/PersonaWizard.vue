@@ -118,7 +118,14 @@
             <img v-if="form.avatar" :src="selectedAvatarDataUri" alt="" style="width:56px;height:56px;border-radius:50%;" />
             <div v-else class="wiz-preview-avatar-placeholder">?</div>
           </div>
-          <button class="wiz-change-avatar-btn" @click="showAvatarPicker = true">Change Avatar</button>
+          <div class="wiz-preview-avatar-meta">
+            <input
+              v-model="form.name"
+              class="wiz-name-input"
+              :placeholder="type === 'system' ? 'Persona name...' : 'Your name or alias...'"
+            />
+            <button class="wiz-change-avatar-btn" @click="showAvatarPicker = true">Change Avatar</button>
+          </div>
         </div>
         <!-- Provider / Model config (system personas) — above prompt -->
         <div v-if="type === 'system'" class="wiz-preview-config">
@@ -892,6 +899,28 @@ onMounted(() => {
   display: flex; align-items: center; justify-content: center;
   font-size: 20px; font-weight: 700; color: #4B5563;
 }
+.wiz-preview-avatar-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.wiz-name-input {
+  width: 100%;
+  padding: 7px 12px;
+  border: 1px solid #2A2A2A;
+  border-radius: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: #FFFFFF;
+  background: #1A1A1A;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.wiz-name-input:focus { border-color: #4B5563; }
+.wiz-name-input::placeholder { color: #4B5563; font-weight: 400; }
 .wiz-change-avatar-btn {
   padding: 6px 14px; border-radius: 8px; border: 1px solid #2A2A2A;
   background: #1A1A1A; font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);

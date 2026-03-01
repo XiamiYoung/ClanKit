@@ -116,8 +116,8 @@
         <div
           class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none"
           :style="seg.output === undefined
-            ? 'background:#fffbeb; border-left:3px solid #f59e0b;'
-            : 'background:#F5F5F5; border-left:3px solid #22c55e;'"
+            ? 'background:#fffbeb; ;'
+            : 'background:#F5F5F5; ;'"
           @click="toggleTool(i, seg)"
         >
           <!-- Icon -->
@@ -176,6 +176,15 @@
         </div>
       </div>
 
+      <!-- Permission prompt segment -->
+      <PermissionPrompt
+        v-else-if="seg.type === 'permission'"
+        :seg="seg"
+        @allow-chat="handlePermissionAllowChat"
+        @allow-global="handlePermissionAllowGlobal"
+        @reject="handlePermissionReject"
+      />
+
       <!-- Inline images — always visible in the message flow (base64 or URL) -->
       <div v-else-if="seg.type === 'image' && seg.images && seg.images.length > 0" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #E5E5EA; background:#FFFFFF;">
         <div class="px-3 py-2" style="background:#F5F5F5; border-bottom:1px solid #E5E5EA;">
@@ -199,11 +208,11 @@
       <BabylonViewer v-for="url in modelUrls" :key="url" :src="url" />
 
       <!-- Wave bar + duration: outside segments block so it shows even with no content yet -->
-      <div v-if="message.streaming" class="flex items-end gap-0.5 h-5 mt-1 pl-1">
+      <div v-if="message.streaming && !hasPendingPermission" class="flex items-end gap-0.5 h-5 mt-1 pl-1">
         <span v-for="n in 5" :key="n" class="wave-bar" :style="`--bar-color:#4c8446; --bar-glow:#4c844680; animation-delay:${(n-1)*0.13}s;`" />
       </div>
       <!-- Duration label: live while streaming, final when done -->
-      <div v-if="message.streaming && message.streamingStartedAt" class="flex items-center gap-1 mt-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
+      <div v-if="message.streaming && message.streamingStartedAt && !hasPendingPermission" class="flex items-center gap-1 mt-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
         <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         <span>cooking for {{ formatDuration(elapsedMs) }}…</span>
       </div>
@@ -216,10 +225,16 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, reactive, watch, onBeforeUnmount, toRaw } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import BabylonViewer from './BabylonViewer.vue'
+import PermissionPrompt from './PermissionPrompt.vue'
+import { useChatsStore } from '../../stores/chats'
+import { useConfigStore } from '../../stores/config'
+
+const chatsStore = useChatsStore()
+const configStore = useConfigStore()
 
 const props = defineProps({
   message: { type: Object, required: true }
@@ -249,6 +264,11 @@ const modelUrls = computed(() => {
   }
   return [...urls]
 })
+
+// ── Pending permission check ───────────────────────────────────────────────
+const hasPendingPermission = computed(() =>
+  (props.message.segments || []).some(s => s.type === 'permission' && s.status === 'pending')
+)
 
 // ── Live elapsed timer ─────────────────────────────────────────────────────
 const now = ref(Date.now())
@@ -378,6 +398,63 @@ function handleContentClick(e) {
     btn.textContent = 'Copied!'
     setTimeout(() => { btn.textContent = 'Copy' }, 2000)
   }).catch(() => {})
+}
+
+// ── Permission prompt handlers ────────────────────────────────────────────────
+
+// Persist the chat immediately so resolved seg.status survives app restart
+function _persistChatNow(chatId) {
+  const chat = chatsStore.chats.find(c => c.id === chatId)
+  if (chat && window.electronAPI?.saveChat) {
+    window.electronAPI.saveChat(JSON.parse(JSON.stringify(toRaw(chat))))
+  }
+}
+
+async function handlePermissionAllowChat(seg) {
+  if (seg.status !== 'pending') return
+  seg.status = 'allowed'
+  _persistChatNow(seg.chatId)
+  chatsStore.clearPermissionPending(seg.chatId)
+  const res = await window.electronAPI?.permissionResponse?.(seg.chatId, {
+    blockId: seg.blockId,
+    decision: 'allow_chat',
+    pattern: seg.command,
+  })
+  // Push the new entry into the reactive chat so the Permissions tab shows it immediately
+  if (res?.newChatAllowEntry) {
+    const chat = chatsStore.chats.find(c => c.id === seg.chatId)
+    if (chat) {
+      if (!Array.isArray(chat.chatAllowList)) chat.chatAllowList = []
+      const exists = chat.chatAllowList.some(e => e.pattern === res.newChatAllowEntry.pattern)
+      if (!exists) chat.chatAllowList.push(res.newChatAllowEntry)
+    }
+  }
+}
+
+async function handlePermissionAllowGlobal(seg) {
+  if (seg.status !== 'pending') return
+  seg.status = 'allowed'
+  _persistChatNow(seg.chatId)
+  chatsStore.clearPermissionPending(seg.chatId)
+  await window.electronAPI?.permissionResponse?.(seg.chatId, {
+    blockId: seg.blockId,
+    decision: 'allow_global',
+    pattern: seg.command,
+  })
+  // Reload config so the Security tab's global allow list reflects the new entry
+  await configStore.loadConfig()
+}
+
+async function handlePermissionReject(seg) {
+  if (seg.status !== 'pending') return
+  seg.status = 'rejected'
+  _persistChatNow(seg.chatId)
+  chatsStore.clearPermissionPending(seg.chatId)
+  await window.electronAPI?.permissionResponse?.(seg.chatId, {
+    blockId: seg.blockId,
+    decision: 'reject',
+    pattern: seg.command,
+  })
 }
 
 // ── Todo panel state ─────────────────────────────────────────────────────────

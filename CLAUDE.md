@@ -126,6 +126,16 @@ npm run electron
 - Chats: `chats/index.json` (metadata) + `chats/{id}.json` (per-chat with messages)
 - Souls: `souls/{personaId}/{type}.md`
 
+### `.env` vs `config.json` — What Lives Where
+
+- **`.env`** (at `DATA_DIR/.env`) stores only **`SPARKAI_DATA_PATH`** — the data directory override. It must live outside `config.json` because it determines where `config.json` is.
+- **`config.json`** stores everything else, including the three user-configured paths:
+  - `skillsPath` — directory of skill folders (default: `~/.claude/skills`)
+  - `DoCPath` — documents / vault folder path
+  - `artyfactPath` — directory where AI artifacts are written during chats
+- These paths are read/written via the `store:get-env-paths` / `store:save-env-path` IPC channels (named for historical reasons), but they no longer touch `.env`.
+- The renderer accesses them through `configStore.config.skillsPath` etc., populated by `loadEnvPaths()` in `src/stores/config.js`.
+
 ## UI/UX Design System
 
 ### Color Palette
@@ -516,3 +526,94 @@ Do NOT write task state to files on disk — it conflicts across concurrent term
 <!-- Append lessons here after corrections. Format: date, what went wrong, the rule to follow. -->
 <!-- Example: -->
 <!-- - **2026-02-25**: Forgot to debounce persist call in tight loop → Always use `debouncedPersistChat()` during streaming, never raw `persistChat()`. -->
+
+- **2026-03-01**: Added a one-time migration block to `main.js` to move path keys from `.env` → `config.json`. Wrong approach — migration code in source is dead weight after first run, requires a restart to execute, and pollutes the codebase with logic that will never run again. **Rule: one-time data migrations must be done by directly editing the data files on disk (e.g. `config.json`, `.env`), not by adding migration logic to source code.**
+
+## App Icon
+
+### Icon Design
+
+SparkAI uses a custom **black-theme icon** — a metallic gold lightning bolt on a pure black background with a gold orbit ring. Designed to match the app's signature dark aesthetic.
+
+- **Style:** Flat + glow, dark premium (Linear/Raycast-inspired)
+- **Colors:** Pure black `#0a0a0a` background · Metallic gold bolt (#FFD700 → #FFA500) · Gold ring with shimmer
+- **Shape:** Rounded square (rx=80), 512×512 canvas
+- **Source:** `build/icons/icon.svg`
+
+### Icon Files
+
+```
+public/
+├── icon.svg          # Favicon source (Vite dev server)
+└── icon.png          # Favicon PNG fallback
+
+build/icons/
+├── icon.svg          # Master SVG
+├── icon.png          # Master PNG (1024x1024)
+├── icon-16x.png      # 16×16
+├── icon-32x.png      # 32×32
+├── icon-48x.png      # 48×48
+├── icon-64x.png      # 64×64
+├── icon-128x.png     # 128×128
+├── icon-256x.png     # 256×256
+└── icon-512x.png     # 512×512
+```
+
+### Electron Window Icon
+
+Set in `electron/main.js` `BrowserWindow` config:
+
+```js
+const { app, BrowserWindow } = require('electron')
+const path = require('path')
+
+new BrowserWindow({
+  icon: path.join(__dirname, '../public/icon.png'),
+  // ...
+})
+```
+
+### Electron Builder Config (`package.json`)
+
+```json
+"build": {
+  "appId": "com.sparkai.app",
+  "productName": "SparkAI",
+  "icon": "build/icons/icon.png",
+  "win": { "icon": "build/icons/icon.png", "target": ["nsis", "portable"] },
+  "mac": { "icon": "build/icons/icon.png", "target": "dmg" },
+  "linux": { "icon": "build/icons", "target": "AppImage" }
+}
+```
+
+### Sidebar Logo
+
+The sidebar logo uses the icon image directly:
+
+```vue
+<!-- Expanded state -->
+<img src="/icon.png" alt="SparkAI" style="width:32px;height:32px;border-radius:8px;" />
+
+<!-- Collapsed state -->
+<img src="/icon.png" alt="SparkAI" style="width:28px;height:28px;border-radius:6px;" />
+```
+
+### Regenerating Icons
+
+If you need to regenerate PNG sizes from the SVG source:
+
+```bash
+# Using sharp (already in devDependencies)
+node scripts/generate-icons.js
+```
+
+Or manually with cairosvg (Python):
+
+```bash
+pip install cairosvg
+python3 -c "
+import cairosvg
+for size in [16,32,48,64,128,256,512,1024]:
+    cairosvg.svg2png(url='build/icons/icon.svg', write_to=f'build/icons/icon-{size}x.png', output_width=size, output_height=size)
+"
+```

@@ -10,7 +10,13 @@
       @remove-group-persona="(cId, pid) => $emit('remove-group-persona', cId, pid)"
     >
       <template #row-bottom-left>
-        <span v-if="isRunning" class="gp-running-badge">
+        <span v-if="chatsStore.pendingPermissionChatIds.has(props.chatId)" class="gp-approval-badge">
+          <svg style="width:10px;height:10px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          Approval
+        </span>
+        <span v-else-if="isRunning" class="gp-running-badge">
           <span class="gp-running-dot"></span>
           Running
         </span>
@@ -260,6 +266,19 @@ function deleteMessage(msg) {
 
 <style scoped>
 .grid-panel { display:flex; flex-direction:column; background:#FFFFFF; overflow:hidden; min-width:0; min-height:0; }
+
+/* ── Approval badge (red, pulsing) ── */
+.gp-approval-badge {
+  display: flex; align-items: center; gap: 5px;
+  padding: 3px 10px 3px 8px; border-radius: var(--radius-full, 9999px);
+  background: #EF4444;
+  color: #FFFFFF; font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small, 0.75rem); font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(239,68,68,0.3);
+  animation: approvalPulse 1.5s ease-in-out infinite;
+}
+@keyframes approvalPulse { 0%,100%{ opacity:1; } 50%{ opacity:0.65; } }
 
 /* ── Running badge (black gradient) ── */
 .gp-running-badge {

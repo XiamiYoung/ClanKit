@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveConfig: (config) => ipcRenderer.invoke('store:save-config', config),
   getDataPath: () => ipcRenderer.invoke('store:get-data-path'),
   saveDataPath: (dataPath) => ipcRenderer.invoke('store:save-data-path', dataPath),
+  getEnvPaths: () => ipcRenderer.invoke('store:get-env-paths'),
+  saveEnvPath: (key, value) => ipcRenderer.invoke('store:save-env-path', key, value),
 
   getPersonas: () => ipcRenderer.invoke('store:get-personas'),
   savePersonas: (personas) => ipcRenderer.invoke('store:save-personas', personas),
@@ -66,6 +68,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── Agent Loop ────────────────────────────────────────────────────────────
   runAgent: (params) => ipcRenderer.invoke('agent:run', params),
   stopAgent: (chatId) => ipcRenderer.invoke('agent:stop', chatId),
+  permissionResponse: (chatId, payload) => ipcRenderer.invoke('agent:permission-response', chatId, payload),
   compactContext: (chatId) => ipcRenderer.invoke('agent:compact', chatId),
   compactContextStandalone: (params) => ipcRenderer.invoke('agent:compact-standalone', params),
   getContextSnapshot: (chatId) => ipcRenderer.invoke('agent:get-context', chatId),
