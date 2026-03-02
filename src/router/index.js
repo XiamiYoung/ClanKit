@@ -4,7 +4,7 @@ import ChatsView from '../views/ChatsView.vue'
 import SkillsView from '../views/SkillsView.vue'
 import PersonasView from '../views/PersonasView.vue'
 import ConfigView from '../views/ConfigView.vue'
-import NotesView from '../views/NotesView.vue'
+import DocsView from '../views/DocsView.vue'
 import McpView from '../views/McpView.vue'
 import ToolsView from '../views/ToolsView.vue'
 import KnowledgeView from '../views/KnowledgeView.vue'
@@ -20,7 +20,7 @@ export default createRouter({
     { path: '/knowledge', component: KnowledgeView },
     { path: '/mcp',       component: McpView },
     { path: '/tools',     component: ToolsView },
-    { path: '/notes',     component: NotesView },
+    { path: '/notes',     component: DocsView },
     { path: '/config',    component: ConfigView }
   ]
 })

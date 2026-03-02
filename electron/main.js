@@ -2287,8 +2287,8 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       const loopConfig = { ...(run.config || config), soulsDir: SOULS_DIR }
       if (injectedPlan) loopConfig.injectedPlan = injectedPlan
       loopConfig.sandboxConfig = groupCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
-      loopConfig.chatPermissionMode = params.chatPermissionMode || 'inherit'
-      loopConfig.chatAllowList = params.chatAllowList || []
+      loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
+      loopConfig.chatAllowList = chatAllowList || []
       const loop = new AgentLoop(loopConfig)
       activeLoops.set(loopKey, loop)
 
@@ -2531,6 +2531,69 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
   } catch (err) {
     logger.error('agent:enhance-prompt error', err.message)
     return { success: false, error: err.message }
+  }
+})
+
+/**
+ * Resolve which @mentioned personas are directly addressed (should respond)
+ * vs. passively referenced. Uses a fast single-turn LLM call.
+ *
+ * Input:  { message, personas: [{id, name}], config }
+ * Output: { addresseeIds: string[] }  — subset of the provided persona IDs
+ */
+ipcMain.handle('agent:resolve-addressees', async (event, { message, personas, config }) => {
+  try {
+    const names = personas.map(p => p.name)
+    const systemPrompt = `You are a routing assistant for a group chat. Your job is to identify which participants are being directly spoken TO in a message — meaning they are expected to respond.
+
+A participant is directly addressed if:
+- The message asks them a question
+- The message gives them an instruction or task
+- The message is directly directed at them (e.g. starts with their @name)
+
+A participant is NOT directly addressed if:
+- They are merely mentioned as a subject or object ("say hello to X", "do you know X", "tell X about Y")
+- They are referenced in passing
+
+Participants in this chat: ${names.map(n => `"${n}"`).join(', ')}
+
+Reply with ONLY a JSON array of the names that should respond. Example: ["Alice"] or ["Alice", "Bob"]
+If none should respond, reply with [].`
+
+    const userContent = `Message: "${message}"`
+
+    const { AnthropicClient } = require('./agent/core/AnthropicClient')
+    // Always use haiku for this classification — fast and cheap
+    const classifyConfig = {
+      ...config,
+      anthropic: { ...(config.anthropic || {}), activeModel: 'haiku' },
+      customModel: config.anthropic?.haikuModel || 'claude-haiku-4-5'
+    }
+    const ac = new AnthropicClient(classifyConfig)
+    const client = ac.getClient()
+    const response = await client.messages.create({
+      model: classifyConfig.customModel,
+      max_tokens: 128,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }],
+    })
+
+    const raw = response.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
+    // Extract JSON array from response (may have surrounding prose)
+    const match = raw.match(/\[.*?\]/s)
+    const addresseeNames = match ? JSON.parse(match[0]) : []
+
+    // Map names back to IDs (case-insensitive)
+    const addresseeIds = personas
+      .filter(p => addresseeNames.some(n => n.toLowerCase() === p.name.toLowerCase()))
+      .map(p => p.id)
+
+    logger.agent('resolve-addressees', { message: message.slice(0, 80), addresseeNames, addresseeIds })
+    return { addresseeIds }
+  } catch (err) {
+    logger.error('agent:resolve-addressees error', err.message)
+    // Fallback: treat all mentioned personas as addressees
+    return { addresseeIds: personas.map(p => p.id) }
   }
 })
 
@@ -3128,6 +3191,32 @@ ipcMain.handle('shell:open-file', async (_, filePath) => {
 ipcMain.handle('shell:open-external', async (_, url) => {
   try {
     await shell.openExternal(url)
+    return { success: true }
+  } catch (err) {
+    return { error: err.message }
+  }
+})
+
+// files:open-image-data-uri -- write a base64 data URI to a temp file and open with the OS viewer
+ipcMain.handle('files:open-image-data-uri', async (_, { dataUri, name }) => {
+  try {
+    const os = require('os')
+    const path = require('path')
+    const fs = require('fs')
+    // Extract base64 payload from data URI (data:<mediaType>;base64,<data>)
+    const match = dataUri.match(/^data:(image\/[^;]+);base64,(.+)$/s)
+    if (!match) return { error: 'Invalid data URI' }
+    const ext = match[1].split('/')[1] || 'png'
+    const safeName = (name || `image.${ext}`).replace(/[^a-zA-Z0-9._-]/g, '_')
+    const tmpPath = path.join(os.tmpdir(), safeName)
+    fs.writeFileSync(tmpPath, Buffer.from(match[2], 'base64'))
+    if (isWSL()) {
+      const { execSync } = require('child_process')
+      execSync('explorer.exe "' + toWindowsPath(tmpPath) + '"')
+      return { success: true }
+    }
+    const result = await shell.openPath(tmpPath)
+    if (result) return { error: result }
     return { success: true }
   } catch (err) {
     return { error: err.message }

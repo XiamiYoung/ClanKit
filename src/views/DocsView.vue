@@ -296,13 +296,17 @@
 
         <!-- Item actions: shown when a specific file or folder is right-clicked -->
         <template v-if="ctxMenu.targetType">
+          <button class="ctx-item" @click="copyPathFromCtx(ctxMenu.targetPath)">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            {{ ctxPathCopied ? 'Copied!' : 'Copy Path' }}
+          </button>
+          <button class="ctx-item" @click="revealInExplorer(ctxMenu.targetPath); closeContextMenu()">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Open in Explorer
+          </button>
           <button class="ctx-item" @click="startCtxAction('rename', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             Rename
-          </button>
-          <button class="ctx-item ctx-danger" @click="handleDeleteItem(ctxMenu.targetPath); closeContextMenu()">
-            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            Delete
           </button>
         </template>
       </div>
@@ -790,16 +794,32 @@ async function onDrawioSave(xml) {
 }
 
 // ── Context menu handlers ──
+const ctxPathCopied = ref(false)
+
 function openContextMenu(e, targetPath, targetType) {
   e.preventDefault?.()
   e.stopPropagation?.()
   const x = Math.min(e.clientX, window.innerWidth - 210)
   const y = Math.min(e.clientY, window.innerHeight - 220)
+  ctxPathCopied.value = false
   ctxMenu.value = { visible: true, x, y, targetPath, targetType }
 }
 
 function closeContextMenu() {
   ctxMenu.value.visible = false
+}
+
+function copyPathFromCtx(path) {
+  navigator.clipboard.writeText(path)
+  ctxPathCopied.value = true
+  setTimeout(() => {
+    ctxPathCopied.value = false
+    closeContextMenu()
+  }, 900)
+}
+
+function revealInExplorer(path) {
+  window.electronAPI.showInFolder(path)
 }
 
 function startCtxAction(type, pathArg) {
@@ -936,6 +956,77 @@ function handleRootDrop(e) {
   handleMoveItem(sourcePath, store.vaultPath)
 }
 
+// ── File-type icon helper ──
+function fileTypeIcon(name, color, active = false) {
+  const s = `width:18px;height:18px;flex-shrink:0;color:${color};`
+  const ext = (name.split('.').pop() || '').toLowerCase()
+
+  // Markdown — official Markdown Mark (dcurtis/markdown-mark), solid variant
+  if (ext === 'md') {
+    return h('svg', { style: `width:22px;height:14px;flex-shrink:0;`, viewBox: '0 0 208 128', fill: active ? '#fff' : '#1e1e1e' }, [
+      h('path', { d: 'M193 128H15a15 15 0 0 1-15-15V15A15 15 0 0 1 15 0h178a15 15 0 0 1 15 15v98a15 15 0 0 1-15 15zM50 98V59l20 25 20-25v39h20V30H90L70 55 50 30H30v68zm134-34h-20V30h-20v34h-20l30 35z' })
+    ])
+  }
+
+  // Draw.io — official diagrams.net icon (Simple Icons), brand orange #F08705
+  if (ext === 'drawio') {
+    return h('svg', { style: `width:18px;height:18px;flex-shrink:0;`, viewBox: '0 0 24 24', fill: active ? '#fff' : '#F08705' }, [
+      h('path', { d: 'M19.69 13.419h-2.527l-2.667-4.555a1.292 1.292 0 001.035-1.28V4.16c0-.725-.576-1.312-1.302-1.312H9.771c-.726 0-1.312.576-1.312 1.301v3.435c0 .619.426 1.152 1.034 1.28l-2.666 4.555H4.309c-.725 0-1.312.576-1.312 1.301v3.435c0 .725.576 1.312 1.302 1.312h4.458c.726 0 1.312-.576 1.312-1.302v-3.434c0-.726-.576-1.312-1.301-1.312h-.437l2.645-4.523h2.059l2.656 4.523h-.438c-.725 0-1.312.576-1.312 1.301v3.435c0 .725.576 1.312 1.302 1.312H19.7c.726 0 1.312-.576 1.312-1.302v-3.434c0-.726-.576-1.312-1.301-1.312zM24 22.976c0 .565-.459 1.024-1.013 1.024H1.024A1.022 1.022 0 010 22.987V1.024C0 .459.459 0 1.013 0h21.963C23.541 0 24 .459 24 1.013z' })
+    ])
+  }
+
+  // JSON
+  if (ext === 'json') {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+      h('path', { d: 'M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1' }),
+      h('path', { d: 'M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1' }),
+    ])
+  }
+
+  // JavaScript / TypeScript
+  if (ext === 'js' || ext === 'ts' || ext === 'jsx' || ext === 'tsx' || ext === 'mjs' || ext === 'cjs') {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+      h('polyline', { points: '16 18 22 12 16 6' }),
+      h('polyline', { points: '8 6 2 12 8 18' }),
+    ])
+  }
+
+  // Images
+  if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'tiff'].includes(ext)) {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+      h('rect', { x: '3', y: '3', width: '18', height: '18', rx: '2' }),
+      h('circle', { cx: '8.5', cy: '8.5', r: '1.5' }),
+      h('polyline', { points: '21 15 16 10 5 21' }),
+    ])
+  }
+
+  // PDF
+  if (ext === 'pdf') {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+      h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
+      h('polyline', { points: '14 2 14 8 20 8' }),
+      h('path', { d: 'M9 15h1a1 1 0 0 0 0-2H9v4' }),
+      h('path', { d: 'M14 13h1.5a1.5 1.5 0 0 1 0 3H14v-3z' }),
+    ])
+  }
+
+  // Plain text / config
+  if (['txt', 'log', 'env', 'ini', 'cfg', 'conf', 'toml', 'yaml', 'yml'].includes(ext)) {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+      h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
+      h('polyline', { points: '14 2 14 8 20 8' }),
+      h('line', { x1: '8', y1: '13', x2: '16', y2: '13' }),
+      h('line', { x1: '8', y1: '17', x2: '13', y2: '17' }),
+    ])
+  }
+
+  // Default: generic document
+  return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+    h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
+    h('polyline', { points: '14 2 14 8 20 8' }),
+  ])
+}
+
 // ── TreeNode: recursive file tree component ──
 const TreeNode = defineComponent({
   name: 'TreeNode',
@@ -1041,30 +1132,13 @@ const TreeNode = defineComponent({
             ? h('svg', { style: `width:18px;height:18px;flex-shrink:0;color:${isActive ? '#fff' : '#6B7280'};`, viewBox: '0 0 24 24', fill: 'currentColor' }, [
                 h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })
               ])
-            : h('svg', { style: `width:18px;height:18px;flex-shrink:0;color:${isActive ? '#fff' : '#9CA3AF'};`, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-                h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
-                h('polyline', { points: '14 2 14 8 20 8' })
-              ]),
+            : fileTypeIcon(props.node.name, isActive ? '#fff' : '#9CA3AF', isActive),
 
           // Name
           h('span', {
             class: 'truncate flex-1',
             style: { fontWeight: isDir ? '600' : '400' }
           }, props.node.name),
-
-          // Delete button (on hover)
-          hovered.value ? h('button', {
-            style: 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);border:none;color:#fff;cursor:pointer;padding:4px;flex-shrink:0;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);display:flex;align-items:center;justify-content:center;',
-            title: 'Delete',
-            onClick: (e) => { e.stopPropagation(); emit('delete-item', props.node.path) },
-            onMouseenter: (e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' },
-            onMouseleave: (e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' },
-          }, [
-            h('svg', { style: 'width:12px;height:12px;', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-              h('polyline', { points: '3 6 5 6 21 6' }),
-              h('path', { d: 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2' })
-            ])
-          ]) : null
         ])
       )
 

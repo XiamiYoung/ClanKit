@@ -2,7 +2,22 @@
   <div>
     <!-- ── User message ─────────────────────────────────────────────────────── -->
     <template v-if="message.role === 'user'">
-      <div class="prose-sparkai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleContentClick" />
+      <!-- Image attachments -->
+      <div
+        v-if="imageAttachments.length > 0"
+        class="flex flex-wrap gap-2 mb-2"
+      >
+        <img
+          v-for="att in imageAttachments"
+          :key="att.id || att.name"
+          :src="att.preview"
+          :alt="att.name"
+          style="max-width:280px; max-height:200px; border-radius:10px; object-fit:contain; display:block; background:rgba(255,255,255,0.12); cursor:pointer;"
+          :title="'Click to open ' + att.name"
+          @click="openImage(att)"
+        />
+      </div>
+      <div v-if="message.content" class="prose-sparkai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleContentClick" />
       <BabylonViewer v-for="url in modelUrls" :key="url" :src="url" />
     </template>
 
@@ -232,13 +247,26 @@ import BabylonViewer from './BabylonViewer.vue'
 import PermissionPrompt from './PermissionPrompt.vue'
 import { useChatsStore } from '../../stores/chats'
 import { useConfigStore } from '../../stores/config'
+import { usePersonasStore } from '../../stores/personas'
 
 const chatsStore = useChatsStore()
 const configStore = useConfigStore()
+const personasStore = usePersonasStore()
 
 const props = defineProps({
   message: { type: Object, required: true }
 })
+
+// ── Image attachments (from clipboard paste / file attach) ────────────────────
+const imageAttachments = computed(() =>
+  (props.message.attachments || []).filter(a => a.type === 'image' && a.preview)
+)
+
+function openImage(att) {
+  if (window.electronAPI?.openImageDataUri) {
+    window.electronAPI.openImageDataUri(att.preview, att.name)
+  }
+}
 
 // ── 3D asset detection ────────────────────────────────────────────────────────
 const MODEL_EXT_RE = /\.(glb|gltf|obj|stl|babylon|fbx)(\?[^\s)]*)?$/i
@@ -357,8 +385,21 @@ function renderMarkdown(text) {
     const clean = stripBase64(String(text))
     const raw = marked.parse(clean, { breaks: true, gfm: true })
     const sanitized = DOMPurify.sanitize(raw)
-    // Highlight @mentions
-    const withMentions = sanitized.replace(/@(\w[\w\s]*?\w|\w)\b/g, '<span class="mention">@$1</span>')
+    // Highlight @mentions using exact persona names from the store.
+    // Sorted longest-first so "Yeo Bo Jun" matches before "Bo Jun" if both exist.
+    const allPersonas = personasStore.personas || []
+    const sortedNames = allPersonas
+      .map(p => p.name)
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length)
+    let withMentions = sanitized
+    for (const name of sortedNames) {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      withMentions = withMentions.replace(
+        new RegExp(`@(${escaped})(?=\\W|$)`, 'g'),
+        '<span class="mention">@$1</span>'
+      )
+    }
     // Wrap <pre><code> blocks with a header bar containing a copy button
     const withCodeBlocks = withMentions
       .replace(/<pre><code(?:\s+class="language-(\w+)")?>/g, (m, lang) => {

@@ -27,7 +27,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
   xml: { type: String, default: '' },
@@ -51,6 +51,17 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   initialized.value = false
+})
+
+// When the user switches to a different .drawio file, the component stays mounted
+// but we need to push the new XML into the already-running webview.
+watch(() => props.filePath, () => {
+  if (!initialized.value) return
+  sendToDrawio({
+    action: 'load',
+    xml: props.xml || '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>',
+    autosave: 1,
+  })
 })
 
 function sendToDrawio(payload) {

@@ -207,6 +207,7 @@
               :expanded-folders="expandedFolders"
               @select-file="openFile"
               @toggle-folder="toggleFolder"
+              @context-menu="(e, node) => openSkillCtxMenu(e, node.path)"
             />
           </div>
         </div>
@@ -339,11 +340,31 @@
       </div>
     </template>
 
+    <!-- ── Skills file tree context menu ── -->
+    <Teleport to="body">
+      <div v-if="skillCtxMenu.visible" class="skill-ctx-overlay" @click="closeSkillCtxMenu" @contextmenu.prevent="closeSkillCtxMenu" />
+      <div
+        v-if="skillCtxMenu.visible"
+        class="skill-ctx-menu"
+        :style="{ top: skillCtxMenu.y + 'px', left: skillCtxMenu.x + 'px' }"
+        @click.stop
+      >
+        <button class="skill-ctx-item" @click="copySkillPath">
+          <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          {{ skillCtxPathCopied ? 'Copied!' : 'Copy Path' }}
+        </button>
+        <button class="skill-ctx-item" @click="revealSkillInExplorer(skillCtxMenu.path)">
+          <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Open in Explorer
+        </button>
+      </div>
+    </Teleport>
+
   </div>
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch, onBeforeUnmount, defineComponent, h } from 'vue'
+import { ref, computed, reactive, watch, onBeforeUnmount, defineComponent, h, Teleport } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import TurndownService from 'turndown'
@@ -436,6 +457,37 @@ const fileContent = ref('')
 const loadingFile = ref(false)
 const fileError = ref(null)
 const expandedFolders = reactive({})
+
+// ── Context menu ──
+const skillCtxMenu = ref({ visible: false, x: 0, y: 0, path: '' })
+const skillCtxPathCopied = ref(false)
+
+function openSkillCtxMenu(e, path) {
+  e.preventDefault()
+  e.stopPropagation()
+  const x = Math.min(e.clientX, window.innerWidth - 200)
+  const y = Math.min(e.clientY, window.innerHeight - 80)
+  skillCtxPathCopied.value = false
+  skillCtxMenu.value = { visible: true, x, y, path }
+}
+
+function closeSkillCtxMenu() {
+  skillCtxMenu.value.visible = false
+}
+
+function copySkillPath() {
+  navigator.clipboard.writeText(skillCtxMenu.value.path)
+  skillCtxPathCopied.value = true
+  setTimeout(() => {
+    skillCtxPathCopied.value = false
+    closeSkillCtxMenu()
+  }, 900)
+}
+
+function revealSkillInExplorer(path) {
+  window.electronAPI.showInFolder(path)
+  closeSkillCtxMenu()
+}
 
 const isMarkdownFile = computed(() => {
   if (!activeFileName.value) return false
@@ -622,7 +674,72 @@ function startSkillsResize(e) {
   document.body.style.userSelect = 'none'
 }
 
-// ── SkillTreeNode: recursive file tree component (matches NotesView TreeNode) ──
+// ── File-type icon helper ──
+function fileTypeIcon(name, color, active = false) {
+  const s = `width:18px;height:18px;flex-shrink:0;color:${color};`
+  const ext = (name.split('.').pop() || '').toLowerCase()
+
+  // Markdown — official Markdown Mark (dcurtis/markdown-mark), solid variant
+  if (ext === 'md') {
+    return h('svg', { style: `width:22px;height:14px;flex-shrink:0;`, viewBox: '0 0 208 128', fill: active ? '#fff' : '#1e1e1e' }, [
+      h('path', { d: 'M193 128H15a15 15 0 0 1-15-15V15A15 15 0 0 1 15 0h178a15 15 0 0 1 15 15v98a15 15 0 0 1-15 15zM50 98V59l20 25 20-25v39h20V30H90L70 55 50 30H30v68zm134-34h-20V30h-20v34h-20l30 35z' })
+    ])
+  }
+
+  // Draw.io — official diagrams.net icon (Simple Icons), brand orange #F08705
+  if (ext === 'drawio') {
+    return h('svg', { style: `width:18px;height:18px;flex-shrink:0;`, viewBox: '0 0 24 24', fill: active ? '#fff' : '#F08705' }, [
+      h('path', { d: 'M19.69 13.419h-2.527l-2.667-4.555a1.292 1.292 0 001.035-1.28V4.16c0-.725-.576-1.312-1.302-1.312H9.771c-.726 0-1.312.576-1.312 1.301v3.435c0 .619.426 1.152 1.034 1.28l-2.666 4.555H4.309c-.725 0-1.312.576-1.312 1.301v3.435c0 .725.576 1.312 1.302 1.312h4.458c.726 0 1.312-.576 1.312-1.302v-3.434c0-.726-.576-1.312-1.301-1.312h-.437l2.645-4.523h2.059l2.656 4.523h-.438c-.725 0-1.312.576-1.312 1.301v3.435c0 .725.576 1.312 1.302 1.312H19.7c.726 0 1.312-.576 1.312-1.302v-3.434c0-.726-.576-1.312-1.301-1.312zM24 22.976c0 .565-.459 1.024-1.013 1.024H1.024A1.022 1.022 0 010 22.987V1.024C0 .459.459 0 1.013 0h21.963C23.541 0 24 .459 24 1.013z' })
+    ])
+  }
+
+  if (ext === 'json') {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+      h('path', { d: 'M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1' }),
+      h('path', { d: 'M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1' }),
+    ])
+  }
+
+  if (['js', 'ts', 'jsx', 'tsx', 'mjs', 'cjs'].includes(ext)) {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+      h('polyline', { points: '16 18 22 12 16 6' }),
+      h('polyline', { points: '8 6 2 12 8 18' }),
+    ])
+  }
+
+  if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'tiff'].includes(ext)) {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+      h('rect', { x: '3', y: '3', width: '18', height: '18', rx: '2' }),
+      h('circle', { cx: '8.5', cy: '8.5', r: '1.5' }),
+      h('polyline', { points: '21 15 16 10 5 21' }),
+    ])
+  }
+
+  if (ext === 'pdf') {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+      h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
+      h('polyline', { points: '14 2 14 8 20 8' }),
+      h('path', { d: 'M9 15h1a1 1 0 0 0 0-2H9v4' }),
+      h('path', { d: 'M14 13h1.5a1.5 1.5 0 0 1 0 3H14v-3z' }),
+    ])
+  }
+
+  if (['txt', 'log', 'env', 'ini', 'cfg', 'conf', 'toml', 'yaml', 'yml'].includes(ext)) {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+      h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
+      h('polyline', { points: '14 2 14 8 20 8' }),
+      h('line', { x1: '8', y1: '13', x2: '16', y2: '13' }),
+      h('line', { x1: '8', y1: '17', x2: '13', y2: '17' }),
+    ])
+  }
+
+  return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+    h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
+    h('polyline', { points: '14 2 14 8 20 8' }),
+  ])
+}
+
+// ── SkillTreeNode: recursive file tree component (matches DocsView TreeNode) ──
 const SkillTreeNode = defineComponent({
   name: 'SkillTreeNode',
   props: {
@@ -631,7 +748,7 @@ const SkillTreeNode = defineComponent({
     activePath: String,
     expandedFolders: Object
   },
-  emits: ['select-file', 'toggle-folder'],
+  emits: ['select-file', 'toggle-folder', 'context-menu'],
   setup(props, { emit }) {
     const hovered = ref(false)
 
@@ -661,6 +778,7 @@ const SkillTreeNode = defineComponent({
             if (isDir) emit('toggle-folder', props.node.path)
             else emit('select-file', props.node.path, props.node.name)
           },
+          onContextmenu: (e) => { e.preventDefault(); e.stopPropagation(); emit('context-menu', e, props.node) },
           onMouseenter: () => { hovered.value = true },
           onMouseleave: () => { hovered.value = false },
         }, [
@@ -677,10 +795,7 @@ const SkillTreeNode = defineComponent({
             ? h('svg', { style: `width:18px;height:18px;flex-shrink:0;color:${isActive ? '#fff' : '#6B7280'};`, viewBox: '0 0 24 24', fill: 'currentColor' }, [
                 h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })
               ])
-            : h('svg', { style: `width:18px;height:18px;flex-shrink:0;color:${isActive ? '#fff' : '#9CA3AF'};`, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-                h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
-                h('polyline', { points: '14 2 14 8 20 8' })
-              ]),
+            : fileTypeIcon(props.node.name, isActive ? '#fff' : '#9CA3AF', isActive),
 
           h('span', {
             class: 'truncate flex-1',
@@ -699,6 +814,7 @@ const SkillTreeNode = defineComponent({
               expandedFolders: props.expandedFolders,
               'onSelect-file': (p, n) => emit('select-file', p, n),
               'onToggle-folder': (p) => emit('toggle-folder', p),
+              'onContext-menu': (e, node) => emit('context-menu', e, node),
             })
           )
         }
@@ -1259,4 +1375,43 @@ const SkillTreeNode = defineComponent({
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
+
+/* ── Skills file tree context menu ── */
+.skill-ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+}
+.skill-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 10px;
+  padding: 4px;
+  min-width: 160px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
+  animation: skillCtxEnter 0.1s ease-out;
+}
+@keyframes skillCtxEnter {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1)  translateY(0); }
+}
+.skill-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #E5E5EA;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+.skill-ctx-item:hover { background: #1F1F1F; color: #FFFFFF; }
 </style>

@@ -55,11 +55,11 @@
           <!-- ── User persona ── -->
           <div class="persona-group">
             <div class="persona-card-wrap" ref="usrChipWrap">
-              <div class="persona-card user" @click.stop="togglePopover('user')" @mouseenter="showPersonaTooltip($event, resolvedUserPersonaId)" @mouseleave="hidePersonaTooltip">
+              <div class="persona-card user" @mouseenter="showPersonaTooltip($event, resolvedUserPersonaId)" @mouseleave="hidePersonaTooltip">
                 <div class="persona-card-avatar">
                   <img v-if="activeUserAvatarDataUri" :src="activeUserAvatarDataUri" alt="" class="persona-card-avatar-img" />
                   <div v-else class="persona-card-avatar-default user">
-                    <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                   </div>
                 </div>
                 <div v-if="!compactPersonas" class="persona-card-info">
@@ -77,8 +77,12 @@
                   </svg>
                 </button>
               </div>
+              <!-- User persona select button -->
+              <button class="sys-add-btn" @click.stop="togglePopover('user')" title="Switch user persona">
+                <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </button>
               <!-- User popover -->
-              <div v-if="showUsrPopover" class="persona-popover" @click.stop>
+              <div v-if="showUsrPopover" class="persona-popover user-popover" @click.stop>
                 <div class="persona-popover-header">User Persona</div>
                 <button
                   v-for="p in sortedUserPersonas"
@@ -110,7 +114,7 @@
                 class="sys-avatar-item"
                 :class="{ active: sysPersonaConfigId === pid }"
                 :style="{ zIndex: activeSystemPersonaIds.length - idx }"
-                @click.stop="openSysPersonaConfig(pid)"
+                @click.stop="onSysAvatarClick(pid)"
                 @mouseenter="showPersonaTooltip($event, pid)"
                 @mouseleave="hidePersonaTooltip"
               >
@@ -135,12 +139,11 @@
               </div>
             </div>
 
-            <!-- Active persona name label -->
+            <!-- Active persona name label (no click) -->
             <template v-if="!compactPersonas">
               <div
                 v-if="activeSystemPersonaIds.length === 1"
                 class="sys-persona-label"
-                @click.stop="openSysPersonaConfig(activeSystemPersonaIds[0])"
                 @mouseenter="showPersonaTooltip($event, activeSystemPersonaIds[0])"
                 @mouseleave="hidePersonaTooltip"
               >
@@ -152,11 +155,11 @@
               </div>
             </template>
 
-            <!-- Summary button (single persona) -->
+            <!-- Summary button (single persona) — also opens model config popover -->
             <button
               v-if="activeSystemPersonaIds.length === 1"
               class="persona-card-summary-btn"
-              @click.stop="$emit('open-soul-viewer', activeSystemPersonaIds[0], 'system', personasStore.getPersonaById(activeSystemPersonaIds[0])?.name || 'System')"
+              @click.stop="openSysPersonaConfig(activeSystemPersonaIds[0]); $emit('open-soul-viewer', activeSystemPersonaIds[0], 'system', personasStore.getPersonaById(activeSystemPersonaIds[0])?.name || 'System')"
               title="View summary"
             >
               <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -168,7 +171,7 @@
             <!-- Configure persona button + combobox -->
             <div class="persona-chip-wrap" ref="groupAddChipWrap">
               <button class="sys-add-btn" @click.stop="openPersonaCombobox" title="Configure personas">
-                <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </button>
               <div v-if="showGroupAddPopover" class="sys-combobox" @click.stop>
                 <div class="sys-combobox-search">
@@ -215,7 +218,7 @@
               <div class="spc-header">
                 <span class="spc-header-name">{{ personasStore.getPersonaById(sysPersonaConfigId)?.name || 'Persona' }}</span>
                 <span v-if="personasStore.getPersonaById(sysPersonaConfigId)?.description" class="spc-header-desc">{{ personasStore.getPersonaById(sysPersonaConfigId).description }}</span>
-                <button v-if="activeSystemPersonaIds.length > 1" class="persona-card-summary-btn" style="margin-left:auto;" @click.stop="$emit('open-soul-viewer', sysPersonaConfigId, 'system', personasStore.getPersonaById(sysPersonaConfigId)?.name || 'System')" title="View summary">
+                <button v-if="activeSystemPersonaIds.length > 1" class="persona-card-summary-btn" style="margin-left:auto;" @click.stop="openSysPersonaConfig(sysPersonaConfigId); $emit('open-soul-viewer', sysPersonaConfigId, 'system', personasStore.getPersonaById(sysPersonaConfigId)?.name || 'System')" title="View summary">
                   <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
                     <line x1="10" y1="22" x2="14" y2="22"/>
@@ -468,6 +471,15 @@ function toggleSystemPersona(personaId) {
     }
     chatsStore.addGroupPersona(chatId, personaId)
   }
+}
+
+// ── System avatar click: grid/group → soul viewer; normal → nothing ──
+function onSysAvatarClick(pid) {
+  if (props.compactPersonas || activeSystemPersonaIds.value.length > 1) {
+    // Grid view or group chat: icon click opens soul viewer
+    emit('open-soul-viewer', pid, 'system', personasStore.getPersonaById(pid)?.name || 'System')
+  }
+  // Normal single-persona view: no action on avatar click (use View Summary btn instead)
 }
 
 // ── System persona config popover ──
@@ -856,6 +868,9 @@ onUnmounted(() => {
 /* ── User persona card ── */
 .persona-card-wrap {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .persona-card {
   display: flex;
@@ -865,7 +880,6 @@ onUnmounted(() => {
   border-radius: 0;
   border: none;
   background: transparent;
-  cursor: pointer;
   transition: none;
   font-family: 'Inter', sans-serif;
   position: relative;
@@ -1016,7 +1030,6 @@ onUnmounted(() => {
   display: flex;
   align-items: baseline;
   gap: 4px;
-  cursor: pointer;
   margin-left: 4px;
   flex-shrink: 0;
 }
@@ -1378,6 +1391,9 @@ onUnmounted(() => {
   z-index: 50;
   padding: 6px;
   scrollbar-width: thin;
+}
+.user-popover {
+  right: -28px; /* align under the group-icon button */
 }
 .persona-popover-header {
   font-family: 'Inter', sans-serif;

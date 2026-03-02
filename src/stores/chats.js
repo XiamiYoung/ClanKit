@@ -42,6 +42,7 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.permissionMode === 'sandbox') chat.permissionMode = 'chat_only' // migrate old value
     if (chat.chatAllowList === undefined) chat.chatAllowList = []
     if (chat.chatDangerOverrides === undefined) chat.chatDangerOverrides = []
+    if (chat.maxPersonaRounds === undefined) chat.maxPersonaRounds = null  // null = use default (10)
     // messages === null means "not loaded yet" (lazy)
     if (chat.messages) {
       for (const msg of chat.messages) {
@@ -344,6 +345,7 @@ export const useChatsStore = defineStore('chats', () => {
     if ('permissionMode' in settings) chat.permissionMode = settings.permissionMode
     if ('chatAllowList' in settings) chat.chatAllowList = settings.chatAllowList
     if ('chatDangerOverrides' in settings) chat.chatDangerOverrides = settings.chatDangerOverrides
+    if ('maxPersonaRounds' in settings) chat.maxPersonaRounds = settings.maxPersonaRounds
     chat.updatedAt = Date.now()
     // persistChat → store:save-chat already updates the index, no separate persistIndex needed
     await persistChat(chatId)
@@ -469,36 +471,24 @@ export const useChatsStore = defineStore('chats', () => {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat || chat.messages === null) return
 
+    // Group persona chunks (tagged with personaId) are handled exclusively by
+    // ChatsView.handleChunk via the perChatStreamingMsgId keying system.
+    // The store must NOT touch them — doing so causes duplicate content writes,
+    // race conditions with the streaming flag, and merged/shared bubbles.
+    if (chunk.personaId) {
+      // Only propagate state flags that don't mutate messages
+      if (chunk.type === 'thinking_start') chat.isThinking = true
+      else if (chunk.type === 'text') chat.isThinking = false
+      else if (chunk.type === 'context_update' && chunk.metrics) chat.contextMetrics = { ...chunk.metrics }
+      debouncedPersistChat(chatId)
+      return
+    }
+
     if (chunk.type === 'text') {
       chat.isThinking = false
-      // Route to correct streaming message (group: by personaId, single: last streaming)
-      let msg
-      if (chunk.personaId) {
-        msg = [...chat.messages].reverse().find(m => m.personaId === chunk.personaId && m.streaming)
-      } else {
-        msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
-      }
+      const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
       if (msg) {
         msg.content = (msg.content || '') + chunk.text
-      }
-    } else if (chunk.type === 'persona_start') {
-      // Create streaming placeholder for group persona
-      const exists = chat.messages.some(m => m.personaId === chunk.personaId && m.streaming)
-      if (!exists) {
-        chat.messages.push({
-          id: uuidv4(), role: 'assistant', content: '',
-          streaming: true, streamingStartedAt: Date.now(),
-          personaId: chunk.personaId, personaName: chunk.personaName, segments: []
-        })
-      }
-    } else if (chunk.type === 'persona_end') {
-      const msg = [...chat.messages].reverse().find(m => m.personaId === chunk.personaId && m.streaming)
-      if (msg) {
-        msg.streaming = false
-        if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
-        if (!msg.content && (!msg.segments || msg.segments.length === 0)) {
-          msg.content = '_No response_'
-        }
       }
     } else if (chunk.type === 'thinking_start') {
       chat.isThinking = true

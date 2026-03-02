@@ -55,7 +55,7 @@
                 </svg>
               </div>
             </div>
-            <span class="cw-msg-name-chip">{{ getMsgAssistantName(msg) }}</span>
+            <span class="cw-msg-name-chip cw-msg-name-chip--assistant">{{ getMsgAssistantName(msg) }}</span>
           </div>
 
           <!-- Message bubble -->
@@ -156,7 +156,7 @@
                 </svg>
               </div>
             </div>
-            <span class="cw-msg-name-chip">{{ userPersonaName }}</span>
+            <span class="cw-msg-name-chip cw-msg-name-chip--user">{{ userPersonaName }}</span>
           </div>
         </div>
       </template>
@@ -662,14 +662,20 @@ defineExpose({ scrollToBottom })
   display: inline-block;
   padding: 1px 8px;
   border-radius: 9999px;
-  background: #1A1A1A;
-  color: #fff;
   font-size: 0.62rem;
   font-weight: 600;
   font-family: 'Inter', sans-serif;
   letter-spacing: -0.01em;
   line-height: 1.5;
   white-space: nowrap;
+}
+.cw-msg-name-chip--user {
+  background: linear-gradient(135deg, #4338CA 0%, #6366F1 50%, #818CF8 100%);
+  color: #fff;
+}
+.cw-msg-name-chip--assistant {
+  background: #4B5563;
+  color: #fff;
 }
 
 /* ── Hover action buttons ── */

@@ -477,7 +477,10 @@ RULES YOU MUST FOLLOW:
 2. NEVER write dialogue, quotes, or messages for other participants. Never write "${otherNames[0] || 'OtherName'}:" or simulate what others would say.
 3. DO NOT prefix your response with your own name. No "${personaName}:" label. Just speak directly.
 4. You may reference other participants by name (e.g. "Mark could help with that") but never speak AS them.
-5. Keep your response concise and relevant to your role.`
+5. Keep your response concise and relevant to your role.
+6. Stay in your assigned role. If the user designated you as a developer, only write and fix code — do not review or critique other participants' code. If you are a reviewer, only review — do not write fixes. Respect the division of labor the user set up. NEVER simulate, fabricate, or pre-generate another participant's work. If your role depends on someone else's output (e.g. you are a reviewer but the developer has not submitted code yet), just acknowledge readiness and wait — do NOT invent placeholder content to act on.
+7. When you want another participant to respond next (e.g. to review, continue, or take action), you MUST use the @Name format: ${otherNames.map(n => '@' + n).join(', ')}. Without the @ prefix the system cannot detect the handoff and no one will respond.
+8. Do NOT @mention someone just to confirm, check in, or ask "are you done?". Only @mention when you have a concrete request that requires them to take action (e.g. review code, fix a bug, write something). Idle confirmation @mentions create infinite loops.`
     }
 
     // ── RAG Knowledge Injection ──

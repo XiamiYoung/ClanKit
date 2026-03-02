@@ -529,6 +529,12 @@ Do NOT write task state to files on disk — it conflicts across concurrent term
 
 - **2026-03-01**: Added a one-time migration block to `main.js` to move path keys from `.env` → `config.json`. Wrong approach — migration code in source is dead weight after first run, requires a restart to execute, and pollutes the codebase with logic that will never run again. **Rule: one-time data migrations must be done by directly editing the data files on disk (e.g. `config.json`, `.env`), not by adding migration logic to source code.**
 
+- **2026-03-02**: Group chat persona collaboration loop collected ALL @mentions from a persona's response and triggered all mentioned personas immediately. This caused a persona that was only *referenced* (e.g. "then we'll hand to @Reviewer") to respond in the same round as the persona that was *addressed*. **Rule: in the persona→persona collaboration loop (`triggerPersonaCollaboration`), apply `resolveAddressees` per source message — the same AI-based disambiguation used in the user→persona path — so only the truly addressed personas respond in each round, not every mentioned name.**
+
+- **2026-03-02**: Multiple personas in a group chat must never share a single message bubble. **Rule: `_applyChunk` in `chats.js` must NOT touch ANY chunk tagged with `personaId` (text, persona_start, persona_end, tool_call, tool_result). All group persona chunk processing — placeholder creation, text routing, streaming flag management — is owned exclusively by `ChatsView.handleChunk` via the `perChatStreamingMsgId` keying system.** The store only handles non-persona chunks (single persona / non-group path) and state flags (isThinking, contextMetrics). Violating this causes: (a) duplicate placeholders, (b) double content writes, (c) `streaming=false` race conditions that reroute text to the wrong persona's bubble.
+
+- **2026-03-02**: `\b` (word boundary) in regex does NOT work for CJK (Chinese/Japanese/Korean) characters. CJK chars are non-`\w`, so `\b` between a CJK char and a space/punctuation (both non-`\w`) never fires. **Rule: always use `(?=\W|$)` instead of `\b` for name-boundary matching in `parseMentions`, `stripMentions`, and the `MessageRenderer` @mention highlighter.** This applies to any regex that must support non-Latin names.
+
 ## App Icon
 
 ### Icon Design

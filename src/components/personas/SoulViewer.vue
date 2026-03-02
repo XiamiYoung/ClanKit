@@ -20,72 +20,173 @@
         </button>
       </div>
 
-      <!-- Content -->
-      <div class="soul-body">
-        <!-- Persona info card (always visible) -->
-        <div class="soul-persona-card">
-          <div class="soul-persona-field">
-            <span class="soul-persona-label">Description</span>
-            <span v-if="!editingPrompt" class="soul-persona-value">{{ personaDescription || '—' }}</span>
+      <!-- Tab bar (only for system personas) -->
+      <div v-if="personaType === 'system'" class="soul-tabs">
+        <button class="soul-tab" :class="{ active: activeTab === 'summary' }" @click="activeTab = 'summary'">
+          <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
+            <line x1="10" y1="22" x2="14" y2="22"/>
+          </svg>
+          Summary
+        </button>
+        <button class="soul-tab" :class="{ active: activeTab === 'model' }" @click="activeTab = 'model'">
+          <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          AI Model
+        </button>
+      </div>
+
+      <!-- ═══ SUMMARY TAB (or user persona — always shows this) ═══ -->
+      <template v-if="activeTab === 'summary'">
+        <!-- Content -->
+        <div class="soul-body">
+          <!-- Persona info card -->
+          <div class="soul-persona-card">
+            <div class="soul-persona-field">
+              <span class="soul-persona-label">Description</span>
+              <span v-if="!editingPrompt" class="soul-persona-value">{{ personaDescription || '—' }}</span>
+            </div>
+            <div class="soul-persona-field">
+              <span class="soul-persona-label">System Prompt</span>
+              <template v-if="!editingPrompt">
+                <pre class="soul-persona-prompt">{{ personaPrompt || '—' }}</pre>
+                <button v-if="personaType === 'system'" class="soul-btn-inline" @click="startEditingPrompt">Edit Prompt</button>
+              </template>
+              <template v-else>
+                <textarea v-model="editPromptContent" class="soul-editor" spellcheck="false" rows="6"></textarea>
+                <div class="soul-prompt-actions">
+                  <button class="soul-btn secondary" @click="cancelEditingPrompt">Cancel</button>
+                  <button class="soul-btn primary" @click="savePrompt">Save Prompt</button>
+                </div>
+              </template>
+            </div>
           </div>
-          <div class="soul-persona-field">
-            <span class="soul-persona-label">System Prompt</span>
-            <template v-if="!editingPrompt">
-              <pre class="soul-persona-prompt">{{ personaPrompt || '—' }}</pre>
-              <button v-if="personaType === 'system'" class="soul-btn-inline" @click="startEditingPrompt">Edit Prompt</button>
+
+          <!-- Divider -->
+          <div class="soul-divider">
+            <span class="soul-divider-label">Learned Memory</span>
+            <span v-if="fileSize" class="soul-divider-meta">{{ fileSizeFormatted }} | Updated: {{ lastUpdated || 'never' }}</span>
+          </div>
+
+          <!-- Soul memory content -->
+          <template v-if="loading">
+            <div class="soul-empty">Loading...</div>
+          </template>
+          <template v-else-if="!content">
+            <div class="soul-empty">
+              <p>No learned memory yet.</p>
+              <p class="soul-empty-hint">The AI will automatically learn preferences and context during conversations.</p>
+            </div>
+          </template>
+          <template v-else>
+            <div v-if="!editingMemory" class="soul-rendered" v-html="renderedHtml"></div>
+            <textarea
+              v-else
+              v-model="editContent"
+              class="soul-editor"
+              spellcheck="false"
+            ></textarea>
+          </template>
+        </div>
+
+        <!-- Footer -->
+        <div class="soul-footer">
+          <div class="soul-footer-left">
+            <button v-if="content" class="soul-btn danger" @click="confirmClear">Clear Memory</button>
+          </div>
+          <div class="soul-footer-right">
+            <template v-if="!editingMemory && content">
+              <button class="soul-btn secondary" @click="startEditingMemory">Edit Memory</button>
             </template>
-            <template v-else>
-              <textarea v-model="editPromptContent" class="soul-editor" spellcheck="false" rows="6"></textarea>
-              <div class="soul-prompt-actions">
-                <button class="soul-btn secondary" @click="cancelEditingPrompt">Cancel</button>
-                <button class="soul-btn primary" @click="savePrompt">Save Prompt</button>
+            <template v-if="editingMemory">
+              <button class="soul-btn secondary" @click="cancelEditingMemory">Cancel</button>
+              <button class="soul-btn primary" @click="saveMemoryEdit">Save</button>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- ═══ AI MODEL TAB (system personas only) ═══ -->
+      <template v-else-if="activeTab === 'model'">
+        <div class="soul-body soul-model-body">
+          <!-- Step 1: Provider -->
+          <div class="soul-model-section">
+            <div class="soul-model-section-label">
+              <span class="soul-step-num">1</span>
+              Provider
+              <span class="soul-model-badge">{{ draftProvider === 'anthropic' ? 'Anthropic' : draftProvider === 'openrouter' ? 'OpenRouter' : 'OpenAI' }}</span>
+            </div>
+            <div class="soul-provider-cards">
+              <button
+                v-for="prov in [
+                  { id: 'anthropic',  label: 'Anthropic',  sub: 'Claude models' },
+                  { id: 'openrouter', label: 'OpenRouter', sub: 'Multi-provider' },
+                  { id: 'openai',     label: 'OpenAI',     sub: 'GPT / custom' }
+                ]"
+                :key="prov.id"
+                class="soul-provider-card"
+                :class="{ active: draftProvider === prov.id }"
+                @click="selectProvider(prov.id)"
+              >
+                <span class="soul-provider-card-name">{{ prov.label }}</span>
+                <span class="soul-provider-card-sub">{{ prov.sub }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 2: Model -->
+          <div class="soul-model-section soul-model-section-grow">
+            <div class="soul-model-section-label">
+              <span class="soul-step-num">2</span>
+              Model
+              <span class="soul-model-badge">{{ currentModelLabel }}</span>
+            </div>
+            <input
+              v-if="draftProvider !== 'anthropic'"
+              v-model="modelFilter"
+              type="text"
+              placeholder="Search models..."
+              class="soul-model-search"
+              @click.stop
+            />
+            <div class="soul-model-list">
+              <button
+                class="soul-model-item"
+                :class="{ active: draftModelId === null }"
+                @click="draftModelId = null"
+              >
+                <span>Default</span>
+                <span class="soul-model-id">{{ defaultModelLabel }}</span>
+              </button>
+              <div v-if="(draftProvider === 'openrouter' && modelsStore.openrouterLoading) || (draftProvider === 'openai' && modelsStore.openaiLoading)" class="soul-model-loading">
+                Loading models...
               </div>
-            </template>
+              <button
+                v-for="m in filteredModels"
+                :key="m.id"
+                class="soul-model-item"
+                :class="{ active: draftModelId === m.id }"
+                @click="draftModelId = m.id"
+              >
+                <span>{{ m.name || m.label || m.id }}</span>
+                <span v-if="m.id !== (m.name || m.label)" class="soul-model-id">{{ m.id }}</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Divider -->
-        <div class="soul-divider">
-          <span class="soul-divider-label">Learned Memory</span>
-          <span v-if="fileSize" class="soul-divider-meta">{{ fileSizeFormatted }} | Updated: {{ lastUpdated || 'never' }}</span>
-        </div>
-
-        <!-- Soul memory content -->
-        <template v-if="loading">
-          <div class="soul-empty">Loading...</div>
-        </template>
-        <template v-else-if="!content">
-          <div class="soul-empty">
-            <p>No learned memory yet.</p>
-            <p class="soul-empty-hint">The AI will automatically learn preferences and context during conversations.</p>
+        <!-- Footer with Save -->
+        <div class="soul-footer">
+          <div class="soul-footer-left"></div>
+          <div class="soul-footer-right">
+            <button class="soul-btn secondary" @click="$emit('close')">Cancel</button>
+            <button class="soul-btn primary" @click="saveModel">Save</button>
           </div>
-        </template>
-        <template v-else>
-          <div v-if="!editingMemory" class="soul-rendered" v-html="renderedHtml"></div>
-          <textarea
-            v-else
-            v-model="editContent"
-            class="soul-editor"
-            spellcheck="false"
-          ></textarea>
-        </template>
-      </div>
+        </div>
+      </template>
 
-      <!-- Footer -->
-      <div class="soul-footer">
-        <div class="soul-footer-left">
-          <button v-if="content" class="soul-btn danger" @click="confirmClear">Clear Memory</button>
-        </div>
-        <div class="soul-footer-right">
-          <template v-if="!editingMemory && content">
-            <button class="soul-btn secondary" @click="startEditingMemory">Edit Memory</button>
-          </template>
-          <template v-if="editingMemory">
-            <button class="soul-btn secondary" @click="cancelEditingMemory">Cancel</button>
-            <button class="soul-btn primary" @click="saveMemoryEdit">Save</button>
-          </template>
-        </div>
-      </div>
     </div>
 
     <!-- Confirm Clear Modal -->
@@ -105,6 +206,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { marked } from 'marked'
 import ConfirmModal from '../common/ConfirmModal.vue'
+import { useModelsStore } from '../../stores/models'
 
 const props = defineProps({
   personaId:          { type: String, required: true },
@@ -112,18 +214,61 @@ const props = defineProps({
   personaName:        { type: String, default: 'Persona' },
   personaDescription: { type: String, default: '' },
   personaPrompt:      { type: String, default: '' },
+  personaProviderId:  { type: String, default: null },
+  personaModelId:     { type: String, default: null },
 })
 
 const emit = defineEmits(['close', 'update-persona'])
 
+const modelsStore = useModelsStore()
+
+// ── Tab state ──
+const activeTab = ref('summary')
+
+// ── Provider / model draft (AI Model tab) ──
+const draftProvider = ref(props.personaProviderId || 'anthropic')
+const draftModelId = ref(props.personaModelId || null)
+const modelFilter = ref('')
+
+const filteredModels = computed(() => {
+  const q = modelFilter.value.trim().toLowerCase()
+  const models = modelsStore.getModelsForProvider(draftProvider.value)
+  if (!q) return models
+  return models.filter(m => (m.name || m.label || '').toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
+})
+
+const defaultModelLabel = computed(() => modelsStore.getDefaultModelLabel(draftProvider.value))
+
+const currentModelLabel = computed(() => {
+  if (!draftModelId.value) return 'Default'
+  const models = modelsStore.getModelsForProvider(draftProvider.value)
+  const m = models.find(x => x.id === draftModelId.value)
+  return m?.name || m?.label || draftModelId.value
+})
+
+function selectProvider(prov) {
+  draftProvider.value = prov
+  draftModelId.value = null
+  modelFilter.value = ''
+  if (prov === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
+  if (prov === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
+}
+
+function saveModel() {
+  emit('update-persona', {
+    providerId: draftProvider.value === 'anthropic' ? null : draftProvider.value,
+    modelId: draftModelId.value || null,
+  })
+  emit('close')
+}
+
+// ── Memory & content ──
 const loading = ref(true)
 const content = ref(null)
 
-// Memory editing
 const editingMemory = ref(false)
 const editContent = ref('')
 
-// Prompt editing
 const editingPrompt = ref(false)
 const editPromptContent = ref('')
 
@@ -142,7 +287,12 @@ const lastUpdated = computed(() => {
 
 const renderedHtml = computed(() => {
   if (!content.value) return ''
-  return marked(content.value, { breaks: true })
+  let text = content.value
+  // Replace the raw persona ID with the display name wherever it appears in the soul file
+  if (props.personaId && props.personaId !== '__default_user__') {
+    text = text.replace(new RegExp(props.personaId, 'g'), props.personaName)
+  }
+  return marked(text, { breaks: true })
 })
 
 async function loadContent() {
@@ -156,7 +306,6 @@ async function loadContent() {
   loading.value = false
 }
 
-// Memory editing
 function startEditingMemory() {
   editContent.value = content.value || ''
   editingMemory.value = true
@@ -173,7 +322,6 @@ async function saveMemoryEdit() {
   editingMemory.value = false
 }
 
-// Prompt editing
 function startEditingPrompt() {
   editPromptContent.value = props.personaPrompt || ''
   editingPrompt.value = true
@@ -189,7 +337,6 @@ function savePrompt() {
   editingPrompt.value = false
 }
 
-// Clear
 const showConfirmClear = ref(false)
 
 function confirmClear() {
@@ -203,7 +350,11 @@ async function executeClear() {
   editingMemory.value = false
 }
 
-onMounted(loadContent)
+onMounted(() => {
+  loadContent()
+  if (draftProvider.value === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
+  if (draftProvider.value === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
+})
 </script>
 
 <style scoped>
@@ -228,6 +379,7 @@ onMounted(loadContent)
 .soul-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 20px; border-bottom: 1px solid #1F1F1F;
+  flex-shrink: 0;
 }
 .soul-header-left { display: flex; align-items: center; gap: 10px; }
 .soul-header-icon {
@@ -250,9 +402,35 @@ onMounted(loadContent)
 }
 .soul-close-btn:hover { background: #1F1F1F; color: #FFFFFF; }
 
+/* ── Tab bar ── */
+.soul-tabs {
+  display: flex; gap: 4px; padding: 8px 20px;
+  border-bottom: 1px solid #1F1F1F; flex-shrink: 0;
+}
+.soul-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 8px;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem); font-weight: 600;
+  color: #6B7280; background: transparent; border: none; cursor: pointer;
+  transition: all 0.15s;
+}
+.soul-tab:hover { color: #9CA3AF; background: #1A1A1A; }
+.soul-tab.active {
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+/* ── Summary tab body ── */
 .soul-body {
   flex: 1; overflow-y: auto; padding: 20px;
   scrollbar-width: thin; scrollbar-color: #333 transparent; min-height: 200px;
+}
+
+/* ── Model tab body ── */
+.soul-model-body {
+  display: flex; flex-direction: column; gap: 0; padding: 20px;
+  min-height: 0;
 }
 
 /* Persona info card */
@@ -326,9 +504,11 @@ onMounted(loadContent)
 }
 .soul-editor:focus { border-color: #4B5563; }
 
+/* ── Footer ── */
 .soul-footer {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 20px; border-top: 1px solid #1F1F1F; background: #0A0A0A;
+  flex-shrink: 0;
 }
 .soul-footer-left, .soul-footer-right { display: flex; gap: 8px; }
 
@@ -351,4 +531,97 @@ onMounted(loadContent)
   background: transparent; color: #EF4444; border: 1px solid rgba(239,68,68,0.3);
 }
 .soul-btn.danger:hover { background: rgba(239,68,68,0.1); }
+
+/* ── AI Model tab ── */
+.soul-model-section {
+  margin-bottom: 20px;
+}
+.soul-model-section-grow {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+}
+.soul-model-section-label {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem);
+  font-weight: 600; color: #9CA3AF; margin-bottom: 10px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.soul-step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: linear-gradient(135deg, #1A1A1A 0%, #374151 100%);
+  color: #FFFFFF; font-size: 10px; font-weight: 700;
+  flex-shrink: 0;
+}
+.soul-model-badge {
+  font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0;
+  padding: 2px 8px; border-radius: 6px;
+  background: #1F1F1F; color: #9CA3AF;
+  font-family: 'JetBrains Mono', monospace;
+}
+.soul-provider-cards {
+  display: flex; gap: 8px;
+}
+.soul-provider-card {
+  flex: 1; padding: 12px 10px; border-radius: 10px;
+  border: 1px solid #2A2A2A; background: #1A1A1A;
+  cursor: pointer; transition: all 0.15s; text-align: center;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.soul-provider-card:hover { border-color: #4B5563; }
+.soul-provider-card.active {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  border-color: #4B5563;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+.soul-provider-card-name {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem); font-weight: 600;
+  color: #9CA3AF; transition: color 0.15s;
+}
+.soul-provider-card.active .soul-provider-card-name { color: #FFFFFF; }
+.soul-provider-card:hover:not(.active) .soul-provider-card-name { color: #D1D5DB; }
+.soul-provider-card-sub {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-small, 0.75rem);
+  color: #4B5563; transition: color 0.15s;
+}
+.soul-provider-card.active .soul-provider-card-sub { color: rgba(255,255,255,0.5); }
+.soul-model-search {
+  width: 100%; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid #2A2A2A; background: #1A1A1A;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption, 0.8rem); outline: none;
+  color: #FFFFFF; transition: border-color 0.15s; margin-bottom: 8px;
+  box-sizing: border-box;
+}
+.soul-model-search:focus { border-color: #4B5563; box-shadow: 0 0 0 3px rgba(75,85,99,0.2); }
+.soul-model-search::placeholder { color: #4B5563; }
+.soul-model-list {
+  flex: 1; overflow-y: auto;
+  border: 1px solid #2A2A2A; border-radius: 12px;
+  display: flex; flex-direction: column;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+  background: #1A1A1A; min-height: 0;
+}
+.soul-model-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 10px 14px; border: none; background: transparent;
+  cursor: pointer; font-family: 'Inter', sans-serif; font-size: var(--fs-caption, 0.8rem);
+  font-weight: 500; color: #9CA3AF; text-align: left;
+  transition: all 0.12s; border-bottom: 1px solid #1F1F1F; flex-shrink: 0;
+}
+.soul-model-item:last-child { border-bottom: none; }
+.soul-model-item:first-child { border-radius: 11px 11px 0 0; }
+.soul-model-item:last-child { border-radius: 0 0 11px 11px; }
+.soul-model-item:hover { background: #222222; color: #FFFFFF; }
+.soul-model-item.active {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  color: #FFFFFF;
+}
+.soul-model-item.active .soul-model-id { color: rgba(255,255,255,0.4); }
+.soul-model-id {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  color: #4B5563; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 200px;
+}
+.soul-model-loading {
+  padding: 16px; text-align: center; font-size: var(--fs-caption, 0.8rem); color: #4B5563;
+}
 </style>

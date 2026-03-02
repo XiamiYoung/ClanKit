@@ -4,6 +4,11 @@
  * Detects `@PersonaName` (case-insensitive) and `@all`.
  * Multi-word persona names are matched greedily.
  *
+ * NOTE: This returns every persona whose @Name appears anywhere in the text.
+ * Determining *which* of those personas should actually respond (addressees vs.
+ * passive references) is handled by the AI resolver in ChatsView — see
+ * `resolveAddressees` / `agent:resolve-addressees` IPC channel.
+ *
  * @param {string} text          The user's message text
  * @param {Array}  personas      Array of persona objects with { id, name }
  * @returns {{ mentions: string[], mentionAll: boolean }}
@@ -14,21 +19,18 @@ export function parseMentions(text, personas) {
     return { mentions: [], mentionAll: false }
   }
 
-  let mentionAll = false
+  const mentionAll = /@all(?=\W|$)/i.test(text)
   const mentions = []
-
-  // Check for @all
-  if (/@all\b/i.test(text)) {
-    mentionAll = true
-  }
 
   // Sort personas by name length descending so longer names match first
   const sorted = [...personas].sort((a, b) => b.name.length - a.name.length)
 
   for (const persona of sorted) {
-    // Escape regex special characters in persona name
     const escaped = persona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const regex = new RegExp(`@${escaped}\\b`, 'i')
+    // Use (?=\W|$) instead of \b — \b fails for CJK names because Chinese
+    // characters are non-\w, so there's no word boundary between them and
+    // following spaces/punctuation.
+    const regex = new RegExp(`@${escaped}(?=\\W|$)`, 'i')
     if (regex.test(text)) {
       if (!mentions.includes(persona.id)) {
         mentions.push(persona.id)
@@ -48,12 +50,12 @@ export function parseMentions(text, personas) {
  */
 export function stripMentions(text, personas) {
   if (!text) return text
-  let cleaned = text.replace(/@all\b/gi, '')
+  let cleaned = text.replace(/@all(?=\W|$)/gi, '')
   if (personas) {
     const sorted = [...personas].sort((a, b) => b.name.length - a.name.length)
     for (const persona of sorted) {
       const escaped = persona.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      cleaned = cleaned.replace(new RegExp(`@${escaped}\\b`, 'gi'), '')
+      cleaned = cleaned.replace(new RegExp(`@${escaped}(?=\\W|$)`, 'gi'), '')
     }
   }
   return cleaned.trim()

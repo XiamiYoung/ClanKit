@@ -603,48 +603,73 @@
               <!-- Attachment preview strip -->
               <div
                 v-if="attachments.length > 0"
-                class="flex flex-wrap gap-1.5 mb-2 px-1"
+                class="flex flex-wrap gap-2 mb-2 px-1"
               >
-                <div
-                  v-for="att in attachments"
-                  :key="att.id"
-                  class="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs max-w-[200px]"
-                  :style="att.type === 'image'
-                    ? 'background:rgba(0,122,255,0.1); color:#0056CC; border:1px solid #93C5FD;'
-                    : att.type === 'folder'
-                      ? 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'
-                      : att.type === 'error'
-                        ? 'background:#FEE2E2; color:#991B1B; border:1px solid #FCA5A5;'
-                        : 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'"
-                >
-                  <!-- Type icon -->
-                  <svg v-if="att.type === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                  </svg>
-                  <svg v-else-if="att.type === 'folder'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                  </svg>
-                  <svg v-else-if="att.type === 'error'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
-                  </svg>
-                  <svg v-else class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                  </svg>
-                  <span class="truncate">{{ att.name }}</span>
-                  <!-- Remove button -->
-                  <button
-                    @click="removeAttachment(att.id)"
-                    class="w-4 h-4 rounded flex items-center justify-center shrink-0 cursor-pointer transition-colors"
-                    style="color:inherit; opacity:0.6;"
-                    @mouseenter="e => e.currentTarget.style.opacity='1'"
-                    @mouseleave="e => e.currentTarget.style.opacity='0.6'"
-                    aria-label="Remove attachment"
+                <template v-for="att in attachments" :key="att.id">
+                  <!-- Image attachment: thumbnail card -->
+                  <div
+                    v-if="att.type === 'image' && att.preview"
+                    class="relative rounded-xl overflow-hidden shrink-0"
+                    style="width:80px; height:80px; border:1px solid #93C5FD; background:#EFF6FF;"
                   >
-                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    <img
+                      :src="att.preview"
+                      :alt="att.name"
+                      style="width:100%; height:100%; object-fit:cover; display:block;"
+                    />
+                    <!-- Remove overlay -->
+                    <button
+                      @click="removeAttachment(att.id)"
+                      class="absolute top-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer"
+                      style="background:rgba(0,0,0,0.55); color:#fff; border:none;"
+                      aria-label="Remove image"
+                    >
+                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <!-- Non-image attachment: chip -->
+                  <div
+                    v-else
+                    class="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs max-w-[200px]"
+                    :style="att.type === 'image'
+                      ? 'background:rgba(0,122,255,0.1); color:#0056CC; border:1px solid #93C5FD;'
+                      : att.type === 'folder'
+                        ? 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'
+                        : att.type === 'error'
+                          ? 'background:#FEE2E2; color:#991B1B; border:1px solid #FCA5A5;'
+                          : 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'"
+                  >
+                    <!-- Type icon -->
+                    <svg v-if="att.type === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
                     </svg>
-                  </button>
-                </div>
+                    <svg v-else-if="att.type === 'folder'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <svg v-else-if="att.type === 'error'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                    </svg>
+                    <svg v-else class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <span class="truncate">{{ att.name }}</span>
+                    <!-- Remove button -->
+                    <button
+                      @click="removeAttachment(att.id)"
+                      class="w-4 h-4 rounded flex items-center justify-center shrink-0 cursor-pointer transition-colors"
+                      style="color:inherit; opacity:0.6;"
+                      @mouseenter="e => e.currentTarget.style.opacity='1'"
+                      @mouseleave="e => e.currentTarget.style.opacity='0.6'"
+                      aria-label="Remove attachment"
+                    >
+                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
+                </template>
               </div>
 
               <!-- Quote preview -->
@@ -1012,7 +1037,7 @@
 
     <!-- ── Chat Settings Modal (dark theme) ──────────────────────────────── -->
     <Teleport to="body">
-      <div v-if="showChatConfigModal" class="ccm-backdrop" @click.self="cancelChatSettings">
+      <div v-if="showChatConfigModal" class="ccm-backdrop">
         <div class="ccm-dialog">
           <!-- Header -->
           <div class="ccm-header">
@@ -1076,6 +1101,25 @@
                   </button>
                 </div>
                 <span class="ccm-working-path-hint">Leave empty to use the global default path.</span>
+              </div>
+
+              <div class="ccm-dark-section">
+                <div class="ccm-dark-section-label">
+                  Maximum Persona Chat Rounds
+                  <span class="ccm-dark-badge">Group Chat</span>
+                </div>
+                <div class="ccm-working-path-row">
+                  <input
+                    v-model.number="draftMaxPersonaRounds"
+                    type="number"
+                    min="1"
+                    max="100"
+                    class="ccm-working-path-input"
+                    style="max-width: 100px;"
+                    @blur="draftMaxPersonaRounds = Math.min(100, Math.max(1, Number(draftMaxPersonaRounds) || 10))"
+                  />
+                </div>
+                <span class="ccm-working-path-hint">How many back-and-forth rounds personas can run in one message. Default: 10. Hard limit: 100.</span>
               </div>
             </div>
 
@@ -1430,8 +1474,8 @@
                   </template>
                   <span v-if="newChatPersonaIds.length > 3" class="newchat-persona-cfg-avatar-fb newchat-persona-cfg-overflow" :style="{ zIndex: 5 }">+{{ newChatPersonaIds.length - 3 }}</span>
                 </div>
-                <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
               </button>
             </div>
@@ -1454,8 +1498,8 @@
                   </template>
                   <span v-if="newChatPersonaIds.length > 3" class="newchat-persona-cfg-avatar-fb newchat-persona-cfg-overflow" :style="{ zIndex: 5 }">+{{ newChatPersonaIds.length - 3 }}</span>
                 </div>
-                <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
               </div>
             </button>
@@ -1545,6 +1589,8 @@
     :personaName="soulViewerTarget.personaName"
     :personaDescription="soulViewerTarget.personaDescription"
     :personaPrompt="soulViewerTarget.personaPrompt"
+    :personaProviderId="soulViewerTarget.personaProviderId"
+    :personaModelId="soulViewerTarget.personaModelId"
     @close="closeSoulViewer"
     @update-persona="handleSoulViewerUpdatePersona"
   />
@@ -1892,6 +1938,9 @@ const ccmActiveTab = ref('general')
 const ccmToolSearch = ref('')
 const ccmMcpSearch = ref('')
 
+// ── General tab draft state ──
+const draftMaxPersonaRounds = ref(10)
+
 // ── Permissions tab draft state ──
 const draftPermissionMode = ref('inherit')
 const draftChatAllowList = ref([])
@@ -1971,6 +2020,7 @@ watch(showChatConfigModal, (open) => {
     enabledToolIds: new Set(chatEnabledToolIds.value),
     enabledMcpIds: new Set(chatEnabledMcpIds.value),
     workingPath: draftWorkingPath.value,
+    maxPersonaRounds: draftMaxPersonaRounds.value,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
     chatDangerOverrides: JSON.parse(JSON.stringify(draftChatDangerOverrides.value)),
@@ -1982,10 +2032,13 @@ watch(showChatConfigModal, (open) => {
 function saveChatSettings() {
   const chatId = chatsStore.activeChatId
   if (!chatId) return
+  const rawRounds = Number(draftMaxPersonaRounds.value)
+  const clampedRounds = Number.isFinite(rawRounds) ? Math.min(100, Math.max(1, rawRounds)) : 10
   chatsStore.setChatSettings(chatId, {
     enabledToolIds: [...chatEnabledToolIds.value],
     enabledMcpIds: [...chatEnabledMcpIds.value],
     workingPath: draftWorkingPath.value || null,
+    maxPersonaRounds: clampedRounds,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
     chatDangerOverrides: JSON.parse(JSON.stringify(draftChatDangerOverrides.value)),
@@ -2000,6 +2053,7 @@ function cancelChatSettings() {
     chatEnabledToolIds.value = _draftSnapshot.enabledToolIds
     chatEnabledMcpIds.value = _draftSnapshot.enabledMcpIds
     draftWorkingPath.value = _draftSnapshot.workingPath
+    draftMaxPersonaRounds.value = _draftSnapshot.maxPersonaRounds
     draftPermissionMode.value = _draftSnapshot.permissionMode
     draftChatAllowList.value = _draftSnapshot.chatAllowList
     draftChatDangerOverrides.value = _draftSnapshot.chatDangerOverrides
@@ -2055,6 +2109,8 @@ function _loadDraftFromChat() {
   }
   // Working path
   draftWorkingPath.value = chat.workingPath || ''
+  // Max persona rounds (null in JSON = use default 10)
+  draftMaxPersonaRounds.value = chat.maxPersonaRounds ?? 10
   // Permissions
   draftPermissionMode.value = chat.permissionMode || 'inherit'
   draftChatAllowList.value = JSON.parse(JSON.stringify(chat.chatAllowList || []))
@@ -2456,9 +2512,11 @@ function openSoulViewer(personaId, personaType, personaName) {
   soulViewerTarget.value = {
     personaId,
     personaType,
-    personaName,
+    personaName: persona?.name || personaName || 'Persona',
     personaDescription: persona?.description || '',
     personaPrompt: persona?.prompt || '',
+    personaProviderId: persona?.providerId || null,
+    personaModelId: persona?.modelId || null,
   }
 }
 
@@ -2476,6 +2534,8 @@ async function handleSoulViewerUpdatePersona(updates) {
   // Refresh the target so the viewer sees the new values
   soulViewerTarget.value.personaPrompt = updated.prompt ?? soulViewerTarget.value.personaPrompt
   soulViewerTarget.value.personaDescription = updated.description ?? soulViewerTarget.value.personaDescription
+  if (updates.providerId !== undefined) soulViewerTarget.value.personaProviderId = updated.providerId ?? null
+  if (updates.modelId !== undefined) soulViewerTarget.value.personaModelId = updated.modelId ?? null
 }
 
 // System persona config popover state moved to ChatHeader
@@ -2926,37 +2986,91 @@ async function onDrop(e) {
 }
 
 /**
- * Handle paste events on the input — detect pasted file paths and
- * offer to attach them instead of inserting as text.
+ * Append resolved attachment paths to the textarea text.
+ */
+function appendPathsToInput(results) {
+  const paths = results.filter(r => r.path).map(r => r.path)
+  if (paths.length === 0) return
+  const prefix = inputText.value.trimEnd()
+  inputText.value = prefix ? `${prefix}\n${paths.join('\n')}` : paths.join('\n')
+}
+
+/**
+ * Handle paste events on the input.
+ * Order: (1) cd.files with .path [Explorer Ctrl+C], (2) text/plain path strings,
+ * (3) clipboard image [PrtSc], (4) default text paste.
  */
 async function onPaste(e) {
-  if (!window.electronAPI?.resolveDropPaths) return
+  const cd = e.clipboardData
 
-  const pasted = e.clipboardData?.getData('text/plain') || ''
-  const lines = pasted.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean)
-
-  // Check if ALL pasted lines look like file paths
-  const pathLines = lines.filter(l =>
-    /^[A-Za-z]:[/\\]/.test(l) ||           // Windows: C:\foo or C:/foo
-    l.startsWith('/') ||                     // Linux: /home/...
-    l.startsWith('file://') ||               // URI: file:///C:/...
-    l.startsWith('\\\\')                     // UNC: \\server\share
-  )
-
-  // Only treat as file paths if every line matches and there's at least one
-  if (pathLines.length > 0 && pathLines.length === lines.length) {
-    e.preventDefault()  // Don't paste as text
-    dbg(`Paste: ${pathLines.length} path(s) detected, attaching...`)
-    try {
-      const results = await window.electronAPI.resolveDropPaths(pathLines)
-      if (results && results.length > 0) {
-        attachments.value.push(...results)
+  if (window.electronAPI?.resolveDropPaths) {
+    // 1. Files copied from OS (Windows Explorer Ctrl+C) — .path exposed by Electron
+    const filePaths = Array.from(cd?.files || []).map(f => f.path).filter(Boolean)
+    if (filePaths.length > 0) {
+      e.preventDefault()
+      try {
+        const results = await window.electronAPI.resolveDropPaths(filePaths)
+        if (results?.length > 0) {
+          attachments.value.push(...results)
+          appendPathsToInput(results)
+        }
+      } catch (err) {
+        dbg(`Paste attach error: ${err.message}`, 'error')
       }
-    } catch (err) {
-      dbg(`Paste attach error: ${err.message}`, 'error')
+      return
+    }
+
+    // 2. Manually pasted path strings in text/plain
+    const pasted = cd?.getData('text/plain') || ''
+    const lines = pasted.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean)
+    const pathLines = lines.filter(l =>
+      /^[A-Za-z]:[/\\]/.test(l) ||   // Windows: C:\foo or C:/foo
+      l.startsWith('/') ||             // Linux: /home/...
+      l.startsWith('file://') ||       // URI: file:///C:/...
+      l.startsWith('\\\\')             // UNC: \\server\share
+    )
+    if (pathLines.length > 0 && pathLines.length === lines.length) {
+      e.preventDefault()
+      try {
+        const results = await window.electronAPI.resolveDropPaths(pathLines)
+        if (results?.length > 0) {
+          attachments.value.push(...results)
+          appendPathsToInput(results)
+        }
+      } catch (err) {
+        dbg(`Paste attach error: ${err.message}`, 'error')
+      }
+      return
     }
   }
-  // Otherwise let the default paste behavior handle it (insert text)
+
+  // 3. Clipboard image (PrtSc / screenshot tool)
+  const items = cd?.items
+  if (items) {
+    for (const item of items) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (!file) continue
+        const mediaType = item.type
+        const ext = mediaType.split('/')[1] || 'png'
+        const name = `screenshot-${Date.now()}.${ext}`
+        const reader = new FileReader()
+        reader.onload = (ev) => {
+          const dataUri = ev.target.result
+          const base64 = dataUri.split(',')[1]
+          attachments.value.push({
+            id: uuidv4(), name, type: 'image',
+            base64, mediaType, preview: dataUri,
+            size: file.size, path: null
+          })
+        }
+        reader.readAsDataURL(file)
+        return
+      }
+    }
+  }
+  // 4. Default: let browser paste text normally
 }
 
 async function pickFiles() {
@@ -3349,6 +3463,231 @@ function handleChatWindowSend(text) {
   sendMessage()
 }
 
+// ── Group chat collaboration helpers ──────────────────────────────────────────
+
+/**
+ * Build the personaRuns array for a group agent call.
+ * Extracted so it can be reused by both the initial user-triggered run and
+ * subsequent persona-to-persona collaboration rounds.
+ */
+function buildPersonaRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPrompt, usrPersona) {
+  const chatProvider = targetChat.provider || 'anthropic'
+  return respondingIds.map(pid => {
+    const persona = personasStore.getPersonaById(pid)
+    if (!persona) return null
+    const overrides = targetChat.groupPersonaOverrides?.[pid] || {}
+
+    const personaCfg = { ...cfg }
+    const resolvedProvider = overrides.providerId || persona.providerId || chatProvider
+    if (resolvedProvider === 'anthropic') {
+      personaCfg.apiKey = cfg.anthropic?.apiKey || ''
+      personaCfg.baseURL = cfg.anthropic?.baseURL || 'https://api.anthropic.com'
+    } else if (resolvedProvider === 'openrouter') {
+      personaCfg.apiKey = cfg.openrouter?.apiKey || ''
+      personaCfg.baseURL = cfg.openrouter?.baseURL || 'https://openrouter.ai/api'
+    } else if (resolvedProvider === 'openai') {
+      personaCfg.openaiApiKey = cfg.openai?.apiKey || ''
+      personaCfg.openaiBaseURL = cfg.openai?.baseURL || 'https://mlaas.virtuosgames.com'
+      personaCfg._resolvedProvider = 'openai'
+      personaCfg.defaultProvider = 'openai'
+    }
+    const resolvedModel = overrides.modelId || persona.modelId || (targetChat.model || null)
+    if (resolvedModel) personaCfg.customModel = resolvedModel
+
+    const otherParticipants = groupIds
+      .filter(id => id !== pid)
+      .map(id => {
+        const p = personasStore.getPersonaById(id)
+        return { id, name: p?.name || 'Unknown', description: p?.description || '', prompt: p?.prompt || '' }
+      })
+    const personaPrompts = {
+      systemPersonaPrompt: persona.prompt || '',
+      userPersonaPrompt: userPersonaPrompt || '',
+      systemPersonaId: pid,
+      userPersonaId: usrPersona?.id || '__default_user__',
+      groupChatContext: { personaName: persona.name, personaDescription: persona.description || '', otherParticipants }
+    }
+
+    return {
+      personaId: pid,
+      personaName: persona.name,
+      config: JSON.parse(JSON.stringify(personaCfg)),
+      enabledAgents: [],
+      enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
+      personaPrompts,
+      mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
+      httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
+    }
+  }).filter(Boolean)
+}
+
+/**
+ * Fire the group runAgent call and finalize any errored streaming messages.
+ * Returns the raw result from electronAPI.runAgent.
+ */
+async function runGroupPersonas(chatId, targetChat, personaRuns, apiMessages, cfg, pendingAttachments) {
+  const res = await window.electronAPI.runAgent({
+    chatId,
+    messages: JSON.parse(JSON.stringify(apiMessages)),
+    config: JSON.parse(JSON.stringify(cfg)),
+    enabledAgents: [],
+    enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
+    ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
+    mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
+    httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
+    personaRuns,
+    chatPermissionMode: targetChat.permissionMode || 'inherit',
+    chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
+    chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
+    knowledgeConfig: {
+      ragEnabled: knowledgeStore.ragEnabled,
+      pineconeApiKey: knowledgeStore.pineconeApiKey,
+      pineconeIndexName: knowledgeStore.pineconeIndexName,
+      embeddingProvider: knowledgeStore.embeddingProvider,
+      embeddingModel: knowledgeStore.embeddingModel,
+      indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs))
+    },
+  })
+
+  dbg(`Group runAgent returned → success=${res.success} results=${res.results?.length ?? 0}`, res.success ? 'success' : 'error')
+
+  if (res.results) {
+    for (const r of res.results) {
+      if (!r.success) {
+        const msg = targetChat.messages.findLast(m => m.personaId === r.personaId && m.role === 'assistant')
+        if (msg && !msg.content) {
+          msg.content = `Error: ${r.error}`
+          msg.segments = [{ type: 'text', content: `Error: ${r.error}` }]
+        }
+      }
+    }
+  }
+
+  return res
+}
+
+
+/**
+ * Inject a special system-style message when the collaboration loop reaches
+ * the iteration limit.
+ */
+function injectCollaborationSummary(targetChat, iterationCount) {
+  const summaryMsg = {
+    id: uuidv4(),
+    role: 'assistant',
+    content: `**Collaboration reached the maximum of ${iterationCount} iterations.** The personas were unable to reach a final resolution within the limit. Please review the conversation and decide how to proceed.`,
+    segments: [{ type: 'text', content: `**Collaboration reached the maximum of ${iterationCount} iterations.** The personas were unable to reach a final resolution within the limit. Please review the conversation and decide how to proceed.` }],
+    isCollaborationSummary: true,
+    streaming: false,
+  }
+  targetChat.messages.push(summaryMsg)
+}
+
+/**
+ * After each group-chat round, scan ONLY the messages added in that round
+ * (slice from prevMessagesLength) for @mentions of other personas, and trigger
+ * those personas to respond — creating a persona-to-persona collaboration loop.
+ *
+ * Runs recursively until no new @mentions are found or MAX_ITERATIONS is hit.
+ * The iteration counter and prevMessagesLength are passed through recursion
+ * (no global state). prevMessagesLength ensures we never re-scan earlier
+ * rounds' messages and accidentally re-trigger personas that were already done.
+ */
+async function triggerPersonaCollaboration(chatId, groupIds, cfg, userPersonaPrompt, usrPersona, iterationCount, prevMessagesLength) {
+  const targetChat = chatsStore.chats.find(c => c.id === chatId)
+  if (!targetChat || !targetChat.messages) return
+
+  // Per-chat limit; fall back to 10 if not set. Hard cap at 100.
+  const MAX_ITERATIONS = Math.min(100, Math.max(1, targetChat.maxPersonaRounds ?? 10))
+
+  const groupPersonas = groupIds.map(id => personasStore.getPersonaById(id)).filter(Boolean)
+
+  // Only examine messages added in the most recent runGroupPersonas call
+  const newMessages = targetChat.messages
+    .slice(prevMessagesLength)
+    .filter(m => m.role === 'assistant' && m.personaId && groupIds.includes(m.personaId) && !m.streaming)
+
+  // For each new message, resolve which @mentioned personas are actually being
+  // addressed (vs. merely referenced). Mirrors the user→persona routing logic.
+  const nextRespondingSet = new Set()
+  for (const msg of newMessages) {
+    const { mentions } = parseMentions(msg.content || '', groupPersonas)
+    // Exclude the sender itself
+    const others = mentions.filter(id => id !== msg.personaId)
+    if (others.length === 0) continue
+
+    let addressees = others
+    if (others.length >= 2) {
+      // 2+ mentions — ask the LLM which ones are actually being addressed
+      try {
+        const mentionedPersonas = others.map(id => {
+          const p = personasStore.getPersonaById(id)
+          return p ? { id, name: p.name } : null
+        }).filter(Boolean)
+        const result = await window.electronAPI.resolveAddressees({
+          message: msg.content,
+          personas: mentionedPersonas,
+          config: JSON.parse(JSON.stringify(cfg)),
+        })
+        if (result?.addresseeIds?.length > 0) addressees = result.addresseeIds
+      } catch (err) {
+        dbg('resolveAddressees failed in collaboration loop, using all mentions:', err?.message)
+      }
+    }
+
+    for (const id of addressees) nextRespondingSet.add(id)
+  }
+
+  if (nextRespondingSet.size === 0) return  // No more collaboration needed
+
+  dbg(`Persona collaboration round ${iterationCount + 1}: [${[...nextRespondingSet].join(', ')}] are the addressees`)
+
+  if (iterationCount >= MAX_ITERATIONS) {
+    injectCollaborationSummary(targetChat, iterationCount)
+    scrollToBottom(false, chatId)
+    await chatsStore.persist?.()
+    return
+  }
+
+  // Run each addressed persona SEQUENTIALLY so messages appear in logical
+  // conversation order (A responds → B sees A's response → B responds).
+  // This prevents the visual chaos of concurrent streaming in collaboration rounds.
+  const respondingIds = [...nextRespondingSet]
+  dbg(`Collaboration run (sequential): ${respondingIds.length} persona(s): ${respondingIds.map(id => personasStore.getPersonaById(id)?.name).join(', ')}`)
+
+  const nextLength = targetChat.messages.length
+
+  for (let i = 0; i < respondingIds.length; i++) {
+    const pid = respondingIds[i]
+    const persona = personasStore.getPersonaById(pid)
+    if (!persona) continue
+
+    // Rebuild apiMessages before each persona so it sees prior personas' output
+    const seqApiMessages = targetChat.messages
+      .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content))
+      .map(m => ({ role: m.role, content: m.content }))
+
+    // Ensure conversation ends with a user message (API requirement)
+    if (seqApiMessages.length > 0 && seqApiMessages[seqApiMessages.length - 1].role === 'assistant') {
+      seqApiMessages.push({
+        role: 'user',
+        content: `[${persona.name}, you have been addressed above. Please respond now as ${persona.name}.]`
+      })
+    }
+
+    const personaRuns = buildPersonaRuns([pid], groupIds, cfg, targetChat, userPersonaPrompt, usrPersona)
+    await runGroupPersonas(chatId, targetChat, personaRuns, seqApiMessages, cfg, [])
+    scrollToBottom(false, chatId)
+  }
+
+  await chatsStore.persist?.()
+
+  // Recurse — pass nextLength so the next call only scans THIS round's output
+  await triggerPersonaCollaboration(chatId, groupIds, cfg, userPersonaPrompt, usrPersona, iterationCount + 1, nextLength)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function sendMessage() {
   const rawText = inputText.value.trim()
   const hasAttachments = attachments.value.length > 0
@@ -3480,6 +3819,10 @@ async function sendMessage() {
   programmaticScrollCount = Math.max(0, programmaticScrollCount - 1)
   scrollToBottom(true)
 
+  // Flush Vue's DOM update so the streaming bubble (spinner) renders immediately
+  // before the synchronous config-building work below blocks the JS thread.
+  await nextTick()
+
   targetChat.isRunning = true
 
   // Build messages for API (only user/assistant, no tool indicators)
@@ -3531,16 +3874,41 @@ async function sendMessage() {
       const groupPersonas = groupIds.map(id => personasStore.getPersonaById(id)).filter(Boolean)
       const { mentions, mentionAll } = parseMentions(text, groupPersonas)
 
+      // When 2+ personas are @mentioned, ask the LLM to determine which ones are
+      // actually being spoken TO vs. merely referenced (e.g. "say hi to @Bob").
+      // For 0 or 1 mentions, skip the extra call — no ambiguity.
+      let addressees = mentions
+      if (!mentionAll && mentions.length >= 2) {
+        try {
+          const mentionedPersonas = mentions.map(id => {
+            const p = personasStore.getPersonaById(id)
+            return p ? { id, name: p.name } : null
+          }).filter(Boolean)
+          const result = await window.electronAPI.resolveAddressees({
+            message: text,
+            personas: mentionedPersonas,
+            config: JSON.parse(JSON.stringify(cfg)),
+          })
+          // Only use AI result if it returned at least one addressee; otherwise
+          // fall back to all mentions (prevents silencing everyone on bad parse).
+          if (result?.addresseeIds?.length > 0) {
+            addressees = result.addresseeIds
+          }
+        } catch (err) {
+          dbg('resolveAddressees failed, falling back to all mentions:', err?.message)
+        }
+      }
+
       // Determine responding personas with sticky targeting:
-      // 1. Explicit @mention → target those, update sticky
-      // 2. Explicit @all → target all, clear sticky
-      // 3. No @mention → use sticky target if set, otherwise all
+      // 1. Explicit @all → target all, clear sticky
+      // 2. Addressees resolved above → target those, update sticky
+      // 3. No mentions → use sticky target if set, otherwise all
       let respondingIds
       if (mentionAll) {
         respondingIds = [...groupIds]
         stickyTarget.value = null
-      } else if (mentions.length > 0) {
-        respondingIds = [...new Set(mentions)]
+      } else if (addressees.length > 0) {
+        respondingIds = [...new Set(addressees)]
         stickyTarget.value = [...respondingIds]
       } else if (stickyTarget.value && stickyTarget.value.length > 0) {
         // Use sticky target, but only personas still in the group
@@ -3553,9 +3921,9 @@ async function sendMessage() {
         respondingIds = [...groupIds]
       }
 
-      dbg(`Group targeting: mentions=${mentions.length} mentionAll=${mentionAll} sticky=${stickyTarget.value?.length ?? 'null'} responding=${respondingIds.length} ids=[${respondingIds.join(',')}]`)
+      dbg(`Group targeting: mentions=${mentions.length} addressees=${addressees.length} mentionAll=${mentionAll} sticky=${stickyTarget.value?.length ?? 'null'} responding=${respondingIds.length}`)
 
-      // Store mention data on user message
+      // Store mention data on user message (all mentions, not just addressees)
       const userMsg = targetChat.messages.findLast(m => m.role === 'user')
       if (userMsg) {
         userMsg.mentions = mentions
@@ -3563,97 +3931,16 @@ async function sendMessage() {
       }
 
       // Build personaRuns[]
-      const personaRuns = respondingIds.map(pid => {
-        const persona = personasStore.getPersonaById(pid)
-        if (!persona) return null
-        const overrides = targetChat.groupPersonaOverrides?.[pid] || {}
-
-        // Resolve per-persona config (persona defaults → chat overrides → global)
-        const personaCfg = { ...cfg }
-        const resolvedProvider = overrides.providerId || persona.providerId || chatProvider
-        if (resolvedProvider === 'anthropic') {
-          personaCfg.apiKey = cfg.anthropic?.apiKey || ''
-          personaCfg.baseURL = cfg.anthropic?.baseURL || 'https://api.anthropic.com'
-        } else if (resolvedProvider === 'openrouter') {
-          personaCfg.apiKey = cfg.openrouter?.apiKey || ''
-          personaCfg.baseURL = cfg.openrouter?.baseURL || 'https://openrouter.ai/api'
-        } else if (resolvedProvider === 'openai') {
-          personaCfg.openaiApiKey = cfg.openai?.apiKey || ''
-          personaCfg.openaiBaseURL = cfg.openai?.baseURL || 'https://mlaas.virtuosgames.com'
-          personaCfg._resolvedProvider = 'openai'
-          personaCfg.defaultProvider = 'openai'
-        }
-        // Persona inherits chat model when its own is null
-        const resolvedModel = overrides.modelId || persona.modelId || (targetChat.model || null)
-        if (resolvedModel) personaCfg.customModel = resolvedModel
-
-        // Build persona prompts with group chat context (include full persona profiles)
-        const otherParticipants = groupIds
-          .filter(id => id !== pid)
-          .map(id => {
-            const p = personasStore.getPersonaById(id)
-            return { id, name: p?.name || 'Unknown', description: p?.description || '', prompt: p?.prompt || '' }
-          })
-        const personaPrompts = {
-          systemPersonaPrompt: persona.prompt || '',
-          userPersonaPrompt: userPersonaPrompt || '',
-          systemPersonaId: pid,
-          userPersonaId: usrPersona?.id || '__default_user__',
-          groupChatContext: { personaName: persona.name, personaDescription: persona.description || '', otherParticipants }
-        }
-
-        return {
-          personaId: pid,
-          personaName: persona.name,
-          config: JSON.parse(JSON.stringify(personaCfg)),
-          enabledAgents: [],
-          enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
-          personaPrompts,
-          mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
-          httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
-        }
-      }).filter(Boolean)
+      const personaRuns = buildPersonaRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPrompt, usrPersona)
 
       dbg(`Group run: ${personaRuns.length} persona(s) responding: ${personaRuns.map(r => r.personaName).join(', ')}`)
 
-      const res = await window.electronAPI.runAgent({
-        chatId,
-        messages: JSON.parse(JSON.stringify(apiMessages)),
-        config: JSON.parse(JSON.stringify(cfg)),
-        enabledAgents: [],
-        enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
-        ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
-        mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
-        httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
-        personaRuns,
-        chatPermissionMode: targetChat.permissionMode || 'inherit',
-        chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
-        chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
-        knowledgeConfig: {
-          ragEnabled: knowledgeStore.ragEnabled,
-          pineconeApiKey: knowledgeStore.pineconeApiKey,
-          pineconeIndexName: knowledgeStore.pineconeIndexName,
-          embeddingProvider: knowledgeStore.embeddingProvider,
-          embeddingModel: knowledgeStore.embeddingModel,
-          indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs))
-        },
-      })
+      const msgCountBeforeRun = targetChat.messages.length
+      await runGroupPersonas(chatId, targetChat, personaRuns, apiMessages, cfg, pendingAttachments)
 
-      dbg(`Group runAgent returned → success=${res.success} results=${res.results?.length ?? 0}`, res.success ? 'success' : 'error')
-
-      // Finalize any remaining streaming messages (persona_end handles most, but just in case)
-      if (res.results) {
-        for (const r of res.results) {
-          if (!r.success) {
-            // Find the persona's message and add error
-            const msg = targetChat.messages.findLast(m => m.personaId === r.personaId && m.role === 'assistant')
-            if (msg && !msg.content) {
-              msg.content = `Error: ${r.error}`
-              msg.segments = [{ type: 'text', content: `Error: ${r.error}` }]
-            }
-          }
-        }
-      }
+      // After the initial group run, check for persona→persona @mentions and loop.
+      // Pass the pre-run message count so we only scan THIS round's new messages.
+      await triggerPersonaCollaboration(chatId, groupIds, cfg, userPersonaPrompt, usrPersona, 0, msgCountBeforeRun)
 
     } else {
       // ── SINGLE PERSONA PATH ──

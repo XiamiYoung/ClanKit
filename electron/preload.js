@@ -73,6 +73,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   compactContextStandalone: (params) => ipcRenderer.invoke('agent:compact-standalone', params),
   getContextSnapshot: (chatId) => ipcRenderer.invoke('agent:get-context', chatId),
   enhancePrompt: (params) => ipcRenderer.invoke('agent:enhance-prompt', params),
+  resolveAddressees: (params) => ipcRenderer.invoke('agent:resolve-addressees', params),
   onAgentChunk: (callback) => {
     ipcRenderer.removeAllListeners('agent:chunk')
     ipcRenderer.on('agent:chunk', (_, data) => callback(data))
@@ -92,6 +93,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── Shell ─────────────────────────────────────────────────────────────────
   execShell: (cmd, args) => ipcRenderer.invoke('shell:exec', { cmd, args }),
   openFile: (filePath) => ipcRenderer.invoke('shell:open-file', filePath),
+  openImageDataUri: (dataUri, name) => ipcRenderer.invoke('files:open-image-data-uri', { dataUri, name }),
   showInFolder: (filePath) => ipcRenderer.invoke('shell:show-in-folder', filePath),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   getClipboardImage: () => ipcRenderer.invoke('clipboard:get-image'),
