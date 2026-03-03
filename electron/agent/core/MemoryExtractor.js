@@ -81,9 +81,7 @@ class MemoryExtractor {
     this.config = config
     const clientOpts = {}
     const baseURL = config.baseURL || config.anthropic?.baseURL
-    if (baseURL && baseURL !== 'https://api.anthropic.com' && !baseURL.includes('openrouter.ai')) {
-      clientOpts.baseURL = baseURL
-    }
+    if (baseURL) clientOpts.baseURL = baseURL
     clientOpts.apiKey = config.apiKey || config.anthropic?.apiKey || ''
     this.client = new Anthropic(clientOpts)
   }
@@ -209,9 +207,12 @@ class MemoryExtractor {
 
   _parseResponse(text) {
     try {
-      // Strip markdown fences if present
-      const cleaned = text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```$/m, '').trim()
-      return JSON.parse(cleaned)
+      // Extract the first JSON object from the response, ignoring markdown fences,
+      // reasoning text, or any other content the model may have appended.
+      const start = text.indexOf('{')
+      const end = text.lastIndexOf('}')
+      if (start === -1 || end === -1 || end < start) return null
+      return JSON.parse(text.slice(start, end + 1))
     } catch {
       logger.warn('MemoryExtractor: failed to parse JSON response', text.slice(0, 200))
       return null

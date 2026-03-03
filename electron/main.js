@@ -414,7 +414,7 @@ async function migrateEnvDataIfNeeded() {
 const DEFAULT_CONFIG = {
   anthropic: {
     apiKey:       '',
-    baseURL:      'https://api.anthropic.com',
+    baseURL:      '',
     sonnetModel:  'claude-sonnet-4-5',
     opusModel:    'claude-opus-4-6',
     haikuModel:   'claude-haiku-3-5',
@@ -422,12 +422,12 @@ const DEFAULT_CONFIG = {
   },
   openrouter: {
     apiKey:  '',
-    baseURL: 'https://openrouter.ai/api',
+    baseURL: '',
     defaultModel: '',
   },
   openai: {
     apiKey:       '',
-    baseURL:      'https://mlaas.virtuosgames.com',
+    baseURL:      '',
     model:        '',
     openaiDefaultModel: '',
   },
@@ -488,6 +488,12 @@ function createWindow() {
   }
 
   mainWindow.on('closed', () => { mainWindow = null })
+
+  // -- Grant microphone access for voice calls --
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'media') { callback(true); return }
+    callback(true) // allow other permissions too (clipboard, etc.)
+  })
 
   // -- Set spellcheck language --
   mainWindow.webContents.session.setSpellCheckerLanguages(['en-US'])
@@ -1456,7 +1462,8 @@ async function generateEmbedding({ text, provider, model, apiKey, baseURL, dimen
   let url, headers, body
 
   if (provider === 'openrouter') {
-    const base = (baseURL || 'https://openrouter.ai/api').replace(/\/+$/, '')
+    if (!baseURL) throw new Error('OpenRouter baseURL not configured')
+    const base = baseURL.replace(/\/+$/, '')
     url = base + '/v1/embeddings'
     headers = {
       'Authorization': `Bearer ${apiKey}`,
@@ -1468,7 +1475,9 @@ async function generateEmbedding({ text, provider, model, apiKey, baseURL, dimen
   } else {
     // OpenAI or OpenAI-compatible
     const cfg = readJSON(CONFIG_FILE, {})
-    const base = (baseURL || cfg.openai?.baseURL || 'https://api.openai.com').replace(/\/+$/, '')
+    const resolvedBase = baseURL || cfg.openai?.baseURL
+    if (!resolvedBase) throw new Error('OpenAI baseURL not configured')
+    const base = resolvedBase.replace(/\/+$/, '')
     // Use standard OpenAI endpoint path
     const isStandardOpenAI = base.includes('api.openai.com')
     url = isStandardOpenAI ? base + '/v1/embeddings' : base + '/proxy/openai/v1/embeddings'
@@ -1692,7 +1701,8 @@ ipcMain.handle('mcp:test-connection', async (_, config) => {
 
 // --- IPC: OpenRouter Model Fetching ------------------------------------------
 ipcMain.handle('openrouter:fetch-models', async (_, { apiKey, baseURL }) => {
-  const url = (baseURL || 'https://openrouter.ai/api').replace(/\/+$/, '') + '/v1/models'
+  if (!baseURL) return { success: false, error: 'OpenRouter baseURL not configured', models: [] }
+  const url = baseURL.replace(/\/+$/, '') + '/v1/models'
   try {
     const https = require('https')
     const http = require('http')
@@ -1734,7 +1744,8 @@ ipcMain.handle('openrouter:fetch-models', async (_, { apiKey, baseURL }) => {
 
 // --- IPC: OpenAI Model Fetching ----------------------------------------------
 ipcMain.handle('openai:fetch-models', async (_, { apiKey, baseURL }) => {
-  const base = (baseURL || 'https://mlaas.virtuosgames.com').replace(/\/+$/, '')
+  if (!baseURL) return { success: false, error: 'OpenAI baseURL not configured', models: [] }
+  const base = baseURL.replace(/\/+$/, '')
   const url = base + '/proxy/openai/v1/models'
   try {
     const https = require('https')
@@ -2088,6 +2099,130 @@ ipcMain.handle('skills:load-all-prompts', (_, dirPath) => {
   }
 })
 
+// --- IPC: Claude Context Loader + File Watcher (Coding Mode) --------------------
+// Replicates Claude Code CLAUDE.md hierarchy:
+//   1. ~/.claude/CLAUDE.md          (global user instructions)
+//   2. Parent dirs outermost->innermost (walk up from projectPath, stop at home)
+//   3. <projectPath>/CLAUDE.md      (project root)
+//   4. <projectPath>/.claude/CLAUDE.md
+// All files concatenated in that order (same merge semantics as Claude Code).
+//
+// File watching: mirrors Claude Code behaviour.
+//   - claude:watch-context(chatId, projectPath) - start watching all CLAUDE.md
+//     paths in the hierarchy; sends claude:context-updated(chatId, merged) to
+//     renderer whenever any watched file changes (debounced 300ms).
+//   - claude:unwatch-context(chatId) - tear down watchers for a chat session.
+//   - claude:load-context(projectPath) - one-shot read (used on first send and
+//     when workingPath changes before a watcher is established).
+
+// Registry: chatId -> { watchers: FSWatcher[], debounceTimer: Timeout|null, projectPath }
+const _claudeWatchers = new Map()
+
+function _claudeResolvePaths(projectPath) {
+  const homeDir = os.homedir()
+  const paths = []
+  // 1. Global
+  paths.push(path.join(homeDir, '.claude', 'CLAUDE.md'))
+  if (projectPath) {
+    // 2. Parent dirs (outermost first, stops before home)
+    const parentDirs = []
+    let current = path.dirname(projectPath)
+    while (current && current !== path.dirname(current) && current !== homeDir) {
+      parentDirs.push(current)
+      current = path.dirname(current)
+    }
+    parentDirs.reverse()
+    for (const dir of parentDirs) paths.push(path.join(dir, 'CLAUDE.md'))
+    // 3. Project root
+    paths.push(path.join(projectPath, 'CLAUDE.md'))
+    // 4. Project .claude dir
+    paths.push(path.join(projectPath, '.claude', 'CLAUDE.md'))
+  }
+  return paths
+}
+
+function _claudeReadAndMerge(projectPath) {
+  const sections = []
+  const candidates = _claudeResolvePaths(projectPath)
+  for (const filePath of candidates) {
+    try {
+      if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, 'utf8').trim()
+        if (content) sections.push({ label: filePath, content })
+      }
+    } catch (err) {
+      logger.warn(`claude: could not read ${filePath}:`, err.message)
+    }
+  }
+  if (sections.length === 0) return null
+  return sections.map(s => `<!-- Source: ${s.label} -->\n${s.content}`).join('\n\n---\n\n')
+}
+
+// One-shot load (used by renderer on first send / path change)
+ipcMain.handle('claude:load-context', async (_, projectPath) => {
+  const merged = _claudeReadAndMerge(projectPath)
+  logger.agent('claude:load-context', { projectPath, found: !!merged })
+  return merged
+})
+
+// Start watching - called by renderer when a coding-mode chat becomes active
+ipcMain.handle('claude:watch-context', async (event, { chatId, projectPath }) => {
+  _claudeTeardown(chatId)
+
+  const watchPaths = _claudeResolvePaths(projectPath)
+  const watchers = []
+  let debounceTimer = null
+
+  function onFileChange(filePath) {
+    if (debounceTimer) clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null
+      const merged = _claudeReadAndMerge(projectPath)
+      logger.agent('claude:context-updated (watch)', { chatId, filePath })
+      const wins = BrowserWindow.getAllWindows()
+      for (const win of wins) {
+        if (!win.isDestroyed()) {
+          win.webContents.send('claude:context-updated', { chatId, context: merged })
+        }
+      }
+    }, 300)
+  }
+
+  for (const watchPath of watchPaths) {
+    try {
+      // Watch the directory (more reliable cross-OS than watching the file directly,
+      // and works even when the CLAUDE.md doesn't exist yet)
+      const dir = path.dirname(watchPath)
+      const filename = path.basename(watchPath)
+      if (!fs.existsSync(dir)) continue
+      const watcher = fs.watch(dir, { persistent: false }, (eventType, changedFile) => {
+        if (changedFile === filename) onFileChange(watchPath)
+      })
+      watcher.on('error', (err) => logger.warn(`claude:watcher error ${watchPath}:`, err.message))
+      watchers.push(watcher)
+    } catch (err) {
+      logger.warn(`claude: could not watch ${watchPath}:`, err.message)
+    }
+  }
+
+  _claudeWatchers.set(chatId, { watchers, debounceTimer, projectPath })
+  logger.agent('claude:watch-context', { chatId, projectPath, watching: watchers.length })
+  return { watching: watchers.length }
+})
+
+// Stop watching - called when coding mode is disabled or chat is closed
+ipcMain.handle('claude:unwatch-context', async (_, chatId) => {
+  _claudeTeardown(chatId)
+  logger.agent('claude:unwatch-context', { chatId })
+})
+
+function _claudeTeardown(chatId) {
+  const entry = _claudeWatchers.get(chatId)
+  if (!entry) return
+  if (entry.debounceTimer) clearTimeout(entry.debounceTimer)
+  for (const w of entry.watchers) { try { w.close() } catch (_) {} }
+  _claudeWatchers.delete(chatId)
+}
 // --- IPC: Shell Execution ----------------------------------------------------
 // Uses execFile (not exec) to prevent shell injection - command and args separated
 ipcMain.handle('shell:exec', async (_, { cmd, args }) => {
@@ -2124,9 +2259,12 @@ function readSoulFileSync(personaId, personaType) {
  */
 async function runMemoryExtraction(event, chatId, messages, config, personaPrompts, participants) {
   try {
-    // Only run for Anthropic provider (needs Anthropic API key for Haiku)
-    const apiKey = config.apiKey || config.anthropic?.apiKey
-    if (!apiKey) return
+    // Memory extraction always uses the Anthropic provider (Haiku model).
+    // Use the explicitly configured Anthropic key/baseURL — never the per-chat
+    // overridden config.apiKey which may belong to a different provider.
+    const apiKey = config.anthropic?.apiKey
+    const baseURL = config.anthropic?.baseURL
+    if (!apiKey || !baseURL) return
 
     // Extract last user message + last assistant response
     const reversed = [...messages].reverse()
@@ -2149,7 +2287,7 @@ async function runMemoryExtraction(event, chatId, messages, config, personaPromp
     const userSoulContent = readSoulFileSync(userPersonaId, 'users')
     const systemSoulContent = readSoulFileSync(systemPersonaId, 'system')
 
-    const extractor = new MemoryExtractor({ apiKey })
+    const extractor = new MemoryExtractor({ apiKey, baseURL })
     const suggestions = await extractor.extract({
       lastUserMessage: lastUserText,
       lastAssistantMessage: lastAssistantText,
@@ -2174,7 +2312,7 @@ async function runMemoryExtraction(event, chatId, messages, config, personaPromp
 
 logger.info('IPC handlers registered: agent:run, agent:stop')
 
-ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts, mcpServers, httpTools, personaRuns, knowledgeConfig, injectedPlan, chatPermissionMode, chatAllowList, chatDangerOverrides }) => {
+ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts, mcpServers, httpTools, personaRuns, knowledgeConfig, injectedPlan, chatPermissionMode, chatAllowList, chatDangerOverrides, maxOutputTokens }) => {
   logger.agent('IPC agent:run received', { chatId, model: config?.anthropic?.activeModel || config?.activeModel, msgCount: messages?.length, personaRuns: personaRuns?.length || 0 })
   logger.agent('config snapshot', {
     baseURL: config?.baseURL,
@@ -2289,6 +2427,8 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       loopConfig.sandboxConfig = groupCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
       loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
       loopConfig.chatAllowList = chatAllowList || []
+      // Per-chat value takes precedence; fall back to global config default
+      loopConfig.maxOutputTokens = maxOutputTokens || groupCfg.maxOutputTokens || null
       const loop = new AgentLoop(loopConfig)
       activeLoops.set(loopKey, loop)
 
@@ -2363,10 +2503,16 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
   loopConfig.chatAllowList = chatAllowList || []
   loopConfig.chatDangerOverrides = chatDangerOverrides || []
+  // Per-chat value takes precedence; fall back to global config default
+  loopConfig.maxOutputTokens = maxOutputTokens || fullCfg.maxOutputTokens || null
   const loop = new AgentLoop(loopConfig)
   activeLoops.set(chatId, loop)
 
-  logger.agent('run start', { chatId, model: config.anthropic?.activeModel || config.activeModel, msgCount: messages.length, agents: enabledAgents, skills: enabledSkills })
+  const skillsForLog = (enabledSkills || []).map(s => ({
+    ...s,
+    ...(s.systemPrompt ? { systemPrompt: s.systemPrompt.slice(0, 200) + (s.systemPrompt.length > 200 ? '…' : '') } : {})
+  }))
+  logger.agent('run start', { chatId, model: config.anthropic?.activeModel || config.activeModel, msgCount: messages.length, agents: enabledAgents, skills: skillsForLog })
 
   try {
     const result = await loop.run(
@@ -3235,6 +3381,155 @@ ipcMain.handle('shell:show-in-folder', (_, filePath) => {
     return { success: true }
   } catch (err) {
     return { error: err.message }
+  }
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Voice Call IPC Handlers
+// ══════════════════════════════════════════════════════════════════════════════
+const VoiceSession = require('./agent/voice/VoiceSession')
+let activeVoiceSession = null
+
+ipcMain.handle('voice:start', async (event, { chatId, personaId, history, voiceConfig, persona, whisperConfig }) => {
+  try {
+    if (activeVoiceSession) {
+      activeVoiceSession.stop()
+      activeVoiceSession = null
+    }
+
+    // Build llmCall function that routes to the correct provider
+    const llmCall = async (messages, vc) => {
+      const cfg = readJSON(CONFIG_FILE, {})
+      const provider = vc.provider || voiceConfig.provider
+      const model = vc.model || voiceConfig.model
+
+      if (provider === 'openai') {
+        const { OpenAIClient } = require('./agent/core/OpenAIClient')
+        const clientCfg = {
+          ...cfg,
+          openaiApiKey: cfg.openai?.apiKey || cfg.openaiApiKey,
+          openaiBaseURL: cfg.openai?.baseURL || cfg.openaiBaseURL,
+          _resolvedProvider: 'openai',
+        }
+        if (model) clientCfg.customModel = model
+        const client = new OpenAIClient(clientCfg)
+        const resolvedModel = client.resolveModel()
+        const raw = client.getClient()
+        const resp = await raw.chat.completions.create({
+          model: resolvedModel,
+          messages,
+          max_tokens: 1024,
+        })
+        return resp.choices?.[0]?.message?.content || ''
+      } else {
+        // Anthropic or OpenRouter — both use AnthropicClient
+        const { AnthropicClient } = require('./agent/core/AnthropicClient')
+        const provCfg = provider === 'openrouter' ? cfg.openrouter : cfg.anthropic
+        const clientCfg = {
+          ...cfg,
+          apiKey: provCfg?.apiKey || cfg.apiKey,
+          baseURL: provCfg?.baseURL || cfg.baseURL,
+        }
+        if (model) clientCfg.customModel = model
+        const ac = new AnthropicClient(clientCfg)
+        const resolvedModel = ac.resolveModel()
+        const client = ac.getClient()
+        const system = messages.find(m => m.role === 'system')?.content || ''
+        const nonSystem = messages.filter(m => m.role !== 'system')
+        const resp = await client.messages.create({
+          model: resolvedModel,
+          max_tokens: 1024,
+          system,
+          messages: nonSystem,
+        })
+        return resp.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
+      }
+    }
+
+    const sendToRenderer = (channel, data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(channel, data)
+      }
+    }
+
+    activeVoiceSession = new VoiceSession({
+      voiceConfig,
+      whisperConfig,
+      persona,
+      history: history || [],
+      llmCall,
+      onStatus:        (s)    => sendToRenderer('voice:status', s),
+      onTranscript:    (text) => sendToRenderer('voice:transcription', { text }),
+      onAiText:        (text) => sendToRenderer('voice:ai-text', { text }),
+      onTaskTriggered: (inst) => sendToRenderer('voice:task-triggered', { instruction: inst }),
+      onError:         (msg)  => sendToRenderer('voice:error', { message: msg }),
+    })
+
+    activeVoiceSession.start()
+    return { success: true }
+  } catch (err) {
+    logger.error('voice:start error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('voice:stop', () => {
+  if (activeVoiceSession) {
+    activeVoiceSession.stop()
+    activeVoiceSession = null
+  }
+  return { success: true }
+})
+
+ipcMain.handle('voice:audio-chunk', async (event, audioBuffer) => {
+  if (!activeVoiceSession) return { success: false, error: 'No active voice session' }
+  try {
+    const buf = Buffer.from(audioBuffer)
+    activeVoiceSession.processAudio(buf) // fire and forget — results come via events
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('voice:mute', (event, { muted }) => {
+  if (activeVoiceSession) activeVoiceSession.setMuted(muted)
+  return { success: true }
+})
+
+ipcMain.handle('voice:task-complete', async (event, summary) => {
+  if (activeVoiceSession) {
+    activeVoiceSession.notifyTaskComplete(summary)
+  }
+  return { success: true }
+})
+
+// OpenAI TTS HD — returns audio buffer as base64 for renderer playback
+ipcMain.handle('voice:tts', async (event, { text, apiKey, baseURL, model }) => {
+  try {
+    if (!text || !apiKey) return { success: false, error: 'Missing text or API key' }
+    const ttsModel = model || 'tts-1' // 'tts-1' = $15/1M chars, 'tts-1-hd' = $30/1M chars
+    const base = (baseURL || 'https://api.openai.com').replace(/\/+$/, '')
+    const isStandard = base.includes('api.openai.com')
+    const url = isStandard
+      ? `${base}/v1/audio/speech`
+      : `${base}/proxy/openai/v1/audio/speech`
+    const authHeader = isStandard
+      ? { 'Authorization': `Bearer ${apiKey}` }
+      : { 'x-api-key': apiKey }
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: ttsModel, input: text, voice: 'alloy', response_format: 'mp3' }),
+    })
+    if (!resp.ok) {
+      const body = await resp.text()
+      return { success: false, error: `TTS API error ${resp.status}: ${body.slice(0, 200)}` }
+    }
+    const arrayBuf = await resp.arrayBuffer()
+    return { success: true, audio: Buffer.from(arrayBuf).toString('base64'), format: 'mp3' }
+  } catch (err) {
+    return { success: false, error: err.message }
   }
 })
 

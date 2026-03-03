@@ -74,7 +74,29 @@
                 Default: <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultArtyfactPath }}</code>
               </p>
             </div>
+
+            <div class="form-group">
+              <label for="maxOutputTokens" class="form-label">
+                Max Output Tokens
+                <span class="form-label-hint">Per-turn output limit</span>
+              </label>
+              <input
+                id="maxOutputTokens"
+                v-model.number="form.maxOutputTokens"
+                type="number"
+                min="1024"
+                max="98304"
+                class="field font-mono"
+                style="max-width: 160px;"
+                @blur="form.maxOutputTokens = Math.min(98304, Math.max(1024, Number(form.maxOutputTokens) || 32768))"
+              />
+              <p class="hint">
+                Maximum tokens the model can generate per turn. Default: 32768. Hard limit: 98304 (96k).
+                Increase for long-form generation tasks.
+              </p>
+            </div>
           </div>
+
           <div class="save-row">
             <AppButton size="save" @click="saveGeneral" :disabled="savingGeneral" :loading="savingGeneral">
               <svg v-if="!savingGeneral" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -477,6 +499,141 @@
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- Voice Call tab -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <template v-if="activeTopTab === 'voice'">
+          <div class="config-card">
+            <div class="form-section-header" style="margin-bottom:12px;">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              </div>
+              <h3 class="form-section-title">Whisper STT (Speech-to-Text)</h3>
+            </div>
+            <p class="hint" style="margin-bottom:16px;">
+              Voice calls use OpenAI's Whisper API for speech recognition. Text-to-speech uses your browser's built-in SpeechSynthesis (free, no API key needed).
+            </p>
+
+            <!-- API Key -->
+            <div class="form-group">
+              <label for="whisperApiKey" class="form-label">
+                OpenAI API Key
+                <span class="form-label-hint">For Whisper STT</span>
+              </label>
+              <div class="input-with-action">
+                <input
+                  id="whisperApiKey"
+                  v-model="form.voiceCall.whisperApiKey"
+                  :type="showWhisperKey ? 'text' : 'password'"
+                  placeholder="sk-..."
+                  class="field font-mono"
+                />
+                <button @click="showWhisperKey = !showWhisperKey" class="field-action-btn" :aria-label="showWhisperKey ? 'Hide key' : 'Show key'">
+                  <svg v-if="!showWhisperKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                </button>
+              </div>
+              <p class="hint">Your OpenAI API key — used only for Whisper speech-to-text. Can be the same key as your OpenAI provider if you have one configured.</p>
+            </div>
+
+            <!-- Base URL -->
+            <div class="form-group">
+              <label for="whisperBaseURL" class="form-label">
+                Base URL
+                <span class="form-label-hint">Optional</span>
+              </label>
+              <input id="whisperBaseURL" v-model="form.voiceCall.whisperBaseURL" type="url" placeholder="https://api.openai.com" class="field font-mono" />
+              <p class="hint">Leave blank for standard OpenAI. Change only if using a custom Whisper-compatible endpoint.</p>
+            </div>
+
+            <!-- TTS Mode -->
+            <div class="form-divider"></div>
+            <div class="form-section-header" style="margin-bottom:12px;">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+              </div>
+              <h3 class="form-section-title">Text-to-Speech</h3>
+            </div>
+            <div class="form-group">
+              <label class="form-label">TTS Mode</label>
+              <div class="sec-mode-btns">
+                <button
+                  class="sec-mode-btn"
+                  :class="{ active: (form.voiceCall.ttsMode || 'browser') === 'browser' }"
+                  @click="form.voiceCall.ttsMode = 'browser'"
+                >
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                  </svg>
+                  Browser (Free)
+                  <span class="sec-mode-badge">Default</span>
+                </button>
+                <button
+                  class="sec-mode-btn"
+                  :class="{ active: form.voiceCall.ttsMode === 'openai' }"
+                  @click="form.voiceCall.ttsMode = 'openai'"
+                >
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                  </svg>
+                  OpenAI TTS
+                </button>
+                <button
+                  class="sec-mode-btn"
+                  :class="{ active: form.voiceCall.ttsMode === 'openai-hd' }"
+                  @click="form.voiceCall.ttsMode = 'openai-hd'"
+                >
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                  </svg>
+                  OpenAI HD
+                </button>
+              </div>
+              <p class="hint" style="margin-top:8px;">
+                <template v-if="(form.voiceCall.ttsMode || 'browser') === 'browser'">Uses your system's built-in voices. Free, no API cost. Quality depends on your OS.</template>
+                <template v-else-if="form.voiceCall.ttsMode === 'openai'">OpenAI TTS (tts-1) — $15 / 1M characters. Uses same API key as Whisper.</template>
+                <template v-else>OpenAI TTS HD (tts-1-hd) — $30 / 1M characters. Higher quality. Uses same API key as Whisper.</template>
+              </p>
+              <p class="hint" style="margin-top:2px; font-size:var(--fs-small);">
+                Whisper STT: $0.006 / minute
+              </p>
+            </div>
+
+            <!-- Test Connection -->
+            <div class="form-divider"></div>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <AppButton size="compact" variant="secondary" @click="testWhisperConnection" :disabled="testingWhisper" :loading="testingWhisper">
+                {{ testingWhisper ? 'Testing...' : 'Test Connection' }}
+              </AppButton>
+              <span v-if="testResultWhisper" class="test-result" :class="testResultWhisper.ok ? 'success' : 'error'">
+                <svg v-if="testResultWhisper.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                {{ testResultWhisper.message }}
+              </span>
+            </div>
+          </div>
+
+          <div class="save-row">
+            <AppButton size="save" @click="saveVoice" :disabled="savingVoice" :loading="savingVoice">
+              <svg v-if="!savingVoice" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+              </svg>
+              {{ savingVoice ? 'Saving...' : 'Save Changes' }}
+            </AppButton>
+            <span v-if="savedVoiceMsg" class="save-indicator" :class="savedVoiceMsg.ok ? 'success' : 'error'">
+              <svg v-if="savedVoiceMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              {{ savedVoiceMsg.text }}
+            </span>
+          </div>
+        </template>
+
+        <!-- ════════════════════════════════════════════════════════════════ -->
         <!-- Security tab -->
         <!-- ════════════════════════════════════════════════════════════════ -->
         <template v-if="activeTopTab === 'security'">
@@ -649,6 +806,13 @@ const testResultPinecone = ref(null)
 const savingKnowledge = ref(false)
 const savedKnowledgeMsg = ref('')
 
+// Voice Call tab state
+const showWhisperKey = ref(false)
+const savingVoice = ref(false)
+const savedVoiceMsg = ref(null)
+const testingWhisper = ref(false)
+const testResultWhisper = ref(null)
+
 // Security tab state
 const savingSecurity = ref(false)
 const savedSecurityMsg = ref(null)
@@ -729,13 +893,21 @@ const IconSecurity = defineComponent({
     h('path', { d: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' })
   ])
 })
-
+const IconVoice = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('path', { d: 'M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z' }),
+    h('path', { d: 'M19 10v2a7 7 0 0 1-14 0v-2' }),
+    h('line', { x1: '12', y1: '19', x2: '12', y2: '23' }),
+    h('line', { x1: '8', y1: '23', x2: '16', y2: '23' })
+  ])
+})
 // Top-level tabs
 const topTabs = [
   { value: 'general', label: 'General', icon: IconGeneral },
   { value: 'models', label: 'AI Models', icon: IconModels },
   { value: 'skills', label: 'AI Skills', icon: IconSkills },
   { value: 'knowledge', label: 'AI Knowledge', icon: IconKnowledge },
+  { value: 'voice', label: 'Voice Call', icon: IconVoice },
   { value: 'security', label: 'Security', icon: IconSecurity },
 ]
 
@@ -835,12 +1007,12 @@ const form = reactive({
   },
   openrouter: {
     apiKey:  '',
-    baseURL: 'https://openrouter.ai/api',
+    baseURL: '',
     defaultModel: '',
   },
   openai: {
     apiKey:       '',
-    baseURL:      'https://mlaas.virtuosgames.com',
+    baseURL:      '',
     model:        '',
     openaiDefaultModel: '',
   },
@@ -849,6 +1021,12 @@ const form = reactive({
   ragEnabled:          true,
   dataPath:            '',
   artyfactPath:        '',
+  maxOutputTokens:     32768,
+  voiceCall: {
+    whisperApiKey:  '',
+    whisperBaseURL: '',
+    ttsMode: 'browser',
+  },
 })
 
 onMounted(async () => {
@@ -858,9 +1036,10 @@ onMounted(async () => {
   if (c.anthropic)  Object.assign(form.anthropic, c.anthropic)
   if (c.openrouter) Object.assign(form.openrouter, c.openrouter)
   if (c.openai)     Object.assign(form.openai, c.openai)
+  if (c.voiceCall)  Object.assign(form.voiceCall, c.voiceCall)
   // Merge top-level scalar fields
   for (const key of Object.keys(c)) {
-    if (key !== 'anthropic' && key !== 'openrouter' && key !== 'openai' && key in form) {
+    if (key !== 'anthropic' && key !== 'openrouter' && key !== 'openai' && key !== 'voiceCall' && key in form) {
       form[key] = c[key]
     }
   }
@@ -925,6 +1104,8 @@ async function saveGeneral() {
     }
     // Save artyfactPath to .env
     await configStore.saveEnvPath('artyfactPath', String(form.artyfactPath))
+    // Save maxOutputTokens to config.json
+    await configStore.saveConfig({ maxOutputTokens: Number(form.maxOutputTokens) || 32768 })
     savedGeneralMsg.value = { ok: true, text: 'Saved — restart app for data path changes' }
   } catch (err) {
     savedGeneralMsg.value = { ok: false, text: err.message || 'Save failed' }
@@ -942,6 +1123,7 @@ async function saveModels() {
     delete modelFields.dataPath
     delete modelFields.artyfactPath
     delete modelFields.DoCPath
+    delete modelFields.voiceCall
     await configStore.saveConfig(modelFields)
     savedModelsMsg.value = { ok: true, text: 'Saved successfully' }
   } catch (err) {
@@ -977,6 +1159,44 @@ async function saveKnowledge() {
   } finally {
     savingKnowledge.value = false
     setTimeout(() => { savedKnowledgeMsg.value = '' }, 3000)
+  }
+}
+
+async function saveVoice() {
+  savingVoice.value = true
+  try {
+    await configStore.saveConfig({ voiceCall: JSON.parse(JSON.stringify(form.voiceCall)) })
+    savedVoiceMsg.value = { ok: true, text: 'Saved successfully' }
+  } catch (err) {
+    savedVoiceMsg.value = { ok: false, text: err.message || 'Save failed' }
+  } finally {
+    savingVoice.value = false
+    setTimeout(() => { savedVoiceMsg.value = null }, 3000)
+  }
+}
+
+async function testWhisperConnection() {
+  const key = form.voiceCall.whisperApiKey
+  if (!key) { testResultWhisper.value = { ok: false, message: 'Enter a Whisper API key first.' }; return }
+  testingWhisper.value = true
+  testResultWhisper.value = null
+  try {
+    // Send a tiny silent WAV to Whisper to verify credentials
+    const baseURL = (form.voiceCall.whisperBaseURL || 'https://api.openai.com').replace(/\/+$/, '')
+    const isStandard = baseURL.includes('api.openai.com')
+    const url = isStandard ? `${baseURL}/v1/models` : `${baseURL}/proxy/openai/v1/models`
+    const authHeader = isStandard ? { 'Authorization': `Bearer ${key}` } : { 'x-api-key': key }
+    const resp = await fetch(url, { headers: authHeader })
+    if (resp.ok) {
+      testResultWhisper.value = { ok: true, message: 'Connected — Whisper API key is valid' }
+    } else {
+      const body = await resp.text()
+      testResultWhisper.value = { ok: false, message: `API error ${resp.status}: ${body.slice(0, 120)}` }
+    }
+  } catch (err) {
+    testResultWhisper.value = { ok: false, message: err.message }
+  } finally {
+    testingWhisper.value = false
   }
 }
 
@@ -1280,4 +1500,6 @@ async function testConnection(provider) {
   color: #DC2626; box-shadow: none;
 }
 .sec-add-btn.danger:hover { background: rgba(239,68,68,0.18); }
+
+/* ── Voice tab ─────────────────────────────────────────────────────────── */
 </style>

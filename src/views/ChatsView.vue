@@ -156,6 +156,7 @@
           @open-chat-settings="showChatConfigModal = true"
           @open-soul-viewer="(id, type, name) => openSoulViewer(id, type, name)"
           @remove-group-persona="(cId, pid) => requestRemoveGroupPersona(cId, pid)"
+          @start-call="handleStartCall"
         />
 
         <!-- ── Context Window Usage Bar (always visible) ────────────────────── -->
@@ -726,76 +727,17 @@
                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
                   </svg>
                 </button>
-                <div class="flex-1 relative" style="min-width:0;">
-                  <textarea
-                    ref="inputEl"
-                    v-model="inputText"
-                    @keydown="onInputKeydown"
-                    @input="onInputChange"
-                    @paste="onPaste"
-                    @focus="inputFocused = true"
-                    @blur="onInputBlur"
-                    :placeholder="isGroupChat ? 'Type a message… (use @name to target a persona)' : 'Type your message here… (paste file paths to attach)'"
-                    rows="3"
-                    class="w-full bg-transparent resize-none outline-none leading-relaxed overflow-y-auto"
-                    style="color:#1A1A1A; font-size:var(--fs-body); min-height:72px; max-height:200px;"
-                  />
-                  <!-- @Mention autocomplete popup -->
-                  <div
-                    v-if="showMentionPopup && mentionSuggestions.length > 0"
-                    class="mention-popup"
-                  >
-                    <div class="mention-popup-header">
-                      <span>Personas</span>
-                      <span class="mention-popup-hint">↑↓ navigate · ↵ select</span>
-                    </div>
-                    <div class="mention-popup-list">
-                      <button
-                        v-for="(s, idx) in mentionSuggestions"
-                        :key="s.id"
-                        class="mention-popup-item"
-                        :class="{ active: mentionActiveIndex === idx }"
-                        @mousedown.prevent="insertMention(s)"
-                        @mouseenter="showMentionTooltip($event, s)"
-                        @mouseleave="hideMentionTooltip"
-                      >
-                        <div class="mention-popup-avatar">
-                          <img v-if="getAvatarDataUriForPersona(s)" :src="getAvatarDataUriForPersona(s)" alt="" class="mention-popup-avatar-img" />
-                          <span v-else class="mention-popup-initial">{{ s.name.charAt(0) }}</span>
-                        </div>
-                        <div class="mention-popup-body">
-                          <div class="mention-popup-name-row">
-                            <span class="mention-popup-name">{{ s.name }}</span>
-                            <span v-if="getPersonaProviderLabel(s.id)" class="mention-popup-meta">{{ getPersonaProviderLabel(s.id) }}</span>
-                          </div>
-                          <span v-if="s.description" class="mention-popup-desc">{{ s.description }}</span>
-                        </div>
-                      </button>
-                      <button
-                        class="mention-popup-item mention-popup-item-all"
-                        :class="{ active: mentionActiveIndex === mentionSuggestions.length }"
-                        @mousedown.prevent="insertMentionAll"
-                      >
-                        <div class="mention-popup-avatar">
-                          <span class="mention-popup-initial mention-popup-initial-all">@</span>
-                        </div>
-                        <div class="mention-popup-body">
-                          <span class="mention-popup-name">all</span>
-                          <span class="mention-popup-desc">Broadcast to all personas</span>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                  <!-- Fixed-position tooltip for @mention persona description -->
-                  <div
-                    v-if="mentionTooltip.visible && mentionTooltip.source === 'mention'"
-                    class="mention-tooltip-fixed"
-                    :style="{ top: mentionTooltip.y + 'px', left: mentionTooltip.x + 'px' }"
-                  >
-                    <div class="mention-tooltip-name">{{ mentionTooltip.name }}</div>
-                    <div class="mention-tooltip-text">{{ mentionTooltip.text }}</div>
-                  </div>
-                </div>
+                <ChatMentionInput
+                  ref="mentionInputRef"
+                  v-model="inputText"
+                  :personaIds="activeSystemPersonaIds"
+                  :isGroupChat="isGroupChat"
+                  :isRunning="activeRunning"
+                  @send="sendMessage"
+                  @focus="inputFocused = true"
+                  @blur="onInputBlur"
+                  @attach="atts => attachments.push(...atts)"
+                />
                 <!-- Stop button (visible while running) -->
                 <button
                   v-if="activeRunning"
@@ -1103,23 +1045,111 @@
                 <span class="ccm-working-path-hint">Leave empty to use the global default path.</span>
               </div>
 
+              <!-- Coding Mode toggle + provider selector -->
+              <div class="ccm-dark-section">
+                <div class="ccm-dark-section-label">
+                  Coding Mode
+                  <!-- Info chip with tooltip -->
+                  <span class="ccm-coding-info-chip" @mouseenter="showCodingInfoTooltip = true" @mouseleave="showCodingInfoTooltip = false">
+                    <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    <div v-if="showCodingInfoTooltip" class="ccm-coding-tooltip">
+                      <div class="ccm-coding-tooltip-title">What is Coding Mode?</div>
+                      <div class="ccm-coding-tooltip-body">Activates project-aware AI assistance. When enabled, SparkAI reads <code>CLAUDE.md</code> instruction files from your project hierarchy and injects them into the system prompt — the same way Claude Code does. Files are watched for changes and context updates automatically.</div>
+                      <div class="ccm-coding-tooltip-hint">Set your project root as the Working Path above, then select a coding provider.</div>
+                    </div>
+                  </span>
+                </div>
+
+                <!-- Toggle row: label + switch -->
+                <div class="ccm-coding-toggle-row">
+                  <span class="ccm-coding-toggle-label">Enable coding mode for this chat</span>
+                  <label class="ccm-coding-switch" @click.stop>
+                    <input type="checkbox" v-model="draftCodingMode" />
+                    <span class="ccm-coding-switch-track"><span class="ccm-coding-switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <!-- Provider dropdown (only visible when coding mode is on) -->
+                <div v-if="draftCodingMode" class="ccm-working-path-row" style="margin-top:10px;">
+                  <label style="font-size:var(--fs-small);color:#9CA3AF;min-width:90px;">Provider</label>
+                  <select
+                    v-model="draftCodingProvider"
+                    class="ccm-working-path-input"
+                    style="max-width:200px; cursor:pointer;"
+                  >
+                    <option value="claude-code">Claude Code</option>
+                  </select>
+                  <!-- Info icon showing what files are loaded for this provider -->
+                  <span class="ccm-provider-info-anchor" @mouseenter="showProviderInfoTooltip = true" @mouseleave="showProviderInfoTooltip = false">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    <div v-if="showProviderInfoTooltip" class="ccm-coding-tooltip ccm-coding-tooltip-right">
+                      <div class="ccm-coding-tooltip-title">{{ codingProviderInfo.label }}</div>
+                      <div class="ccm-coding-tooltip-body">{{ codingProviderInfo.description }}</div>
+                      <div class="ccm-coding-tooltip-files">
+                        <div class="ccm-coding-tooltip-files-label">Files loaded (in order):</div>
+                        <div v-for="f in codingProviderInfo.files" :key="f" class="ccm-coding-tooltip-file">
+                          <svg style="width:10px;height:10px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                          <code>{{ f }}</code>
+                        </div>
+                      </div>
+                    </div>
+                  </span>
+                </div>
+              </div>
+
               <div class="ccm-dark-section">
                 <div class="ccm-dark-section-label">
                   Maximum Persona Chat Rounds
                   <span class="ccm-dark-badge">Group Chat</span>
                 </div>
-                <div class="ccm-working-path-row">
+                <div class="ccm-stepper-row">
+                  <button class="ccm-stepper-btn" @click="draftMaxPersonaRounds = Math.max(1, draftMaxPersonaRounds - 1)">−</button>
                   <input
                     v-model.number="draftMaxPersonaRounds"
                     type="number"
                     min="1"
                     max="100"
-                    class="ccm-working-path-input"
-                    style="max-width: 100px;"
+                    class="ccm-stepper-input"
                     @blur="draftMaxPersonaRounds = Math.min(100, Math.max(1, Number(draftMaxPersonaRounds) || 10))"
                   />
+                  <button class="ccm-stepper-btn" @click="draftMaxPersonaRounds = Math.min(100, draftMaxPersonaRounds + 1)">+</button>
                 </div>
                 <span class="ccm-working-path-hint">How many back-and-forth rounds personas can run in one message. Default: 10. Hard limit: 100.</span>
+              </div>
+
+              <div class="ccm-dark-section">
+                <div class="ccm-dark-section-label">
+                  Max Output Tokens
+                  <span class="ccm-dark-badge">{{ draftMaxOutputTokens ? draftMaxOutputTokens.toLocaleString() + ' tokens' : 'Global default' }}</span>
+                </div>
+                <div class="ccm-stepper-row">
+                  <button class="ccm-stepper-btn" @click="draftMaxOutputTokens = Math.max(1024, (draftMaxOutputTokens ?? configStore.config.maxOutputTokens ?? 32768) - 1024)">−</button>
+                  <input
+                    :value="draftMaxOutputTokens ?? configStore.config.maxOutputTokens ?? 32768"
+                    type="number"
+                    min="1024"
+                    max="98304"
+                    class="ccm-stepper-input ccm-stepper-input--wide"
+                    @input="draftMaxOutputTokens = Number($event.target.value) || null"
+                    @blur="draftMaxOutputTokens = draftMaxOutputTokens ? Math.min(98304, Math.max(1024, Number(draftMaxOutputTokens))) : null"
+                  />
+                  <button class="ccm-stepper-btn" @click="draftMaxOutputTokens = Math.min(98304, (draftMaxOutputTokens ?? configStore.config.maxOutputTokens ?? 32768) + 1024)">+</button>
+                  <button
+                    v-if="draftMaxOutputTokens"
+                    class="ccm-stepper-reset"
+                    @click="draftMaxOutputTokens = null"
+                    title="Reset to global default"
+                  >
+                    Reset
+                  </button>
+                </div>
+                <span class="ccm-working-path-hint">
+                  Global default: {{ (configStore.config.maxOutputTokens ?? 32768).toLocaleString() }} tokens. Hard limit: 98,304 (96k). Leave empty to inherit.
+                </span>
               </div>
             </div>
 
@@ -1634,6 +1664,7 @@ import { useMcpStore } from '../stores/mcp'
 import { useToolsStore } from '../stores/tools'
 import { useModelsStore } from '../stores/models'
 import { useKnowledgeStore } from '../stores/knowledge'
+import { useVoiceStore } from '../stores/voice'
 import { getAvatarDataUri } from '../components/personas/personaAvatars'
 import SoulViewer from '../components/personas/SoulViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
@@ -1644,6 +1675,7 @@ import { parseMentions } from '../utils/mentions'
 import { v4 as uuidv4 } from 'uuid'
 import AppButton from '../components/common/AppButton.vue'
 import ChatGridLayout from '../components/chat/ChatGridLayout.vue'
+import ChatMentionInput from '../components/chat/ChatMentionInput.vue'
 import { estimateToolTokens, estimateMcpTokens, formatTokens, tokenPercentage } from '../utils/tokenEstimate'
 
 const chatsStore = useChatsStore()
@@ -1654,6 +1686,256 @@ const mcpStore = useMcpStore()
 const toolsStore = useToolsStore()
 const modelsStore = useModelsStore()
 const knowledgeStore = useKnowledgeStore()
+const voiceStore = useVoiceStore()
+
+// ── Voice call ──
+async function handleStartCall(chatId) {
+  const chat = chatsStore.chats.find(c => c.id === chatId)
+  if (!chat || chat.isGroupChat) return
+  if (voiceStore.isCallActive) return
+
+  // Resolve persona
+  const personaId = chat.systemPersonaId || personasStore.defaultSystemPersona?.id
+  const persona = personaId ? personasStore.getPersonaById(personaId) : null
+
+  // Resolve provider/model from persona → chat → global defaults (same as regular chat)
+  const chatProvider = persona?.providerId || chat.provider || configStore.config.defaultProvider || 'anthropic'
+  const chatModel = persona?.modelId || chat.model || ''
+
+  // Ensure messages loaded
+  await chatsStore.ensureMessages(chatId)
+  const history = (chat.messages || []).map(m => ({
+    role: m.role,
+    content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+  }))
+
+  // Resolve Whisper config
+  const vc = configStore.config.voiceCall || {}
+  const whisperConfig = {
+    apiKey: vc.whisperApiKey || '',
+    baseURL: vc.whisperBaseURL || 'https://api.openai.com',
+  }
+
+  // Update voice store
+  voiceStore.startCall(chatId, personaId, persona?.name || 'AI')
+
+  // Start backend voice session
+  if (window.electronAPI?.voice?.start) {
+    await window.electronAPI.voice.start({
+      chatId,
+      personaId,
+      history,
+      voiceConfig: { provider: chatProvider, model: chatModel },
+      persona: { name: persona?.name, systemPrompt: persona?.systemPrompt },
+      whisperConfig,
+    })
+  }
+
+  // Subscribe to voice events
+  setupVoiceListeners()
+
+  // Start mic capture (MediaRecorder + VAD → audio chunks to backend Whisper)
+  startMicCapture()
+}
+
+// ── Mic capture with VAD (sends audio chunks to backend for Whisper STT) ──
+let micStream = null
+let micRecorder = null
+let micAnalyser = null
+let micAnimFrame = null
+let micSilenceStart = 0
+let micIsRecording = false
+const SILENCE_THRESHOLD = 0.015
+const SILENCE_DURATION_MS = 1200
+const MIN_RECORDING_MS = 400
+const MAX_RECORDING_MS = 30000 // Cap at 30s to limit Whisper cost
+
+async function startMicCapture() {
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const actx = new AudioContext()
+    const source = actx.createMediaStreamSource(micStream)
+    micAnalyser = actx.createAnalyser()
+    micAnalyser.fftSize = 2048
+    source.connect(micAnalyser)
+
+    const dataArray = new Float32Array(micAnalyser.fftSize)
+    let chunks = []
+    let recordingStartTime = 0
+
+    micRecorder = new MediaRecorder(micStream, { mimeType: 'audio/webm;codecs=opus' })
+    micRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data)
+    }
+    micRecorder.onstop = async () => {
+      const duration = Date.now() - recordingStartTime
+      if (chunks.length === 0 || duration < MIN_RECORDING_MS) { chunks = []; return }
+      const blob = new Blob(chunks, { type: 'audio/webm' })
+      chunks = []
+      const arrayBuf = await blob.arrayBuffer()
+      if (window.electronAPI?.voice?.audioChunk && voiceStore.isCallActive) {
+        window.electronAPI.voice.audioChunk(Array.from(new Uint8Array(arrayBuf)))
+      }
+    }
+
+    function vadLoop() {
+      if (!voiceStore.isCallActive) { stopMicCapture(); return }
+      micAnalyser.getFloatTimeDomainData(dataArray)
+      let sum = 0
+      for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i]
+      const rms = Math.sqrt(sum / dataArray.length)
+      const isSpeaking = rms > SILENCE_THRESHOLD
+      const isMuted = voiceStore.isMuted
+      const isProcessing = voiceStore.status === 'processing' || voiceStore.status === 'speaking'
+
+      if (isSpeaking && !isMuted && !isProcessing) {
+        micSilenceStart = 0
+        if (!micIsRecording) {
+          micIsRecording = true
+          recordingStartTime = Date.now()
+          chunks = []
+          if (micRecorder.state === 'inactive') micRecorder.start()
+        }
+      } else if (micIsRecording) {
+        if (!micSilenceStart) micSilenceStart = Date.now()
+        if (Date.now() - micSilenceStart > SILENCE_DURATION_MS) {
+          micIsRecording = false
+          micSilenceStart = 0
+          if (micRecorder.state === 'recording') micRecorder.stop()
+        }
+      }
+      // Hard cap: stop recording after MAX_RECORDING_MS to limit Whisper cost
+      if (micIsRecording && (Date.now() - recordingStartTime > MAX_RECORDING_MS)) {
+        micIsRecording = false
+        micSilenceStart = 0
+        if (micRecorder.state === 'recording') micRecorder.stop()
+      }
+      micAnimFrame = requestAnimationFrame(vadLoop)
+    }
+    micAnimFrame = requestAnimationFrame(vadLoop)
+  } catch (err) {
+    console.error('Mic capture failed:', err)
+  }
+}
+
+function stopMicCapture() {
+  if (micAnimFrame) { cancelAnimationFrame(micAnimFrame); micAnimFrame = null }
+  if (micRecorder && micRecorder.state !== 'inactive') { try { micRecorder.stop() } catch {} }
+  micRecorder = null
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null }
+  micAnalyser = null
+  micIsRecording = false
+  micSilenceStart = 0
+}
+
+// ── TTS ──
+// 'browser' = free SpeechSynthesis, 'openai-hd' = OpenAI TTS HD (uses Whisper API key)
+let activeAudioEl = null
+
+async function speakText(text) {
+  if (!text) return
+  voiceStore.setStatus('speaking')
+
+  const vc = configStore.config.voiceCall || {}
+  const useOpenAITTS = (vc.ttsMode === 'openai' || vc.ttsMode === 'openai-hd') && vc.whisperApiKey
+  if (useOpenAITTS && window.electronAPI?.voice?.tts) {
+    // OpenAI TTS — costs per character ($15/1M normal, $30/1M HD)
+    try {
+      const result = await window.electronAPI.voice.tts({
+        text,
+        apiKey: vc.whisperApiKey,
+        baseURL: vc.whisperBaseURL || 'https://api.openai.com',
+        model: vc.ttsMode === 'openai-hd' ? 'tts-1-hd' : 'tts-1',
+      })
+      if (result.success && result.audio) {
+        const audioUrl = `data:audio/${result.format || 'mp3'};base64,${result.audio}`
+        activeAudioEl = new Audio(audioUrl)
+        activeAudioEl.onended = () => {
+          activeAudioEl = null
+          if (voiceStore.isCallActive) voiceStore.setStatus('listening')
+        }
+        activeAudioEl.onerror = () => {
+          activeAudioEl = null
+          if (voiceStore.isCallActive) voiceStore.setStatus('listening')
+        }
+        activeAudioEl.play()
+        return
+      }
+      // Fallback to browser TTS if OpenAI TTS fails
+      console.warn('OpenAI TTS failed, falling back to browser:', result.error)
+    } catch (err) {
+      console.warn('OpenAI TTS error, falling back to browser:', err)
+    }
+  }
+
+  // Browser SpeechSynthesis (free, default)
+  if (!window.speechSynthesis) { voiceStore.setStatus('listening'); return }
+  window.speechSynthesis.cancel()
+  const utterance = new SpeechSynthesisUtterance(text)
+  utterance.rate = 1.0
+  utterance.pitch = 1.0
+  utterance.volume = 1.0
+  utterance.onend = () => {
+    if (voiceStore.isCallActive) voiceStore.setStatus('listening')
+  }
+  utterance.onerror = () => {
+    if (voiceStore.isCallActive) voiceStore.setStatus('listening')
+  }
+  window.speechSynthesis.speak(utterance)
+}
+
+function stopSpeaking() {
+  if (window.speechSynthesis) window.speechSynthesis.cancel()
+  if (activeAudioEl) { activeAudioEl.pause(); activeAudioEl = null }
+}
+
+// ── Voice event listeners ──
+let voiceCleanups = []
+function setupVoiceListeners() {
+  voiceCleanups.forEach(fn => fn())
+  voiceCleanups = []
+
+  const api = window.electronAPI?.voice
+  if (!api) return
+
+  voiceCleanups.push(api.onStatus((status) => voiceStore.setStatus(status)))
+
+  // Whisper transcript from backend
+  voiceCleanups.push(api.onTranscription(({ text }) => {
+    voiceStore.setTranscript(text)
+    addVoiceMessageToChat('user', text)
+  }))
+
+  // AI response — add to chat + speak via SpeechSynthesis
+  voiceCleanups.push(api.onAiText(({ text }) => {
+    voiceStore.setAiText(text)
+    addVoiceMessageToChat('assistant', text)
+    speakText(text)
+  }))
+
+  voiceCleanups.push(api.onError(({ message }) => console.error('Voice error:', message)))
+  voiceCleanups.push(api.onTaskTriggered(({ instruction }) => handleVoiceTask(instruction)))
+}
+
+// Add a voice exchange message to the active call's chat
+function addVoiceMessageToChat(role, content) {
+  const chatId = voiceStore.activeChatId
+  if (!chatId || !content) return
+  chatsStore.addMessage(chatId, { role, content, fromVoice: true })
+}
+
+// Handle task triggered from voice call
+function handleVoiceTask(instruction) {
+  const chatId = voiceStore.activeChatId
+  if (!chatId) return
+  // Switch to the chat if needed
+  if (chatsStore.activeChatId !== chatId) {
+    chatsStore.activeChatId = chatId
+  }
+  // Inject instruction as user input and trigger send
+  inputText.value = instruction
+  nextTick(() => sendMessage())
+}
 
 // ── Grid mode state ──
 const gridMode = ref(false)
@@ -1727,7 +2009,8 @@ function gridOpenChatSettings(chatId) {
 const inputText = ref('')
 const attachments = ref([])
 const isDragOver = ref(false)
-const inputEl = ref(null)
+const inputEl = ref(null) // legacy: no longer bound to a DOM element; use mentionInputRef
+const mentionInputRef = ref(null)
 const messagesEl = ref(null)
 const chatWindowRef = ref(null)
 const renameInput = ref(null)
@@ -1837,27 +2120,8 @@ function startResize(e) {
 // Group chat popover state moved to ChatHeader
 const showGroupPersonaConfigId = ref(null)
 
-// @Mention autocomplete state
-const showMentionPopup = ref(false)
-const mentionQuery = ref('')
-const mentionActiveIndex = ref(0)
-const mentionStartPos = ref(-1)
+// Tooltip state for message avatars and user avatar (shared across tooltip handlers)
 const mentionTooltip = reactive({ visible: false, source: '', text: '', name: '', x: 0, y: 0, side: 'right' })
-
-function showMentionTooltip(event, persona) {
-  if (!persona.description) { mentionTooltip.visible = false; return }
-  const rect = event.currentTarget.getBoundingClientRect()
-  mentionTooltip.source = 'mention'
-  mentionTooltip.name = persona.name
-  mentionTooltip.text = persona.description
-  mentionTooltip.x = rect.right + 12
-  mentionTooltip.y = rect.top + rect.height / 2
-  mentionTooltip.visible = true
-}
-
-function hideMentionTooltip() {
-  mentionTooltip.visible = false
-}
 
 // Persona header tooltip moved to ChatHeader (has its own tooltip state)
 
@@ -1922,14 +2186,6 @@ const stickyTargetLabel = computed(() => {
     .join(', ')
 })
 
-const mentionSuggestions = computed(() => {
-  const ids = activeSystemPersonaIds.value
-  if (ids.length < 2) return []
-  const q = mentionQuery.value.toLowerCase()
-  return ids
-    .map(id => personasStore.getPersonaById(id))
-    .filter(p => p && (!q || p.name.toLowerCase().includes(q)))
-})
 
 // ── HTTP Tools modal state ──
 const showToolsModal = ref(false)
@@ -1940,6 +2196,7 @@ const ccmMcpSearch = ref('')
 
 // ── General tab draft state ──
 const draftMaxPersonaRounds = ref(10)
+const draftMaxOutputTokens = ref(null)  // null = use global default
 
 // ── Permissions tab draft state ──
 const draftPermissionMode = ref('inherit')
@@ -2020,7 +2277,10 @@ watch(showChatConfigModal, (open) => {
     enabledToolIds: new Set(chatEnabledToolIds.value),
     enabledMcpIds: new Set(chatEnabledMcpIds.value),
     workingPath: draftWorkingPath.value,
+    codingMode: draftCodingMode.value,
+    codingProvider: draftCodingProvider.value,
     maxPersonaRounds: draftMaxPersonaRounds.value,
+    maxOutputTokens: draftMaxOutputTokens.value,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
     chatDangerOverrides: JSON.parse(JSON.stringify(draftChatDangerOverrides.value)),
@@ -2034,11 +2294,16 @@ function saveChatSettings() {
   if (!chatId) return
   const rawRounds = Number(draftMaxPersonaRounds.value)
   const clampedRounds = Number.isFinite(rawRounds) ? Math.min(100, Math.max(1, rawRounds)) : 10
+  const rawMaxOutput = Number(draftMaxOutputTokens.value)
+  const clampedMaxOutput = draftMaxOutputTokens.value ? Math.min(98304, Math.max(1024, rawMaxOutput)) : null
   chatsStore.setChatSettings(chatId, {
     enabledToolIds: [...chatEnabledToolIds.value],
     enabledMcpIds: [...chatEnabledMcpIds.value],
     workingPath: draftWorkingPath.value || null,
+    codingMode: draftCodingMode.value,
+    codingProvider: draftCodingProvider.value,
     maxPersonaRounds: clampedRounds,
+    maxOutputTokens: clampedMaxOutput,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
     chatDangerOverrides: JSON.parse(JSON.stringify(draftChatDangerOverrides.value)),
@@ -2053,7 +2318,10 @@ function cancelChatSettings() {
     chatEnabledToolIds.value = _draftSnapshot.enabledToolIds
     chatEnabledMcpIds.value = _draftSnapshot.enabledMcpIds
     draftWorkingPath.value = _draftSnapshot.workingPath
+    draftCodingMode.value = _draftSnapshot.codingMode ?? false
+    draftCodingProvider.value = _draftSnapshot.codingProvider ?? 'claude-code'
     draftMaxPersonaRounds.value = _draftSnapshot.maxPersonaRounds
+    draftMaxOutputTokens.value = _draftSnapshot.maxOutputTokens ?? null
     draftPermissionMode.value = _draftSnapshot.permissionMode
     draftChatAllowList.value = _draftSnapshot.chatAllowList
     draftChatDangerOverrides.value = _draftSnapshot.chatDangerOverrides
@@ -2071,6 +2339,28 @@ const chatEnabledToolIds = ref(new Set())
 const toolsSearchQuery = ref('')
 const toolsCategoryFilter = ref('')
 const draftWorkingPath = ref('')
+const draftCodingMode = ref(false)
+const draftCodingProvider = ref('claude-code')
+
+// ── Coding mode tooltip state ──
+const showCodingInfoTooltip = ref(false)
+const showProviderInfoTooltip = ref(false)
+
+const codingProviderInfo = computed(() => {
+  const providers = {
+    'claude-code': {
+      label: 'Claude Code',
+      description: 'Loads CLAUDE.md instruction files from your project hierarchy, identical to how the Claude Code CLI works. Each file is watched for live changes.',
+      files: [
+        '~/.claude/CLAUDE.md (global)',
+        '<parent-dirs>/CLAUDE.md (ancestors)',
+        '<working-path>/CLAUDE.md (project root)',
+        '<working-path>/**/CLAUDE.md (sub-dirs, if any)',
+      ],
+    },
+  }
+  return providers[draftCodingProvider.value] || providers['claude-code']
+})
 
 // Resolve default tool IDs (global defaults or all tools)
 function _defaultToolIds() {
@@ -2109,8 +2399,12 @@ function _loadDraftFromChat() {
   }
   // Working path
   draftWorkingPath.value = chat.workingPath || ''
+  draftCodingMode.value = chat.codingMode ?? false
+  draftCodingProvider.value = chat.codingProvider ?? 'claude-code'
   // Max persona rounds (null in JSON = use default 10)
   draftMaxPersonaRounds.value = chat.maxPersonaRounds ?? 10
+  // Max output tokens (null = use global default)
+  draftMaxOutputTokens.value = chat.maxOutputTokens ?? null
   // Permissions
   draftPermissionMode.value = chat.permissionMode || 'inherit'
   draftChatAllowList.value = JSON.parse(JSON.stringify(chat.chatAllowList || []))
@@ -2457,7 +2751,7 @@ async function confirmNewChat() {
     const title = newChatName.value.trim() || 'New Chat'
     await chatsStore.createChat(title, personaCfg)
   }
-  nextTick(() => inputEl.value?.focus())
+  nextTick(() => mentionInputRef.value?.focus())
 }
 
 function cancelNewChat() {
@@ -2766,113 +3060,8 @@ function setGroupPersonaOverrideField(personaId, field, value) {
   chatsStore.setGroupPersonaOverride(chatId, personaId, { ...existing, [field]: value })
 }
 
-// ── @Mention Autocomplete Functions ──────────────────────────────────────────
-function onInputChange(e) {
-  autoResize(e)
-  checkMentionTrigger()
-}
-
-function checkMentionTrigger() {
-  if (activeSystemPersonaIds.value.length < 2) { showMentionPopup.value = false; return }
-  const el = inputEl.value
-  if (!el) return
-  const text = el.value
-  const cursorPos = el.selectionStart
-  // Look backward from cursor for an '@' that's at start of line or preceded by whitespace
-  let atPos = -1
-  for (let i = cursorPos - 1; i >= 0; i--) {
-    if (text[i] === '@' && (i === 0 || /\s/.test(text[i - 1]))) {
-      atPos = i
-      break
-    }
-    if (/\s/.test(text[i])) break
-  }
-  if (atPos >= 0) {
-    mentionStartPos.value = atPos
-    mentionQuery.value = text.slice(atPos + 1, cursorPos)
-    mentionActiveIndex.value = 0
-    showMentionPopup.value = true
-  } else {
-    showMentionPopup.value = false
-  }
-}
-
-function onInputKeydown(e) {
-  // When mention popup is open, intercept navigation and selection keys
-  if (showMentionPopup.value && mentionSuggestions.value.length > 0) {
-    const totalItems = mentionSuggestions.value.length + 1 // +1 for @all
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      mentionActiveIndex.value = (mentionActiveIndex.value + 1) % totalItems
-      return
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      mentionActiveIndex.value = (mentionActiveIndex.value - 1 + totalItems) % totalItems
-      return
-    } else if (e.key === 'Tab' || e.key === 'Enter') {
-      e.preventDefault()
-      if (mentionActiveIndex.value < mentionSuggestions.value.length) {
-        insertMention(mentionSuggestions.value[mentionActiveIndex.value])
-      } else {
-        insertMentionAll()
-      }
-      return
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      showMentionPopup.value = false
-      mentionTooltip.visible = false
-      return
-    }
-  }
-
-  // Enter without modifiers sends the message
-  if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
-    e.preventDefault()
-    sendMessage()
-  }
-}
-
-function insertMention(persona) {
-  const el = inputEl.value
-  if (!el || mentionStartPos.value < 0) return
-  const before = inputText.value.slice(0, mentionStartPos.value)
-  const after = inputText.value.slice(el.selectionStart)
-  inputText.value = `${before}@${persona.name} ${after}`
-  showMentionPopup.value = false
-  mentionTooltip.visible = false
-  nextTick(() => {
-    const pos = before.length + 1 + persona.name.length + 1
-    el.setSelectionRange(pos, pos)
-    el.focus()
-  })
-}
-
-function insertMentionAll() {
-  const el = inputEl.value
-  if (!el || mentionStartPos.value < 0) return
-  const before = inputText.value.slice(0, mentionStartPos.value)
-  const after = inputText.value.slice(el.selectionStart)
-  inputText.value = `${before}@all ${after}`
-  showMentionPopup.value = false
-  mentionTooltip.visible = false
-  nextTick(() => {
-    const pos = before.length + 5
-    el.setSelectionRange(pos, pos)
-    el.focus()
-  })
-}
-
 function onInputBlur() {
   inputFocused.value = false
-  // Delay hiding so mousedown on popup can fire
-  setTimeout(() => { showMentionPopup.value = false }, 200)
-}
-
-// ── Input ─────────────────────────────────────────────────────────────────────
-function autoResize(e) {
-  const el = e.target
-  el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 200) + 'px'
 }
 
 // ── Attachments / Drag-and-Drop ──────────────────────────────────────────────
@@ -3158,7 +3347,7 @@ function requestDeleteMessage(msg) {
 function quoteMessage(msg) {
   const content = msg.content || ''
   quotedMessage.value = { role: msg.role, content, personaId: msg.personaId || null }
-  nextTick(() => inputEl.value?.focus())
+  nextTick(() => mentionInputRef.value?.focus())
 }
 
 function getQuotedSenderName(q) {
@@ -3402,6 +3591,8 @@ function handleChunk(cId, chunk) {
     dbg(`thinking: ${chunk.text?.slice(0,60) ?? ''}…`, 'chunk')
   } else if (chunk.type === 'compaction') {
     dbg(`compaction: ${chunk.message || 'context compacted'}`, 'warn')
+  } else if (chunk.type === 'max_tokens_reached') {
+    dbg(`max_tokens reached (limit=${chunk.limit})`, 'warn')
   } else if (chunk.type === 'subagent_progress') {
     dbg(`subagent: ${chunk.agent || 'unknown'} — ${chunk.status || JSON.stringify(chunk).slice(0,60)}`, 'info')
   }
@@ -3481,13 +3672,13 @@ function buildPersonaRuns(respondingIds, groupIds, cfg, targetChat, userPersonaP
     const resolvedProvider = overrides.providerId || persona.providerId || chatProvider
     if (resolvedProvider === 'anthropic') {
       personaCfg.apiKey = cfg.anthropic?.apiKey || ''
-      personaCfg.baseURL = cfg.anthropic?.baseURL || 'https://api.anthropic.com'
+      personaCfg.baseURL = cfg.anthropic?.baseURL || ''
     } else if (resolvedProvider === 'openrouter') {
       personaCfg.apiKey = cfg.openrouter?.apiKey || ''
-      personaCfg.baseURL = cfg.openrouter?.baseURL || 'https://openrouter.ai/api'
+      personaCfg.baseURL = cfg.openrouter?.baseURL || ''
     } else if (resolvedProvider === 'openai') {
       personaCfg.openaiApiKey = cfg.openai?.apiKey || ''
-      personaCfg.openaiBaseURL = cfg.openai?.baseURL || 'https://mlaas.virtuosgames.com'
+      personaCfg.openaiBaseURL = cfg.openai?.baseURL || ''
       personaCfg._resolvedProvider = 'openai'
       personaCfg.defaultProvider = 'openai'
     }
@@ -3539,6 +3730,7 @@ async function runGroupPersonas(chatId, targetChat, personaRuns, apiMessages, cf
     chatPermissionMode: targetChat.permissionMode || 'inherit',
     chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
     chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
+    maxOutputTokens: targetChat.maxOutputTokens || null,
     knowledgeConfig: {
       ragEnabled: knowledgeStore.ragEnabled,
       pineconeApiKey: knowledgeStore.pineconeApiKey,
@@ -3715,7 +3907,7 @@ async function sendMessage() {
     perChatQueue.get(cid).push({ text, attachments: [...attachments.value] })
     inputText.value = ''
     attachments.value = []
-    if (inputEl.value) inputEl.value.style.height = 'auto'
+    mentionInputRef.value?.resetHeight()
     // Resume auto-scroll: user sent a new prompt, so re-engage scrolling for the current stream
     userScrolled.value = false
     scrollToBottom(true, cid)
@@ -3745,9 +3937,7 @@ async function sendMessage() {
   const pendingAttachments = [...attachments.value]
   attachments.value = []
   inputText.value = ''
-  if (inputEl.value) {
-    inputEl.value.style.height = 'auto'
-  }
+  mentionInputRef.value?.resetHeight()
 
   try {
   // Reset scroll-lock for this new answer
@@ -3837,13 +4027,13 @@ async function sendMessage() {
   const chatProvider = targetChat.provider || 'anthropic'
   if (chatProvider === 'anthropic') {
     cfg.apiKey = cfg.anthropic?.apiKey || ''
-    cfg.baseURL = cfg.anthropic?.baseURL || 'https://api.anthropic.com'
+    cfg.baseURL = cfg.anthropic?.baseURL || ''
   } else if (chatProvider === 'openrouter') {
     cfg.apiKey = cfg.openrouter?.apiKey || ''
-    cfg.baseURL = cfg.openrouter?.baseURL || 'https://openrouter.ai/api'
+    cfg.baseURL = cfg.openrouter?.baseURL || ''
   } else if (chatProvider === 'openai') {
     cfg.openaiApiKey = cfg.openai?.apiKey || ''
-    cfg.openaiBaseURL = cfg.openai?.baseURL || 'https://mlaas.virtuosgames.com'
+    cfg.openaiBaseURL = cfg.openai?.baseURL || ''
     cfg._resolvedProvider = 'openai'
     cfg.defaultProvider = 'openai'
   }
@@ -3853,6 +4043,23 @@ async function sendMessage() {
   // Per-chat working path (artifact directory)
   if (targetChat.workingPath) {
     cfg.chatWorkingPath = targetChat.workingPath
+  }
+  // Coding Mode: inject CLAUDE.md context into cfg.
+  // Primary: use watcher-cached context (_codingModeContext) which updates automatically on file change.
+  // Fallback: one-shot IPC read for the first send before the watcher has fired.
+  if (targetChat.codingMode && targetChat.workingPath) {
+    try {
+      // Use watcher cache if available (avoids redundant file I/O)
+      const cached = targetChat.id === chatsStore.activeChatId ? _codingModeContext.value : null
+      const claudeCtx = cached ?? (
+        window.electronAPI?.claude?.loadContext
+          ? await window.electronAPI.claude.loadContext(targetChat.workingPath)
+          : null
+      )
+      if (claudeCtx) cfg.claudeContext = claudeCtx
+    } catch (err) {
+      console.warn('[CodingMode] Failed to load CLAUDE.md context:', err)
+    }
   }
   dbg(`runAgent → chatId=${chatId} provider=${chatProvider} model=${targetChat.model || cfg.anthropic?.activeModel} msgs=${apiMessages.length} skills=[${enabledSkills.value.join(',')||'none'}] group=${isGroup}`)
   dbg(`config → baseURL=${cfg.baseURL} apiKey=${cfg.apiKey ? cfg.apiKey.slice(0,8)+'…' : '(empty)'} sonnet=${cfg.anthropic?.sonnetModel}`)
@@ -3962,13 +4169,13 @@ async function sendMessage() {
       const singleCfg = { ...cfg }
       if (personaProvider === 'anthropic') {
         singleCfg.apiKey = cfg.anthropic?.apiKey || ''
-        singleCfg.baseURL = cfg.anthropic?.baseURL || 'https://api.anthropic.com'
+        singleCfg.baseURL = cfg.anthropic?.baseURL || ''
       } else if (personaProvider === 'openrouter') {
         singleCfg.apiKey = cfg.openrouter?.apiKey || ''
-        singleCfg.baseURL = cfg.openrouter?.baseURL || 'https://openrouter.ai/api'
+        singleCfg.baseURL = cfg.openrouter?.baseURL || ''
       } else if (personaProvider === 'openai') {
         singleCfg.openaiApiKey = cfg.openai?.apiKey || ''
-        singleCfg.openaiBaseURL = cfg.openai?.baseURL || 'https://mlaas.virtuosgames.com'
+        singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''
         singleCfg._resolvedProvider = 'openai'
         singleCfg.defaultProvider = 'openai'
       }
@@ -3988,6 +4195,7 @@ async function sendMessage() {
         chatPermissionMode: targetChat.permissionMode || 'inherit',
         chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
         chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
+        maxOutputTokens: targetChat.maxOutputTokens || null,
         knowledgeConfig: {
           ragEnabled: knowledgeStore.ragEnabled,
           pineconeApiKey: knowledgeStore.pineconeApiKey,
@@ -4092,6 +4300,19 @@ async function sendMessage() {
           m.streaming = false
           if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
         }
+      }
+    }
+
+    // Notify voice session that the agent task completed (for verbal notification)
+    if (voiceStore.isCallActive && voiceStore.activeChatId === chatId) {
+      // Get the last assistant message as a brief summary
+      const lastMsg = finChat?.messages?.filter(m => m.role === 'assistant').pop()
+      const summary = lastMsg?.content
+        ? (typeof lastMsg.content === 'string' ? lastMsg.content.slice(0, 100) : 'Done')
+        : 'Done'
+      // Fire and forget — voice session will speak the notification
+      if (window.electronAPI?.voice?.notifyTaskComplete) {
+        window.electronAPI.voice.notifyTaskComplete(summary)
       }
     }
 
@@ -4239,7 +4460,7 @@ function refinePlan(msg) {
   chatsStore.setPlanState(chatsStore.activeChatId, msg.id, 'rejected')
   // Pre-fill the textarea with a refinement prompt and focus
   inputText.value = 'Refine the plan: '
-  nextTick(() => inputEl.value?.focus())
+  nextTick(() => mentionInputRef.value?.focus())
 }
 
 async function compactContext() {
@@ -4337,7 +4558,7 @@ watch(() => chatsStore.activeChatId, () => {
   // Scroll after messages are rendered (handles both already-loaded and lazy-loaded cases)
   scrollToBottom(true)
   nextTick(() => {
-    inputEl.value?.focus()
+    mentionInputRef.value?.focus()
   })
 })
 
@@ -4391,7 +4612,49 @@ async function handleInterceptedFileDrop(url) {
   }
 }
 
+// --- Coding Mode: CLAUDE.md file watcher lifecycle ----------------------------
+// Mirrors Claude Code: watches the full CLAUDE.md hierarchy for the active chat.
+// When a file changes, main pushes claude:context-updated -> we store merged
+// context in _codingModeContext so it is used on the NEXT send automatically.
+const _codingModeContext = ref(null)  // most-recently-pushed context for active chat
+let _codingModeContextHandler = null  // IPC listener reference for cleanup
+
+// Sync watcher whenever the active chat or its coding settings change
+watch(
+  () => [chatsStore.activeChatId, chatsStore.activeChat?.codingMode, chatsStore.activeChat?.workingPath],
+  async ([chatId, codingMode, workingPath]) => {
+    // Tear down previous listener
+    if (_codingModeContextHandler && window.electronAPI?.claude?.offContextUpdated) {
+      window.electronAPI.claude.offContextUpdated(_codingModeContextHandler)
+      _codingModeContextHandler = null
+    }
+    _codingModeContext.value = null
+
+    if (!chatId || !codingMode || !workingPath || !window.electronAPI?.claude) return
+
+    // Start watching (main process, debounced 300ms)
+    try {
+      await window.electronAPI.claude.watchContext(chatId, workingPath)
+    } catch (err) {
+      console.warn('[CodingMode] watchContext failed:', err)
+      return
+    }
+
+    // Subscribe to push events from main
+    _codingModeContextHandler = (payload) => {
+      if (payload?.chatId === chatId) {
+        _codingModeContext.value = payload.context ?? null
+      }
+    }
+    window.electronAPI.claude.onContextUpdated(_codingModeContextHandler)
+  },
+  { immediate: true }
+)
+
 onMounted(async () => {
+  // Restore from PiP if a voice call is active for this view
+  if (voiceStore.isCallActive && voiceStore.isPip) voiceStore.setPip(false)
+
   personasStore.loadPersonas()
   await knowledgeStore.loadConfig()
   // Load tools in background — then sync draft from active chat
@@ -4401,7 +4664,7 @@ onMounted(async () => {
   // Initialize MCP from active chat or defaults
   _loadDraftFromChat()
   scrollToBottom()
-  nextTick(() => inputEl.value?.focus())
+  nextTick(() => mentionInputRef.value?.focus())
   document.addEventListener('click', handlePopoverOutsideClick)
 
   // Register UI chunk callback with the store (store owns the persistent IPC listener)
@@ -4425,7 +4688,34 @@ onMounted(async () => {
   }
 })
 
+// Stop speech recognition and TTS when call ends (from any source)
+watch(() => voiceStore.isCallActive, (active) => {
+  if (!active) {
+    stopMicCapture()
+    stopSpeaking()
+    voiceCleanups.forEach(fn => fn())
+    voiceCleanups = []
+  }
+})
+
 onUnmounted(() => {
+  // Switch to PiP mode if a voice call is active
+  if (voiceStore.isCallActive) voiceStore.setPip(true)
+  // Clean voice listeners, mic capture, and TTS
+  stopMicCapture()
+  stopSpeaking()
+  voiceCleanups.forEach(fn => fn())
+  voiceCleanups = []
+
+  // Tear down CLAUDE.md file watcher + IPC listener
+  if (_codingModeContextHandler && window.electronAPI?.claude?.offContextUpdated) {
+    window.electronAPI.claude.offContextUpdated(_codingModeContextHandler)
+    _codingModeContextHandler = null
+  }
+  if (chatsStore.activeChatId && window.electronAPI?.claude?.unwatchContext) {
+    window.electronAPI.claude.unwatchContext(chatsStore.activeChatId)
+  }
+
   chatsStore.clearUiChunkCallback()
 
   document.removeEventListener('click', handlePopoverOutsideClick)
@@ -5389,6 +5679,122 @@ onUnmounted(() => {
 .ccm-dark-badge.badge-on { background: #064E3B; color: #6EE7B7; }
 .ccm-dark-badge.badge-off { background: #451A1A; color: #FCA5A5; }
 
+/* ── Coding Mode — info chip & tooltips ──────────────────────────────── */
+.ccm-coding-info-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: #1F1F1F;
+  border: 1px solid #2A2A2A;
+  color: #6B7280;
+  cursor: help;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.ccm-coding-info-chip:hover { background: #2A2A2A; color: #9CA3AF; }
+
+.ccm-coding-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 280px;
+  background: #161616;
+  border: 1px solid #2A2A2A;
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  z-index: 9999;
+  pointer-events: none;
+  font-family: 'Inter', sans-serif;
+}
+.ccm-coding-tooltip-right {
+  left: auto;
+  right: 0;
+}
+.ccm-coding-tooltip-title {
+  font-size: 12px; font-weight: 700; color: #E5E5EA; margin-bottom: 6px;
+}
+.ccm-coding-tooltip-body {
+  font-size: 11px; font-weight: 400; color: #9CA3AF; line-height: 1.55;
+}
+.ccm-coding-tooltip-body code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; color: #67E8F9;
+  background: #0C1F26; padding: 1px 5px; border-radius: 4px;
+}
+.ccm-coding-tooltip-hint {
+  margin-top: 8px;
+  font-size: 11px; font-weight: 500; color: #4B5563;
+  border-top: 1px solid #1F1F1F; padding-top: 8px;
+}
+.ccm-coding-tooltip-files { margin-top: 8px; }
+.ccm-coding-tooltip-files-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: #4B5563; margin-bottom: 5px;
+}
+.ccm-coding-tooltip-file {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 0; color: #6B7280;
+}
+.ccm-coding-tooltip-file code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; color: #67E8F9;
+}
+
+/* ── Coding Mode — toggle row ──────────────────────────────────────────── */
+.ccm-coding-toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 10px 14px;
+  background: #1A1A1A; border: 1px solid #222;
+  border-radius: 10px;
+}
+.ccm-coding-toggle-label {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary); font-weight: 500;
+  color: #9CA3AF;
+}
+
+/* ── Coding Mode — switch (teal accent, not black) ─────────────────────── */
+.ccm-coding-switch {
+  display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0;
+}
+.ccm-coding-switch input { display: none; }
+.ccm-coding-switch-track {
+  position: relative; width: 38px; height: 22px;
+  border-radius: 11px; background: #2A2A2A;
+  border: 1px solid #333;
+  transition: background 0.2s, border-color 0.2s;
+}
+.ccm-coding-switch input:checked + .ccm-coding-switch-track {
+  background: #0E7490;
+  border-color: #0891B2;
+}
+.ccm-coding-switch-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #4B5563;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  transition: transform 0.2s, background 0.2s;
+}
+.ccm-coding-switch input:checked + .ccm-coding-switch-track .ccm-coding-switch-thumb {
+  transform: translateX(16px); background: #FFFFFF;
+}
+
+/* ── Provider info anchor ─────────────────────────────────────────────── */
+.ccm-provider-info-anchor {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #1A1A1A; border: 1px solid #2A2A2A;
+  color: #4B5563; cursor: help;
+  position: relative; flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.ccm-provider-info-anchor:hover { background: #2A2A2A; color: #9CA3AF; }
+
 /* Provider buttons (dark) — used in Permissions tab */
 .ccm-provider-btns {
   display: flex; gap: 8px;
@@ -5683,6 +6089,44 @@ onUnmounted(() => {
 .ccm-working-path-hint {
   font-family: 'Inter', sans-serif; font-size: 11px; color: #4B5563;
   margin-top: 4px; display: block;
+}
+
+/* Stepper control — number fields with styled +/- buttons */
+.ccm-stepper-row {
+  display: flex; align-items: center; gap: 4px;
+}
+.ccm-stepper-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  background: #1A1A1A; border: 1px solid #2A2A2A;
+  color: #9CA3AF; font-size: 16px; font-family: 'Inter', sans-serif;
+  line-height: 1; cursor: pointer; transition: all 0.15s; user-select: none;
+}
+.ccm-stepper-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #374151 100%);
+  border-color: #4B5563; color: #FFFFFF;
+}
+.ccm-stepper-input {
+  width: 64px; padding: 6px 8px; border-radius: 8px; text-align: center;
+  background: #1A1A1A; border: 1px solid #2A2A2A;
+  font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  color: #FFFFFF; outline: none; transition: border-color 0.15s;
+  /* hide native spinners */
+  -moz-appearance: textfield;
+}
+.ccm-stepper-input::-webkit-outer-spin-button,
+.ccm-stepper-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.ccm-stepper-input:focus { border-color: #4B5563; }
+.ccm-stepper-input::placeholder { color: #4B5563; }
+.ccm-stepper-input--wide { width: 90px; }
+.ccm-stepper-reset {
+  padding: 5px 10px; border-radius: 8px; margin-left: 4px;
+  background: #1A1A1A; border: 1px solid #2A2A2A;
+  color: #6B7280; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.ccm-stepper-reset:hover {
+  background: #2A2A2A; border-color: #374151; color: #9CA3AF;
 }
 
 /* ── Permissions tab ──────────────────────────────────────────────────── */

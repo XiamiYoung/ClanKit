@@ -50,7 +50,107 @@
       @send-with-attachments="onSendWithAttachments"
       @stop="stopChat"
       @delete-message="deleteMessage"
-    />
+    >
+      <template #input>
+        <div class="gp-input-area">
+          <!-- Attachment preview strip -->
+          <div v-if="gpAttachments.length > 0" class="gp-attach-strip">
+            <template v-for="att in gpAttachments" :key="att.id">
+              <!-- Image thumbnail -->
+              <div
+                v-if="att.type === 'image' && att.preview"
+                class="gp-att-img-wrap"
+              >
+                <img :src="att.preview" :alt="att.name" class="gp-att-img" />
+                <button @click="removeGpAttachment(att.id)" class="gp-att-remove" aria-label="Remove image">
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+              <!-- File chip -->
+              <div v-else class="gp-att-chip" :style="att.type === 'error' ? 'background:#FEE2E2;color:#991B1B;border-color:#FCA5A5;' : ''">
+                <svg v-if="att.type === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <svg v-else-if="att.type === 'folder'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <svg v-else-if="att.type === 'error'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                <svg v-else class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span class="gp-att-name">{{ att.name }}</span>
+                <button @click="removeGpAttachment(att.id)" class="gp-att-chip-remove" aria-label="Remove attachment">
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <!-- Input box row -->
+          <div class="gp-input-box" :class="{ focused: gpInputFocused }">
+            <!-- Attach button -->
+            <button
+              @click="pickGpFiles"
+              :disabled="isRunning"
+              class="gp-icon-btn"
+              aria-label="Attach files"
+              title="Attach files or folders"
+            >
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+              </svg>
+            </button>
+
+            <ChatMentionInput
+              ref="mentionInputRef"
+              v-model="gpInputText"
+              :personaIds="chatPersonaIds"
+              :isGroupChat="isGroupChat"
+              :isRunning="isRunning"
+              :compact="true"
+              @send="onMentionSend"
+              @focus="gpInputFocused = true"
+              @blur="gpInputFocused = false"
+              @attach="atts => gpAttachments.push(...atts)"
+            />
+
+            <!-- Stop button -->
+            <button
+              v-if="isRunning"
+              @click="stopChat"
+              class="gp-icon-btn gp-stop-btn"
+              aria-label="Stop agent"
+              title="Stop agent"
+            >
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            </button>
+
+            <!-- Send button -->
+            <button
+              @click="onMentionSend(gpInputText)"
+              :disabled="!gpInputText.trim() && gpAttachments.length === 0"
+              class="gp-icon-btn gp-send-btn"
+              :class="{ active: gpInputText.trim() || gpAttachments.length > 0 }"
+              aria-label="Send message"
+              :title="isRunning ? 'Send (queued)' : 'Send message'"
+            >
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Hint bar -->
+          <div class="gp-hint-bar">
+            <div class="gp-hint-left">
+              <span v-if="gpAttachments.length > 0" class="gp-att-count">{{ gpAttachments.length }} file{{ gpAttachments.length !== 1 ? 's' : '' }} attached</span>
+              <span v-if="isGroupChat && stickyTargetLabel" class="gp-sticky-indicator">
+                Talking to <strong>{{ stickyTargetLabel }}</strong>
+                <button class="gp-sticky-clear" @click="clearStickyTarget" title="Reset to all">
+                  <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </span>
+            </div>
+            <span class="gp-hint-right">↵ send · ⇧↵ newline</span>
+          </div>
+        </div>
+      </template>
+    </ChatWindow>
   </div>
 
   <!-- Teleported swap dropdown (escapes grid cell overflow:hidden) -->
@@ -96,6 +196,8 @@ import { useKnowledgeStore } from '../../stores/knowledge'
 import { v4 as uuidv4 } from 'uuid'
 import ChatHeader from './ChatHeader.vue'
 import ChatWindow from './ChatWindow.vue'
+import ChatMentionInput from './ChatMentionInput.vue'
+import { parseMentions } from '../../utils/mentions'
 
 const props = defineProps({
   chatId: { type: String, required: true },
@@ -112,7 +214,39 @@ const mcpStore = useMcpStore()
 const toolsStore = useToolsStore()
 const knowledgeStore = useKnowledgeStore()
 
-// Swap menu state
+// ── Input area state ──
+const gpInputText = ref('')
+const mentionInputRef = ref(null)
+const gpAttachments = ref([])
+const gpInputFocused = ref(false)
+
+// ── Sticky target label for hint bar ──
+const stickyTargetLabel = computed(() => {
+  if (!stickyTarget.value?.length) return ''
+  const names = stickyTarget.value
+    .map(id => personasStore.getPersonaById(id)?.name)
+    .filter(Boolean)
+  return names.join(', ')
+})
+
+// ── Chat persona info (for @mention support) ──
+const chatPersonaIds = computed(() => {
+  const c = chatsStore.chats.find(c => c.id === props.chatId)
+  if (!c) return []
+  if (c.groupPersonaIds?.length > 0) return [...c.groupPersonaIds]
+  const id = c.systemPersonaId || personasStore.defaultSystemPersona?.id
+  return id ? [id] : []
+})
+
+const isGroupChat = computed(() => {
+  const c = chatsStore.chats.find(c => c.id === props.chatId)
+  return c?.isGroupChat ?? false
+})
+
+// ── Sticky @mention target for this grid panel ──
+const stickyTarget = ref(null)
+
+// ── Swap menu state
 const showSwapMenu = ref(false)
 const swapSearch = ref('')
 const swapWrapEl = ref(null)
@@ -166,12 +300,157 @@ watch(showSwapMenu, v => { if (v) nextTick(() => swapSearchEl.value?.focus()) })
 onMounted(() => { document.addEventListener('click', onDocClick) })
 onUnmounted(() => { document.removeEventListener('click', onDocClick) })
 
+// ── File attachment helpers ──
+async function pickGpFiles() {
+  if (!window.electronAPI?.pickFiles) return
+  try {
+    const results = await window.electronAPI.pickFiles()
+    if (results?.length) gpAttachments.value.push(...results)
+  } catch { /* ignore */ }
+}
+
+function removeGpAttachment(id) {
+  gpAttachments.value = gpAttachments.value.filter(a => a.id !== id)
+}
+
+function clearStickyTarget() {
+  stickyTarget.value = null
+}
+
+// ── Send from mention input (handles group chat @mention routing) ──
+async function onMentionSend(text) {
+  const hasAttachments = gpAttachments.value.length > 0
+  if (!text?.trim() && !hasAttachments) return
+  const chatId = props.chatId
+  const targetChat = chatsStore.chats.find(c => c.id === chatId)
+  if (!targetChat || targetChat.isRunning) return
+
+  const pendingAttachments = [...gpAttachments.value]
+  gpInputText.value = ''
+  gpAttachments.value = []
+  mentionInputRef.value?.resetHeight()
+
+  const groupIds = chatPersonaIds.value
+  if (isGroupChat.value && groupIds.length > 1) {
+    // GROUP CHAT: resolve @mention routing
+    const groupPersonas = groupIds.map(id => personasStore.getPersonaById(id)).filter(Boolean)
+    const { mentions, mentionAll } = parseMentions(text, groupPersonas)
+    const cfg = { ...configStore.config }
+
+    let addressees = mentions
+    if (!mentionAll && mentions.length >= 2) {
+      try {
+        const mentionedPersonas = mentions.map(id => {
+          const p = personasStore.getPersonaById(id)
+          return p ? { id, name: p.name } : null
+        }).filter(Boolean)
+        const result = await window.electronAPI.resolveAddressees({
+          message: text,
+          personas: mentionedPersonas,
+          config: JSON.parse(JSON.stringify(cfg)),
+        })
+        if (result?.addresseeIds?.length > 0) addressees = result.addresseeIds
+      } catch { /* fallback to all mentions */ }
+    }
+
+    let respondingIds
+    if (mentionAll) {
+      respondingIds = [...groupIds]
+      stickyTarget.value = null
+    } else if (addressees.length > 0) {
+      respondingIds = [...new Set(addressees)]
+      stickyTarget.value = [...respondingIds]
+    } else if (stickyTarget.value?.length > 0) {
+      respondingIds = stickyTarget.value.filter(id => groupIds.includes(id))
+      if (respondingIds.length === 0) { respondingIds = [...groupIds]; stickyTarget.value = null }
+    } else {
+      respondingIds = [...groupIds]
+    }
+
+    // Add user message
+    const attachmentMeta = pendingAttachments.map(a => ({ id: a.id, name: a.name, type: a.type, path: a.path, size: a.size, preview: a.preview, mediaType: a.mediaType }))
+    await chatsStore.addMessage(chatId, { role: 'user', content: text, mentions, mentionAll, ...(attachmentMeta.length > 0 ? { attachments: attachmentMeta } : {}) })
+    if (targetChat.messages) for (const m of targetChat.messages) if (m.streaming) m.streaming = false
+
+    // Run each responding persona sequentially
+    const chatProvider = targetChat.provider || 'anthropic'
+    const apiMessages = targetChat.messages
+      .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content))
+      .map(m => ({ role: m.role, content: m.content }))
+
+    targetChat.isRunning = true
+    try {
+      for (const personaId of respondingIds) {
+        const persona = personasStore.getPersonaById(personaId)
+        if (!persona) continue
+        const streamingMsgId = uuidv4()
+        await chatsStore.addMessage(chatId, {
+          id: streamingMsgId, role: 'assistant', content: '', streaming: true,
+          streamingStartedAt: Date.now(), segments: [], personaId, personaName: persona.name,
+        })
+        const singleCfg = { ...cfg }
+        const pProvider = persona.providerId || chatProvider
+        if (pProvider === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || '' }
+        else if (pProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || '' }
+        else if (pProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai' }
+        const pModel = persona.modelId || targetChat.model || null
+        if (pModel) singleCfg.customModel = pModel
+        if (targetChat.workingPath) singleCfg.chatWorkingPath = targetChat.workingPath
+
+        const usrPersona = targetChat.userPersonaId ? personasStore.getPersonaById(targetChat.userPersonaId) : personasStore.defaultUserPersona
+        const personaPrompts = { systemPersonaId: personaId, userPersonaId: usrPersona?.id || '__default_user__' }
+        if (persona.prompt) personaPrompts.systemPersonaPrompt = persona.prompt
+        if (usrPersona?.prompt) personaPrompts.userPersonaPrompt = usrPersona.prompt
+
+        try {
+          const res = await window.electronAPI.runAgent({
+            chatId, messages: JSON.parse(JSON.stringify(apiMessages)),
+            config: JSON.parse(JSON.stringify(singleCfg)),
+            enabledAgents: [], enabledSkills: JSON.parse(JSON.stringify(skillsStore.allSkillObjects)),
+            personaPrompts,
+            mcpServers: (targetChat.enabledMcpIds ? mcpStore.servers.filter(s => targetChat.enabledMcpIds.includes(s.id)) : mcpStore.servers).map(s => JSON.parse(JSON.stringify(s))),
+            httpTools: (targetChat.enabledToolIds ? toolsStore.tools.filter(t => targetChat.enabledToolIds.includes(t.id)) : toolsStore.tools).map(t => JSON.parse(JSON.stringify(t))),
+            knowledgeConfig: { ragEnabled: knowledgeStore.ragEnabled, pineconeApiKey: knowledgeStore.pineconeApiKey, pineconeIndexName: knowledgeStore.pineconeIndexName, embeddingProvider: knowledgeStore.embeddingProvider, embeddingModel: knowledgeStore.embeddingModel, indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs)) },
+          })
+          const currentChat = chatsStore.chats.find(c => c.id === chatId)
+          if (currentChat?.messages) {
+            const msg = currentChat.messages.find(m => m.id === streamingMsgId)
+            if (msg) {
+              if (res.success) { if (!msg.content && res.result) { msg.segments = [{ type: 'text', content: res.result }]; msg.content = res.result } }
+              else { msg.segments = [{ type: 'text', content: `Error: ${res.error}` }]; msg.content = `Error: ${res.error}` }
+              msg.streaming = false
+              if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
+            }
+          }
+          // Append this persona's reply to apiMessages for next persona's context
+          const replyContent = res.success ? (res.result || '') : `Error: ${res.error}`
+          apiMessages.push({ role: 'assistant', content: replyContent })
+        } catch (err) {
+          const currentChat = chatsStore.chats.find(c => c.id === chatId)
+          if (currentChat?.messages) {
+            const msg = currentChat.messages.find(m => m.id === streamingMsgId)
+            if (msg) { msg.content = `Error: ${err.message}`; msg.streaming = false; if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt }
+          }
+        }
+      }
+    } finally {
+      const finChat = chatsStore.chats.find(c => c.id === chatId)
+      if (finChat) { finChat.isRunning = false; finChat.isThinking = false }
+      if (finChat?.messages) for (const m of finChat.messages) if (m.streaming) { m.streaming = false; if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt }
+      await chatsStore.persist?.()
+    }
+  } else {
+    // SINGLE PERSONA: delegate to existing onSend
+    await onSend(text, pendingAttachments)
+  }
+}
+
 // ── Send with attachments ──
 async function onSendWithAttachments(text, pendingAttachments) {
   return onSend(text, pendingAttachments)
 }
 
-// ── Send (receives text from ChatWindow) ──
+// ── Send (receives text from ChatWindow default input) ──
 async function onSend(text, pendingAttachments = []) {
   if (!text && pendingAttachments.length === 0) return
   if (!props.chatId) return
@@ -200,9 +479,9 @@ async function onSend(text, pendingAttachments = []) {
   const apiMessages = targetChat.messages.filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content)).map(m => ({ role: m.role, content: m.content }))
   const cfg = { ...configStore.config }
   const chatProvider = targetChat.provider || 'anthropic'
-  if (chatProvider === 'anthropic') { cfg.apiKey = cfg.anthropic?.apiKey || ''; cfg.baseURL = cfg.anthropic?.baseURL || 'https://api.anthropic.com' }
-  else if (chatProvider === 'openrouter') { cfg.apiKey = cfg.openrouter?.apiKey || ''; cfg.baseURL = cfg.openrouter?.baseURL || 'https://openrouter.ai/api' }
-  else if (chatProvider === 'openai') { cfg.openaiApiKey = cfg.openai?.apiKey || ''; cfg.openaiBaseURL = cfg.openai?.baseURL || 'https://mlaas.virtuosgames.com'; cfg._resolvedProvider = 'openai'; cfg.defaultProvider = 'openai' }
+  if (chatProvider === 'anthropic') { cfg.apiKey = cfg.anthropic?.apiKey || ''; cfg.baseURL = cfg.anthropic?.baseURL || '' }
+  else if (chatProvider === 'openrouter') { cfg.apiKey = cfg.openrouter?.apiKey || ''; cfg.baseURL = cfg.openrouter?.baseURL || '' }
+  else if (chatProvider === 'openai') { cfg.openaiApiKey = cfg.openai?.apiKey || ''; cfg.openaiBaseURL = cfg.openai?.baseURL || ''; cfg._resolvedProvider = 'openai'; cfg.defaultProvider = 'openai' }
   if (targetChat.model) cfg.customModel = targetChat.model
   if (targetChat.workingPath) cfg.chatWorkingPath = targetChat.workingPath
   const sysPersona = targetChat.systemPersonaId ? personasStore.getPersonaById(targetChat.systemPersonaId) : personasStore.defaultSystemPersona
@@ -214,9 +493,9 @@ async function onSend(text, pendingAttachments = []) {
   personaPrompts.userPersonaId = usrPersona?.id || '__default_user__'
   const singleCfg = { ...cfg }
   const personaProvider = sysPersona?.providerId || chatProvider
-  if (personaProvider === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || 'https://api.anthropic.com' }
-  else if (personaProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || 'https://openrouter.ai/api' }
-  else if (personaProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || 'https://mlaas.virtuosgames.com'; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai' }
+  if (personaProvider === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || '' }
+  else if (personaProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || '' }
+  else if (personaProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai' }
   const personaModel = sysPersona?.modelId || targetChat.model || null
   if (personaModel) singleCfg.customModel = personaModel
   try {
@@ -266,6 +545,161 @@ function deleteMessage(msg) {
 
 <style scoped>
 .grid-panel { display:flex; flex-direction:column; background:#FFFFFF; overflow:hidden; min-width:0; min-height:0; }
+
+/* ── Input area wrapper ── */
+.gp-input-area {
+  padding: 8px 12px 6px;
+  border-top: 1px solid var(--border, #E5E5EA);
+  background: #FFFFFF;
+}
+
+/* ── Attachment preview strip ── */
+.gp-attach-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 0 2px;
+}
+.gp-att-img-wrap {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #93C5FD;
+  background: #EFF6FF;
+  flex-shrink: 0;
+}
+.gp-att-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gp-att-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.gp-att-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px 4px 8px;
+  border-radius: 8px;
+  font-size: var(--fs-small, 0.75rem);
+  max-width: 180px;
+  background: #F5F5F5;
+  color: #6B7280;
+  border: 1px solid #E5E5EA;
+}
+.gp-att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.gp-att-chip-remove {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  flex-shrink: 0;
+  padding: 0;
+}
+.gp-att-chip-remove:hover { opacity: 1; }
+
+/* ── Input box row (attach + textarea + stop + send) ── */
+.gp-input-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border, #E5E5EA);
+  border-radius: 14px;
+  background: #FAFAFA;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.gp-input-box.focused {
+  border-color: #1A1A1A;
+  background: #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.04);
+}
+
+/* ── Icon buttons (attach, stop, send) ── */
+.gp-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: none;
+  background: #F5F5F5;
+  color: #9CA3AF;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  margin-bottom: 2px;
+  padding: 0;
+}
+.gp-icon-btn:hover:not(:disabled) { background: #E5E5EA; color: #1A1A1A; }
+.gp-icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.gp-stop-btn { background: rgba(255,59,48,0.08); color: #FF3B30; }
+.gp-stop-btn:hover { background: rgba(255,59,48,0.14) !important; color: #FF3B30 !important; }
+.gp-send-btn { background: #E5E5EA; color: #9CA3AF; }
+.gp-send-btn.active {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.gp-send-btn.active:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%) !important; color: #FFFFFF !important; }
+
+/* ── Hint bar ── */
+.gp-hint-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding: 0 2px;
+}
+.gp-hint-left { display: flex; align-items: center; gap: 8px; }
+.gp-att-count { font-size: var(--fs-small, 0.75rem); color: #1A1A1A; font-weight: 500; }
+.gp-hint-right { font-size: var(--fs-small, 0.75rem); color: #9CA3AF; }
+.gp-sticky-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-small, 0.75rem);
+  color: #6B7280;
+  background: rgba(0,0,0,0.04);
+  border-radius: 6px;
+  padding: 2px 6px 2px 8px;
+}
+.gp-sticky-indicator strong { color: #1A1A1A; }
+.gp-sticky-clear {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #9CA3AF;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.gp-sticky-clear:hover { color: #1A1A1A; }
 
 /* ── Approval badge (red, pulsing) ── */
 .gp-approval-badge {

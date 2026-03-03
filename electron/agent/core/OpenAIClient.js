@@ -12,7 +12,9 @@ const { logger } = require('../../logger')
 class OpenAIClient {
   constructor(config) {
     this.config = config
-    const baseURL = (config.openaiBaseURL || config.openai?.baseURL || config.baseURL || 'https://mlaas.virtuosgames.com').replace(/\/+$/, '')
+    const resolvedBaseURL = config.openaiBaseURL || config.openai?.baseURL || config.baseURL
+    if (!resolvedBaseURL) throw new Error('OpenAI baseURL not configured')
+    const baseURL = resolvedBaseURL.replace(/\/+$/, '')
     const apiKey = config.openaiApiKey || config.openai?.apiKey || config.apiKey || ''
     this.client = new OpenAI({
       baseURL: baseURL + '/proxy/openai/v1',

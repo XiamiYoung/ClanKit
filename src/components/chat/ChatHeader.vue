@@ -42,6 +42,17 @@
       </div>
       <!-- Extra action buttons slot (grid view inserts maximize + swap here) -->
       <div class="ch-row-top-actions">
+        <!-- Voice call button (hidden for group chats) -->
+        <button
+          v-if="canStartCall"
+          class="ch-call-btn"
+          @click.stop="startCall"
+          title="Start voice call"
+        >
+          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+          </svg>
+        </button>
         <slot name="actions" />
       </div>
     </div>
@@ -281,6 +292,8 @@
             <div class="chat-config-tooltip-row"><span class="cct-key">MCP</span><span class="cct-val">{{ enabledMcpServers.length }}/{{ mcpStore.servers.length }} ({{ formatTokens(mcpTokenEstimate) }})</span></div>
             <div class="chat-config-tooltip-row"><span class="cct-key">RAG</span><span class="cct-val">{{ ragEnabledCount }} index{{ ragEnabledCount !== 1 ? 'es' : '' }}</span></div>
             <div class="chat-config-tooltip-row"><span class="cct-key">Path</span><span class="cct-val">{{ effectiveWorkingPath }}</span></div>
+            <div class="chat-config-tooltip-row"><span class="cct-key">Rounds</span><span class="cct-val">{{ effectivePersonaRounds }}</span></div>
+            <div class="chat-config-tooltip-row"><span class="cct-key">Max Tokens</span><span class="cct-val">{{ effectiveMaxOutputTokens.toLocaleString() }}</span></div>
           </div>
         </div>
       </div>
@@ -311,6 +324,7 @@ import { useMcpStore } from '../../stores/mcp'
 import { useKnowledgeStore } from '../../stores/knowledge'
 import { getAvatarDataUri } from '../personas/personaAvatars'
 import { estimateToolTokens, estimateMcpTokens, formatTokens } from '../../utils/tokenEstimate'
+import { useVoiceStore } from '../../stores/voice'
 
 const props = defineProps({
   chatId: { type: String, required: true },
@@ -322,11 +336,26 @@ const emit = defineEmits([
   'open-chat-settings',
   'open-soul-viewer',
   'remove-group-persona',
+  'start-call',
 ])
 
 const chatsStore = useChatsStore()
 const configStore = useConfigStore()
 const personasStore = usePersonasStore()
+const voiceStore = useVoiceStore()
+
+// ── Voice call ──
+const isGroupChat = computed(() => chat.value?.isGroupChat ?? false)
+const canStartCall = computed(() => {
+  if (isGroupChat.value) return false
+  if (voiceStore.isCallActive) return false
+  return true
+})
+
+function startCall() {
+  if (!canStartCall.value) return
+  emit('start-call', props.chatId)
+}
 const modelsStore = useModelsStore()
 const toolsStore = useToolsStore()
 const mcpStore = useMcpStore()
@@ -597,6 +626,14 @@ const effectiveWorkingPath = computed(() => {
   return chat.value?.workingPath || configStore.config.artyfactPath || '~/.sparkai/artyfact'
 })
 
+const effectivePersonaRounds = computed(() => {
+  return chat.value?.maxPersonaRounds ?? 10
+})
+
+const effectiveMaxOutputTokens = computed(() => {
+  return chat.value?.maxOutputTokens ?? configStore.config.maxOutputTokens ?? 32768
+})
+
 // ── Click-outside handler ──
 function handleOutsideClick(e) {
   if (usrChipWrap.value && !usrChipWrap.value.contains(e.target)) showUsrPopover.value = false
@@ -765,6 +802,19 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+}
+
+/* ── Call button ── */
+.ch-call-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border: none; border-radius: 8px;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF; cursor: pointer; transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+.ch-call-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
 }
 
 /* ── Row 2: Personas + Chat Settings ── */

@@ -42,7 +42,9 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.permissionMode === 'sandbox') chat.permissionMode = 'chat_only' // migrate old value
     if (chat.chatAllowList === undefined) chat.chatAllowList = []
     if (chat.chatDangerOverrides === undefined) chat.chatDangerOverrides = []
+    if (chat.codingMode === undefined) chat.codingMode = false
     if (chat.maxPersonaRounds === undefined) chat.maxPersonaRounds = null  // null = use default (10)
+    if (chat.codingProvider === undefined) chat.codingProvider = 'claude-code'
     // messages === null means "not loaded yet" (lazy)
     if (chat.messages) {
       for (const msg of chat.messages) {
@@ -124,6 +126,9 @@ export const useChatsStore = defineStore('chats', () => {
       workingPath: null,
       enabledToolIds: null,
       enabledMcpIds: null,
+      codingMode: false,
+      codingProvider: 'claude-code',
+      maxOutputTokens: null,    // null = use global default from config
     }
     if (personaConfig && personaConfig.length === 1) {
       chat.systemPersonaId = personaConfig[0]
@@ -172,6 +177,8 @@ export const useChatsStore = defineStore('chats', () => {
       workingPath: source.workingPath || null,
       enabledToolIds: source.enabledToolIds ? [...source.enabledToolIds] : null,
       enabledMcpIds: source.enabledMcpIds ? [...source.enabledMcpIds] : null,
+      codingMode: source.codingMode || false,
+      codingProvider: source.codingProvider || 'claude-code',
     }
     // Override personas if provided
     if (personaOverride && personaOverride.length > 0) {
@@ -340,6 +347,8 @@ export const useChatsStore = defineStore('chats', () => {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
     if ('workingPath' in settings) chat.workingPath = settings.workingPath
+    if ('codingMode' in settings) chat.codingMode = settings.codingMode
+    if ('codingProvider' in settings) chat.codingProvider = settings.codingProvider
     if ('enabledToolIds' in settings) chat.enabledToolIds = settings.enabledToolIds
     if ('enabledMcpIds' in settings) chat.enabledMcpIds = settings.enabledMcpIds
     if ('permissionMode' in settings) chat.permissionMode = settings.permissionMode
@@ -500,6 +509,12 @@ export const useChatsStore = defineStore('chats', () => {
       }
     } else if (chunk.type === 'context_update' && chunk.metrics) {
       chat.contextMetrics = { ...chunk.metrics }
+    } else if (chunk.type === 'max_tokens_reached') {
+      const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
+      if (msg) {
+        msg.content = (msg.content || '') +
+          `\n\n---\n⚠️ **Output truncated** — the model reached the ${(chunk.limit || 0).toLocaleString()}-token output limit. Send a follow-up to continue.`
+      }
     }
     // tool_call, tool_result, compaction, subagent_progress handled by UI callback only
     // (they need the perChatStreamingSegments map which lives in ChatsView)

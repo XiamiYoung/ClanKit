@@ -20,7 +20,7 @@ function browserDefaultConfig() {
   return {
     anthropic: {
       apiKey:      '',
-      baseURL:     'https://api.anthropic.com',
+      baseURL:     '',
       sonnetModel: 'anthropic/claude-sonnet-latest',
       opusModel:   'anthropic/claude-opus-latest',
       haikuModel:  'anthropic/claude-3-5-haiku-20241022',
@@ -28,12 +28,12 @@ function browserDefaultConfig() {
     },
     openrouter: {
       apiKey:  '',
-      baseURL: 'https://openrouter.ai/api',
+      baseURL: '',
       defaultModel: '',
     },
     openai: {
       apiKey:       '',
-      baseURL:      'https://mlaas.virtuosgames.com',
+      baseURL:      '',
       model:        '',
       openaiDefaultModel: '',
     },

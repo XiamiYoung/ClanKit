@@ -6,7 +6,7 @@ export const useConfigStore = defineStore('config', () => {
   const config = ref({
     anthropic: {
       apiKey:      '',
-      baseURL:     'https://api.anthropic.com',
+      baseURL:     '',
       sonnetModel: 'anthropic/claude-sonnet-latest',
       opusModel:   'anthropic/claude-opus-latest',
       haikuModel:  'anthropic/claude-haiku-latest',
@@ -14,12 +14,12 @@ export const useConfigStore = defineStore('config', () => {
     },
     openrouter: {
       apiKey:  '',
-      baseURL: 'https://openrouter.ai/api',
+      baseURL: '',
       defaultModel: '',
     },
     openai: {
       apiKey:       '',
-      baseURL:      'https://mlaas.virtuosgames.com',
+      baseURL:      '',
       model:        '',
       openaiDefaultModel: '',
     },
@@ -51,6 +51,22 @@ export const useConfigStore = defineStore('config', () => {
       breakingKeywords: 'breaking, exclusive, announces, launches, reveals, introduces, unveils, raises, acquires, partnership',
       timeWindowHours: 24,
     },
+    maxOutputTokens: 32768,  // global default; per-chat can override; hard limit 98304 (96k)
+    voiceCall: {
+      whisperApiKey: '',     // OpenAI API key for Whisper STT
+      whisperBaseURL: '',    // Base URL (defaults to https://api.openai.com)
+      ttsMode: 'browser',   // 'browser' = free SpeechSynthesis, 'openai' = TTS $15/1M chars, 'openai-hd' = TTS HD $30/1M chars
+    },
+  })
+
+  // True when at least one provider has both an API key and a baseURL configured.
+  const isConfigured = computed(() => {
+    const c = config.value
+    return !!(
+      (c.anthropic?.apiKey && c.anthropic?.baseURL) ||
+      (c.openrouter?.apiKey && c.openrouter?.baseURL) ||
+      (c.openai?.apiKey && c.openai?.baseURL)
+    )
   })
 
   const activeModelId = computed(() => {
@@ -72,6 +88,7 @@ export const useConfigStore = defineStore('config', () => {
       anthropic:  { ...defaults.anthropic,  ...saved.anthropic },
       openrouter: { ...defaults.openrouter, ...saved.openrouter },
       openai:     { ...defaults.openai,     ...saved.openai },
+      voiceCall:  { ...defaults.voiceCall,  ...saved.voiceCall },
       sandboxConfig: {
         ...defaults.sandboxConfig,
         ...savedSandbox,
@@ -105,9 +122,10 @@ export const useConfigStore = defineStore('config', () => {
       anthropic:  { ...prev.anthropic,  ...newConfig.anthropic },
       openrouter: { ...prev.openrouter, ...newConfig.openrouter },
       openai:     { ...prev.openai,     ...newConfig.openai },
+      voiceCall:  { ...prev.voiceCall,  ...newConfig.voiceCall },
     }
     await storage.saveConfig(JSON.parse(JSON.stringify(toRaw(config.value))))
   }
 
-  return { config, activeModelId, loadConfig, loadEnvPaths, saveEnvPath, saveConfig }
+  return { config, activeModelId, isConfigured, loadConfig, loadEnvPaths, saveEnvPath, saveConfig }
 })

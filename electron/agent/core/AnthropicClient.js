@@ -11,9 +11,7 @@ class AnthropicClient {
     const isOpenRouter = config.baseURL && config.baseURL.includes('openrouter.ai')
     const key = config.apiKey || ''
     const clientOpts = {
-      baseURL: (config.baseURL && config.baseURL !== 'https://api.anthropic.com')
-        ? config.baseURL
-        : undefined
+      baseURL: config.baseURL || undefined
     }
     if (isOpenRouter) {
       // OpenRouter expects Authorization: Bearer header, not x-api-key.

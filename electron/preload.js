@@ -152,6 +152,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
     rename:       (oldPath, newPath)   => ipcRenderer.invoke('obsidian:rename', oldPath, newPath),
   },
 
+  // -- Coding Mode / Claude Context ------------------------------------------
+  claude: {
+    // One-shot: load and merge CLAUDE.md hierarchy for a given project path.
+    loadContext:   (projectPath)           => ipcRenderer.invoke('claude:load-context', projectPath),
+    // Watch: start watching all CLAUDE.md files in the hierarchy.
+    // Fires claude:context-updated(chatId, merged) to renderer on any change (debounced 300ms).
+    watchContext:  (chatId, projectPath)   => ipcRenderer.invoke('claude:watch-context', { chatId, projectPath }),
+    // Unwatch: tear down watchers for a chat session.
+    unwatchContext: (chatId)               => ipcRenderer.invoke('claude:unwatch-context', chatId),
+    // Subscribe to file-change push events from main process.
+    onContextUpdated: (cb) => ipcRenderer.on('claude:context-updated', (_e, payload) => cb(payload)),
+    offContextUpdated: (cb) => ipcRenderer.removeListener('claude:context-updated', cb),
+  },
+
+  // ── Voice Call ──────────────────────────────────────────────────────────────
+  voice: {
+    start:      (params)   => ipcRenderer.invoke('voice:start', params),
+    stop:       ()         => ipcRenderer.invoke('voice:stop'),
+    audioChunk: (buffer)   => ipcRenderer.invoke('voice:audio-chunk', buffer),
+    mute:       (params)   => ipcRenderer.invoke('voice:mute', params),
+    notifyTaskComplete: (summary) => ipcRenderer.invoke('voice:task-complete', summary),
+    onStatus:       (cb) => { ipcRenderer.on('voice:status', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:status') },
+    onTranscription:(cb) => { ipcRenderer.on('voice:transcription', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:transcription') },
+    onAiText:       (cb) => { ipcRenderer.on('voice:ai-text', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:ai-text') },
+    onTaskTriggered:(cb) => { ipcRenderer.on('voice:task-triggered', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:task-triggered') },
+    onError:        (cb) => { ipcRenderer.on('voice:error', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:error') },
+    tts:            (params) => ipcRenderer.invoke('voice:tts', params),
+  },
+
   // ── Draw.io ─────────────────────────────────────────────────────────────────
   drawio: {
     getFramePath:    () => ipcRenderer.invoke('drawio:get-frame-path'),

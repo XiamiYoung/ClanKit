@@ -26,6 +26,13 @@
       </button>
     </div>
 
+    <!-- Voice call indicator -->
+    <div v-if="voiceStore.isCallActive" class="sidebar-call-indicator" @click="goToCall" :title="isCollapsed ? 'On a call — click to return' : ''">
+      <div class="sidebar-call-dot"></div>
+      <span v-show="!isCollapsed" class="sidebar-call-text">On a call</span>
+      <span v-show="!isCollapsed" class="sidebar-call-name">{{ voiceStore.activePersonaName }}</span>
+    </div>
+
     <!-- Navigation -->
     <div class="flex-1 px-3 py-3 flex flex-col gap-0.5 overflow-y-auto" style="scrollbar-width:thin;">
       <p class="nav-section-label" v-show="!isCollapsed">AI Agent</p>
@@ -48,11 +55,19 @@
 
 <script setup>
 import { defineComponent, h, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useVoiceStore } from '../../stores/voice'
 
 const route = useRoute()
+const router = useRouter()
+const voiceStore = useVoiceStore()
 
 const isCollapsed = ref(false)
+
+function goToCall() {
+  voiceStore.setPip(false)
+  router.push('/chats')
+}
 function toggleCollapse() {
   isCollapsed.value = !isCollapsed.value
 }
@@ -204,9 +219,47 @@ const NavItem = defineComponent({
   color: #1A1A1A;
 }
 
+/* ── Voice call indicator ─────────────────────────────────────────────── */
+.sidebar-call-indicator {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 12px 0; padding: 8px 12px;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border-radius: 10px; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  transition: all 0.15s ease;
+  animation: sidebarCallPulse 2s ease-in-out infinite;
+}
+.sidebar-call-indicator:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+}
+.sidebar-call-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #10B981; flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(16,185,129,0.5);
+  animation: dotPulse 1.5s ease-in-out infinite;
+}
+.sidebar-call-text {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption);
+  font-weight: 600; color: #FFFFFF; white-space: nowrap;
+}
+.sidebar-call-name {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-small);
+  color: rgba(255,255,255,0.6); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.85); }
+}
+@keyframes sidebarCallPulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+  50% { box-shadow: 0 2px 12px rgba(16,185,129,0.15), 0 2px 8px rgba(0,0,0,0.12); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .nav-item {
     transition: none;
   }
+  .sidebar-call-indicator, .sidebar-call-dot { animation: none; }
 }
 </style>

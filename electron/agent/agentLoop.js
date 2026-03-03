@@ -436,6 +436,17 @@ ${toolEntries.join('\n')}
 Call these tools to retrieve prompt templates or reusable instructions on demand.`
     }
 
+    // -- Coding Mode: CLAUDE.md project context --
+    // Injected after tool listings but before persona prompts so persona identity
+    // takes precedence. claudeContext is loaded by the renderer via claude:load-context IPC
+    // and passed through config.claudeContext when codingMode is enabled on the chat.
+    // v1 simplification: context is re-read on every send (no caching).
+    // Future: add mtime-based cache invalidation if per-message latency becomes an issue.
+    const claudeContext = this.config.claudeContext
+    if (claudeContext) {
+      system += `\n\n## PROJECT CONTEXT (CLAUDE.md)\n${claudeContext}`
+    }
+
     // Append persona context if provided
     if (systemPersonaPrompt) {
       system += `\n\n## SYSTEM PERSONA\n${systemPersonaPrompt}`
@@ -809,6 +820,12 @@ RULES:
     // Emit initial context metrics
     onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
 
+    // Resolve configured output token limit: per-chat → global config → hardcoded default
+    const DEFAULT_MAX_TOKENS = 32768
+    const configuredMaxTokens = this.config.maxOutputTokens
+      ? Math.min(98304, Math.max(1024, Number(this.config.maxOutputTokens)))
+      : DEFAULT_MAX_TOKENS
+
     try {
       let iteration = 0
       // Safety limit — high enough that the context window (tracked by
@@ -824,7 +841,7 @@ RULES:
         // ── Build request params ──
         const createParams = {
           model,
-          max_tokens: 16384,
+          max_tokens: configuredMaxTokens,
           system: systemPrompt,
           messages: conversationMessages,
           stream: true,
@@ -931,7 +948,7 @@ RULES:
           const openaiMessages = this._toOpenAIMessages(systemPrompt, conversationMessages)
           const openaiParams = {
             model,
-            max_tokens: 16384,
+            max_tokens: configuredMaxTokens,
             messages: openaiMessages,
             stream: true,
           }
@@ -1116,6 +1133,10 @@ RULES:
               break
             }
           } else {
+            // 'length' is OpenAI's finish_reason when max_tokens is hit
+            if (stopReason === 'length') {
+              onChunk({ type: 'max_tokens_reached', limit: configuredMaxTokens })
+            }
             break
           }
 
@@ -1340,6 +1361,9 @@ RULES:
             }
 
           } else {
+            if (stopReason === 'max_tokens') {
+              onChunk({ type: 'max_tokens_reached', limit: configuredMaxTokens })
+            }
             break
           }
         }

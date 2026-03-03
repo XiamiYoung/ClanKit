@@ -460,6 +460,7 @@ All views follow a consistent structure:
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+- **No hardcoded provider endpoints**: Never use `|| 'https://api.anthropic.com'`, `|| 'https://openrouter.ai/api'`, `|| 'https://mlaas.virtuosgames.com'`, or any other provider URL as a fallback in source code. All endpoints must come from user configuration (`config.anthropic.baseURL`, `config.openrouter.baseURL`, `config.openai.baseURL`). If a baseURL is missing at runtime, throw an error or return early — do not silently fall back to an official URL. Placeholder text in `<input placeholder="...">` UI fields is exempt (display only, not used for requests).
 
 ## Workflow Orchestration
 
