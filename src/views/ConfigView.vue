@@ -1705,7 +1705,10 @@ async function testPineconeConnection() {
 
 /* ── Content area ───────────────────────────────────────────────────────── */
 .config-content { flex: 1; overflow-y: auto; padding: 24px 32px 32px; scrollbar-width: thin; }
-.config-content-inner { max-width: 640px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.config-content-inner { max-width: 860px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+@media (min-width: 2560px) {
+  .config-content-inner { max-width: 1000px; }
+}
 
 /* ── Provider tabs (same style as top-level tabs) ──────────────────────── */
 .provider-tab-group { display: flex; gap: 2px; margin-bottom: 4px; }
