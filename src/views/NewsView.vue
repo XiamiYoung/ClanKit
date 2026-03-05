@@ -819,10 +819,10 @@ onMounted(async () => {
   scrollbar-width: thin;
 }
 
-@media (min-width: 2560px) {
+@media (min-width: 3840px) {
   .news-scroll {
     overflow: hidden;
-    padding-bottom: 0;
+    padding-bottom: 24px;
   }
 }
 
@@ -938,7 +938,6 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-  height: 76px;
 }
 
 .top-news-card {
@@ -1043,12 +1042,11 @@ onMounted(async () => {
   animation: spin 0.7s linear infinite;
 }
 
-/* Loading placeholder — same fixed height as .top-news-row */
 .top-news-loading {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 76px;
+  min-height: 76px;
 }
 
 .top-news-loading-spinner {
@@ -1070,7 +1068,15 @@ onMounted(async () => {
 
 @media (min-width: 2560px) {
   .top-news-row {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(8, 1fr);
+    height: auto;
+  }
+}
+
+@media (min-width: 3840px) {
+  .top-news-row {
+    grid-template-columns: repeat(10, 1fr);
+    height: auto;
   }
 }
 
@@ -1089,7 +1095,7 @@ onMounted(async () => {
   }
 }
 
-@media (min-width: 2560px) {
+@media (min-width: 3840px) {
   .news-grid {
     grid-template-columns: repeat(4, 1fr);
     grid-template-rows: repeat(2, 1fr);
@@ -1114,7 +1120,7 @@ onMounted(async () => {
   height: 360px;
 }
 
-@media (min-width: 2560px) {
+@media (min-width: 3840px) {
   .feed-card {
     height: 100%;
   }
