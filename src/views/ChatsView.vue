@@ -6783,7 +6783,7 @@ onUnmounted(() => {
 
 /* Info */
 .ncp-info {
-  display: flex; flex-direction: column; gap: 1px;
+  display: flex; flex-direction: column; gap: 0.0625rem;
   min-width: 0; flex: 1;
 }
 .ncp-name {
@@ -6917,7 +6917,7 @@ onUnmounted(() => {
 .group-persona-chip-name {
   font-weight: 500;
   color: #1A1A1A;
-  max-width: 80px;
+  max-width: 5rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -7151,7 +7151,7 @@ onUnmounted(() => {
 .mention-tooltip-name {
   font-size: 12px;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 .mention-tooltip-text {
   font-size: 12px;
@@ -7186,7 +7186,7 @@ onUnmounted(() => {
 :global(.persona-header-tooltip-name) {
   font-size: 12px;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7295,7 +7295,7 @@ onUnmounted(() => {
 .rag-popover-empty {
   font-size: 12px;
   color: #9CA3AF;
-  padding: 8px 0;
+  padding: 0.5rem 0;
 }
 .rag-popover-list {
   display: flex;
