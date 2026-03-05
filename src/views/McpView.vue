@@ -542,7 +542,7 @@ function cardGradient() {
 /* ── Header ────────────────────────────────────────────────────────────────── */
 .catalog-header {
   flex-shrink: 0;
-  padding: 16px 24px 14px;
+  padding: 1rem 1.5rem 0.875rem;
   background: #FFFFFF;
   border-bottom: 1px solid #E5E5EA;
 }
@@ -557,41 +557,41 @@ function cardGradient() {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   color: #6B7280;
-  margin: 4px 0 0 0;
+  margin: 0.25rem 0 0 0;
 }
 .catalog-count-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
   color: #9CA3AF;
   background: rgba(241, 245, 249, 0.8);
-  padding: 5px 12px;
+  padding: 0.3125rem 0.75rem;
   border-radius: 9999px;
   border: 1px solid rgba(229, 229, 234, 0.5);
 }
 /* ── Search bar ────────────────────────────────────────────────────────────── */
 .catalog-search-wrap {
   position: relative;
-  margin-top: 14px;
+  margin-top: 0.875rem;
 }
 .catalog-search-icon {
   position: absolute;
-  left: 14px;
+  left: 0.875rem;
   top: 50%;
   transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
+  width: 1.125rem;
+  height: 1.125rem;
   color: #9CA3AF;
   pointer-events: none;
   transition: color 0.2s;
 }
 .catalog-search-input {
   width: 100%;
-  padding: 11px 42px 11px 42px;
-  border-radius: 12px;
+  padding: 0.6875rem 2.625rem 0.6875rem 2.625rem;
+  border-radius: 0.75rem;
   border: 1px solid #E5E5EA;
   background: rgba(255, 255, 255, 0.8);
   font-family: 'Inter', sans-serif;
@@ -610,15 +610,15 @@ function cardGradient() {
 .catalog-search-wrap:focus-within .catalog-search-icon { color: #007AFF; }
 .catalog-search-clear {
   position: absolute;
-  right: 10px;
+  right: 0.625rem;
   top: 50%;
   transform: translateY(-50%);
-  width: 26px;
-  height: 26px;
+  width: 1.625rem;
+  height: 1.625rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   color: #9CA3AF;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -634,7 +634,7 @@ function cardGradient() {
 .mcp-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  gap: 1.25rem;
 }
 @media (min-width: 1920px) { .mcp-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (min-width: 2560px) { .mcp-grid { grid-template-columns: repeat(4, 1fr); } }
@@ -644,7 +644,7 @@ function cardGradient() {
   position: relative;
   display: flex;
   flex-direction: column;
-  border-radius: 16px;
+  border-radius: 1rem;
   overflow: hidden;
   cursor: pointer;
   background: #FFFFFF;
@@ -655,21 +655,21 @@ function cardGradient() {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 .mcp-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-0.1875rem);
   border-color: #D1D1D6;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
-.mcp-card:active { transform: translateY(-1px); transition-duration: 0.1s; }
+.mcp-card:active { transform: translateY(-0.0625rem); transition-duration: 0.1s; }
 .mcp-card-accent { height: 4px; width: 100%; flex-shrink: 0; }
-.mcp-card-body { padding: 20px 20px 16px; display: flex; flex-direction: column; flex: 1; }
+.mcp-card-body { padding: 1.25rem 1.25rem 1rem; display: flex; flex-direction: column; flex: 1; }
 
 /* ── Default row — top of card body ───────────────────────────────────────── */
 .mcp-card-default-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 0 12px;
-  margin-bottom: 14px;
+  padding: 0 0 0.75rem;
+  margin-bottom: 0.875rem;
   border-bottom: 1px solid #E5E5EA;
 }
 .mcp-default-label {
@@ -681,10 +681,10 @@ function cardGradient() {
   text-transform: uppercase;
 }
 
-.mcp-card-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.mcp-card-title-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.875rem; }
 .mcp-card-icon {
-  width: 36px; height: 36px;
-  border-radius: 12px;
+  width: 2.25rem; height: 2.25rem;
+  border-radius: 0.75rem;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
@@ -700,12 +700,12 @@ function cardGradient() {
 .mcp-runtime-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 6px;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.375rem;
 }
 .mcp-runtime-badge.running {
   background: #E8F8EF;
@@ -716,8 +716,8 @@ function cardGradient() {
   color: #9CA3AF;
 }
 .mcp-runtime-dot {
-  width: 6px;
-  height: 6px;
+  width: 0.375rem;
+  height: 0.375rem;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -733,7 +733,7 @@ function cardGradient() {
   font-size: var(--fs-secondary);
   color: #6B7280;
   line-height: 1.55;
-  margin: 0 0 14px;
+  margin: 0 0 0.875rem;
   flex: 1;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -742,7 +742,7 @@ function cardGradient() {
 }
 .mcp-card-footer {
   border-top: 1px solid #E5E5EA;
-  padding-top: 12px;
+  padding-top: 0.75rem;
   margin-top: auto;
   display: flex;
   align-items: center;
@@ -752,7 +752,7 @@ function cardGradient() {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: var(--fs-caption);
   color: #9CA3AF;
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 0.3125rem;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   max-width: 100%;
 }
@@ -767,8 +767,8 @@ function cardGradient() {
 }
 @keyframes mcp-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 .mcp-modal {
-  width: min(640px, 95vw); max-height: 85vh;
-  background: #0F0F0F; border: 1px solid #2A2A2A; border-radius: 20px;
+  width: min(40rem, 95vw); max-height: 85vh;
+  background: #0F0F0F; border: 1px solid #2A2A2A; border-radius: 1.25rem;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
   display: flex; flex-direction: column; overflow: hidden;
   animation: mcp-modal-in 0.2s ease-out;
@@ -779,11 +779,11 @@ function cardGradient() {
 }
 .mcp-modal-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px; border-bottom: 1px solid #1F1F1F;
+  padding: 1rem 1.25rem; border-bottom: 1px solid #1F1F1F;
 }
-.mcp-modal-header-left { display: flex; align-items: center; gap: 10px; }
+.mcp-modal-header-left { display: flex; align-items: center; gap: 0.625rem; }
 .mcp-modal-header-icon {
-  width: 30px; height: 30px; border-radius: 8px;
+  width: 1.875rem; height: 1.875rem; border-radius: 0.5rem;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
@@ -793,34 +793,34 @@ function cardGradient() {
   font-weight: 700; color: #FFFFFF; margin: 0;
 }
 .mcp-modal-close {
-  width: 32px; height: 32px; border-radius: 8px;
+  width: 2rem; height: 2rem; border-radius: 0.5rem;
   display: flex; align-items: center; justify-content: center;
   border: none; background: transparent; color: #6B7280;
   cursor: pointer; transition: all 0.15s;
 }
 .mcp-modal-close:hover { background: #1F1F1F; color: #FFFFFF; }
 .mcp-modal-body {
-  flex: 1; overflow-y: auto; padding: 24px;
+  flex: 1; overflow-y: auto; padding: 1.5rem;
   scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
 .save-error {
-  display: flex; align-items: center; gap: 8px; margin: 0 24px 0;
-  padding: 10px 14px; border-radius: var(--radius-sm, 8px);
+  display: flex; align-items: center; gap: 0.5rem; margin: 0 1.5rem 0;
+  padding: 0.625rem 0.875rem; border-radius: var(--radius-sm, 8px);
   background: rgba(255,59,48,0.1); border: 1px solid rgba(255,59,48,0.3);
   color: #FF6B6B; font-size: var(--fs-secondary, 0.875rem); font-family: 'Inter', sans-serif;
 }
 .mcp-modal-footer {
-  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-  padding: 16px 24px; border-top: 1px solid #1F1F1F; background: #0A0A0A;
+  display: flex; align-items: center; justify-content: flex-end; gap: 0.625rem;
+  padding: 1rem 1.5rem; border-top: 1px solid #1F1F1F; background: #0A0A0A;
 }
 /* ── Form fields ───────────────────────────────────────────────────────────── */
-.form-group { margin-bottom: 16px; }
+.form-group { margin-bottom: 1rem; }
 .form-label {
   display: block; font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary); font-weight: 600; color: #9CA3AF; margin-bottom: 6px;
+  font-size: var(--fs-secondary); font-weight: 600; color: #9CA3AF; margin-bottom: 0.375rem;
 }
 .form-input {
-  width: 100%; padding: 9px 12px; border-radius: 8px;
+  width: 100%; padding: 0.5625rem 0.75rem; border-radius: 0.5rem;
   border: 1px solid #2A2A2A; background: #1A1A1A;
   font-family: 'Inter', sans-serif; font-size: var(--fs-body);
   color: #FFFFFF; outline: none;
@@ -829,7 +829,7 @@ function cardGradient() {
 .form-input:focus { border-color: #4B5563; box-shadow: 0 0 0 3px rgba(75, 85, 99, 0.2); }
 .form-input::placeholder { color: #4B5563; }
 .form-input-sm {
-  width: 100%; padding: 7px 10px; border-radius: 6px;
+  width: 100%; padding: 0.4375rem 0.625rem; border-radius: 0.375rem;
   border: 1px solid #2A2A2A; background: #111111;
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
   color: #FFFFFF; outline: none; transition: border-color 0.15s;
@@ -837,7 +837,7 @@ function cardGradient() {
 .form-input-sm:focus { border-color: #4B5563; }
 .form-input-sm::placeholder { color: #4B5563; }
 .form-textarea {
-  width: 100%; padding: 8px 10px; border-radius: 6px;
+  width: 100%; padding: 0.5rem 0.625rem; border-radius: 0.375rem;
   border: 1px solid #2A2A2A; background: #111111;
   font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-small);
   color: #FFFFFF; outline: none; resize: vertical; transition: border-color 0.15s;
@@ -846,58 +846,58 @@ function cardGradient() {
 .form-textarea::placeholder { color: #4B5563; }
 .form-hint {
   font-family: 'Inter', sans-serif; font-size: var(--fs-caption);
-  color: #4B5563; margin: 4px 0 0;
+  color: #4B5563; margin: 0.25rem 0 0;
 }
 
 /* ── Environment variables ─────────────────────────────────────────────────── */
-.env-section { margin-top: 8px; padding-top: 16px; border-top: 1px solid #1F1F1F; }
+.env-section { margin-top: 0.5rem; padding-top: 1rem; border-top: 1px solid #1F1F1F; }
 .env-header {
-  display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;
 }
 .env-title {
   font-family: 'Inter', sans-serif; font-size: var(--fs-body);
   font-weight: 700; color: #FFFFFF; margin: 0;
 }
 .env-add-btn {
-  display: flex; align-items: center; gap: 4px;
-  padding: 5px 12px; border-radius: 6px;
+  display: flex; align-items: center; gap: 0.25rem;
+  padding: 0.3125rem 0.75rem; border-radius: 0.375rem;
   font-family: 'Inter', sans-serif; font-size: var(--fs-caption); font-weight: 600;
   background: #1A1A1A; color: #9CA3AF; border: 1px solid #2A2A2A;
   cursor: pointer; transition: all 0.15s;
 }
 .env-add-btn:hover { background: #222222; color: #FFFFFF; border-color: #374151; }
 .env-empty {
-  padding: 20px; border-radius: 10px;
+  padding: 1.25rem; border-radius: 0.625rem;
   background: #1A1A1A; border: 1.5px dashed #2A2A2A; text-align: center;
 }
 .env-empty p {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); color: #4B5563; margin: 0;
 }
-.env-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.env-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
 .env-remove-btn {
-  width: 28px; height: 28px;
+  width: 1.75rem; height: 1.75rem;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 6px; border: none; background: none;
+  border-radius: 0.375rem; border: none; background: none;
   color: #4B5563; cursor: pointer; flex-shrink: 0;
   transition: background 0.15s, color 0.15s;
 }
 .env-remove-btn:hover { background: rgba(239,68,68,0.15); color: #EF4444; }
 
 /* ── Test Connection ───────────────────────────────────────────────────────── */
-.test-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid #1F1F1F; }
+.test-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #1F1F1F; }
 
-.test-result { margin-top: 12px; padding: 12px 14px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); }
+.test-result { margin-top: 0.75rem; padding: 0.75rem 0.875rem; border-radius: 0.625rem; box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); }
 .test-result.success { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
 .test-result.error { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
-.test-result-title { font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600; margin: 0 0 8px; }
+.test-result-title { font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600; margin: 0 0 0.5rem; }
 .test-result.success .test-result-title { color: #FFFFFF; }
 .test-result.error .test-result-title { color: #FF6B6B; }
 .test-result-error {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
   color: #FF6B6B; margin: 0; word-break: break-word;
 }
-.test-tools-list { display: flex; flex-direction: column; gap: 4px; }
-.test-tool-item { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; }
+.test-tools-list { display: flex; flex-direction: column; gap: 0.25rem; }
+.test-tool-item { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.25rem 0; }
 .test-tool-name {
   font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-small);
   font-weight: 600; color: #FFFFFF; flex-shrink: 0;
@@ -920,9 +920,9 @@ function cardGradient() {
 .default-toggle input { display: none; }
 .default-toggle-track {
   position: relative;
-  width: 34px;
-  height: 20px;
-  border-radius: 10px;
+  width: 2.125rem;
+  height: 1.25rem;
+  border-radius: 0.625rem;
   background: #D1D1D6;
   transition: background 0.2s;
 }
@@ -931,17 +931,17 @@ function cardGradient() {
 }
 .default-toggle-thumb {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1rem;
+  height: 1rem;
   border-radius: 50%;
   background: #FFFFFF;
   box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   transition: transform 0.2s;
 }
 .default-toggle input:checked + .default-toggle-track .default-toggle-thumb {
-  transform: translateX(14px);
+  transform: translateX(0.875rem);
 }
 
 /* ── Reduced motion ─────────────────────────────────────────────────────────── */
