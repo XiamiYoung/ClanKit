@@ -65,7 +65,11 @@ export default {
         'card':       '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
         'card-hover': '0 4px 12px rgba(0,0,0,0.08)',
         'card-lg':    '0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)',
-      }
+      },
+      screens: {
+        'hd': '1920px',   // HD 1080p baseline
+        '4k': '2560px',   // 4K / large display
+      },
     }
   },
   plugins: []
