@@ -794,7 +794,7 @@ function truncateEndpoint(ep) {
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .catalog-filter-tab-count {
-  font-size: 10px;
+  font-size: var(--fs-small);
   font-weight: 700;
   padding: 1px 5px;
   border-radius: 4px;
@@ -812,12 +812,11 @@ function truncateEndpoint(ep) {
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
 .tools-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 20px;
 }
-@media (max-width: 1200px) { .tools-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 900px)  { .tools-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 600px)  { .tools-grid { grid-template-columns: 1fr; } }
+@media (min-width: 1920px) { .tools-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 2560px) { .tools-grid { grid-template-columns: repeat(4, 1fr); } }
 
 /* ── Card ──────────────────────────────────────────────────────────────────── */
 .tools-card {
@@ -857,7 +856,7 @@ function truncateEndpoint(ep) {
 }
 .tools-default-label {
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: var(--fs-caption);
   font-weight: 600;
   color: #9CA3AF;
   letter-spacing: 0.04em;
@@ -887,7 +886,7 @@ function truncateEndpoint(ep) {
   display: inline-flex;
   align-items: center;
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: var(--fs-caption);
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 6px;
@@ -927,7 +926,7 @@ function truncateEndpoint(ep) {
 }
 .tools-card-method {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 11px;
+  font-size: var(--fs-caption);
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 4px;
@@ -1028,7 +1027,7 @@ function truncateEndpoint(ep) {
 .form-textarea {
   width: 100%; padding: 8px 10px; border-radius: 6px;
   border: 1px solid #2A2A2A; background: #111111;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-small);
   color: #FFFFFF; outline: none; resize: vertical; transition: border-color 0.15s;
 }
 .form-textarea:focus { border-color: #4B5563; }
