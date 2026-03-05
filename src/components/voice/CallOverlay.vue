@@ -263,10 +263,10 @@ function endCall() { emit('end-call') }
   z-index: 200;
   cursor: grab;
   user-select: none;
-  width: 300px;
+  width: 18.75rem;
   background: #0F0F0F;
   border: 1px solid #2A2A2A;
-  border-radius: 16px;
+  border-radius: 1rem;
   box-shadow: 0 12px 40px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.15);
   animation: callPanelEnter 0.2s ease-out;
   overflow: hidden;
@@ -275,20 +275,20 @@ function endCall() { emit('end-call') }
 .call-panel-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 14px 10px;
+  gap: 0.625rem;
+  padding: 0.875rem 0.875rem 0.625rem;
 }
 
 /* Avatar with status ring */
 .call-panel-avatar {
   position: relative;
-  width: 40px; height: 40px;
+  width: 2.5rem; height: 2.5rem;
   border-radius: 50%;
   overflow: visible;
   flex-shrink: 0;
 }
 .call-panel-ring {
-  position: absolute; inset: -3px;
+  position: absolute; inset: -0.1875rem;
   border-radius: 50%;
   border: 2px solid #374151;
   transition: all 0.3s ease;
@@ -313,12 +313,12 @@ function endCall() { emit('end-call') }
   animation: callSpin 1.5s linear infinite;
 }
 .call-panel-avatar-img {
-  width: 40px; height: 40px;
+  width: 2.5rem; height: 2.5rem;
   border-radius: 50%;
   object-fit: cover;
 }
 .call-panel-avatar-fallback {
-  width: 40px; height: 40px;
+  width: 2.5rem; height: 2.5rem;
   border-radius: 50%;
   background: linear-gradient(135deg, #1A1A1A 0%, #374151 100%);
   display: flex; align-items: center; justify-content: center;
@@ -348,8 +348,8 @@ function endCall() { emit('end-call') }
 }
 
 .call-panel-close {
-  width: 32px; height: 32px;
-  border: none; border-radius: 8px;
+  width: 2rem; height: 2rem;
+  border: none; border-radius: 0.5rem;
   background: rgba(255,255,255,0.06);
   color: #EF4444;
   display: flex; align-items: center; justify-content: center;
@@ -364,14 +364,14 @@ function endCall() { emit('end-call') }
 
 /* STT transcript */
 .call-panel-transcript {
-  margin: 0 10px 6px;
-  padding: 6px 10px;
+  margin: 0 0.625rem 0.375rem;
+  padding: 0.375rem 0.625rem;
   background: #1A1A1A;
   border: 1px solid #2A2A2A;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
 }
 .call-panel-transcript-label {
   font-family: 'Inter', sans-serif;
@@ -392,18 +392,18 @@ function endCall() { emit('end-call') }
 /* Controls */
 .call-panel-controls {
   display: flex;
-  gap: 8px;
-  padding: 4px 14px 10px;
+  gap: 0.5rem;
+  padding: 0.25rem 0.875rem 0.625rem;
 }
 .call-panel-btn {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px;
+  gap: 0.375rem;
+  padding: 0.5rem;
   border: none;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   background: #1A1A1A;
   color: #FFFFFF;
   font-family: 'Inter', sans-serif;
@@ -422,21 +422,21 @@ function endCall() { emit('end-call') }
 
 /* Device selectors */
 .call-panel-devices {
-  padding: 0 10px 12px;
+  padding: 0 0.625rem 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 0.3125rem;
   border-top: 1px solid #1A1A1A;
-  padding-top: 10px;
+  padding-top: 0.625rem;
 }
 .call-panel-device-row {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 0.4375rem;
 }
 .call-panel-device-icon {
-  width: 13px;
-  height: 13px;
+  width: 0.8125rem;
+  height: 0.8125rem;
   color: #6B7280;
   flex-shrink: 0;
 }
@@ -445,11 +445,11 @@ function endCall() { emit('end-call') }
   min-width: 0;
   background: #1A1A1A;
   border: 1px solid #2A2A2A;
-  border-radius: 7px;
+  border-radius: 0.4375rem;
   color: #D1D5DB;
   font-family: 'Inter', sans-serif;
   font-size: 0.6875rem;
-  padding: 4px 6px;
+  padding: 0.25rem 0.375rem;
   cursor: pointer;
   outline: none;
   appearance: none;
