@@ -38,7 +38,7 @@ defineProps({
 <style scoped>
 /* ── Base ────────────────────────────────────────────────────────────────── */
 .app-btn {
-  display: flex; align-items: center; gap: 7px;
+  display: flex; align-items: center; gap: 0.4375rem;
   font-family: 'Inter', sans-serif; font-weight: 600;
   border: none; cursor: pointer; transition: all 0.15s ease;
   flex-shrink: 0; text-decoration: none;
@@ -88,31 +88,31 @@ defineProps({
 
 /* ── Size: default ───────────────────────────────────────────────────────── */
 .app-btn--default {
-  padding: 8px 16px; border-radius: var(--radius-sm);
+  padding: 0.5rem 1rem; border-radius: var(--radius-sm);
   font-size: var(--fs-body);
 }
 
 /* ── Size: compact ───────────────────────────────────────────────────────── */
 .app-btn--compact {
-  padding: 6px 12px; border-radius: 10px;
+  padding: 0.375rem 0.75rem; border-radius: 0.625rem;
   font-size: var(--fs-secondary);
 }
 
 /* ── Size: save ──────────────────────────────────────────────────────────── */
 .app-btn--save {
-  padding: 10px 20px; border-radius: var(--radius-md);
+  padding: 0.625rem 1.25rem; border-radius: var(--radius-md);
   font-size: var(--fs-body);
 }
 
 /* ── Size: modal (for modal footer buttons) ──────────────────────────────── */
 .app-btn--modal {
-  padding: 8px 22px; border-radius: 8px;
+  padding: 0.5rem 1.375rem; border-radius: 0.5rem;
   font-size: var(--fs-body);
 }
 
 /* ── Ghost size overrides (smaller gaps, font) ───────────────────────────── */
 .app-btn--ghost.app-btn--default {
-  gap: 4px; padding: 5px 10px; border-radius: 6px;
+  gap: 0.25rem; padding: 0.3125rem 0.625rem; border-radius: 0.375rem;
   font-size: var(--fs-caption);
 }
 .app-btn--ghost.app-btn--default:hover { background: var(--border); }
@@ -120,10 +120,10 @@ defineProps({
 
 /* ── Spinner ─────────────────────────────────────────────────────────────── */
 .app-btn-spinner {
-  width: 18px; height: 18px; flex-shrink: 0;
+  width: 1.125rem; height: 1.125rem; flex-shrink: 0;
   animation: app-btn-spin 0.8s linear infinite;
 }
-.app-btn--compact .app-btn-spinner { width: 14px; height: 14px; }
+.app-btn--compact .app-btn-spinner { width: 0.875rem; height: 0.875rem; }
 
 @keyframes app-btn-spin {
   from { transform: rotate(0deg); }
