@@ -11,7 +11,7 @@
             </svg>
           </div>
           <div>
-            <h2 class="soul-title">{{ personaName }} — {{ tabLabel }}</h2>
+            <h2 class="soul-title">{{ isNew ? (personaType === 'system' ? 'New System Persona' : 'New User Persona') : `${draftName || personaName} — ${tabLabel}` }}</h2>
             <span class="soul-meta">{{ personaType === 'system' ? 'System Persona' : 'User Persona' }}</span>
           </div>
         </div>
@@ -28,8 +28,9 @@
             <line x1="10" y1="22" x2="14" y2="22"/>
           </svg>
           Summary
+          <span v-if="hasSummaryErrors" class="soul-tab-error-dot"></span>
         </button>
-        <button class="soul-tab" :class="{ active: activeTab === 'memory' }" @click="activeTab = 'memory'">
+        <button v-if="!isNew" class="soul-tab" :class="{ active: activeTab === 'memory' }" @click="activeTab = 'memory'">
           <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 2 17.5v-15A2.5 2.5 0 0 1 4.5 0"/>
             <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44A2.5 2.5 0 0 0 22 17.5v-15A2.5 2.5 0 0 0 19.5 0"/>
@@ -42,6 +43,7 @@
             <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
           </svg>
           AI Model
+          <span v-if="hasModelErrors" class="soul-tab-error-dot"></span>
         </button>
         <button class="soul-tab" :class="{ active: activeTab === 'voice' }" @click="activeTab = 'voice'">
           <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -50,6 +52,7 @@
             <line x1="12" y1="19" x2="12" y2="23"/>
           </svg>
           Voice
+          <span v-if="hasVoiceErrors" class="soul-tab-error-dot"></span>
         </button>
       </div>
 
@@ -58,7 +61,7 @@
         <div class="soul-persona-card">
           <!-- Avatar + Name row -->
           <div class="soul-identity-row">
-            <button v-if="!readOnly" class="soul-avatar-btn" @click="showAvatarPicker = true" title="Change avatar">
+            <button v-if="!readOnly" class="soul-avatar-btn" :class="{ 'soul-avatar-error': errors.avatar }" @click="showAvatarPicker = true" title="Change avatar">
               <img v-if="avatarDataUri" :src="avatarDataUri" class="soul-avatar-img" alt="" />
               <div v-else class="soul-avatar-fallback">{{ fallbackInitial }}</div>
               <span class="soul-avatar-edit-badge">
@@ -76,10 +79,13 @@
                 v-model="draftName"
                 type="text"
                 class="soul-name-input"
+                :class="{ 'soul-input-error': errors.name }"
                 placeholder="Persona name"
                 spellcheck="false"
+                @input="clearError('name')"
               />
               <span v-else class="soul-persona-value">{{ draftName || '—' }}</span>
+              <span v-if="errors.name || errors.avatar" class="soul-validation-error">{{ errors.name || errors.avatar }}</span>
             </div>
           </div>
 
@@ -89,10 +95,13 @@
               <textarea
                 v-model="draftDescription"
                 class="soul-desc-textarea"
+                :class="{ 'soul-input-error': errors.description }"
                 placeholder="Short description of this persona"
                 spellcheck="false"
                 rows="3"
+                @input="clearError('description')"
               ></textarea>
+              <span v-if="errors.description" class="soul-validation-error">{{ errors.description }}</span>
               <div class="soul-ai-btn-row">
                 <button
                   class="soul-btn-inline soul-btn-enhance soul-desc-ai-btn"
@@ -114,9 +123,10 @@
           </div>
           <div class="soul-persona-field soul-prompt-field">
             <span class="soul-persona-label">Persona</span>
-            <template v-if="!readOnly && personaType === 'system'">
-              <textarea v-model="draftPrompt" class="soul-editor soul-editor-prompt" spellcheck="false" placeholder="Enter the persona system prompt..."></textarea>
-              <div class="soul-enhance-row">
+            <template v-if="!readOnly">
+              <textarea v-model="draftPrompt" class="soul-editor soul-editor-prompt" :class="{ 'soul-input-error': errors.prompt }" spellcheck="false" :placeholder="personaType === 'system' ? 'Enter the persona system prompt...' : 'Describe yourself, your role, and context for the AI...'" @input="clearError('prompt')"></textarea>
+              <span v-if="errors.prompt" class="soul-validation-error">{{ errors.prompt }}</span>
+              <div v-if="personaType === 'system'" class="soul-enhance-row">
                 <button class="soul-btn-inline soul-btn-enhance" :disabled="enhancing || !draftPrompt.trim() || !isProviderActive" :title="!isProviderActive ? providerInactiveTooltip : 'Enhance prompt with AI'" @click="enhancePrompt">
                   <svg v-if="!enhancing" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                   <span v-if="enhancing" class="soul-spinner"></span>
@@ -173,28 +183,31 @@
             {{ isVoiceCallActive ? 'Active' : 'Inactive' }}
           </span>
         </div>
+        <span v-if="errors.voice" class="soul-validation-error" style="margin-bottom: 0.25rem;">{{ errors.voice }}</span>
         <div class="soul-voice-grid">
           <button
             v-for="v in voiceOptions"
             :key="v.value"
             class="soul-voice-card"
             :class="{ active: draftVoiceId === v.value }"
-            @click="draftVoiceId = v.value"
+            @click="draftVoiceId = v.value; clearError('voice')"
           >
             <span class="soul-voice-card-name">{{ v.label }}</span>
             <span class="soul-voice-card-desc">{{ v.desc }}</span>
-            <button
+            <span
+              role="button"
+              tabindex="0"
               class="soul-voice-demo-btn"
-              :class="{ disabled: !isVoiceCallActive }"
-              :disabled="!isVoiceCallActive || !!playingVoice"
+              :class="{ disabled: !isVoiceCallActive || !!playingVoice }"
               :title="isVoiceCallActive ? 'Play demo' : 'Voice call not active — test connection in Configuration'"
-              @click.stop="playVoiceDemo(v.value)"
+              @click.stop="isVoiceCallActive && !playingVoice && playVoiceDemo(v.value)"
+              @keydown.enter.stop="isVoiceCallActive && !playingVoice && playVoiceDemo(v.value)"
             >
               <svg v-if="playingVoice !== v.value" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
               <span v-else class="soul-demo-playing">
                 <span></span><span></span><span></span>
               </span>
-            </button>
+            </span>
           </button>
         </div>
       </div>
@@ -210,14 +223,35 @@
           <div v-if="activeProviderOptions.length === 0" class="soul-no-providers">
             No active providers. Enable a provider in Configuration first.
           </div>
-          <select
-            v-else
-            :value="draftProvider"
-            class="soul-provider-select"
-            @change="selectProvider($event.target.value)"
-          >
-            <option v-for="p in activeProviderOptions" :key="p.id" :value="p.id">{{ p.label }}</option>
-          </select>
+          <div v-else class="soul-provider-custom" :class="{ 'soul-input-error': errors.provider }">
+            <button
+              type="button"
+              class="soul-provider-trigger"
+              :class="{ open: providerDropdownOpen }"
+              @click.stop="toggleProviderDropdown"
+            >
+              <span>{{ activeProviderOptions.find(p => p.id === draftProvider)?.label || 'Select a provider' }}</span>
+              <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 12 12" fill="none" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 4.5L6 7.5L9 4.5"/>
+              </svg>
+            </button>
+            <div v-if="providerDropdownOpen" class="soul-provider-dropdown">
+              <button
+                v-for="p in activeProviderOptions"
+                :key="p.id"
+                type="button"
+                class="soul-provider-option"
+                :class="{ active: draftProvider === p.id }"
+                @click.stop="pickProvider(p.id)"
+              >
+                {{ p.label }}
+                <svg v-if="draftProvider === p.id" style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <span v-if="errors.provider" class="soul-validation-error">{{ errors.provider }}</span>
         </div>
 
         <!-- Model -->
@@ -235,7 +269,7 @@
             class="soul-model-search"
             @click.stop
           />
-          <div class="soul-model-list">
+          <div class="soul-model-list" :class="{ 'soul-input-error': errors.model }">
             <div v-if="(draftProvider === 'openrouter' && modelsStore.openrouterLoading) || (draftProvider === 'openai' && modelsStore.openaiLoading) || (draftProvider === 'deepseek' && modelsStore.deepseekLoading)" class="soul-model-loading">
               Loading models...
             </div>
@@ -244,12 +278,13 @@
               :key="m.id"
               class="soul-model-item"
               :class="{ active: draftModelId === m.id }"
-              @click="draftModelId = m.id"
+              @click="draftModelId = m.id; clearError('model')"
             >
               <span>{{ m.name || m.label || m.id }}</span>
               <span v-if="m.id !== (m.name || m.label)" class="soul-model-id">{{ m.id }}</span>
             </button>
           </div>
+          <span v-if="errors.model" class="soul-validation-error">{{ errors.model }}</span>
         </div>
       </div>
 
@@ -293,6 +328,7 @@ const props = defineProps({
   personaVoiceId:     { type: String, default: null },
   personaAvatar:      { type: String, default: null },
   readOnly:           { type: Boolean, default: false },
+  isNew:              { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['close', 'update-persona'])
@@ -321,6 +357,7 @@ const fallbackInitial = computed(() => (draftName.value || '?').charAt(0).toUppe
 function onAvatarSelected(avatarId) {
   draftAvatar.value = avatarId
   showAvatarPicker.value = false
+  clearError('avatar')
 }
 
 // ── Voice options & draft ──
@@ -385,6 +422,23 @@ const initProvider = props.personaProviderId || (configStore.activeProviders[0] 
 const draftProvider = ref(initProvider)
 const draftModelId = ref(props.personaModelId || null)
 const modelFilter = ref('')
+const providerDropdownOpen = ref(false)
+
+function toggleProviderDropdown() {
+  providerDropdownOpen.value = !providerDropdownOpen.value
+}
+
+function onProviderDropdownClickOutside(e) {
+  if (!e.target.closest('.soul-provider-custom')) {
+    providerDropdownOpen.value = false
+  }
+}
+
+function pickProvider(id) {
+  selectProvider(id)
+  clearError('provider')
+  providerDropdownOpen.value = false
+}
 
 const filteredModels = computed(() => {
   const q = modelFilter.value.trim().toLowerCase()
@@ -429,59 +483,22 @@ const providerInactiveTooltip = computed(() => {
   return `${label} provider is inactive — test connection in Configuration first`
 })
 
-/** Build a config object that routes to the persona's selected provider + utility model */
-function buildProviderConfig() {
-  const fullCfg = JSON.parse(JSON.stringify(configStore.config))
-  const pid = draftProvider.value
-  const provCfg = fullCfg[pid] || {}
-  const utilityModel = provCfg.utilityModel || null
-
-  const cfg = { ...fullCfg }
-  if (pid === 'anthropic') {
-    cfg.apiKey = provCfg.apiKey || ''
-    cfg.baseURL = provCfg.baseURL || ''
-    if (utilityModel) cfg.customModel = utilityModel
-  } else if (pid === 'openrouter') {
-    cfg.apiKey = provCfg.apiKey || ''
-    cfg.baseURL = provCfg.baseURL || ''
-    cfg.defaultProvider = 'openrouter'
-    if (utilityModel) cfg.customModel = utilityModel
-  } else if (pid === 'openai') {
-    cfg.openaiApiKey = provCfg.apiKey || ''
-    cfg.openaiBaseURL = provCfg.baseURL || ''
-    cfg._resolvedProvider = 'openai'
-    cfg.defaultProvider = 'openai'
-    if (utilityModel) cfg.customModel = utilityModel
-  } else if (pid === 'deepseek') {
-    cfg.openaiApiKey = provCfg.apiKey || ''
-    cfg.openaiBaseURL = (provCfg.baseURL || '').replace(/\/+$/, '')
-    cfg._resolvedProvider = 'openai'
-    cfg._directAuth = true
-    cfg.defaultProvider = 'openai'
-    if (utilityModel) cfg.customModel = utilityModel
-  }
-  return cfg
-}
-
 // ── AI Enhance ──
 const enhancing = ref(false)
 
 async function enhancePrompt() {
-  if (enhancing.value || !draftPrompt.value.trim() || !isProviderActive.value) return
+  if (enhancing.value || !draftPrompt.value.trim()) return
   enhancing.value = true
   try {
-    const cfg = buildProviderConfig()
-    const res = await window.electronAPI.runAgent({
-      chatId: '__persona_enhance__',
-      messages: [{
-        role: 'user',
-        content: `Enhance this AI system persona prompt. Make it more specific, effective, and well-structured while keeping the same intent. IMPORTANT: Respond in the SAME language as the original prompt. If the prompt is in Chinese, respond in Chinese. If in English, respond in English. Return ONLY the enhanced prompt text, nothing else.\n\nOriginal prompt:\n${draftPrompt.value}`
-      }],
-      config: cfg,
-      enabledAgents: [], enabledSkills: [], mcpServers: [], httpTools: [],
+    const config = JSON.parse(JSON.stringify(configStore.config))
+    const res = await window.electronAPI.enhancePrompt({
+      prompt: `Enhance this AI system persona prompt. Make it more specific, effective, and well-structured while keeping the same intent. IMPORTANT: Respond in the SAME language as the original prompt. If the prompt is in Chinese, respond in Chinese. If in English, respond in English. Return ONLY the enhanced prompt text, nothing else.\n\nOriginal prompt:\n${draftPrompt.value}`,
+      config,
     })
-    if (res.success && res.result) {
-      draftPrompt.value = res.result.trim()
+    if (res.success && res.text) {
+      draftPrompt.value = res.text.trim()
+    } else if (!res.success) {
+      console.error('Enhancement failed:', res.error)
     }
   } catch (err) {
     console.error('Enhancement failed:', err.message || err)
@@ -491,21 +508,18 @@ async function enhancePrompt() {
 
 async function summarizeDescription() {
   const prompt = draftPrompt.value || props.personaPrompt
-  if (summarizing.value || !prompt?.trim() || !isProviderActive.value) return
+  if (summarizing.value || !prompt?.trim()) return
   summarizing.value = true
   try {
-    const cfg = buildProviderConfig()
-    const res = await window.electronAPI.runAgent({
-      chatId: '__persona_describe__',
-      messages: [{
-        role: 'user',
-        content: `Read this persona prompt and write a SHORT description (max 10 words) that tells the user who this persona is. Focus on: role, expertise, key character traits. Use clean, simple words. No punctuation at the end. IMPORTANT: Respond in the SAME language as the prompt. If the prompt is in Chinese, write the description in Chinese. If in English, write in English. Return ONLY the description, nothing else.\n\nPrompt:\n${prompt}`
-      }],
-      config: cfg,
-      enabledAgents: [], enabledSkills: [], mcpServers: [], httpTools: [],
+    const config = JSON.parse(JSON.stringify(configStore.config))
+    const res = await window.electronAPI.enhancePrompt({
+      prompt: `Read this persona prompt and write a SHORT description (max 10 words) that tells the user who this persona is. Focus on: role, expertise, key character traits. Use clean, simple words. No punctuation at the end. IMPORTANT: Respond in the SAME language as the prompt. If the prompt is in Chinese, write the description in Chinese. If in English, write in English. Return ONLY the description, nothing else.\n\nPrompt:\n${prompt}`,
+      config,
     })
-    if (res.success && res.result) {
-      draftDescription.value = res.result.trim().replace(/\.+$/, '')
+    if (res.success && res.text) {
+      draftDescription.value = res.text.trim().replace(/\.+$/, '')
+    } else if (!res.success) {
+      console.error('Description generation failed:', res.error)
     }
   } catch (err) {
     console.error('Description generation failed:', err.message || err)
@@ -549,14 +563,50 @@ async function loadContent() {
 }
 
 
+// ── Validation ──
+const errors = ref({})
+
+const hasSummaryErrors = computed(() => !!(errors.value.name || errors.value.avatar || errors.value.description || errors.value.prompt))
+const hasModelErrors = computed(() => !!(errors.value.provider || errors.value.model))
+const hasVoiceErrors = computed(() => !!errors.value.voice)
+
+function clearError(field) {
+  if (errors.value[field]) {
+    const e = { ...errors.value }
+    delete e[field]
+    errors.value = e
+  }
+}
+
 // ── Unified save ──
 function saveAll() {
+  const e = {}
+  if (!draftName.value.trim()) e.name = 'Name is required'
+  if (!draftAvatar.value) e.avatar = 'Avatar is required'
+  if (!draftDescription.value.trim()) e.description = 'Description is required'
+  if (!draftPrompt.value.trim()) e.prompt = 'Persona prompt is required'
+  if (props.personaType === 'system') {
+    if (!draftProvider.value) e.provider = 'Provider is required'
+    if (!draftModelId.value) e.model = 'Model is required'
+    if (!draftVoiceId.value) e.voice = 'Voice is required'
+  }
+
+  if (Object.keys(e).length > 0) {
+    errors.value = e
+    // Navigate to the first tab with errors
+    if (e.name || e.avatar || e.description || e.prompt) activeTab.value = 'summary'
+    else if (e.provider || e.model) activeTab.value = 'model'
+    else if (e.voice) activeTab.value = 'voice'
+    return
+  }
+  errors.value = {}
+
   // Emit all current drafts so parent can persist
   emit('update-persona', {
-    name: draftName.value || undefined,
-    avatar: draftAvatar.value || undefined,
-    description: draftDescription.value || undefined,
-    prompt: draftPrompt.value || undefined,
+    name: draftName.value,
+    avatar: draftAvatar.value,
+    description: draftDescription.value,
+    prompt: draftPrompt.value,
     providerId: draftProvider.value,
     modelId: draftModelId.value || null,
     voiceId: draftVoiceId.value,
@@ -582,8 +632,12 @@ onMounted(() => {
   if (draftProvider.value === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
   if (draftProvider.value === 'deepseek' && !modelsStore.deepseekCached) modelsStore.fetchDeepSeekModels()
   window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('click', onProviderDropdownClickOutside)
 })
-onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('click', onProviderDropdownClickOutside)
+})
 </script>
 
 <style scoped>
@@ -649,6 +703,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #374151 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
+.soul-tab-error-dot {
+  width: 0.375rem; height: 0.375rem; border-radius: 50%;
+  background: #EF4444; flex-shrink: 0;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.6);
+}
 
 /* ── Body ── */
 .soul-body {
@@ -674,6 +733,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   border-radius: 50%;
 }
 .soul-avatar-btn:hover .soul-avatar-edit-badge { opacity: 1; }
+.soul-avatar-error { outline: 2px solid #EF4444; outline-offset: 2px; }
 .soul-avatar-readonly {
   width: 3rem; height: 3rem; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -704,6 +764,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 }
 .soul-name-input:focus { border-color: #4B5563; }
 .soul-name-input::placeholder { color: #4B5563; }
+.soul-input-error { border-color: #EF4444 !important; }
+.soul-validation-error {
+  font-family: 'Inter', sans-serif; font-size: 0.6875rem; font-weight: 600;
+  color: #EF4444; margin-top: 0.125rem;
+}
 
 .soul-desc-textarea {
   width: 100%; padding: 0.5rem 0.625rem; border-radius: 0.5rem;
@@ -869,18 +934,42 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   background: #1F1F1F; color: #9CA3AF;
   font-family: 'JetBrains Mono', monospace;
 }
-.soul-provider-select {
-  width: 100%; padding: 0.5625rem 0.75rem; border-radius: 0.5rem;
+.soul-provider-custom {
+  position: relative; width: 100%;
+}
+.soul-provider-custom.soul-input-error .soul-provider-trigger {
+  border-color: #EF4444 !important;
+}
+.soul-provider-trigger {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 0.5625rem 0.75rem; border-radius: 0.5rem;
   border: 1px solid #2A2A2A; background: #1A1A1A;
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem);
   font-weight: 600; color: #FFFFFF; outline: none;
   cursor: pointer; transition: border-color 0.15s;
-  -webkit-appearance: none; appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' fill='none' stroke='%236B7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 0.75rem center;
+  text-align: left;
 }
-.soul-provider-select:focus { border-color: #4B5563; box-shadow: 0 0 0 3px rgba(75,85,99,0.2); }
-.soul-provider-select option { background: #1A1A1A; color: #FFFFFF; }
+.soul-provider-trigger:hover { border-color: #4B5563; }
+.soul-provider-trigger.open { border-color: #4B5563; box-shadow: 0 0 0 3px rgba(75,85,99,0.2); }
+.soul-provider-dropdown {
+  position: absolute; top: calc(100% + 0.25rem); left: 0; right: 0; z-index: 50;
+  background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 0.5rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2);
+  overflow: hidden;
+}
+.soul-provider-option {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 0.5625rem 0.75rem; border: none; background: transparent;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem);
+  font-weight: 600; color: #9CA3AF; cursor: pointer; text-align: left;
+  transition: all 0.12s; border-bottom: 1px solid #1F1F1F;
+}
+.soul-provider-option:last-child { border-bottom: none; }
+.soul-provider-option:hover { background: #222222; color: #FFFFFF; }
+.soul-provider-option.active {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  color: #FFFFFF;
+}
 .soul-no-providers {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem);
   color: #EF4444; padding: 0.625rem 0;

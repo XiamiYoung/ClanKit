@@ -66,7 +66,6 @@ class VoiceSession {
     if (this._voiceBusy) {
       // Preempt: abort the current LLM stream and store this audio as pending.
       // Only the LATEST audio matters — overwrite any previously pending chunk.
-      console.log('[VOICE:SESSION] processAudio preempting busy turn — storing as pending')
       this._currentLLMAbort?.()
       this._pendingAudio = audioBuffer
       return
@@ -81,7 +80,6 @@ class VoiceSession {
       if (this._pendingAudio) {
         audioBuffer = this._pendingAudio
         this._pendingAudio = null
-        console.log('[VOICE:SESSION] processing pending audio from preempted turn')
       }
     } while (audioBuffer && this.active)
   }
@@ -89,7 +87,6 @@ class VoiceSession {
   async _runTurn(audioBuffer) {
     try {
       this._voiceBusy = true
-      console.log(`[VOICE:SESSION] turn START — buffer=${audioBuffer.length} bytes`)
       this.onStatus('processing')
 
       const sttOpts = {}
@@ -97,15 +94,11 @@ class VoiceSession {
       const personaName = this.persona?.name
       if (personaName) sttOpts.prompt = `Conversation with ${personaName}.`
 
-      console.log('[VOICE:STT] → calling Whisper API')
-      const t0 = Date.now()
       const sttResult = await this.stt.transcribe(audioBuffer, 'audio/webm', sttOpts)
-      console.log(`[VOICE:STT] ← Whisper done in ${Date.now() - t0}ms — text="${(sttResult?.text || '').slice(0, 80)}"`)
 
       const transcript = sttResult?.text || ''
       const whisperSecs = sttResult?.durationSecs || 0
       if (!transcript) {
-        console.log('[VOICE:SESSION] transcript empty — returning to standby')
         if (this.active) this.onStatus('standby')
         return
       }
@@ -114,16 +107,14 @@ class VoiceSession {
       await this._processTranscript(transcript)
     } catch (err) {
       if (err.name === 'AbortError') {
-        console.log('[VOICE:SESSION] LLM stream aborted — turn preempted')
+        // turn preempted — no action needed
       } else {
-        console.log(`[VOICE:SESSION] turn ERROR: ${err.message}`)
         this.onError(err.message || 'Voice processing error')
         if (this.active) this.onStatus('standby')
       }
     } finally {
       this._voiceBusy = false
       this._currentLLMAbort = null
-      console.log('[VOICE:SESSION] turn END — busy released')
     }
   }
 
@@ -176,10 +167,7 @@ class VoiceSession {
     const abortController = new AbortController()
     this._currentLLMAbort = () => abortController.abort()
 
-    console.log('[VOICE:LLM] → calling voice LLM (streaming)')
-    const t1 = Date.now()
     const llmResult = await this.llmCall(messages, this.voiceConfig, { onChunk, signal: abortController.signal })
-    console.log(`[VOICE:LLM] fully done in ${Date.now() - t1}ms${firstSentenceAt ? ` (first sentence at ${firstSentenceAt - t1}ms)` : ''}`)
 
     const aiResponse = llmResult?.text ?? ''
     if (!aiResponse || !this.active) {

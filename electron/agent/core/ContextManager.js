@@ -58,12 +58,10 @@ class ContextManager {
   }
 
   /**
-   * Build API request parameters with compaction enabled (Opus 4.6 only).
+   * Build API request parameters with compaction enabled.
    * Returns the params with beta headers and context_management set.
    */
   applyCompaction(params) {
-    if (!this.anthropicClient.isOpus46()) return params
-
     // Use beta endpoint with compaction
     return {
       ...params,

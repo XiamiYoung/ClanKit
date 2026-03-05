@@ -8,6 +8,11 @@
       </button>
       <div v-if="showProviderMenu" class="pmp-menu">
         <button
+          v-if="provider"
+          class="pmp-option pmp-clear"
+          @click="clearSelection"
+        >✕ Clear</button>
+        <button
           v-for="p in activeProviderOptions"
           :key="p.id"
           class="pmp-option"
@@ -120,6 +125,27 @@ function selectModel(id) {
   emit('update:model', id)
   showModelMenu.value = false
 }
+
+function clearSelection() {
+  emit('update:provider', null)
+  emit('update:model', null)
+  showProviderMenu.value = false
+  modelSearch.value = ''
+}
+
+// Auto-clear stale selections when provider is no longer active or model is no longer in list
+watch(activeProviderOptions, (opts) => {
+  if (props.provider && !opts.find(p => p.id === props.provider)) {
+    emit('update:provider', null)
+    emit('update:model', null)
+  }
+})
+
+watch(allModels, (models) => {
+  if (props.model && models.length > 0 && !models.find(m => m.id === props.model)) {
+    emit('update:model', null)
+  }
+})
 
 function goToConfig() {
   router.push('/config')
@@ -242,6 +268,17 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideClick))
 .pmp-option.active {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #374151 100%);
   color: #FFFFFF;
+}
+
+.pmp-clear {
+  color: #EF4444;
+  border-bottom: 1px solid #1F1F1F;
+  margin-bottom: 0.25rem;
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+.pmp-clear:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #FCA5A5;
 }
 
 .pmp-empty {

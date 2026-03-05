@@ -25,49 +25,71 @@
     </div>
 
     <!-- Navigation -->
-    <div class="flex-1 px-3 py-3 flex flex-col gap-0.5 overflow-y-auto" style="scrollbar-width:thin;">
-      <div style="display:flex;align-items:center;justify-content:space-between;min-height:1.5rem;">
-        <p class="nav-section-label" v-show="!isCollapsed" style="margin:0;">AI Agent</p>
-        <button @click="toggleCollapse" class="nav-collapse-btn" :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'" style="flex-shrink:0;">
-          <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <line x1="4" y1="6" x2="20" y2="6"/>
-            <line x1="4" y1="12" x2="20" y2="12"/>
-            <line x1="4" y1="18" x2="20" y2="18"/>
+    <div class="flex-1 px-3 py-3 flex flex-col overflow-y-auto" style="scrollbar-width:thin;gap:0.125rem;">
+
+      <!-- ── AI Agent ── -->
+      <div class="nav-section" :class="{ collapsed: isCollapsed }">
+        <div class="nav-section-header">
+          <span class="nav-section-label" v-show="!isCollapsed">AI Agent</span>
+          <button @click="toggleCollapse" class="nav-collapse-btn" :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="4" y1="6" x2="20" y2="6"/>
+              <line x1="4" y1="12" x2="20" y2="12"/>
+              <line x1="4" y1="18" x2="20" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <NavItem to="/chats"     :icon="IconChats"     label="Chats"       :isCollapsed="isCollapsed" />
+        <NavItem to="/tools"     :icon="IconTools"     label="Tools"       :isCollapsed="isCollapsed" />
+        <NavItem to="/skills"    :icon="IconSkills"    label="Skills"      :isCollapsed="isCollapsed" />
+        <NavItem to="/mcp"       :icon="IconMcp"       label="MCP Servers" :isCollapsed="isCollapsed" />
+        <NavItem to="/knowledge" :icon="IconKnowledge" label="Knowledge"   :isCollapsed="isCollapsed" />
+        <NavItem to="/personas"  :icon="IconPersonas"  label="Personas"    :isCollapsed="isCollapsed" />
+      </div>
+
+      <!-- ── Workspace ── -->
+      <div class="nav-section" :class="{ collapsed: isCollapsed }">
+        <div class="nav-section-header" v-show="!isCollapsed">
+          <span class="nav-section-label">Workspace</span>
+        </div>
+        <NavItem to="/news"  :icon="IconNews"  label="News"      :isCollapsed="isCollapsed" />
+        <NavItem to="/notes" :icon="IconNotes" label="Documents" :isCollapsed="isCollapsed" />
+      </div>
+
+      <!-- ── System ── -->
+      <div class="nav-section" :class="{ collapsed: isCollapsed }">
+        <div class="nav-section-header" v-show="!isCollapsed">
+          <span class="nav-section-label">System</span>
+        </div>
+        <NavItem to="/config" :icon="IconConfig" label="Configuration" :isCollapsed="isCollapsed" />
+        <!-- Cost Overview button -->
+        <button
+          @click="showCostOverview = true"
+          class="cost-overview-btn"
+          :class="{ collapsed: isCollapsed }"
+          @mouseenter="isCollapsed ? showNavTooltip('Cost Overview', $event) : undefined"
+          @mouseleave="isCollapsed ? hideNavTooltip() : undefined"
+        >
+          <svg style="width:18px;height:18px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
           </svg>
+          <span v-show="!isCollapsed" class="cost-overview-label">Cost Overview</span>
         </button>
       </div>
-      <NavItem to="/chats"    :icon="IconChats"    label="Chats"    :isCollapsed="isCollapsed" />
-      <NavItem to="/tools"    :icon="IconTools"    label="Tools"    :isCollapsed="isCollapsed" />
-      <NavItem to="/skills"   :icon="IconSkills"   label="Skills"   :isCollapsed="isCollapsed" />
-      <NavItem to="/mcp"      :icon="IconMcp"      label="MCP Servers" :isCollapsed="isCollapsed" />
-      <NavItem to="/knowledge" :icon="IconKnowledge" label="Knowledge" :isCollapsed="isCollapsed" />
-      <NavItem to="/personas" :icon="IconPersonas" label="Personas" :isCollapsed="isCollapsed" />
-      <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:0.75rem;">Workspace</p>
-      <NavItem to="/news"     :icon="IconNews"     label="News"     :isCollapsed="isCollapsed" />
-      <NavItem to="/notes"     :icon="IconNotes"     label="Documents"  :isCollapsed="isCollapsed" />
-
-      <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:0.75rem;">System</p>
-      <NavItem to="/config" :icon="IconConfig" label="Configuration" :isCollapsed="isCollapsed" />
-
-      <!-- Cost Overview button -->
-      <button
-        @click="showCostOverview = true"
-        class="cost-overview-btn"
-        :class="{ collapsed: isCollapsed }"
-        :title="isCollapsed ? 'Cost Overview' : ''"
-      >
-        <svg style="width:18px;height:18px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-        </svg>
-        <span v-show="!isCollapsed" class="cost-overview-label">Cost Overview</span>
-      </button>
 
     </div>
 
+    <!-- ── Nav tooltip ────────────────────────────────────────────────────── -->
+    <Teleport to="body">
+      <div v-if="navTooltipVisible" class="nav-tooltip-fixed" :style="navTooltipStyle">
+        {{ navTooltipText }}
+      </div>
+    </Teleport>
+
     <!-- ── Cost Overview Modal ─────────────────────────────────────────── -->
     <Teleport to="body">
-      <div v-if="showCostOverview" class="cost-modal-backdrop" @click.self="showCostOverview = false">
-        <div class="cost-modal">
+      <div v-if="showCostOverview" class="cost-modal-backdrop" @click.self.stop>
+        <div class="cost-modal" @click.stop>
           <div class="cost-modal-header">
             <div style="display:flex;align-items:center;gap:0.625rem;">
               <div class="cost-modal-icon">
@@ -93,34 +115,50 @@
               No usage data yet. Send some messages first.
             </div>
             <template v-else>
-              <div v-for="prov in overviewProviders" :key="prov.name" class="cost-provider-card">
+              <div v-for="prov in overviewProviders" :key="prov.label" class="cost-provider-card">
+                <!-- Provider header -->
                 <div class="cost-provider-header">
-                  <span class="cost-provider-name">{{ prov.label }}</span>
-                  <span class="cost-provider-total">{{ fmtCost(prov.costs.USD, 'USD') }}</span>
+                  <span class="cost-provider-name">
+                    {{ prov.label }}<template v-if="prov.whisperCalls"> — {{ prov.whisperCalls }} rounds · {{ prov.whisperSecs.toFixed(1) }}s</template>
+                  </span>
                 </div>
-                <div class="cost-provider-detail">
-                  <span>Input: {{ (prov.usage.inputTokens || 0).toLocaleString() }} tok</span>
-                  <span>Output: {{ (prov.usage.outputTokens || 0).toLocaleString() }} tok</span>
-                  <span v-if="prov.usage.cacheReadTokens">Cache hits: {{ (prov.usage.cacheReadTokens || 0).toLocaleString() }}</span>
-                  <span v-if="prov.usage.whisperCalls">Whisper: {{ prov.usage.whisperCalls }} calls</span>
+                <!-- Per-model rows -->
+                <div v-for="m in prov.models" :key="m.modelId" class="cost-model-row">
+                  <div class="cost-model-top">
+                    <span class="cost-model-id">{{ MODEL_DISPLAY_NAMES[m.modelId] || m.modelId }}</span>
+                    <span class="cost-model-usd">{{ fmtCost(m.usd) }}</span>
+                  </div>
+                  <div class="cost-model-detail">
+                    <template v-if="m.usage.whisperSecs">
+                      <span>{{ m.usage.whisperSecs.toFixed(1) }}s × {{ fmtCost(m.whisperPerSec) }}</span>
+                    </template>
+                    <template v-else-if="m.usage.ttsChars">
+                      <span>{{ fmtTokens(m.usage.ttsChars) }} chars × {{ fmtCost(m.ttsPerChar) }}</span>
+                    </template>
+                    <template v-else>
+                      <span v-if="m.usage.inputTokens">In {{ fmtTokens(m.usage.inputTokens) }}<template v-if="m.inputPricePerToken"> × {{ fmtCost(m.inputPricePerToken) }} = {{ fmtCost(m.usage.inputTokens * m.inputPricePerToken) }}</template></span>
+                      <span v-if="m.usage.outputTokens">Out {{ fmtTokens(m.usage.outputTokens) }}<template v-if="m.outputPricePerToken"> × {{ fmtCost(m.outputPricePerToken) }} = {{ fmtCost(m.usage.outputTokens * m.outputPricePerToken) }}</template></span>
+                      <span v-if="m.usage.voiceInputTokens">In(v) {{ fmtTokens(m.usage.voiceInputTokens) }}<template v-if="m.inputPricePerToken"> × {{ fmtCost(m.inputPricePerToken) }} = {{ fmtCost(m.usage.voiceInputTokens * m.inputPricePerToken) }}</template></span>
+                      <span v-if="m.usage.voiceOutputTokens">Out(v) {{ fmtTokens(m.usage.voiceOutputTokens) }}<template v-if="m.outputPricePerToken"> × {{ fmtCost(m.outputPricePerToken) }} = {{ fmtCost(m.usage.voiceOutputTokens * m.outputPricePerToken) }}</template></span>
+                      <span v-if="m.usage.cacheCreationTokens">Cache write {{ fmtTokens(m.usage.cacheCreationTokens) }}</span>
+                      <span v-if="m.usage.cacheReadTokens">Cache read {{ fmtTokens(m.usage.cacheReadTokens) }}</span>
+                    </template>
+                  </div>
                 </div>
-                <div class="cost-currency-row">
-                  <span>{{ fmtCost(prov.costs.USD, 'USD') }} <span style="color:#6B7280;font-size:0.85em;">USD</span></span>
-                  <span style="color:#4B5563;">/</span>
-                  <span>{{ fmtCost(prov.costs.CNY, 'CNY') }} <span style="color:#6B7280;font-size:0.85em;">CNY</span></span>
-                  <span style="color:#4B5563;">/</span>
-                  <span>{{ fmtCost(prov.costs.SGD, 'SGD') }} <span style="color:#6B7280;font-size:0.85em;">SGD</span></span>
+                <!-- Provider total currency row -->
+                <div class="cost-provider-currency">
+                  <span>{{ fmtCost(prov.costs.USD) }} <span class="cost-cur-label">USD</span></span>
                 </div>
               </div>
 
               <div class="cost-total-row">
                 <span class="cost-total-label">TOTAL</span>
-                <div class="cost-currency-row" style="font-weight:700;">
-                  <span>{{ fmtCost(overviewTotal.USD, 'USD') }} <span style="color:#6B7280;font-size:0.85em;font-weight:400;">USD</span></span>
-                  <span style="color:#4B5563;">/</span>
-                  <span>{{ fmtCost(overviewTotal.CNY, 'CNY') }} <span style="color:#6B7280;font-size:0.85em;font-weight:400;">CNY</span></span>
-                  <span style="color:#4B5563;">/</span>
-                  <span>{{ fmtCost(overviewTotal.SGD, 'SGD') }} <span style="color:#6B7280;font-size:0.85em;font-weight:400;">SGD</span></span>
+                <div class="cost-currency-row">
+                  <span>{{ fmtCost(overviewTotal.USD) }} <span class="cost-cur-label">USD</span></span>
+                  <span class="cost-sep">/</span>
+                  <span>{{ fmtCost(overviewTotal.CNY, 'CNY') }} <span class="cost-cur-label">CNY</span></span>
+                  <span class="cost-sep">/</span>
+                  <span>{{ fmtCost(overviewTotal.SGD, 'SGD') }} <span class="cost-cur-label">SGD</span></span>
                 </div>
               </div>
             </template>
@@ -136,12 +174,33 @@ import { defineComponent, h, ref, computed, watch, onMounted, onUnmounted } from
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useVoiceStore } from '../../stores/voice'
 import { useConfigStore } from '../../stores/config'
+import { usePersonasStore } from '../../stores/personas'
 import { resolveModelPrice, calcCostUSD, convertCurrencies, formatCost } from '../../utils/pricing.js'
 
 const route = useRoute()
 const router = useRouter()
 const voiceStore = useVoiceStore()
 const configStore = useConfigStore()
+const personasStore = usePersonasStore()
+
+// ── Nav tooltip (position:fixed so it escapes overflow:hidden ancestors) ─────
+const navTooltipVisible = ref(false)
+const navTooltipText    = ref('')
+const navTooltipStyle   = ref({})
+
+function showNavTooltip(label, event) {
+  const r = event.currentTarget.getBoundingClientRect()
+  navTooltipText.value  = label
+  navTooltipStyle.value = {
+    top:       (r.top + r.height / 2) + 'px',
+    left:      (r.right + 8) + 'px',
+    transform: 'translateY(-50%)',
+  }
+  navTooltipVisible.value = true
+}
+function hideNavTooltip() {
+  navTooltipVisible.value = false
+}
 
 // ── Cost Overview ────────────────────────────────────────────────────────────
 const showCostOverview  = ref(false)
@@ -151,12 +210,25 @@ const overviewData      = ref(null)
 // Alias to avoid name collision with any local variable
 const fmtCost = formatCost
 
+function fmtTokens(n) {
+  if (!n) return '0'
+  if (n >= 1000) return (n / 1000).toFixed(n >= 10000 ? 1 : 2).replace(/\.?0+$/, '') + 'k'
+  return String(n)
+}
+
+const MODEL_DISPLAY_NAMES = {
+  'whisper-1': 'STT (Speech To Text)',
+  'tts-1':     'TTS (Text To Speech)',
+  'tts-1-hd':  'TTS HD (Text To Speech)',
+  'tts-llm':   'TTS Voice LLM',
+}
+
 const PROVIDER_LABELS = {
   anthropic:  'Anthropic',
   openrouter: 'OpenRouter',
   openai:     'OpenAI',
   deepseek:   'DeepSeek',
-  voice:      'Voice (Whisper/TTS)',
+  voice:      'Voice (Whisper)',
 }
 
 watch(showCostOverview, async (open) => {
@@ -166,45 +238,93 @@ watch(showCostOverview, async (open) => {
   try {
     const index = await window.electronAPI.getChatIndex()
     const provMap = {}
+    const USAGE_KEYS = ['inputTokens','outputTokens','cacheCreationTokens','cacheReadTokens','voiceInputTokens','voiceOutputTokens','whisperCalls','whisperSecs','ttsChars']
 
     for (const meta of (index || [])) {
       const chat = await window.electronAPI.getChat(meta.id)
       if (!chat?.usage) continue
       const u        = chat.usage
+      // Skip chats with no actual token usage (empty object or all-zero fields)
+      if (!USAGE_KEYS.some(k => (u[k] || 0) > 0)) continue
       const provider = chat.provider || 'anthropic'
-      const model    = chat.model    || ''
+      // Resolve model: chat.model (set by accumulateUsage) → persona modelId → skip
+      const personaId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null)
+        || chat.systemPersonaId
+      const personaModel = personaId ? personasStore.getPersonaById(personaId)?.modelId : null
+      const model = chat.model || personaModel
+      // Always route STT (Whisper) into the standalone Voice bucket
+      if ((u.whisperSecs || 0) + (u.whisperCalls || 0) > 0) {
+        const vProv = 'voice', vModel = 'whisper-1'
+        if (!provMap[vProv]) provMap[vProv] = { label: PROVIDER_LABELS[vProv] || 'Voice (Whisper)', models: {} }
+        const vp = provMap[vProv]
+        if (!vp.models[vModel]) vp.models[vModel] = { usage: Object.fromEntries(USAGE_KEYS.map(k => [k, 0])) }
+        vp.models[vModel].usage.whisperCalls += (u.whisperCalls || 0)
+        vp.models[vModel].usage.whisperSecs  += (u.whisperSecs  || 0)
+      }
+      // Route TTS chars to Voice bucket (priced per char via tts-1/tts-1-hd)
+      if ((u.ttsChars || 0) > 0) {
+        const vProv = 'voice'
+        if (!provMap[vProv]) provMap[vProv] = { label: PROVIDER_LABELS[vProv] || 'Voice (Whisper)', models: {} }
+        const ttsModel = 'tts-1'
+        const vp = provMap[vProv]
+        if (!vp.models[ttsModel]) vp.models[ttsModel] = { usage: Object.fromEntries(USAGE_KEYS.map(k => [k, 0])) }
+        vp.models[ttsModel].usage.ttsChars += (u.ttsChars || 0)
+      }
 
-      if (!provMap[provider]) {
-        provMap[provider] = {
-          label: PROVIDER_LABELS[provider] || provider,
-          usage: { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, voiceInputTokens: 0, voiceOutputTokens: 0, whisperCalls: 0, whisperSecs: 0 },
-          modelsUsed: new Set(),
-        }
+      // Route voice LLM tokens to Voice bucket, tagged with base model for pricing
+      if (model && (u.voiceInputTokens || 0) + (u.voiceOutputTokens || 0) > 0) {
+        const vProv = 'voice'
+        if (!provMap[vProv]) provMap[vProv] = { label: PROVIDER_LABELS[vProv] || 'Voice (Whisper)', models: {} }
+        const vp = provMap[vProv]
+        if (!vp.models['tts-llm']) vp.models['tts-llm'] = { usage: Object.fromEntries(USAGE_KEYS.map(k => [k, 0])), baseModel: model }
+        vp.models['tts-llm'].usage.voiceInputTokens  += (u.voiceInputTokens  || 0)
+        vp.models['tts-llm'].usage.voiceOutputTokens += (u.voiceOutputTokens || 0)
       }
+
+      if (!model) continue
+
+      if (!provMap[provider]) provMap[provider] = { label: PROVIDER_LABELS[provider] || provider, models: {} }
       const p = provMap[provider]
-      for (const key of Object.keys(p.usage)) {
-        p.usage[key] = (p.usage[key] || 0) + (u[key] || 0)
+      if (!p.models[model]) p.models[model] = { usage: Object.fromEntries(USAGE_KEYS.map(k => [k, 0])) }
+      // Accumulate LLM keys only — whisper, voice tokens and ttsChars go to Voice bucket
+      const VOICE_ONLY = new Set(['whisperCalls','whisperSecs','voiceInputTokens','voiceOutputTokens','ttsChars'])
+      for (const key of USAGE_KEYS) {
+        if (!VOICE_ONLY.has(key)) p.models[model].usage[key] += (u[key] || 0)
       }
-      if (model) p.modelsUsed.add(model)
     }
 
-    const pricing = configStore.config.pricing
-    const rates   = pricing?.currencyRates || { USD: 1, CNY: 7.28, SGD: 1.35 }
+    const pricing      = configStore.config.pricing
+    const rates        = pricing?.currencyRates || { USD: 1, CNY: 7.28, SGD: 1.35 }
+    const whisperPrice = resolveModelPrice('whisper-1', pricing)
+    const M            = 1_000_000
 
     const providers = Object.entries(provMap).map(([, p]) => {
-      let totalUSD = 0
-      const prices = [...p.modelsUsed].map(m => resolveModelPrice(m, pricing)).filter(Boolean)
-      if (prices.length > 0) {
-        const avgPrice = {
-          input:      prices.reduce((s, x) => s + (x.input || 0), 0)      / prices.length,
-          output:     prices.reduce((s, x) => s + (x.output || 0), 0)     / prices.length,
-          cacheWrite: prices.reduce((s, x) => s + (x.cacheWrite || 0), 0) / prices.length,
-          cacheRead:  prices.reduce((s, x) => s + (x.cacheRead || 0), 0)  / prices.length,
-          perSec:     prices.reduce((s, x) => s + (x.perSec || 0), 0)     / prices.length,
+      let provUSD = 0
+      const models = Object.entries(p.models).map(([modelId, m]) => {
+        const price = resolveModelPrice(m.baseModel || modelId, pricing)
+        let llmUsd = 0
+        if (price) {
+          llmUsd += ((m.usage.inputTokens         || 0) / M) * (price.input      || 0)
+          llmUsd += ((m.usage.outputTokens        || 0) / M) * (price.output     || 0)
+          llmUsd += ((m.usage.voiceInputTokens    || 0) / M) * (price.input      || 0)
+          llmUsd += ((m.usage.voiceOutputTokens   || 0) / M) * (price.output     || 0)
+          llmUsd += ((m.usage.cacheCreationTokens || 0) / M) * (price.cacheWrite || 0)
+          llmUsd += ((m.usage.cacheReadTokens     || 0) / M) * (price.cacheRead  || 0)
         }
-        totalUSD = calcCostUSD(p.usage, avgPrice)
-      }
-      return { name: p.label, label: p.label, usage: p.usage, costs: convertCurrencies(totalUSD, rates) }
+        const whisperPerSec = whisperPrice?.perSec || 0.0001
+        const whisperUsd    = (m.usage.whisperSecs || 0) * whisperPerSec
+        const ttsPrice      = resolveModelPrice('tts-1', pricing)
+        const ttsPerChar    = ttsPrice?.perChar || 0.000015
+        const ttsUsd        = (m.usage.ttsChars || 0) * ttsPerChar
+        const usd = llmUsd + whisperUsd + ttsUsd
+        provUSD += usd
+        const inputPricePerToken  = price ? (price.input  || 0) / M : 0
+        const outputPricePerToken = price ? (price.output || 0) / M : 0
+        return { modelId, usage: m.usage, usd, llmUsd, whisperUsd, ttsUsd, whisperPerSec, ttsPerChar, inputPricePerToken, outputPricePerToken, costs: convertCurrencies(usd, rates) }
+      }).sort((a, b) => b.usd - a.usd)
+      const whisperCalls = models.reduce((s, m) => s + (m.usage.whisperCalls || 0), 0)
+      const whisperSecs  = models.reduce((s, m) => s + (m.usage.whisperSecs  || 0), 0)
+      return { label: p.label, models, costs: convertCurrencies(provUSD, rates), whisperCalls, whisperSecs }
     })
 
     const totalUSD = providers.reduce((s, p) => s + p.costs.USD, 0)
@@ -334,6 +454,8 @@ const NavItem = defineComponent({
           isActive ? 'nav-item-active' : 'nav-item-inactive'
         ],
         style: props.isCollapsed ? 'justify-content:center;' : '',
+        onMouseenter: props.isCollapsed ? (e) => showNavTooltip(props.label, e) : undefined,
+        onMouseleave: props.isCollapsed ? () => hideNavTooltip() : undefined,
         'aria-current': isActive ? 'page' : undefined,
       }, () => children)
     }
@@ -342,12 +464,38 @@ const NavItem = defineComponent({
 </script>
 
 <style scoped>
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+}
+
+/* Spacing between sections when expanded — no divider */
+.nav-section + .nav-section {
+  margin-top: 0.375rem;
+}
+
+/* Divider between sections when collapsed */
+.nav-section.collapsed + .nav-section.collapsed {
+  margin-top: 0.375rem;
+  padding-top: 0.375rem;
+  border-top: 1px solid #F0F0F0;
+}
+
+.nav-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 1.5rem;
+  padding: 0 0.25rem;
+}
+
 .nav-section-label {
   font-size: var(--fs-caption);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #9CA3AF;
-  padding: 0.625rem 0.75rem 0.25rem;
+  padding: 0.5rem 0.5rem 0.25rem;
   font-family: 'Inter', sans-serif;
   font-weight: 600;
 }
@@ -467,6 +615,22 @@ const NavItem = defineComponent({
 </style>
 
 <style>
+/* Nav tooltip — fixed position, escapes all overflow:hidden ancestors */
+.nav-tooltip-fixed {
+  position: fixed;
+  z-index: 99999;
+  background: #1A1A1A;
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 0.3125rem 0.625rem;
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  pointer-events: none;
+}
+
 /* Cost Overview modal — unscoped (teleported to body) */
 .cost-modal-backdrop {
   position: fixed; inset: 0; z-index: 9999;
@@ -477,7 +641,7 @@ const NavItem = defineComponent({
   background: #0F0F0F;
   border: 1px solid #2A2A2A;
   border-radius: 1rem;
-  width: 32rem; max-width: 90vw; max-height: 80vh;
+  width: 52rem; max-width: 94vw; max-height: 88vh;
   display: flex; flex-direction: column;
   box-shadow: 0 25px 60px rgba(0,0,0,0.5);
   animation: costModalIn 0.15s ease-out;
@@ -521,11 +685,36 @@ const NavItem = defineComponent({
 .cost-provider-card {
   background:#141414; border:1px solid #1F1F1F; border-radius:0.75rem; padding:0.75rem 1rem;
 }
-.cost-provider-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.375rem; }
-.cost-provider-name  { font-size:var(--fs-secondary); font-weight:600; color:#FFFFFF; }
+.cost-provider-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem; }
+.cost-provider-name  { font-size:var(--fs-secondary); font-weight:700; color:#FFFFFF; }
 .cost-provider-total { font-size:var(--fs-secondary); font-weight:700; color:#34D399; font-family:'JetBrains Mono',monospace; }
-.cost-provider-detail{ display:flex; gap:1rem; flex-wrap:wrap; font-size:var(--fs-caption); color:#6B7280; margin-bottom:0.375rem; }
-.cost-currency-row   { display:flex; gap:0.5rem; align-items:center; font-size:var(--fs-caption); color:#9CA3AF; font-family:'JetBrains Mono',monospace; }
+
+/* Per-model rows */
+.cost-model-row {
+  background:#0A0A0A; border:1px solid #1A1A1A; border-radius:0.5rem;
+  padding:0.5rem 0.625rem; margin-bottom:0.375rem;
+}
+.cost-model-row:last-of-type { margin-bottom:0.5rem; }
+.cost-model-top {
+  display:flex; justify-content:space-between; align-items:baseline;
+  margin-bottom:0.25rem;
+}
+.cost-model-id  { font-family:'JetBrains Mono',monospace; font-size:var(--fs-caption); color:#D1D5DB; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%; }
+.cost-model-usd { font-family:'JetBrains Mono',monospace; font-size:var(--fs-caption); font-weight:700; color:#34D399; white-space:nowrap; }
+.cost-model-calls  { font-size:var(--fs-small); color:#9CA3AF; margin-bottom:0.25rem; }
+.cost-model-detail { display:flex; gap:0.625rem 1rem; flex-wrap:wrap; font-size:var(--fs-small); color:#6B7280; align-items:center; }
+.cost-model-multicur { font-family:'JetBrains Mono',monospace; color:#6B7280; white-space:nowrap; }
+
+/* Provider-level currency footer */
+.cost-provider-currency {
+  display:flex; gap:0.375rem; align-items:center; flex-wrap:wrap; justify-content:flex-end;
+  font-size:var(--fs-caption); font-family:'JetBrains Mono',monospace; color:#34D399;
+  padding-top:0.5rem; border-top:1px solid #1F1F1F; margin-top:0.125rem;
+}
+.cost-cur-label { font-size:0.85em; }
+.cost-sep { color:#4B5563; }
+
+.cost-currency-row { display:flex; gap:0.5rem; align-items:center; font-size:var(--fs-caption); color:#34D399; font-family:'JetBrains Mono',monospace; }
 .cost-total-row {
   display:flex; justify-content:space-between; align-items:center;
   padding:0.75rem 1rem; background:#1A1A1A; border-radius:0.75rem;

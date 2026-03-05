@@ -665,13 +665,8 @@ Current keywords:
 Return format: {"highKeywords": "...", "medKeywords": "...", "breakingKeywords": "..."}`
 
   try {
-    const cfg = configStore.config
-    // Deep-clone to strip Vue reactive proxies before IPC serialization
-    const config = JSON.parse(JSON.stringify({
-      apiKey: cfg.anthropic?.apiKey || '',
-      baseURL: cfg.anthropic?.baseURL || 'https://api.anthropic.com',
-      anthropic: cfg.anthropic,
-    }))
+    // Deep-clone full config to strip Vue reactive proxies before IPC serialization
+    const config = JSON.parse(JSON.stringify(configStore.config))
     const result = await window.electronAPI.enhancePrompt({ prompt, config })
     if (!result.success) {
       enhanceError.value = result.error || 'Failed to enhance keywords'

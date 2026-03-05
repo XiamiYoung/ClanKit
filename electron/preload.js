@@ -184,6 +184,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onError:        (cb) => { ipcRenderer.on('voice:error', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:error') },
     onUsage:        (cb) => { ipcRenderer.on('voice:usage', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:usage') },
     tts:            (params) => ipcRenderer.invoke('voice:tts', params),
+    accumulateUsage:(chatId, usage) => ipcRenderer.invoke('agent:accumulate-voice-usage', { chatId, usage }),
   },
 
   // ── Email / SMTP ────────────────────────────────────────────────────────────

@@ -182,73 +182,105 @@
           <span style="color:#9CA3AF; font-size:var(--fs-small); white-space:nowrap;">
             {{ formatTokenCount(activeContextMetrics.inputTokens) }} in / {{ formatTokenCount(activeContextMetrics.outputTokens) }} out
           </span>
-          <span
-            v-if="activeContextMetrics.compactionCount > 0"
-            class="px-1.5 py-0.5 rounded-full"
-            style="background:#F5F5F5; color:#6B7280; font-size:var(--fs-small); white-space:nowrap;"
-          >
-            {{ activeContextMetrics.compactionCount }}x compacted
-          </span>
-          <!-- Inspect button -->
-          <div style="position:relative;" @mouseenter="showInspectTooltip = true" @mouseleave="showInspectTooltip = false">
-          <button
-            @click="inspectContext"
-            :disabled="!hasContextData"
-            class="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
-            :style="hasContextData
-              ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
-              : 'background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
-            @mouseenter="e => { if (hasContextData) e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }"
-            @mouseleave="e => { if (hasContextData) e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }"
-            :title="hasContextData ? 'Inspect context window contents' : 'Send a message first to inspect context'"
-          >
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-            </svg>
-            <span style="font-size:var(--fs-small);">Inspect</span>
-            <span v-if="activeChatCost" style="font-size:var(--fs-small); opacity:0.75; margin-left:0.125rem;">· {{ formatCost(activeChatCost.usd) }}</span>
-          </button>
+          <!-- Cost + Inspect button -->
+          <div style="position:relative; display:flex; align-items:center; gap:0.25rem;"
+               @mouseenter="showInspectTooltip = true; refreshCostOnHover()"
+               @mouseleave="showInspectTooltip = false">
+            <span v-if="activeChatCost" class="ict-inline-cost">{{ formatCost(activeChatCost.usd) }}</span>
+            <button
+              @click="inspectContext"
+              :disabled="!hasContextData"
+              class="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
+              :style="hasContextData
+                ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
+                : 'background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
+              @mouseenter="e => { if (hasContextData) e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }"
+              @mouseleave="e => { if (hasContextData) e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }"
+            >
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+              <span style="font-size:var(--fs-small);">Inspect</span>
+            </button>
 
-          <!-- Cost breakdown tooltip -->
-          <div v-if="showInspectTooltip && activeChatCost" class="inspect-cost-tooltip">
-            <div class="ict-model">{{ activeChatCost.modelId }}</div>
-            <div class="ict-section">
-              <div class="ict-row">
-                <span>Input</span>
-                <span>{{ formatCost(activeChatCost.inputUsd) }}</span>
+            <!-- Cost breakdown tooltip -->
+            <div v-if="showInspectTooltip" class="inspect-cost-tooltip">
+              <!-- Header: model + total cost badge (badge only when there's cost data) -->
+              <div class="ict-header">
+                <div class="ict-header-left">
+                  <svg style="width:11px;height:11px;flex-shrink:0;opacity:0.5;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                  <span class="ict-model-name">{{ activeChatModel || 'Unknown model' }}</span>
+                </div>
+                <span v-if="activeChatCost" class="ict-total-badge">{{ formatCost(activeChatCost.all?.USD ?? 0, 'USD') }}</span>
               </div>
-              <div class="ict-row">
-                <span>Output</span>
-                <span>{{ formatCost(activeChatCost.outputUsd) }}</span>
+
+              <!-- LLM section -->
+              <div class="ict-section">
+                <div class="ict-section-label">LLM Cost</div>
+                <template v-if="activeChatCost?.hasPricing">
+                  <div class="ict-row">
+                    <span>Input tokens</span>
+                    <span>{{ formatCost(activeChatCost.inputUsd) }}</span>
+                  </div>
+                  <div class="ict-row">
+                    <span>Output tokens</span>
+                    <span>{{ formatCost(activeChatCost.outputUsd) }}</span>
+                  </div>
+                  <div v-if="(activeChatCost.cacheWriteUsd ?? 0) > 0" class="ict-row">
+                    <span>Cache write</span>
+                    <span>{{ formatCost(activeChatCost.cacheWriteUsd) }}</span>
+                  </div>
+                  <div v-if="(activeChatCost.cacheReadUsd ?? 0) > 0" class="ict-row">
+                    <span>Cache read</span>
+                    <span>{{ formatCost(activeChatCost.cacheReadUsd) }}</span>
+                  </div>
+                  <div class="ict-row ict-row-sub">
+                    <span>Subtotal</span>
+                    <span>{{ formatCost(activeChatCost.llmUsd) }}</span>
+                  </div>
+                </template>
+                <template v-else-if="activeChatCost && !activeChatCost.hasPricing">
+                  <div class="ict-row">
+                    <span style="font-style:italic; opacity:0.5;">Price not configured</span>
+                  </div>
+                </template>
+                <template v-else>
+                  <!-- no messages yet: blank rows -->
+                  <div class="ict-row">
+                    <span>Input tokens</span><span class="ict-blank">—</span>
+                  </div>
+                  <div class="ict-row">
+                    <span>Output tokens</span><span class="ict-blank">—</span>
+                  </div>
+                </template>
               </div>
-              <div v-if="activeChatCost.cacheWriteUsd > 0" class="ict-row">
-                <span>Cache write</span>
-                <span>{{ formatCost(activeChatCost.cacheWriteUsd) }}</span>
+
+              <!-- Voice / Whisper section — always shown -->
+              <div class="ict-section">
+                <div class="ict-section-label">Voice · Whisper</div>
+                <div class="ict-row">
+                  <span>{{ activeChatUsage?.whisperCalls ? `${activeChatUsage.whisperCalls} rounds · ${(activeChatUsage.whisperSecs || 0).toFixed(1)}s` : 'No rounds' }}</span>
+                  <span v-if="activeChatCost">{{ formatCost(activeChatCost.whisperUsd) }}</span>
+                  <span v-else class="ict-blank">—</span>
+                </div>
               </div>
-              <div v-if="activeChatCost.cacheReadUsd > 0" class="ict-row">
-                <span>Cache read</span>
-                <span>{{ formatCost(activeChatCost.cacheReadUsd) }}</span>
+
+              <!-- Total row -->
+              <div class="ict-total">
+                <div class="ict-total-row">
+                  <span class="ict-total-label">Total (USD / CNY / SGD)</span>
+                </div>
+                <div v-if="activeChatCost" class="ict-total-amounts">
+                  <span><span class="ict-amount">{{ formatCost(activeChatCost.all?.USD ?? 0) }}</span> <span class="ict-cur">USD</span></span>
+                  <span class="ict-sep">/</span>
+                  <span><span class="ict-amount">{{ formatCost(activeChatCost.all?.CNY ?? 0, 'CNY') }}</span> <span class="ict-cur">CNY</span></span>
+                  <span class="ict-sep">/</span>
+                  <span><span class="ict-amount">{{ formatCost(activeChatCost.all?.SGD ?? 0, 'SGD') }}</span> <span class="ict-cur">SGD</span></span>
+                </div>
+                <div v-else class="ict-blank" style="padding-top:0.125rem;">—</div>
               </div>
-            </div>
-            <div v-if="activeChatUsage?.whisperCalls" class="ict-section ict-section-voice">
-              <div class="ict-section-label">Voice (Whisper)</div>
-              <div class="ict-row">
-                <span>{{ activeChatUsage.whisperCalls }} calls · {{ (activeChatUsage.whisperSecs || 0).toFixed(1) }}s</span>
-                <span>{{ formatCost(activeChatCost.whisperUsd) }}</span>
-              </div>
-            </div>
-            <div class="ict-total">
-              <span>Total</span>
-              <span>
-                {{ formatCost(activeChatCost.all.USD) }} <span class="ict-cur">USD</span>
-                &thinsp;/&thinsp;
-                {{ formatCost(activeChatCost.all.CNY, 'CNY') }} <span class="ict-cur">CNY</span>
-                &thinsp;/&thinsp;
-                {{ formatCost(activeChatCost.all.SGD, 'SGD') }} <span class="ict-cur">SGD</span>
-              </span>
             </div>
           </div>
-          </div><!-- /inspect wrapper -->
 
           <!-- Compact button -->
           <button
@@ -293,10 +325,10 @@
                 </svg>
                 <span class="font-semibold" style="font-family:'Inter',sans-serif; color:#1A1A1A; font-size:var(--fs-subtitle);">Context Inspector</span>
                 <span
-                  v-if="contextSnapshot"
+                  v-if="activeChatModel"
                   class="px-1.5 py-0.5 rounded-full"
                   style="background:#F5F5F5; color:#6B7280; font-size:var(--fs-small);"
-                >{{ activeChatModel || contextSnapshot.model }}</span>
+                >{{ activeChatModel }}</span>
               </div>
               <button
                 @click="showContextInspector = false"
@@ -312,16 +344,7 @@
             </div>
 
             <!-- Body -->
-            <div v-if="!contextSnapshot" class="flex-1 flex items-center justify-center py-16">
-              <div class="text-center">
-                <svg class="w-12 h-12 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="#D1D1D6" stroke-width="1.5">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                </svg>
-                <p style="color:#9CA3AF; font-size:var(--fs-body);">No context data yet. Send a message first.</p>
-              </div>
-            </div>
-
-            <div v-else class="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            <div class="flex-1 overflow-y-auto px-5 py-4 space-y-3">
               <!-- Metrics section (expanded by default) -->
               <div style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
                 <button
@@ -367,7 +390,7 @@
                       </template>
                       <tr v-if="activeContextMetrics.whisperCalls">
                         <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Whisper STT</td>
-                        <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeContextMetrics.whisperCalls }} call{{ activeContextMetrics.whisperCalls !== 1 ? 's' : '' }}, {{ (activeContextMetrics.whisperSecs ?? 0).toFixed(1) }}s audio</td>
+                        <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeContextMetrics.whisperCalls }} rounds, {{ (activeContextMetrics.whisperSecs ?? 0).toFixed(1) }}s audio</td>
                       </tr>
                     </tbody>
                   </table>
@@ -414,7 +437,7 @@
                       </tr>
                       <tr v-if="activeChatUsage.whisperCalls" style="border-bottom:1px solid #F5F5F5;">
                         <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Whisper STT</td>
-                        <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeChatUsage.whisperCalls }} calls, {{ (activeChatUsage.whisperSecs || 0).toFixed(1) }}s</td>
+                        <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeChatUsage.whisperCalls }} rounds, {{ (activeChatUsage.whisperSecs || 0).toFixed(1) }}s</td>
                       </tr>
                       <template v-if="activeChatCost">
                         <tr style="border-top:2px solid #E5E5EA;">
@@ -451,7 +474,7 @@
                   <div class="flex items-center gap-2">
                     <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">System Prompt</span>
                     <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                      {{ (contextSnapshot.systemPrompt?.length ?? 0).toLocaleString() }} chars
+                      {{ contextSnapshot ? (contextSnapshot.systemPrompt?.length ?? 0).toLocaleString() + ' chars' : 'not yet loaded' }}
                     </span>
                   </div>
                   <svg class="w-4 h-4 transition-transform" :style="inspectorSections.system ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
@@ -459,12 +482,13 @@
                   </svg>
                 </button>
                 <div v-if="inspectorSections.system" class="px-4 py-3" style="border-top:1px solid #E5E5EA;">
-                  <pre class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:300px; overflow-y:auto;">{{ contextSnapshot.systemPrompt }}</pre>
+                  <pre v-if="contextSnapshot?.systemPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:300px; overflow-y:auto;">{{ contextSnapshot.systemPrompt }}</pre>
+                  <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">Available after the first message is sent.</p>
                 </div>
               </div>
 
-              <!-- Personas section -->
-              <div v-if="contextSnapshot.personas?.systemPersonaPrompt || contextSnapshot.personas?.userPersonaPrompt" style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
+              <!-- Personas section — uses store data before first message, snapshot prompts after -->
+              <div v-if="inspectorPersonas" style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
                 <button
                   @click="inspectorSections.personas = !inspectorSections.personas"
                   class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
@@ -475,7 +499,7 @@
                   <div class="flex items-center gap-2">
                     <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Personas</span>
                     <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                      {{ (contextSnapshot.personas?.systemPersonaPrompt ? 1 : 0) + (contextSnapshot.personas?.userPersonaPrompt ? 1 : 0) }} active
+                      {{ (inspectorPersonas.systemPersonaPrompt || inspectorPersonas.systemPersonaName ? 1 : 0) + (inspectorPersonas.userPersonaPrompt || inspectorPersonas.userPersonaName ? 1 : 0) }} active
                     </span>
                   </div>
                   <svg class="w-4 h-4 transition-transform" :style="inspectorSections.personas ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
@@ -483,17 +507,27 @@
                   </svg>
                 </button>
                 <div v-if="inspectorSections.personas" style="border-top:1px solid #E5E5EA;">
-                  <div v-if="contextSnapshot.personas?.systemPersonaPrompt" class="px-4 py-3" :style="contextSnapshot.personas?.userPersonaPrompt ? 'border-bottom:1px solid #F5F5F5;' : ''">
+                  <!-- System persona -->
+                  <div
+                    v-if="inspectorPersonas.systemPersonaPrompt || inspectorPersonas.systemPersonaName"
+                    class="px-4 py-3"
+                    :style="(inspectorPersonas.userPersonaPrompt || inspectorPersonas.userPersonaName) ? 'border-bottom:1px solid #F5F5F5;' : ''"
+                  >
                     <div class="flex items-center gap-2 mb-1.5">
                       <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:rgba(0,122,255,0.1); color:#0056CC;">System Persona</span>
+                      <span v-if="inspectorPersonas.systemPersonaName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorPersonas.systemPersonaName }}</span>
                     </div>
-                    <pre class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ contextSnapshot.personas.systemPersonaPrompt }}</pre>
+                    <pre v-if="inspectorPersonas.systemPersonaPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorPersonas.systemPersonaPrompt }}</pre>
+                    <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">Prompt available after first message.</p>
                   </div>
-                  <div v-if="contextSnapshot.personas?.userPersonaPrompt" class="px-4 py-3">
+                  <!-- User persona -->
+                  <div v-if="inspectorPersonas.userPersonaPrompt || inspectorPersonas.userPersonaName" class="px-4 py-3">
                     <div class="flex items-center gap-2 mb-1.5">
                       <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#D1FAE5; color:#065F46;">User Persona</span>
+                      <span v-if="inspectorPersonas.userPersonaName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorPersonas.userPersonaName }}</span>
                     </div>
-                    <pre class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ contextSnapshot.personas.userPersonaPrompt }}</pre>
+                    <pre v-if="inspectorPersonas.userPersonaPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorPersonas.userPersonaPrompt }}</pre>
+                    <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">Prompt available after first message.</p>
                   </div>
                 </div>
               </div>
@@ -510,7 +544,7 @@
                   <div class="flex items-center gap-2">
                     <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Messages</span>
                     <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                      {{ contextSnapshot.messages?.length ?? 0 }}
+                      {{ contextSnapshot?.messages?.length ?? 0 }}
                     </span>
                   </div>
                   <svg class="w-4 h-4 transition-transform" :style="inspectorSections.messages ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
@@ -518,31 +552,33 @@
                   </svg>
                 </button>
                 <div v-if="inspectorSections.messages" style="border-top:1px solid #E5E5EA; max-height:400px; overflow-y:auto;">
-                  <div
-                    v-for="(msg, idx) in contextSnapshot.messages"
-                    :key="idx"
-                    class="px-4 py-2.5"
-                    :style="idx < contextSnapshot.messages.length - 1 ? 'border-bottom:1px solid #F5F5F5;' : ''"
-                  >
-                    <div class="flex items-center gap-2 mb-1">
-                      <span
-                        class="px-1.5 py-0.5 rounded text-xs font-medium"
-                        :style="msg.role === 'user'
-                          ? 'background:rgba(0,122,255,0.1); color:#0056CC;'
-                          : 'background:#D1FAE5; color:#065F46;'"
-                      >{{ msg.role }}</span>
-                      <span style="color:#9CA3AF; font-size:var(--fs-small);">{{ msg.contentLength?.toLocaleString() }} chars</span>
-                    </div>
+                  <template v-if="contextSnapshot?.messages?.length">
                     <div
-                      class="text-xs cursor-pointer"
-                      style="font-family:'JetBrains Mono',monospace; color:#6B7280;"
-                      @click="expandedMessages[idx] = !expandedMessages[idx]"
+                      v-for="(msg, idx) in contextSnapshot.messages"
+                      :key="idx"
+                      class="px-4 py-2.5"
+                      :style="idx < contextSnapshot.messages.length - 1 ? 'border-bottom:1px solid #F5F5F5;' : ''"
                     >
-                      <pre v-if="expandedMessages[idx]" class="whitespace-pre-wrap leading-relaxed overflow-x-auto" style="max-height:300px; overflow-y:auto;">{{ msg.fullContent }}</pre>
-                      <span v-else>{{ msg.contentPreview }}<span v-if="msg.contentLength > 200" style="color:#007AFF;"> ... (click to expand)</span></span>
+                      <div class="flex items-center gap-2 mb-1">
+                        <span
+                          class="px-1.5 py-0.5 rounded text-xs font-medium"
+                          :style="msg.role === 'user'
+                            ? 'background:rgba(0,122,255,0.1); color:#0056CC;'
+                            : 'background:#D1FAE5; color:#065F46;'"
+                        >{{ msg.role }}</span>
+                        <span style="color:#9CA3AF; font-size:var(--fs-small);">{{ msg.contentLength?.toLocaleString() }} chars</span>
+                      </div>
+                      <div
+                        class="text-xs cursor-pointer"
+                        style="font-family:'JetBrains Mono',monospace; color:#6B7280;"
+                        @click="expandedMessages[idx] = !expandedMessages[idx]"
+                      >
+                        <pre v-if="expandedMessages[idx]" class="whitespace-pre-wrap leading-relaxed overflow-x-auto" style="max-height:300px; overflow-y:auto;">{{ msg.fullContent }}</pre>
+                        <span v-else>{{ msg.contentPreview }}<span v-if="msg.contentLength > 200" style="color:#007AFF;"> ... (click to expand)</span></span>
+                      </div>
                     </div>
-                  </div>
-                  <div v-if="!contextSnapshot.messages?.length" class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">No messages</div>
+                  </template>
+                  <div v-else class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">{{ contextSnapshot ? 'No messages' : 'Available after the first message is sent.' }}</div>
                 </div>
               </div>
 
@@ -558,7 +594,7 @@
                   <div class="flex items-center gap-2">
                     <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Tools</span>
                     <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                      {{ contextSnapshot.tools?.length ?? 0 }}
+                      {{ contextSnapshot?.tools?.length ?? 0 }}
                     </span>
                   </div>
                   <svg class="w-4 h-4 transition-transform" :style="inspectorSections.tools ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
@@ -566,16 +602,18 @@
                   </svg>
                 </button>
                 <div v-if="inspectorSections.tools" style="border-top:1px solid #E5E5EA; max-height:300px; overflow-y:auto;">
-                  <div
-                    v-for="(tool, idx) in contextSnapshot.tools"
-                    :key="idx"
-                    class="px-4 py-2"
-                    :style="idx < contextSnapshot.tools.length - 1 ? 'border-bottom:1px solid #F5F5F5;' : ''"
-                  >
-                    <span class="font-medium text-xs" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A;">{{ tool.name }}</span>
-                    <p v-if="tool.description" class="mt-0.5 text-xs" style="color:#9CA3AF;">{{ tool.description.slice(0, 150) }}{{ tool.description.length > 150 ? '...' : '' }}</p>
-                  </div>
-                  <div v-if="!contextSnapshot.tools?.length" class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">No tools</div>
+                  <template v-if="contextSnapshot?.tools?.length">
+                    <div
+                      v-for="(tool, idx) in contextSnapshot.tools"
+                      :key="idx"
+                      class="px-4 py-2"
+                      :style="idx < contextSnapshot.tools.length - 1 ? 'border-bottom:1px solid #F5F5F5;' : ''"
+                    >
+                      <span class="font-medium text-xs" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A;">{{ tool.name }}</span>
+                      <p v-if="tool.description" class="mt-0.5 text-xs" style="color:#9CA3AF;">{{ tool.description.slice(0, 150) }}{{ tool.description.length > 150 ? '...' : '' }}</p>
+                    </div>
+                  </template>
+                  <div v-else class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">{{ contextSnapshot ? 'No tools' : 'Available after the first message is sent.' }}</div>
                 </div>
               </div>
 
@@ -1810,7 +1848,7 @@ async function handleStartCall(chatId) {
   }
 
   // Update voice store
-  voiceStore.startCall(chatId, personaId, persona?.name || 'AI')
+  voiceStore.startCall(chatId, personaId, persona?.name || 'AI', chatModel)
 
   // Start backend voice session
   if (window.electronAPI?.voice?.start) {
@@ -1865,14 +1903,12 @@ async function startMicCapture() {
     if (deviceId) audioConstraints.deviceId = { exact: deviceId }
     micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
     const actx = new AudioContext()
-    console.log(`[VOICE:VAD] AudioContext created — state=${actx.state}`)
     const source = actx.createMediaStreamSource(micStream)
     micAnalyser = actx.createAnalyser()
     micAnalyser.fftSize = 2048
     source.connect(micAnalyser)
 
     // Log AudioContext state changes — suspension after browser inactivity kills the VAD loop
-    actx.onstatechange = () => console.log(`[VOICE:VAD] AudioContext state changed → ${actx.state}`)
 
     // VAD params are read live from config on every frame so slider changes take
     // effect immediately without restarting the call.
@@ -1906,22 +1942,18 @@ async function startMicCapture() {
       const speechFrames = micSpeechFrames
       micSpeechFrames = 0
       if (chunks.length === 0 || duration < MIN_RECORDING_MS) {
-        console.log(`[VOICE:VAD] onstop dropped — duration=${duration}ms chunks=${chunks.length}`)
         chunks = []
         return
       }
       if (speechFrames < vadParam('vadSpeechFrames', 20)) {
-        console.log(`[VOICE:VAD] onstop dropped — speechFrames=${speechFrames} < threshold`)
         chunks = []
         return
       }
       const blob = new Blob(chunks, { type: 'audio/webm' })
       chunks = []
       const arrayBuf = await blob.arrayBuffer()
-      console.log(`[VOICE:VAD] onstop sending — duration=${duration}ms speechFrames=${speechFrames} bytes=${arrayBuf.byteLength}`)
       if (window.electronAPI?.voice?.audioChunk && voiceStore.isCallActive) {
         window.electronAPI.voice.audioChunk(Array.from(new Uint8Array(arrayBuf)))
-        console.log(`[VOICE:VAD] IPC audio-chunk sent`)
       }
     }
 
@@ -1944,7 +1976,6 @@ async function startMicCapture() {
       if (!voiceStore.isCallActive) { stopMicCapture(); return }
       // AudioContext can be suspended by the browser after inactivity — resume it silently
       if (actx.state === 'suspended') {
-        console.log('[VOICE:VAD] AudioContext suspended — resuming')
         actx.resume()
       }
       micAnalyser.getFloatTimeDomainData(dataArray)
@@ -1959,9 +1990,6 @@ async function startMicCapture() {
       if (!micIsRecording && Date.now() >= micCooldownUntil) {
         const newFloor = ambientFloor * (1 - AMBIENT_ALPHA) + rms * AMBIENT_ALPHA
         const floorCeiling = vadParam('vadAmplitude', 0.018) * 3
-        if (newFloor > floorCeiling && ambientFloor <= floorCeiling) {
-          console.log(`[VOICE:VAD] ambientFloor capped at ${floorCeiling.toFixed(4)} (raw=${newFloor.toFixed(4)}) — background noise is very loud`)
-        }
         ambientFloor = Math.min(newFloor, floorCeiling)
       }
 
@@ -1986,7 +2014,6 @@ async function startMicCapture() {
       if (isSpeaking && !isMuted && ttsIsSpeaking) {
         if (!micBargeInStart) micBargeInStart = Date.now()
         if (Date.now() - micBargeInStart >= 500) {
-          console.log(`[VOICE:VAD] barge-in after ${Date.now() - micBargeInStart}ms continuous speech`)
           stopSpeaking()
           micCooldownUntil = 0
           micBargeInStart = 0
@@ -2004,7 +2031,6 @@ async function startMicCapture() {
           micSpeechFrames = 0
           recordingStartTime = Date.now()
           chunks = []
-          console.log(`[VOICE:VAD] recording START — rms=${rms.toFixed(4)} threshold=${dynamicThreshold.toFixed(4)} ambientFloor=${ambientFloor.toFixed(4)}`)
           if (micRecorder.state === 'inactive') micRecorder.start()
           // Status: actively capturing user speech
           voiceStore.setStatus('listening')
@@ -2098,6 +2124,11 @@ async function _fetchTTSAudio(text) {
       voice: voiceId,
     })
     if (result.success && result.audio) {
+      // Record TTS character count for cost tracking
+      const chatId = activeChatId.value
+      if (chatId && text.length > 0) {
+        window.electronAPI?.voice?.accumulateUsage?.(chatId, { ttsChars: text.length })
+      }
       return `data:audio/${result.format || 'mp3'};base64,${result.audio}`
     }
   } catch { /* fall through — playback will use browser TTS */ }
@@ -2227,9 +2258,10 @@ function setupVoiceListeners() {
   }))
   voiceCleanups.push(api.onTaskTriggered(({ instruction }) => handleVoiceTask(instruction)))
 
-  // Accumulate voice + Whisper usage into the active chat's contextMetrics
+  // Accumulate voice + Whisper usage into the active chat's contextMetrics and voice store (for real-time cost)
   if (api.onUsage) {
     voiceCleanups.push(api.onUsage((usage) => {
+      voiceStore.addCallUsage(usage)
       const chatId = voiceStore.activeChatId
       if (!chatId) return
       const chat = chatsStore.chats.find(c => c.id === chatId)
@@ -2427,10 +2459,26 @@ const inspectorUsage        = ref(null)   // usage loaded fresh from disk when i
 const contextSnapshot = computed(() => perChatSnapshots.get(chatsStore.activeChatId) ?? null)
 
 const activeChatUsage = computed(() => {
-  // Prefer fresh value loaded from disk when inspector is open (main process
-  // writes usage independently of the renderer store, so the store copy is stale)
-  if (inspectorUsage.value) return inspectorUsage.value
-  return chatsStore.activeChat?.usage || null
+  const chat = chatsStore.activeChat
+  // Base: fresh disk copy when available (inspector opened / hover refresh),
+  // otherwise the store copy written by the agent chunk stream.
+  const base = inspectorUsage.value || chat?.usage || null
+  // contextMetrics holds the live in-memory whisper/voice totals updated by onUsage
+  // events during a call. chat.usage (on disk) is also updated by accumulateUsage
+  // but only after a round-trip through the main process. Use max() to always show
+  // the most up-to-date value without double-counting.
+  const m = chat?.contextMetrics
+  if (!m) return base
+  const liveWhisper = (m.whisperCalls || 0) + (m.whisperSecs || 0)
+  const liveVoice   = (m.voiceInputTokens || 0) + (m.voiceOutputTokens || 0)
+  if (!liveWhisper && !liveVoice) return base
+  return {
+    ...(base || {}),
+    whisperCalls:      Math.max(base?.whisperCalls      || 0, m.whisperCalls      || 0),
+    whisperSecs:       Math.max(base?.whisperSecs        || 0, m.whisperSecs       || 0),
+    voiceInputTokens:  Math.max(base?.voiceInputTokens   || 0, m.voiceInputTokens  || 0),
+    voiceOutputTokens: Math.max(base?.voiceOutputTokens  || 0, m.voiceOutputTokens || 0),
+  }
 })
 
 // Resolved model for the active chat: persona modelId → chat.model → contextSnapshot
@@ -2443,24 +2491,49 @@ const activeChatModel = computed(() => {
   return persona?.modelId || chat.model || contextSnapshot.value?.model || ''
 })
 
+// Persona info for the inspector — prefers snapshot data (has prompts), falls back to store (has names)
+const inspectorPersonas = computed(() => {
+  // If snapshot has persona prompts, use them (richer data)
+  if (contextSnapshot.value?.personas?.systemPersonaPrompt || contextSnapshot.value?.personas?.userPersonaPrompt) {
+    return contextSnapshot.value.personas
+  }
+  // Fall back to store data — return name info so inspector can show the personas even before first message
+  const chat = chatsStore.activeChat
+  if (!chat) return null
+  const sysId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null) || chat.systemPersonaId
+  const sysPersona = sysId ? personasStore.getPersonaById(sysId) : personasStore.defaultSystemPersona
+  const usrId = chat.userPersonaId
+  const usrPersona = usrId ? personasStore.getPersonaById(usrId) : personasStore.defaultUserPersona
+  if (!sysPersona && !usrPersona) return null
+  return {
+    systemPersonaName: sysPersona?.name || null,
+    systemPersonaPrompt: null, // not yet available until first message
+    userPersonaName: usrPersona?.name || null,
+    userPersonaPrompt: null,
+  }
+})
+
 const activeChatCost = computed(() => {
   const usage   = activeChatUsage.value
   const chat    = chatsStore.activeChat
   if (!usage || !chat) return null
+  // Must have at least some token or voice activity
+  const hasActivity = (usage.inputTokens || 0) + (usage.outputTokens || 0) + (usage.whisperCalls || 0) > 0
+  if (!hasActivity) return null
   const modelId = activeChatModel.value
   const price   = resolveModelPrice(modelId, configStore.config.pricing)
-  if (!price) return null
+  // LLM costs — zero when price not configured (whisper cost still computable)
   const M = 1_000_000
-  const inputUsd      = ((usage.inputTokens         || 0) / M) * (price.input      || 0)
-  const outputUsd     = ((usage.outputTokens        || 0) / M) * (price.output     || 0)
-  const cacheWriteUsd = ((usage.cacheCreationTokens || 0) / M) * (price.cacheWrite || 0)
-  const cacheReadUsd  = ((usage.cacheReadTokens     || 0) / M) * (price.cacheRead  || 0)
+  const inputUsd      = price ? (((usage.inputTokens  || 0) + (usage.voiceInputTokens  || 0)) / M) * (price.input      || 0) : 0
+  const outputUsd     = price ? (((usage.outputTokens || 0) + (usage.voiceOutputTokens || 0)) / M) * (price.output     || 0) : 0
+  const cacheWriteUsd = price ? ((usage.cacheCreationTokens || 0) / M) * (price.cacheWrite || 0) : 0
+  const cacheReadUsd  = price ? ((usage.cacheReadTokens     || 0) / M) * (price.cacheRead  || 0) : 0
   const llmUsd = inputUsd + outputUsd + cacheWriteUsd + cacheReadUsd
   const whisperPrice = resolveModelPrice('whisper-1', configStore.config.pricing)
   const whisperUsd   = ((usage.whisperSecs || 0)) * (whisperPrice?.perSec || 0.0001)
   const usd = llmUsd + whisperUsd
   const all = convertCurrencies(usd, configStore.config.pricing?.currencyRates)
-  return { usd, all, modelId, llmUsd, whisperUsd, inputUsd, outputUsd, cacheWriteUsd, cacheReadUsd }
+  return { usd, all, modelId, hasPricing: !!price, llmUsd, whisperUsd, inputUsd, outputUsd, cacheWriteUsd, cacheReadUsd }
 })
 
 const expandedMessages = reactive({})
@@ -3239,7 +3312,8 @@ async function handleSoulViewerUpdatePersona(updates) {
   if (!persona) return
   const updated = { ...persona, ...updates }
   await personasStore.savePersona(updated)
-  // Refresh the target so the viewer sees the new values
+  // Re-check after await — viewer may have been closed while save was in flight
+  if (!soulViewerTarget.value) return
   soulViewerTarget.value.personaPrompt = updated.prompt ?? soulViewerTarget.value.personaPrompt
   soulViewerTarget.value.personaDescription = updated.description ?? soulViewerTarget.value.personaDescription
   if (updates.providerId !== undefined) soulViewerTarget.value.personaProviderId = updated.providerId ?? null
@@ -4849,18 +4923,47 @@ async function compactContext() {
   // Standalone compaction when not running
   if (!window.electronAPI?.compactContextStandalone) return
 
+  const targetChat = chatsStore.chats.find(c => c.id === chatId)
+  if (!targetChat || !targetChat.messages) return
+
+  const tokensBefore = targetChat.contextMetrics?.inputTokens || 0
+
   isCompacting.value = true
   dbg('Starting standalone compaction…', 'info')
 
   try {
-    const targetChat = chatsStore.chats.find(c => c.id === chatId)
-    if (!targetChat || !targetChat.messages) return
-
     const apiMessages = targetChat.messages
       .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content))
       .map(m => ({ role: m.role, content: m.content }))
 
-    const cfg = { ...configStore.config }
+    // Build a flat config the AgentLoop constructor expects (same pattern as sendMessage).
+    // AnthropicClient reads config.apiKey / config.baseURL at the top level.
+    const raw = configStore.config
+    const sysPersonaId = targetChat.systemPersonaId || personasStore.defaultSystemPersona?.id
+    const sysPersona = sysPersonaId ? personasStore.getPersonaById(sysPersonaId) : personasStore.defaultSystemPersona
+    const chatProvider = sysPersona?.providerId || 'anthropic'
+    const cfg = { ...raw }
+    if (chatProvider === 'anthropic') {
+      cfg.apiKey = raw.anthropic?.apiKey || ''
+      cfg.baseURL = raw.anthropic?.baseURL || ''
+    } else if (chatProvider === 'openrouter') {
+      cfg.apiKey = raw.openrouter?.apiKey || ''
+      cfg.baseURL = raw.openrouter?.baseURL || ''
+    } else if (chatProvider === 'openai') {
+      cfg.openaiApiKey = raw.openai?.apiKey || ''
+      cfg.openaiBaseURL = raw.openai?.baseURL || ''
+      cfg._resolvedProvider = 'openai'
+      cfg.defaultProvider = 'openai'
+    } else if (chatProvider === 'deepseek') {
+      cfg.openaiApiKey = raw.deepseek?.apiKey || ''
+      cfg.openaiBaseURL = (raw.deepseek?.baseURL || '').replace(/\/+$/, '')
+      cfg._resolvedProvider = 'openai'
+      cfg._directAuth = true
+      cfg.defaultProvider = 'openai'
+    }
+    const resolvedModel = targetChat.personaModelOverrides?.[sysPersonaId] || sysPersona?.modelId || null
+    if (resolvedModel) cfg.customModel = resolvedModel
+
     const res = await window.electronAPI.compactContextStandalone({
       chatId,
       messages: JSON.parse(JSON.stringify(apiMessages)),
@@ -4872,29 +4975,58 @@ async function compactContext() {
     if (res.success) {
       dbg(`Compaction done — input tokens: ${res.metrics?.inputTokens?.toLocaleString() ?? '?'}`, 'success')
 
-      // Update context metrics on the chat
       if (res.metrics) targetChat.contextMetrics = { ...res.metrics }
 
-      // Add the compaction exchange to the chat so the model's summary is preserved
+      // Hidden user/assistant pair preserves the compaction exchange in LLM context,
+      // while the visible system banner is the only thing shown in the UI.
       await chatsStore.addMessage(chatId, {
         role: 'user',
         content: '[Context compaction requested]',
-        compaction: true
+        compaction: true,
+        hidden: true,
       })
       await chatsStore.addMessage(chatId, {
         role: 'assistant',
         content: res.assistantContent || '[Context compacted]',
-        compaction: true
+        compaction: true,
+        hidden: true,
+      })
+      // Visible indicator shown in chat
+      const tokensAfter = res.metrics?.inputTokens || 0
+      await chatsStore.addMessage(chatId, {
+        role: 'system',
+        compaction: true,
+        tokensBefore,
+        tokensAfter,
+        content: 'Context compacted',
+        segments: [{ type: 'text', content: 'Context compacted' }],
+        streaming: false,
       })
       scrollToBottom()
     } else {
       dbg(`Compaction failed: ${res.error}`, 'error')
+      // Surface the error to the user
+      const errMsg = res.error || 'Compaction failed'
+      await chatsStore.addMessage(chatId, {
+        role: 'system',
+        content: `Context compaction failed: ${errMsg}`
+      })
     }
   } catch (err) {
     dbg(`Compaction error: ${err.message}`, 'error')
   } finally {
     isCompacting.value = false
   }
+}
+
+async function refreshCostOnHover() {
+  // Fetch latest usage from disk so tooltip cost is always current
+  const chatId = chatsStore.activeChatId
+  if (!chatId) return
+  try {
+    const freshChat = await window.electronAPI.getChat(chatId)
+    if (freshChat?.usage) inspectorUsage.value = freshChat.usage
+  } catch {}
 }
 
 async function inspectContext() {
@@ -7579,80 +7711,155 @@ onUnmounted(() => {
 }
 
 /* ── Inspect button cost tooltip ─────────────────────────────────────────── */
+/* ── Inline cost chip in context bar ── */
+.ict-inline-cost {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--fs-small);
+  color: #6B7280;
+  cursor: default;
+  white-space: nowrap;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  transition: color 0.12s ease;
+}
+.ict-inline-cost:hover { color: #374151; }
+
+/* ── Cost breakdown tooltip ── */
 .inspect-cost-tooltip {
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  min-width: 15rem;
-  background: #0F0F0F;
-  border: 1px solid #2A2A2A;
+  min-width: 22rem;
+  width: max-content;
+  max-width: 30rem;
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
   border-radius: 0.75rem;
-  padding: 0.625rem 0.75rem;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.2);
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06);
   z-index: 1000;
   pointer-events: none;
   animation: fadeIn 0.12s ease;
 }
-.ict-model {
+/* Header: model name + green total badge */
+.ict-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  background: #F9F9F9;
+  border-bottom: 1px solid #F0F0F0;
+}
+.ict-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  color: #6B7280;
+}
+.ict-model-name {
   font-family: 'JetBrains Mono', monospace;
-  font-size: var(--fs-caption);
-  color: rgba(255,255,255,0.45);
-  margin-bottom: 0.375rem;
+  font-size: var(--fs-small);
+  color: #6B7280;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.ict-total-badge {
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background: #F0FDF4;
+  color: #15803D;
+  white-space: nowrap;
+}
+/* Section block */
 .ict-section {
+  padding: 0.5rem 0.875rem;
+  border-bottom: 1px solid #F5F5F5;
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
-  padding-bottom: 0.375rem;
-  border-bottom: 1px solid #2A2A2A;
-  margin-bottom: 0.375rem;
-}
-.ict-section-voice {
-  padding-top: 0;
+  gap: 0.25rem;
 }
 .ict-section-label {
   font-size: var(--fs-small);
-  color: rgba(255,255,255,0.35);
+  font-weight: 600;
+  color: #9CA3AF;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   margin-bottom: 0.125rem;
 }
+/* Cost row */
 .ict-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
   font-size: var(--fs-small);
-  color: rgba(255,255,255,0.65);
+  color: #6B7280;
 }
 .ict-row span:last-child {
   font-family: 'JetBrains Mono', monospace;
-  color: rgba(255,255,255,0.85);
+  color: #1A1A1A;
   white-space: nowrap;
 }
+.ict-row-sub {
+  margin-top: 0.125rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid #F0F0F0;
+  font-weight: 600;
+  color: #374151;
+}
+.ict-row-sub span:last-child {
+  color: #374151;
+}
+/* Total block */
 .ict-total {
+  padding: 0.5rem 0.875rem;
+  background: #F9F9F9;
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
-  padding-top: 0.25rem;
+  gap: 0.25rem;
 }
-.ict-total > span:first-child {
+.ict-total-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.ict-total-label {
   font-size: var(--fs-small);
   font-weight: 600;
-  color: rgba(255,255,255,0.45);
+  color: #9CA3AF;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
-.ict-total > span:last-child {
+.ict-total-amounts {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
   font-family: 'JetBrains Mono', monospace;
-  font-size: var(--fs-small);
+  font-size: var(--fs-caption);
+  flex-wrap: wrap;
+}
+.ict-amount {
   font-weight: 700;
-  color: #FFFFFF;
-  line-height: 1.6;
+  color: #15803D;
+}
+.ict-sep {
+  color: #D1D5DB;
+  font-size: var(--fs-small);
 }
 .ict-cur {
   font-size: 0.75em;
   font-weight: 400;
-  color: rgba(255,255,255,0.4);
-  margin-left: 0.125rem;
+  color: #9CA3AF;
+}
+.ict-blank {
+  font-family: 'JetBrains Mono', monospace;
+  color: #D1D5DB;
 }
 </style>

@@ -521,34 +521,20 @@ async function enhancePrompt() {
   enhancing.value = true
 
   try {
-    const res = await window.electronAPI.runAgent({
-      chatId: '__persona_enhance__',
-      messages: [
-        {
-          role: 'user',
-          content: `Enhance this ${props.type === 'system' ? 'AI system' : 'user'} persona prompt. Make it more specific, effective, and well-structured while keeping the same intent. Return ONLY the enhanced prompt text, nothing else.\n\nOriginal prompt:\n${form.generatedPrompt}`
-        }
-      ],
-      config: JSON.parse(JSON.stringify(await getConfigForEnhance())),
-      enabledAgents: [],
-      enabledSkills: [],
-      mcpServers: [],
-      httpTools: [],
+    const config = JSON.parse(JSON.stringify(configStore.config))
+    const res = await window.electronAPI.enhancePrompt({
+      prompt: `Enhance this ${props.type === 'system' ? 'AI system' : 'user'} persona prompt. Make it more specific, effective, and well-structured while keeping the same intent. Return ONLY the enhanced prompt text, nothing else.\n\nOriginal prompt:\n${form.generatedPrompt}`,
+      config,
     })
-    if (res.success && res.result) {
-      form.generatedPrompt = res.result.trim()
+    if (res.success && res.text) {
+      form.generatedPrompt = res.text.trim()
+    } else if (!res.success) {
+      console.error('Enhancement failed:', res.error)
     }
   } catch (err) {
     console.error('Enhancement failed:', err.message || err)
   }
   enhancing.value = false
-}
-
-async function getConfigForEnhance() {
-  if (window.electronAPI?.getConfig) {
-    return await window.electronAPI.getConfig()
-  }
-  return {}
 }
 
 function revertEnhance() {
@@ -566,21 +552,13 @@ const showValidation = ref(false)
 async function generateDescription(prompt) {
   if (!prompt.trim()) return form.name || 'Untitled'
   try {
-    const config = await getConfigForEnhance()
-    const res = await window.electronAPI.runAgent({
-      chatId: '__persona_describe__',
-      messages: [{
-        role: 'user',
-        content: `Read this persona prompt and write a SHORT description (max 10 words) that tells the user who this persona is. Focus on: role, expertise, key character traits. Use clean, simple words. No punctuation at the end. Return ONLY the description, nothing else.\n\nPrompt:\n${prompt}`
-      }],
-      config: JSON.parse(JSON.stringify(config)),
-      enabledAgents: [],
-      enabledSkills: [],
-      mcpServers: [],
-      httpTools: [],
+    const config = JSON.parse(JSON.stringify(configStore.config))
+    const res = await window.electronAPI.enhancePrompt({
+      prompt: `Read this persona prompt and write a SHORT description (max 10 words) that tells the user who this persona is. Focus on: role, expertise, key character traits. Use clean, simple words. No punctuation at the end. Return ONLY the description, nothing else.\n\nPrompt:\n${prompt}`,
+      config,
     })
-    if (res.success && res.result) {
-      return res.result.trim().replace(/\.+$/, '')
+    if (res.success && res.text) {
+      return res.text.trim().replace(/\.+$/, '')
     }
   } catch (err) {
     console.error('Description generation failed:', err)

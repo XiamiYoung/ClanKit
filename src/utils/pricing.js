@@ -28,22 +28,46 @@ export const DEFAULT_CURRENCY_RATES = { USD: 1, CNY: 7.28, SGD: 1.35 }
  * @param {object} pricingConfig  config.pricing (may be undefined/null)
  * @returns {{ input, output, cacheWrite, cacheRead, perSec?, perChar? } | null}
  */
+/** Strip optional provider prefix (e.g. "anthropic/claude-haiku-latest" → "claude-haiku-latest") */
+function stripProvider(id) {
+  return id.includes('/') ? id.split('/').slice(1).join('/') : id
+}
+
+/** Model family: first two hyphen-joined segments (e.g. "claude-haiku-4-5" → "claude-haiku") */
+function modelFamily(id) {
+  const bare = stripProvider(id)
+  const parts = bare.split('-')
+  return parts.length >= 3 ? parts.slice(0, 2).join('-') : bare
+}
+
 export function resolveModelPrice(modelId, pricingConfig) {
   if (!modelId) return null
   const userModels = pricingConfig?.models || {}
   const modelMap   = pricingConfig?.modelPriceMap || {}
   const allPrices  = { ...DEFAULT_PRICES, ...userModels }
+  const bareId     = stripProvider(modelId)
 
-  // 1. Exact match
+  // 1. Exact match (original, then bare)
   if (allPrices[modelId]) return allPrices[modelId]
+  if (allPrices[bareId])  return allPrices[bareId]
 
-  // 2. modelPriceMap alias
-  const alias = modelMap[modelId]
-  if (alias && allPrices[alias]) return allPrices[alias]
+  // 2. modelPriceMap alias (original, then bare)
+  for (const id of [modelId, bareId]) {
+    const alias = modelMap[id]
+    if (alias && allPrices[alias]) return allPrices[alias]
+  }
 
-  // 3. Fuzzy: find first key that the modelId includes
+  // 3. Substring fuzzy match (try bare first)
+  for (const id of [bareId, modelId]) {
+    for (const [key, price] of Object.entries(allPrices)) {
+      if (id.includes(key) || key.includes(id)) return price
+    }
+  }
+
+  // 4. Model family prefix match ("claude-haiku-latest" → family "claude-haiku" matches "claude-haiku-4-5")
+  const incomingFamily = modelFamily(modelId)
   for (const [key, price] of Object.entries(allPrices)) {
-    if (modelId.includes(key) || key.includes(modelId)) return price
+    if (modelFamily(key) === incomingFamily) return price
   }
 
   return null

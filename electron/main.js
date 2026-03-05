@@ -418,31 +418,31 @@ const DEFAULT_CONFIG = {
     sonnetModel:  'claude-sonnet-4-5',
     opusModel:    'claude-opus-4-6',
     haikuModel:   'claude-haiku-3-5',
-    utilityModel: '',
     isActive:     false,
     testedAt:     null,
   },
   openrouter: {
     apiKey:  '',
     baseURL: '',
-    utilityModel: '',
     isActive:     false,
     testedAt:     null,
   },
   openai: {
     apiKey:       '',
     baseURL:      '',
-    utilityModel: '',
     isActive:     false,
     testedAt:     null,
   },
   deepseek: {
     apiKey:       '',
     baseURL:      '',
-    utilityModel: '',
     isActive:     false,
     testedAt:     null,
     maxTokens:    8192,
+  },
+  utilityModel: {
+    provider: '',
+    model:    '',
   },
   defaultProvider:   'anthropic',
   systemPrompt:      '',
@@ -667,6 +667,7 @@ async function accumulateUsage(chatId, metrics, provider, model) {
     voiceOutputTokens:   (u.voiceOutputTokens   || 0) + (metrics.voiceOutputTokens   || 0),
     whisperCalls:        (u.whisperCalls        || 0) + (metrics.whisperCalls        || 0),
     whisperSecs:         (u.whisperSecs         || 0) + (metrics.whisperSecs         || 0),
+    ttsChars:            (u.ttsChars            || 0) + (metrics.ttsChars            || 0),
   }
   // Stamp provider/model for cost attribution if not already set
   if (provider && !chat.provider) chat.provider = provider
@@ -695,11 +696,23 @@ ipcMain.handle('store:get-chat', async (_, chatId) => {
 
 ipcMain.handle('store:save-chat', async (_, chat) => {
   if (!chat || !chat.id) return false
-  // Preserve usage data written by accumulateUsage — renderer memory has usage:null
-  // because it never receives the accumulated value back. Don't overwrite with null.
-  if (chat.usage == null) {
-    const existing = await readJSONAsync(path.join(CHATS_DIR, `${chat.id}.json`), null)
-    if (existing?.usage) chat.usage = existing.usage
+  // Preserve fields written by accumulateUsage — renderer memory never receives these back.
+  // Read from disk on every save to merge: usage/model/provider when absent, and whisper/voice
+  // usage fields which are exclusively written by accumulateUsage and never tracked in renderer.
+  const existing = await readJSONAsync(path.join(CHATS_DIR, `${chat.id}.json`), null)
+  if (existing) {
+    if (chat.usage == null && existing.usage) chat.usage = existing.usage
+    if (!chat.model    && existing.model)    chat.model    = existing.model
+    if (!chat.provider && existing.provider) chat.provider = existing.provider
+    // whisper/voice fields are written only by accumulateUsage; always prefer the higher disk value
+    if (existing.usage && chat.usage) {
+      const VOICE_KEYS = ['whisperCalls', 'whisperSecs', 'voiceInputTokens', 'voiceOutputTokens']
+      for (const k of VOICE_KEYS) {
+        if ((existing.usage[k] || 0) > (chat.usage[k] || 0)) {
+          chat.usage[k] = existing.usage[k]
+        }
+      }
+    }
   }
   // Write the per-chat file atomically
   await writeJSONAtomic(path.join(CHATS_DIR, `${chat.id}.json`), chat)
@@ -764,10 +777,11 @@ ipcMain.handle('store:get-config', () => {
   const result = {
     ...DEFAULT_CONFIG,
     ...nonEmpty,
-    anthropic:  { ...DEFAULT_CONFIG.anthropic,  ...saved.anthropic },
-    openrouter: { ...DEFAULT_CONFIG.openrouter, ...saved.openrouter },
-    openai:     { ...DEFAULT_CONFIG.openai,     ...saved.openai },
-    deepseek:   { ...DEFAULT_CONFIG.deepseek,   ...saved.deepseek },
+    anthropic:    { ...DEFAULT_CONFIG.anthropic,    ...saved.anthropic },
+    openrouter:   { ...DEFAULT_CONFIG.openrouter,   ...saved.openrouter },
+    openai:       { ...DEFAULT_CONFIG.openai,       ...saved.openai },
+    deepseek:     { ...DEFAULT_CONFIG.deepseek,     ...saved.deepseek },
+    utilityModel: { ...DEFAULT_CONFIG.utilityModel, ...saved.utilityModel },
     sandboxConfig: {
       ...DEFAULT_CONFIG.sandboxConfig,
       ...savedSandbox,
@@ -2592,8 +2606,9 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   activeLoops.set(chatId, loop)
 
   const skillsForLog = (enabledSkills || []).map(s => ({
-    ...s,
-    ...(s.systemPrompt ? { systemPrompt: s.systemPrompt.slice(0, 200) + (s.systemPrompt.length > 200 ? '…' : '') } : {})
+    id: s.id,
+    name: s.name,
+    summary: (s.summary || s.systemPrompt || '').slice(0, 200),
   }))
   logger.agent('run start', { chatId, model: config.anthropic?.activeModel || config.activeModel, msgCount: messages.length, agents: enabledAgents, skills: skillsForLog })
 
@@ -2774,18 +2789,53 @@ ipcMain.handle('agent:compact-standalone', async (event, { chatId, messages, con
 })
 
 // -- Lightweight one-shot LLM call (for AI Enhance features) -----------------
+// Uses global config.utilityModel — supports all providers.
 ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
   try {
-    const { AnthropicClient } = require('./agent/core/AnthropicClient')
-    const ac = new AnthropicClient(config)
-    const client = ac.getClient()
-    const response = await client.messages.create({
-      model: ac.resolveModel(),
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }],
-    })
-    const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
-    return { success: true, text }
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) {
+      return { success: false, error: 'Utility model not configured. Set it in Config → AI → Models → Global Model Settings.' }
+    }
+    const providerCfg = config[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
+      return { success: false, error: `Utility model provider "${um.provider}" is missing apiKey or baseURL.` }
+    }
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    if (isOpenAI) {
+      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const cfg = {
+        openaiApiKey: providerCfg.apiKey,
+        openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+        _resolvedProvider: 'openai',
+        defaultProvider: 'openai',
+        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+      }
+      const client = new OpenAIClient(cfg).getClient()
+      const response = await client.chat.completions.create({
+        model: um.model,
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: prompt }],
+      })
+      const text = response.choices?.[0]?.message?.content || ''
+      return { success: true, text }
+    } else {
+      // anthropic or openrouter — both use AnthropicClient
+      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const cfg = {
+        apiKey:      providerCfg.apiKey,
+        baseURL:     providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+      }
+      const client = new AnthropicClient(cfg).getClient()
+      const response = await client.messages.create({
+        model: um.model,
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: prompt }],
+      })
+      const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+      return { success: true, text }
+    }
   } catch (err) {
     logger.error('agent:enhance-prompt error', err.message)
     return { success: false, error: err.message }
@@ -2820,26 +2870,55 @@ If none should respond, reply with [].`
 
     const userContent = `Message: "${message}"`
 
-    const { AnthropicClient } = require('./agent/core/AnthropicClient')
-    // Use the provider's configured utilityModel — no hardcoded model ID
-    const classifyConfig = {
-      ...config,
-      customModel: config.anthropic?.utilityModel || config.customModel || null,
-    }
-    if (!classifyConfig.customModel) {
-      logger.warn('agent:resolve-addressees: no utilityModel configured, treating all mentions as addressees')
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) {
+      logger.warn('agent:resolve-addressees: no global utilityModel configured, treating all mentions as addressees')
       return { addresseeIds: personas.map(p => p.id) }
     }
-    const ac = new AnthropicClient(classifyConfig)
-    const client = ac.getClient()
-    const response = await client.messages.create({
-      model: classifyConfig.customModel,
-      max_tokens: 128,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userContent }],
-    })
+    const providerCfg = config[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
+      logger.warn(`agent:resolve-addressees: utilityModel provider "${um.provider}" missing apiKey/baseURL, treating all mentions as addressees`)
+      return { addresseeIds: personas.map(p => p.id) }
+    }
 
-    const raw = response.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
+    let raw
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    if (isOpenAI) {
+      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const cfg = {
+        openaiApiKey: providerCfg.apiKey,
+        openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+        _resolvedProvider: 'openai',
+        defaultProvider: 'openai',
+        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+      }
+      const resp = await new OpenAIClient(cfg).getClient().chat.completions.create({
+        model: um.model,
+        max_tokens: 128,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userContent },
+        ],
+      })
+      raw = resp.choices?.[0]?.message?.content || ''
+    } else {
+      // anthropic or openrouter
+      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const cfg = {
+        apiKey:      providerCfg.apiKey,
+        baseURL:     providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+      }
+      const resp = await new AnthropicClient(cfg).getClient().messages.create({
+        model: um.model,
+        max_tokens: 128,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }],
+      })
+      raw = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
+    }
+
     // Extract JSON array from response (may have surrounding prose)
     const match = raw.match(/\[.*?\]/s)
     const addresseeNames = match ? JSON.parse(match[0]) : []
@@ -3694,17 +3773,11 @@ ipcMain.handle('voice:stop', () => {
 })
 
 ipcMain.handle('voice:audio-chunk', async (event, audioBuffer) => {
-  if (!activeVoiceSession) {
-    console.log('[VOICE:IPC] audio-chunk received but no active session')
-    return { success: false, error: 'No active voice session' }
-  }
+  if (!activeVoiceSession) return { success: false, error: 'No active voice session' }
   try {
-    const buf = Buffer.from(audioBuffer)
-    console.log(`[VOICE:IPC] audio-chunk received — ${buf.length} bytes, busy=${activeVoiceSession._voiceBusy}`)
-    activeVoiceSession.processAudio(buf) // fire and forget — results come via events
+    activeVoiceSession.processAudio(Buffer.from(audioBuffer)) // fire and forget — results come via events
     return { success: true }
   } catch (err) {
-    console.log(`[VOICE:IPC] audio-chunk error: ${err.message}`)
     return { success: false, error: err.message }
   }
 })

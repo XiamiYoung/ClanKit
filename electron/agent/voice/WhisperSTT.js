@@ -40,17 +40,10 @@ class WhisperSTT {
       ? { 'Authorization': `Bearer ${this.apiKey}` }
       : { 'x-api-key': this.apiKey }
 
-    const bufSize = form.getBuffer().length
-    console.log(`[VOICE:STT] fetch → ${url} (${bufSize} bytes)`)
-    const fetchStart = Date.now()
-
     // Abort if the API takes more than 10s — prevents _voiceBusy from getting stuck forever.
     // Normal Whisper: 1–3s. Slow but valid: 4–8s. Hung connection: never resolves.
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => {
-      console.log('[VOICE:STT] fetch TIMEOUT after 10s — aborting')
-      controller.abort()
-    }, 10000)
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
 
     let resp
     try {
@@ -63,15 +56,12 @@ class WhisperSTT {
     } finally {
       clearTimeout(timeoutId)
     }
-    console.log(`[VOICE:STT] fetch ← status=${resp.status} in ${Date.now() - fetchStart}ms`)
-
     if (!resp.ok) {
       const body = await resp.text()
       throw new Error(`Whisper API error ${resp.status}: ${body}`)
     }
 
     const json = await resp.json()
-    console.log(`[VOICE:STT] json parsed — duration=${json.duration}s segments=${json.segments?.length ?? 0} raw="${(json.text || '').slice(0, 80)}"`)
     let text = (json.text || '').trim()
 
     // ── no_speech_prob guard ──────────────────────────────────────────────────
@@ -86,11 +76,7 @@ class WhisperSTT {
     const segments = Array.isArray(json.segments) ? json.segments : []
     if (segments.length > 0) {
       const avgNoSpeech = segments.reduce((s, seg) => s + (seg.no_speech_prob || 0), 0) / segments.length
-      console.log(`[VOICE:STT] no_speech_prob avg=${avgNoSpeech.toFixed(3)} (threshold 0.7)`)
-      if (avgNoSpeech > 0.7) {
-        console.log(`[VOICE:STT] no_speech_prob too high — discarding: "${text}"`)
-        text = ''
-      }
+      if (avgNoSpeech > 0.7) text = ''
     }
 
     // ── trivial-output filter ─────────────────────────────────────────────────
@@ -134,10 +120,7 @@ class WhisperSTT {
       ]
       const lower = text.toLowerCase().replace(/\s+/g, ' ').trim()
       const isHallucination = HALLUCINATIONS.some(h => lower.includes(h.toLowerCase()))
-      if (isHallucination) {
-        console.log(`[VOICE:STT] hallucination blocked — discarding: "${text}"`)
-        text = ''
-      }
+      if (isHallucination) text = ''
     }
 
     return {

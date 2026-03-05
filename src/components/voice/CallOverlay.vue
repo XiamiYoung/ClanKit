@@ -22,44 +22,68 @@
           <span class="call-panel-name">{{ voiceStore.activePersonaName || 'AI' }}</span>
           <span class="call-panel-status">{{ statusLabel }}</span>
         </div>
-        <button class="call-panel-close" @click="endCall" title="End Call">
-          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-          </svg>
-        </button>
+
+        <!-- Header actions: cost chip · mute · end -->
+        <div class="call-panel-header-actions">
+          <!-- Cost chip -->
+          <div
+            v-if="callCost.whisperCalls > 0 || callCost.llmUsd > 0"
+            class="call-cost-chip"
+            @mouseenter="openCostTooltip"
+            @mouseleave="showCostTooltip = false"
+          >
+            {{ formatCost(callCost.totalUsd) }}
+            <!-- Tooltip -->
+            <div v-if="showCostTooltip" class="call-cost-tooltip" :style="tooltipStyle">
+              <div class="cct-row cct-header">
+                <span>Call cost</span>
+                <span class="cct-total">{{ formatCost(callCost.totalUsd) }}</span>
+              </div>
+              <div v-if="callCost.whisperCalls > 0" class="cct-row">
+                <span class="cct-label">Speech-to-text</span>
+                <span class="cct-value">{{ callCost.whisperCalls }} rounds · {{ callCost.whisperSecs.toFixed(1) }}s</span>
+                <span class="cct-usd">{{ formatCost(callCost.whisperUsd) }}</span>
+              </div>
+              <div v-if="callCost.llmUsd > 0" class="cct-row">
+                <span class="cct-label">AI response</span>
+                <span class="cct-value">{{ (n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : n)(voiceStore.callVoiceInputTokens + voiceStore.callVoiceOutputTokens) }} tok</span>
+                <span class="cct-usd">{{ formatCost(callCost.llmUsd) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mute -->
+          <button
+            class="call-panel-icon-btn" :class="{ active: voiceStore.isMuted }"
+            @click="toggleMute"
+            :title="voiceStore.isMuted ? 'Unmute' : 'Mute'"
+          >
+            <svg v-if="!voiceStore.isMuted" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+            <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="1" y1="1" x2="23" y2="23"/>
+              <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+              <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .99-.2 1.93-.57 2.78"/>
+              <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </button>
+
+          <!-- End call -->
+          <button class="call-panel-close" @click="endCall" title="End Call">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <!-- STT transcript — last thing you said -->
       <div v-if="voiceStore.lastTranscript" class="call-panel-transcript">
         <span class="call-panel-transcript-label">You said</span>
         <span class="call-panel-transcript-text">{{ voiceStore.lastTranscript }}</span>
-      </div>
-
-      <!-- Controls row -->
-      <div class="call-panel-controls">
-        <button
-          class="call-panel-btn" :class="{ active: voiceStore.isMuted }"
-          @click="toggleMute"
-          :title="voiceStore.isMuted ? 'Unmute' : 'Mute'"
-        >
-          <svg v-if="!voiceStore.isMuted" style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-          </svg>
-          <svg v-else style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="1" y1="1" x2="23" y2="23"/>
-            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
-            <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .99-.2 1.93-.57 2.78"/>
-            <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-          </svg>
-        </button>
-        <button class="call-panel-btn end" @click="endCall" title="End Call">
-          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="currentColor">
-            <rect x="6" y="6" width="12" height="12" rx="2"/>
-          </svg>
-          End
-        </button>
       </div>
 
       <!-- Device selectors -->
@@ -111,15 +135,52 @@
 import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useVoiceStore } from '../../stores/voice'
 import { usePersonasStore } from '../../stores/personas'
+import { useConfigStore } from '../../stores/config'
 import { getAvatarDataUri } from '../personas/personaAvatars'
+import { resolveModelPrice, formatCost } from '../../utils/pricing'
 
 const voiceStore = useVoiceStore()
 const personasStore = usePersonasStore()
+const configStore = useConfigStore()
 
 const emit = defineEmits(['end-call', 'toggle-mute', 'mic-change', 'speaker-change'])
 
 const micDevices = ref([])
 const speakerDevices = ref([])
+const showCostTooltip = ref(false)
+const tooltipStyle = ref({})
+
+const TOOLTIP_H = 96  // estimated rendered height (2–3 rows)
+const TOOLTIP_GAP = 8
+
+function openCostTooltip(e) {
+  const r = e.currentTarget.getBoundingClientRect()
+  const vw = window.innerWidth
+  const style = {}
+
+  // ── Vertical: prefer above, fall back to below ──
+  if (r.top - TOOLTIP_H - TOOLTIP_GAP >= 0) {
+    style.top = (r.top - TOOLTIP_GAP) + 'px'
+    style.transform = 'translateY(-100%)'
+  } else {
+    style.top = (r.bottom + TOOLTIP_GAP) + 'px'
+    style.transform = 'none'
+  }
+
+  // ── Horizontal: anchor by whichever edge has more room ──
+  // Right half of screen → pin tooltip's right edge to chip's right edge (extends leftward)
+  // Left half of screen  → pin tooltip's left  edge to chip's left  edge (extends rightward)
+  if (r.right > vw / 2) {
+    style.right = (vw - r.right) + 'px'
+    style.left = 'auto'
+  } else {
+    style.left = r.left + 'px'
+    style.right = 'auto'
+  }
+
+  tooltipStyle.value = style
+  showCostTooltip.value = true
+}
 
 // ── Drag-to-reposition ──
 const panelEl = ref(null)
@@ -242,6 +303,32 @@ const statusLabel = computed(() => {
   return 'Connecting...'
 })
 
+// Real-time call cost
+const callCost = computed(() => {
+  const M = 1_000_000
+  const pricing = configStore.config?.pricing
+
+  const whisperPrice   = resolveModelPrice('whisper-1', pricing)
+  const whisperUsd     = (voiceStore.callWhisperSecs) * (whisperPrice?.perSec ?? 0.0001)
+
+  const llmModelId     = voiceStore.callModelId
+  const llmPrice       = llmModelId ? resolveModelPrice(llmModelId, pricing) : null
+  const llmUsd         = llmPrice
+    ? ((voiceStore.callVoiceInputTokens  / M) * (llmPrice.input  || 0)
+    +  (voiceStore.callVoiceOutputTokens / M) * (llmPrice.output || 0))
+    : 0
+
+  const totalUsd = whisperUsd + llmUsd
+  return {
+    totalUsd,
+    whisperUsd,
+    llmUsd,
+    whisperSecs:  voiceStore.callWhisperSecs,
+    whisperCalls: voiceStore.callWhisperCalls,
+    hasLlmPrice:  !!llmPrice,
+  }
+})
+
 function onMicChange(e) {
   voiceStore.setMicId(e.target.value)
   emit('mic-change', e.target.value)
@@ -278,6 +365,24 @@ function endCall() { emit('end-call') }
   gap: 0.625rem;
   padding: 0.875rem 0.875rem 0.625rem;
 }
+.call-panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+.call-panel-icon-btn {
+  width: 2rem; height: 2rem;
+  border: none; border-radius: 0.5rem;
+  background: rgba(255,255,255,0.06);
+  color: #9CA3AF;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.call-panel-icon-btn:hover { background: rgba(255,255,255,0.1); color: #FFFFFF; }
+.call-panel-icon-btn.active { background: #374151; color: #FFFFFF; }
 
 /* Avatar with status ring */
 .call-panel-avatar {
@@ -389,36 +494,80 @@ function endCall() { emit('end-call') }
   word-break: break-word;
 }
 
-/* Controls */
-.call-panel-controls {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.25rem 0.875rem 0.625rem;
-}
-.call-panel-btn {
-  flex: 1;
+/* Cost chip + tooltip */
+.call-cost-chip {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  padding: 0.5rem;
-  border: none;
+  gap: 0.25rem;
+  padding: 0.5rem 0.625rem;
   border-radius: 0.625rem;
-  background: #1A1A1A;
-  color: #FFFFFF;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #F59E0B;
+  cursor: default;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.call-cost-tooltip {
+  position: fixed;
+  min-width: 14rem;
+  background: #111111;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.625rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  padding: 0.5rem 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  pointer-events: none;
+  z-index: 9999;
+}
+.cct-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.cct-header {
+  justify-content: space-between;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #2A2A2A;
   font-family: 'Inter', sans-serif;
-  font-size: 0.75rem;
+  font-size: 0.625rem;
   font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #F59E0B;
 }
-.call-panel-btn:hover { background: #2A2A2A; }
-.call-panel-btn.active { background: #374151; }
-.call-panel-btn.end {
-  background: #DC2626;
+.cct-total {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
   color: #FFFFFF;
 }
-.call-panel-btn.end:hover { background: #EF4444; }
+.cct-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #6B7280;
+  width: 7rem;
+  flex-shrink: 0;
+}
+.cct-value {
+  flex: 1;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.6875rem;
+  color: #9CA3AF;
+}
+.cct-usd {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.6875rem;
+  color: #D1D5DB;
+  white-space: nowrap;
+}
 
 /* Device selectors */
 .call-panel-devices {

@@ -42,12 +42,38 @@
             msg.role === 'system' ? 'justify-center' : msg.role === 'user' ? 'justify-end' : 'justify-start'
           ]"
         >
-          <!-- System info banner (stop/resume notifications) -->
-          <div v-if="msg.role === 'system'" class="cw-system-banner">
-            <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- System info banner (stop/resume/compaction notifications) -->
+          <div v-if="msg.role === 'system'" class="cw-system-banner"
+            :class="msg.compaction ? 'cw-system-banner--compact' : msg.interruptType === 'stop' ? 'cw-system-banner--stop' : msg.interruptType === 'pause' ? 'cw-system-banner--pause' : ''">
+            <!-- Compaction icon -->
+            <svg v-if="msg.compaction" style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/>
+            </svg>
+            <!-- Pause icon -->
+            <svg v-else-if="msg.interruptType === 'pause'" style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>
+            </svg>
+            <!-- Stop icon -->
+            <svg v-else-if="msg.interruptType === 'stop'" style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="5" y="5" width="14" height="14" rx="2"/>
+            </svg>
+            <!-- Fallback info icon -->
+            <svg v-else style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
-            <span class="prose-sparkai" style="display:inline;"><MessageRenderer :message="msg" /></span>
+            <template v-if="msg.compaction">
+              <span class="cw-system-banner-text">Context compacted</span>
+              <template v-if="msg.tokensBefore && msg.tokensAfter">
+                <span class="cw-system-banner-sep">·</span>
+                <span class="cw-system-banner-tokens">
+                  {{ msg.tokensBefore >= 1000 ? (msg.tokensBefore / 1000).toFixed(1) + 'k' : msg.tokensBefore }}
+                  <svg style="width:10px;height:10px;opacity:0.6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                  {{ msg.tokensAfter >= 1000 ? (msg.tokensAfter / 1000).toFixed(1) + 'k' : msg.tokensAfter }}
+                  <span style="opacity:0.5;">tokens</span>
+                </span>
+              </template>
+            </template>
+            <span v-else class="cw-system-banner-text">{{ msg.content }}</span>
           </div>
 
           <!-- Assistant avatar + name chip -->
@@ -172,7 +198,7 @@
     </div>
 
     <!-- Input area: use default slot for custom input, or built-in basic input -->
-    <slot name="input" :isRunning="isRunning" :inputText="defaultInputText" :sendMessage="defaultSend" :stopChat="defaultStop">
+    <slot name="input" :isRunning="isRunning" :inputText="defaultInputText" :sendMessage="defaultSend" :stopChat="defaultStop" :pauseChat="defaultPause">
       <div class="cw-input-area">
         <!-- Quote preview -->
         <div
@@ -243,10 +269,15 @@
             rows="2"
             class="cw-textarea"
           />
-          <!-- Stop -->
-          <button v-if="isRunning" @click.stop="defaultStop" class="cw-btn stop" aria-label="Stop" title="Stop agent">
-            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-          </button>
+          <!-- Pause / Stop -->
+          <template v-if="isRunning">
+            <button @click.stop="defaultPause" class="cw-btn stop" aria-label="Pause" title="Pause (Esc) — interrupt but keep queue">
+              <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+            </button>
+            <button @click.stop="defaultStop" class="cw-btn stop" aria-label="Stop" title="Stop — interrupt and clear queue">
+              <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            </button>
+          </template>
           <!-- Send -->
           <button
             @click.stop="defaultSend"
@@ -295,7 +326,7 @@ const props = defineProps({
   onRefinePlan:  { type: Function, default: null },
 })
 
-const emit = defineEmits(['send', 'stop', 'quote', 'delete-message', 'send-with-attachments'])
+const emit = defineEmits(['send', 'stop', 'pause', 'quote', 'delete-message', 'send-with-attachments'])
 
 const chatsStore = useChatsStore()
 const personasStore = usePersonasStore()
@@ -376,12 +407,12 @@ function hideAvatarTooltip() {
 
 // ── Visible messages with limit ──
 const visibleMessages = computed(() => {
-  const all = chat.value?.messages ?? []
+  const all = (chat.value?.messages ?? []).filter(m => !m.hidden)
   if (all.length <= visibleLimit.value) return all
   return all.slice(all.length - visibleLimit.value)
 })
 const hasHiddenMessages = computed(() => {
-  const all = chat.value?.messages ?? []
+  const all = (chat.value?.messages ?? []).filter(m => !m.hidden)
   return all.length > visibleLimit.value
 })
 function loadMoreMessages() {
@@ -550,6 +581,10 @@ function defaultStop() {
   emit('stop')
 }
 
+function defaultPause() {
+  emit('pause')
+}
+
 // Expose scrollToBottom so parents can trigger it
 defineExpose({ scrollToBottom })
 </script>
@@ -690,15 +725,47 @@ defineExpose({ scrollToBottom })
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.3125rem 0.75rem;
-  background: rgba(107, 114, 128, 0.08);
-  border: 1px solid rgba(107, 114, 128, 0.18);
+  padding: 0.3125rem 0.875rem;
+  background: rgba(107, 114, 128, 0.07);
+  border: 1px solid rgba(107, 114, 128, 0.16);
   border-radius: 1.25rem;
   color: #6B7280;
   font-size: var(--fs-caption);
   font-family: 'Inter', sans-serif;
-  max-width: 70%;
-  text-align: center;
+  font-weight: 500;
+  max-width: 72%;
+  line-height: 1;
+}
+.cw-system-banner--pause {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.25);
+  color: #B45309;
+}
+.cw-system-banner--stop {
+  background: rgba(239, 68, 68, 0.07);
+  border-color: rgba(239, 68, 68, 0.22);
+  color: #DC2626;
+}
+.cw-system-banner--compact {
+  background: rgba(99, 102, 241, 0.06);
+  border-color: rgba(99, 102, 241, 0.2);
+  color: #6366F1;
+}
+.cw-system-banner-sep {
+  color: rgba(99, 102, 241, 0.35);
+  font-size: 0.7rem;
+}
+.cw-system-banner-tokens {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--fs-small);
+  color: #818CF8;
+}
+.cw-system-banner-text {
+  line-height: 1.4;
+  display: block;
 }
 
 /* ── Hover action buttons ── */

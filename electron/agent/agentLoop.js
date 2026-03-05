@@ -7,7 +7,7 @@
  *  - Tool use with automatic dispatch and result handling
  *  - Sub-agent delegation for parallel/focused subtasks
  *  - Background task management
- *  - Context window tracking with compaction (Opus 4.6 beta)
+ *  - Context window tracking with compaction (Anthropic beta API, local trim for OpenAI-compat)
  *  - Todo manager for complex multi-step task planning
  *  - Skill system for domain-specific system prompts
  */
@@ -247,8 +247,8 @@ class AgentLoop {
   /**
    * Standalone compaction — makes one API call with compaction enabled
    * to compress the conversation history. Works when the agent loop is NOT running.
-   * For Opus 4.6: uses the beta compaction API.
-   * For other models: falls back to local message trimming.
+   * For Anthropic providers: uses the beta compaction API.
+   * For OpenAI-compat providers: falls back to local message trimming.
    */
   async compactStandalone(messages, enabledAgents, enabledSkills, onChunk, personaPrompts) {
     this.toolRegistry.loadForAgents(enabledAgents)
@@ -268,10 +268,9 @@ class AgentLoop {
 
     const client = this.anthropicClient.getClient()
     const model  = this.anthropicClient.resolveModel()
-    const isOpus46 = this.anthropicClient.isOpus46()
 
-    // Non-Opus: local trim
-    if (!isOpus46) {
+    // OpenAI-compat provider: local trim only (beta compaction is Anthropic-only)
+    if (this.isOpenAI) {
       const estimatedTokens = JSON.stringify(conversationMessages).length / 4
       const trimmed = this.contextManager.localTrim(conversationMessages, estimatedTokens)
       this.contextManager.compactionCount++
@@ -280,7 +279,7 @@ class AgentLoop {
       return { assistantContent: '[Older messages trimmed to fit context window]', metrics }
     }
 
-    // Opus 4.6: API compaction
+    // Anthropic: API compaction (all models)
     let createParams = {
       model,
       max_tokens: 2048,
@@ -991,7 +990,7 @@ RULES:
         // ── Manual compaction request from UI ──
         if (this._compactionRequested) {
           this._compactionRequested = false
-          if (isOpus46) {
+          if (!this.isOpenAI) {
             logger.agent('Manual compaction requested', { inputTokens: this.contextManager.inputTokens })
             Object.assign(createParams, this.contextManager.applyCompaction(createParams))
             this.contextManager.compactionCount++
@@ -999,16 +998,16 @@ RULES:
           }
         }
 
-        // ── Compaction (Opus 4.6 only, when context is large) ──
-        if (isOpus46 && this.contextManager.shouldCompact()) {
+        // ── Compaction (Anthropic providers, when context is large) ──
+        if (!this.isOpenAI && this.contextManager.shouldCompact()) {
           logger.agent('Applying compaction', { inputTokens: this.contextManager.inputTokens })
           Object.assign(createParams, this.contextManager.applyCompaction(createParams))
           this.contextManager.compactionCount++
           onChunk({ type: 'compaction', message: 'Context compacted to fit window' })
         }
 
-        // ── Context trimming for non-Opus models ──
-        if (!isOpus46 && this.contextManager.shouldCompact()) {
+        // ── Context trimming for OpenAI-compat providers ──
+        if (this.isOpenAI && this.contextManager.shouldCompact()) {
           createParams.messages = this.contextManager.localTrim(
             createParams.messages,
             this.contextManager.inputTokens

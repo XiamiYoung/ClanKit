@@ -77,7 +77,8 @@ export const useModelsStore = defineStore('models', () => {
   async function fetchDeepSeekModels() {
     const ds = configStore.config.deepseek || {}
     if (!ds.apiKey) return
-    const baseURL = (ds.baseURL || 'https://api.deepseek.com').replace(/\/+$/, '')
+    if (!ds.baseURL) return
+    const baseURL = ds.baseURL.replace(/\/+$/, '')
     deepseekLoading.value = true
     try {
       const resp = await fetch(`${baseURL}/v1/models`, {

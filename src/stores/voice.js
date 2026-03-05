@@ -16,7 +16,14 @@ export const useVoiceStore = defineStore('voice', () => {
   const selectedMicId = ref('')
   const selectedSpeakerId = ref('')
 
-  function startCall(chatId, personaId, personaName) {
+  // Real-time cost accumulators for the current call (reset on startCall)
+  const callModelId = ref('')
+  const callWhisperSecs = ref(0)
+  const callWhisperCalls = ref(0)
+  const callVoiceInputTokens = ref(0)
+  const callVoiceOutputTokens = ref(0)
+
+  function startCall(chatId, personaId, personaName, modelId) {
     isCallActive.value = true
     activeChatId.value = chatId
     activePersonaId.value = personaId
@@ -26,6 +33,11 @@ export const useVoiceStore = defineStore('voice', () => {
     isPip.value = false
     lastTranscript.value = ''
     lastAiText.value = ''
+    callModelId.value = modelId || ''
+    callWhisperSecs.value = 0
+    callWhisperCalls.value = 0
+    callVoiceInputTokens.value = 0
+    callVoiceOutputTokens.value = 0
   }
 
   function endCall() {
@@ -38,6 +50,19 @@ export const useVoiceStore = defineStore('voice', () => {
     isPip.value = false
     lastTranscript.value = ''
     lastAiText.value = ''
+    callModelId.value = ''
+    callWhisperSecs.value = 0
+    callWhisperCalls.value = 0
+    callVoiceInputTokens.value = 0
+    callVoiceOutputTokens.value = 0
+  }
+
+  function addCallUsage(usage) {
+    if (!usage) return
+    if (usage.whisperSecs)         callWhisperSecs.value         += usage.whisperSecs
+    if (usage.whisperCalls)        callWhisperCalls.value        += usage.whisperCalls
+    if (usage.voiceInputTokens)    callVoiceInputTokens.value    += usage.voiceInputTokens
+    if (usage.voiceOutputTokens)   callVoiceOutputTokens.value   += usage.voiceOutputTokens
   }
 
   function setStatus(s) { status.value = s }
@@ -52,7 +77,9 @@ export const useVoiceStore = defineStore('voice', () => {
     isCallActive, activeChatId, activePersonaId, activePersonaName,
     status, isMuted, isPip, lastTranscript, lastAiText,
     selectedMicId, selectedSpeakerId,
+    callModelId, callWhisperSecs, callWhisperCalls,
+    callVoiceInputTokens, callVoiceOutputTokens,
     startCall, endCall, setStatus, setMuted, setPip, setTranscript, setAiText,
-    setMicId, setSpeakerId,
+    setMicId, setSpeakerId, addCallUsage,
   }
 })

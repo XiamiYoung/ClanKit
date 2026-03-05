@@ -27,7 +27,7 @@
 
     <!-- Global voice call components -->
     <CallOverlay @end-call="handleEndCall" @toggle-mute="handleToggleMute" />
-    <CallPip @end-call="handleEndCall" />
+    <CallPip @end-call="handleEndCall" @toggle-mute="handleToggleMute" />
   </div>
 </template>
 

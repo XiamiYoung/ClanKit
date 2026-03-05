@@ -19,6 +19,25 @@
         <span class="call-pip-status">{{ statusLabel }}</span>
       </div>
 
+      <!-- Mute button -->
+      <button
+        class="call-pip-mute" :class="{ active: voiceStore.isMuted }"
+        @click.stop="toggleMute"
+        :title="voiceStore.isMuted ? 'Unmute' : 'Mute'"
+      >
+        <svg v-if="!voiceStore.isMuted" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="1" y1="1" x2="23" y2="23"/>
+          <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+          <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .99-.2 1.93-.57 2.78"/>
+          <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </button>
+
       <!-- End button -->
       <button class="call-pip-end" @click.stop="endCall" title="End Call">
         <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -40,13 +59,13 @@ const voiceStore = useVoiceStore()
 const personasStore = usePersonasStore()
 const router = useRouter()
 
-const emit = defineEmits(['end-call'])
+const emit = defineEmits(['end-call', 'toggle-mute'])
 
 const personaAvatar = computed(() => {
   if (!voiceStore.activePersonaId) return null
   const persona = personasStore.personas.find(p => p.id === voiceStore.activePersonaId)
-  if (!persona?.avatarOptions) return null
-  return getAvatarDataUri(persona.avatarOptions)
+  if (!persona?.avatar) return null
+  return getAvatarDataUri(persona.avatar)
 })
 
 const statusClass = computed(() => {
@@ -68,6 +87,10 @@ const statusLabel = computed(() => {
 function goToCall() {
   voiceStore.setPip(false)
   router.push('/chats')
+}
+
+function toggleMute() {
+  emit('toggle-mute')
 }
 
 function endCall() {
@@ -129,6 +152,15 @@ function endCall() {
   font-family: 'Inter', sans-serif; font-size: 0.6875rem; font-weight: 500;
   color: #9CA3AF;
 }
+
+.call-pip-mute {
+  width: 1.75rem; height: 1.75rem; border: none; border-radius: 0.5rem;
+  background: rgba(255,255,255,0.06); color: #9CA3AF;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
+}
+.call-pip-mute:hover { background: rgba(255,255,255,0.12); color: #FFFFFF; }
+.call-pip-mute.active { background: #374151; color: #FFFFFF; }
 
 .call-pip-end {
   width: 1.75rem; height: 1.75rem; border: none; border-radius: 0.5rem;
