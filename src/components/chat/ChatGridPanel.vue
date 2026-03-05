@@ -548,7 +548,7 @@ function deleteMessage(msg) {
 
 /* ── Input area wrapper ── */
 .gp-input-area {
-  padding: 8px 12px 6px;
+  padding: 0.5rem 0.75rem 0.375rem;
   border-top: 1px solid var(--border, #E5E5EA);
   background: #FFFFFF;
 }
@@ -557,15 +557,15 @@ function deleteMessage(msg) {
 .gp-attach-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 6px;
-  padding: 0 2px;
+  gap: 0.375rem;
+  margin-bottom: 0.375rem;
+  padding: 0 0.125rem;
 }
 .gp-att-img-wrap {
   position: relative;
-  width: 64px;
-  height: 64px;
-  border-radius: 10px;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 0.625rem;
   overflow: hidden;
   border: 1px solid #93C5FD;
   background: #EFF6FF;
@@ -574,10 +574,10 @@ function deleteMessage(msg) {
 .gp-att-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .gp-att-remove {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 18px;
-  height: 18px;
+  top: 0.125rem;
+  right: 0.125rem;
+  width: 1.125rem;
+  height: 1.125rem;
   border-radius: 50%;
   background: rgba(0,0,0,0.55);
   color: #fff;
@@ -591,20 +591,20 @@ function deleteMessage(msg) {
 .gp-att-chip {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 6px 4px 8px;
-  border-radius: 8px;
+  gap: 0.3125rem;
+  padding: 0.25rem 0.375rem 0.25rem 0.5rem;
+  border-radius: 0.5rem;
   font-size: var(--fs-small, 0.75rem);
-  max-width: 180px;
+  max-width: 11.25rem;
   background: #F5F5F5;
   color: #6B7280;
   border: 1px solid #E5E5EA;
 }
 .gp-att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 .gp-att-chip-remove {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 0.25rem;
   border: none;
   background: transparent;
   color: inherit;
@@ -622,10 +622,10 @@ function deleteMessage(msg) {
 .gp-input-box {
   display: flex;
   align-items: flex-end;
-  gap: 6px;
-  padding: 6px 8px;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
   border: 1px solid var(--border, #E5E5EA);
-  border-radius: 14px;
+  border-radius: 0.875rem;
   background: #FAFAFA;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
@@ -637,9 +637,9 @@ function deleteMessage(msg) {
 
 /* ── Icon buttons (attach, stop, send) ── */
 .gp-icon-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 2.125rem;
+  height: 2.125rem;
+  border-radius: 0.625rem;
   border: none;
   background: #F5F5F5;
   color: #9CA3AF;
@@ -649,7 +649,7 @@ function deleteMessage(msg) {
   justify-content: center;
   flex-shrink: 0;
   transition: all 0.15s ease;
-  margin-bottom: 2px;
+  margin-bottom: 0.125rem;
   padding: 0;
 }
 .gp-icon-btn:hover:not(:disabled) { background: #E5E5EA; color: #1A1A1A; }
@@ -669,27 +669,27 @@ function deleteMessage(msg) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 4px;
-  padding: 0 2px;
+  margin-top: 0.25rem;
+  padding: 0 0.125rem;
 }
-.gp-hint-left { display: flex; align-items: center; gap: 8px; }
+.gp-hint-left { display: flex; align-items: center; gap: 0.5rem; }
 .gp-att-count { font-size: var(--fs-small, 0.75rem); color: #1A1A1A; font-weight: 500; }
 .gp-hint-right { font-size: var(--fs-small, 0.75rem); color: #9CA3AF; }
 .gp-sticky-indicator {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   font-size: var(--fs-small, 0.75rem);
   color: #6B7280;
   background: rgba(0,0,0,0.04);
-  border-radius: 6px;
-  padding: 2px 6px 2px 8px;
+  border-radius: 0.375rem;
+  padding: 0.125rem 0.375rem 0.125rem 0.5rem;
 }
 .gp-sticky-indicator strong { color: #1A1A1A; }
 .gp-sticky-clear {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 0.25rem;
   border: none;
   background: transparent;
   color: #9CA3AF;
@@ -703,8 +703,8 @@ function deleteMessage(msg) {
 
 /* ── Approval badge (red, pulsing) ── */
 .gp-approval-badge {
-  display: flex; align-items: center; gap: 5px;
-  padding: 3px 10px 3px 8px; border-radius: var(--radius-full, 9999px);
+  display: flex; align-items: center; gap: 0.3125rem;
+  padding: 0.1875rem 0.625rem 0.1875rem 0.5rem; border-radius: var(--radius-full, 9999px);
   background: #EF4444;
   color: #FFFFFF; font-family: 'Inter', sans-serif;
   font-size: var(--fs-small, 0.75rem); font-weight: 600;
@@ -716,8 +716,8 @@ function deleteMessage(msg) {
 
 /* ── Running badge (black gradient) ── */
 .gp-running-badge {
-  display: flex; align-items: center; gap: 5px;
-  padding: 3px 10px 3px 8px; border-radius: var(--radius-full, 9999px);
+  display: flex; align-items: center; gap: 0.3125rem;
+  padding: 0.1875rem 0.625rem 0.1875rem 0.5rem; border-radius: var(--radius-full, 9999px);
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF; font-family: 'Inter', sans-serif;
   font-size: var(--fs-small, 0.75rem); font-weight: 600;
@@ -726,7 +726,7 @@ function deleteMessage(msg) {
   animation: gridPulse 1.2s ease-in-out infinite;
 }
 .gp-running-dot {
-  width: 6px; height: 6px; border-radius: 50%;
+  width: 0.375rem; height: 0.375rem; border-radius: 50%;
   background: #FFFFFF;
   animation: gridPulse 1.2s ease-in-out infinite;
 }
@@ -737,10 +737,10 @@ function deleteMessage(msg) {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 1.875rem;
+  height: 1.875rem;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   border: none;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
@@ -759,10 +759,10 @@ function deleteMessage(msg) {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 1.875rem;
+  height: 1.875rem;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   border: none;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
@@ -782,11 +782,11 @@ function deleteMessage(msg) {
 <!-- Unscoped styles for teleported swap dropdown -->
 <style>
 .gp-swap-dropdown {
-  width: 300px;
-  max-height: 400px;
+  width: 18.75rem;
+  max-height: 25rem;
   background: #0F0F0F;
   border: 1px solid #2A2A2A;
-  border-radius: 16px;
+  border-radius: 1rem;
   box-shadow: 0 25px 60px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.2);
   display: flex;
   flex-direction: column;
@@ -797,8 +797,8 @@ function deleteMessage(msg) {
 .gp-swap-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 16px 10px;
+  gap: 0.625rem;
+  padding: 0.875rem 1rem 0.625rem;
   border-bottom: 1px solid #1F1F1F;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body, 0.9375rem);
@@ -806,9 +806,9 @@ function deleteMessage(msg) {
   color: #FFFFFF;
 }
 .gp-swap-header-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 1.875rem;
+  height: 1.875rem;
+  border-radius: 0.5rem;
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   display: flex;
   align-items: center;
@@ -820,11 +820,11 @@ function deleteMessage(msg) {
 .gp-swap-search-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 8px 12px;
-  padding: 8px 12px;
+  gap: 0.5rem;
+  margin: 0.5rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid #2A2A2A;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   background: #1A1A1A;
   transition: border-color 0.15s;
 }
@@ -843,7 +843,7 @@ function deleteMessage(msg) {
 .gp-swap-list {
   flex: 1;
   overflow-y: auto;
-  padding: 6px;
+  padding: 0.375rem;
   scrollbar-width: thin;
 }
 .gp-swap-list::-webkit-scrollbar { width: 6px; }
@@ -853,13 +853,13 @@ function deleteMessage(msg) {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 10px 12px;
+  padding: 0.625rem 0.75rem;
   border: none;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   background: transparent;
   cursor: pointer;
   transition: background 0.12s ease;
-  gap: 10px;
+  gap: 0.625rem;
   text-align: left;
   color: #9CA3AF;
 }
@@ -881,13 +881,13 @@ function deleteMessage(msg) {
 }
 .gp-swap-item-meta {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 500;
   color: #6B7280;
   flex-shrink: 0;
 }
 .gp-swap-empty {
-  padding: 24px 16px;
+  padding: 1.5rem 1rem;
   text-align: center;
   font-size: var(--fs-secondary, 0.875rem);
   color: #6B7280;
