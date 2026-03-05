@@ -49,18 +49,176 @@
       <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:0.75rem;">System</p>
       <NavItem to="/config" :icon="IconConfig" label="Configuration" :isCollapsed="isCollapsed" />
 
+      <!-- Cost Overview button -->
+      <button
+        @click="showCostOverview = true"
+        class="cost-overview-btn"
+        :class="{ collapsed: isCollapsed }"
+        :title="isCollapsed ? 'Cost Overview' : ''"
+      >
+        <svg style="width:18px;height:18px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+        <span v-show="!isCollapsed" class="cost-overview-label">Cost Overview</span>
+      </button>
+
     </div>
+
+    <!-- ── Cost Overview Modal ─────────────────────────────────────────── -->
+    <Teleport to="body">
+      <div v-if="showCostOverview" class="cost-modal-backdrop" @click.self="showCostOverview = false">
+        <div class="cost-modal">
+          <div class="cost-modal-header">
+            <div style="display:flex;align-items:center;gap:0.625rem;">
+              <div class="cost-modal-icon">
+                <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+              </div>
+              <span class="cost-modal-title">Cost Overview</span>
+              <span class="cost-modal-subtitle">All-time, all chats</span>
+            </div>
+            <button @click="showCostOverview = false" class="cost-modal-close">
+              <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+
+          <div v-if="isLoadingOverview" class="cost-modal-loading">
+            <svg class="cost-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            <span>Loading usage data…</span>
+          </div>
+
+          <div v-else class="cost-modal-body">
+            <div v-if="!overviewProviders.length" style="text-align:center;padding:2rem;color:#6B7280;font-size:var(--fs-body);">
+              No usage data yet. Send some messages first.
+            </div>
+            <template v-else>
+              <div v-for="prov in overviewProviders" :key="prov.name" class="cost-provider-card">
+                <div class="cost-provider-header">
+                  <span class="cost-provider-name">{{ prov.label }}</span>
+                  <span class="cost-provider-total">{{ fmtCost(prov.costs.USD, 'USD') }}</span>
+                </div>
+                <div class="cost-provider-detail">
+                  <span>Input: {{ (prov.usage.inputTokens || 0).toLocaleString() }} tok</span>
+                  <span>Output: {{ (prov.usage.outputTokens || 0).toLocaleString() }} tok</span>
+                  <span v-if="prov.usage.cacheReadTokens">Cache hits: {{ (prov.usage.cacheReadTokens || 0).toLocaleString() }}</span>
+                  <span v-if="prov.usage.whisperCalls">Whisper: {{ prov.usage.whisperCalls }} calls</span>
+                </div>
+                <div class="cost-currency-row">
+                  <span>{{ fmtCost(prov.costs.USD, 'USD') }}</span>
+                  <span style="color:#4B5563;">/</span>
+                  <span>{{ fmtCost(prov.costs.CNY, 'CNY') }}</span>
+                  <span style="color:#4B5563;">/</span>
+                  <span>{{ fmtCost(prov.costs.SGD, 'SGD') }}</span>
+                </div>
+              </div>
+
+              <div class="cost-total-row">
+                <span class="cost-total-label">TOTAL</span>
+                <div class="cost-currency-row" style="font-weight:700;">
+                  <span>{{ fmtCost(overviewTotal.USD, 'USD') }}</span>
+                  <span style="color:#4B5563;">/</span>
+                  <span>{{ fmtCost(overviewTotal.CNY, 'CNY') }}</span>
+                  <span style="color:#4B5563;">/</span>
+                  <span>{{ fmtCost(overviewTotal.SGD, 'SGD') }}</span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </nav>
 </template>
 
 <script setup>
-import { defineComponent, h, ref, onMounted, onUnmounted } from 'vue'
+import { defineComponent, h, ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useVoiceStore } from '../../stores/voice'
+import { useConfigStore } from '../../stores/config'
+import { resolveModelPrice, calcCostUSD, convertCurrencies, formatCost } from '../../utils/pricing.js'
 
 const route = useRoute()
 const router = useRouter()
 const voiceStore = useVoiceStore()
+const configStore = useConfigStore()
+
+// ── Cost Overview ────────────────────────────────────────────────────────────
+const showCostOverview  = ref(false)
+const isLoadingOverview = ref(false)
+const overviewData      = ref(null)
+
+// Alias to avoid name collision with any local variable
+const fmtCost = formatCost
+
+const PROVIDER_LABELS = {
+  anthropic:  'Anthropic',
+  openrouter: 'OpenRouter',
+  openai:     'OpenAI',
+  deepseek:   'DeepSeek',
+  voice:      'Voice (Whisper/TTS)',
+}
+
+watch(showCostOverview, async (open) => {
+  if (!open) return
+  isLoadingOverview.value = true
+  overviewData.value = null
+  try {
+    const index = await window.electronAPI.getChatIndex()
+    const provMap = {}
+
+    for (const meta of (index || [])) {
+      const chat = await window.electronAPI.getChat(meta.id)
+      if (!chat?.usage) continue
+      const u        = chat.usage
+      const provider = chat.provider || 'anthropic'
+      const model    = chat.model    || ''
+
+      if (!provMap[provider]) {
+        provMap[provider] = {
+          label: PROVIDER_LABELS[provider] || provider,
+          usage: { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, voiceInputTokens: 0, voiceOutputTokens: 0, whisperCalls: 0, whisperSecs: 0 },
+          modelsUsed: new Set(),
+        }
+      }
+      const p = provMap[provider]
+      for (const key of Object.keys(p.usage)) {
+        p.usage[key] = (p.usage[key] || 0) + (u[key] || 0)
+      }
+      if (model) p.modelsUsed.add(model)
+    }
+
+    const pricing = configStore.config.pricing
+    const rates   = pricing?.currencyRates || { USD: 1, CNY: 7.28, SGD: 1.35 }
+
+    const providers = Object.entries(provMap).map(([, p]) => {
+      let totalUSD = 0
+      const prices = [...p.modelsUsed].map(m => resolveModelPrice(m, pricing)).filter(Boolean)
+      if (prices.length > 0) {
+        const avgPrice = {
+          input:      prices.reduce((s, x) => s + (x.input || 0), 0)      / prices.length,
+          output:     prices.reduce((s, x) => s + (x.output || 0), 0)     / prices.length,
+          cacheWrite: prices.reduce((s, x) => s + (x.cacheWrite || 0), 0) / prices.length,
+          cacheRead:  prices.reduce((s, x) => s + (x.cacheRead || 0), 0)  / prices.length,
+          perSec:     prices.reduce((s, x) => s + (x.perSec || 0), 0)     / prices.length,
+        }
+        totalUSD = calcCostUSD(p.usage, avgPrice)
+      }
+      return { name: p.label, label: p.label, usage: p.usage, costs: convertCurrencies(totalUSD, rates) }
+    })
+
+    const totalUSD = providers.reduce((s, p) => s + p.costs.USD, 0)
+    overviewData.value = { providers, total: convertCurrencies(totalUSD, rates) }
+  } catch (err) {
+    console.error('Cost overview error', err)
+    overviewData.value = { providers: [], total: { USD: 0, CNY: 0, SGD: 0 } }
+  } finally {
+    isLoadingOverview.value = false
+  }
+})
+
+const overviewProviders = computed(() => overviewData.value?.providers || [])
+const overviewTotal     = computed(() => overviewData.value?.total     || { USD: 0, CNY: 0, SGD: 0 })
 
 const isCollapsed = ref(false)
 const userOverride = ref(null) // null = auto mode, true/false = user locked
@@ -284,4 +442,94 @@ const NavItem = defineComponent({
   }
   .sidebar-call-indicator, .sidebar-call-dot { animation: none; }
 }
+
+.cost-overview-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  color: #6B7280;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  transition: all 0.15s ease;
+  margin-top: 0.25rem;
+  text-align: left;
+}
+.cost-overview-btn:hover { background: #F5F5F5; color: #1A1A1A; }
+.cost-overview-btn.collapsed { justify-content: center; padding: 0.5rem; }
+.cost-overview-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+
+<style>
+/* Cost Overview modal — unscoped (teleported to body) */
+.cost-modal-backdrop {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+}
+.cost-modal {
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 1rem;
+  width: 32rem; max-width: 90vw; max-height: 80vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+  animation: costModalIn 0.15s ease-out;
+}
+@keyframes costModalIn {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}
+.cost-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.875rem 1rem 0.75rem;
+  border-bottom: 1px solid #1F1F1F;
+}
+.cost-modal-icon {
+  width: 2rem; height: 2rem; border-radius: 0.5rem;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  display: flex; align-items: center; justify-content: center;
+  color: #FFFFFF; flex-shrink: 0;
+}
+.cost-modal-title   { font-family:'Inter',sans-serif; font-size:var(--fs-subtitle); font-weight:700; color:#FFFFFF; }
+.cost-modal-subtitle{ font-size:var(--fs-caption); color:#6B7280; margin-left:0.25rem; }
+.cost-modal-close {
+  width:2rem; height:2rem; border-radius:0.5rem; background:none; border:none;
+  cursor:pointer; display:flex; align-items:center; justify-content:center; color:#6B7280;
+  transition: background 0.15s;
+}
+.cost-modal-close:hover { background:#1A1A1A; color:#FFFFFF; }
+.cost-modal-loading {
+  display:flex; align-items:center; justify-content:center; gap:0.75rem;
+  padding:3rem; color:#6B7280; font-size:var(--fs-body);
+}
+.cost-spinner { width:1.25rem; height:1.25rem; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.cost-modal-body {
+  flex:1; overflow-y:auto; padding:1rem;
+  display:flex; flex-direction:column; gap:0.75rem;
+  scrollbar-width:thin;
+}
+.cost-modal-body::-webkit-scrollbar { width: 6px; }
+.cost-modal-body::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+.cost-provider-card {
+  background:#141414; border:1px solid #1F1F1F; border-radius:0.75rem; padding:0.75rem 1rem;
+}
+.cost-provider-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.375rem; }
+.cost-provider-name  { font-size:var(--fs-secondary); font-weight:600; color:#FFFFFF; }
+.cost-provider-total { font-size:var(--fs-secondary); font-weight:700; color:#34D399; font-family:'JetBrains Mono',monospace; }
+.cost-provider-detail{ display:flex; gap:1rem; flex-wrap:wrap; font-size:var(--fs-caption); color:#6B7280; margin-bottom:0.375rem; }
+.cost-currency-row   { display:flex; gap:0.5rem; align-items:center; font-size:var(--fs-caption); color:#9CA3AF; font-family:'JetBrains Mono',monospace; }
+.cost-total-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:0.75rem 1rem; background:#1A1A1A; border-radius:0.75rem;
+  border:1px solid #2A2A2A;
+}
+.cost-total-label { font-size:var(--fs-secondary); font-weight:700; color:#FFFFFF; letter-spacing:0.06em; }
 </style>
