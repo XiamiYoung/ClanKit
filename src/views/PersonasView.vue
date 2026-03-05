@@ -332,6 +332,9 @@ function getAvatarGradient(persona) {
     background: #E5E5EA;
   }
 }
+@media (min-width: 2560px) {
+  .personas-columns { gap: 1.5rem; }
+}
 
 /* ── Section header ──────────────────────────────────────────────────────── */
 .section-header {
