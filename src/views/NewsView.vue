@@ -810,12 +810,20 @@ onMounted(async () => {
 
 .news-scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 20px;
   padding-bottom: 24px;
   scrollbar-width: thin;
+}
+
+@media (min-width: 2560px) {
+  .news-scroll {
+    overflow-y: hidden;
+    padding-bottom: 0;
+  }
 }
 
 .news-header {
@@ -1084,7 +1092,11 @@ onMounted(async () => {
 @media (min-width: 2560px) {
   .news-grid {
     grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: 400px;
+    grid-template-rows: repeat(2, 1fr);
+    grid-auto-rows: unset;
+    flex: 1;
+    height: 90%;
+    min-height: 0;
   }
 }
 
@@ -1104,7 +1116,7 @@ onMounted(async () => {
 
 @media (min-width: 2560px) {
   .feed-card {
-    height: 400px;
+    height: 100%;
   }
 }
 .feed-card:hover {
