@@ -53,10 +53,23 @@
   }
 
   /* ── Global font scale ───────────────────────────────────────────────────
-     125% base = 20px. All rem-based Tailwind utilities scale automatically.
-     Covers bubbles, input area, sidebar, tool blocks — everything.          */
+     Breakpoint-stepped scaling:
+     < 1920px → 16px (base, graceful fallback)
+     1920px+  → 18px (HD 1080p, primary target)
+     2560px+  → 20px (4K / large display)
+     All rem-based Tailwind utilities and var(--fs-*) tokens scale automatically. */
   html {
-    font-size: 125%;
+    font-size: 100%;
+  }
+
+  /* HD (1920px+): 18px — primary target */
+  @media (min-width: 1920px) {
+    html { font-size: 112.5%; }
+  }
+
+  /* 4K (2560px+): 20px — large display target */
+  @media (min-width: 2560px) {
+    html { font-size: 125%; }
   }
 
   html, body, #app {
