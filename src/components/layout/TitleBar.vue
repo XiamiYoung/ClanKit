@@ -2,13 +2,13 @@
   <!-- Full-width drag region — clicks on buttons are excluded via no-drag -->
   <div
     class="titlebar flex items-center shrink-0 select-none"
-    style="height:38px; background:#FFFFFF; border-bottom:1px solid #E5E5EA; -webkit-app-region:drag; padding:0 8px 0 14px;"
+    style="height:2.375rem; background:#FFFFFF; border-bottom:1px solid #E5E5EA; -webkit-app-region:drag; padding:0 0.5rem 0 0.875rem;"
   >
     <!-- Sidebar toggle -->
     <button
       @click.stop="$emit('toggle-sidebar')"
       class="flex items-center justify-center rounded transition-colors mr-2"
-      style="-webkit-app-region:no-drag; width:28px; height:28px; color:#6B7280; background:transparent; border:none; cursor:pointer; flex-shrink:0;"
+      style="-webkit-app-region:no-drag; width:1.75rem; height:1.75rem; color:#6B7280; background:transparent; border:none; cursor:pointer; flex-shrink:0;"
       @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
       @mouseleave="e => e.currentTarget.style.background='transparent'"
       title="Toggle sidebar"
@@ -28,12 +28,12 @@
     <div style="flex:1;" />
 
     <!-- Window controls -->
-    <div class="flex items-center" style="-webkit-app-region:no-drag; gap:2px;">
+    <div class="flex items-center" style="-webkit-app-region:no-drag; gap:0.125rem;">
       <!-- Minimize -->
       <button
         @click.stop="minimize"
         class="flex items-center justify-center rounded transition-colors"
-        style="width:32px; height:26px; background:transparent; border:none; color:#6B7280; cursor:pointer;"
+        style="width:2rem; height:1.625rem; background:transparent; border:none; color:#6B7280; cursor:pointer;"
         @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
         @mouseleave="e => e.currentTarget.style.background='transparent'"
         title="Minimize"
@@ -47,7 +47,7 @@
       <button
         @click.stop="toggleMaximize"
         class="flex items-center justify-center rounded transition-colors"
-        style="width:32px; height:26px; background:transparent; border:none; color:#6B7280; cursor:pointer;"
+        style="width:2rem; height:1.625rem; background:transparent; border:none; color:#6B7280; cursor:pointer;"
         @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
         @mouseleave="e => e.currentTarget.style.background='transparent'"
         :title="isMaximized ? 'Restore' : 'Maximize'"
@@ -67,7 +67,7 @@
       <button
         @click.stop="close"
         class="flex items-center justify-center rounded transition-colors"
-        style="width:32px; height:26px; background:transparent; border:none; color:#6B7280; cursor:pointer;"
+        style="width:2rem; height:1.625rem; background:transparent; border:none; color:#6B7280; cursor:pointer;"
         @mouseenter="e => { e.currentTarget.style.background='#c0392b'; e.currentTarget.style.color='#ffffff'; }"
         @mouseleave="e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#6B7280'; }"
         title="Close"
