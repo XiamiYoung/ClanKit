@@ -941,11 +941,11 @@ const SkillTreeNode = defineComponent({
 /* ── Skills Grid ───────────────────────────────────────────────────────────── */
 .skill-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 20px;
 }
-@media (max-width: 1200px) { .skill-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 900px)  { .skill-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1920px) { .skill-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 2560px) { .skill-grid { grid-template-columns: repeat(4, 1fr); } }
 
 /* ── Skill Card — iOS Minimalist ─────────────────────────────────────── */
 .skill-card {
