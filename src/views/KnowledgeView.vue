@@ -790,7 +790,7 @@ function formatDate(ts) {
   white-space: nowrap;
 }
 .stat-label {
-  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 700;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-small); font-weight: 700;
   color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em;
 }
 .stat-value {
@@ -826,7 +826,7 @@ function formatDate(ts) {
 }
 .source-badge .icon-xs { color: var(--text-muted); }
 .source-badge-count {
-  font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
+  font-family: 'JetBrains Mono', monospace; font-size: var(--fs-small); font-weight: 600;
   color: var(--text-muted); margin-left: 2px;
 }
 .source-delete-btn {
@@ -880,7 +880,7 @@ function formatDate(ts) {
 }
 .index-enabled-chip {
   flex-shrink: 0; padding: 2px 8px; border-radius: 10px;
-  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 700;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-small); font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.04em;
 }
 .chip-enabled, .chip-disabled {
@@ -1064,16 +1064,16 @@ function formatDate(ts) {
 }
 .rag-result-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
 .rag-result-rank {
-  font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+  font-family: 'JetBrains Mono', monospace; font-size: var(--fs-caption); font-weight: 700;
   color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border);
   padding: 1px 6px; border-radius: 4px;
 }
 .rag-result-score {
-  font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
+  font-family: 'JetBrains Mono', monospace; font-size: var(--fs-caption); font-weight: 600;
   color: #059669;
 }
 .rag-result-source {
-  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption); font-weight: 500;
   color: var(--text-muted); margin-left: auto;
 }
 .rag-result-text {
