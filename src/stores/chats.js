@@ -46,6 +46,7 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.maxPersonaRounds === undefined) chat.maxPersonaRounds = null  // null = use default (10)
     if (chat.codingProvider === undefined) chat.codingProvider = 'claude-code'
     if (chat.personaModelOverrides === undefined) chat.personaModelOverrides = {}
+    if (chat.usage === undefined) chat.usage = null  // null = no usage data yet
     // messages === null means "not loaded yet" (lazy)
     if (chat.messages) {
       for (const msg of chat.messages) {
