@@ -265,6 +265,9 @@
         </div>
       </Teleport>
 
+      <!-- Scrollable content: top stories + feed grid -->
+      <div class="news-scroll">
+
       <!-- Top Stories -->
       <div v-if="newsStore.topArticles.length || newsStore.topLoading || newsStore.hasFetchedOnce" class="top-news-section">
         <div class="top-news-label">
@@ -364,6 +367,8 @@
           </div>
         </div>
       </div>
+
+      </div><!-- end .news-scroll -->
     </template>
   </div>
 </template>
@@ -799,8 +804,18 @@ onMounted(async () => {
   height: 100%;
   overflow: hidden;
   background: var(--bg-main);
-  padding: 24px 28px;
+  padding: 24px 28px 0;
   gap: 20px;
+}
+
+.news-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 24px;
+  scrollbar-width: thin;
 }
 
 .news-header {
@@ -1055,24 +1070,21 @@ onMounted(async () => {
 .news-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: 1fr 1fr;
+  grid-auto-rows: 360px;
   gap: 14px;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
 }
 
 @media (min-width: 1920px) {
   .news-grid {
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: 1fr 1fr 1fr;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: 360px;
   }
 }
 
 @media (min-width: 2560px) {
   .news-grid {
     grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: 1fr 1fr;
+    grid-auto-rows: 400px;
   }
 }
 
@@ -1087,8 +1099,13 @@ onMounted(async () => {
   transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
               border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  min-height: 0;
-  max-height: 100%;
+  height: 360px;
+}
+
+@media (min-width: 2560px) {
+  .feed-card {
+    height: 400px;
+  }
 }
 .feed-card:hover {
   border-color: #D1D1D6;
