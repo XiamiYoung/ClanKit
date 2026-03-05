@@ -913,7 +913,7 @@ onMounted(async () => {
 
 .top-news-row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   height: 76px;
 }
@@ -953,7 +953,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: var(--fs-caption);
   font-weight: 700;
   flex-shrink: 0;
   color: #FFFFFF;
@@ -1039,28 +1039,22 @@ onMounted(async () => {
   animation: spin 0.7s linear infinite;
 }
 
-@media (max-width: 1400px) {
+@media (min-width: 1920px) {
   .top-news-row {
     grid-template-columns: repeat(5, 1fr);
   }
 }
 
-@media (max-width: 1000px) {
+@media (min-width: 2560px) {
   .top-news-row {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  .top-news-row {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(6, 1fr);
   }
 }
 
 /* ── Grid ─────────────────────────────────────────────────────────────── */
 .news-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   grid-template-rows: 1fr 1fr;
   gap: 14px;
   flex: 1;
@@ -1068,29 +1062,17 @@ onMounted(async () => {
   overflow: hidden;
 }
 
-@media (max-width: 1400px) {
+@media (min-width: 1920px) {
   .news-grid {
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: 1fr 1fr 1fr;
   }
 }
 
-@media (max-width: 1000px) {
+@media (min-width: 2560px) {
   .news-grid {
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(4, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  .news-grid {
-    grid-template-columns: 1fr;
-    grid-template-rows: none;
-    overflow-y: auto;
-    scrollbar-width: thin;
-  }
-  .feed-card {
-    max-height: 400px;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: 1fr 1fr;
   }
 }
 
@@ -1162,7 +1144,7 @@ onMounted(async () => {
 
 .feed-info-count {
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: var(--fs-caption);
   font-weight: 700;
   color: #FFFFFF;
   padding: 1px 7px;
@@ -1247,7 +1229,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: var(--fs-caption);
   font-weight: 700;
   flex-shrink: 0;
   margin-top: 1px;
