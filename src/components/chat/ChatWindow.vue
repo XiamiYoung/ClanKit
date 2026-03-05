@@ -568,10 +568,10 @@ defineExpose({ scrollToBottom })
 .cw-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 24px;
+  padding: 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 1rem;
   scrollbar-width: thin;
   background: #FFFFFF;
   min-height: 0;
@@ -590,7 +590,7 @@ defineExpose({ scrollToBottom })
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 0.875rem;
   height: 100%;
   text-align: center;
 }
@@ -602,8 +602,8 @@ defineExpose({ scrollToBottom })
   letter-spacing: -0.01em;
 }
 .cw-spinner {
-  width: 28px;
-  height: 28px;
+  width: 1.75rem;
+  height: 1.75rem;
   border: 3px solid #E5E5EA;
   border-top-color: #1A1A1A;
   border-radius: 50%;
@@ -612,9 +612,9 @@ defineExpose({ scrollToBottom })
 @keyframes cw-spin { to { transform: rotate(360deg); } }
 
 .cw-empty-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 18px;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 1.125rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -632,7 +632,7 @@ defineExpose({ scrollToBottom })
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   color: #9CA3AF;
-  margin: 4px 0 0;
+  margin: 0.25rem 0 0;
 }
 
 /* ── Message avatars ── */
@@ -640,20 +640,20 @@ defineExpose({ scrollToBottom })
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   flex-shrink: 0;
 }
 .cw-msg-avatar-wrap { flex-shrink: 0; }
 .cw-msg-avatar-img {
-  width: 44px;
-  height: 44px;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 50%;
   object-fit: cover;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .cw-msg-avatar-fallback {
-  width: 44px;
-  height: 44px;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -669,7 +669,7 @@ defineExpose({ scrollToBottom })
 }
 .cw-msg-name-chip {
   display: inline-block;
-  padding: 1px 8px;
+  padding: 0.0625rem 0.5rem;
   border-radius: 9999px;
   font-size: 0.62rem;
   font-weight: 600;
@@ -689,11 +689,11 @@ defineExpose({ scrollToBottom })
 .cw-system-banner {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.75rem;
   background: rgba(107, 114, 128, 0.08);
   border: 1px solid rgba(107, 114, 128, 0.18);
-  border-radius: 20px;
+  border-radius: 1.25rem;
   color: #6B7280;
   font-size: var(--fs-caption);
   font-family: 'Inter', sans-serif;
@@ -703,9 +703,9 @@ defineExpose({ scrollToBottom })
 
 /* ── Hover action buttons ── */
 .cw-msg-action-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -721,9 +721,9 @@ defineExpose({ scrollToBottom })
 
 /* ── Message bubbles ── */
 .cw-msg-bubble {
-  padding: 14px 18px;
+  padding: 0.875rem 1.125rem;
   line-height: 1.65;
-  border-radius: 18px;
+  border-radius: 1.125rem;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
 }
@@ -735,7 +735,7 @@ defineExpose({ scrollToBottom })
 .cw-msg-bubble-user {
   background: linear-gradient(135deg, #4338CA 0%, #6366F1 50%, #818CF8 100%);
   color: #ffffff;
-  border-radius: 18px;
+  border-radius: 1.125rem;
   box-shadow: 0 4px 16px rgba(99,102,241,0.25), 0 1px 4px rgba(67,56,202,0.15);
 }
 .cw-msg-bubble-user :deep(*) { color: #FFFFFF !important; }
@@ -744,7 +744,7 @@ defineExpose({ scrollToBottom })
   border: none;
   color: #1A1A1A;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.03);
-  border-radius: 18px;
+  border-radius: 1.125rem;
 }
 
 /* ── Timestamp ── */
@@ -752,12 +752,12 @@ defineExpose({ scrollToBottom })
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   color: #9CA3AF;
-  margin-top: 3px;
+  margin-top: 0.1875rem;
 }
 
 /* ── Thinking dots ── */
-.cw-thinking { display: flex; gap: 3px; padding: 4px 0; }
-.cw-thinking .dot { width: 5px; height: 5px; border-radius: 50%; background: #9CA3AF; animation: cw-bounce 1s ease-in-out infinite; }
+.cw-thinking { display: flex; gap: 0.1875rem; padding: 0.25rem 0; }
+.cw-thinking .dot { width: 0.3125rem; height: 0.3125rem; border-radius: 50%; background: #9CA3AF; animation: cw-bounce 1s ease-in-out infinite; }
 .cw-thinking .dot:nth-child(2) { animation-delay: 0.15s; }
 .cw-thinking .dot:nth-child(3) { animation-delay: 0.3s; }
 @keyframes cw-bounce { 0%,80%,100%{transform:translateY(0);} 40%{transform:translateY(-4px);} }
@@ -770,24 +770,24 @@ defineExpose({ scrollToBottom })
 .cw-attachments {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 16px 0;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem 0;
   background: #FFFFFF;
   border-top: 1px solid #E5E5EA;
 }
 .cw-att-chip {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 8px;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
   background: #F5F5F5;
   border: 1px solid #E5E5EA;
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   color: #1A1A1A;
-  max-width: 200px;
+  max-width: 12.5rem;
 }
 .cw-att-name {
   white-space: nowrap;
@@ -796,8 +796,8 @@ defineExpose({ scrollToBottom })
   min-width: 0;
 }
 .cw-att-remove {
-  width: 18px;
-  height: 18px;
+  width: 1.125rem;
+  height: 1.125rem;
   border-radius: 50%;
   border: none;
   background: #E5E5EA;
@@ -816,17 +816,17 @@ defineExpose({ scrollToBottom })
 
 /* ── Input area (default slot fallback) ── */
 .cw-input-area {
-  padding: 10px 16px 12px;
+  padding: 0.625rem 1rem 0.75rem;
   flex-shrink: 0;
   background: #FFFFFF;
   border-top: 1px solid #E5E5EA;
 }
 .cw-input-box {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
   align-items: flex-end;
-  border-radius: 14px;
-  padding: 10px 14px;
+  border-radius: 0.875rem;
+  padding: 0.625rem 0.875rem;
   background: #FFFFFF;
   border: 1px solid #E5E5EA;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
@@ -846,16 +846,16 @@ defineExpose({ scrollToBottom })
   font-size: var(--fs-body, 0.9375rem);
   color: var(--text-primary, #1A1A1A);
   line-height: 1.5;
-  min-height: 44px;
-  max-height: 120px;
+  min-height: 2.75rem;
+  max-height: 7.5rem;
   overflow-y: auto;
 }
 .cw-textarea::placeholder { color: var(--text-muted, #9CA3AF); }
 
 .cw-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.625rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -887,25 +887,25 @@ defineExpose({ scrollToBottom })
   z-index: 9999;
   pointer-events: none;
   transform: translate(-50%, -100%);
-  min-width: 140px;
-  max-width: 280px;
-  padding: 8px 12px;
+  min-width: 8.75rem;
+  max-width: 17.5rem;
+  padding: 0.5rem 0.75rem;
   background: rgba(0, 0, 0, 0.92);
-  border-radius: 10px;
+  border-radius: 0.625rem;
   box-shadow: 0 4px 12px rgba(0,0,0,0.12);
 }
 .cw-avatar-tooltip-name {
   font-family: 'Inter', sans-serif;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: #F5F5F5;
 }
 .cw-avatar-tooltip-desc {
   font-family: 'Inter', sans-serif;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 400;
   color: #D1D1D6;
   line-height: 1.45;
-  margin-top: 3px;
+  margin-top: 0.1875rem;
 }
 </style>
