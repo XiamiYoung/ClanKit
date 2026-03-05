@@ -11,30 +11,43 @@
       </div>
     </div>
 
-    <!-- Top-level tab bar -->
-    <div class="config-tab-bar">
-      <div class="config-tab-group">
-        <button
-          v-for="tab in topTabs"
-          :key="tab.value"
-          @click="activeTopTab = tab.value"
-          class="config-tab-btn"
-          :class="{ active: activeTopTab === tab.value }"
-        >
-          <component :is="tab.icon" class="config-tab-icon" />
-          {{ tab.label }}
-        </button>
-      </div>
+    <!-- Primary tab bar (2 tabs) -->
+    <div class="config-primary-tabs">
+      <button
+        v-for="tab in topTabs" :key="tab.value"
+        @click="switchTopTab(tab.value)"
+        class="config-primary-tab"
+        :class="{ active: activeTopTab === tab.value }"
+      >
+        <component :is="tab.icon" class="config-tab-icon" />
+        {{ tab.label }}
+      </button>
     </div>
 
-    <!-- Scrollable content -->
-    <div class="config-content">
-      <div class="config-content-inner">
+    <!-- Two-column body: left sub-nav + right content -->
+    <div class="config-body">
+      <!-- Left vertical sub-nav -->
+      <nav class="config-subnav">
+        <button
+          v-for="sub in currentSubTabs" :key="sub.value"
+          @click="activeSubTab = sub.value"
+          class="config-subnav-item"
+          :class="{ active: activeSubTab === sub.value }"
+        >
+          <component :is="sub.icon" class="config-subnav-icon" />
+          <span class="config-subnav-label">{{ sub.label }}</span>
+          <span class="config-subnav-dot" :class="getSubTabStatus(sub.value)" />
+        </button>
+      </nav>
+
+      <!-- Right scrollable content -->
+      <div class="config-content">
+        <div class="config-content-inner">
 
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <!-- General tab -->
+        <!-- Paths (General > Paths) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <template v-if="activeTopTab === 'general'">
+        <template v-if="activeTopTab === 'general' && activeSubTab === 'paths'">
           <div class="config-card">
             <div class="form-group">
               <label for="dataPath" class="form-label">
@@ -76,24 +89,9 @@
             </div>
 
             <div class="form-group">
-              <label for="maxOutputTokens" class="form-label">
-                Max Output Tokens
-                <span class="form-label-hint">Per-turn output limit</span>
-              </label>
-              <input
-                id="maxOutputTokens"
-                v-model.number="form.maxOutputTokens"
-                type="number"
-                min="1024"
-                max="98304"
-                class="field font-mono"
-                style="max-width: 160px;"
-                @blur="form.maxOutputTokens = Math.min(98304, Math.max(1024, Number(form.maxOutputTokens) || 32768))"
-              />
-              <p class="hint">
-                Maximum tokens the model can generate per turn. Default: 32768. Hard limit: 98304 (96k).
-                Increase for long-form generation tasks.
-              </p>
+              <label for="skillsPath" class="form-label">Skills Path</label>
+              <input id="skillsPath" v-model="form.skillsPath" type="text" placeholder="~/.claude/skills" class="field font-mono" />
+              <p class="hint">Directory containing skill folders. Leave empty for default: ~/.claude/skills</p>
             </div>
           </div>
 
@@ -114,9 +112,33 @@
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <!-- AI Models tab -->
+        <!-- Models (AI > Models) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <template v-if="activeTopTab === 'models'">
+        <template v-if="activeTopTab === 'ai' && activeSubTab === 'models'">
+
+          <!-- Max Output Tokens (global per-turn limit) -->
+          <div class="config-card">
+            <div class="form-group" style="margin-bottom:0;">
+              <label for="maxOutputTokens" class="form-label">
+                Max Output Tokens
+                <span class="form-label-hint">Per-turn output limit</span>
+              </label>
+              <input
+                id="maxOutputTokens"
+                v-model.number="form.maxOutputTokens"
+                type="number"
+                min="1024"
+                max="98304"
+                class="field font-mono"
+                style="max-width: 160px;"
+                @blur="form.maxOutputTokens = Math.min(98304, Math.max(1024, Number(form.maxOutputTokens) || 32768))"
+              />
+              <p class="hint">
+                Maximum tokens the model can generate per turn. Default: 32768. Hard limit: 98304 (96k).
+                Increase for long-form generation tasks.
+              </p>
+            </div>
+          </div>
 
           <!-- Provider tab selector -->
           <div class="provider-tab-group">
@@ -521,36 +543,9 @@
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <!-- AI Skills tab -->
+        <!-- Knowledge (AI > Knowledge) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <template v-if="activeTopTab === 'skills'">
-          <div class="config-card">
-            <div class="form-group">
-              <label for="skillsPath" class="form-label">Skills Path</label>
-              <input id="skillsPath" v-model="form.skillsPath" type="text" placeholder="~/.claude/skills" class="field font-mono" />
-              <p class="hint">Directory containing skill folders. Leave empty for default: ~/.claude/skills</p>
-            </div>
-          </div>
-          <div class="save-row">
-            <AppButton size="save" @click="saveSkills" :disabled="savingSkills" :loading="savingSkills">
-              <svg v-if="!savingSkills" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-              </svg>
-              {{ savingSkills ? 'Saving…' : 'Save Changes' }}
-            </AppButton>
-            <span v-if="savedSkillsMsg" class="save-indicator" :class="savedSkillsMsg.ok ? 'success' : 'error'">
-              <svg v-if="savedSkillsMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              {{ savedSkillsMsg.text }}
-            </span>
-          </div>
-        </template>
-
-        <!-- ════════════════════════════════════════════════════════════════ -->
-        <!-- AI Knowledge tab (Pinecone) -->
-        <!-- ════════════════════════════════════════════════════════════════ -->
-        <template v-if="activeTopTab === 'knowledge'">
+        <template v-if="activeTopTab === 'ai' && activeSubTab === 'knowledge'">
           <div class="config-card">
 
             <div class="form-group">
@@ -600,9 +595,9 @@
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <!-- Voice Call tab -->
+        <!-- Voice (AI > Voice) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <template v-if="activeTopTab === 'voice'">
+        <template v-if="activeTopTab === 'ai' && activeSubTab === 'voice'">
           <div class="config-card">
             <div class="form-section-header" style="margin-bottom:12px;">
               <div class="section-icon-sm">
@@ -834,9 +829,9 @@
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <!-- Email tab -->
+        <!-- Email (General > Email) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <template v-if="activeTopTab === 'email'">
+        <template v-if="activeTopTab === 'general' && activeSubTab === 'email'">
           <div class="config-card">
 
             <!-- SMTP Server section -->
@@ -938,9 +933,9 @@
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <!-- Security tab -->
+        <!-- Security (General > Security) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <template v-if="activeTopTab === 'security'">
+        <template v-if="activeTopTab === 'general' && activeSubTab === 'security'">
 
           <!-- Global Mode -->
           <div class="config-card">
@@ -1048,6 +1043,7 @@
           </div>
         </template>
 
+        </div>
       </div>
     </div>
   </div>
@@ -1072,13 +1068,24 @@ function openInExplorer(path) {
 }
 const showKey  = ref(false)
 const showOpenRouterKey = ref(false)
-const VALID_TABS = ['general', 'models', 'skills', 'knowledge', 'voice', 'email', 'security']
+const VALID_TABS = ['general', 'ai', 'models', 'skills', 'knowledge', 'voice', 'email', 'security']
 const activeTopTab = ref('general')
 const activeProviderTab = ref('anthropic')
 
 // Respond to ?tab= query param (e.g. from ToolsView → "Configure SMTP" button)
+// Map old flat tab values to new two-level structure
 watch(() => route.query.tab, (tab) => {
-  if (tab && VALID_TABS.includes(tab)) activeTopTab.value = tab
+  if (!tab) return
+  // New top-level tabs
+  if (tab === 'general') { activeTopTab.value = 'general'; activeSubTab.value = 'paths'; return }
+  if (tab === 'ai') { activeTopTab.value = 'ai'; activeSubTab.value = 'models'; return }
+  // Old flat tab values → remap
+  if (tab === 'models') { activeTopTab.value = 'ai'; activeSubTab.value = 'models'; return }
+  if (tab === 'voice') { activeTopTab.value = 'ai'; activeSubTab.value = 'voice'; return }
+  if (tab === 'knowledge') { activeTopTab.value = 'ai'; activeSubTab.value = 'knowledge'; return }
+  if (tab === 'security') { activeTopTab.value = 'general'; activeSubTab.value = 'security'; return }
+  if (tab === 'email') { activeTopTab.value = 'general'; activeSubTab.value = 'email'; return }
+  if (tab === 'skills') { activeTopTab.value = 'general'; activeSubTab.value = 'paths'; return }
 }, { immediate: true })
 
 // Per-tab save state
@@ -1232,16 +1239,51 @@ const IconEmail = defineComponent({
     h('polyline', { points: '22,6 12,13 2,6' })
   ])
 })
-// Top-level tabs
+const IconPaths = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('path', { d: 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' })
+  ])
+})
+// Top-level tabs (2 primary)
 const topTabs = [
-  { value: 'general',  label: 'General',      icon: IconGeneral  },
-  { value: 'models',   label: 'AI Models',    icon: IconModels   },
-  { value: 'skills',   label: 'AI Skills',    icon: IconSkills   },
-  { value: 'knowledge',label: 'AI Knowledge', icon: IconKnowledge },
-  { value: 'voice',    label: 'Voice Call',   icon: IconVoice    },
-  { value: 'email',    label: 'Email',        icon: IconEmail    },
-  { value: 'security', label: 'Security',     icon: IconSecurity },
+  { value: 'general', label: 'General', icon: IconGeneral },
+  { value: 'ai',      label: 'AI',      icon: IconModels  },
 ]
+
+// Sub-tab arrays
+const subTabsGeneral = [
+  { value: 'paths',    label: 'Paths',    icon: IconPaths    },
+  { value: 'security', label: 'Security', icon: IconSecurity },
+  { value: 'email',    label: 'Email',    icon: IconEmail    },
+]
+const subTabsAI = [
+  { value: 'models',    label: 'Models',    icon: IconModels    },
+  { value: 'voice',     label: 'Voice',     icon: IconVoice     },
+  { value: 'knowledge', label: 'Knowledge', icon: IconKnowledge },
+]
+
+const activeSubTab = ref('paths')
+
+const currentSubTabs = computed(() =>
+  activeTopTab.value === 'general' ? subTabsGeneral : subTabsAI
+)
+
+function switchTopTab(tab) {
+  activeTopTab.value = tab
+  activeSubTab.value = tab === 'general' ? 'paths' : 'models'
+}
+
+function getSubTabStatus(subTab) {
+  switch (subTab) {
+    case 'paths':     return (form.dataPath || form.artyfactPath || form.skillsPath) ? 'configured' : 'empty'
+    case 'security':  return 'configured'
+    case 'email':     return form.smtp?.host ? 'configured' : 'empty'
+    case 'models':    return Object.values(form).some(v => v?.apiKey) ? 'configured' : 'empty'
+    case 'voice':     return form.voiceCall?.whisperApiKey ? 'configured' : 'empty'
+    case 'knowledge': return form.pineconeApiKey ? 'configured' : 'empty'
+    default:          return 'empty'
+  }
+}
 
 // Provider icon components
 const IconAnthropic = defineComponent({
@@ -1524,8 +1566,8 @@ async function saveGeneral() {
     }
     // Save artyfactPath to .env
     await configStore.saveEnvPath('artyfactPath', String(form.artyfactPath))
-    // Save maxOutputTokens to config.json
-    await configStore.saveConfig({ maxOutputTokens: Number(form.maxOutputTokens) || 32768 })
+    // Save skillsPath to config (merged into Paths section)
+    await configStore.saveEnvPath('skillsPath', String(form.skillsPath))
     savedGeneralMsg.value = { ok: true, text: 'Saved — restart app for data path changes' }
   } catch (err) {
     savedGeneralMsg.value = { ok: false, text: err.message || 'Save failed' }
@@ -1688,9 +1730,114 @@ async function testPineconeConnection() {
 .config-title { font-family: 'Inter', sans-serif; font-size: var(--fs-page-title); font-weight: 700; color: var(--text-primary); margin: 0; }
 .config-subtitle { font-family: 'Inter', sans-serif; font-size: var(--fs-body); color: var(--text-primary); margin: 4px 0 0 0; }
 
-/* ── Top-level tab bar ──────────────────────────────────────────────────── */
-.config-tab-bar { padding: 12px 32px 0; background: var(--bg-card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.config-tab-group { display: flex; gap: 2px; padding-bottom: 12px; }
+/* ── Primary tab bar ────────────────────────────────────────────────────── */
+.config-primary-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+.config-primary-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  padding: 0.75rem 1.125rem;
+  border: none;
+  background: transparent;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.config-primary-tab:hover { color: var(--text-primary); }
+.config-primary-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
+}
+.config-tab-icon { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* ── Two-column body ─────────────────────────────────────────────────────── */
+.config-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Left sub-nav ────────────────────────────────────────────────────────── */
+.config-subnav {
+  width: 11rem;
+  min-width: 11rem;
+  padding: 0.75rem 0.5rem;
+  border-right: 1px solid var(--border);
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+@media (min-width: 2560px) {
+  .config-subnav { width: 12.5rem; min-width: 12.5rem; }
+}
+.config-subnav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5625rem;
+  padding: 0.5625rem 0.75rem;
+  border: none;
+  border-radius: 0.625rem;
+  background: transparent;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: left;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+.config-subnav-item:hover:not(.active) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.config-subnav-item.active {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+.config-subnav-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+.config-subnav-label { flex: 1; }
+.config-subnav-dot {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.config-subnav-dot.configured { background: #10B981; }
+.config-subnav-dot.empty      { background: #D1D5DB; }
+.config-subnav-item.active .config-subnav-dot.configured { background: #34D399; }
+.config-subnav-item.active .config-subnav-dot.empty      { background: rgba(255,255,255,0.3); }
+
+/* ── Content area ───────────────────────────────────────────────────────── */
+.config-content { flex: 1; min-width: 0; overflow-y: auto; padding: 1.5rem 2rem 2rem; scrollbar-width: thin; }
+.config-content-inner { max-width: 860px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+@media (min-width: 2560px) {
+  .config-content-inner { max-width: 1000px; }
+}
+
+/* ── Provider tabs ──────────────────────────────────────────────────────── */
+.provider-tab-group { display: flex; gap: 2px; margin-bottom: 4px; }
 .config-tab-btn {
   display: flex; align-items: center; gap: 7px; padding: 8px 16px; border-radius: var(--radius-sm);
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 500;
@@ -1701,17 +1848,6 @@ async function testPineconeConnection() {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
-.config-tab-icon { width: 16px; height: 16px; flex-shrink: 0; }
-
-/* ── Content area ───────────────────────────────────────────────────────── */
-.config-content { flex: 1; overflow-y: auto; padding: 24px 32px 32px; scrollbar-width: thin; }
-.config-content-inner { max-width: 860px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
-@media (min-width: 2560px) {
-  .config-content-inner { max-width: 1000px; }
-}
-
-/* ── Provider tabs (same style as top-level tabs) ──────────────────────── */
-.provider-tab-group { display: flex; gap: 2px; margin-bottom: 4px; }
 
 /* ── Config card ────────────────────────────────────────────────────────── */
 .config-card {
