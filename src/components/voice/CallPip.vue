@@ -78,9 +78,9 @@ function endCall() {
 <style>
 /* Unscoped — teleported to body */
 .call-pip {
-  position: fixed; bottom: 24px; right: 24px; z-index: 9999;
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px; border-radius: 16px;
+  position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9999;
+  display: flex; align-items: center; gap: 0.625rem;
+  padding: 0.625rem 0.875rem; border-radius: 1rem;
   background: #0F0F0F; border: 1px solid #2A2A2A;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2);
   cursor: pointer; transition: all 0.15s ease;
@@ -92,10 +92,10 @@ function endCall() {
 }
 
 .call-pip-avatar {
-  position: relative; width: 36px; height: 36px; flex-shrink: 0;
+  position: relative; width: 2.25rem; height: 2.25rem; flex-shrink: 0;
 }
 .call-pip-ring {
-  position: absolute; inset: -3px; border-radius: 50%;
+  position: absolute; inset: -0.1875rem; border-radius: 50%;
   border: 2px solid #374151; transition: all 0.3s ease;
 }
 .call-pip-avatar.listening .call-pip-ring {
@@ -110,16 +110,16 @@ function endCall() {
 }
 
 .call-pip-img {
-  width: 36px; height: 36px; border-radius: 50%; object-fit: cover;
+  width: 2.25rem; height: 2.25rem; border-radius: 50%; object-fit: cover;
 }
 .call-pip-fallback {
-  width: 36px; height: 36px; border-radius: 50%;
+  width: 2.25rem; height: 2.25rem; border-radius: 50%;
   background: linear-gradient(135deg, #1A1A1A, #374151);
   display: flex; align-items: center; justify-content: center; color: #9CA3AF;
 }
 
 .call-pip-info {
-  display: flex; flex-direction: column; gap: 1px;
+  display: flex; flex-direction: column; gap: 0.0625rem;
 }
 .call-pip-name {
   font-family: 'Inter', sans-serif; font-size: 0.8125rem; font-weight: 600;
@@ -131,7 +131,7 @@ function endCall() {
 }
 
 .call-pip-end {
-  width: 28px; height: 28px; border: none; border-radius: 8px;
+  width: 1.75rem; height: 1.75rem; border: none; border-radius: 0.5rem;
   background: #DC2626; color: #FFFFFF;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
