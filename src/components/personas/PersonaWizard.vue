@@ -63,7 +63,7 @@
                 />
                 <span v-if="showValidation && !form.providerId" class="wiz-error">Provider is required</span>
                 <span v-if="showValidation && form.providerId && !form.modelId" class="wiz-error">Model is required</span>
-                <button class="wiz-option-done" @click="confirmProviderModel" style="margin-top:8px;">
+                <button class="wiz-option-done" @click="confirmProviderModel" style="margin-top:0.5rem;">
                   <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                   Continue
                 </button>
@@ -133,7 +133,7 @@
           </div>
         </div>
         <!-- Voice selector (system personas) -->
-        <div v-if="type === 'system'" class="wiz-preview-config" style="margin-bottom:12px;">
+        <div v-if="type === 'system'" class="wiz-preview-config" style="margin-bottom:0.75rem;">
           <div class="wpc-section" style="margin-bottom:0;">
             <div class="wpc-label">
               <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
@@ -654,13 +654,13 @@ onMounted(() => {
 @keyframes wiz-fade { from { opacity: 0; } to { opacity: 1; } }
 
 .wiz-modal {
-  width: 900px;
+  width: 56.25rem;
   max-width: 95vw;
   height: 85vh;
   max-height: 85vh;
   background: #0F0F0F;
   border: 1px solid #2A2A2A;
-  border-radius: 20px;
+  border-radius: 1.25rem;
   box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
@@ -677,19 +677,19 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 24px;
+  padding: 1.125rem 1.5rem;
   border-bottom: 1px solid #1F1F1F;
   flex-shrink: 0;
 }
 .wiz-header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
 }
 .wiz-header-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 2.125rem;
+  height: 2.125rem;
+  border-radius: 0.625rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -704,9 +704,9 @@ onMounted(() => {
   margin: 0;
 }
 .wiz-close-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 2.125rem;
+  height: 2.125rem;
+  border-radius: 0.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -722,10 +722,10 @@ onMounted(() => {
 .wiz-chat {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 24px;
+  padding: 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 1rem;
   scrollbar-width: thin;
   scrollbar-color: #374151 transparent;
 }
@@ -733,37 +733,37 @@ onMounted(() => {
 .wiz-chat::-webkit-scrollbar-track { background: transparent; }
 .wiz-chat::-webkit-scrollbar-thumb { background: #374151; border-radius: 9999px; }
 .wiz-chat::-webkit-scrollbar-thumb:hover { background: #4B5563; }
-.wiz-msg { display: flex; gap: 10px; max-width: 92%; }
+.wiz-msg { display: flex; gap: 0.625rem; max-width: 92%; }
 .wiz-msg.ai { align-self: flex-start; }
 .wiz-msg.user { align-self: flex-end; }
 .wiz-msg-avatar {
-  width: 28px; height: 28px; border-radius: 8px;
+  width: 1.75rem; height: 1.75rem; border-radius: 0.5rem;
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; margin-top: 2px;
+  flex-shrink: 0; margin-top: 0.125rem;
 }
 .wiz-msg-bubble {
-  border-radius: 12px; padding: 10px 14px;
+  border-radius: 0.75rem; padding: 0.625rem 0.875rem;
   font-family: 'Inter', sans-serif; font-size: var(--fs-body); line-height: 1.55;
 }
-.wiz-msg-bubble.ai { background: #1A1A1A; color: #D1D5DB; border-bottom-left-radius: 4px; }
-.wiz-msg-bubble.user { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color: #fff; border-bottom-right-radius: 4px; }
+.wiz-msg-bubble.ai { background: #1A1A1A; color: #D1D5DB; border-bottom-left-radius: 0.25rem; }
+.wiz-msg-bubble.user { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color: #fff; border-bottom-right-radius: 0.25rem; }
 .wiz-msg-bubble p { margin: 0; }
 
 /* -- Option pills ---------------------------------------------------------- */
-.wiz-options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.wiz-options { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.625rem; }
 .wiz-option-btn {
-  padding: 5px 12px; border-radius: 9999px; border: 1px solid #2A2A2A;
+  padding: 0.3125rem 0.75rem; border-radius: 9999px; border: 1px solid #2A2A2A;
   background: #1A1A1A; font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
   font-weight: 500; color: #9CA3AF; cursor: pointer; transition: all 0.15s;
 }
 .wiz-option-btn:hover { border-color: #4B5563; color: #FFFFFF; background: #222222; }
 .wiz-option-btn.selected { border-color: #1A1A1A; background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); color: #fff; }
 .wiz-option-done {
-  padding: 5px 14px; border-radius: 9999px; border: 1.5px solid #374151;
+  padding: 0.3125rem 0.875rem; border-radius: 9999px; border: 1.5px solid #374151;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
-  color: #fff; cursor: pointer; transition: background 0.15s; display: flex; align-items: center; gap: 4px;
+  color: #fff; cursor: pointer; transition: background 0.15s; display: flex; align-items: center; gap: 0.25rem;
 }
 .wiz-option-done:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); border-color: #4B5563; }
 
@@ -771,15 +771,15 @@ onMounted(() => {
 .wiz-avatar-trigger {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-top: 12px;
+  gap: 0.875rem;
+  margin-top: 0.75rem;
 }
 .wiz-pick-avatar-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-radius: 10px;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.625rem;
   border: 1.5px solid #374151;
   background: rgba(255, 255, 255, 0.05);
   color: #FFFFFF;
@@ -796,7 +796,7 @@ onMounted(() => {
 .wiz-avatar-preview-inline {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .wiz-avatar-selected-label {
   font-family: 'Inter', sans-serif;
@@ -809,11 +809,11 @@ onMounted(() => {
 .wiz-model-provider {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
-  padding: 10px 12px;
+  gap: 0.625rem;
+  margin-top: 0.625rem;
+  padding: 0.625rem 0.75rem;
   background: #1A1A1A;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   border: 1px solid #2A2A2A;
 }
 .wiz-error {
@@ -824,7 +824,7 @@ onMounted(() => {
 .wiz-mp-field {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 0.1875rem;
 }
 .wiz-mp-field label {
   font-size: 0.75rem;
@@ -832,9 +832,9 @@ onMounted(() => {
   color: #6B7280;
 }
 .wiz-mp-select {
-  padding: 6px 10px;
+  padding: 0.375rem 0.625rem;
   border: 1px solid #2A2A2A;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   font-size: 0.85rem;
   background: #111111;
   color: #FFFFFF;
@@ -847,20 +847,20 @@ onMounted(() => {
 
 /* -- Input bar ------------------------------------------------------------- */
 .wiz-input-bar {
-  display: flex; align-items: flex-end; gap: 8px;
-  padding: 14px 24px; border-top: 1px solid #1F1F1F; background: #0A0A0A;
+  display: flex; align-items: flex-end; gap: 0.5rem;
+  padding: 0.875rem 1.5rem; border-top: 1px solid #1F1F1F; background: #0A0A0A;
   flex-shrink: 0;
 }
 .wiz-input {
-  flex: 1; padding: 10px 14px; border: 1px solid #2A2A2A; border-radius: 10px;
+  flex: 1; padding: 0.625rem 0.875rem; border: 1px solid #2A2A2A; border-radius: 0.625rem;
   font-family: 'Inter', sans-serif; font-size: var(--fs-body); color: #FFFFFF;
   background: #1A1A1A; outline: none; transition: border-color 0.15s; box-sizing: border-box;
-  resize: none; line-height: 1.5; min-height: 44px; max-height: 120px;
+  resize: none; line-height: 1.5; min-height: 2.75rem; max-height: 7.5rem;
 }
 .wiz-input:focus { border-color: #4B5563; }
 .wiz-input::placeholder { color: #4B5563; }
 .wiz-send-btn {
-  width: 38px; height: 38px; border-radius: 10px; border: none;
+  width: 2.375rem; height: 2.375rem; border-radius: 0.625rem; border: none;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
   color: #fff; display: flex; align-items: center; justify-content: center;
@@ -871,7 +871,7 @@ onMounted(() => {
 
 /* -- Preview body (scrollable content area) -------------------------------- */
 .wiz-preview-body {
-  border-top: 1px solid #1F1F1F; padding: 20px 24px; background: #0A0A0A;
+  border-top: 1px solid #1F1F1F; padding: 1.25rem 1.5rem; background: #0A0A0A;
   flex: 1; min-height: 0; display: flex; flex-direction: column;
   overflow-y: auto;
   scrollbar-width: thin;
@@ -880,26 +880,26 @@ onMounted(() => {
 .wiz-preview-avatar-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
   flex-shrink: 0;
 }
 .wiz-preview-avatar-placeholder {
-  width: 56px; height: 56px; border-radius: 50%; background: #1F1F1F;
+  width: 3.5rem; height: 3.5rem; border-radius: 50%; background: #1F1F1F;
   display: flex; align-items: center; justify-content: center;
-  font-size: 20px; font-weight: 700; color: #4B5563;
+  font-size: 1.25rem; font-weight: 700; color: #4B5563;
 }
 .wiz-preview-avatar-meta {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0.375rem;
   flex: 1;
 }
 .wiz-name-input {
   width: 100%;
-  padding: 7px 12px;
+  padding: 0.4375rem 0.75rem;
   border: 1px solid #2A2A2A;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
@@ -912,20 +912,20 @@ onMounted(() => {
 .wiz-name-input:focus { border-color: #4B5563; }
 .wiz-name-input::placeholder { color: #4B5563; font-weight: 400; }
 .wiz-change-avatar-btn {
-  padding: 6px 14px; border-radius: 8px; border: 1px solid #2A2A2A;
+  padding: 0.375rem 0.875rem; border-radius: 0.5rem; border: 1px solid #2A2A2A;
   background: #1A1A1A; font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
   font-weight: 600; color: #FFFFFF; cursor: pointer; transition: background 0.15s, border-color 0.15s;
 }
 .wiz-change-avatar-btn:hover { background: #222222; border-color: #374151; }
 .wiz-preview-prompt {
-  flex: 1; min-height: 120px; display: flex; flex-direction: column;
+  flex: 1; min-height: 7.5rem; display: flex; flex-direction: column;
 }
 .wiz-preview-label {
   display: block; font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
-  font-weight: 600; color: #6B7280; margin-bottom: 6px; flex-shrink: 0;
+  font-weight: 600; color: #6B7280; margin-bottom: 0.375rem; flex-shrink: 0;
 }
 .wiz-preview-textarea {
-  width: 100%; flex: 1; min-height: 80px; padding: 10px 12px; border: 1px solid #2A2A2A; border-radius: 8px;
+  width: 100%; flex: 1; min-height: 5rem; padding: 0.625rem 0.75rem; border: 1px solid #2A2A2A; border-radius: 0.5rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-secondary);
   color: #FFFFFF; background: #1A1A1A; outline: none; resize: none; line-height: 1.6;
   box-sizing: border-box; transition: border-color 0.15s;
@@ -936,53 +936,53 @@ onMounted(() => {
 .wiz-enhance-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  margin-bottom: 8px;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
   flex-shrink: 0;
 }
 
 /* -- Preview config (provider/model) ---------------------------------------- */
 .wiz-preview-config {
-  margin-bottom: 16px;
-  padding: 12px 14px;
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.875rem;
   background: #1A1A1A;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   border: 1px solid #2A2A2A;
   flex-shrink: 0;
 }
 .wpc-section {
-  margin-bottom: 10px;
+  margin-bottom: 0.625rem;
 }
 .wpc-section:last-child {
   margin-bottom: 0;
 }
 .wpc-label {
   font-family: 'Inter', sans-serif;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #6B7280;
-  padding: 0 2px 4px;
+  padding: 0 0.125rem 0.25rem;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .wpc-btn-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 0.25rem;
 }
 .wpc-btn {
   flex: 1;
-  min-width: 70px;
-  padding: 5px 8px;
-  border-radius: 8px;
+  min-width: 4.375rem;
+  padding: 0.3125rem 0.5rem;
+  border-radius: 0.5rem;
   border: 1px solid #2A2A2A;
   background: #111111;
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #6B7280;
   cursor: pointer;
@@ -1005,15 +1005,15 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
-  padding: 14px 24px;
+  gap: 0.625rem;
+  padding: 0.875rem 1.5rem;
   border-top: 1px solid #1F1F1F;
   background: #0A0A0A;
   flex-shrink: 0;
 }
 .wiz-cancel-btn {
-  padding: 8px 20px;
-  border-radius: 10px;
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.625rem;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
@@ -1029,8 +1029,8 @@ onMounted(() => {
   background: #1A1A1A;
 }
 .wiz-done-btn {
-  padding: 8px 24px;
-  border-radius: 10px;
+  padding: 0.5rem 1.5rem;
+  border-radius: 0.625rem;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 600;
