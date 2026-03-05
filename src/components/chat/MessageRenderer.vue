@@ -695,7 +695,7 @@ function diffMarker(type) {
 :deep(.code-block-wrap) {
   position: relative;
   margin: 0.5rem 0;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   overflow: hidden;
   border: 1px solid #30363d;
 }
@@ -712,15 +712,15 @@ function diffMarker(type) {
 }
 :deep(.code-copy-btn) {
   position: absolute;
-  top: 6px;
-  right: 8px;
+  top: 0.375rem;
+  right: 0.5rem;
   z-index: 2;
   font-size: 0.7rem;
   color: #fff;
   background: #1A1A1A;
   border: none;
-  border-radius: 8px;
-  padding: 3px 10px;
+  border-radius: 0.5rem;
+  padding: 0.1875rem 0.625rem;
   cursor: pointer;
   user-select: none;
   box-shadow: 0 1px 3px rgba(0,0,0,0.12);
@@ -736,7 +736,7 @@ function diffMarker(type) {
 }
 :deep(.code-block-wrap pre) {
   margin: 0;
-  padding: 32px 12px 12px;
+  padding: 2rem 0.75rem 0.75rem;
   background: #1C1C1E;
   overflow-x: auto;
 }
@@ -752,12 +752,12 @@ function diffMarker(type) {
 .inline-images-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .inline-image {
   max-width: 100%;
-  max-height: 400px;
-  border-radius: 12px;
+  max-height: 25rem;
+  border-radius: 0.75rem;
   border: 1px solid #E5E5EA;
   cursor: pointer;
   transition: opacity 0.15s, box-shadow 0.15s;
@@ -771,9 +771,9 @@ function diffMarker(type) {
 
 .wave-bar {
   display: inline-block;
-  width: 3.5px;
-  height: 18px;
-  border-radius: 2px;
+  width: 0.21875rem;
+  height: 1.125rem;
+  border-radius: 0.125rem;
   transform-origin: bottom;
   transform: scaleY(0.3);
   background: var(--bar-color);
@@ -794,17 +794,17 @@ function diffMarker(type) {
 :deep(.mention) {
   background: rgba(99, 102, 241, 0.15);
   color: #6366F1;
-  padding: 1px 4px;
-  border-radius: 4px;
+  padding: 0.0625rem 0.25rem;
+  border-radius: 0.25rem;
   font-weight: 600;
 }
 
 /* ── File path chip (inline styled text) ──────────────────────────────────── */
 :deep(.file-path-chip) {
   display: inline;
-  padding: 2px 6px;
-  margin: 0 1px;
-  border-radius: 5px;
+  padding: 0.125rem 0.375rem;
+  margin: 0 0.0625rem;
+  border-radius: 0.3125rem;
   background: rgba(0, 0, 0, 0.05);
   border: 1px solid var(--border, #E5E5EA);
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
@@ -816,10 +816,10 @@ function diffMarker(type) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  margin-left: 3px;
-  border-radius: 5px;
+  width: 1.375rem;
+  height: 1.375rem;
+  margin-left: 0.1875rem;
+  border-radius: 0.3125rem;
   background: linear-gradient(135deg, #56CCF2 0%, #2F80ED 100%);
   color: #FFFFFF;
   cursor: pointer;
