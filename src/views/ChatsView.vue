@@ -2321,7 +2321,12 @@ const pendingQueue = computed(() => perChatQueue.get(chatsStore.activeChatId) ??
 const isCompacting = ref(false)
 
 // ── Resizable sidebar ────────────────────────────────────────────────────────
-const sidebarWidth = ref(240)
+function getDefaultSidebarWidth() {
+  if (window.innerWidth >= 2560) return 280
+  if (window.innerWidth >= 1920) return 240
+  return 220
+}
+const sidebarWidth = ref(getDefaultSidebarWidth())
 const isResizing = ref(false)
 
 function startResize(e) {
@@ -2331,7 +2336,9 @@ function startResize(e) {
 
   function onMouseMove(e) {
     const delta = e.clientX - startX
-    sidebarWidth.value = Math.max(180, Math.min(400, startWidth + delta))
+    const minW = window.innerWidth >= 2560 ? 200 : 180
+    const maxW = window.innerWidth >= 2560 ? 480 : 400
+    sidebarWidth.value = Math.max(minW, Math.min(maxW, startWidth + delta))
   }
 
   function onMouseUp() {
