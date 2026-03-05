@@ -243,7 +243,7 @@
                 <button
                   @click="linkError = ''"
                   class="shrink-0 cursor-pointer"
-                  style="background:none;border:none;color:#991B1B;font-size:16px;padding:0 0 0 8px;"
+                  style="background:none;border:none;color:#991B1B;font-size:var(--fs-body);padding:0 0 0 8px;"
                 >&times;</button>
               </div>
             </div>
