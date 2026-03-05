@@ -646,8 +646,9 @@ app.on('before-quit', () => {
 
 // --- IPC: Storage -----------------------------------------------------------
 
-/** Accumulate usage metrics into chat.usage and save atomically. */
-async function accumulateUsage(chatId, metrics) {
+/** Accumulate usage metrics into chat.usage and save atomically.
+ *  Also stamps chat.provider / chat.model if they are missing. */
+async function accumulateUsage(chatId, metrics, provider, model) {
   if (!chatId || !metrics) return
   const file = path.join(CHATS_DIR, `${chatId}.json`)
   let chat
@@ -667,6 +668,9 @@ async function accumulateUsage(chatId, metrics) {
     whisperCalls:        (u.whisperCalls        || 0) + (metrics.whisperCalls        || 0),
     whisperSecs:         (u.whisperSecs         || 0) + (metrics.whisperSecs         || 0),
   }
+  // Stamp provider/model for cost attribution if not already set
+  if (provider && !chat.provider) chat.provider = provider
+  if (model     && !chat.model)   chat.model     = model
   try {
     await writeJSONAtomic(file, chat)
   } catch (err) {
@@ -691,6 +695,12 @@ ipcMain.handle('store:get-chat', async (_, chatId) => {
 
 ipcMain.handle('store:save-chat', async (_, chat) => {
   if (!chat || !chat.id) return false
+  // Preserve usage data written by accumulateUsage — renderer memory has usage:null
+  // because it never receives the accumulated value back. Don't overwrite with null.
+  if (chat.usage == null) {
+    const existing = await readJSONAsync(path.join(CHATS_DIR, `${chat.id}.json`), null)
+    if (existing?.usage) chat.usage = existing.usage
+  }
   // Write the per-chat file atomically
   await writeJSONAtomic(path.join(CHATS_DIR, `${chat.id}.json`), chat)
   // Update the index entry
@@ -2531,13 +2541,15 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
           }
           activeLoops.delete(loopKey)
           // Persist cumulative usage
-          const _pMetrics = loop.contextManager.getMetrics()
+          const _pMetrics  = loop.contextManager.getMetrics()
+          const _pProvider = (run.config || config).defaultProvider || 'anthropic'
+          const _pModel    = loop.anthropicClient.resolveModel()
           accumulateUsage(chatId, {
             inputTokens:         _pMetrics.inputTokens         || 0,
             outputTokens:        _pMetrics.outputTokens        || 0,
             cacheCreationTokens: _pMetrics.cacheCreationInputTokens || 0,
             cacheReadTokens:     _pMetrics.cacheReadInputTokens     || 0,
-          }).catch(() => {})
+          }, _pProvider, _pModel).catch(() => {})
         }
       })()
     })
@@ -2604,12 +2616,14 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     logger.agent('run done', { chatId, success: result !== undefined, resultLen: typeof result === 'string' ? result.length : 0 })
     // Persist cumulative usage to chat JSON
     const _usageMetrics = loop.contextManager.getMetrics()
+    const _provider = config.defaultProvider || (config._resolvedProvider) || 'anthropic'
+    const _model    = loop.anthropicClient.resolveModel()
     accumulateUsage(chatId, {
       inputTokens:         _usageMetrics.inputTokens         || 0,
       outputTokens:        _usageMetrics.outputTokens        || 0,
       cacheCreationTokens: _usageMetrics.cacheCreationInputTokens || 0,
       cacheReadTokens:     _usageMetrics.cacheReadInputTokens     || 0,
-    }).catch(() => {})
+    }, _provider, _model).catch(() => {})
     // Fire-and-forget memory extraction -- single persona as participant for routing
     const singleParticipants = personaPrompts?.systemPersonaId
       ? [{ id: personaPrompts.systemPersonaId, name: personaPrompts.groupChatContext?.personaName || 'Assistant', type: 'system' }]
