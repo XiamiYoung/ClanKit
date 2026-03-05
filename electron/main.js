@@ -3660,7 +3660,7 @@ ipcMain.handle('voice:start', async (event, { chatId, personaId, history, voiceC
       onAiText:        (text, meta) => sendToRenderer('voice:ai-text', { text, ...meta }),
       onTaskTriggered: (inst) => sendToRenderer('voice:task-triggered', { instruction: inst }),
       onError:         (msg)  => sendToRenderer('voice:error', { message: msg }),
-      onUsage:         (u)    => sendToRenderer('voice:usage', u),
+      onUsage:         (u)    => { sendToRenderer('voice:usage', u); accumulateUsage(chatId, u).catch(() => {}) },
     })
 
     activeVoiceSession.start()
