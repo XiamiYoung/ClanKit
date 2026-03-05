@@ -594,9 +594,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   display: flex; align-items: center; justify-content: center;
 }
 .soul-modal {
-  width: min(860px, 94vw); height: min(88vh, 900px);
+  width: min(53.75rem, 94vw); height: min(88vh, 56.25rem);
   background: #0F0F0F; border: 1px solid #2A2A2A;
-  border-radius: 20px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+  border-radius: 1.25rem; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
   display: flex; flex-direction: column; overflow: hidden;
   animation: soul-enter 0.2s ease-out;
 }
@@ -607,12 +607,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 .soul-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px; border-bottom: 1px solid #1F1F1F;
+  padding: 1rem 1.25rem; border-bottom: 1px solid #1F1F1F;
   flex-shrink: 0;
 }
-.soul-header-left { display: flex; align-items: center; gap: 10px; }
+.soul-header-left { display: flex; align-items: center; gap: 0.625rem; }
 .soul-header-icon {
-  width: 30px; height: 30px; border-radius: 8px;
+  width: 1.875rem; height: 1.875rem; border-radius: 0.5rem;
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
@@ -625,7 +625,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.75rem); color: #4B5563;
 }
 .soul-close-btn {
-  width: 32px; height: 32px; border-radius: 8px;
+  width: 2rem; height: 2rem; border-radius: 0.5rem;
   display: flex; align-items: center; justify-content: center;
   border: none; background: transparent; color: #6B7280; cursor: pointer; transition: all 0.15s;
 }
@@ -633,12 +633,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 /* ── Tab bar ── */
 .soul-tabs {
-  display: flex; gap: 4px; padding: 8px 20px;
+  display: flex; gap: 0.25rem; padding: 0.5rem 1.25rem;
   border-bottom: 1px solid #1F1F1F; flex-shrink: 0;
 }
 .soul-tab {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 14px; border-radius: 8px;
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  padding: 0.4375rem 0.875rem; border-radius: 0.5rem;
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem); font-weight: 600;
   color: #6B7280; background: transparent; border: none; cursor: pointer;
   transition: all 0.15s;
@@ -652,7 +652,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 /* ── Body ── */
 .soul-body {
-  flex: 1; overflow-y: auto; padding: 20px;
+  flex: 1; overflow-y: auto; padding: 1.25rem;
   scrollbar-width: thin; scrollbar-color: #333 transparent; min-height: 0;
 }
 
@@ -661,42 +661,42 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   display: block;
 }
 .soul-persona-card {
-  background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 12px;
-  padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;
+  background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 0.75rem;
+  padding: 0.875rem 1rem; display: flex; flex-direction: column; gap: 0.75rem;
 }
 /* ── Identity row (avatar + name) ── */
 .soul-identity-row {
-  display: flex; align-items: center; gap: 14px;
+  display: flex; align-items: center; gap: 0.875rem;
 }
 .soul-avatar-btn {
-  position: relative; width: 48px; height: 48px; flex-shrink: 0;
+  position: relative; width: 3rem; height: 3rem; flex-shrink: 0;
   border: none; background: transparent; cursor: pointer; padding: 0;
   border-radius: 50%;
 }
 .soul-avatar-btn:hover .soul-avatar-edit-badge { opacity: 1; }
 .soul-avatar-readonly {
-  width: 48px; height: 48px; flex-shrink: 0;
+  width: 3rem; height: 3rem; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   border-radius: 50%; overflow: hidden;
 }
-.soul-avatar-img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; }
+.soul-avatar-img { width: 3rem; height: 3rem; border-radius: 50%; object-fit: cover; }
 .soul-avatar-fallback {
-  width: 48px; height: 48px; border-radius: 50%;
+  width: 3rem; height: 3rem; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 18px; font-weight: 700; color: #fff;
+  font-size: 1.125rem; font-weight: 700; color: #fff;
   background: linear-gradient(135deg, #1A1A1A 0%, #374151 100%);
 }
 .soul-avatar-edit-badge {
-  position: absolute; bottom: -2px; right: -2px;
-  width: 20px; height: 20px; border-radius: 50%;
+  position: absolute; bottom: -0.125rem; right: -0.125rem;
+  width: 1.25rem; height: 1.25rem; border-radius: 50%;
   background: linear-gradient(135deg, #0F0F0F 0%, #374151 100%);
   border: 2px solid #0F0F0F;
   display: flex; align-items: center; justify-content: center;
   color: #FFFFFF; opacity: 0.6; transition: opacity 0.15s;
 }
-.soul-identity-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.soul-identity-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
 .soul-name-input {
-  width: 100%; padding: 6px 10px; border-radius: 8px;
+  width: 100%; padding: 0.375rem 0.625rem; border-radius: 0.5rem;
   border: 1px solid #2A2A2A; background: #111111;
   font-family: 'Inter', sans-serif; font-size: var(--fs-body, 0.875rem);
   font-weight: 600; color: #FFFFFF; outline: none;
@@ -706,31 +706,31 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 .soul-name-input::placeholder { color: #4B5563; }
 
 .soul-desc-textarea {
-  width: 100%; padding: 8px 10px; border-radius: 8px;
+  width: 100%; padding: 0.5rem 0.625rem; border-radius: 0.5rem;
   border: 1px solid #2A2A2A; background: #111111;
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.8rem);
   color: #FFFFFF; outline: none; transition: border-color 0.15s; box-sizing: border-box;
-  resize: vertical; line-height: 1.5; min-height: 50px;
+  resize: vertical; line-height: 1.5; min-height: 3.125rem;
 }
 .soul-desc-textarea:focus { border-color: #4B5563; }
 .soul-desc-textarea::placeholder { color: #4B5563; }
 .soul-desc-readonly {
   color: #9CA3AF; cursor: default; resize: none;
 }
-.soul-ai-btn-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.soul-ai-btn-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem; }
 .soul-desc-ai-btn { }
 .soul-provider-inactive-chip {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
-  color: #EF4444; padding: 3px 8px; border-radius: 6px;
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  font-family: 'Inter', sans-serif; font-size: 0.625rem; font-weight: 600;
+  color: #EF4444; padding: 0.1875rem 0.5rem; border-radius: 0.375rem;
   background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2);
   cursor: help;
 }
 
-.soul-persona-field { display: flex; flex-direction: column; gap: 4px; }
+.soul-persona-field { display: flex; flex-direction: column; gap: 0.25rem; }
 .soul-prompt-field { display: flex; flex-direction: column; }
 .soul-persona-label {
-  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 700;
+  font-family: 'Inter', sans-serif; font-size: 0.625rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.06em; color: #4B5563; flex-shrink: 0;
 }
 .soul-persona-value {
@@ -739,17 +739,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 }
 .soul-persona-prompt {
   font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-secondary, 0.8rem);
-  color: #9CA3AF; background: #111111; border: 1px solid #2A2A2A; border-radius: 8px;
-  padding: 10px 12px; margin: 0; white-space: pre-wrap; word-break: break-word;
+  color: #9CA3AF; background: #111111; border: 1px solid #2A2A2A; border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem; margin: 0; white-space: pre-wrap; word-break: break-word;
   line-height: 1.6; flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent;
-  min-height: 80px;
+  min-height: 5rem;
 }
 .soul-btn-inline {
-  align-self: flex-start; padding: 4px 10px; border-radius: 6px;
-  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+  align-self: flex-start; padding: 0.25rem 0.625rem; border-radius: 0.375rem;
+  font-family: 'Inter', sans-serif; font-size: 0.6875rem; font-weight: 600;
   color: #6B7280; background: #1A1A1A; border: 1px solid #2A2A2A;
   cursor: pointer; transition: all 0.12s;
-  display: inline-flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; gap: 0.3125rem;
 }
 .soul-btn-inline:hover { background: #222222; color: #FFFFFF; border-color: #374151; }
 .soul-btn-inline:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -759,23 +759,23 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 .soul-btn-enhance:hover:not(:disabled) { background: rgba(245, 158, 11, 0.1); color: #FBBF24; border-color: rgba(245, 158, 11, 0.5); }
 
 .soul-enhance-row {
-  display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 0.375rem; margin-top: 0.375rem; flex-shrink: 0;
 }
 
 .soul-editor {
-  width: 100%; min-height: 120px; padding: 12px;
-  border: 1px solid #2A2A2A; border-radius: 10px;
+  width: 100%; min-height: 7.5rem; padding: 0.75rem;
+  border: 1px solid #2A2A2A; border-radius: 0.625rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-secondary, 0.8rem);
   color: #FFFFFF; background: #111111; outline: none; resize: vertical;
   line-height: 1.6; box-sizing: border-box; transition: border-color 0.15s;
 }
 .soul-editor:focus { border-color: #4B5563; }
-.soul-editor-prompt { min-height: 200px; height: 300px; }
-.soul-editor-memory { flex: 1; min-height: 200px; }
+.soul-editor-prompt { min-height: 12.5rem; height: 18.75rem; }
+.soul-editor-memory { flex: 1; min-height: 12.5rem; }
 
 /* Spinner */
 .soul-spinner {
-  display: inline-block; width: 12px; height: 12px;
+  display: inline-block; width: 0.75rem; height: 0.75rem;
   border: 2px solid rgba(245, 158, 11, 0.3); border-top-color: #F59E0B;
   border-radius: 50%; animation: soul-spin 0.6s linear infinite;
 }
@@ -783,48 +783,48 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 /* ── Memory tab ── */
 .soul-memory-body {
-  display: flex; flex-direction: column; gap: 12px;
+  display: flex; flex-direction: column; gap: 0.75rem;
 }
 .soul-memory-meta {
-  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+  font-family: 'Inter', sans-serif; font-size: 0.6875rem; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.04em; color: #4B5563;
-  padding: 0 2px; flex-shrink: 0;
+  padding: 0 0.125rem; flex-shrink: 0;
 }
 .soul-memory-actions {
-  display: flex; gap: 6px; margin-top: 8px; flex-shrink: 0;
+  display: flex; gap: 0.375rem; margin-top: 0.5rem; flex-shrink: 0;
 }
 
 /* Empty state */
 .soul-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  min-height: 80px; color: #4B5563; font-family: 'Inter', sans-serif;
+  min-height: 5rem; color: #4B5563; font-family: 'Inter', sans-serif;
   font-size: var(--fs-body, 0.875rem); text-align: center; flex: 1;
 }
-.soul-empty p { margin: 4px 0; }
-.soul-empty-hint { font-size: var(--fs-secondary, 0.75rem); color: #374151; max-width: 300px; }
+.soul-empty p { margin: 0.25rem 0; }
+.soul-empty-hint { font-size: var(--fs-secondary, 0.75rem); color: #374151; max-width: 18.75rem; }
 
 .soul-rendered {
   font-family: 'Inter', sans-serif; font-size: var(--fs-body, 0.875rem);
   color: #D1D5DB; line-height: 1.6; flex: 1; overflow-y: auto;
   scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
-.soul-rendered :deep(h1) { font-size: 1.25rem; font-weight: 700; margin: 0 0 8px; color: #FFFFFF; }
-.soul-rendered :deep(h2) { font-size: 1rem; font-weight: 600; margin: 16px 0 6px; color: #9CA3AF; }
-.soul-rendered :deep(ul) { padding-left: 20px; margin: 4px 0; }
-.soul-rendered :deep(li) { margin: 2px 0; }
-.soul-rendered :deep(blockquote) { border-left: 3px solid #2A2A2A; padding-left: 12px; color: #6B7280; margin: 8px 0; }
-.soul-rendered :deep(code) { font-family: 'JetBrains Mono', monospace; font-size: 0.85em; background: #1A1A1A; padding: 1px 4px; border-radius: 3px; color: #D1D5DB; }
+.soul-rendered :deep(h1) { font-size: 1.25rem; font-weight: 700; margin: 0 0 0.5rem; color: #FFFFFF; }
+.soul-rendered :deep(h2) { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.375rem; color: #9CA3AF; }
+.soul-rendered :deep(ul) { padding-left: 1.25rem; margin: 0.25rem 0; }
+.soul-rendered :deep(li) { margin: 0.125rem 0; }
+.soul-rendered :deep(blockquote) { border-left: 3px solid #2A2A2A; padding-left: 0.75rem; color: #6B7280; margin: 0.5rem 0; }
+.soul-rendered :deep(code) { font-family: 'JetBrains Mono', monospace; font-size: 0.85em; background: #1A1A1A; padding: 0.0625rem 0.25rem; border-radius: 0.1875rem; color: #D1D5DB; }
 
 /* ── Footer ── */
 .soul-footer {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 20px; border-top: 1px solid #1F1F1F; background: #0A0A0A;
+  padding: 0.75rem 1.25rem; border-top: 1px solid #1F1F1F; background: #0A0A0A;
   flex-shrink: 0;
 }
-.soul-footer-left, .soul-footer-right { display: flex; gap: 8px; }
+.soul-footer-left, .soul-footer-right { display: flex; gap: 0.5rem; }
 
 .soul-btn {
-  padding: 7px 16px; border-radius: 8px;
+  padding: 0.4375rem 1rem; border-radius: 0.5rem;
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.8rem);
   font-weight: 600; cursor: pointer; border: none; transition: all 0.15s;
 }
@@ -841,76 +841,76 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 /* ── AI Model tab ── */
 .soul-model-body {
-  display: flex; flex-direction: column; gap: 0; padding: 20px;
+  display: flex; flex-direction: column; gap: 0; padding: 1.25rem;
   min-height: 0;
 }
 .soul-model-section {
-  margin-bottom: 20px;
+  margin-bottom: 1.25rem;
 }
 .soul-model-section-grow {
   flex: 1; display: flex; flex-direction: column; min-height: 0;
 }
 .soul-model-section-label {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 0.5rem;
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem);
-  font-weight: 600; color: #9CA3AF; margin-bottom: 10px;
+  font-weight: 600; color: #9CA3AF; margin-bottom: 0.625rem;
   text-transform: uppercase; letter-spacing: 0.04em;
 }
 .soul-step-num {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 18px; height: 18px; border-radius: 50%;
+  width: 1.125rem; height: 1.125rem; border-radius: 50%;
   background: linear-gradient(135deg, #1A1A1A 0%, #374151 100%);
-  color: #FFFFFF; font-size: 10px; font-weight: 700;
+  color: #FFFFFF; font-size: 0.625rem; font-weight: 700;
   flex-shrink: 0;
 }
 .soul-model-badge {
-  font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0;
-  padding: 2px 8px; border-radius: 6px;
+  font-size: 0.6875rem; font-weight: 600; text-transform: none; letter-spacing: 0;
+  padding: 0.125rem 0.5rem; border-radius: 0.375rem;
   background: #1F1F1F; color: #9CA3AF;
   font-family: 'JetBrains Mono', monospace;
 }
 .soul-provider-select {
-  width: 100%; padding: 9px 12px; border-radius: 8px;
+  width: 100%; padding: 0.5625rem 0.75rem; border-radius: 0.5rem;
   border: 1px solid #2A2A2A; background: #1A1A1A;
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem);
   font-weight: 600; color: #FFFFFF; outline: none;
   cursor: pointer; transition: border-color 0.15s;
   -webkit-appearance: none; appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' fill='none' stroke='%236B7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 12px center;
+  background-repeat: no-repeat; background-position: right 0.75rem center;
 }
 .soul-provider-select:focus { border-color: #4B5563; box-shadow: 0 0 0 3px rgba(75,85,99,0.2); }
 .soul-provider-select option { background: #1A1A1A; color: #FFFFFF; }
 .soul-no-providers {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem);
-  color: #EF4444; padding: 10px 0;
+  color: #EF4444; padding: 0.625rem 0;
 }
 .soul-model-search {
-  width: 100%; padding: 8px 12px; border-radius: 8px;
+  width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
   border: 1px solid #2A2A2A; background: #1A1A1A;
   font-family: 'Inter', sans-serif; font-size: var(--fs-caption, 0.8rem); outline: none;
-  color: #FFFFFF; transition: border-color 0.15s; margin-bottom: 8px;
+  color: #FFFFFF; transition: border-color 0.15s; margin-bottom: 0.5rem;
   box-sizing: border-box;
 }
 .soul-model-search:focus { border-color: #4B5563; box-shadow: 0 0 0 3px rgba(75,85,99,0.2); }
 .soul-model-search::placeholder { color: #4B5563; }
 .soul-model-list {
   flex: 1; overflow-y: auto;
-  border: 1px solid #2A2A2A; border-radius: 12px;
+  border: 1px solid #2A2A2A; border-radius: 0.75rem;
   display: flex; flex-direction: column;
   scrollbar-width: thin; scrollbar-color: #333 transparent;
   background: #1A1A1A; min-height: 0;
 }
 .soul-model-item {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; padding: 10px 14px; border: none; background: transparent;
+  gap: 0.5rem; padding: 0.625rem 0.875rem; border: none; background: transparent;
   cursor: pointer; font-family: 'Inter', sans-serif; font-size: var(--fs-caption, 0.8rem);
   font-weight: 500; color: #9CA3AF; text-align: left;
   transition: all 0.12s; border-bottom: 1px solid #1F1F1F; flex-shrink: 0;
 }
 .soul-model-item:last-child { border-bottom: none; }
-.soul-model-item:first-child { border-radius: 11px 11px 0 0; }
-.soul-model-item:last-child { border-radius: 0 0 11px 11px; }
+.soul-model-item:first-child { border-radius: 0.6875rem 0.6875rem 0 0; }
+.soul-model-item:last-child { border-radius: 0 0 0.6875rem 0.6875rem; }
 .soul-model-item:hover { background: #222222; color: #FFFFFF; }
 .soul-model-item.active {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
@@ -918,20 +918,20 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 }
 .soul-model-item.active .soul-model-id { color: rgba(255,255,255,0.4); }
 .soul-model-id {
-  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.625rem;
   color: #4B5563; white-space: nowrap; overflow: hidden;
-  text-overflow: ellipsis; max-width: 200px;
+  text-overflow: ellipsis; max-width: 12.5rem;
 }
 .soul-model-loading {
-  padding: 16px; text-align: center; font-size: var(--fs-caption, 0.8rem); color: #4B5563;
+  padding: 1rem; text-align: center; font-size: var(--fs-caption, 0.8rem); color: #4B5563;
 }
 
 /* ── Voice tab ── */
 .soul-voice-body {
-  display: flex; flex-direction: column; gap: 16px; padding: 20px;
+  display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem;
 }
 .soul-voice-heading {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 0.625rem;
 }
 .soul-voice-heading-label {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem);
@@ -939,24 +939,24 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
   text-transform: uppercase; letter-spacing: 0.04em;
 }
 .soul-voice-status {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
-  padding: 3px 10px 3px 8px; border-radius: 20px;
+  display: inline-flex; align-items: center; gap: 0.3125rem;
+  font-family: 'Inter', sans-serif; font-size: 0.6875rem; font-weight: 600;
+  padding: 0.1875rem 0.625rem 0.1875rem 0.5rem; border-radius: 1.25rem;
 }
 .soul-voice-status.active { color: #34D399; background: rgba(52, 211, 153, 0.1); }
 .soul-voice-status.inactive { color: #EF4444; background: rgba(239, 68, 68, 0.1); }
 .soul-voice-status-dot {
-  width: 6px; height: 6px; border-radius: 50%;
+  width: 0.375rem; height: 0.375rem; border-radius: 50%;
 }
 .soul-voice-status.active .soul-voice-status-dot { background: #34D399; }
 .soul-voice-status.inactive .soul-voice-status-dot { background: #EF4444; }
 
 .soul-voice-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.625rem;
 }
 .soul-voice-card {
-  display: flex; flex-direction: column; gap: 4px;
-  padding: 14px 12px; border-radius: 10px;
+  display: flex; flex-direction: column; gap: 0.25rem;
+  padding: 0.875rem 0.75rem; border-radius: 0.625rem;
   border: 1px solid #2A2A2A; background: #1A1A1A;
   cursor: pointer; transition: all 0.15s; text-align: center;
   position: relative;
@@ -981,8 +981,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 /* Voice demo button */
 .soul-voice-demo-btn {
-  position: absolute; bottom: 8px; right: 8px;
-  width: 26px; height: 26px; border-radius: 50%;
+  position: absolute; bottom: 0.5rem; right: 0.5rem;
+  width: 1.625rem; height: 1.625rem; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   border: none; cursor: pointer; transition: all 0.15s;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -999,17 +999,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 /* Demo playing animation */
 .soul-demo-playing {
-  display: flex; align-items: center; gap: 2px; height: 12px;
+  display: flex; align-items: center; gap: 0.125rem; height: 0.75rem;
 }
 .soul-demo-playing span {
-  width: 2px; background: #FFFFFF; border-radius: 1px;
+  width: 0.125rem; background: #FFFFFF; border-radius: 0.0625rem;
   animation: soul-eq 0.8s ease-in-out infinite alternate;
 }
-.soul-demo-playing span:nth-child(1) { height: 4px; animation-delay: 0s; }
-.soul-demo-playing span:nth-child(2) { height: 8px; animation-delay: 0.15s; }
-.soul-demo-playing span:nth-child(3) { height: 5px; animation-delay: 0.3s; }
+.soul-demo-playing span:nth-child(1) { height: 0.25rem; animation-delay: 0s; }
+.soul-demo-playing span:nth-child(2) { height: 0.5rem; animation-delay: 0.15s; }
+.soul-demo-playing span:nth-child(3) { height: 0.3125rem; animation-delay: 0.3s; }
 @keyframes soul-eq {
-  0% { height: 3px; }
-  100% { height: 10px; }
+  0% { height: 0.1875rem; }
+  100% { height: 0.625rem; }
 }
 </style>
