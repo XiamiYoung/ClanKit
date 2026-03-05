@@ -57,8 +57,8 @@ function decide(decision) {
 
 <style scoped>
 .perm-prompt {
-  margin: 8px 0;
-  border-radius: 12px;
+  margin: 0.5rem 0;
+  border-radius: 0.75rem;
   overflow: hidden;
   border: 1px solid #2A2A2A;
   background: #0F0F0F;
@@ -70,14 +70,14 @@ function decide(decision) {
 .perm-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px 8px;
+  gap: 0.5rem;
+  padding: 0.625rem 0.875rem 0.5rem;
   border-bottom: 1px solid #1F1F1F;
 }
 .perm-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.375rem;
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   display: flex;
   align-items: center;
@@ -94,7 +94,7 @@ function decide(decision) {
 .perm-result-badge {
   font-size: 0.7rem;
   font-weight: 600;
-  padding: 2px 8px;
+  padding: 0.125rem 0.5rem;
   border-radius: 99px;
 }
 .badge-allowed {
@@ -106,25 +106,25 @@ function decide(decision) {
   color: #f87171;
 }
 .perm-body {
-  padding: 10px 14px;
+  padding: 0.625rem 0.875rem;
 }
 .perm-description {
   font-size: 0.75rem;
   color: #9CA3AF;
-  margin: 0 0 8px 0;
+  margin: 0 0 0.5rem 0;
 }
 .perm-command {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
   background: #1A1A1A;
   border: 1px solid #2A2A2A;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.75rem;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 0.25rem;
 }
 .perm-tool-name {
   color: #60a5fa;
@@ -136,13 +136,13 @@ function decide(decision) {
 }
 .perm-actions {
   display: flex;
-  gap: 8px;
-  padding: 8px 14px 12px;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem 0.75rem;
   flex-wrap: wrap;
 }
 .perm-btn {
-  padding: 5px 12px;
-  border-radius: 8px;
+  padding: 0.3125rem 0.75rem;
+  border-radius: 0.5rem;
   border: none;
   font-family: 'Inter', sans-serif;
   font-size: 0.75rem;
