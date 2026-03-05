@@ -829,6 +829,129 @@
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- Pricing (AI > Pricing) -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <template v-if="activeTopTab === 'ai' && activeSubTab === 'pricing'">
+
+          <!-- Currency Rates -->
+          <div class="config-card">
+            <div class="form-section-header" style="margin-bottom:1rem;">
+              <div class="section-icon-sm">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+                </svg>
+              </div>
+              <div>
+                <h3 class="form-section-title">Currency Rates</h3>
+                <p class="form-section-desc">USD is the base. Enter how many units equal $1 USD.</p>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+              <div class="form-group">
+                <label class="form-label">CNY (¥) per $1</label>
+                <input type="number" step="0.01" v-model.number="form.pricing.currencyRates.CNY" class="field font-mono" placeholder="7.28" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">SGD (S$) per $1</label>
+                <input type="number" step="0.01" v-model.number="form.pricing.currencyRates.SGD" class="field font-mono" placeholder="1.35" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Model Prices -->
+          <div class="config-card">
+            <div class="form-section-header" style="margin-bottom:0.75rem; align-items:flex-start;">
+              <div class="section-icon-sm">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+              </div>
+              <div style="flex:1;">
+                <h3 class="form-section-title">Model Prices</h3>
+                <p class="form-section-desc">USD per 1M tokens. Overrides built-in defaults.</p>
+              </div>
+              <button class="action-btn" @click="fetchOpenRouterPrices" :disabled="isFetchingPrices">
+                <svg v-if="!isFetchingPrices" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/>
+                </svg>
+                <svg v-else class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                </svg>
+                {{ isFetchingPrices ? 'Updating…' : 'Update OpenRouter' }}
+              </button>
+            </div>
+            <!-- Table header -->
+            <div class="pricing-table-header">
+              <span>Model ID</span>
+              <span>Input ($/1M)</span>
+              <span>Output ($/1M)</span>
+              <span>Cache Write</span>
+              <span>Cache Read</span>
+              <span></span>
+            </div>
+            <!-- Price rows -->
+            <div v-for="(row, modelId) in mergedPriceRows" :key="modelId" class="pricing-table-row">
+              <span class="font-mono" style="font-size:var(--fs-caption); color:#1A1A1A; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ modelId }}</span>
+              <input type="number" step="0.001" :value="row.input"      @change="row.input      = +$event.target.value; onPriceEdit(modelId, row)" class="field font-mono" style="padding:0.25rem 0.375rem; font-size:var(--fs-caption);" placeholder="0.00" />
+              <input type="number" step="0.001" :value="row.output"     @change="row.output     = +$event.target.value; onPriceEdit(modelId, row)" class="field font-mono" style="padding:0.25rem 0.375rem; font-size:var(--fs-caption);" placeholder="0.00" />
+              <input type="number" step="0.001" :value="row.cacheWrite" @change="row.cacheWrite = +$event.target.value; onPriceEdit(modelId, row)" class="field font-mono" style="padding:0.25rem 0.375rem; font-size:var(--fs-caption);" placeholder="0.00" />
+              <input type="number" step="0.001" :value="row.cacheRead"  @change="row.cacheRead  = +$event.target.value; onPriceEdit(modelId, row)" class="field font-mono" style="padding:0.25rem 0.375rem; font-size:var(--fs-caption);" placeholder="0.00" />
+              <button @click="resetModelPrice(modelId)" title="Reset to default" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0.25rem;border-radius:var(--radius-sm);color:#9CA3AF;" @mouseenter="e=>e.currentTarget.style.background='var(--bg-hover)'" @mouseleave="e=>e.currentTarget.style.background='none'">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5"/>
+                </svg>
+              </button>
+            </div>
+            <!-- Add custom model -->
+            <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border);">
+              <input v-model="newModelId" class="field font-mono" placeholder="Add custom model ID" style="flex:2;" />
+              <AppButton variant="primary" size="compact" @click="addCustomModel" :disabled="!newModelId.trim()">Add</AppButton>
+            </div>
+          </div>
+
+          <!-- Model Aliases -->
+          <div class="config-card">
+            <div class="form-section-header" style="margin-bottom:0.75rem;">
+              <div class="section-icon-sm">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+                  <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
+                </svg>
+              </div>
+              <div>
+                <h3 class="form-section-title">Model Aliases</h3>
+                <p class="form-section-desc">Map custom or provider-prefixed model names to a known price tier.</p>
+              </div>
+            </div>
+            <div v-for="(target, alias) in form.pricing.modelPriceMap" :key="alias" style="display:grid; grid-template-columns:1fr 1.5rem 1fr 2rem; gap:0.5rem; align-items:center; padding:0.375rem 0; border-bottom:1px solid var(--border-light);">
+              <span class="font-mono" style="color:#1A1A1A; font-size:var(--fs-caption); overflow:hidden; text-overflow:ellipsis;">{{ alias }}</span>
+              <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              <select v-model="form.pricing.modelPriceMap[alias]" class="field" style="font-size:var(--fs-caption); padding:0.25rem 0.375rem;">
+                <option v-for="mid in allKnownModelIds" :key="mid" :value="mid">{{ mid }}</option>
+              </select>
+              <button @click="deleteAlias(alias)" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0.25rem;border-radius:var(--radius-sm);color:#EF4444;" @mouseenter="e=>e.currentTarget.style.background='var(--bg-hover)'" @mouseleave="e=>e.currentTarget.style.background='none'">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border);">
+              <input v-model="newAliasFrom" class="field font-mono" placeholder="Custom model ID (alias)" style="flex:2;" />
+              <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              <select v-model="newAliasTo" class="field" style="flex:2; font-size:var(--fs-caption); padding:0.25rem 0.375rem;">
+                <option value="">— select tier —</option>
+                <option v-for="mid in allKnownModelIds" :key="mid" :value="mid">{{ mid }}</option>
+              </select>
+              <AppButton variant="primary" size="compact" @click="addAlias" :disabled="!newAliasFrom.trim() || !newAliasTo">Add</AppButton>
+            </div>
+          </div>
+
+          <!-- Save row -->
+          <div class="config-save-row">
+            <span v-if="pricingSaved" class="save-status saved">Saved</span>
+            <AppButton variant="primary" size="save" @click="savePricing">Save Pricing</AppButton>
+          </div>
+        </template>
+
+        <!-- ════════════════════════════════════════════════════════════════ -->
         <!-- Email (General > Email) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
         <template v-if="activeTopTab === 'general' && activeSubTab === 'email'">
@@ -1055,6 +1178,7 @@ import { useRoute } from 'vue-router'
 import { useConfigStore } from '../stores/config'
 import { useModelsStore } from '../stores/models'
 import AppButton from '../components/common/AppButton.vue'
+import { DEFAULT_PRICES } from '../utils/pricing.js'
 
 const configStore = useConfigStore()
 const modelsStore = useModelsStore()
@@ -1244,6 +1368,12 @@ const IconPaths = defineComponent({
     h('path', { d: 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' })
   ])
 })
+const IconPricing = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('line', { x1: '12', y1: '1', x2: '12', y2: '23' }),
+    h('path', { d: 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6' })
+  ])
+})
 // Top-level tabs (2 primary)
 const topTabs = [
   { value: 'general', label: 'General', icon: IconGeneral },
@@ -1260,6 +1390,7 @@ const subTabsAI = [
   { value: 'models',    label: 'Models',    icon: IconModels    },
   { value: 'voice',     label: 'Voice',     icon: IconVoice     },
   { value: 'knowledge', label: 'Knowledge', icon: IconKnowledge },
+  { value: 'pricing',   label: 'Pricing',   icon: IconPricing   },
 ]
 
 const activeSubTab = ref('paths')
@@ -1281,6 +1412,7 @@ function getSubTabStatus(subTab) {
     case 'models':    return Object.values(form).some(v => v?.apiKey) ? 'configured' : 'empty'
     case 'voice':     return form.voiceCall?.whisperApiKey ? 'configured' : 'empty'
     case 'knowledge': return form.pineconeApiKey ? 'configured' : 'empty'
+    case 'pricing':   return Object.keys(form.pricing?.models || {}).length > 0 ? 'configured' : 'empty'
     default:          return 'empty'
   }
 }
@@ -1455,6 +1587,11 @@ const form = reactive({
     user: '',
     pass: '',
   },
+  pricing: {
+    models: {},
+    modelPriceMap: {},
+    currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 },
+  },
 })
 
 // Reset isActive when key fields change (skip initial population)
@@ -1479,6 +1616,12 @@ onMounted(async () => {
   if (c.deepseek)   Object.assign(form.deepseek, c.deepseek)
   if (c.voiceCall)  Object.assign(form.voiceCall, c.voiceCall)
   if (c.smtp)       Object.assign(form.smtp, c.smtp)
+  form.pricing = {
+    models: {},
+    modelPriceMap: {},
+    currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 },
+    ...(c.pricing || {})
+  }
   // Merge top-level scalar fields
   for (const key of Object.keys(c)) {
     if (key !== 'anthropic' && key !== 'openrouter' && key !== 'openai' && key !== 'deepseek' && key !== 'voiceCall' && key in form) {
@@ -1713,6 +1856,84 @@ async function testPineconeConnection() {
       : { ok: false, message: result.error || 'Connection failed' }
   } catch (err) { testResultPinecone.value = { ok: false, message: err.message } }
   finally { testingPinecone.value = false }
+}
+
+// ── Pricing tab state ────────────────────────────────────────────────────────
+const isFetchingPrices = ref(false)
+const pricingSaved = ref(false)
+const newModelId   = ref('')
+const newAliasFrom = ref('')
+const newAliasTo   = ref('')
+
+const mergedPriceRows = computed(() => {
+  const userModels = form.pricing?.models || {}
+  const merged = { ...DEFAULT_PRICES }
+  for (const [k, v] of Object.entries(userModels)) merged[k] = { ...merged[k], ...v }
+  return Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)))
+})
+
+const allKnownModelIds = computed(() => Object.keys(mergedPriceRows.value))
+
+function onPriceEdit(modelId, row) {
+  if (!form.pricing.models) form.pricing.models = {}
+  form.pricing.models[modelId] = { input: row.input || 0, output: row.output || 0, cacheWrite: row.cacheWrite || 0, cacheRead: row.cacheRead || 0 }
+}
+
+function resetModelPrice(modelId) {
+  if (form.pricing?.models?.[modelId]) {
+    delete form.pricing.models[modelId]
+  }
+}
+
+function addCustomModel() {
+  const id = newModelId.value.trim()
+  if (!id) return
+  if (!form.pricing.models) form.pricing.models = {}
+  form.pricing.models[id] = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 }
+  newModelId.value = ''
+}
+
+function addAlias() {
+  if (!newAliasFrom.value.trim() || !newAliasTo.value) return
+  if (!form.pricing.modelPriceMap) form.pricing.modelPriceMap = {}
+  form.pricing.modelPriceMap[newAliasFrom.value.trim()] = newAliasTo.value
+  newAliasFrom.value = ''
+  newAliasTo.value = ''
+}
+
+function deleteAlias(alias) {
+  if (form.pricing?.modelPriceMap) delete form.pricing.modelPriceMap[alias]
+}
+
+async function fetchOpenRouterPrices() {
+  isFetchingPrices.value = true
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/models')
+    const data = await resp.json()
+    if (!form.pricing.models) form.pricing.models = {}
+    for (const m of (data.data || [])) {
+      const id = m.id
+      const pricing = m.pricing
+      if (!id || !pricing) continue
+      form.pricing.models[id] = {
+        input:      parseFloat(pricing.prompt)     * 1_000_000 || 0,
+        output:     parseFloat(pricing.completion) * 1_000_000 || 0,
+        cacheWrite: 0,
+        cacheRead:  0,
+      }
+    }
+  } catch (err) {
+    console.error('fetchOpenRouterPrices error', err)
+  } finally {
+    isFetchingPrices.value = false
+  }
+}
+
+async function savePricing() {
+  configStore.config.pricing = { ...form.pricing }
+  await configStore.saveConfig()
+  pricingSaved.value = true
+  setTimeout(() => { pricingSaved.value = false }, 2000)
 }
 
 </script>
@@ -2067,5 +2288,85 @@ async function testPineconeConnection() {
   font-size: var(--fs-small);
   color: var(--text-muted);
   margin-bottom: 4px;
+}
+
+/* Pricing table */
+.pricing-table-header,
+.pricing-table-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 2rem;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.375rem 0;
+}
+.pricing-table-header {
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+.pricing-table-row {
+  border-bottom: 1px solid var(--border-light);
+}
+.pricing-table-row:last-child { border-bottom: none; }
+
+/* Pricing save row */
+.config-save-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.save-status {
+  display: inline-flex;
+  align-items: center;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  padding: 0.375rem 0.875rem;
+  border-radius: 0.5rem;
+  animation: fadeIn 0.2s ease;
+}
+.save-status.saved {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* Pricing action button */
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: var(--radius-sm, 0.5rem);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.action-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
+}
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* form-section-desc used in pricing cards */
+.form-section-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  margin: 0.125rem 0 0;
 }
 </style>
