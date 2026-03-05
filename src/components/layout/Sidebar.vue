@@ -54,7 +54,7 @@
 </template>
 
 <script setup>
-import { defineComponent, h, ref } from 'vue'
+import { defineComponent, h, ref, onMounted, onUnmounted } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useVoiceStore } from '../../stores/voice'
 
@@ -63,6 +63,27 @@ const router = useRouter()
 const voiceStore = useVoiceStore()
 
 const isCollapsed = ref(false)
+const userOverride = ref(null) // null = auto mode, true/false = user locked
+
+function applyAutoCollapse() {
+  if (userOverride.value !== null) return
+  isCollapsed.value = window.innerWidth < 1920
+}
+
+function onResize() {
+  if (userOverride.value === null) {
+    isCollapsed.value = window.innerWidth < 1920
+  }
+}
+
+onMounted(() => {
+  applyAutoCollapse()
+  window.addEventListener('resize', onResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', onResize)
+})
 
 function goToCall() {
   voiceStore.setPip(false)
@@ -70,6 +91,7 @@ function goToCall() {
 }
 function toggleCollapse() {
   isCollapsed.value = !isCollapsed.value
+  userOverride.value = isCollapsed.value
 }
 
 // ── SVG Icon Components ──────────────────────────────────────────────────────
