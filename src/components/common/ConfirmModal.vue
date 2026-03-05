@@ -104,10 +104,10 @@ onUnmounted(() => {
 }
 
 .confirm-modal {
-  width: min(440px, 90vw);
+  width: min(27.5rem, 90vw);
   background: #0F0F0F;
   border: 1px solid #2A2A2A;
-  border-radius: 16px;
+  border-radius: 1rem;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
@@ -124,7 +124,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 1rem 1.25rem;
   border-bottom: 1px solid #1F1F1F;
 }
 
@@ -137,9 +137,9 @@ onUnmounted(() => {
 }
 
 .confirm-close-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -153,7 +153,7 @@ onUnmounted(() => {
 .confirm-close-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .confirm-body {
-  padding: 20px 20px 24px;
+  padding: 1.25rem 1.25rem 1.5rem;
 }
 
 .confirm-message {
@@ -169,10 +169,10 @@ onUnmounted(() => {
   font-size: var(--fs-secondary);
   color: #FCA5A5;
   line-height: 1.5;
-  margin: 10px 0 0;
-  padding: 8px 12px;
+  margin: 0.625rem 0 0;
+  padding: 0.5rem 0.75rem;
   background: rgba(239, 68, 68, 0.12);
-  border-radius: 8px;
+  border-radius: 0.5rem;
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
@@ -180,15 +180,15 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
-  padding: 14px 20px;
+  gap: 0.625rem;
+  padding: 0.875rem 1.25rem;
   border-top: 1px solid #1F1F1F;
   background: #0A0A0A;
 }
 
 .confirm-cancel-btn {
-  padding: 8px 18px;
-  border-radius: 8px;
+  padding: 0.5rem 1.125rem;
+  border-radius: 0.5rem;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
@@ -202,8 +202,8 @@ onUnmounted(() => {
 .confirm-cancel-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .confirm-action-btn {
-  padding: 8px 20px;
-  border-radius: 8px;
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.5rem;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
@@ -212,7 +212,7 @@ onUnmounted(() => {
   transition: all 0.15s;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .confirm-action-btn:disabled { opacity: 0.7; cursor: not-allowed; }
 
@@ -237,8 +237,8 @@ onUnmounted(() => {
 }
 
 .confirm-spinner {
-  width: 16px;
-  height: 16px;
+  width: 1rem;
+  height: 1rem;
   animation: confirm-spin 0.8s linear infinite;
 }
 
