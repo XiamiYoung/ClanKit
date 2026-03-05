@@ -129,6 +129,7 @@
             >
               <component :is="tab.icon" class="config-tab-icon" />
               {{ tab.label }}
+              <span class="prov-dot" :class="form[tab.value]?.isActive ? 'active' : 'inactive'" />
             </button>
           </div>
 
@@ -196,17 +197,20 @@
               </div>
             </div>
 
-            <!-- Default Model combo box -->
+            <!-- Utility Model -->
             <div class="form-divider"></div>
             <div class="form-group">
-              <label class="form-label">Default Model</label>
-              <ComboBox
-                :model-value="form.anthropic.activeModel"
-                :options="anthropicComboOptions"
-                :chip-label-override="anthropicDefaultPlaceholder"
-                placeholder="Search models..."
-                @update:model-value="onAnthropicDefaultChange"
-              />
+              <label class="form-label">
+                Utility Model
+                <span class="cfg-required">*</span>
+              </label>
+              <span class="cfg-hint">Background tasks: @mention routing, context compaction, title generation. Pick the cheapest/fastest.</span>
+              <select v-model="form.anthropic.utilityModel" class="field font-mono">
+                <option value="" disabled>Select utility model</option>
+                <option v-if="form.anthropic.sonnetModel" :value="form.anthropic.sonnetModel">{{ form.anthropic.sonnetModel }}</option>
+                <option v-if="form.anthropic.opusModel" :value="form.anthropic.opusModel">{{ form.anthropic.opusModel }}</option>
+                <option v-if="form.anthropic.haikuModel" :value="form.anthropic.haikuModel">{{ form.anthropic.haikuModel }}</option>
+              </select>
             </div>
 
             <!-- Test Connection -->
@@ -214,25 +218,19 @@
             <div class="test-connection-row">
               <div>
                 <p class="form-section-title">Test Connection</p>
-                <p class="hint" style="margin-top:2px;">Verify Anthropic endpoint and key</p>
+                <p class="hint" style="margin-top:2px;">Verify endpoint, key, and utility model</p>
               </div>
-              <div class="flex items-center gap-2">
-                <AppButton v-if="testingAnthropic" variant="danger-ghost" @click="stopTest('anthropic')">
-                  <svg class="icon-sm" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-                  Stop
-                </AppButton>
-                <AppButton @click="testConnection('anthropic')" :disabled="testingAnthropic" :loading="testingAnthropic">
-                  <svg v-if="!testingAnthropic" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-                  </svg>
-                  {{ testingAnthropic ? 'Testing…' : 'Test' }}
-                </AppButton>
-              </div>
+              <AppButton @click="testProviderConnection('anthropic')" :disabled="testingProvider === 'anthropic' || !canTestAnthropic" :loading="testingProvider === 'anthropic'">
+                <svg v-if="testingProvider !== 'anthropic'" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                </svg>
+                {{ testingProvider === 'anthropic' ? 'Testing\u2026' : 'Test Connection' }}
+              </AppButton>
             </div>
-            <div v-if="testResultAnthropic" class="test-result" :class="testResultAnthropic.ok ? 'success' : 'error'">
-              <svg v-if="testResultAnthropic.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <div v-if="testResults.anthropic" class="test-result" :class="testResults.anthropic.ok ? 'success' : 'error'">
+              <svg v-if="testResults.anthropic.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
               <svg v-else class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span>{{ testResultAnthropic.message }}</span>
+              <span>{{ testResults.anthropic.message }}</span>
             </div>
           </div>
 
@@ -283,39 +281,40 @@
               <span>{{ orModelsFetchError }}</span>
             </div>
 
+            <!-- Utility Model -->
+            <div class="form-divider"></div>
+            <div class="form-group">
+              <label class="form-label">
+                Utility Model
+                <span class="cfg-required">*</span>
+              </label>
+              <span class="cfg-hint">Background tasks: @mention routing, context compaction, title generation. Pick the cheapest/fastest.</span>
+              <div v-if="modelsStore.openrouterModels.length > 0" class="utility-model-picker">
+                <input v-model="orUtilityFilter" type="text" placeholder="Filter models…" class="field font-mono field-sm" />
+                <select v-model="form.openrouter.utilityModel" class="field font-mono field-sm" :size="Math.min(filteredOrUtilityModels.length, 6)" style="height:auto; padding:6px 8px;">
+                  <option v-for="m in filteredOrUtilityModels" :key="m.id" :value="m.id">{{ m.id }} — {{ m.name }}</option>
+                </select>
+                <p v-if="form.openrouter.utilityModel" class="hint selected-hint">Selected: <span class="font-mono">{{ form.openrouter.utilityModel }}</span></p>
+              </div>
+              <input v-else v-model="form.openrouter.utilityModel" type="text" placeholder="e.g. meta-llama/llama-3.1-8b-instruct (fetch models for picker)" class="field font-mono" />
+            </div>
+
             <!-- Test Connection -->
             <div class="form-divider"></div>
             <div class="test-connection-row">
               <div>
                 <p class="form-section-title">Test Connection</p>
-                <p class="hint" style="margin-top:2px;">{{ orSelectedTestModel ? `Test with ${orSelectedTestModel}` : 'Select a model above first' }}</p>
+                <p class="hint" style="margin-top:2px;">Verify endpoint, key, and utility model</p>
               </div>
-              <div class="flex items-center gap-2">
-                <AppButton v-if="testingOpenRouter" variant="danger-ghost" @click="stopTest('openrouter')">
-                  <svg class="icon-sm" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg> Stop
-                </AppButton>
-                <AppButton @click="testConnection('openrouter')" :disabled="testingOpenRouter || !orSelectedTestModel" :loading="testingOpenRouter">
-                  <svg v-if="!testingOpenRouter" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                  {{ testingOpenRouter ? 'Testing…' : 'Test' }}
-                </AppButton>
-              </div>
+              <AppButton @click="testProviderConnection('openrouter')" :disabled="testingProvider === 'openrouter' || !canTestOpenRouter" :loading="testingProvider === 'openrouter'">
+                <svg v-if="testingProvider !== 'openrouter'" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                {{ testingProvider === 'openrouter' ? 'Testing\u2026' : 'Test Connection' }}
+              </AppButton>
             </div>
-            <div v-if="testResultOpenRouter" class="test-result" :class="testResultOpenRouter.ok ? 'success' : 'error'">
-              <svg v-if="testResultOpenRouter.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <div v-if="testResults.openrouter" class="test-result" :class="testResults.openrouter.ok ? 'success' : 'error'">
+              <svg v-if="testResults.openrouter.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
               <svg v-else class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span>{{ testResultOpenRouter.message }}</span>
-            </div>
-
-            <!-- Default Model combo box -->
-            <div class="form-divider"></div>
-            <div class="form-group">
-              <label class="form-label">Default Model</label>
-              <ComboBox
-                :model-value="form.openrouter.defaultModel"
-                :options="openrouterComboOptions"
-                placeholder="Search models..."
-                @update:model-value="onOrDefaultChange"
-              />
+              <span>{{ testResults.openrouter.message }}</span>
             </div>
           </div>
 
@@ -366,39 +365,141 @@
               <span>{{ openaiModelsFetchError }}</span>
             </div>
 
+            <!-- Utility Model -->
+            <div class="form-divider"></div>
+            <div class="form-group">
+              <label class="form-label">
+                Utility Model
+                <span class="cfg-required">*</span>
+              </label>
+              <span class="cfg-hint">Background tasks: @mention routing, context compaction, title generation. Pick the cheapest/fastest.</span>
+              <div v-if="modelsStore.openaiModels.length > 0" class="utility-model-picker">
+                <input v-model="openaiUtilityFilter" type="text" placeholder="Filter models…" class="field font-mono field-sm" />
+                <select v-model="form.openai.utilityModel" class="field font-mono field-sm" :size="Math.min(filteredOpenAIUtilityModels.length, 6)" style="height:auto; padding:6px 8px;">
+                  <option v-for="m in filteredOpenAIUtilityModels" :key="m.id" :value="m.id">{{ m.id }} — {{ m.name }}</option>
+                </select>
+                <p v-if="form.openai.utilityModel" class="hint selected-hint">Selected: <span class="font-mono">{{ form.openai.utilityModel }}</span></p>
+              </div>
+              <input v-else v-model="form.openai.utilityModel" type="text" placeholder="e.g. gpt-4o-mini (fetch models for picker)" class="field font-mono" />
+            </div>
+
             <!-- Test Connection -->
             <div class="form-divider"></div>
             <div class="test-connection-row">
               <div>
                 <p class="form-section-title">Test Connection</p>
-                <p class="hint" style="margin-top:2px;">{{ openaiSelectedTestModel ? `Test with ${openaiSelectedTestModel}` : 'Select a model above first' }}</p>
+                <p class="hint" style="margin-top:2px;">Verify endpoint, key, and utility model</p>
               </div>
-              <div class="flex items-center gap-2">
-                <AppButton v-if="testingOpenAI" variant="danger-ghost" @click="stopTest('openai')">
-                  <svg class="icon-sm" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg> Stop
-                </AppButton>
-                <AppButton @click="testConnection('openai')" :disabled="testingOpenAI || !openaiSelectedTestModel" :loading="testingOpenAI">
-                  <svg v-if="!testingOpenAI" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                  {{ testingOpenAI ? 'Testing…' : 'Test' }}
-                </AppButton>
-              </div>
+              <AppButton @click="testProviderConnection('openai')" :disabled="testingProvider === 'openai' || !canTestOpenAI" :loading="testingProvider === 'openai'">
+                <svg v-if="testingProvider !== 'openai'" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                {{ testingProvider === 'openai' ? 'Testing\u2026' : 'Test Connection' }}
+              </AppButton>
             </div>
-            <div v-if="testResultOpenAI" class="test-result" :class="testResultOpenAI.ok ? 'success' : 'error'">
-              <svg v-if="testResultOpenAI.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <div v-if="testResults.openai" class="test-result" :class="testResults.openai.ok ? 'success' : 'error'">
+              <svg v-if="testResults.openai.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
               <svg v-else class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span>{{ testResultOpenAI.message }}</span>
+              <span>{{ testResults.openai.message }}</span>
+            </div>
+          </div>
+
+          <!-- ── DeepSeek Tab ────────────────────────────────────────── -->
+          <div v-if="activeProviderTab === 'deepseek'" class="config-card">
+
+            <div class="form-group">
+              <label for="deepseekApiKey" class="form-label">
+                API Key <span class="form-label-hint">Bearer token</span>
+              </label>
+              <div class="input-with-action">
+                <input id="deepseekApiKey" v-model="form.deepseek.apiKey" :type="showDeepSeekKey ? 'text' : 'password'" placeholder="sk-…" class="field font-mono" />
+                <button @click="showDeepSeekKey = !showDeepSeekKey" class="field-action-btn" :aria-label="showDeepSeekKey ? 'Hide key' : 'Show key'">
+                  <svg v-if="!showDeepSeekKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+              </div>
+              <p class="hint">DeepSeek API key — stored locally</p>
             </div>
 
-            <!-- Default Model combo box -->
+            <div class="form-group">
+              <label for="deepseekBaseURL" class="form-label">Base URL</label>
+              <input id="deepseekBaseURL" v-model="form.deepseek.baseURL" type="url" placeholder="https://api.deepseek.com" class="field" />
+              <p class="hint">DeepSeek base URL. Leave blank to use the official API endpoint.</p>
+            </div>
+
+            <!-- Available Models -->
+            <div class="form-divider"></div>
+            <div class="test-connection-row">
+              <div>
+                <p class="form-section-title">Available Models</p>
+                <p class="hint" style="margin-top:2px;">{{ deepseekModels.length > 0 ? `${deepseekModels.length} models loaded` : 'Enter API key and fetch models' }}</p>
+              </div>
+              <AppButton size="compact" @click="fetchDeepSeekModels" :disabled="deepseekModelsFetching || !form.deepseek.apiKey" :loading="deepseekModelsFetching">
+                <svg v-if="!deepseekModelsFetching" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                {{ deepseekModelsFetching ? 'Fetching…' : 'Fetch Models' }}
+              </AppButton>
+            </div>
+            <div v-if="deepseekModels.length > 0" class="model-list-area">
+              <input v-model="deepseekModelFilter" type="text" placeholder="Filter models…" class="field font-mono field-sm" />
+              <select v-model="deepseekSelectedTestModel" class="field font-mono field-sm" :size="Math.min(filteredDeepSeekModels.length, 8)" style="height:auto; padding:6px 8px;">
+                <option v-for="m in filteredDeepSeekModels" :key="m.id" :value="m.id">{{ m.id }}</option>
+              </select>
+              <p v-if="deepseekSelectedTestModel" class="hint selected-hint">Selected: <span class="font-mono">{{ deepseekSelectedTestModel }}</span></p>
+            </div>
+            <div v-if="deepseekModelsFetchError" class="test-result error">
+              <svg class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>{{ deepseekModelsFetchError }}</span>
+            </div>
+
+            <!-- Utility Model -->
             <div class="form-divider"></div>
             <div class="form-group">
-              <label class="form-label">Default Model</label>
-              <ComboBox
-                :model-value="form.openai.model"
-                :options="openaiComboOptions"
-                placeholder="Search models..."
-                @update:model-value="onOpenaiDefaultChange"
+              <label class="form-label">
+                Utility Model
+                <span class="cfg-required">*</span>
+              </label>
+              <span class="cfg-hint">Background tasks: @mention routing, context compaction, title generation. Pick the cheapest/fastest.</span>
+              <div v-if="deepseekModels.length > 0" class="utility-model-picker">
+                <input v-model="deepseekUtilityFilter" type="text" placeholder="Filter models…" class="field font-mono field-sm" />
+                <select v-model="form.deepseek.utilityModel" class="field font-mono field-sm" :size="Math.min(filteredDeepSeekUtilityModels.length, 6)" style="height:auto; padding:6px 8px;">
+                  <option v-for="m in filteredDeepSeekUtilityModels" :key="m.id" :value="m.id">{{ m.id }}</option>
+                </select>
+                <p v-if="form.deepseek.utilityModel" class="hint selected-hint">Selected: <span class="font-mono">{{ form.deepseek.utilityModel }}</span></p>
+              </div>
+              <input v-else v-model="form.deepseek.utilityModel" type="text" placeholder="e.g. deepseek-chat (fetch models for picker)" class="field font-mono" />
+            </div>
+
+            <!-- Test Connection -->
+            <div class="form-divider"></div>
+            <div class="test-connection-row">
+              <div>
+                <p class="form-section-title">Test Connection</p>
+                <p class="hint" style="margin-top:2px;">Verify endpoint, key, and utility model</p>
+              </div>
+              <AppButton @click="testProviderConnection('deepseek')" :disabled="testingProvider === 'deepseek' || !canTestDeepSeek" :loading="testingProvider === 'deepseek'">
+                <svg v-if="testingProvider !== 'deepseek'" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                {{ testingProvider === 'deepseek' ? 'Testing\u2026' : 'Test Connection' }}
+              </AppButton>
+            </div>
+            <div v-if="testResults.deepseek" class="test-result" :class="testResults.deepseek.ok ? 'success' : 'error'">
+              <svg v-if="testResults.deepseek.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg v-else class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>{{ testResults.deepseek.message }}</span>
+            </div>
+
+            <div class="form-group">
+              <label for="deepseekMaxTokens" class="form-label">
+                Max Output Tokens <span class="form-label-hint">1 – 8192</span>
+              </label>
+              <input
+                id="deepseekMaxTokens"
+                v-model.number="form.deepseek.maxTokens"
+                type="number"
+                min="1"
+                max="8192"
+                step="256"
+                class="field font-mono"
+                placeholder="8192"
               />
+              <p class="hint">DeepSeek enforces a hard limit of 8192 tokens per response.</p>
             </div>
           </div>
 
@@ -550,6 +651,105 @@
               <p class="hint">Leave blank for standard OpenAI. Change only if using a custom Whisper-compatible endpoint.</p>
             </div>
 
+            <!-- STT Language -->
+            <div class="form-group">
+              <label for="whisperLanguage" class="form-label">
+                STT Language
+                <span class="form-label-hint">Recommended for noise reduction</span>
+              </label>
+              <input id="whisperLanguage" v-model="form.voiceCall.language" type="text" placeholder="e.g. en, zh, ja, fr (leave blank for auto)" class="field font-mono" />
+              <p class="hint">Setting your language (e.g. <code>en</code>) prevents Whisper from misidentifying background noise or echo as speech in another language, significantly reducing false triggers.</p>
+            </div>
+
+            <!-- VAD Sensitivity -->
+            <div class="form-divider"></div>
+            <div class="form-section-header" style="margin-bottom:12px;">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              </div>
+              <h3 class="form-section-title">Microphone Sensitivity (VAD)</h3>
+            </div>
+            <p class="hint" style="margin-bottom:16px;">
+              Controls when the mic starts and stops capturing. Tune these if the AI triggers on keyboard noise, background sound, or misses quiet speech.
+            </p>
+
+            <div class="vad-grid">
+              <!-- Amplitude threshold -->
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">
+                  Amplitude Threshold
+                  <span class="form-label-hint">Current: {{ form.voiceCall.vadAmplitude }}</span>
+                </label>
+                <input
+                  type="range" min="0.005" max="0.06" step="0.001"
+                  v-model.number="form.voiceCall.vadAmplitude"
+                  class="vad-slider"
+                />
+                <div class="vad-slider-labels"><span>Sensitive</span><span>Selective</span></div>
+                <p class="hint">Minimum loudness to register as speech. Raise if keyboard/noise triggers the mic. Lower if quiet speech is missed. Default: 0.018</p>
+              </div>
+
+              <!-- Silence duration -->
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">
+                  Silence Cutoff
+                  <span class="form-label-hint">Current: {{ form.voiceCall.vadSilenceMs }}ms</span>
+                </label>
+                <input
+                  type="range" min="300" max="2000" step="50"
+                  v-model.number="form.voiceCall.vadSilenceMs"
+                  class="vad-slider"
+                />
+                <div class="vad-slider-labels"><span>Faster (300ms)</span><span>Slower (2000ms)</span></div>
+                <p class="hint">How long silence must last before audio is sent to Whisper. Lower = faster response, higher = fewer accidental cutoffs mid-sentence. Default: 700ms</p>
+              </div>
+
+              <!-- Min speech frames -->
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">
+                  Min Speech Frames
+                  <span class="form-label-hint">Current: {{ form.voiceCall.vadSpeechFrames }} (~{{ Math.round(form.voiceCall.vadSpeechFrames / 60 * 1000) }}ms)</span>
+                </label>
+                <input
+                  type="range" min="5" max="60" step="1"
+                  v-model.number="form.voiceCall.vadSpeechFrames"
+                  class="vad-slider"
+                />
+                <div class="vad-slider-labels"><span>5 frames</span><span>60 frames</span></div>
+                <p class="hint">How many consecutive loud frames before a recording starts. Higher values reject brief noise bursts and single key clicks. Default: 20</p>
+              </div>
+
+              <!-- Voice band ratio -->
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">
+                  Voice Band Ratio
+                  <span class="form-label-hint">Current: {{ Math.round(form.voiceCall.vadVoiceBandRatio * 100) }}%</span>
+                </label>
+                <input
+                  type="range" min="0.05" max="0.6" step="0.01"
+                  v-model.number="form.voiceCall.vadVoiceBandRatio"
+                  class="vad-slider"
+                />
+                <div class="vad-slider-labels"><span>Permissive (5%)</span><span>Strict (60%)</span></div>
+                <p class="hint">Minimum fraction of audio energy that must be in the 300–3400 Hz voice range. Keyboard clicks have ~10%, speech has ~40–70%. Raise to block more noise. Default: 25%</p>
+              </div>
+
+              <!-- Proximity multiplier -->
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">
+                  Background Noise Rejection
+                  <span class="form-label-hint">Current: {{ form.voiceCall.vadProximityMult }}×</span>
+                </label>
+                <input
+                  type="range" min="1.2" max="5" step="0.1"
+                  v-model.number="form.voiceCall.vadProximityMult"
+                  class="vad-slider"
+                />
+                <div class="vad-slider-labels"><span>Relaxed (1.2×)</span><span>Strict (5×)</span></div>
+                <p class="hint">How much louder you must be than the background before the mic activates. Higher values block people chatting nearby. If the mic stops picking up your voice, lower this. Default: 2.5×</p>
+              </div>
+            </div>
+
             <!-- TTS Mode -->
             <div class="form-divider"></div>
             <div class="form-section-header" style="margin-bottom:12px;">
@@ -629,6 +829,110 @@
               <svg v-if="savedVoiceMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               {{ savedVoiceMsg.text }}
+            </span>
+          </div>
+        </template>
+
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- Email tab -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <template v-if="activeTopTab === 'email'">
+          <div class="config-card">
+
+            <!-- SMTP Server section -->
+            <div class="form-section-header" style="margin-bottom:12px;">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                </svg>
+              </div>
+              <h3 class="form-section-title">SMTP Server</h3>
+            </div>
+            <p class="hint" style="margin-bottom:16px;">
+              Credentials for outbound email. The agent will use these to send emails when asked.
+              Uses STARTTLS on port 587 (Office 365, Outlook, Gmail, etc.)
+            </p>
+
+            <!-- Host -->
+            <div class="form-group">
+              <label for="smtpHost" class="form-label">
+                Host
+                <span class="form-label-hint">SMTP server hostname</span>
+              </label>
+              <input id="smtpHost" v-model="form.smtp.host" type="text" placeholder="smtp.office365.com" class="field font-mono" />
+            </div>
+
+            <!-- Port -->
+            <div class="form-group">
+              <label for="smtpPort" class="form-label">
+                Port
+                <span class="form-label-hint">Default 587 (STARTTLS)</span>
+              </label>
+              <input id="smtpPort" v-model.number="form.smtp.port" type="number" placeholder="587" class="field font-mono" style="max-width:120px;" />
+            </div>
+
+            <!-- Username -->
+            <div class="form-group">
+              <label for="smtpUser" class="form-label">
+                Username
+                <span class="form-label-hint">Usually your full email address</span>
+              </label>
+              <input id="smtpUser" v-model="form.smtp.user" type="text" placeholder="you@yourdomain.com" class="field font-mono" />
+            </div>
+
+            <!-- Password -->
+            <div class="form-group">
+              <label for="smtpPass" class="form-label">
+                Password
+                <span class="form-label-hint">App password or account password</span>
+              </label>
+              <div class="input-with-action">
+                <input
+                  id="smtpPass"
+                  v-model="form.smtp.pass"
+                  :type="showSmtpPass ? 'text' : 'password'"
+                  placeholder="••••••••"
+                  class="field font-mono"
+                />
+                <button @click="showSmtpPass = !showSmtpPass" class="field-action-btn" :aria-label="showSmtpPass ? 'Hide password' : 'Show password'">
+                  <svg v-if="!showSmtpPass" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                </button>
+              </div>
+              <p class="hint">For Office 365 with MFA, use an app password from your Microsoft account security settings.</p>
+            </div>
+
+            <!-- Test Connection -->
+            <div class="form-divider"></div>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <AppButton size="compact" variant="secondary" @click="testSmtpConnection" :disabled="testingSmtp" :loading="testingSmtp">
+                {{ testingSmtp ? 'Testing...' : 'Test Connection' }}
+              </AppButton>
+              <span v-if="testResultSmtp" class="test-result" :class="testResultSmtp.ok ? 'success' : 'error'">
+                <svg v-if="testResultSmtp.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                {{ testResultSmtp.message }}
+              </span>
+            </div>
+          </div>
+
+          <div class="save-row">
+            <AppButton size="save" @click="saveEmail" :disabled="savingEmail" :loading="savingEmail">
+              <svg v-if="!savingEmail" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+              </svg>
+              {{ savingEmail ? 'Saving...' : 'Save Changes' }}
+            </AppButton>
+            <span v-if="savedEmailMsg" class="save-indicator" :class="savedEmailMsg.ok ? 'success' : 'error'">
+              <svg v-if="savedEmailMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              {{ savedEmailMsg.text }}
             </span>
           </div>
         </template>
@@ -750,14 +1054,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, defineComponent, h } from 'vue'
+import { ref, reactive, onMounted, computed, watch, nextTick, defineComponent, h } from 'vue'
+import { useRoute } from 'vue-router'
 import { useConfigStore } from '../stores/config'
 import { useModelsStore } from '../stores/models'
 import AppButton from '../components/common/AppButton.vue'
-import ComboBox from '../components/common/ComboBox.vue'
 
 const configStore = useConfigStore()
 const modelsStore = useModelsStore()
+const route = useRoute()
 
 const isElectron = !!(typeof window !== 'undefined' && window.electronAPI)
 
@@ -767,8 +1072,14 @@ function openInExplorer(path) {
 }
 const showKey  = ref(false)
 const showOpenRouterKey = ref(false)
+const VALID_TABS = ['general', 'models', 'skills', 'knowledge', 'voice', 'email', 'security']
 const activeTopTab = ref('general')
 const activeProviderTab = ref('anthropic')
+
+// Respond to ?tab= query param (e.g. from ToolsView → "Configure SMTP" button)
+watch(() => route.query.tab, (tab) => {
+  if (tab && VALID_TABS.includes(tab)) activeTopTab.value = tab
+}, { immediate: true })
 
 // Per-tab save state
 const savingModels = ref(false)
@@ -776,27 +1087,34 @@ const savedModelsMsg = ref('')
 const savingSkills = ref(false)
 const savedSkillsMsg = ref('')
 
-// Per-provider test state
-const testingAnthropic = ref(false)
-const testingOpenRouter = ref(false)
-const testResultAnthropic = ref(null)
-const testResultOpenRouter = ref(null)
+// Unified provider test state
+const testingProvider = ref(null)  // 'anthropic' | 'openrouter' | 'openai' | 'deepseek' | null
+const testResults = ref({})        // { [provider]: { ok, message } }
 
 // OpenRouter local state (fetch button + test model selection)
 const orModelsFetching = ref(false)
 const orModelsFetchError = ref('')
 const orModelFilter = ref('')
 const orSelectedTestModel = ref('')
+const orUtilityFilter = ref('')
 
 
 // OpenAI state
 const showOpenAIKey = ref(false)
-const testingOpenAI = ref(false)
-const testResultOpenAI = ref(null)
 const openaiModelsFetching = ref(false)
 const openaiModelsFetchError = ref('')
 const openaiModelFilter = ref('')
 const openaiSelectedTestModel = ref('')
+const openaiUtilityFilter = ref('')
+
+// DeepSeek state
+const showDeepSeekKey = ref(false)
+const deepseekModelsFetching = ref(false)
+const deepseekModelsFetchError = ref('')
+const deepseekModelFilter = ref('')
+const deepseekSelectedTestModel = ref('')
+const deepseekUtilityFilter = ref('')
+const deepseekModels = ref([])
 
 
 // Pinecone state
@@ -812,6 +1130,13 @@ const savingVoice = ref(false)
 const savedVoiceMsg = ref(null)
 const testingWhisper = ref(false)
 const testResultWhisper = ref(null)
+
+// Email tab state
+const showSmtpPass = ref(false)
+const savingEmail = ref(false)
+const savedEmailMsg = ref(null)
+const testingSmtp = ref(false)
+const testResultSmtp = ref(null)
 
 // Security tab state
 const savingSecurity = ref(false)
@@ -901,14 +1226,21 @@ const IconVoice = defineComponent({
     h('line', { x1: '8', y1: '23', x2: '16', y2: '23' })
   ])
 })
+const IconEmail = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('path', { d: 'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z' }),
+    h('polyline', { points: '22,6 12,13 2,6' })
+  ])
+})
 // Top-level tabs
 const topTabs = [
-  { value: 'general', label: 'General', icon: IconGeneral },
-  { value: 'models', label: 'AI Models', icon: IconModels },
-  { value: 'skills', label: 'AI Skills', icon: IconSkills },
-  { value: 'knowledge', label: 'AI Knowledge', icon: IconKnowledge },
-  { value: 'voice', label: 'Voice Call', icon: IconVoice },
-  { value: 'security', label: 'Security', icon: IconSecurity },
+  { value: 'general',  label: 'General',      icon: IconGeneral  },
+  { value: 'models',   label: 'AI Models',    icon: IconModels   },
+  { value: 'skills',   label: 'AI Skills',    icon: IconSkills   },
+  { value: 'knowledge',label: 'AI Knowledge', icon: IconKnowledge },
+  { value: 'voice',    label: 'Voice Call',   icon: IconVoice    },
+  { value: 'email',    label: 'Email',        icon: IconEmail    },
+  { value: 'security', label: 'Security',     icon: IconSecurity },
 ]
 
 // Provider icon components
@@ -935,10 +1267,19 @@ const IconOpenAI = defineComponent({
   ])
 })
 
+const IconDeepSeek = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('path', { d: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z' }),
+    h('path', { d: 'M8 12c0-2.21 1.79-4 4-4s4 1.79 4 4-1.79 4-4 4-4-1.79-4-4z' }),
+    h('path', { d: 'M12 8V6M12 18v-2M8 12H6M18 12h-2' })
+  ])
+})
+
 const providerOptions = [
   { value: 'anthropic',   label: 'Anthropic',   icon: IconAnthropic   },
   { value: 'openrouter',  label: 'OpenRouter',  icon: IconOpenRouter  },
-  { value: 'openai',      label: 'OpenAI',       icon: IconOpenAI      }
+  { value: 'openai',      label: 'OpenAI',      icon: IconOpenAI      },
+  { value: 'deepseek',    label: 'DeepSeek',    icon: IconDeepSeek    },
 ]
 
 const filteredOrModels = computed(() => {
@@ -955,45 +1296,64 @@ const filteredOpenAIModels = computed(() => {
   return models.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
 })
 
-// ── ComboBox options for default model selectors ────────────────────────────
-const anthropicComboOptions = computed(() => {
-  const list = []
-  if (form.anthropic.sonnetModel) list.push({ id: 'sonnet', name: 'Sonnet', detail: form.anthropic.sonnetModel })
-  if (form.anthropic.opusModel) list.push({ id: 'opus', name: 'Opus', detail: form.anthropic.opusModel })
-  if (form.anthropic.haikuModel) list.push({ id: 'haiku', name: 'Haiku', detail: form.anthropic.haikuModel })
-  return list
+const filteredDeepSeekModels = computed(() => {
+  if (!deepseekModelFilter.value) return deepseekModels.value
+  const q = deepseekModelFilter.value.toLowerCase()
+  return deepseekModels.value.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
 })
 
-const anthropicDefaultPlaceholder = computed(() => {
-  const m = anthropicComboOptions.value.find(m => m.id === form.anthropic.activeModel)
-  return m ? `${m.name} (${m.detail})` : 'Select a model...'
+// Utility Model filtered lists (reuse same source data)
+const filteredOrUtilityModels = computed(() => {
+  const models = modelsStore.openrouterModels
+  if (!orUtilityFilter.value) return models
+  const q = orUtilityFilter.value.toLowerCase()
+  return models.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
+})
+const filteredOpenAIUtilityModels = computed(() => {
+  const models = modelsStore.openaiModels
+  if (!openaiUtilityFilter.value) return models
+  const q = openaiUtilityFilter.value.toLowerCase()
+  return models.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
+})
+const filteredDeepSeekUtilityModels = computed(() => {
+  if (!deepseekUtilityFilter.value) return deepseekModels.value
+  const q = deepseekUtilityFilter.value.toLowerCase()
+  return deepseekModels.value.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
 })
 
-function onAnthropicDefaultChange(val) {
-  form.anthropic.activeModel = val
-}
+// ── Test Connection (new unified approach using agent:test-provider IPC) ─────
+const canTestAnthropic  = computed(() => !!(form.anthropic.apiKey  && form.anthropic.baseURL  && form.anthropic.utilityModel))
+const canTestOpenRouter = computed(() => !!(form.openrouter.apiKey && form.openrouter.baseURL && form.openrouter.utilityModel))
+const canTestOpenAI     = computed(() => !!(form.openai.apiKey     && form.openai.baseURL     && form.openai.utilityModel))
+const canTestDeepSeek   = computed(() => !!(form.deepseek.apiKey   && form.deepseek.baseURL   && form.deepseek.utilityModel))
 
-const openrouterComboOptions = computed(() =>
-  modelsStore.openrouterModels.map(m => ({ id: m.id, name: m.name || m.id, detail: m.id }))
-)
-
-function onOrDefaultChange(val) {
-  form.openrouter.defaultModel = val
-}
-
-const openaiComboOptions = computed(() =>
-  modelsStore.openaiModels.map(m => ({ id: m.id, name: m.name || m.id, detail: m.id }))
-)
-
-function onOpenaiDefaultChange(val) {
-  form.openai.model = val
-  form.openai.openaiDefaultModel = val
-}
-
-function modelIdPreview(which) {
-  if (which === 'opus')  return form.anthropic.opusModel  || '—'
-  if (which === 'haiku') return form.anthropic.haikuModel || '—'
-  return form.anthropic.sonnetModel || '—'
+async function testProviderConnection(provider) {
+  testingProvider.value = provider
+  testResults.value[provider] = null
+  const pCfg = form[provider]
+  try {
+    const res = await window.electronAPI.testProvider({
+      provider,
+      apiKey: pCfg.apiKey,
+      baseURL: pCfg.baseURL,
+      utilityModel: pCfg.utilityModel,
+    })
+    if (res.success) {
+      form[provider].isActive = true
+      form[provider].testedAt = Date.now()
+      testResults.value[provider] = { ok: true, message: `Connected \u00B7 ${res.ms}ms` }
+    } else {
+      form[provider].isActive = false
+      testResults.value[provider] = { ok: false, message: res.error }
+    }
+    // Auto-save the isActive + testedAt
+    await configStore.saveConfig(JSON.parse(JSON.stringify(form)))
+  } catch (err) {
+    form[provider].isActive = false
+    testResults.value[provider] = { ok: false, message: err.message || 'Test failed' }
+  } finally {
+    testingProvider.value = null
+  }
 }
 
 const form = reactive({
@@ -1003,18 +1363,31 @@ const form = reactive({
     sonnetModel: '',
     opusModel:   '',
     haikuModel:  '',
-    activeModel: 'sonnet',
+    utilityModel: '',
+    isActive:    false,
+    testedAt:    null,
   },
   openrouter: {
     apiKey:  '',
     baseURL: '',
-    defaultModel: '',
+    utilityModel: '',
+    isActive:    false,
+    testedAt:    null,
   },
   openai: {
     apiKey:       '',
     baseURL:      '',
-    model:        '',
-    openaiDefaultModel: '',
+    utilityModel: '',
+    isActive:    false,
+    testedAt:    null,
+  },
+  deepseek: {
+    apiKey:    '',
+    baseURL:   '',
+    utilityModel: '',
+    isActive:    false,
+    testedAt:    null,
+    maxTokens: 8192,
   },
   skillsPath:  '',
   pineconeApiKey:      '',
@@ -1026,8 +1399,33 @@ const form = reactive({
     whisperApiKey:  '',
     whisperBaseURL: '',
     ttsMode: 'browser',
+    language: '',
+    vadAmplitude:      0.018,
+    vadSilenceMs:      700,
+    vadSpeechFrames:   20,
+    vadVoiceBandRatio: 0.25,
+    vadProximityMult:  2.5,
+    isActive: false,
+  },
+  smtp: {
+    host: '',
+    port: 587,
+    user: '',
+    pass: '',
   },
 })
+
+// Reset isActive when key fields change (skip initial population)
+const formReady = ref(false)
+function resetActive(provider) {
+  if (!formReady.value) return
+  form[provider].isActive = false
+  testResults.value[provider] = null
+}
+watch(() => [form.anthropic.apiKey, form.anthropic.baseURL, form.anthropic.utilityModel], () => resetActive('anthropic'))
+watch(() => [form.openrouter.apiKey, form.openrouter.baseURL, form.openrouter.utilityModel], () => resetActive('openrouter'))
+watch(() => [form.openai.apiKey, form.openai.baseURL, form.openai.utilityModel], () => resetActive('openai'))
+watch(() => [form.deepseek.apiKey, form.deepseek.baseURL, form.deepseek.utilityModel], () => resetActive('deepseek'))
 
 onMounted(async () => {
   const c = JSON.parse(JSON.stringify(configStore.config))
@@ -1036,10 +1434,12 @@ onMounted(async () => {
   if (c.anthropic)  Object.assign(form.anthropic, c.anthropic)
   if (c.openrouter) Object.assign(form.openrouter, c.openrouter)
   if (c.openai)     Object.assign(form.openai, c.openai)
+  if (c.deepseek)   Object.assign(form.deepseek, c.deepseek)
   if (c.voiceCall)  Object.assign(form.voiceCall, c.voiceCall)
+  if (c.smtp)       Object.assign(form.smtp, c.smtp)
   // Merge top-level scalar fields
   for (const key of Object.keys(c)) {
-    if (key !== 'anthropic' && key !== 'openrouter' && key !== 'openai' && key !== 'voiceCall' && key in form) {
+    if (key !== 'anthropic' && key !== 'openrouter' && key !== 'openai' && key !== 'deepseek' && key !== 'voiceCall' && key in form) {
       form[key] = c[key]
     }
   }
@@ -1066,6 +1466,8 @@ onMounted(async () => {
   sandboxForm.defaultMode = sc.defaultMode || 'sandbox'
   sandboxForm.sandboxAllowList = JSON.parse(JSON.stringify(sc.sandboxAllowList || []))
   sandboxForm.dangerBlockList  = JSON.parse(JSON.stringify(sc.dangerBlockList  || []))
+  // Enable watcher-based isActive reset now that initial population is done
+  nextTick(() => { formReady.value = true })
 })
 
 async function fetchOrModels() {
@@ -1092,6 +1494,24 @@ async function fetchOpenAIModelsLocal() {
     else { openaiModelsFetchError.value = result.error || 'Unknown error' }
   } catch (err) { openaiModelsFetchError.value = err.message }
   finally { openaiModelsFetching.value = false }
+}
+
+async function fetchDeepSeekModels() {
+  if (!form.deepseek.apiKey) { deepseekModelsFetchError.value = 'Enter an API key first.'; return }
+  deepseekModelsFetching.value = true
+  deepseekModelsFetchError.value = ''
+  try {
+    const baseURL = (form.deepseek.baseURL || 'https://api.deepseek.com').replace(/\/+$/, '')
+    const resp = await fetch(`${baseURL}/v1/models`, {
+      headers: { 'Authorization': `Bearer ${form.deepseek.apiKey}`, 'Accept': 'application/json' }
+    })
+    if (!resp.ok) { deepseekModelsFetchError.value = `API error ${resp.status}`; return }
+    const data = await resp.json()
+    const models = (data.data || []).map(m => ({ id: m.id, name: m.id }))
+    deepseekModels.value = models
+    deepseekSelectedTestModel.value = ''
+  } catch (err) { deepseekModelsFetchError.value = err.message }
+  finally { deepseekModelsFetching.value = false }
 }
 
 async function saveGeneral() {
@@ -1189,14 +1609,54 @@ async function testWhisperConnection() {
     const resp = await fetch(url, { headers: authHeader })
     if (resp.ok) {
       testResultWhisper.value = { ok: true, message: 'Connected — Whisper API key is valid' }
+      form.voiceCall.isActive = true
+      await configStore.saveConfig({ voiceCall: JSON.parse(JSON.stringify(form.voiceCall)) })
     } else {
       const body = await resp.text()
       testResultWhisper.value = { ok: false, message: `API error ${resp.status}: ${body.slice(0, 120)}` }
+      form.voiceCall.isActive = false
     }
   } catch (err) {
     testResultWhisper.value = { ok: false, message: err.message }
+    form.voiceCall.isActive = false
   } finally {
     testingWhisper.value = false
+  }
+}
+
+async function saveEmail() {
+  savingEmail.value = true
+  try {
+    await configStore.saveConfig({ smtp: JSON.parse(JSON.stringify(form.smtp)) })
+    savedEmailMsg.value = { ok: true, text: 'Saved successfully' }
+  } catch (err) {
+    savedEmailMsg.value = { ok: false, text: err.message || 'Save failed' }
+  } finally {
+    savingEmail.value = false
+    setTimeout(() => { savedEmailMsg.value = null }, 3000)
+  }
+}
+
+async function testSmtpConnection() {
+  if (!form.smtp.host || !form.smtp.user || !form.smtp.pass) {
+    testResultSmtp.value = { ok: false, message: 'Fill in host, user, and password first.' }
+    return
+  }
+  if (!window.electronAPI?.testSmtp) {
+    testResultSmtp.value = { ok: false, message: 'Not running inside Electron.' }
+    return
+  }
+  testingSmtp.value = true
+  testResultSmtp.value = null
+  try {
+    const result = await window.electronAPI.testSmtp(JSON.parse(JSON.stringify(form.smtp)))
+    testResultSmtp.value = result.success
+      ? { ok: true, message: 'Connected — SMTP credentials verified' }
+      : { ok: false, message: result.error || 'Connection failed' }
+  } catch (err) {
+    testResultSmtp.value = { ok: false, message: err.message }
+  } finally {
+    testingSmtp.value = false
   }
 }
 
@@ -1213,68 +1673,6 @@ async function testPineconeConnection() {
   finally { testingPinecone.value = false }
 }
 
-const TEST_TIMEOUT_MS = 20000
-let testAbortAnthropic = false
-let testAbortOpenRouter = false
-let testAbortOpenAI = false
-
-function stopTest(provider) {
-  const chatIdMap = { anthropic: 'test', openrouter: 'test-openrouter', openai: 'test-openai' }
-  if (provider === 'anthropic') testAbortAnthropic = true
-  else if (provider === 'openai') testAbortOpenAI = true
-  else testAbortOpenRouter = true
-  if (window.electronAPI?.stopAgent) window.electronAPI.stopAgent(chatIdMap[provider] || 'test')
-}
-
-async function testConnection(provider) {
-  if (!window.electronAPI?.runAgent) {
-    const result = { ok: false, message: 'Not running inside Electron. Open the app with npm run dev from WSL — do not use the browser tab at localhost:5173.' }
-    if (provider === 'anthropic') testResultAnthropic.value = result
-    else if (provider === 'openai') testResultOpenAI.value = result
-    else testResultOpenRouter.value = result
-    return
-  }
-
-  if (provider === 'anthropic') {
-    testingAnthropic.value = true; testResultAnthropic.value = null; testAbortAnthropic = false
-    const timer = setTimeout(() => stopTest('anthropic'), TEST_TIMEOUT_MS)
-    try {
-      const testCfg = JSON.parse(JSON.stringify({ ...form, apiKey: form.anthropic.apiKey, baseURL: form.anthropic.baseURL }))
-      const res = await window.electronAPI.runAgent({ chatId: 'test', messages: [{ role: 'user', content: 'Reply with exactly: OK' }], config: testCfg, enabledAgents: [], enabledSkills: [] })
-      clearTimeout(timer)
-      testResultAnthropic.value = testAbortAnthropic
-        ? { ok: false, message: 'Test stopped.' }
-        : res.success ? { ok: true, message: `Connected · ${modelIdPreview(form.anthropic.activeModel)} · "${res.result?.substring(0, 60)}"` } : { ok: false, message: res.error }
-    } catch (err) { clearTimeout(timer); testResultAnthropic.value = testAbortAnthropic ? { ok: false, message: 'Test stopped.' } : { ok: false, message: err.message } }
-    finally { testingAnthropic.value = false }
-  } else if (provider === 'openai') {
-    testingOpenAI.value = true; testResultOpenAI.value = null; testAbortOpenAI = false
-    const testModel = openaiSelectedTestModel.value
-    if (!testModel) { testResultOpenAI.value = { ok: false, message: 'Select a model from the list above first.' }; testingOpenAI.value = false; return }
-    const timer = setTimeout(() => stopTest('openai'), TEST_TIMEOUT_MS)
-    try {
-      const res = await window.electronAPI.runAgent({ chatId: 'test-openai', messages: [{ role: 'user', content: 'Reply with exactly: OK' }], config: JSON.parse(JSON.stringify({ ...form, openaiApiKey: form.openai.apiKey, openaiBaseURL: form.openai.baseURL, customModel: testModel, _resolvedProvider: 'openai' })), enabledAgents: [], enabledSkills: [] })
-      clearTimeout(timer)
-      testResultOpenAI.value = testAbortOpenAI
-        ? { ok: false, message: 'Test stopped.' }
-        : res.success ? { ok: true, message: `Connected · ${testModel} · "${res.result?.substring(0, 60)}"` } : { ok: false, message: res.error }
-    } catch (err) { clearTimeout(timer); testResultOpenAI.value = testAbortOpenAI ? { ok: false, message: 'Test stopped.' } : { ok: false, message: err.message } }
-    finally { testingOpenAI.value = false }
-  } else {
-    testingOpenRouter.value = true; testResultOpenRouter.value = null; testAbortOpenRouter = false
-    const testModel = orSelectedTestModel.value
-    if (!testModel) { testResultOpenRouter.value = { ok: false, message: 'Select a model from the list above first.' }; testingOpenRouter.value = false; return }
-    const timer = setTimeout(() => stopTest('openrouter'), TEST_TIMEOUT_MS)
-    try {
-      const res = await window.electronAPI.runAgent({ chatId: 'test-openrouter', messages: [{ role: 'user', content: 'Reply with exactly: OK' }], config: JSON.parse(JSON.stringify({ ...form, apiKey: form.openrouter.apiKey, baseURL: form.openrouter.baseURL, customModel: testModel })), enabledAgents: [], enabledSkills: [] })
-      clearTimeout(timer)
-      testResultOpenRouter.value = testAbortOpenRouter
-        ? { ok: false, message: 'Test stopped.' }
-        : res.success ? { ok: true, message: `Connected · ${testModel} · "${res.result?.substring(0, 60)}"` } : { ok: false, message: res.error }
-    } catch (err) { clearTimeout(timer); testResultOpenRouter.value = testAbortOpenRouter ? { ok: false, message: 'Test stopped.' } : { ok: false, message: err.message } }
-    finally { testingOpenRouter.value = false }
-  }
-}
 </script>
 
 <style scoped>
@@ -1387,6 +1785,16 @@ async function testConnection(provider) {
 .test-result.success .icon-sm { color: #FFFFFF; }
 .test-result.error { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); color: #FF6B6B; }
 .test-result.error .icon-sm { color: #FF6B6B; }
+
+/* ── Provider status dot on tab buttons ────────────────────────────────── */
+.prov-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-left: 2px;
+}
+.prov-dot.active   { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.5); }
+.prov-dot.inactive { background: #9CA3AF; }
+.cfg-required { color: #EF4444; margin-left: 2px; }
+.cfg-hint { display: block; font-size: var(--fs-caption); color: var(--text-muted); margin-bottom: 6px; line-height: 1.4; }
+.utility-model-picker { display: flex; flex-direction: column; gap: 8px; }
 
 /* ── Save row ───────────────────────────────────────────────────────────── */
 .save-row { display: flex; align-items: center; gap: 12px; }
@@ -1502,4 +1910,23 @@ async function testConnection(provider) {
 .sec-add-btn.danger:hover { background: rgba(239,68,68,0.18); }
 
 /* ── Voice tab ─────────────────────────────────────────────────────────── */
+.vad-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 4px;
+}
+.vad-slider {
+  width: 100%;
+  accent-color: var(--text-primary);
+  cursor: pointer;
+  margin: 6px 0 2px;
+}
+.vad-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
 </style>

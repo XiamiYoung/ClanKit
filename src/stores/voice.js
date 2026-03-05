@@ -12,6 +12,10 @@ export const useVoiceStore = defineStore('voice', () => {
   const lastTranscript = ref('')
   const lastAiText = ref('')
 
+  // Device selection — persisted across calls
+  const selectedMicId = ref('')
+  const selectedSpeakerId = ref('')
+
   function startCall(chatId, personaId, personaName) {
     isCallActive.value = true
     activeChatId.value = chatId
@@ -39,12 +43,16 @@ export const useVoiceStore = defineStore('voice', () => {
   function setStatus(s) { status.value = s }
   function setMuted(m) { isMuted.value = m }
   function setPip(p) { isPip.value = p }
-  function setTranscript(t) { lastTranscript.value = t }
+  function setTranscript(t) { lastTranscript.value = typeof t === 'string' ? t : '' }
   function setAiText(t) { lastAiText.value = t }
+  function setMicId(id) { selectedMicId.value = id }
+  function setSpeakerId(id) { selectedSpeakerId.value = id }
 
   return {
     isCallActive, activeChatId, activePersonaId, activePersonaName,
     status, isMuted, isPip, lastTranscript, lastAiText,
+    selectedMicId, selectedSpeakerId,
     startCall, endCall, setStatus, setMuted, setPip, setTranscript, setAiText,
+    setMicId, setSpeakerId,
   }
 })

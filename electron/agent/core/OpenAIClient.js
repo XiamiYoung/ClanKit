@@ -16,11 +16,17 @@ class OpenAIClient {
     if (!resolvedBaseURL) throw new Error('OpenAI baseURL not configured')
     const baseURL = resolvedBaseURL.replace(/\/+$/, '')
     const apiKey = config.openaiApiKey || config.openai?.apiKey || config.apiKey || ''
-    this.client = new OpenAI({
-      baseURL: baseURL + '/proxy/openai/v1',
-      apiKey: 'dummy',               // SDK requires a non-empty string
-      defaultHeaders: { 'x-api-key': apiKey }
-    })
+    // _directAuth: use standard Bearer auth (DeepSeek, direct OpenAI endpoints).
+    // Default proxy mode: Virtuos MLaaS uses x-api-key + /proxy/openai/v1 path.
+    if (config._directAuth) {
+      this.client = new OpenAI({ baseURL: baseURL + '/v1', apiKey })
+    } else {
+      this.client = new OpenAI({
+        baseURL: baseURL + '/proxy/openai/v1',
+        apiKey: 'dummy',               // SDK requires a non-empty string
+        defaultHeaders: { 'x-api-key': apiKey }
+      })
+    }
     logger.agent('OpenAIClient init', {
       model: this.resolveModel(),
       baseURL,
@@ -31,6 +37,7 @@ class OpenAIClient {
   resolveModel() {
     const c = this.config
     if (c.customModel) return c.customModel
+    if (c._directAuth) return c.deepseek?.model || c.openaiModel || 'deepseek-chat'
     return c.openaiModel || c.openai?.model || 'gpt-4o'
   }
 

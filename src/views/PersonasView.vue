@@ -40,7 +40,7 @@
                 <p class="section-desc">Configure how the AI behaves and responds.</p>
               </div>
             </div>
-            <AppButton @click="openWizard('system')">
+            <AppButton @click="createNew('system')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Configure
             </AppButton>
@@ -53,8 +53,7 @@
                 :key="persona.id"
                 :persona="persona"
                 :gradient="getAvatarGradient(persona)"
-                @click="openEdit(persona)"
-                @edit="openEdit(persona)"
+                @click="openSoulViewer(persona)"
                 @delete="confirmDelete(persona)"
                 @set-default="personasStore.setDefault(persona.id)"
               />
@@ -88,7 +87,7 @@
                 <p class="section-desc">Configure your identity and context for the AI.</p>
               </div>
             </div>
-            <AppButton @click="openWizard('user')">
+            <AppButton @click="createNew('user')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Configure
             </AppButton>
@@ -101,8 +100,7 @@
                 :key="persona.id"
                 :persona="persona"
                 :gradient="getAvatarGradient(persona)"
-                @click="openEdit(persona)"
-                @edit="openEdit(persona)"
+                @click="openSoulViewer(persona)"
                 @delete="confirmDelete(persona)"
                 @set-default="personasStore.setDefault(persona.id)"
               />
@@ -122,13 +120,20 @@
       </div>
     </div>
 
-    <!-- Wizard Modal -->
-    <PersonaWizard
-      v-if="showWizard"
-      :type="wizardType"
-      :edit-persona="wizardEditPersona"
-      @close="showWizard = false"
-      @saved="onSaved"
+    <!-- Memory Modal -->
+    <SoulViewer
+      v-if="soulViewerPersona"
+      :persona-id="soulViewerPersona.id"
+      :persona-type="soulViewerPersona.type === 'system' ? 'system' : 'users'"
+      :persona-name="soulViewerPersona.name"
+      :persona-description="soulViewerPersona.description"
+      :persona-prompt="soulViewerPersona.prompt"
+      :persona-provider-id="soulViewerPersona.providerId || null"
+      :persona-model-id="soulViewerPersona.modelId || null"
+      :persona-voice-id="soulViewerPersona.voiceId || null"
+      :persona-avatar="soulViewerPersona.avatar || null"
+      @close="soulViewerPersona = null"
+      @update-persona="onUpdatePersona"
     />
 
     <!-- Confirm Delete Modal -->
@@ -146,10 +151,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { v4 as uuidv4 } from 'uuid'
 import { usePersonasStore } from '../stores/personas'
 import { PERSONA_AVATARS } from '../components/personas/personaAvatars'
 import PersonaCard from '../components/personas/PersonaCard.vue'
-import PersonaWizard from '../components/personas/PersonaWizard.vue'
+import SoulViewer from '../components/personas/SoulViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 
@@ -170,24 +176,43 @@ const userPersonas = computed(() =>
     .sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
 )
 
-const showWizard = ref(false)
-const wizardType = ref('system')
-const wizardEditPersona = ref(null)
+// ── SoulViewer ──
+const soulViewerPersona = ref(null)
 
-function openWizard(type) {
-  wizardType.value = type
-  wizardEditPersona.value = null
-  showWizard.value = true
+function openSoulViewer(persona) {
+  soulViewerPersona.value = persona
 }
 
-function openEdit(persona) {
-  wizardType.value = persona.type
-  wizardEditPersona.value = persona
-  showWizard.value = true
+function createNew(type) {
+  soulViewerPersona.value = {
+    id: uuidv4(),
+    name: '',
+    type,
+    description: '',
+    prompt: '',
+    avatar: null,
+    providerId: null,
+    modelId: null,
+    voiceId: null,
+    isNew: true,
+  }
 }
 
-function onSaved() {
-  showWizard.value = false
+async function onUpdatePersona(updates) {
+  if (!soulViewerPersona.value) return
+  const updated = { ...soulViewerPersona.value }
+  delete updated.isNew
+  if (updates.name !== undefined) updated.name = updates.name
+  if (updates.avatar !== undefined) updated.avatar = updates.avatar
+  if (updates.description !== undefined) updated.description = updates.description
+  if (updates.prompt !== undefined) updated.prompt = updates.prompt
+  if (updates.providerId !== undefined) updated.providerId = updates.providerId
+  if (updates.modelId !== undefined) updated.modelId = updates.modelId
+  if (updates.voiceId !== undefined) updated.voiceId = updates.voiceId
+  // Use the existing name if the update didn't provide one (can happen for new personas)
+  if (!updated.name) updated.name = 'Untitled Persona'
+  await personasStore.savePersona(updated)
+  soulViewerPersona.value = updated
 }
 
 const confirmDeleteTarget = ref(null)

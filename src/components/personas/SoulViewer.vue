@@ -1,5 +1,5 @@
 <template>
-  <div class="soul-backdrop" @click.self="$emit('close')">
+  <div class="soul-backdrop">
     <div class="soul-modal">
       <!-- Header -->
       <div class="soul-header">
@@ -11,7 +11,7 @@
             </svg>
           </div>
           <div>
-            <h2 class="soul-title">{{ personaName }} — Summary</h2>
+            <h2 class="soul-title">{{ personaName }} — {{ tabLabel }}</h2>
             <span class="soul-meta">{{ personaType === 'system' ? 'System Persona' : 'User Persona' }}</span>
           </div>
         </div>
@@ -29,6 +29,13 @@
           </svg>
           Summary
         </button>
+        <button class="soul-tab" :class="{ active: activeTab === 'memory' }" @click="activeTab = 'memory'">
+          <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 2 17.5v-15A2.5 2.5 0 0 1 4.5 0"/>
+            <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44A2.5 2.5 0 0 0 22 17.5v-15A2.5 2.5 0 0 0 19.5 0"/>
+          </svg>
+          Memory
+        </button>
         <button class="soul-tab" :class="{ active: activeTab === 'model' }" @click="activeTab = 'model'">
           <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
@@ -36,177 +43,244 @@
           </svg>
           AI Model
         </button>
+        <button class="soul-tab" :class="{ active: activeTab === 'voice' }" @click="activeTab = 'voice'">
+          <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+          </svg>
+          Voice
+        </button>
       </div>
 
-      <!-- ═══ SUMMARY TAB (or user persona — always shows this) ═══ -->
-      <template v-if="activeTab === 'summary'">
-        <!-- Content -->
-        <div class="soul-body">
-          <!-- Persona info card -->
-          <div class="soul-persona-card">
-            <div class="soul-persona-field">
-              <span class="soul-persona-label">Description</span>
-              <span v-if="!editingPrompt" class="soul-persona-value">{{ personaDescription || '—' }}</span>
+      <!-- ═══ SUMMARY TAB ═══ -->
+      <div v-if="activeTab === 'summary'" class="soul-body soul-summary-body">
+        <div class="soul-persona-card">
+          <!-- Avatar + Name row -->
+          <div class="soul-identity-row">
+            <button v-if="!readOnly" class="soul-avatar-btn" @click="showAvatarPicker = true" title="Change avatar">
+              <img v-if="avatarDataUri" :src="avatarDataUri" class="soul-avatar-img" alt="" />
+              <div v-else class="soul-avatar-fallback">{{ fallbackInitial }}</div>
+              <span class="soul-avatar-edit-badge">
+                <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </span>
+            </button>
+            <div v-else class="soul-avatar-readonly">
+              <img v-if="avatarDataUri" :src="avatarDataUri" class="soul-avatar-img" alt="" />
+              <div v-else class="soul-avatar-fallback">{{ fallbackInitial }}</div>
             </div>
-            <div class="soul-persona-field">
-              <span class="soul-persona-label">System Prompt</span>
-              <template v-if="!editingPrompt">
-                <pre class="soul-persona-prompt">{{ personaPrompt || '—' }}</pre>
-                <button v-if="personaType === 'system'" class="soul-btn-inline" @click="startEditingPrompt">Edit Prompt</button>
-              </template>
-              <template v-else>
-                <textarea v-model="editPromptContent" class="soul-editor" spellcheck="false" rows="6"></textarea>
-                <div class="soul-prompt-actions">
-                  <button class="soul-btn secondary" @click="cancelEditingPrompt">Cancel</button>
-                  <button class="soul-btn primary" @click="savePrompt">Save Prompt</button>
-                </div>
-              </template>
+            <div class="soul-identity-fields">
+              <span class="soul-persona-label">Name</span>
+              <input
+                v-if="!readOnly"
+                v-model="draftName"
+                type="text"
+                class="soul-name-input"
+                placeholder="Persona name"
+                spellcheck="false"
+              />
+              <span v-else class="soul-persona-value">{{ draftName || '—' }}</span>
             </div>
           </div>
 
-          <!-- Divider -->
-          <div class="soul-divider">
-            <span class="soul-divider-label">Learned Memory</span>
-            <span v-if="fileSize" class="soul-divider-meta">{{ fileSizeFormatted }} | Updated: {{ lastUpdated || 'never' }}</span>
+          <div class="soul-persona-field">
+            <span class="soul-persona-label">Description</span>
+            <template v-if="!readOnly">
+              <textarea
+                v-model="draftDescription"
+                class="soul-desc-textarea"
+                placeholder="Short description of this persona"
+                spellcheck="false"
+                rows="3"
+              ></textarea>
+              <div class="soul-ai-btn-row">
+                <button
+                  class="soul-btn-inline soul-btn-enhance soul-desc-ai-btn"
+                  :disabled="summarizing || !draftPrompt.trim() || !isProviderActive"
+                  :title="!isProviderActive ? providerInactiveTooltip : 'Generate description from persona prompt'"
+                  @click="summarizeDescription"
+                >
+                  <svg v-if="!summarizing" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                  <span v-if="summarizing" class="soul-spinner"></span>
+                  {{ summarizing ? 'Generating...' : 'AI Summarize' }}
+                </button>
+                <span v-if="!isProviderActive" class="soul-provider-inactive-chip" :title="providerInactiveTooltip">
+                  <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  Provider inactive
+                </span>
+              </div>
+            </template>
+            <textarea v-else class="soul-desc-textarea soul-desc-readonly" :value="draftDescription || '—'" readonly rows="2"></textarea>
           </div>
+          <div class="soul-persona-field soul-prompt-field">
+            <span class="soul-persona-label">Persona</span>
+            <template v-if="!readOnly && personaType === 'system'">
+              <textarea v-model="draftPrompt" class="soul-editor soul-editor-prompt" spellcheck="false" placeholder="Enter the persona system prompt..."></textarea>
+              <div class="soul-enhance-row">
+                <button class="soul-btn-inline soul-btn-enhance" :disabled="enhancing || !draftPrompt.trim() || !isProviderActive" :title="!isProviderActive ? providerInactiveTooltip : 'Enhance prompt with AI'" @click="enhancePrompt">
+                  <svg v-if="!enhancing" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                  <span v-if="enhancing" class="soul-spinner"></span>
+                  {{ enhancing ? 'Enhancing...' : 'AI Enhance' }}
+                </button>
+                <span v-if="!isProviderActive" class="soul-provider-inactive-chip" :title="providerInactiveTooltip">
+                  <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  Provider inactive
+                </span>
+              </div>
+            </template>
+            <pre v-else class="soul-persona-prompt">{{ personaPrompt || '—' }}</pre>
+          </div>
+        </div>
+      </div>
 
-          <!-- Soul memory content -->
-          <template v-if="loading">
-            <div class="soul-empty">Loading...</div>
-          </template>
-          <template v-else-if="!content">
-            <div class="soul-empty">
-              <p>No learned memory yet.</p>
-              <p class="soul-empty-hint">The AI will automatically learn preferences and context during conversations.</p>
-            </div>
-          </template>
-          <template v-else>
-            <div v-if="!editingMemory" class="soul-rendered" v-html="renderedHtml"></div>
-            <textarea
-              v-else
-              v-model="editContent"
-              class="soul-editor"
-              spellcheck="false"
-            ></textarea>
-          </template>
+      <!-- ═══ MEMORY TAB ═══ -->
+      <div v-else-if="activeTab === 'memory'" class="soul-body soul-memory-body">
+        <div v-if="fileSize" class="soul-memory-meta">
+          <span>{{ fileSizeFormatted }}</span>
+          <span v-if="lastUpdated"> · Updated: {{ lastUpdated }}</span>
         </div>
 
-        <!-- Footer -->
-        <div class="soul-footer">
-          <div class="soul-footer-left">
-            <button v-if="content" class="soul-btn danger" @click="confirmClear">Clear Memory</button>
+        <template v-if="loading">
+          <div class="soul-empty">Loading...</div>
+        </template>
+        <!-- PersonaView: directly editable textarea -->
+        <template v-else-if="!readOnly">
+          <textarea
+            v-model="draftMemory"
+            class="soul-editor soul-editor-memory"
+            spellcheck="false"
+            placeholder="No learned memory yet. The AI will automatically learn preferences and context during conversations."
+          ></textarea>
+        </template>
+        <!-- ChatView (readOnly): rendered markdown or empty state -->
+        <template v-else-if="!content">
+          <div class="soul-empty">
+            <p>No learned memory yet.</p>
+            <p class="soul-empty-hint">The AI will automatically learn preferences and context during conversations.</p>
           </div>
-          <div class="soul-footer-right">
-            <template v-if="!editingMemory && content">
-              <button class="soul-btn secondary" @click="startEditingMemory">Edit Memory</button>
-            </template>
-            <template v-if="editingMemory">
-              <button class="soul-btn secondary" @click="cancelEditingMemory">Cancel</button>
-              <button class="soul-btn primary" @click="saveMemoryEdit">Save</button>
-            </template>
-          </div>
+        </template>
+        <template v-else>
+          <div class="soul-rendered" v-html="renderedHtml"></div>
+        </template>
+      </div>
+
+      <!-- ═══ VOICE TAB (system personas only) ═══ -->
+      <div v-else-if="activeTab === 'voice'" class="soul-body soul-voice-body">
+        <div class="soul-voice-heading">
+          <span class="soul-voice-heading-label">Select a TTS voice for this persona</span>
+          <span class="soul-voice-status" :class="isVoiceCallActive ? 'active' : 'inactive'">
+            <span class="soul-voice-status-dot"></span>
+            {{ isVoiceCallActive ? 'Active' : 'Inactive' }}
+          </span>
         </div>
-      </template>
+        <div class="soul-voice-grid">
+          <button
+            v-for="v in voiceOptions"
+            :key="v.value"
+            class="soul-voice-card"
+            :class="{ active: draftVoiceId === v.value }"
+            @click="draftVoiceId = v.value"
+          >
+            <span class="soul-voice-card-name">{{ v.label }}</span>
+            <span class="soul-voice-card-desc">{{ v.desc }}</span>
+            <button
+              class="soul-voice-demo-btn"
+              :class="{ disabled: !isVoiceCallActive }"
+              :disabled="!isVoiceCallActive || !!playingVoice"
+              :title="isVoiceCallActive ? 'Play demo' : 'Voice call not active — test connection in Configuration'"
+              @click.stop="playVoiceDemo(v.value)"
+            >
+              <svg v-if="playingVoice !== v.value" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              <span v-else class="soul-demo-playing">
+                <span></span><span></span><span></span>
+              </span>
+            </button>
+          </button>
+        </div>
+      </div>
 
       <!-- ═══ AI MODEL TAB (system personas only) ═══ -->
-      <template v-else-if="activeTab === 'model'">
-        <div class="soul-body soul-model-body">
-          <!-- Step 1: Provider -->
-          <div class="soul-model-section">
-            <div class="soul-model-section-label">
-              <span class="soul-step-num">1</span>
-              Provider
-              <span class="soul-model-badge">{{ draftProvider === 'anthropic' ? 'Anthropic' : draftProvider === 'openrouter' ? 'OpenRouter' : 'OpenAI' }}</span>
-            </div>
-            <div class="soul-provider-cards">
-              <button
-                v-for="prov in [
-                  { id: 'anthropic',  label: 'Anthropic',  sub: 'Claude models' },
-                  { id: 'openrouter', label: 'OpenRouter', sub: 'Multi-provider' },
-                  { id: 'openai',     label: 'OpenAI',     sub: 'GPT / custom' }
-                ]"
-                :key="prov.id"
-                class="soul-provider-card"
-                :class="{ active: draftProvider === prov.id }"
-                @click="selectProvider(prov.id)"
-              >
-                <span class="soul-provider-card-name">{{ prov.label }}</span>
-                <span class="soul-provider-card-sub">{{ prov.sub }}</span>
-              </button>
-            </div>
+      <div v-else-if="activeTab === 'model'" class="soul-body soul-model-body">
+        <!-- Provider -->
+        <div class="soul-model-section">
+          <div class="soul-model-section-label">
+            <span class="soul-step-num">1</span>
+            Provider
           </div>
-
-          <!-- Step 2: Model -->
-          <div class="soul-model-section soul-model-section-grow">
-            <div class="soul-model-section-label">
-              <span class="soul-step-num">2</span>
-              Model
-              <span class="soul-model-badge">{{ currentModelLabel }}</span>
-            </div>
-            <input
-              v-if="draftProvider !== 'anthropic'"
-              v-model="modelFilter"
-              type="text"
-              placeholder="Search models..."
-              class="soul-model-search"
-              @click.stop
-            />
-            <div class="soul-model-list">
-              <button
-                class="soul-model-item"
-                :class="{ active: draftModelId === null }"
-                @click="draftModelId = null"
-              >
-                <span>Default</span>
-                <span class="soul-model-id">{{ defaultModelLabel }}</span>
-              </button>
-              <div v-if="(draftProvider === 'openrouter' && modelsStore.openrouterLoading) || (draftProvider === 'openai' && modelsStore.openaiLoading)" class="soul-model-loading">
-                Loading models...
-              </div>
-              <button
-                v-for="m in filteredModels"
-                :key="m.id"
-                class="soul-model-item"
-                :class="{ active: draftModelId === m.id }"
-                @click="draftModelId = m.id"
-              >
-                <span>{{ m.name || m.label || m.id }}</span>
-                <span v-if="m.id !== (m.name || m.label)" class="soul-model-id">{{ m.id }}</span>
-              </button>
-            </div>
+          <div v-if="activeProviderOptions.length === 0" class="soul-no-providers">
+            No active providers. Enable a provider in Configuration first.
           </div>
+          <select
+            v-else
+            :value="draftProvider"
+            class="soul-provider-select"
+            @change="selectProvider($event.target.value)"
+          >
+            <option v-for="p in activeProviderOptions" :key="p.id" :value="p.id">{{ p.label }}</option>
+          </select>
         </div>
 
-        <!-- Footer with Save -->
-        <div class="soul-footer">
-          <div class="soul-footer-left"></div>
-          <div class="soul-footer-right">
-            <button class="soul-btn secondary" @click="$emit('close')">Cancel</button>
-            <button class="soul-btn primary" @click="saveModel">Save</button>
+        <!-- Model -->
+        <div class="soul-model-section soul-model-section-grow">
+          <div class="soul-model-section-label">
+            <span class="soul-step-num">2</span>
+            Model
+            <span class="soul-model-badge">{{ currentModelLabel }}</span>
+          </div>
+          <input
+            v-if="draftProvider !== 'anthropic'"
+            v-model="modelFilter"
+            type="text"
+            placeholder="Search models..."
+            class="soul-model-search"
+            @click.stop
+          />
+          <div class="soul-model-list">
+            <div v-if="(draftProvider === 'openrouter' && modelsStore.openrouterLoading) || (draftProvider === 'openai' && modelsStore.openaiLoading) || (draftProvider === 'deepseek' && modelsStore.deepseekLoading)" class="soul-model-loading">
+              Loading models...
+            </div>
+            <button
+              v-for="m in filteredModels"
+              :key="m.id"
+              class="soul-model-item"
+              :class="{ active: draftModelId === m.id }"
+              @click="draftModelId = m.id"
+            >
+              <span>{{ m.name || m.label || m.id }}</span>
+              <span v-if="m.id !== (m.name || m.label)" class="soul-model-id">{{ m.id }}</span>
+            </button>
           </div>
         </div>
-      </template>
+      </div>
+
+      <!-- ═══ UNIFIED FOOTER ═══ -->
+      <div class="soul-footer">
+        <div class="soul-footer-left"></div>
+        <div class="soul-footer-right">
+          <button class="soul-btn secondary" @click="$emit('close')">Cancel</button>
+          <button class="soul-btn primary" @click="saveAll">Save</button>
+        </div>
+      </div>
 
     </div>
 
-    <!-- Confirm Clear Modal -->
-    <ConfirmModal
-      v-if="showConfirmClear"
-      title="Clear Memory"
-      :message="`Clear all learned memory for &quot;${personaName}&quot;? This cannot be undone.`"
-      confirm-text="Clear"
-      confirm-class="danger"
-      @confirm="executeClear"
-      @close="showConfirmClear = false"
+    <!-- Avatar Picker -->
+    <AvatarPicker
+      v-if="showAvatarPicker"
+      :current-avatar-id="draftAvatar || ''"
+      @select="onAvatarSelected"
+      @close="showAvatarPicker = false"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
-import ConfirmModal from '../common/ConfirmModal.vue'
 import { useModelsStore } from '../../stores/models'
+import { useConfigStore } from '../../stores/config'
+import { getAvatarDataUri } from './personaAvatars'
+import AvatarPicker from './AvatarPicker.vue'
 
 const props = defineProps({
   personaId:          { type: String, required: true },
@@ -216,17 +290,99 @@ const props = defineProps({
   personaPrompt:      { type: String, default: '' },
   personaProviderId:  { type: String, default: null },
   personaModelId:     { type: String, default: null },
+  personaVoiceId:     { type: String, default: null },
+  personaAvatar:      { type: String, default: null },
+  readOnly:           { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['close', 'update-persona'])
 
 const modelsStore = useModelsStore()
+const configStore = useConfigStore()
 
 // ── Tab state ──
 const activeTab = ref('summary')
 
+const tabLabel = computed(() => {
+  const labels = { summary: 'Summary', memory: 'Memory', model: 'AI Model', voice: 'Voice' }
+  return labels[activeTab.value] || 'Summary'
+})
+
+// ── Name, avatar, description draft ──
+const draftName = ref(props.personaName || '')
+const draftAvatar = ref(props.personaAvatar || null)
+const draftDescription = ref(props.personaDescription || '')
+const showAvatarPicker = ref(false)
+const summarizing = ref(false)
+
+const avatarDataUri = computed(() => getAvatarDataUri(draftAvatar.value))
+const fallbackInitial = computed(() => (draftName.value || '?').charAt(0).toUpperCase())
+
+function onAvatarSelected(avatarId) {
+  draftAvatar.value = avatarId
+  showAvatarPicker.value = false
+}
+
+// ── Voice options & draft ──
+const voiceOptions = [
+  { value: 'alloy',   label: 'Alloy',   desc: 'Neutral, balanced' },
+  { value: 'echo',    label: 'Echo',     desc: 'Warm, rounded' },
+  { value: 'fable',   label: 'Fable',    desc: 'Expressive, British' },
+  { value: 'onyx',    label: 'Onyx',     desc: 'Deep, authoritative' },
+  { value: 'nova',    label: 'Nova',     desc: 'Friendly, upbeat' },
+  { value: 'shimmer', label: 'Shimmer',  desc: 'Clear, gentle' },
+]
+const draftVoiceId = ref(props.personaVoiceId || 'alloy')
+
+// ── Voice demo ──
+const isVoiceCallActive = computed(() => configStore.config.voiceCall?.isActive === true)
+const playingVoice = ref(null)
+
+async function playVoiceDemo(voiceId) {
+  if (!isVoiceCallActive.value || playingVoice.value) return
+  playingVoice.value = voiceId
+  const vc = configStore.config.voiceCall || {}
+  const text = 'Hello, this is a sample of my voice. How do I sound?'
+  const useOpenAI = (vc.ttsMode === 'openai' || vc.ttsMode === 'openai-hd') && vc.whisperApiKey
+
+  if (useOpenAI && window.electronAPI?.voice?.tts) {
+    try {
+      const result = await window.electronAPI.voice.tts({
+        text,
+        apiKey: vc.whisperApiKey,
+        baseURL: vc.whisperBaseURL,
+        model: vc.ttsMode === 'openai-hd' ? 'tts-1-hd' : 'tts-1',
+        voice: voiceId,
+      })
+      if (result.success && result.audio) {
+        const audio = new Audio(`data:audio/${result.format || 'mp3'};base64,${result.audio}`)
+        audio.onended = () => { playingVoice.value = null }
+        audio.onerror = () => { playingVoice.value = null }
+        audio.play()
+        return
+      }
+    } catch { /* fall through to browser TTS */ }
+  }
+
+  // Browser SpeechSynthesis fallback
+  if (window.speechSynthesis) {
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.onend = () => { playingVoice.value = null }
+    utterance.onerror = () => { playingVoice.value = null }
+    window.speechSynthesis.speak(utterance)
+  } else {
+    playingVoice.value = null
+  }
+}
+
 // ── Provider / model draft (AI Model tab) ──
-const draftProvider = ref(props.personaProviderId || 'anthropic')
+const activeProviderOptions = computed(() => {
+  const labels = { anthropic: 'Anthropic', openrouter: 'OpenRouter', openai: 'OpenAI', deepseek: 'DeepSeek' }
+  return configStore.activeProviders.map(id => ({ id, label: labels[id] }))
+})
+
+const initProvider = props.personaProviderId || (configStore.activeProviders[0] || 'anthropic')
+const draftProvider = ref(initProvider)
 const draftModelId = ref(props.personaModelId || null)
 const modelFilter = ref('')
 
@@ -237,10 +393,8 @@ const filteredModels = computed(() => {
   return models.filter(m => (m.name || m.label || '').toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
 })
 
-const defaultModelLabel = computed(() => modelsStore.getDefaultModelLabel(draftProvider.value))
-
 const currentModelLabel = computed(() => {
-  if (!draftModelId.value) return 'Default'
+  if (!draftModelId.value) return '—'
   const models = modelsStore.getModelsForProvider(draftProvider.value)
   const m = models.find(x => x.id === draftModelId.value)
   return m?.name || m?.label || draftModelId.value
@@ -252,25 +406,112 @@ function selectProvider(prov) {
   modelFilter.value = ''
   if (prov === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
   if (prov === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
-}
-
-function saveModel() {
-  emit('update-persona', {
-    providerId: draftProvider.value === 'anthropic' ? null : draftProvider.value,
-    modelId: draftModelId.value || null,
-  })
-  emit('close')
+  if (prov === 'deepseek' && !modelsStore.deepseekCached) modelsStore.fetchDeepSeekModels()
 }
 
 // ── Memory & content ──
 const loading = ref(true)
 const content = ref(null)
 
-const editingMemory = ref(false)
-const editContent = ref('')
+const draftMemory = ref('')
 
-const editingPrompt = ref(false)
-const editPromptContent = ref('')
+// ── Prompt draft (always editable in PersonaView) ──
+const draftPrompt = ref(props.personaPrompt || '')
+
+// ── Provider active check for AI buttons ──
+const PROVIDER_LABELS = { anthropic: 'Anthropic', openrouter: 'OpenRouter', openai: 'OpenAI', deepseek: 'DeepSeek' }
+const isProviderActive = computed(() => {
+  const pid = draftProvider.value
+  return configStore.config[pid]?.isActive === true
+})
+const providerInactiveTooltip = computed(() => {
+  const label = PROVIDER_LABELS[draftProvider.value] || draftProvider.value
+  return `${label} provider is inactive — test connection in Configuration first`
+})
+
+/** Build a config object that routes to the persona's selected provider + utility model */
+function buildProviderConfig() {
+  const fullCfg = JSON.parse(JSON.stringify(configStore.config))
+  const pid = draftProvider.value
+  const provCfg = fullCfg[pid] || {}
+  const utilityModel = provCfg.utilityModel || null
+
+  const cfg = { ...fullCfg }
+  if (pid === 'anthropic') {
+    cfg.apiKey = provCfg.apiKey || ''
+    cfg.baseURL = provCfg.baseURL || ''
+    if (utilityModel) cfg.customModel = utilityModel
+  } else if (pid === 'openrouter') {
+    cfg.apiKey = provCfg.apiKey || ''
+    cfg.baseURL = provCfg.baseURL || ''
+    cfg.defaultProvider = 'openrouter'
+    if (utilityModel) cfg.customModel = utilityModel
+  } else if (pid === 'openai') {
+    cfg.openaiApiKey = provCfg.apiKey || ''
+    cfg.openaiBaseURL = provCfg.baseURL || ''
+    cfg._resolvedProvider = 'openai'
+    cfg.defaultProvider = 'openai'
+    if (utilityModel) cfg.customModel = utilityModel
+  } else if (pid === 'deepseek') {
+    cfg.openaiApiKey = provCfg.apiKey || ''
+    cfg.openaiBaseURL = (provCfg.baseURL || '').replace(/\/+$/, '')
+    cfg._resolvedProvider = 'openai'
+    cfg._directAuth = true
+    cfg.defaultProvider = 'openai'
+    if (utilityModel) cfg.customModel = utilityModel
+  }
+  return cfg
+}
+
+// ── AI Enhance ──
+const enhancing = ref(false)
+
+async function enhancePrompt() {
+  if (enhancing.value || !draftPrompt.value.trim() || !isProviderActive.value) return
+  enhancing.value = true
+  try {
+    const cfg = buildProviderConfig()
+    const res = await window.electronAPI.runAgent({
+      chatId: '__persona_enhance__',
+      messages: [{
+        role: 'user',
+        content: `Enhance this AI system persona prompt. Make it more specific, effective, and well-structured while keeping the same intent. IMPORTANT: Respond in the SAME language as the original prompt. If the prompt is in Chinese, respond in Chinese. If in English, respond in English. Return ONLY the enhanced prompt text, nothing else.\n\nOriginal prompt:\n${draftPrompt.value}`
+      }],
+      config: cfg,
+      enabledAgents: [], enabledSkills: [], mcpServers: [], httpTools: [],
+    })
+    if (res.success && res.result) {
+      draftPrompt.value = res.result.trim()
+    }
+  } catch (err) {
+    console.error('Enhancement failed:', err.message || err)
+  }
+  enhancing.value = false
+}
+
+async function summarizeDescription() {
+  const prompt = draftPrompt.value || props.personaPrompt
+  if (summarizing.value || !prompt?.trim() || !isProviderActive.value) return
+  summarizing.value = true
+  try {
+    const cfg = buildProviderConfig()
+    const res = await window.electronAPI.runAgent({
+      chatId: '__persona_describe__',
+      messages: [{
+        role: 'user',
+        content: `Read this persona prompt and write a SHORT description (max 10 words) that tells the user who this persona is. Focus on: role, expertise, key character traits. Use clean, simple words. No punctuation at the end. IMPORTANT: Respond in the SAME language as the prompt. If the prompt is in Chinese, write the description in Chinese. If in English, write in English. Return ONLY the description, nothing else.\n\nPrompt:\n${prompt}`
+      }],
+      config: cfg,
+      enabledAgents: [], enabledSkills: [], mcpServers: [], httpTools: [],
+    })
+    if (res.success && res.result) {
+      draftDescription.value = res.result.trim().replace(/\.+$/, '')
+    }
+  } catch (err) {
+    console.error('Description generation failed:', err.message || err)
+  }
+  summarizing.value = false
+}
 
 const fileSize = computed(() => content.value ? new Blob([content.value]).size : 0)
 const fileSizeFormatted = computed(() => {
@@ -288,7 +529,6 @@ const lastUpdated = computed(() => {
 const renderedHtml = computed(() => {
   if (!content.value) return ''
   let text = content.value
-  // Replace the raw persona ID with the display name wherever it appears in the soul file
   if (props.personaId && props.personaId !== '__default_user__') {
     text = text.replace(new RegExp(props.personaId, 'g'), props.personaName)
   }
@@ -300,61 +540,50 @@ async function loadContent() {
   try {
     const data = await window.electronAPI.souls.read(props.personaId, props.personaType)
     content.value = data || null
+    draftMemory.value = data || ''
   } catch (err) {
     content.value = null
+    draftMemory.value = ''
   }
   loading.value = false
 }
 
-function startEditingMemory() {
-  editContent.value = content.value || ''
-  editingMemory.value = true
+
+// ── Unified save ──
+function saveAll() {
+  // Emit all current drafts so parent can persist
+  emit('update-persona', {
+    name: draftName.value || undefined,
+    avatar: draftAvatar.value || undefined,
+    description: draftDescription.value || undefined,
+    prompt: draftPrompt.value || undefined,
+    providerId: draftProvider.value,
+    modelId: draftModelId.value || null,
+    voiceId: draftVoiceId.value,
+  })
+
+  // Memory: save if changed
+  if (draftMemory.value !== (content.value || '')) {
+    window.electronAPI.souls.write(props.personaId, props.personaType, draftMemory.value)
+      .then(() => { content.value = draftMemory.value })
+      .catch(err => console.error('Memory save failed:', err))
+  }
+
+  emit('close')
 }
 
-function cancelEditingMemory() {
-  editingMemory.value = false
-  editContent.value = ''
-}
-
-async function saveMemoryEdit() {
-  await window.electronAPI.souls.write(props.personaId, props.personaType, editContent.value)
-  content.value = editContent.value
-  editingMemory.value = false
-}
-
-function startEditingPrompt() {
-  editPromptContent.value = props.personaPrompt || ''
-  editingPrompt.value = true
-}
-
-function cancelEditingPrompt() {
-  editingPrompt.value = false
-  editPromptContent.value = ''
-}
-
-function savePrompt() {
-  emit('update-persona', { prompt: editPromptContent.value })
-  editingPrompt.value = false
-}
-
-const showConfirmClear = ref(false)
-
-function confirmClear() {
-  showConfirmClear.value = true
-}
-
-async function executeClear() {
-  showConfirmClear.value = false
-  await window.electronAPI.souls.delete(props.personaId, props.personaType)
-  content.value = null
-  editingMemory.value = false
+function onKeyDown(e) {
+  if (e.key === 'Escape') emit('close')
 }
 
 onMounted(() => {
   loadContent()
   if (draftProvider.value === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
   if (draftProvider.value === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
+  if (draftProvider.value === 'deepseek' && !modelsStore.deepseekCached) modelsStore.fetchDeepSeekModels()
+  window.addEventListener('keydown', onKeyDown)
 })
+onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 </script>
 
 <style scoped>
@@ -365,7 +594,7 @@ onMounted(() => {
   display: flex; align-items: center; justify-content: center;
 }
 .soul-modal {
-  width: min(700px, 90vw); max-height: 85vh;
+  width: min(860px, 94vw); height: min(88vh, 900px);
   background: #0F0F0F; border: 1px solid #2A2A2A;
   border-radius: 20px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
   display: flex; flex-direction: column; overflow: hidden;
@@ -421,27 +650,88 @@ onMounted(() => {
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 
-/* ── Summary tab body ── */
+/* ── Body ── */
 .soul-body {
   flex: 1; overflow-y: auto; padding: 20px;
-  scrollbar-width: thin; scrollbar-color: #333 transparent; min-height: 200px;
+  scrollbar-width: thin; scrollbar-color: #333 transparent; min-height: 0;
 }
 
-/* ── Model tab body ── */
-.soul-model-body {
-  display: flex; flex-direction: column; gap: 0; padding: 20px;
-  min-height: 0;
+/* ── Summary tab ── */
+.soul-summary-body {
+  display: block;
 }
-
-/* Persona info card */
 .soul-persona-card {
   background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 12px;
-  padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;
 }
+/* ── Identity row (avatar + name) ── */
+.soul-identity-row {
+  display: flex; align-items: center; gap: 14px;
+}
+.soul-avatar-btn {
+  position: relative; width: 48px; height: 48px; flex-shrink: 0;
+  border: none; background: transparent; cursor: pointer; padding: 0;
+  border-radius: 50%;
+}
+.soul-avatar-btn:hover .soul-avatar-edit-badge { opacity: 1; }
+.soul-avatar-readonly {
+  width: 48px; height: 48px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; overflow: hidden;
+}
+.soul-avatar-img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; }
+.soul-avatar-fallback {
+  width: 48px; height: 48px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #1A1A1A 0%, #374151 100%);
+}
+.soul-avatar-edit-badge {
+  position: absolute; bottom: -2px; right: -2px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: linear-gradient(135deg, #0F0F0F 0%, #374151 100%);
+  border: 2px solid #0F0F0F;
+  display: flex; align-items: center; justify-content: center;
+  color: #FFFFFF; opacity: 0.6; transition: opacity 0.15s;
+}
+.soul-identity-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.soul-name-input {
+  width: 100%; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid #2A2A2A; background: #111111;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body, 0.875rem);
+  font-weight: 600; color: #FFFFFF; outline: none;
+  transition: border-color 0.15s; box-sizing: border-box;
+}
+.soul-name-input:focus { border-color: #4B5563; }
+.soul-name-input::placeholder { color: #4B5563; }
+
+.soul-desc-textarea {
+  width: 100%; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid #2A2A2A; background: #111111;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.8rem);
+  color: #FFFFFF; outline: none; transition: border-color 0.15s; box-sizing: border-box;
+  resize: vertical; line-height: 1.5; min-height: 50px;
+}
+.soul-desc-textarea:focus { border-color: #4B5563; }
+.soul-desc-textarea::placeholder { color: #4B5563; }
+.soul-desc-readonly {
+  color: #9CA3AF; cursor: default; resize: none;
+}
+.soul-ai-btn-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.soul-desc-ai-btn { }
+.soul-provider-inactive-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
+  color: #EF4444; padding: 3px 8px; border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2);
+  cursor: help;
+}
+
 .soul-persona-field { display: flex; flex-direction: column; gap: 4px; }
+.soul-prompt-field { display: flex; flex-direction: column; }
 .soul-persona-label {
   font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.06em; color: #4B5563;
+  text-transform: uppercase; letter-spacing: 0.06em; color: #4B5563; flex-shrink: 0;
 }
 .soul-persona-value {
   font-family: 'Inter', sans-serif; font-size: var(--fs-body, 0.875rem);
@@ -451,42 +741,72 @@ onMounted(() => {
   font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-secondary, 0.8rem);
   color: #9CA3AF; background: #111111; border: 1px solid #2A2A2A; border-radius: 8px;
   padding: 10px 12px; margin: 0; white-space: pre-wrap; word-break: break-word;
-  line-height: 1.6; max-height: 150px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent;
+  line-height: 1.6; flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent;
+  min-height: 80px;
 }
 .soul-btn-inline {
   align-self: flex-start; padding: 4px 10px; border-radius: 6px;
   font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
   color: #6B7280; background: #1A1A1A; border: 1px solid #2A2A2A;
-  cursor: pointer; transition: all 0.12s; margin-top: 4px;
+  cursor: pointer; transition: all 0.12s;
+  display: inline-flex; align-items: center; gap: 5px;
 }
 .soul-btn-inline:hover { background: #222222; color: #FFFFFF; border-color: #374151; }
-.soul-prompt-actions { display: flex; gap: 6px; margin-top: 6px; }
+.soul-btn-inline:disabled { opacity: 0.4; cursor: not-allowed; }
+.soul-btn-enhance {
+  color: #F59E0B; border-color: rgba(245, 158, 11, 0.3);
+}
+.soul-btn-enhance:hover:not(:disabled) { background: rgba(245, 158, 11, 0.1); color: #FBBF24; border-color: rgba(245, 158, 11, 0.5); }
 
-/* Divider */
-.soul-divider {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+.soul-enhance-row {
+  display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-shrink: 0;
 }
-.soul-divider-label {
-  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.04em; color: #FFFFFF; white-space: nowrap;
+
+.soul-editor {
+  width: 100%; min-height: 120px; padding: 12px;
+  border: 1px solid #2A2A2A; border-radius: 10px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-secondary, 0.8rem);
+  color: #FFFFFF; background: #111111; outline: none; resize: vertical;
+  line-height: 1.6; box-sizing: border-box; transition: border-color 0.15s;
 }
-.soul-divider-meta {
-  font-family: 'Inter', sans-serif; font-size: 11px; color: #4B5563; white-space: nowrap;
+.soul-editor:focus { border-color: #4B5563; }
+.soul-editor-prompt { min-height: 200px; height: 300px; }
+.soul-editor-memory { flex: 1; min-height: 200px; }
+
+/* Spinner */
+.soul-spinner {
+  display: inline-block; width: 12px; height: 12px;
+  border: 2px solid rgba(245, 158, 11, 0.3); border-top-color: #F59E0B;
+  border-radius: 50%; animation: soul-spin 0.6s linear infinite;
 }
-.soul-divider::after { content: ''; flex: 1; height: 1px; background: #1F1F1F; }
+@keyframes soul-spin { to { transform: rotate(360deg); } }
+
+/* ── Memory tab ── */
+.soul-memory-body {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.soul-memory-meta {
+  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; color: #4B5563;
+  padding: 0 2px; flex-shrink: 0;
+}
+.soul-memory-actions {
+  display: flex; gap: 6px; margin-top: 8px; flex-shrink: 0;
+}
 
 /* Empty state */
 .soul-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   min-height: 80px; color: #4B5563; font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body, 0.875rem); text-align: center;
+  font-size: var(--fs-body, 0.875rem); text-align: center; flex: 1;
 }
 .soul-empty p { margin: 4px 0; }
 .soul-empty-hint { font-size: var(--fs-secondary, 0.75rem); color: #374151; max-width: 300px; }
 
 .soul-rendered {
   font-family: 'Inter', sans-serif; font-size: var(--fs-body, 0.875rem);
-  color: #D1D5DB; line-height: 1.6;
+  color: #D1D5DB; line-height: 1.6; flex: 1; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
 .soul-rendered :deep(h1) { font-size: 1.25rem; font-weight: 700; margin: 0 0 8px; color: #FFFFFF; }
 .soul-rendered :deep(h2) { font-size: 1rem; font-weight: 600; margin: 16px 0 6px; color: #9CA3AF; }
@@ -494,15 +814,6 @@ onMounted(() => {
 .soul-rendered :deep(li) { margin: 2px 0; }
 .soul-rendered :deep(blockquote) { border-left: 3px solid #2A2A2A; padding-left: 12px; color: #6B7280; margin: 8px 0; }
 .soul-rendered :deep(code) { font-family: 'JetBrains Mono', monospace; font-size: 0.85em; background: #1A1A1A; padding: 1px 4px; border-radius: 3px; color: #D1D5DB; }
-
-.soul-editor {
-  width: 100%; min-height: 120px; padding: 12px;
-  border: 1px solid #2A2A2A; border-radius: 10px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-secondary, 0.8rem);
-  color: #FFFFFF; background: #1A1A1A; outline: none; resize: vertical;
-  line-height: 1.6; box-sizing: border-box; transition: border-color 0.15s;
-}
-.soul-editor:focus { border-color: #4B5563; }
 
 /* ── Footer ── */
 .soul-footer {
@@ -527,12 +838,12 @@ onMounted(() => {
   background: #1A1A1A; color: #9CA3AF; border: 1px solid #2A2A2A;
 }
 .soul-btn.secondary:hover { background: #222222; color: #FFFFFF; border-color: #374151; }
-.soul-btn.danger {
-  background: transparent; color: #EF4444; border: 1px solid rgba(239,68,68,0.3);
-}
-.soul-btn.danger:hover { background: rgba(239,68,68,0.1); }
 
 /* ── AI Model tab ── */
+.soul-model-body {
+  display: flex; flex-direction: column; gap: 0; padding: 20px;
+  min-height: 0;
+}
 .soul-model-section {
   margin-bottom: 20px;
 }
@@ -558,32 +869,22 @@ onMounted(() => {
   background: #1F1F1F; color: #9CA3AF;
   font-family: 'JetBrains Mono', monospace;
 }
-.soul-provider-cards {
-  display: flex; gap: 8px;
-}
-.soul-provider-card {
-  flex: 1; padding: 12px 10px; border-radius: 10px;
+.soul-provider-select {
+  width: 100%; padding: 9px 12px; border-radius: 8px;
   border: 1px solid #2A2A2A; background: #1A1A1A;
-  cursor: pointer; transition: all 0.15s; text-align: center;
-  display: flex; flex-direction: column; gap: 3px;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem);
+  font-weight: 600; color: #FFFFFF; outline: none;
+  cursor: pointer; transition: border-color 0.15s;
+  -webkit-appearance: none; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' fill='none' stroke='%236B7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
 }
-.soul-provider-card:hover { border-color: #4B5563; }
-.soul-provider-card.active {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  border-color: #4B5563;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+.soul-provider-select:focus { border-color: #4B5563; box-shadow: 0 0 0 3px rgba(75,85,99,0.2); }
+.soul-provider-select option { background: #1A1A1A; color: #FFFFFF; }
+.soul-no-providers {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem);
+  color: #EF4444; padding: 10px 0;
 }
-.soul-provider-card-name {
-  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem); font-weight: 600;
-  color: #9CA3AF; transition: color 0.15s;
-}
-.soul-provider-card.active .soul-provider-card-name { color: #FFFFFF; }
-.soul-provider-card:hover:not(.active) .soul-provider-card-name { color: #D1D5DB; }
-.soul-provider-card-sub {
-  font-family: 'Inter', sans-serif; font-size: var(--fs-small, 0.75rem);
-  color: #4B5563; transition: color 0.15s;
-}
-.soul-provider-card.active .soul-provider-card-sub { color: rgba(255,255,255,0.5); }
 .soul-model-search {
   width: 100%; padding: 8px 12px; border-radius: 8px;
   border: 1px solid #2A2A2A; background: #1A1A1A;
@@ -623,5 +924,92 @@ onMounted(() => {
 }
 .soul-model-loading {
   padding: 16px; text-align: center; font-size: var(--fs-caption, 0.8rem); color: #4B5563;
+}
+
+/* ── Voice tab ── */
+.soul-voice-body {
+  display: flex; flex-direction: column; gap: 16px; padding: 20px;
+}
+.soul-voice-heading {
+  display: flex; align-items: center; gap: 10px;
+}
+.soul-voice-heading-label {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem);
+  font-weight: 600; color: #9CA3AF;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.soul-voice-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+  padding: 3px 10px 3px 8px; border-radius: 20px;
+}
+.soul-voice-status.active { color: #34D399; background: rgba(52, 211, 153, 0.1); }
+.soul-voice-status.inactive { color: #EF4444; background: rgba(239, 68, 68, 0.1); }
+.soul-voice-status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+}
+.soul-voice-status.active .soul-voice-status-dot { background: #34D399; }
+.soul-voice-status.inactive .soul-voice-status-dot { background: #EF4444; }
+
+.soul-voice-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+}
+.soul-voice-card {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 14px 12px; border-radius: 10px;
+  border: 1px solid #2A2A2A; background: #1A1A1A;
+  cursor: pointer; transition: all 0.15s; text-align: center;
+  position: relative;
+}
+.soul-voice-card:hover { border-color: #4B5563; }
+.soul-voice-card.active {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  border-color: #4B5563;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+.soul-voice-card-name {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body, 0.9375rem); font-weight: 600;
+  color: #9CA3AF; transition: color 0.15s;
+}
+.soul-voice-card.active .soul-voice-card-name { color: #FFFFFF; }
+.soul-voice-card:hover:not(.active) .soul-voice-card-name { color: #D1D5DB; }
+.soul-voice-card-desc {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-small, 0.75rem);
+  color: #4B5563; transition: color 0.15s;
+}
+.soul-voice-card.active .soul-voice-card-desc { color: rgba(255,255,255,0.5); }
+
+/* Voice demo button */
+.soul-voice-demo-btn {
+  position: absolute; bottom: 8px; right: 8px;
+  width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: none; cursor: pointer; transition: all 0.15s;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.soul-voice-demo-btn:hover:not(.disabled) {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+}
+.soul-voice-demo-btn.disabled {
+  opacity: 0.3; cursor: not-allowed;
+}
+
+/* Demo playing animation */
+.soul-demo-playing {
+  display: flex; align-items: center; gap: 2px; height: 12px;
+}
+.soul-demo-playing span {
+  width: 2px; background: #FFFFFF; border-radius: 1px;
+  animation: soul-eq 0.8s ease-in-out infinite alternate;
+}
+.soul-demo-playing span:nth-child(1) { height: 4px; animation-delay: 0s; }
+.soul-demo-playing span:nth-child(2) { height: 8px; animation-delay: 0.15s; }
+.soul-demo-playing span:nth-child(3) { height: 5px; animation-delay: 0.3s; }
+@keyframes soul-eq {
+  0% { height: 3px; }
+  100% { height: 10px; }
 }
 </style>

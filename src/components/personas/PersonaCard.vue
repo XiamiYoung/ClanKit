@@ -26,6 +26,15 @@
       <!-- Description -->
       <p class="persona-card-desc">{{ persona.description || 'No description' }}</p>
 
+      <!-- Provider + Model metadata -->
+      <div v-if="persona.providerId || persona.modelId" class="pc-model-meta">
+        <span v-if="persona.providerId" class="pc-provider-badge">
+          {{ PROVIDER_LABELS[persona.providerId] || persona.providerId }}
+        </span>
+        <span v-if="persona.modelId" class="pc-model-id">{{ persona.modelId }}</span>
+        <span v-if="isProviderInactive" class="pc-inactive-warn">&#9888; Provider inactive</span>
+      </div>
+
       <!-- Footer -->
       <div class="persona-card-footer">
         <div class="persona-card-badges">
@@ -34,29 +43,25 @@
             Default
           </span>
           <span v-if="persona.isBuiltin" class="persona-card-builtin-badge">Built-in</span>
+          <span v-if="persona.voiceId" class="persona-card-voice-badge">
+            <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+            {{ persona.voiceId }}
+          </span>
         </div>
-        <div class="persona-card-actions">
+        <div class="persona-card-footer-right">
           <button
             v-if="!persona.isDefault"
             @click.stop="$emit('set-default')"
-            class="persona-action-btn"
+            class="persona-action-btn star-btn-always"
             title="Set as default"
             aria-label="Set as default"
           >
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </button>
           <button
-            @click.stop="$emit('edit')"
-            class="persona-action-btn"
-            title="Edit persona"
-            aria-label="Edit persona"
-          >
-            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <button
             v-if="!persona.isBuiltin"
             @click.stop="$emit('delete')"
-            class="persona-action-btn danger"
+            class="persona-action-btn delete-btn-always"
             title="Delete persona"
             aria-label="Delete persona"
           >
@@ -71,18 +76,33 @@
 <script setup>
 import { computed } from 'vue'
 import { getAvatarDataUri } from './personaAvatars'
+import { useConfigStore } from '../../stores/config'
+
+const PROVIDER_LABELS = {
+  anthropic:  'Anthropic',
+  openrouter: 'OpenRouter',
+  openai:     'OpenAI',
+  deepseek:   'DeepSeek',
+}
+
+const configStore = useConfigStore()
 
 const props = defineProps({
   persona: { type: Object, required: true },
   gradient: { type: String, default: 'linear-gradient(135deg, #0F0F0F, #374151)' },
 })
 
-defineEmits(['click', 'edit', 'delete', 'set-default'])
+defineEmits(['click', 'delete', 'set-default'])
 
 const avatarDataUri = computed(() => getAvatarDataUri(props.persona.avatar))
 
 const fallbackInitial = computed(() => {
   return (props.persona.name || '?').charAt(0).toUpperCase()
+})
+
+const isProviderInactive = computed(() => {
+  if (!props.persona.providerId) return false
+  return !configStore.config[props.persona.providerId]?.isActive
 })
 </script>
 
@@ -91,7 +111,7 @@ const fallbackInitial = computed(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 200px;
+  min-height: 200px;
   border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
@@ -112,8 +132,8 @@ const fallbackInitial = computed(() => {
 }
 
 .persona-card-accent { height: 3px; width: 100%; flex-shrink: 0; }
-.persona-card-body { padding: 20px 20px 16px; display: flex; flex-direction: column; flex: 1; }
-.persona-card-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.persona-card-body { padding: 16px 16px 12px; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.persona-card-title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .persona-card-avatar { flex-shrink: 0; }
 .persona-card-avatar-img { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; }
 .persona-card-avatar-fallback {
@@ -136,9 +156,38 @@ const fallbackInitial = computed(() => {
 .persona-card-type.user { background: rgba(0, 0, 0, 0.06); color: #1A1A1A; }
 .persona-card-desc {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); color: #6B7280;
-  line-height: 1.55; margin: 0 0 16px;
+  line-height: 1.55; margin: 0 0 10px;
   max-height: calc(var(--fs-secondary) * 1.55 * 2); /* 2 lines — matches default persona */
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.pc-model-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.pc-provider-badge {
+  font-size: var(--fs-small);
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: rgba(0,0,0,0.06);
+  color: var(--text-secondary);
+}
+.pc-model-id {
+  font-size: var(--fs-small);
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+.pc-inactive-warn {
+  font-size: var(--fs-small);
+  color: #EF4444;
+  font-weight: 600;
 }
 .persona-card-footer {
   border-top: 1px solid rgba(229, 229, 234, 0.5); padding-top: 12px; margin-top: auto;
@@ -157,19 +206,26 @@ const fallbackInitial = computed(() => {
   padding: 2px 8px; border-radius: 9999px; background: rgba(0,0,0,0.06);
   color: #1A1A1A; display: flex; align-items: center;
 }
-.persona-card-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s ease; }
-.persona-card:hover .persona-card-actions { opacity: 1; }
+.persona-card-voice-badge {
+  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: 9999px; background: rgba(0,0,0,0.06);
+  color: #6B7280; display: flex; align-items: center; gap: 3px;
+  text-transform: capitalize;
+}
+.persona-card-footer-right { display: flex; align-items: center; gap: 2px; }
 .persona-action-btn {
   width: 28px; height: 28px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  border: none; background: transparent; color: #9CA3AF; cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  border: none; background: transparent; cursor: pointer;
+  transition: background 0.15s, color 0.15s; flex-shrink: 0;
 }
-.persona-action-btn:hover { background: #F5F5F5; color: #1A1A1A; }
-.persona-action-btn.danger:hover { background: #FEE2E2; color: #DC2626; }
+.star-btn-always { color: #D1D5DB; }
+.star-btn-always:hover { background: #F5F5F5; color: #F59E0B; }
+.delete-btn-always { color: #D1D5DB; }
+.delete-btn-always:hover { background: #FEE2E2; color: #DC2626; }
 
 @media (prefers-reduced-motion: reduce) {
-  .persona-card, .persona-card-actions { transition: none; }
+  .persona-card { transition: none; }
   .persona-card:hover { transform: none; }
 }
 </style>

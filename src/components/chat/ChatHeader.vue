@@ -42,17 +42,23 @@
       </div>
       <!-- Extra action buttons slot (grid view inserts maximize + swap here) -->
       <div class="ch-row-top-actions">
-        <!-- Voice call button (hidden for group chats) -->
-        <button
-          v-if="canStartCall"
-          class="ch-call-btn"
-          @click.stop="startCall"
-          title="Start voice call"
+        <!-- Voice call button with hover tooltip -->
+        <div
+          ref="callBtnEl"
+          class="ch-call-btn-wrap"
+          @mouseenter="showCallTooltip"
+          @mouseleave="hideCallTooltip"
         >
-          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-          </svg>
-        </button>
+          <button
+            class="ch-call-btn"
+            :disabled="!canStartCall"
+            @click.stop="startCall"
+          >
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+          </button>
+        </div>
         <slot name="actions" />
       </div>
     </div>
@@ -92,27 +98,7 @@
               <button class="sys-add-btn" @click.stop="togglePopover('user')" title="Switch user persona">
                 <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </button>
-              <!-- User popover -->
-              <div v-if="showUsrPopover" class="persona-popover user-popover" @click.stop>
-                <div class="persona-popover-header">User Persona</div>
-                <button
-                  v-for="p in sortedUserPersonas"
-                  :key="p.id"
-                  class="persona-popover-item has-description"
-                  :class="{ selected: resolvedUserPersonaId === p.id }"
-                  @click="selectPersona('user', p.isDefault ? null : p.id)"
-                >
-                  <div class="persona-popover-avatar-wrap">
-                    <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:36px;height:36px;border-radius:50%;" />
-                    <span v-else class="persona-popover-avatar-fallback">{{ p.name.charAt(0) }}</span>
-                  </div>
-                  <div class="persona-popover-item-text">
-                    <span>{{ p.name }}</span>
-                    <span v-if="p.description" class="persona-popover-item-desc">{{ p.description }}</span>
-                  </div>
-                </button>
               </div>
-            </div>
           </div>
 
           <!-- ── System personas ── -->
@@ -166,11 +152,11 @@
               </div>
             </template>
 
-            <!-- Summary button (single persona) — also opens model config popover -->
+            <!-- Summary button (single persona) — opens SoulViewer -->
             <button
               v-if="activeSystemPersonaIds.length === 1"
               class="persona-card-summary-btn"
-              @click.stop="openSysPersonaConfig(activeSystemPersonaIds[0]); $emit('open-soul-viewer', activeSystemPersonaIds[0], 'system', personasStore.getPersonaById(activeSystemPersonaIds[0])?.name || 'System')"
+              @click.stop="$emit('open-soul-viewer', activeSystemPersonaIds[0], 'system', personasStore.getPersonaById(activeSystemPersonaIds[0])?.name || 'System')"
               title="View summary"
             >
               <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -179,102 +165,11 @@
               </svg>
             </button>
 
-            <!-- Configure persona button + combobox -->
+            <!-- Configure persona button -->
             <div class="persona-chip-wrap" ref="groupAddChipWrap">
               <button class="sys-add-btn" @click.stop="openPersonaCombobox" title="Configure personas">
                 <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </button>
-              <div v-if="showGroupAddPopover" class="sys-combobox" @click.stop>
-                <div class="sys-combobox-search">
-                  <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                  <input
-                    ref="personaSearchEl"
-                    v-model="personaSearchQuery"
-                    type="text"
-                    placeholder="Search personas..."
-                    class="sys-combobox-input"
-                  />
-                </div>
-                <div class="sys-combobox-list">
-                  <label
-                    v-for="p in filteredSystemPersonas"
-                    :key="p.id"
-                    class="sys-combobox-item"
-                    :class="{ selected: activeSystemPersonaIds.includes(p.id) }"
-                  >
-                    <div class="sys-combobox-check">
-                      <input
-                        type="checkbox"
-                        :checked="activeSystemPersonaIds.includes(p.id)"
-                        @change="toggleSystemPersona(p.id)"
-                      />
-                      <svg v-if="activeSystemPersonaIds.includes(p.id)" class="sys-combobox-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                    </div>
-                    <div class="sys-combobox-avatar">
-                      <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" class="sys-combobox-avatar-img" />
-                      <span v-else class="sys-combobox-avatar-fallback">{{ p.name.charAt(0) }}</span>
-                    </div>
-                    <div class="sys-combobox-info">
-                      <span class="sys-combobox-name">{{ p.name }}</span>
-                      <span v-if="p.description" class="sys-combobox-desc">{{ p.description }}</span>
-                    </div>
-                  </label>
-                  <div v-if="filteredSystemPersonas.length === 0" class="sys-combobox-empty">No personas match your search</div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Config popover (anchored to the system group) -->
-            <div v-if="sysPersonaConfigId" class="sys-persona-config-popover" @click.stop>
-              <div class="spc-header">
-                <span class="spc-header-name">{{ personasStore.getPersonaById(sysPersonaConfigId)?.name || 'Persona' }}</span>
-                <span v-if="personasStore.getPersonaById(sysPersonaConfigId)?.description" class="spc-header-desc">{{ personasStore.getPersonaById(sysPersonaConfigId).description }}</span>
-                <button v-if="activeSystemPersonaIds.length > 1" class="persona-card-summary-btn" style="margin-left:auto;" @click.stop="openSysPersonaConfig(sysPersonaConfigId); $emit('open-soul-viewer', sysPersonaConfigId, 'system', personasStore.getPersonaById(sysPersonaConfigId)?.name || 'System')" title="View summary">
-                  <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
-                    <line x1="10" y1="22" x2="14" y2="22"/>
-                  </svg>
-                </button>
-              </div>
-              <div class="spc-section">
-                <div class="spc-label">Provider</div>
-                <div class="spc-btn-row">
-                  <button
-                    v-for="prov in ['anthropic', 'openrouter', 'openai']"
-                    :key="prov"
-                    class="spc-btn"
-                    :class="{ active: (personasStore.getPersonaById(sysPersonaConfigId)?.providerId || 'anthropic') === prov }"
-                    @click="setSysPersonaProvider(sysPersonaConfigId, prov)"
-                  >{{ prov === 'anthropic' ? 'Anthropic' : prov === 'openrouter' ? 'OpenRouter' : 'OpenAI' }}</button>
-                </div>
-              </div>
-              <div class="spc-section">
-                <div class="spc-label">Model</div>
-                <input
-                  v-if="sysConfigProvider !== 'anthropic'"
-                  v-model="sysConfigModelFilter"
-                  type="text"
-                  placeholder="Search models..."
-                  class="spc-search"
-                  @click.stop
-                />
-                <div class="spc-model-list">
-                  <button class="spc-model-item" :class="{ active: !personasStore.getPersonaById(sysPersonaConfigId)?.modelId }" @click="setSysPersonaModel(sysPersonaConfigId, null)">
-                    <span>Default</span>
-                    <span class="spc-model-id">{{ sysConfigDefaultModelLabel }}</span>
-                  </button>
-                  <button
-                    v-for="m in sysConfigModelOptions"
-                    :key="m.id"
-                    class="spc-model-item"
-                    :class="{ active: personasStore.getPersonaById(sysPersonaConfigId)?.modelId === m.id }"
-                    @click="setSysPersonaModel(sysPersonaConfigId, m.id)"
-                  >
-                    <span>{{ m.name || m.label || m.id }}</span>
-                    <span v-if="m.id !== (m.name || m.label)" class="spc-model-id">{{ m.id }}</span>
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -311,6 +206,174 @@
       <div class="ch-persona-tooltip-text">{{ tooltipState.text }}</div>
     </div>
   </Teleport>
+
+  <!-- ── User Persona Modal ── -->
+  <Teleport to="body">
+    <div v-if="showUsrPopover" class="ch-modal-backdrop">
+      <div class="ch-modal" role="dialog" aria-modal="true">
+        <div class="ch-modal-header">
+          <div class="ch-modal-header-icon">
+            <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <span class="ch-modal-title">User Persona</span>
+          <button class="ch-modal-close" @click="showUsrPopover = false">
+            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="ch-modal-body">
+          <button
+            v-for="p in sortedUserPersonas"
+            :key="p.id"
+            class="ch-modal-item"
+            :class="{ selected: resolvedUserPersonaId === p.id }"
+            @click="selectPersona('user', p.isDefault ? null : p.id)"
+          >
+            <div class="ch-modal-item-avatar">
+              <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+              <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+            </div>
+            <div class="ch-modal-item-text">
+              <span class="ch-modal-item-name">{{ p.name }}</span>
+              <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+            </div>
+            <svg v-if="resolvedUserPersonaId === p.id" class="ch-modal-check" style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- ── System Persona Picker Modal ── -->
+  <Teleport to="body">
+    <div v-if="showGroupAddPopover" class="ch-modal-backdrop">
+      <div class="ch-modal" role="dialog" aria-modal="true">
+        <div class="ch-modal-header">
+          <div class="ch-modal-header-icon">
+            <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><path d="M4 12h16"/><path d="M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1"/><path d="M9 16h0"/><path d="M15 16h0"/></svg>
+          </div>
+          <span class="ch-modal-title">System Personas</span>
+          <button class="ch-modal-close" @click="showGroupAddPopover = false">
+            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="ch-modal-search">
+          <svg style="width:14px;height:14px;flex-shrink:0;color:#6B7280;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input
+            ref="personaSearchEl"
+            v-model="personaSearchQuery"
+            type="text"
+            placeholder="Search personas..."
+            class="ch-modal-search-input"
+          />
+        </div>
+        <div class="ch-modal-body">
+          <label
+            v-for="p in filteredSystemPersonas"
+            :key="p.id"
+            class="ch-modal-item ch-modal-item-check"
+            :class="{ selected: activeSystemPersonaIds.includes(p.id) }"
+          >
+            <div class="ch-modal-check-box" :class="{ checked: activeSystemPersonaIds.includes(p.id) }">
+              <input type="checkbox" :checked="activeSystemPersonaIds.includes(p.id)" @change="toggleSystemPersona(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
+              <svg v-if="activeSystemPersonaIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="ch-modal-item-avatar">
+              <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+              <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+            </div>
+            <div class="ch-modal-item-text">
+              <span class="ch-modal-item-name">{{ p.name }}</span>
+              <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+            </div>
+          </label>
+          <div v-if="filteredSystemPersonas.length === 0" class="ch-modal-empty">No personas match</div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- ── System Persona Config Modal ── -->
+  <Teleport to="body">
+    <div v-if="sysPersonaConfigId" class="ch-modal-backdrop">
+      <div class="ch-modal ch-modal-config" role="dialog" aria-modal="true">
+        <div class="ch-modal-header">
+          <div class="ch-modal-header-icon">
+            <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1px;min-width:0;">
+            <span class="ch-modal-title">{{ personasStore.getPersonaById(sysPersonaConfigId)?.name || 'Persona' }}</span>
+            <span v-if="personasStore.getPersonaById(sysPersonaConfigId)?.description" class="ch-modal-subtitle">{{ personasStore.getPersonaById(sysPersonaConfigId).description }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+            <button v-if="activeSystemPersonaIds.length > 1" class="ch-modal-soul-btn" @click="$emit('open-soul-viewer', sysPersonaConfigId, 'system', personasStore.getPersonaById(sysPersonaConfigId)?.name || 'System'); sysPersonaConfigId = null" title="View memory">
+              <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><line x1="10" y1="22" x2="14" y2="22"/></svg>
+            </button>
+            <button class="ch-modal-close" @click="sysPersonaConfigId = null">
+              <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="ch-modal-body" style="gap:16px;">
+          <!-- Inactive provider warning -->
+          <div v-if="isPersonaProviderInactive(sysPersonaConfigId)" class="ch-inactive-warn">
+            &#9888; Provider inactive. Go to Configuration to fix.
+          </div>
+          <!-- Model override (chat-scoped) -->
+          <div class="ch-cfg-section">
+            <div class="ch-cfg-label">Model</div>
+            <div class="ch-override-notice">
+              Override for this chat only — won't be saved to the persona.
+            </div>
+            <ProviderModelPicker
+              model-only
+              :provider-label="sysConfigProviderLabel"
+              :provider="sysConfigProvider"
+              :model="chatModelOverride(sysPersonaConfigId)"
+              @update:model="val => setChatModelOverride(sysPersonaConfigId, val)"
+            />
+            <button
+              v-if="chatModelOverride(sysPersonaConfigId)"
+              class="ch-override-clear"
+              @click="setChatModelOverride(sysPersonaConfigId, null)"
+            >
+              Clear override (use persona default: {{ personaModelLabel(sysPersonaConfigId) }})
+            </button>
+          </div>
+        </div>
+        <div class="ch-modal-footer">
+          <button class="ch-modal-cancel" @click="sysPersonaConfigId = null">Close</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Floating call button tooltip (Teleport to body to escape stacking contexts) -->
+  <Teleport to="body">
+    <div
+      v-if="callTooltipVisible"
+      class="ch-call-tooltip-fixed"
+      :style="{ top: callTooltipY + 'px', right: callTooltipRight + 'px' }"
+    >
+      <template v-if="canStartCall">
+        <div class="ch-call-tooltip-row">
+          <span class="cct-key">Persona</span>
+          <span class="cct-val">{{ personasStore.getPersonaById(activeSystemPersonaIds[0])?.name || '—' }}</span>
+        </div>
+        <div class="ch-call-tooltip-row">
+          <span class="cct-key">STT</span>
+          <span class="cct-val">Whisper</span>
+        </div>
+        <div class="ch-call-tooltip-row">
+          <span class="cct-key">TTS</span>
+          <span class="cct-val">{{ callTtsModeLabel }}</span>
+        </div>
+      </template>
+      <template v-else>
+        <div class="ch-call-tooltip-reason">{{ callButtonTooltip }}</div>
+      </template>
+    </div>
+  </Teleport>
+
 </template>
 
 <script setup>
@@ -323,6 +386,7 @@ import { useToolsStore } from '../../stores/tools'
 import { useMcpStore } from '../../stores/mcp'
 import { useKnowledgeStore } from '../../stores/knowledge'
 import { getAvatarDataUri } from '../personas/personaAvatars'
+import ProviderModelPicker from '../common/ProviderModelPicker.vue'
 import { estimateToolTokens, estimateMcpTokens, formatTokens } from '../../utils/tokenEstimate'
 import { useVoiceStore } from '../../stores/voice'
 
@@ -345,11 +409,53 @@ const personasStore = usePersonasStore()
 const voiceStore = useVoiceStore()
 
 // ── Voice call ──
+const callBtnEl = ref(null)
+const callTooltipVisible = ref(false)
+const callTooltipY = ref(0)
+const callTooltipRight = ref(0)
+
+function showCallTooltip() {
+  if (!callBtnEl.value) return
+  const rect = callBtnEl.value.getBoundingClientRect()
+  callTooltipY.value = rect.bottom + 8
+  callTooltipRight.value = window.innerWidth - rect.right
+  callTooltipVisible.value = true
+}
+
+function hideCallTooltip() {
+  callTooltipVisible.value = false
+}
+
+// Close any open modal on Escape
+function onKeyDown(e) {
+  if (e.key !== 'Escape') return
+  if (sysPersonaConfigId.value) { sysPersonaConfigId.value = null; return }
+  if (showGroupAddPopover.value) { showGroupAddPopover.value = false; return }
+  if (showUsrPopover.value) { showUsrPopover.value = false; return }
+}
+onMounted(() => window.addEventListener('keydown', onKeyDown))
+onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+
 const isGroupChat = computed(() => chat.value?.isGroupChat ?? false)
 const canStartCall = computed(() => {
-  if (isGroupChat.value) return false
   if (voiceStore.isCallActive) return false
+  if (activeSystemPersonaIds.value.length !== 1) return false
+  if (!configStore.config.voiceCall?.whisperApiKey) return false
   return true
+})
+const callButtonTooltip = computed(() => {
+  if (voiceStore.isCallActive) return 'Call already in progress'
+  const count = activeSystemPersonaIds.value.length
+  if (count === 0) return 'Select a persona to start a call'
+  if (count > 1) return 'Voice call requires exactly one persona'
+  if (!configStore.config.voiceCall?.whisperApiKey) return 'Whisper API key not configured — go to Configuration → Voice Call'
+  return 'Start voice call'
+})
+const callTtsModeLabel = computed(() => {
+  const mode = configStore.config.voiceCall?.ttsMode || 'browser'
+  if (mode === 'openai-hd') return 'OpenAI TTS HD'
+  if (mode === 'openai') return 'OpenAI TTS'
+  return 'Browser (free)'
 })
 
 function startCall() {
@@ -412,7 +518,6 @@ const personaSearchQuery = ref('')
 
 // ── System persona config popover ──
 const sysPersonaConfigId = ref(null)
-const sysConfigModelFilter = ref('')
 
 // ── Own tooltip state (not shared with parent) ──
 const tooltipState = reactive({ visible: false, name: '', text: '', x: 0, y: 0 })
@@ -517,26 +622,27 @@ function openSysPersonaConfig(pid) {
     sysPersonaConfigId.value = null
   } else {
     sysPersonaConfigId.value = pid
-    sysConfigModelFilter.value = ''
-    const persona = personasStore.getPersonaById(pid)
-    const prov = persona?.providerId || 'anthropic'
-    if (prov === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
-    if (prov === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
   }
 }
 
-function setSysPersonaProvider(pid, provider) {
-  const persona = personasStore.getPersonaById(pid)
-  if (!persona) return
-  personasStore.savePersona({ ...persona, providerId: provider || null, modelId: null })
-  if (provider === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
-  if (provider === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
+// ── Chat-scope model override (does NOT touch persona) ──
+function chatModelOverride(personaId) {
+  return chat.value?.personaModelOverrides?.[personaId] || null
 }
 
-function setSysPersonaModel(pid, model) {
-  const persona = personasStore.getPersonaById(pid)
-  if (!persona) return
-  personasStore.savePersona({ ...persona, modelId: model || null })
+function setChatModelOverride(personaId, modelId) {
+  if (!props.chatId) return
+  chatsStore.setChatPersonaModelOverride(props.chatId, personaId, modelId)
+}
+
+function personaModelLabel(personaId) {
+  return personasStore.getPersonaById(personaId)?.modelId || '(provider default)'
+}
+
+function isPersonaProviderInactive(personaId) {
+  const p = personasStore.getPersonaById(personaId)
+  if (!p?.providerId) return false
+  return !configStore.config[p.providerId]?.isActive
 }
 
 const sysConfigProvider = computed(() => {
@@ -545,20 +651,11 @@ const sysConfigProvider = computed(() => {
   return p?.providerId || 'anthropic'
 })
 
-const sysConfigDefaultModelLabel = computed(() => {
-  const chatModel = chat.value?.model
-  if (chatModel) return chatModel
-  return modelsStore.getDefaultModelLabel(sysConfigProvider.value)
-})
-
-const sysConfigModelOptions = computed(() => {
-  const provider = sysConfigProvider.value
-  const q = sysConfigModelFilter.value.trim().toLowerCase()
-  const models = modelsStore.getModelsForProvider(provider)
-  if (!q) return models
-  return models.filter(m =>
-    (m.name || '').toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
-  )
+const sysConfigProviderLabel = computed(() => {
+  if (!sysPersonaConfigId.value) return ''
+  const p = personasStore.getPersonaById(sysPersonaConfigId.value)
+  const labels = { anthropic: 'Anthropic', openrouter: 'OpenRouter', openai: 'OpenAI', deepseek: 'DeepSeek' }
+  return labels[p?.providerId] || p?.providerId || ''
 })
 
 // ── Persona tooltip (header-only) ──
@@ -581,25 +678,24 @@ function hidePersonaTooltip() {
 }
 
 // ── Chat Settings tooltip data ──
-const effectiveProvider = computed(() => chat.value?.provider || 'anthropic')
-
 const effectiveProviderLabel = computed(() => {
-  const p = effectiveProvider.value
-  if (p === 'openrouter') return 'OpenRouter'
-  if (p === 'openai') return 'OpenAI'
-  return 'Anthropic'
+  const c = chat.value
+  if (!c) return '—'
+  const personaId = activeSystemPersonaIds.value[0]
+  if (!personaId) return '—'
+  const persona = personasStore.getPersonaById(personaId)
+  const labels = { anthropic: 'Anthropic', openrouter: 'OpenRouter', openai: 'OpenAI', deepseek: 'DeepSeek' }
+  return labels[persona?.providerId] || '—'
 })
 
 const effectiveModelLabel = computed(() => {
-  const model = chat.value?.model
-  if (!model) return 'Default'
-  const orMatch = modelsStore.openrouterModels.find(m => m.id === model)
-  if (orMatch) return orMatch.name
-  const openaiMatch = modelsStore.openaiModels.find(m => m.id === model)
-  if (openaiMatch) return openaiMatch.name || openaiMatch.id
-  const anMatch = modelsStore.anthropicModels.find(m => m.id === model)
-  if (anMatch) return anMatch.label
-  return model.length > 30 ? '…' + model.slice(-28) : model
+  const c = chat.value
+  if (!c) return '—'
+  const personaId = activeSystemPersonaIds.value[0]
+  if (!personaId) return '—'
+  const override = c.personaModelOverrides?.[personaId]
+  if (override) return `${override} (override)`
+  return personasStore.getPersonaById(personaId)?.modelId || '—'
 })
 
 // Chat-level tool/MCP/RAG counts for the tooltip
@@ -634,26 +730,6 @@ const effectiveMaxOutputTokens = computed(() => {
   return chat.value?.maxOutputTokens ?? configStore.config.maxOutputTokens ?? 32768
 })
 
-// ── Click-outside handler ──
-function handleOutsideClick(e) {
-  if (usrChipWrap.value && !usrChipWrap.value.contains(e.target)) showUsrPopover.value = false
-  if (groupAddChipWrap.value && !groupAddChipWrap.value.contains(e.target)) showGroupAddPopover.value = false
-  if (sysPersonaConfigId.value) {
-    const el = document.querySelector('.sys-persona-config-popover')
-    if (el && !el.contains(e.target)) {
-      const card = e.target.closest('.sys-avatar-item')
-      if (!card) sysPersonaConfigId.value = null
-    }
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('click', handleOutsideClick)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleOutsideClick)
-})
 </script>
 
 <style scoped>
@@ -805,6 +881,10 @@ onUnmounted(() => {
 }
 
 /* ── Call button ── */
+.ch-call-btn-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
 .ch-call-btn {
   display: flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; border: none; border-radius: 8px;
@@ -812,11 +892,17 @@ onUnmounted(() => {
   color: #FFFFFF; cursor: pointer; transition: all 0.15s ease;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
-.ch-call-btn:hover {
+.ch-call-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
 }
-
+.ch-call-btn:disabled {
+  background: #E5E5EA;
+  color: #9CA3AF;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
 /* ── Row 2: Personas + Chat Settings ── */
 .ch-row-bottom {
   display: flex;
@@ -1123,412 +1209,245 @@ onUnmounted(() => {
   background: rgba(255,255,255,0.1);
 }
 
-/* ── System persona combobox ── */
-.sys-combobox {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  width: 320px;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  border-radius: 14px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06);
-  z-index: 60;
-  overflow: hidden;
-}
-.sys-combobox-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 1px solid #F0F0F0;
-  color: #9CA3AF;
-}
-.sys-combobox-input {
-  flex: 1;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  color: #1A1A1A;
-}
-.sys-combobox-input::placeholder {
-  color: #D1D1D6;
-}
-.sys-combobox-list {
-  max-height: 340px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.sys-combobox-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: all 0.12s;
-  border-radius: 10px;
-  border: 1px solid transparent;
-}
-.sys-combobox-item:hover {
-  background: #F5F5F5;
-  border-color: #E5E5EA;
-}
-.sys-combobox-item.selected {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: transparent;
-}
-.sys-combobox-item.selected:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-}
-.sys-combobox-check {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  border: 1.5px solid #D1D1D6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  position: relative;
-  transition: all 0.12s;
-}
-.sys-combobox-item.selected .sys-combobox-check {
-  background: rgba(255,255,255,0.2);
-  border-color: rgba(255,255,255,0.4);
-}
-.sys-combobox-check input {
-  position: absolute;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  margin: 0;
-}
-.sys-combobox-check-icon {
-  width: 12px;
-  height: 12px;
-  color: #fff;
-}
-.sys-combobox-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #374151 0%, #4B5563 100%);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-.sys-combobox-item.selected .sys-combobox-avatar {
-  box-shadow: 0 1px 4px rgba(255,255,255,0.15);
-}
-.sys-combobox-avatar-img {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.sys-combobox-avatar-fallback {
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  user-select: none;
-}
-.sys-combobox-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-.sys-combobox-name {
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  color: #1A1A1A;
-}
-.sys-combobox-item.selected .sys-combobox-name {
-  color: #fff;
-}
-.sys-combobox-desc {
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 400;
-  color: #374151;
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.sys-combobox-item.selected .sys-combobox-desc {
-  color: rgba(255,255,255,0.65);
-}
-.sys-combobox-empty {
-  padding: 20px 14px;
-  text-align: center;
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  color: #9CA3AF;
-}
-
-/* ── System persona config popover ── */
-.sys-persona-config-popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 300px;
-  max-height: 420px;
-  overflow-y: auto;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  border-radius: 14px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
-  z-index: 60;
-  padding: 10px;
-  scrollbar-width: thin;
-}
-.spc-header {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 2px 2px 8px;
-  border-bottom: 1px solid #E5E5EA;
-  margin-bottom: 10px;
-}
-.spc-header-name {
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  font-weight: 700;
-  color: #1A1A1A;
-}
-.spc-header-desc {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 500;
-  color: #9CA3AF;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.spc-section {
-  margin-bottom: 10px;
-}
-.spc-section:last-child {
-  margin-bottom: 0;
-}
-.spc-label {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #9CA3AF;
-  padding: 0 2px 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.spc-btn-row {
-  display: flex;
-  gap: 4px;
-}
-.spc-btn {
-  flex: 1;
-  padding: 5px 8px;
-  border-radius: 8px;
-  border: 1px solid #E5E5EA;
-  background: #FAFAFA;
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  color: #6B7280;
-  cursor: pointer;
-  transition: all 0.12s;
-  text-align: center;
-}
-.spc-btn:hover {
-  border-color: #9CA3AF;
-  background: #F5F5F5;
-}
-.spc-btn.active {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-}
-.spc-search {
-  width: 100%;
-  padding: 5px 8px;
-  border: 1px solid #E5E5EA;
-  border-radius: 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  outline: none;
-  background: #FAFAFA;
-  color: #1A1A1A;
-  margin-bottom: 4px;
-  box-sizing: border-box;
-  transition: border-color 0.15s;
-}
-.spc-search::placeholder { color: #9CA3AF; }
-.spc-search:focus { border-color: #1A1A1A; }
-.spc-model-list {
-  max-height: 140px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.spc-model-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 5px 8px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  color: #1A1A1A;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.1s;
-}
-.spc-model-item:hover { background: #F5F5F5; }
-.spc-model-item.active {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
-}
-.spc-model-id {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  color: #9CA3AF;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.spc-model-item.active .spc-model-id { color: rgba(255,255,255,0.5); }
-
-/* ── Persona chip wrap (legacy) ── */
+/* ── Persona chip wrap ── */
 .persona-chip-wrap {
   position: relative;
 }
-
-/* ── Popover dropdown ── */
-.persona-popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 280px;
-  max-height: 360px;
-  overflow-y: auto;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  z-index: 50;
-  padding: 6px;
-  scrollbar-width: thin;
-}
-.user-popover {
-  right: -28px; /* align under the group-icon button */
-}
-.persona-popover-header {
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #9CA3AF;
-  padding: 8px 10px 4px;
-}
-.persona-popover-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  color: #1A1A1A;
-  transition: background 0.12s;
-  text-align: left;
-}
-.persona-popover-item:hover {
-  background: #F5F5F5;
-}
-.persona-popover-item.selected {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.persona-popover-avatar-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.persona-popover-avatar-fallback {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: #9CA3AF;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
-}
-.persona-popover-item.selected .persona-popover-avatar-fallback {
-  background: rgba(255,255,255,0.15);
-}
-.persona-popover-item.has-description {
-  align-items: flex-start;
-  padding: 10px;
-}
-.persona-popover-item-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.persona-popover-item-desc {
-  font-size: 11px;
-  font-weight: 400;
-  color: #374151;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.persona-popover-item.selected .persona-popover-item-desc {
-  color: rgba(255,255,255,0.6);
-}
 </style>
 
-<!-- Global styles for teleported tooltip (unscoped) -->
+<!-- Global styles for teleported modals + tooltips (unscoped) -->
 <style>
+/* ── Persona modals (teleported) ── */
+.ch-modal-backdrop {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  animation: ch-backdrop-in 0.15s ease-out;
+}
+@keyframes ch-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.ch-modal {
+  width: min(440px, 90vw);
+  max-height: 80vh;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 16px;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: ch-modal-in 0.18s ease-out;
+}
+@keyframes ch-modal-in {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.ch-modal-config {
+  width: min(360px, 90vw);
+  max-height: 70vh;
+}
+.ch-modal-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid #1F1F1F;
+  flex-shrink: 0;
+}
+.ch-modal-header-icon {
+  width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.ch-modal-title {
+  font-family: 'Inter', sans-serif; font-size: 0.9375rem;
+  font-weight: 700; color: #FFFFFF;
+}
+.ch-modal-subtitle {
+  font-family: 'Inter', sans-serif; font-size: 0.75rem;
+  font-weight: 400; color: #6B7280;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ch-modal-close {
+  margin-left: auto; width: 28px; height: 28px; border-radius: 7px;
+  border: none; background: transparent; color: #6B7280;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s; flex-shrink: 0;
+}
+.ch-modal-close:hover { background: #1F1F1F; color: #FFFFFF; }
+.ch-modal-soul-btn {
+  width: 26px; height: 26px; border-radius: 7px;
+  border: 1px solid #2A2A2A; background: #1A1A1A; color: #9CA3AF;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s; flex-shrink: 0;
+}
+.ch-modal-soul-btn:hover { background: #2A2A2A; color: #FFFFFF; }
+.ch-modal-search {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #1A1A1A;
+  flex-shrink: 0;
+}
+.ch-modal-search-input {
+  flex: 1; border: none; outline: none;
+  background: transparent;
+  font-family: 'Inter', sans-serif; font-size: 0.875rem;
+  color: #FFFFFF;
+}
+.ch-modal-search-input::placeholder { color: #4B5563; }
+.ch-modal-body {
+  flex: 1; overflow-y: auto;
+  padding: 8px;
+  display: flex; flex-direction: column; gap: 3px;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+}
+.ch-modal-item {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 10px 12px;
+  border-radius: 10px; border: 1px solid transparent;
+  background: transparent; cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.12s; text-align: left;
+}
+.ch-modal-item:hover {
+  background: #1A1A1A; border-color: #2A2A2A;
+}
+.ch-modal-item.selected {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #374151 100%);
+  border-color: #374151;
+}
+.ch-modal-item-check { align-items: flex-start; }
+.ch-modal-check-box {
+  width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0;
+  border: 1.5px solid #374151;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; transition: all 0.12s; margin-top: 2px;
+}
+.ch-modal-check-box.checked {
+  background: linear-gradient(135deg, #374151 0%, #4B5563 100%);
+  border-color: #4B5563;
+}
+.ch-modal-item-avatar {
+  width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #1A1A1A 0%, #374151 100%);
+}
+.ch-modal-avatar-fallback {
+  font-family: 'Inter', sans-serif; font-size: 15px;
+  font-weight: 700; color: #fff; user-select: none;
+}
+.ch-modal-item-text {
+  display: flex; flex-direction: column; gap: 3px;
+  min-width: 0; flex: 1;
+}
+.ch-modal-item-name {
+  font-family: 'Inter', sans-serif; font-size: 0.875rem;
+  font-weight: 600; color: #E5E5EA;
+}
+.ch-modal-item.selected .ch-modal-item-name { color: #FFFFFF; }
+.ch-modal-item-desc {
+  font-family: 'Inter', sans-serif; font-size: 0.75rem;
+  font-weight: 400; color: #6B7280; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ch-modal-item.selected .ch-modal-item-desc { color: rgba(255,255,255,0.5); }
+.ch-modal-check { color: rgba(255,255,255,0.7); }
+.ch-modal-empty {
+  padding: 20px; text-align: center;
+  font-family: 'Inter', sans-serif; font-size: 0.8125rem; color: #4B5563;
+}
+/* Config modal specific */
+.ch-cfg-section { flex-shrink: 0; }
+.ch-cfg-label {
+  font-family: 'Inter', sans-serif; font-size: 10px;
+  font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: #4B5563; margin-bottom: 8px;
+}
+.ch-override-notice {
+  font-size: var(--fs-caption, 0.8125rem);
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.2);
+  border-radius: var(--radius-sm, 8px);
+  color: #D97706;
+}
+.ch-override-clear {
+  margin-top: 8px;
+  font-size: var(--fs-caption, 0.8125rem);
+  color: #9CA3AF;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+.ch-override-clear:hover { color: #FFFFFF; }
+.ch-inactive-warn {
+  font-size: var(--fs-caption, 0.8125rem);
+  color: #EF4444;
+  font-weight: 600;
+  padding: 8px 12px;
+  background: rgba(239,68,68,0.08);
+  border-radius: var(--radius-sm, 8px);
+  margin-bottom: 8px;
+}
+.ch-modal-footer {
+  padding: 10px 16px; border-top: 1px solid #1F1F1F;
+  background: #0A0A0A; display: flex; justify-content: flex-end;
+  flex-shrink: 0;
+}
+.ch-modal-cancel {
+  padding: 7px 16px; border-radius: 8px;
+  font-family: 'Inter', sans-serif; font-size: 0.8125rem; font-weight: 600;
+  border: 1px solid #2A2A2A; background: #1A1A1A; color: #9CA3AF; cursor: pointer; transition: all 0.15s;
+}
+.ch-modal-cancel:hover { background: #222; color: #FFFFFF; border-color: #374151; }
+
+.ch-call-tooltip-fixed {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: #1A1A1A;
+  border-radius: 10px;
+  padding: 10px 14px;
+  min-width: 200px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+}
+.ch-call-tooltip-fixed .ch-call-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 2px 0;
+}
+.ch-call-tooltip-fixed .ch-call-tooltip-reason {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.5;
+}
+.ch-call-tooltip-fixed .cct-key {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.5);
+  white-space: nowrap;
+}
+.ch-call-tooltip-fixed .cct-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: #FFFFFF;
+  white-space: nowrap;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
 .ch-persona-tooltip-fixed {
   position: fixed;
   z-index: 9999;

@@ -3,16 +3,21 @@
  *
  * Communicates via JSON-RPC 2.0 over stdin/stdout (newline-delimited JSON).
  * Handles initialization handshake, tool discovery, and tool execution.
+ *
+ * Some MCP servers require interactive authentication (e.g. OAuth/MSAL).
+ * The server process opens the user's default browser itself when needed —
+ * no interception or redirection is done here.
  */
 const { spawn } = require('child_process')
+const { EventEmitter } = require('events')
 const { logger } = require('../../logger')
 
-const INITIALIZE_TIMEOUT = 30000  // 30s — npx may need to download
-const CALL_TIMEOUT = 30000        // 30s for tool calls
-const KILL_TIMEOUT = 5000         // 5s before SIGKILL
+const CALL_TIMEOUT = 30000  // 30s for tool calls
+const KILL_TIMEOUT = 5000   // 5s before SIGKILL
 
-class McpClient {
+class McpClient extends EventEmitter {
   constructor({ name, command, args = [], env = {} }) {
+    super()
     this.name = name
     this.command = command
     this.args = args
@@ -29,6 +34,9 @@ class McpClient {
 
   /**
    * Start the subprocess and perform MCP initialization handshake.
+   *
+   * The initialize request has NO timeout — some servers require interactive
+   * authentication before they respond, and we must wait indefinitely.
    */
   async start() {
     if (this.started) return
@@ -58,12 +66,12 @@ class McpClient {
       this._rejectAll(new Error(`MCP server "${this.name}" exited (code=${code}, signal=${signal})`))
     })
 
-    // 1. Send initialize request
+    // 1. Send initialize — no timeout so auth flows can complete
     const initResult = await this._sendRequest('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: {},
       clientInfo: { name: 'SparkAI', version: '1.0.0' },
-    }, INITIALIZE_TIMEOUT)
+    }, 0)
 
     logger.info(`[MCP:${this.name}] Initialized:`, {
       serverName: initResult?.serverInfo?.name,
@@ -134,6 +142,10 @@ class McpClient {
 
   // ── Private methods ────────────────────────────────────────────────────────
 
+  /**
+   * Send a JSON-RPC request and return a Promise for the result.
+   * Pass timeout=0 to wait indefinitely (used for initialize).
+   */
   _sendRequest(method, params, timeout = CALL_TIMEOUT) {
     return new Promise((resolve, reject) => {
       if (!this.process || !this.process.stdin.writable) {
@@ -143,17 +155,20 @@ class McpClient {
       const id = this._nextId++
       const msg = JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n'
 
-      const timer = setTimeout(() => {
-        this._pending.delete(id)
-        reject(new Error(`MCP request "${method}" timed out after ${timeout}ms`))
-      }, timeout)
+      let timer = null
+      if (timeout > 0) {
+        timer = setTimeout(() => {
+          this._pending.delete(id)
+          reject(new Error(`MCP request "${method}" timed out after ${timeout}ms`))
+        }, timeout)
+      }
 
       this._pending.set(id, { resolve, reject, timer })
 
       try {
         this.process.stdin.write(msg)
       } catch (err) {
-        clearTimeout(timer)
+        if (timer) clearTimeout(timer)
         this._pending.delete(id)
         reject(err)
       }
@@ -194,7 +209,7 @@ class McpClient {
       const pending = this._pending.get(msg.id)
       if (pending) {
         this._pending.delete(msg.id)
-        clearTimeout(pending.timer)
+        if (pending.timer) clearTimeout(pending.timer)
 
         if (msg.error) {
           pending.reject(new Error(`MCP error ${msg.error.code}: ${msg.error.message}`))
@@ -213,7 +228,7 @@ class McpClient {
 
   _rejectAll(err) {
     for (const [id, pending] of this._pending) {
-      clearTimeout(pending.timer)
+      if (pending.timer) clearTimeout(pending.timer)
       pending.reject(err)
     }
     this._pending.clear()

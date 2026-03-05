@@ -7,7 +7,7 @@
         <div>
           <h1 class="catalog-title">Tools</h1>
           <p class="catalog-subtitle">
-            Define HTTP endpoints, code references, and prompt templates the AI agent can use as tools.
+            Define HTTP endpoints, code snippets, prompt templates, and SMTP email tools the AI agent can use.
           </p>
         </div>
         <div class="flex items-center gap-2">
@@ -78,6 +78,15 @@
           Prompt
           <span class="catalog-filter-tab-count">{{ promptCount }}</span>
         </button>
+        <button
+          class="catalog-filter-tab"
+          :class="{ active: typeFilter === 'smtp' }"
+          @click="typeFilter = 'smtp'"
+        >
+          <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          SMTP
+          <span class="catalog-filter-tab-count">{{ smtpCount }}</span>
+        </button>
       </div>
     </div>
 
@@ -147,6 +156,10 @@
                   <svg v-else-if="tool.type === 'code'" style="width:18px;height:18px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
                   </svg>
+                  <!-- SMTP icon: envelope -->
+                  <svg v-else-if="tool.type === 'smtp'" style="width:18px;height:18px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                  </svg>
                   <!-- Prompt icon: chat bubble -->
                   <svg v-else style="width:18px;height:18px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -185,6 +198,11 @@
                       {{ (tool.code || '').split('\n').length }} lines
                     </span>
                   </template>
+                  <!-- SMTP footer -->
+                  <template v-else-if="tool.type === 'smtp'">
+                    <span class="tools-card-method">SMTP</span>
+                    <span class="tools-card-endpoint">via Config → Email</span>
+                  </template>
                   <!-- Prompt footer -->
                   <template v-else>
                     <span class="tools-card-method">
@@ -217,6 +235,9 @@
                 <svg v-else-if="form.type === 'code'" style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
                 </svg>
+                <svg v-else-if="form.type === 'smtp'" style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                </svg>
                 <svg v-else style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
@@ -248,10 +269,12 @@
                 <option value="http">HTTP Endpoint</option>
                 <option value="code">Code Snippet</option>
                 <option value="prompt">Prompt Template</option>
+                <option value="smtp">SMTP Email</option>
               </select>
               <p class="form-hint">
                 <template v-if="form.type === 'http'">API endpoint the agent can call directly</template>
                 <template v-else-if="form.type === 'code'">Code shown to the agent as a reference — agent uses execute_shell to run</template>
+                <template v-else-if="form.type === 'smtp'">Email tool using SMTP credentials from Config → Email</template>
                 <template v-else>Text template returned to the agent on demand when it calls this tool</template>
               </p>
             </div>
@@ -336,6 +359,20 @@
                   placeholder="// Paste your reference code here..."
                 ></textarea>
                 <p class="form-hint">This code is shown to the agent as a reference. The agent will use execute_shell to run similar code.</p>
+              </div>
+            </template>
+
+            <!-- ── SMTP fields ──────────────────────────────────── -->
+            <template v-else-if="form.type === 'smtp'">
+              <div class="form-group">
+                <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;">
+                  <svg style="width:16px;height:16px;color:#0284C7;flex-shrink:0;margin-top:1px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <div style="font-size:var(--fs-secondary);color:#0369A1;line-height:1.5;">
+                    SMTP credentials (host, port, username, password) are read from
+                    <strong>Config → Email</strong>. This tool will send email using those settings.
+                    <br/>The agent can specify: <code>to</code>, <code>subject</code>, <code>body</code>, <code>html</code>, <code>cc</code>, <code>bcc</code>, <code>from_name</code>, <code>attachments</code>.
+                  </div>
+                </div>
               </div>
             </template>
 
@@ -426,6 +463,7 @@ const typeLabelMap = {
   http: 'HTTP',
   code: 'Code',
   prompt: 'Prompt',
+  smtp: 'SMTP',
 }
 
 async function refreshTools() {
@@ -472,6 +510,7 @@ function emptyForm() {
 const httpCount = computed(() => toolsStore.tools.filter(t => (t.type || 'http') === 'http').length)
 const codeCount = computed(() => toolsStore.tools.filter(t => t.type === 'code').length)
 const promptCount = computed(() => toolsStore.tools.filter(t => t.type === 'prompt').length)
+const smtpCount = computed(() => toolsStore.tools.filter(t => t.type === 'smtp').length)
 
 const filteredTools = computed(() => {
   let list = toolsStore.tools
@@ -496,7 +535,7 @@ const filteredTools = computed(() => {
 })
 
 const modalTitle = computed(() => {
-  const typeLabels = { http: 'HTTP Tool', code: 'Code Snippet', prompt: 'Prompt Tool' }
+  const typeLabels = { http: 'HTTP Tool', code: 'Code Snippet', prompt: 'Prompt Tool', smtp: 'SMTP Email Tool' }
   const label = typeLabels[form.value.type] || 'Tool'
   return editingTool.value ? `Edit ${label}` : `Add ${label}`
 })
@@ -506,6 +545,7 @@ const canSave = computed(() => {
   if (form.value.type === 'http') return !!form.value.endpoint?.trim()
   if (form.value.type === 'code') return !!form.value.code?.trim()
   if (form.value.type === 'prompt') return !!form.value.promptText?.trim()
+  if (form.value.type === 'smtp') return true  // only name required
   return false
 })
 
@@ -1078,4 +1118,5 @@ select.form-input { appearance: auto; cursor: pointer; }
   .tools-backdrop, .tools-modal { animation: none; }
   .default-toggle-track, .default-toggle-thumb { transition: none; }
 }
+
 </style>

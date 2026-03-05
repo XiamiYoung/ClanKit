@@ -377,13 +377,17 @@ const filteredServers = computed(() => {
   })
 })
 
+function resetTestState() {
+  testStatus.value = ''
+  testTools.value = []
+  testError.value = ''
+}
+
 function openAdd() {
   editingServer.value = null
   form.value = emptyForm()
   saveError.value = ''
-  testStatus.value = ''
-  testTools.value = []
-  testError.value = ''
+  resetTestState()
   showModal.value = true
 }
 
@@ -398,15 +402,14 @@ function openEdit(server) {
     argsText: (server.args || []).join('\n'),
     envVars: Object.entries(server.env || {}).map(([key, value]) => ({ key, value })),
   }
-  testStatus.value = ''
-  testTools.value = []
-  testError.value = ''
+  resetTestState()
   showModal.value = true
 }
 
 function closeModal() {
   showModal.value = false
   editingServer.value = null
+  resetTestState()
 }
 
 // Lock body scroll & handle ESC when modal is open
@@ -466,9 +469,8 @@ async function saveForm() {
 }
 
 async function runTestConnection() {
+  resetTestState()
   testStatus.value = 'testing'
-  testTools.value = []
-  testError.value = ''
 
   const args = form.value.argsText
     .split('\n')
@@ -884,6 +886,7 @@ function cardGradient() {
 
 /* ── Test Connection ───────────────────────────────────────────────────────── */
 .test-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid #1F1F1F; }
+
 .test-result { margin-top: 12px; padding: 12px 14px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); }
 .test-result.success { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
 .test-result.error { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
@@ -951,3 +954,4 @@ function cardGradient() {
   .default-toggle-track, .default-toggle-thumb { transition: none; }
 }
 </style>
+

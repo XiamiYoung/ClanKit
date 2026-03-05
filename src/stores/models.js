@@ -15,14 +15,19 @@ export const useModelsStore = defineStore('models', () => {
   const openaiLoading = ref(false)
   const openaiCached = ref(false)
 
+  // ── DeepSeek ────────────────────────────────────────────────────────────
+  const deepseekModels = ref([])
+  const deepseekLoading = ref(false)
+  const deepseekCached = ref(false)
+
   // ── Anthropic (derived from config) ─────────────────────────────────────
   const anthropicModels = computed(() => {
     const a = configStore.config.anthropic || {}
     return [
-      { id: a.sonnetModel || 'claude-sonnet-4-5', name: 'Sonnet', label: 'Sonnet' },
-      { id: a.opusModel || 'claude-opus-4-6', name: 'Opus', label: 'Opus' },
-      { id: a.haikuModel || 'claude-haiku-4-5', name: 'Haiku', label: 'Haiku' },
-    ]
+      a.sonnetModel ? { id: a.sonnetModel } : null,
+      a.opusModel   ? { id: a.opusModel   } : null,
+      a.haikuModel  ? { id: a.haikuModel  } : null,
+    ].filter(Boolean)
   })
 
   // ── Fetch functions ─────────────────────────────────────────────────────
@@ -69,34 +74,33 @@ export const useModelsStore = defineStore('models', () => {
     }
   }
 
+  async function fetchDeepSeekModels() {
+    const ds = configStore.config.deepseek || {}
+    if (!ds.apiKey) return
+    const baseURL = (ds.baseURL || 'https://api.deepseek.com').replace(/\/+$/, '')
+    deepseekLoading.value = true
+    try {
+      const resp = await fetch(`${baseURL}/v1/models`, {
+        headers: { 'Authorization': `Bearer ${ds.apiKey}`, 'Accept': 'application/json' }
+      })
+      if (!resp.ok) return
+      const data = await resp.json()
+      deepseekModels.value = (data.data || []).map(m => ({ id: m.id, name: m.id }))
+      deepseekCached.value = true
+    } catch (err) {
+      console.error('Failed to fetch DeepSeek models:', err)
+    } finally {
+      deepseekLoading.value = false
+    }
+  }
+
   // ── Helpers ─────────────────────────────────────────────────────────────
 
   function getModelsForProvider(provider) {
     if (provider === 'openrouter') return openrouterModels.value
     if (provider === 'openai') return openaiModels.value
+    if (provider === 'deepseek') return deepseekModels.value
     return anthropicModels.value
-  }
-
-  function getDefaultModelLabel(provider) {
-    const c = configStore.config
-    if (provider === 'openai') {
-      const oa = c.openai || {}
-      if (oa.openaiDefaultModel) return oa.openaiDefaultModel
-      if (oa.model) return oa.model
-      if (openaiModels.value.length) return openaiModels.value[0].id
-      return 'Not set'
-    }
-    if (provider === 'openrouter') {
-      const or = c.openrouter || {}
-      if (or.defaultModel) return or.defaultModel
-      if (openrouterModels.value.length) return openrouterModels.value[0].id
-      return 'Not set'
-    }
-    // Anthropic — use activeModel resolution
-    const a = c.anthropic || {}
-    if (a.activeModel === 'opus') return a.opusModel || 'claude-opus-4-6'
-    if (a.activeModel === 'haiku') return a.haikuModel || 'claude-haiku-4-5'
-    return a.sonnetModel || 'claude-sonnet-4-5'
   }
 
   return {
@@ -106,10 +110,13 @@ export const useModelsStore = defineStore('models', () => {
     openaiModels,
     openaiLoading,
     openaiCached,
+    deepseekModels,
+    deepseekLoading,
+    deepseekCached,
     anthropicModels,
     fetchOpenRouterModels,
     fetchOpenAIModels,
+    fetchDeepSeekModels,
     getModelsForProvider,
-    getDefaultModelLabel,
   }
 })

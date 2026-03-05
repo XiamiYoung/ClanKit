@@ -39,11 +39,19 @@
           :key="msg.id"
           :class="[
             'flex gap-3 cw-animate-fade-in',
-            msg.role === 'user' ? 'justify-end' : 'justify-start'
+            msg.role === 'system' ? 'justify-center' : msg.role === 'user' ? 'justify-end' : 'justify-start'
           ]"
         >
+          <!-- System info banner (stop/resume notifications) -->
+          <div v-if="msg.role === 'system'" class="cw-system-banner">
+            <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span class="prose-sparkai" style="display:inline;"><MessageRenderer :message="msg" /></span>
+          </div>
+
           <!-- Assistant avatar + name chip -->
-          <div v-if="msg.role === 'assistant'" class="cw-msg-avatar-col"
+          <div v-else-if="msg.role === 'assistant'" class="cw-msg-avatar-col"
             @mouseenter="showAvatarTooltip($event, msg)"
             @mouseleave="hideAvatarTooltip"
           >
@@ -58,8 +66,9 @@
             <span class="cw-msg-name-chip cw-msg-name-chip--assistant">{{ getMsgAssistantName(msg) }}</span>
           </div>
 
-          <!-- Message bubble -->
+          <!-- Message bubble (not rendered for system banners) -->
           <div
+            v-if="msg.role !== 'system'"
             :class="[
               'relative group/bubble max-w-[75%]',
               msg.role === 'assistant' ? 'min-w-[50%]' : ''
@@ -676,6 +685,20 @@ defineExpose({ scrollToBottom })
 .cw-msg-name-chip--assistant {
   background: #4B5563;
   color: #fff;
+}
+.cw-system-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: rgba(107, 114, 128, 0.08);
+  border: 1px solid rgba(107, 114, 128, 0.18);
+  border-radius: 20px;
+  color: #6B7280;
+  font-size: var(--fs-caption);
+  font-family: 'Inter', sans-serif;
+  max-width: 70%;
+  text-align: center;
 }
 
 /* ── Hover action buttons ── */

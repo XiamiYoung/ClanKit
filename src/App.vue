@@ -17,7 +17,12 @@
           </svg>
         </button>
       </div>
-      <RouterView class="flex-1 min-h-0" />
+      <RouterView v-slot="{ Component }">
+        <!-- KeepAlive on ChatsView keeps the mic/VAD/TTS alive when user navigates away during a call -->
+        <KeepAlive :include="['ChatsView']">
+          <component :is="Component" class="flex-1 min-h-0" />
+        </KeepAlive>
+      </RouterView>
     </main>
 
     <!-- Global voice call components -->

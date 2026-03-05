@@ -137,6 +137,27 @@ class AgentLoop {
     this.stopped = true
   }
 
+  /**
+   * Live-update the permission gate's chat mode while the loop is running.
+   * Called when the user changes permission settings in the chat settings panel.
+   * If mode becomes 'all_permissions', any currently pending permission prompts
+   * are auto-resolved so the agent continues immediately.
+   */
+  updatePermissionMode(chatMode, chatAllowList) {
+    this.permissionGate.chatMode = chatMode
+    if (chatAllowList) this.permissionGate.chatAllowList = chatAllowList
+    logger.agent('PermissionGate: mode updated live', { chatMode, chatAllowListLen: chatAllowList?.length })
+
+    // Auto-resolve any pending permission requests when switching to all_permissions
+    if (chatMode === 'all_permissions' && this._pendingPermissions.size > 0) {
+      for (const [blockId, resolve] of this._pendingPermissions) {
+        logger.agent('PermissionGate: auto-resolving pending block due to mode change', { blockId })
+        resolve('allow_chat')
+      }
+      this._pendingPermissions.clear()
+    }
+  }
+
   requestCompaction() {
     this._compactionRequested = true
   }
@@ -396,11 +417,11 @@ Then write the file to the chosen location. For non-.md files, continue using th
     const mcpServers = this.mcpServers || []
     if (mcpServers.length > 0) {
       const mcpEntries = mcpServers.map(s =>
-        `- ${s.name}: ${s.description || 'No description'} (${s.command} ${(s.args || []).join(' ')})`
+        `- ${s.name}: ${s.description || 'No description'}`
       )
-      system += `\n\nMCP SERVERS (external integrations — tools discovered dynamically):
+      system += `\n\nMCP SERVERS (external integrations — available on demand):
 ${mcpEntries.join('\n')}
-Use MCP tools when the user's request involves external services or integrations.`
+When the user's request involves one of these integrations, call search_mcp_tools with the server name first to load its tools, then use them.`
     }
 
     // Append user-defined tools info if any are enabled
@@ -408,6 +429,7 @@ Use MCP tools when the user's request involves external services or integrations
     const httpToolsList = allUserTools.filter(t => (t.type || 'http') === 'http')
     const codeToolsList = allUserTools.filter(t => t.type === 'code')
     const promptToolsList = allUserTools.filter(t => t.type === 'prompt')
+    const smtpToolsList = allUserTools.filter(t => t.type === 'smtp')
 
     if (httpToolsList.length > 0) {
       const toolEntries = httpToolsList.map(t =>
@@ -434,6 +456,15 @@ Call these tools to retrieve reference code. Use execute_shell to run similar co
       system += `\n\nPROMPT TOOLS (user-defined prompt templates):
 ${toolEntries.join('\n')}
 Call these tools to retrieve prompt templates or reusable instructions on demand.`
+    }
+
+    if (smtpToolsList.length > 0) {
+      const toolEntries = smtpToolsList.map(t =>
+        `- smtp_${t.id}: ${t.description || t.name}`
+      )
+      system += `\n\nSMTP EMAIL TOOLS (send emails via configured SMTP server):
+${toolEntries.join('\n')}
+Always confirm recipient, subject, and content before sending unless the user explicitly said to send it.`
     }
 
     // -- Coding Mode: CLAUDE.md project context --
@@ -727,30 +758,56 @@ RULES:
       }
     })
 
-    // Inject MCP tools from configured servers (dynamic discovery via subprocess)
-    const mcpToolMap = new Map() // toolName → { serverId, serverName, tool }
-    if (this.mcpServers.length > 0) {
-      try {
-        const discoveredTools = await mcpManager.getToolsForServers(this.mcpServers)
-        for (const { serverId, serverName, tool } of discoveredTools) {
-          const fullName = `mcp_${serverId.slice(0, 8)}_${tool.name}`
-          mcpToolMap.set(fullName, { serverId, serverName, tool })
+    // MCP tool map — populated lazily when the LLM calls search_mcp_tools
+    const mcpToolMap = new Map() // toolName → { serverId, serverName, tool, serverConfig }
+    const mcpServerConfigById = new Map((this.mcpServers || []).map(s => [s.id, s]))
+
+    // Helper: load schemas for the given server configs and register them into mcpToolMap
+    const _loadMcpTools = async (serverConfigs) => {
+      const discovered = await mcpManager.getToolSchemas(serverConfigs)
+      const newTools = []
+      for (const { serverId, serverName, tool } of discovered) {
+        const fullName = `mcp_${serverId.slice(0, 8)}_${tool.name}`
+        if (!mcpToolMap.has(fullName)) {
+          mcpToolMap.set(fullName, { serverId, serverName, tool, serverConfig: mcpServerConfigById.get(serverId) })
           allToolsAnthropic.push({
             name: fullName,
             description: `[MCP: ${serverName}] ${tool.description || tool.name}`,
             input_schema: tool.inputSchema || { type: 'object', properties: {} }
           })
+          newTools.push({ name: fullName, description: tool.description || tool.name })
         }
-        logger.agent('MCP tools discovered', { count: discoveredTools.length })
-      } catch (err) {
-        logger.error('MCP tool discovery failed', err.message)
       }
+      return newTools
     }
 
-    // Inject user-defined tools from catalog (HTTP, Code, Prompt)
+    // Expose a single search_mcp_tools meta-tool instead of injecting all schemas upfront.
+    // The LLM calls this when it decides it needs an MCP integration, then uses the
+    // returned tools in the next iteration — zero processes started until actually needed.
+    if (this.mcpServers && this.mcpServers.length > 0) {
+      const serverList = this.mcpServers.map(s => `"${s.name}"`).join(', ')
+      allToolsAnthropic.push({
+        name: 'search_mcp_tools',
+        description: `Load tools from one or more MCP servers. Call this when the user's request requires an external integration. Available servers: ${serverList}. After calling, the server's tools will be ready to use immediately.`,
+        input_schema: {
+          type: 'object',
+          properties: {
+            server_names: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Exact names of MCP servers to load tools from (e.g. ["n8n-mcp-manager"])'
+            }
+          },
+          required: ['server_names']
+        }
+      })
+    }
+
+    // Inject user-defined tools from catalog (HTTP, Code, Prompt, SMTP)
     const httpToolMap = new Map()   // toolName → tool config
     const codeToolMap = new Map()   // toolName → tool config
     const promptToolMap = new Map() // toolName → tool config
+    const smtpToolMap = new Map()   // toolName → tool config
 
     if (this.httpTools.length > 0) {
       for (const tool of this.httpTools) {
@@ -780,6 +837,36 @@ RULES:
               properties: {}
             }
           })
+        } else if (toolType === 'smtp') {
+          const fullName = `smtp_${tool.id}`
+          smtpToolMap.set(fullName, tool)
+          allToolsAnthropic.push({
+            name: fullName,
+            description: `[Email] ${tool.description || tool.name}`,
+            input_schema: {
+              type: 'object',
+              properties: {
+                to:          { type: 'string', description: 'Recipient email(s), comma-separated' },
+                subject:     { type: 'string', description: 'Email subject line' },
+                body:        { type: 'string', description: 'Plain-text body (required even when html is set)' },
+                html:        { type: 'string', description: 'Optional HTML body' },
+                cc:          { type: 'string', description: 'CC recipient(s), comma-separated' },
+                bcc:         { type: 'string', description: 'BCC recipient(s), comma-separated' },
+                from_name:   { type: 'string', description: 'Sender display name (defaults to SMTP username)' },
+                attachments: {
+                  type: 'array',
+                  description: 'Files to attach. Each item is a path string or {path, filename}.',
+                  items: {
+                    oneOf: [
+                      { type: 'string' },
+                      { type: 'object', properties: { path: { type: 'string' }, filename: { type: 'string' } }, required: ['path'] }
+                    ]
+                  }
+                }
+              },
+              required: ['to', 'subject', 'body']
+            }
+          })
         } else {
           // HTTP (default)
           const fullName = `http_${tool.id}`
@@ -796,21 +883,12 @@ RULES:
           })
         }
       }
-      const counts = { http: httpToolMap.size, code: codeToolMap.size, prompt: promptToolMap.size }
+      const counts = { http: httpToolMap.size, code: codeToolMap.size, prompt: promptToolMap.size, smtp: smtpToolMap.size }
       logger.agent('User tools injected', counts)
     }
 
-    // Convert tools to the correct format for the provider
-    const allTools = this.isOpenAI
-      ? allToolsAnthropic.map(t => ({
-          type: 'function',
-          function: {
-            name: t.name,
-            description: t.description || '',
-            parameters: t.input_schema || { type: 'object', properties: {} }
-          }
-        }))
-      : allToolsAnthropic
+    // NOTE: allTools is computed fresh each iteration inside the while loop below
+    // so that MCP tools added dynamically by search_mcp_tools are immediately available.
 
     const client = this.anthropicClient.getClient()
     const model  = this.anthropicClient.resolveModel()
@@ -839,6 +917,18 @@ RULES:
         iteration++
 
         // ── Build request params ──
+        // allTools is rebuilt each iteration so dynamically-added MCP tools are included
+        const allTools = this.isOpenAI
+          ? allToolsAnthropic.map(t => ({
+              type: 'function',
+              function: {
+                name: t.name,
+                description: t.description || '',
+                parameters: t.input_schema || { type: 'object', properties: {} }
+              }
+            }))
+          : allToolsAnthropic
+
         const createParams = {
           model,
           max_tokens: configuredMaxTokens,
@@ -940,15 +1030,20 @@ RULES:
           msgs: createParams.messages.length,
           tools: allTools.length,
           thinking: isOpus46 ? 'adaptive' : (supportsThinking ? 'enabled' : 'none'),
-          isOpenAI: this.isOpenAI
+          provider: this.config._directAuth ? 'deepseek' : (this.isOpenAI ? 'openai-compat' : 'anthropic')
         })
 
         if (this.isOpenAI) {
           // ── OpenAI-format streaming ──
           const openaiMessages = this._toOpenAIMessages(systemPrompt, conversationMessages)
+          // DeepSeek has a per-model cap (default 8192); use configured limit or fall back to 8192
+          const deepseekMax = this.config._directAuth
+            ? Math.min(configuredMaxTokens, Number(this.config.deepseek?.maxTokens) || 8192)
+            : configuredMaxTokens
+          const effectiveMaxTokens = deepseekMax
           const openaiParams = {
             model,
-            max_tokens: configuredMaxTokens,
+            max_tokens: effectiveMaxTokens,
             messages: openaiMessages,
             stream: true,
           }
@@ -958,7 +1053,7 @@ RULES:
           try {
             stream = await client.chat.completions.create(openaiParams)
           } catch (streamErr) {
-            logger.error('OpenAI stream open FAILED', streamErr.message)
+            logger.error(`${this.config._directAuth ? 'DeepSeek' : 'OpenAI'} stream open FAILED`, streamErr.message)
             throw streamErr
           }
 
@@ -1070,17 +1165,32 @@ RULES:
                 })
               } else if (toolName === 'background_task') {
                 result = await this.taskManager.execute(toolInput)
+              } else if (toolName === 'search_mcp_tools') {
+                const requestedNames = toolInput.server_names || []
+                const matched = (this.mcpServers || []).filter(s => requestedNames.includes(s.name))
+                if (matched.length === 0) {
+                  const available = (this.mcpServers || []).map(s => s.name).join(', ')
+                  result = { success: false, error: `No servers matched: ${requestedNames.join(', ')}. Available: ${available}` }
+                } else {
+                  const newTools = await _loadMcpTools(matched)
+                  logger.agent('search_mcp_tools (openai)', { requested: requestedNames, loaded: newTools.length })
+                  result = newTools.length > 0
+                    ? { success: true, loaded: newTools.length, tools: newTools }
+                    : { success: false, error: `Servers found but no tools discovered: ${requestedNames.join(', ')}` }
+                }
               } else if (mcpToolMap.has(toolName)) {
                 // Permission check for MCP tools
                 const permCheckMcp = await this._checkPermission(toolName, toolInput, onChunk)
                 if (permCheckMcp.decision === 'block' || permCheckMcp.decision === 'reject') {
                   result = permCheckMcp.result
                 } else {
-                  const { serverId, tool } = mcpToolMap.get(toolName)
-                  result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput)
+                  const { serverId, tool, serverConfig } = mcpToolMap.get(toolName)
+                  result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput, serverConfig)
                 }
               } else if (httpToolMap.has(toolName)) {
                 result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
+              } else if (smtpToolMap.has(toolName)) {
+                result = await this._executeSmtpTool(toolInput)
               } else if (codeToolMap.has(toolName)) {
                 const codeTool = codeToolMap.get(toolName)
                 result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
@@ -1297,17 +1407,32 @@ RULES:
                 })
               } else if (toolName === 'background_task') {
                 result = await this.taskManager.execute(toolInput)
+              } else if (toolName === 'search_mcp_tools') {
+                const requestedNames = toolInput.server_names || []
+                const matched = (this.mcpServers || []).filter(s => requestedNames.includes(s.name))
+                if (matched.length === 0) {
+                  const available = (this.mcpServers || []).map(s => s.name).join(', ')
+                  result = { success: false, error: `No servers matched: ${requestedNames.join(', ')}. Available: ${available}` }
+                } else {
+                  const newTools = await _loadMcpTools(matched)
+                  logger.agent('search_mcp_tools (anthropic)', { requested: requestedNames, loaded: newTools.length })
+                  result = newTools.length > 0
+                    ? { success: true, loaded: newTools.length, tools: newTools }
+                    : { success: false, error: `Servers found but no tools discovered: ${requestedNames.join(', ')}` }
+                }
               } else if (mcpToolMap.has(toolName)) {
                 // Permission check for MCP tools
                 const permCheck = await this._checkPermission(toolName, toolInput, onChunk)
                 if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
                   result = permCheck.result
                 } else {
-                  const { serverId, tool } = mcpToolMap.get(toolName)
-                  result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput)
+                  const { serverId, tool, serverConfig } = mcpToolMap.get(toolName)
+                  result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput, serverConfig)
                 }
               } else if (httpToolMap.has(toolName)) {
                 result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
+              } else if (smtpToolMap.has(toolName)) {
+                result = await this._executeSmtpTool(toolInput)
               } else if (codeToolMap.has(toolName)) {
                 const codeTool = codeToolMap.get(toolName)
                 result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
@@ -1389,12 +1514,13 @@ RULES:
    * Transforms MCP content array to agent-friendly result.
    * Extracts images/binary data so they never enter conversation context.
    */
-  async _executeMcpToolViaManager(serverId, toolName, input) {
+  async _executeMcpToolViaManager(serverId, toolName, input, serverConfig = null) {
     // Max size for text going into conversation context (characters)
     const MAX_TEXT_FOR_CONTEXT = 50000
 
     try {
-      const result = await mcpManager.callTool(serverId, toolName, input)
+      // Pass serverConfig so McpManager can lazy-start the server if not yet running
+      const result = await mcpManager.callTool(serverId, toolName, input, serverConfig)
 
       // Log raw content types for debugging
       const content = result?.content || []
@@ -1591,6 +1717,62 @@ RULES:
       }
     } catch (err) {
       logger.error('HTTP tool execution failed', { name: tool.name, error: err.message })
+      return { success: false, error: err.message }
+    }
+  }
+
+  /** Send email via SMTP using the app's configured SMTP credentials */
+  async _executeSmtpTool({ to, subject, body, html, cc, bcc, from_name, attachments }) {
+    const smtp = this.config.smtpConfig || {}
+    const { host, port, user, pass } = smtp
+
+    if (!host || !user || !pass) {
+      return { error: 'SMTP not configured. Open Config → Email and fill in host, username, and password.' }
+    }
+
+    try {
+      const nodemailer = require('nodemailer')
+      const fs = require('fs')
+      const path = require('path')
+
+      const transporter = nodemailer.createTransport({
+        host,
+        port: port || 587,
+        secure: (port === 465),
+        requireTLS: (port !== 465),
+        auth: { user, pass },
+        tls: { rejectUnauthorized: false }
+      })
+
+      const fromAddress = from_name
+        ? `"${String(from_name).replace(/"/g, '')}" <${user}>`
+        : user
+
+      // Resolve attachments
+      const resolvedAttachments = []
+      if (Array.isArray(attachments) && attachments.length > 0) {
+        for (const att of attachments) {
+          const filePath = typeof att === 'string' ? att : att.path
+          const filename = (typeof att === 'object' && att.filename) ? att.filename : path.basename(filePath)
+          if (!filePath) continue
+          if (!fs.existsSync(filePath)) return { error: `Attachment not found: ${filePath}` }
+          resolvedAttachments.push({ path: filePath, filename })
+        }
+      }
+
+      const mailOptions = {
+        from: fromAddress, to, subject, text: body,
+        ...(html ? { html } : {}),
+        ...(cc ? { cc } : {}),
+        ...(bcc ? { bcc } : {}),
+        ...(resolvedAttachments.length > 0 ? { attachments: resolvedAttachments } : {}),
+      }
+
+      logger.agent('SMTP tool exec', { to, subject })
+      const info = await transporter.sendMail(mailOptions)
+      return { success: true, messageId: info.messageId, accepted: info.accepted, rejected: info.rejected }
+    } catch (err) {
+      logger.error('SMTP tool execution failed', err.message)
       return { success: false, error: err.message }
     }
   }

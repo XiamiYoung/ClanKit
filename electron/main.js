@@ -418,18 +418,31 @@ const DEFAULT_CONFIG = {
     sonnetModel:  'claude-sonnet-4-5',
     opusModel:    'claude-opus-4-6',
     haikuModel:   'claude-haiku-3-5',
-    activeModel:  'sonnet',
+    utilityModel: '',
+    isActive:     false,
+    testedAt:     null,
   },
   openrouter: {
     apiKey:  '',
     baseURL: '',
-    defaultModel: '',
+    utilityModel: '',
+    isActive:     false,
+    testedAt:     null,
   },
   openai: {
     apiKey:       '',
     baseURL:      '',
-    model:        '',
-    openaiDefaultModel: '',
+    utilityModel: '',
+    isActive:     false,
+    testedAt:     null,
+  },
+  deepseek: {
+    apiKey:       '',
+    baseURL:      '',
+    utilityModel: '',
+    isActive:     false,
+    testedAt:     null,
+    maxTokens:    8192,
   },
   defaultProvider:   'anthropic',
   systemPrompt:      '',
@@ -716,6 +729,7 @@ ipcMain.handle('store:get-config', () => {
     anthropic:  { ...DEFAULT_CONFIG.anthropic,  ...saved.anthropic },
     openrouter: { ...DEFAULT_CONFIG.openrouter, ...saved.openrouter },
     openai:     { ...DEFAULT_CONFIG.openai,     ...saved.openai },
+    deepseek:   { ...DEFAULT_CONFIG.deepseek,   ...saved.deepseek },
     sandboxConfig: {
       ...DEFAULT_CONFIG.sandboxConfig,
       ...savedSandbox,
@@ -752,9 +766,28 @@ ipcMain.handle('store:save-config', (_, config) => {
     anthropic:  { ...(existing.anthropic || {}),  ...(config.anthropic || {}) },
     openrouter: { ...(existing.openrouter || {}), ...(config.openrouter || {}) },
     openai:     { ...(existing.openai || {}),     ...(config.openai || {}) },
+    smtp:       { ...(existing.smtp || {}),       ...(config.smtp || {}) },
   }
   writeJSON(CONFIG_FILE, merged)
   return true
+})
+
+ipcMain.handle('store:test-smtp', async (_, smtpConfig) => {
+  try {
+    const nodemailer = require('nodemailer')
+    const transporter = nodemailer.createTransport({
+      host: smtpConfig.host,
+      port: smtpConfig.port || 587,
+      secure: false,
+      requireTLS: true,
+      auth: { user: smtpConfig.user, pass: smtpConfig.pass },
+      tls: { rejectUnauthorized: false },
+    })
+    await transporter.verify()
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
 })
 
 ipcMain.handle('store:get-data-path', () => ({
@@ -1690,7 +1723,7 @@ ipcMain.handle('mcp:get-status', () => {
   return mcpManager.getRunningStatus()
 })
 
-ipcMain.handle('mcp:test-connection', async (_, config) => {
+ipcMain.handle('mcp:test-connection', async (event, config) => {
   try {
     return await mcpManager.testConnection(config)
   } catch (err) {
@@ -2429,6 +2462,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       loopConfig.chatAllowList = chatAllowList || []
       // Per-chat value takes precedence; fall back to global config default
       loopConfig.maxOutputTokens = maxOutputTokens || groupCfg.maxOutputTokens || null
+      loopConfig.smtpConfig = groupCfg.smtp || null
       const loop = new AgentLoop(loopConfig)
       activeLoops.set(loopKey, loop)
 
@@ -2505,6 +2539,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.chatDangerOverrides = chatDangerOverrides || []
   // Per-chat value takes precedence; fall back to global config default
   loopConfig.maxOutputTokens = maxOutputTokens || fullCfg.maxOutputTokens || null
+  loopConfig.smtpConfig = fullCfg.smtp || null
   const loop = new AgentLoop(loopConfig)
   activeLoops.set(chatId, loop)
 
@@ -2630,6 +2665,20 @@ ipcMain.handle('agent:permission-response', (event, chatId, { blockId, decision,
   return { success: true }
 })
 
+ipcMain.handle('agent:update-permission-mode', (event, chatId, { chatMode, chatAllowList }) => {
+  // Update all active loops for this chat (exact + group persona loops)
+  let updated = false
+  for (const [key, loop] of activeLoops) {
+    if (key === chatId || key.startsWith(chatId + ':')) {
+      if (typeof loop.updatePermissionMode === 'function') {
+        loop.updatePermissionMode(chatMode, chatAllowList)
+        updated = true
+      }
+    }
+  }
+  return { success: updated }
+})
+
 ipcMain.handle('agent:compact', (event, chatId) => {
   const loop = chatId ? activeLoops.get(chatId) : null
   if (loop && typeof loop.requestCompaction === 'function') {
@@ -2709,11 +2758,14 @@ If none should respond, reply with [].`
     const userContent = `Message: "${message}"`
 
     const { AnthropicClient } = require('./agent/core/AnthropicClient')
-    // Always use haiku for this classification — fast and cheap
+    // Use the provider's configured utilityModel — no hardcoded model ID
     const classifyConfig = {
       ...config,
-      anthropic: { ...(config.anthropic || {}), activeModel: 'haiku' },
-      customModel: config.anthropic?.haikuModel || 'claude-haiku-4-5'
+      customModel: config.anthropic?.utilityModel || config.customModel || null,
+    }
+    if (!classifyConfig.customModel) {
+      logger.warn('agent:resolve-addressees: no utilityModel configured, treating all mentions as addressees')
+      return { addresseeIds: personas.map(p => p.id) }
     }
     const ac = new AnthropicClient(classifyConfig)
     const client = ac.getClient()
@@ -2740,6 +2792,60 @@ If none should respond, reply with [].`
     logger.error('agent:resolve-addressees error', err.message)
     // Fallback: treat all mentioned personas as addressees
     return { addresseeIds: personas.map(p => p.id) }
+  }
+})
+
+ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, utilityModel }) => {
+  try {
+    if (!apiKey || !baseURL || !utilityModel) {
+      return { success: false, error: 'Missing required fields (apiKey, baseURL, utilityModel)' }
+    }
+
+    const isOpenAI = provider === 'openai' || provider === 'deepseek'
+
+    if (isOpenAI) {
+      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const cfg = {
+        openaiApiKey: apiKey,
+        openaiBaseURL: baseURL.replace(/\/+$/, ''),
+        customModel: utilityModel,
+        _resolvedProvider: 'openai',
+        defaultProvider: 'openai',
+        ...(provider === 'deepseek' ? { _directAuth: true } : {}),
+      }
+      const client = new OpenAIClient(cfg)
+      const start = Date.now()
+      const resp = await client.getClient().chat.completions.create({
+        model: utilityModel,
+        max_tokens: 8,
+        messages: [{ role: 'user', content: 'hi' }],
+      })
+      const ms = Date.now() - start
+      const text = resp.choices?.[0]?.message?.content || ''
+      return { success: true, ms, preview: text.substring(0, 40) }
+    } else {
+      // Anthropic or OpenRouter (both use AnthropicClient)
+      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const cfg = {
+        apiKey,
+        baseURL: baseURL.replace(/\/+$/, ''),
+        customModel: utilityModel,
+      }
+      const ac = new AnthropicClient(cfg)
+      const client = ac.getClient()
+      const start = Date.now()
+      const resp = await client.messages.create({
+        model: utilityModel,
+        max_tokens: 8,
+        messages: [{ role: 'user', content: 'hi' }],
+      })
+      const ms = Date.now() - start
+      const text = resp.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
+      return { success: true, ms, preview: text.substring(0, 40) }
+    }
+  } catch (err) {
+    logger.error('agent:test-provider error', err.message)
+    return { success: false, error: err.message }
   }
 })
 
@@ -3390,15 +3496,24 @@ ipcMain.handle('shell:show-in-folder', (_, filePath) => {
 const VoiceSession = require('./agent/voice/VoiceSession')
 let activeVoiceSession = null
 
-ipcMain.handle('voice:start', async (event, { chatId, personaId, history, voiceConfig, persona, whisperConfig }) => {
+ipcMain.handle('voice:start', async (event, { chatId, personaId, history, voiceConfig, persona, userPersona, whisperConfig }) => {
   try {
     if (activeVoiceSession) {
       activeVoiceSession.stop()
       activeVoiceSession = null
     }
 
-    // Build llmCall function that routes to the correct provider
-    const llmCall = async (messages, vc) => {
+    // Load soul memory for both personas so the voice LLM has full context
+    const systemSoulContent = readSoulFileSync(persona?.id || personaId, 'system')
+    const userSoulContent = readSoulFileSync(userPersona?.id, 'users')
+
+    // Build llmCall function that routes to the correct provider.
+    // Returns { text, inputTokens, outputTokens } for usage tracking.
+    // opts.onChunk(delta) — called with each streamed token when streaming is requested.
+    // Voice responses are brief (1–3 sentences) so 400 tokens is a safe cap that also
+    // keeps generation fast. Task JSON rarely exceeds 200 tokens.
+    const llmCall = async (messages, vc, opts = {}) => {
+      const { onChunk, signal } = opts
       const cfg = readJSON(CONFIG_FILE, {})
       const provider = vc.provider || voiceConfig.provider
       const model = vc.model || voiceConfig.model
@@ -3415,12 +3530,24 @@ ipcMain.handle('voice:start', async (event, { chatId, personaId, history, voiceC
         const client = new OpenAIClient(clientCfg)
         const resolvedModel = client.resolveModel()
         const raw = client.getClient()
-        const resp = await raw.chat.completions.create({
-          model: resolvedModel,
-          messages,
-          max_tokens: 1024,
-        })
-        return resp.choices?.[0]?.message?.content || ''
+
+        if (onChunk) {
+          const stream = await raw.chat.completions.create({ model: resolvedModel, messages, max_tokens: 400, stream: true })
+          let fullText = ''
+          for await (const chunk of stream) {
+            if (signal?.aborted) { stream.controller?.abort(); break }
+            const delta = chunk.choices?.[0]?.delta?.content || ''
+            if (delta) { fullText += delta; onChunk(delta) }
+          }
+          return { text: fullText, inputTokens: 0, outputTokens: 0 }
+        }
+
+        const resp = await raw.chat.completions.create({ model: resolvedModel, messages, max_tokens: 400 })
+        return {
+          text: resp.choices?.[0]?.message?.content || '',
+          inputTokens: resp.usage?.prompt_tokens || 0,
+          outputTokens: resp.usage?.completion_tokens || 0,
+        }
       } else {
         // Anthropic or OpenRouter — both use AnthropicClient
         const { AnthropicClient } = require('./agent/core/AnthropicClient')
@@ -3436,13 +3563,31 @@ ipcMain.handle('voice:start', async (event, { chatId, personaId, history, voiceC
         const client = ac.getClient()
         const system = messages.find(m => m.role === 'system')?.content || ''
         const nonSystem = messages.filter(m => m.role !== 'system')
-        const resp = await client.messages.create({
-          model: resolvedModel,
-          max_tokens: 1024,
-          system,
-          messages: nonSystem,
-        })
-        return resp.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
+
+        if (onChunk) {
+          const stream = await client.messages.create({ model: resolvedModel, max_tokens: 400, stream: true, system, messages: nonSystem })
+          let fullText = ''
+          let inputTokens = 0, outputTokens = 0
+          for await (const event of stream) {
+            if (signal?.aborted) { stream.controller?.abort(); break }
+            if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+              const t = event.delta.text || ''
+              if (t) { fullText += t; onChunk(t) }
+            } else if (event.type === 'message_start' && event.message?.usage) {
+              inputTokens = event.message.usage.input_tokens || 0
+            } else if (event.type === 'message_delta' && event.usage) {
+              outputTokens = event.usage.output_tokens || 0
+            }
+          }
+          return { text: fullText, inputTokens, outputTokens }
+        }
+
+        const resp = await client.messages.create({ model: resolvedModel, max_tokens: 400, system, messages: nonSystem })
+        return {
+          text: resp.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '',
+          inputTokens: resp.usage?.input_tokens || 0,
+          outputTokens: resp.usage?.output_tokens || 0,
+        }
       }
     }
 
@@ -3456,13 +3601,17 @@ ipcMain.handle('voice:start', async (event, { chatId, personaId, history, voiceC
       voiceConfig,
       whisperConfig,
       persona,
+      userPersona: userPersona || {},
+      systemSoulContent: systemSoulContent || '',
+      userSoulContent: userSoulContent || '',
       history: history || [],
       llmCall,
       onStatus:        (s)    => sendToRenderer('voice:status', s),
       onTranscript:    (text) => sendToRenderer('voice:transcription', { text }),
-      onAiText:        (text) => sendToRenderer('voice:ai-text', { text }),
+      onAiText:        (text, meta) => sendToRenderer('voice:ai-text', { text, ...meta }),
       onTaskTriggered: (inst) => sendToRenderer('voice:task-triggered', { instruction: inst }),
       onError:         (msg)  => sendToRenderer('voice:error', { message: msg }),
+      onUsage:         (u)    => sendToRenderer('voice:usage', u),
     })
 
     activeVoiceSession.start()
@@ -3482,18 +3631,28 @@ ipcMain.handle('voice:stop', () => {
 })
 
 ipcMain.handle('voice:audio-chunk', async (event, audioBuffer) => {
-  if (!activeVoiceSession) return { success: false, error: 'No active voice session' }
+  if (!activeVoiceSession) {
+    console.log('[VOICE:IPC] audio-chunk received but no active session')
+    return { success: false, error: 'No active voice session' }
+  }
   try {
     const buf = Buffer.from(audioBuffer)
+    console.log(`[VOICE:IPC] audio-chunk received — ${buf.length} bytes, busy=${activeVoiceSession._voiceBusy}`)
     activeVoiceSession.processAudio(buf) // fire and forget — results come via events
     return { success: true }
   } catch (err) {
+    console.log(`[VOICE:IPC] audio-chunk error: ${err.message}`)
     return { success: false, error: err.message }
   }
 })
 
 ipcMain.handle('voice:mute', (event, { muted }) => {
   if (activeVoiceSession) activeVoiceSession.setMuted(muted)
+  return { success: true }
+})
+
+ipcMain.handle('voice:update-history', (event, history) => {
+  if (activeVoiceSession) activeVoiceSession.history = history || []
   return { success: true }
 })
 
@@ -3505,7 +3664,7 @@ ipcMain.handle('voice:task-complete', async (event, summary) => {
 })
 
 // OpenAI TTS HD — returns audio buffer as base64 for renderer playback
-ipcMain.handle('voice:tts', async (event, { text, apiKey, baseURL, model }) => {
+ipcMain.handle('voice:tts', async (event, { text, apiKey, baseURL, model, voice }) => {
   try {
     if (!text || !apiKey) return { success: false, error: 'Missing text or API key' }
     const ttsModel = model || 'tts-1' // 'tts-1' = $15/1M chars, 'tts-1-hd' = $30/1M chars
@@ -3520,7 +3679,7 @@ ipcMain.handle('voice:tts', async (event, { text, apiKey, baseURL, model }) => {
     const resp = await fetch(url, {
       method: 'POST',
       headers: { ...authHeader, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: ttsModel, input: text, voice: 'alloy', response_format: 'mp3' }),
+      body: JSON.stringify({ model: ttsModel, input: text, voice: voice || 'alloy', response_format: 'mp3' }),
     })
     if (!resp.ok) {
       const body = await resp.text()

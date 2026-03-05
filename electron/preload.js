@@ -69,11 +69,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   runAgent: (params) => ipcRenderer.invoke('agent:run', params),
   stopAgent: (chatId) => ipcRenderer.invoke('agent:stop', chatId),
   permissionResponse: (chatId, payload) => ipcRenderer.invoke('agent:permission-response', chatId, payload),
+  updatePermissionMode: (chatId, payload) => ipcRenderer.invoke('agent:update-permission-mode', chatId, payload),
   compactContext: (chatId) => ipcRenderer.invoke('agent:compact', chatId),
   compactContextStandalone: (params) => ipcRenderer.invoke('agent:compact-standalone', params),
   getContextSnapshot: (chatId) => ipcRenderer.invoke('agent:get-context', chatId),
   enhancePrompt: (params) => ipcRenderer.invoke('agent:enhance-prompt', params),
   resolveAddressees: (params) => ipcRenderer.invoke('agent:resolve-addressees', params),
+  testProvider: (params) => ipcRenderer.invoke('agent:test-provider', params),
   onAgentChunk: (callback) => {
     ipcRenderer.removeAllListeners('agent:chunk')
     ipcRenderer.on('agent:chunk', (_, data) => callback(data))
@@ -171,15 +173,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     start:      (params)   => ipcRenderer.invoke('voice:start', params),
     stop:       ()         => ipcRenderer.invoke('voice:stop'),
     audioChunk: (buffer)   => ipcRenderer.invoke('voice:audio-chunk', buffer),
-    mute:       (params)   => ipcRenderer.invoke('voice:mute', params),
+    mute:               (params)  => ipcRenderer.invoke('voice:mute', params),
     notifyTaskComplete: (summary) => ipcRenderer.invoke('voice:task-complete', summary),
+    updateHistory:      (history) => ipcRenderer.invoke('voice:update-history', history),
     onStatus:       (cb) => { ipcRenderer.on('voice:status', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:status') },
     onTranscription:(cb) => { ipcRenderer.on('voice:transcription', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:transcription') },
     onAiText:       (cb) => { ipcRenderer.on('voice:ai-text', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:ai-text') },
     onTaskTriggered:(cb) => { ipcRenderer.on('voice:task-triggered', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:task-triggered') },
     onError:        (cb) => { ipcRenderer.on('voice:error', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:error') },
+    onUsage:        (cb) => { ipcRenderer.on('voice:usage', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:usage') },
     tts:            (params) => ipcRenderer.invoke('voice:tts', params),
   },
+
+  // ── Email / SMTP ────────────────────────────────────────────────────────────
+  testSmtp: (smtpConfig) => ipcRenderer.invoke('store:test-smtp', smtpConfig),
 
   // ── Draw.io ─────────────────────────────────────────────────────────────────
   drawio: {

@@ -10,18 +10,31 @@ export const useConfigStore = defineStore('config', () => {
       sonnetModel: 'anthropic/claude-sonnet-latest',
       opusModel:   'anthropic/claude-opus-latest',
       haikuModel:  'anthropic/claude-haiku-latest',
-      activeModel: 'sonnet',
+      utilityModel: '',
+      isActive:    false,
+      testedAt:    null,
     },
     openrouter: {
       apiKey:  '',
       baseURL: '',
-      defaultModel: '',
+      utilityModel: '',
+      isActive:    false,
+      testedAt:    null,
     },
     openai: {
       apiKey:       '',
       baseURL:      '',
-      model:        '',
-      openaiDefaultModel: '',
+      utilityModel: '',
+      isActive:    false,
+      testedAt:    null,
+    },
+    deepseek: {
+      apiKey:     '',
+      baseURL:    '',
+      utilityModel: '',
+      isActive:    false,
+      testedAt:    null,
+      maxTokens:  8192,
     },
     skillsPath:  '',
     DoCPath:     '',
@@ -52,10 +65,18 @@ export const useConfigStore = defineStore('config', () => {
       timeWindowHours: 24,
     },
     maxOutputTokens: 32768,  // global default; per-chat can override; hard limit 98304 (96k)
+    smtp: {
+      host:      '',
+      port:      587,
+      user:      '',
+      pass:      '',
+      userEmail: '',
+    },
     voiceCall: {
       whisperApiKey: '',     // OpenAI API key for Whisper STT
       whisperBaseURL: '',    // Base URL (defaults to https://api.openai.com)
       ttsMode: 'browser',   // 'browser' = free SpeechSynthesis, 'openai' = TTS $15/1M chars, 'openai-hd' = TTS HD $30/1M chars
+      isActive: false,       // set to true after successful test connection
     },
   })
 
@@ -65,16 +86,16 @@ export const useConfigStore = defineStore('config', () => {
     return !!(
       (c.anthropic?.apiKey && c.anthropic?.baseURL) ||
       (c.openrouter?.apiKey && c.openrouter?.baseURL) ||
-      (c.openai?.apiKey && c.openai?.baseURL)
+      (c.openai?.apiKey && c.openai?.baseURL) ||
+      (c.deepseek?.apiKey && c.deepseek?.baseURL)
     )
   })
 
-  const activeModelId = computed(() => {
+  const activeProviders = computed(() => {
     const c = config.value
-    const a = c.anthropic || {}
-    if (a.activeModel === 'opus')  return a.opusModel
-    if (a.activeModel === 'haiku') return a.haikuModel
-    return a.sonnetModel
+    return ['anthropic', 'openrouter', 'openai', 'deepseek'].filter(
+      p => c[p]?.isActive === true
+    )
   })
 
   async function loadConfig() {
@@ -88,7 +109,9 @@ export const useConfigStore = defineStore('config', () => {
       anthropic:  { ...defaults.anthropic,  ...saved.anthropic },
       openrouter: { ...defaults.openrouter, ...saved.openrouter },
       openai:     { ...defaults.openai,     ...saved.openai },
+      deepseek:   { ...defaults.deepseek,   ...saved.deepseek },
       voiceCall:  { ...defaults.voiceCall,  ...saved.voiceCall },
+      smtp:       { ...defaults.smtp,       ...saved.smtp },
       sandboxConfig: {
         ...defaults.sandboxConfig,
         ...savedSandbox,
@@ -122,10 +145,14 @@ export const useConfigStore = defineStore('config', () => {
       anthropic:  { ...prev.anthropic,  ...newConfig.anthropic },
       openrouter: { ...prev.openrouter, ...newConfig.openrouter },
       openai:     { ...prev.openai,     ...newConfig.openai },
+      deepseek:   { ...prev.deepseek,   ...newConfig.deepseek },
       voiceCall:  { ...prev.voiceCall,  ...newConfig.voiceCall },
+      smtp:       { ...prev.smtp,       ...newConfig.smtp },
     }
     await storage.saveConfig(JSON.parse(JSON.stringify(toRaw(config.value))))
   }
 
-  return { config, activeModelId, isConfigured, loadConfig, loadEnvPaths, saveEnvPath, saveConfig }
+  const isVoiceCallActive = computed(() => config.value.voiceCall?.isActive === true)
+
+  return { config, activeProviders, isConfigured, isVoiceCallActive, loadConfig, loadEnvPaths, saveEnvPath, saveConfig }
 })

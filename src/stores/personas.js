@@ -79,6 +79,7 @@ export const usePersonasStore = defineStore('personas', () => {
       if (p.modelId === undefined) p.modelId = null
       if (p.enabledSkillIds === undefined) p.enabledSkillIds = null
       if (p.mcpServerIds === undefined) p.mcpServerIds = null
+      if (p.voiceId === undefined) p.voiceId = null
     }
 
     // Ensure at least one default per type

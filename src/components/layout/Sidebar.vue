@@ -1,29 +1,20 @@
 <template>
   <nav
     class="flex flex-col shrink-0"
-    :style="{ width: isCollapsed ? '64px' : '260px', minWidth: isCollapsed ? '64px' : '260px', background: '#FFFFFF', height: '100%', overflow: 'hidden', position: 'relative', zIndex: 10, borderRight: '1px solid #E5E5EA', transition: 'width 0.2s ease, min-width 0.2s ease' }"
+    :style="{ width: isCollapsed ? '64px' : '200px', minWidth: isCollapsed ? '64px' : '200px', background: '#FFFFFF', height: '100%', overflow: 'hidden', position: 'relative', zIndex: 10, borderRight: '1px solid #E5E5EA', transition: 'width 0.2s ease, min-width 0.2s ease' }"
     aria-label="Main navigation"
   >
     <!-- Logo / Header -->
-    <div :style="{ padding: isCollapsed ? '16px 0' : '16px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'space-between' }">
-      <div v-show="!isCollapsed" class="flex items-center gap-2.5">
-        <img
-          src="/icon.png"
-          alt="SparkAI"
-          class="w-9 h-9 rounded-xl shrink-0"
-          style="object-fit:contain;"
-        />
-        <span style="font-family:'Inter','Figtree',system-ui,sans-serif; font-size:var(--fs-subtitle); font-weight:700; color:#1A1A1A; letter-spacing:-0.02em;">
-          SparkAI
-        </span>
-      </div>
-      <button @click="toggleCollapse" class="nav-collapse-btn" :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
-        <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <line x1="4" y1="6" x2="20" y2="6"/>
-          <line x1="4" y1="12" x2="20" y2="12"/>
-          <line x1="4" y1="18" x2="20" y2="18"/>
-        </svg>
-      </button>
+    <div :style="{ padding: isCollapsed ? '16px 0' : '16px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
+      <img
+        src="/icon.png"
+        alt="SparkAI"
+        :class="isCollapsed ? 'w-7 h-7 rounded-md' : 'w-9 h-9 rounded-xl'"
+        style="object-fit:contain;flex-shrink:0;"
+      />
+      <span v-show="!isCollapsed" style="font-family:'Inter','Figtree',system-ui,sans-serif; font-size:var(--fs-subtitle); font-weight:700; color:#1A1A1A; letter-spacing:-0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-left:10px;">
+        SparkAI
+      </span>
     </div>
 
     <!-- Voice call indicator -->
@@ -35,7 +26,16 @@
 
     <!-- Navigation -->
     <div class="flex-1 px-3 py-3 flex flex-col gap-0.5 overflow-y-auto" style="scrollbar-width:thin;">
-      <p class="nav-section-label" v-show="!isCollapsed">AI Agent</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;min-height:24px;">
+        <p class="nav-section-label" v-show="!isCollapsed" style="margin:0;">AI Agent</p>
+        <button @click="toggleCollapse" class="nav-collapse-btn" :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'" style="flex-shrink:0;">
+          <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="4" y1="6" x2="20" y2="6"/>
+            <line x1="4" y1="12" x2="20" y2="12"/>
+            <line x1="4" y1="18" x2="20" y2="18"/>
+          </svg>
+        </button>
+      </div>
       <NavItem to="/chats"    :icon="IconChats"    label="Chats"    :isCollapsed="isCollapsed" />
       <NavItem to="/tools"    :icon="IconTools"    label="Tools"    :isCollapsed="isCollapsed" />
       <NavItem to="/skills"   :icon="IconSkills"   label="Skills"   :isCollapsed="isCollapsed" />

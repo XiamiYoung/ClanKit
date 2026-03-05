@@ -1,5 +1,5 @@
 <template>
-  <div class="h-full flex chats-page">
+  <div class="h-full flex chats-page" v-bind="$attrs">
     <!-- ── Grid Mode ──────────────────────────────────────────────────────── -->
     <ChatGridLayout
       v-if="gridMode"
@@ -306,9 +306,23 @@
                         <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Usage</td>
                         <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ Math.round(activeContextMetrics.percentage) }}%</td>
                       </tr>
-                      <tr>
+                      <tr :style="(activeContextMetrics.voiceInputTokens || activeContextMetrics.voiceOutputTokens) ? 'border-bottom:1px solid #F5F5F5;' : ''">
                         <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Compactions</td>
                         <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeContextMetrics.compactionCount ?? 0 }}</td>
+                      </tr>
+                      <template v-if="activeContextMetrics.voiceInputTokens || activeContextMetrics.voiceOutputTokens">
+                        <tr style="border-bottom:1px solid #F5F5F5;">
+                          <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Voice in</td>
+                          <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (activeContextMetrics.voiceInputTokens ?? 0).toLocaleString() }} tok</td>
+                        </tr>
+                        <tr :style="(activeContextMetrics.whisperCalls) ? 'border-bottom:1px solid #F5F5F5;' : ''">
+                          <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Voice out</td>
+                          <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (activeContextMetrics.voiceOutputTokens ?? 0).toLocaleString() }} tok</td>
+                        </tr>
+                      </template>
+                      <tr v-if="activeContextMetrics.whisperCalls">
+                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Whisper STT</td>
+                        <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeContextMetrics.whisperCalls }} call{{ activeContextMetrics.whisperCalls !== 1 ? 's' : '' }}, {{ (activeContextMetrics.whisperSecs ?? 0).toFixed(1) }}s audio</td>
                       </tr>
                     </tbody>
                   </table>
@@ -481,7 +495,7 @@
                       Electron: <span :style="hasElectron ? 'color:#007AFF; font-weight:600;' : 'color:#dc2626; font-weight:600;'">{{ hasElectron ? 'YES' : 'NO' }}</span>
                     </span>
                     <span style="font-size:var(--fs-small); color:#9CA3AF;">
-                      Model: <span style="color:#1A1A1A; font-weight:600;">{{ configStore.config.activeModel }} → {{ debugModelId }}</span>
+                      Model: <span style="color:#1A1A1A; font-weight:600;">{{ debugModelId }}</span>
                     </span>
                   </div>
                   <!-- Log entries (last 100) -->
@@ -863,7 +877,7 @@
           <!-- Tool list -->
           <div class="tools-select-list">
             <div v-if="toolsStore.tools.length === 0" class="tools-select-empty">
-              <p>No tools configured. Go to the Tools page to add HTTP tools.</p>
+              <p>No HTTP tools configured. Go to the Tools page to add some.</p>
             </div>
             <div v-else-if="filteredModalTools.length === 0" class="tools-select-empty">
               <p>No tools match your filter.</p>
@@ -884,7 +898,7 @@
                 <span class="tools-select-row-name">{{ tool.name }}</span>
                 <span class="tools-select-row-desc">{{ tool.description || 'No description' }}</span>
               </div>
-              <span class="tools-select-row-cat" :class="'tools-select-type-' + (tool.type || 'http')">{{ {http:'HTTP',code:'Code',prompt:'Prompt'}[tool.type || 'http'] }}</span>
+              <span class="tools-select-row-cat" :class="'tools-select-type-' + (tool.type || 'http')">{{ {http:'HTTP',code:'Code',prompt:'Prompt',smtp:'SMTP'}[tool.type || 'http'] }}</span>
             </label>
           </div>
 
@@ -1003,10 +1017,6 @@
             <button class="ccm-tab" :class="{ active: ccmActiveTab === 'permissions' }" @click="ccmActiveTab = 'permissions'">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               Permissions
-            </button>
-            <button class="ccm-tab" :class="{ active: ccmActiveTab === 'model' }" @click="ccmActiveTab = 'model'">
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-              Model
             </button>
             <button class="ccm-tab" :class="{ active: ccmActiveTab === 'tools' }" @click="ccmActiveTab = 'tools'">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
@@ -1153,61 +1163,6 @@
               </div>
             </div>
 
-            <!-- ═══ MODEL TAB ═══ -->
-            <div v-else-if="ccmActiveTab === 'model'" class="ccm-tab-content">
-              <!-- Step 1: Provider -->
-              <div class="ccm-dark-section">
-                <div class="ccm-dark-section-label">
-                  <span class="ccm-step-num">1</span> Provider
-                  <span class="ccm-dark-badge">{{ effectiveProviderLabel }}</span>
-                </div>
-                <div class="ccm-provider-cards">
-                  <button v-for="prov in [
-                    { id: 'anthropic',  label: 'Anthropic',  sub: 'Claude models' },
-                    { id: 'openrouter', label: 'OpenRouter', sub: 'Multi-provider' },
-                    { id: 'openai',     label: 'OpenAI',     sub: 'GPT / custom' }
-                  ]" :key="prov.id"
-                    class="ccm-provider-card" :class="{ active: effectiveProvider === prov.id }"
-                    @click="selectProvider(prov.id)">
-                    <span class="ccm-provider-card-name">{{ prov.label }}</span>
-                    <span class="ccm-provider-card-sub">{{ prov.sub }}</span>
-                  </button>
-                </div>
-              </div>
-              <!-- Step 2: Model -->
-              <div class="ccm-dark-section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-                <div class="ccm-dark-section-label">
-                  <span class="ccm-step-num">2</span> Model
-                  <span class="ccm-dark-badge">{{ effectiveModelLabel }}</span>
-                </div>
-                <div v-if="effectiveProvider === 'openrouter' || effectiveProvider === 'openai'" style="margin-bottom:8px;">
-                  <input v-model="chatModelFilter" type="text" placeholder="Search models..." class="ccm-model-search" @click.stop />
-                </div>
-                <div class="ccm-model-list">
-                  <button class="ccm-model-item" :class="{ active: !chatsStore.activeChat?.model }" @click="selectModel(null)">
-                    <span>Default</span><span class="ccm-model-id">{{ defaultModelLabel }}</span>
-                  </button>
-                  <template v-if="effectiveProvider === 'openrouter'">
-                    <div v-if="modelsStore.openrouterLoading" class="ccm-model-loading">Loading models...</div>
-                    <button v-for="m in filteredChatOpenRouterModels" :key="m.id" class="ccm-model-item" :class="{ active: chatsStore.activeChat?.model === m.id }" @click="selectModel(m.id)">
-                      <span>{{ m.name || m.id }}</span><span class="ccm-model-id">{{ m.id }}</span>
-                    </button>
-                  </template>
-                  <template v-else-if="effectiveProvider === 'openai'">
-                    <div v-if="modelsStore.openaiLoading" class="ccm-model-loading">Loading models...</div>
-                    <button v-for="m in filteredChatOpenAIModels" :key="m.id" class="ccm-model-item" :class="{ active: chatsStore.activeChat?.model === m.id }" @click="selectModel(m.id)">
-                      <span>{{ m.name || m.id }}</span><span class="ccm-model-id">{{ m.id }}</span>
-                    </button>
-                  </template>
-                  <template v-else>
-                    <button v-for="opt in anthropicModelChoices" :key="opt.id" class="ccm-model-item" :class="{ active: chatsStore.activeChat?.model === opt.id }" @click="selectModel(opt.id)">
-                      <span>{{ opt.label }}</span><span class="ccm-model-id">{{ opt.id }}</span>
-                    </button>
-                  </template>
-                </div>
-              </div>
-            </div>
-
             <!-- ═══ TOOLS TAB ═══ -->
             <div v-else-if="ccmActiveTab === 'tools'" class="ccm-tab-content">
               <!-- Search + actions bar -->
@@ -1224,8 +1179,8 @@
               </div>
               <!-- Tool list -->
               <div class="ccm-item-list">
-                <div v-if="toolsStore.tools.length === 0" class="ccm-list-empty">No tools configured. Go to the Tools page to add tools.</div>
-                <div v-else-if="ccmFilteredTools.length === 0" class="ccm-list-empty">No tools match "{{ ccmToolSearch }}"</div>
+                <div v-if="toolsStore.tools.length === 0 && !ccmToolSearch" class="ccm-list-empty">No tools configured. Go to the Tools page to add some.</div>
+                <div v-else-if="ccmFilteredTools.length === 0 && ccmToolSearch" class="ccm-list-empty">No tools match "{{ ccmToolSearch }}"</div>
                 <div
                   v-for="t in ccmFilteredTools"
                   :key="t.id"
@@ -1236,7 +1191,7 @@
                   <div class="ccm-item-card-info">
                     <div class="ccm-item-card-top">
                       <span class="ccm-item-card-name">{{ t.name }}</span>
-                      <span class="ccm-item-card-type" :class="'ccm-type-' + (t.type || 'http')">{{ {http:'HTTP',code:'Code',prompt:'Prompt'}[t.type || 'http'] }}</span>
+                      <span class="ccm-item-card-type" :class="'ccm-type-' + (t.type || 'http')">{{ {http:'HTTP',code:'Code',prompt:'Prompt',smtp:'SMTP'}[t.type || 'http'] }}</span>
                     </div>
                     <span class="ccm-item-card-desc">{{ t.description || 'No description' }}</span>
                   </div>
@@ -1621,6 +1576,9 @@
     :personaPrompt="soulViewerTarget.personaPrompt"
     :personaProviderId="soulViewerTarget.personaProviderId"
     :personaModelId="soulViewerTarget.personaModelId"
+    :personaVoiceId="soulViewerTarget.personaVoiceId"
+    :personaAvatar="soulViewerTarget.personaAvatar"
+    :readOnly="true"
     @close="closeSoulViewer"
     @update-persona="handleSoulViewerUpdatePersona"
   />
@@ -1655,7 +1613,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted, onErrorCaptured, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, onActivated, onDeactivated, onErrorCaptured, watch } from 'vue'
+defineOptions({ name: 'ChatsView', inheritAttrs: false })
 import { useChatsStore } from '../stores/chats'
 import { useSkillsStore } from '../stores/skills'
 import { useConfigStore } from '../stores/config'
@@ -1691,16 +1650,25 @@ const voiceStore = useVoiceStore()
 // ── Voice call ──
 async function handleStartCall(chatId) {
   const chat = chatsStore.chats.find(c => c.id === chatId)
-  if (!chat || chat.isGroupChat) return
+  if (!chat) return
+  // Use active persona count, not isGroupChat flag (which stays true after removing personas)
+  const activeCount = chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds.length : 1
+  if (activeCount > 1) return
   if (voiceStore.isCallActive) return
 
-  // Resolve persona
-  const personaId = chat.systemPersonaId || personasStore.defaultSystemPersona?.id
+  // Resolve system persona — use same logic as activeSystemPersonaIds in ChatHeader
+  const personaId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null)
+    || chat.systemPersonaId
+    || personasStore.defaultSystemPersona?.id
   const persona = personaId ? personasStore.getPersonaById(personaId) : null
 
-  // Resolve provider/model from persona → chat → global defaults (same as regular chat)
-  const chatProvider = persona?.providerId || chat.provider || configStore.config.defaultProvider || 'anthropic'
-  const chatModel = persona?.modelId || chat.model || ''
+  // Resolve user persona
+  const userPersonaId = chat.userPersonaId || personasStore.defaultUserPersona?.id
+  const userPersona = userPersonaId ? personasStore.getPersonaById(userPersonaId) : null
+
+  // Resolve provider/model from persona (provider is always on the persona now)
+  const chatProvider = persona?.providerId || 'anthropic'
+  const chatModel = persona?.modelId || ''
 
   // Ensure messages loaded
   await chatsStore.ensureMessages(chatId)
@@ -1714,6 +1682,7 @@ async function handleStartCall(chatId) {
   const whisperConfig = {
     apiKey: vc.whisperApiKey || '',
     baseURL: vc.whisperBaseURL || 'https://api.openai.com',
+    language: vc.language || '',
   }
 
   // Update voice store
@@ -1726,7 +1695,18 @@ async function handleStartCall(chatId) {
       personaId,
       history,
       voiceConfig: { provider: chatProvider, model: chatModel },
-      persona: { name: persona?.name, systemPrompt: persona?.systemPrompt },
+      persona: {
+        id: personaId,
+        name: persona?.name,
+        description: persona?.description,
+        systemPrompt: persona?.systemPrompt,
+      },
+      userPersona: {
+        id: userPersonaId || '__default_user__',
+        name: userPersona?.name,
+        description: userPersona?.description,
+        systemPrompt: userPersona?.systemPrompt,
+      },
       whisperConfig,
     })
   }
@@ -1745,19 +1725,49 @@ let micAnalyser = null
 let micAnimFrame = null
 let micSilenceStart = 0
 let micIsRecording = false
-const SILENCE_THRESHOLD = 0.015
-const SILENCE_DURATION_MS = 1200
-const MIN_RECORDING_MS = 400
+let micSpeechFrames = 0    // frames where isSpeaking=true during current recording
+let micBargeInStart = 0    // timestamp when continuous barge-in speech started (0 = none)
+// VAD constants — read from config at call-start time via vadParam() below
+const MIN_RECORDING_MS = 500
 const MAX_RECORDING_MS = 30000 // Cap at 30s to limit Whisper cost
+function vadParam(key, fallback) {
+  return configStore.config.voiceCall?.[key] ?? fallback
+}
 
 async function startMicCapture() {
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const deviceId = voiceStore.selectedMicId
+    const audioConstraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    if (deviceId) audioConstraints.deviceId = { exact: deviceId }
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
     const actx = new AudioContext()
+    console.log(`[VOICE:VAD] AudioContext created — state=${actx.state}`)
     const source = actx.createMediaStreamSource(micStream)
     micAnalyser = actx.createAnalyser()
     micAnalyser.fftSize = 2048
     source.connect(micAnalyser)
+
+    // Log AudioContext state changes — suspension after browser inactivity kills the VAD loop
+    actx.onstatechange = () => console.log(`[VOICE:VAD] AudioContext state changed → ${actx.state}`)
+
+    // VAD params are read live from config on every frame so slider changes take
+    // effect immediately without restarting the call.
+
+    // Dynamic noise floor: tracks ambient background level with a slow EMA.
+    // Only updated while NOT recording, so the user's own voice doesn't raise it.
+    // Effective threshold = max(SILENCE_THRESHOLD, ambientFloor × PROXIMITY_MULTIPLIER).
+    // This means if background people are chatting at RMS 0.025, the trigger
+    // rises to ~0.062 — your voice directly into the mic comfortably exceeds that.
+    let ambientFloor = vadParam('vadAmplitude', 0.018) * 0.5  // conservative starting estimate
+    const AMBIENT_ALPHA = 0.003  // slow adaptation (~330 frames to fully update)
+
+    // Pre-compute voice-band bin range once (300–3400 Hz).
+    // Human speech energy concentrates here. Keyboard clicks and background hiss
+    // have proportionally more energy outside this range (especially above 4kHz).
+    const binHz = actx.sampleRate / micAnalyser.fftSize
+    const voiceLowBin  = Math.round(300  / binHz)
+    const voiceHighBin = Math.round(3400 / binHz)
+    const fftArray = new Float32Array(micAnalyser.frequencyBinCount)
 
     const dataArray = new Float32Array(micAnalyser.fftSize)
     let chunks = []
@@ -1769,39 +1779,130 @@ async function startMicCapture() {
     }
     micRecorder.onstop = async () => {
       const duration = Date.now() - recordingStartTime
-      if (chunks.length === 0 || duration < MIN_RECORDING_MS) { chunks = []; return }
+      const speechFrames = micSpeechFrames
+      micSpeechFrames = 0
+      if (chunks.length === 0 || duration < MIN_RECORDING_MS) {
+        console.log(`[VOICE:VAD] onstop dropped — duration=${duration}ms chunks=${chunks.length}`)
+        chunks = []
+        return
+      }
+      if (speechFrames < vadParam('vadSpeechFrames', 20)) {
+        console.log(`[VOICE:VAD] onstop dropped — speechFrames=${speechFrames} < threshold`)
+        chunks = []
+        return
+      }
       const blob = new Blob(chunks, { type: 'audio/webm' })
       chunks = []
       const arrayBuf = await blob.arrayBuffer()
+      console.log(`[VOICE:VAD] onstop sending — duration=${duration}ms speechFrames=${speechFrames} bytes=${arrayBuf.byteLength}`)
       if (window.electronAPI?.voice?.audioChunk && voiceStore.isCallActive) {
         window.electronAPI.voice.audioChunk(Array.from(new Uint8Array(arrayBuf)))
+        console.log(`[VOICE:VAD] IPC audio-chunk sent`)
       }
+    }
+
+    function isVoiceBand() {
+      // Second gate: require that ≥25% of audio energy sits in the 300–3400 Hz voice band.
+      // Keyboard clicks are broadband transients; their voice-band ratio is typically <15%.
+      // Real speech always concentrates significant energy in this range.
+      micAnalyser.getFloatFrequencyData(fftArray) // values in dB, typically -100..0
+      let voicePower = 0
+      let totalPower = 0
+      for (let i = 1; i < fftArray.length; i++) {
+        const p = Math.pow(10, fftArray[i] / 10) // dB → linear power
+        totalPower += p
+        if (i >= voiceLowBin && i <= voiceHighBin) voicePower += p
+      }
+      return totalPower > 0 && (voicePower / totalPower) >= vadParam('vadVoiceBandRatio', 0.25)
     }
 
     function vadLoop() {
       if (!voiceStore.isCallActive) { stopMicCapture(); return }
+      // AudioContext can be suspended by the browser after inactivity — resume it silently
+      if (actx.state === 'suspended') {
+        console.log('[VOICE:VAD] AudioContext suspended — resuming')
+        actx.resume()
+      }
       micAnalyser.getFloatTimeDomainData(dataArray)
       let sum = 0
       for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i]
       const rms = Math.sqrt(sum / dataArray.length)
-      const isSpeaking = rms > SILENCE_THRESHOLD
-      const isMuted = voiceStore.isMuted
-      const isProcessing = voiceStore.status === 'processing' || voiceStore.status === 'speaking'
 
-      if (isSpeaking && !isMuted && !isProcessing) {
+      // Update ambient floor only when quiet (not recording, not in cooldown).
+      // This tracks background chatter level so the dynamic threshold rises with it.
+      // Cap at 3× the base threshold so loud background noise can't make the mic
+      // completely deaf to the user's voice — this is the safety ceiling.
+      if (!micIsRecording && Date.now() >= micCooldownUntil) {
+        const newFloor = ambientFloor * (1 - AMBIENT_ALPHA) + rms * AMBIENT_ALPHA
+        const floorCeiling = vadParam('vadAmplitude', 0.018) * 3
+        if (newFloor > floorCeiling && ambientFloor <= floorCeiling) {
+          console.log(`[VOICE:VAD] ambientFloor capped at ${floorCeiling.toFixed(4)} (raw=${newFloor.toFixed(4)}) — background noise is very loud`)
+        }
+        ambientFloor = Math.min(newFloor, floorCeiling)
+      }
+
+      // Effective threshold: must beat both the fixed floor AND the ambient × multiplier.
+      // If background people chat at RMS ~0.025, threshold lifts to ~0.062 —
+      // your voice directly into the mic easily clears that.
+      const dynamicThreshold = Math.max(
+        vadParam('vadAmplitude', 0.018),
+        ambientFloor * vadParam('vadProximityMult', 2.5)
+      )
+
+      // Gate 1: dynamic amplitude  Gate 2: voice-band frequency ratio
+      const isSpeaking = rms > dynamicThreshold && isVoiceBand()
+      const isMuted = voiceStore.isMuted
+      const inCooldown = Date.now() < micCooldownUntil
+
+      // Barge-in: user speaks while AI is speaking → stop TTS.
+      // Require continuous speech for 1s before cutting — prevents a single noise
+      // spike or clap from interrupting. The timer resets if speech drops below threshold.
+      // Use ttsIsSpeaking (not voiceStore.status) so the timer persists across the brief
+      // standby gap between consecutive sentences.
+      if (isSpeaking && !isMuted && ttsIsSpeaking) {
+        if (!micBargeInStart) micBargeInStart = Date.now()
+        if (Date.now() - micBargeInStart >= 500) {
+          console.log(`[VOICE:VAD] barge-in after ${Date.now() - micBargeInStart}ms continuous speech`)
+          stopSpeaking()
+          micCooldownUntil = 0
+          micBargeInStart = 0
+        }
+      } else {
+        micBargeInStart = 0  // reset if speech drops — noise burst didn't sustain
+      }
+
+      // Never gate mic on 'processing' — voice LLM and chat agent run independently.
+      // VoiceSession.processAudio guards itself; mic must stay open during agent tasks.
+      if (isSpeaking && !isMuted && !inCooldown) {
         micSilenceStart = 0
         if (!micIsRecording) {
           micIsRecording = true
+          micSpeechFrames = 0
           recordingStartTime = Date.now()
           chunks = []
+          console.log(`[VOICE:VAD] recording START — rms=${rms.toFixed(4)} threshold=${dynamicThreshold.toFixed(4)} ambientFloor=${ambientFloor.toFixed(4)}`)
           if (micRecorder.state === 'inactive') micRecorder.start()
+          // Status: actively capturing user speech
+          voiceStore.setStatus('listening')
         }
+        micSpeechFrames++
       } else if (micIsRecording) {
         if (!micSilenceStart) micSilenceStart = Date.now()
-        if (Date.now() - micSilenceStart > SILENCE_DURATION_MS) {
+        if (Date.now() - micSilenceStart > vadParam('vadSilenceMs', 700)) {
           micIsRecording = false
           micSilenceStart = 0
           if (micRecorder.state === 'recording') micRecorder.stop()
+        }
+      } else {
+        // Not recording and no speech detected.
+        // VAD clears 'listening' if it got stuck.
+        // It also clears 'processing' once the backend is done — the backend
+        // tries to set 'standby' but that's now blocked, so the VAD does it instead
+        // once the mic is idle (not cooldown, not speaking).
+        const s = voiceStore.status
+        const backendIdle = s !== 'speaking' && s !== 'idle' && Date.now() >= micCooldownUntil
+        if ((s === 'listening' || s === 'processing') && backendIdle) {
+          voiceStore.setStatus('standby')
         }
       }
       // Hard cap: stop recording after MAX_RECORDING_MS to limit Whisper cost
@@ -1826,67 +1927,138 @@ function stopMicCapture() {
   micAnalyser = null
   micIsRecording = false
   micSilenceStart = 0
+  micBargeInStart = 0
 }
 
 // ── TTS ──
 // 'browser' = free SpeechSynthesis, 'openai-hd' = OpenAI TTS HD (uses Whisper API key)
 let activeAudioEl = null
+let micCooldownUntil = 0  // timestamp: ignore VAD triggers until this time (post-TTS debounce)
+const MIC_COOLDOWN_MS = 400
 
-async function speakText(text) {
+// TTS serial queue — ensures one utterance plays after the previous finishes.
+// Prefetch: audio is fetched concurrently while prior sentence plays, so playback
+// is gapless. ttsIsSpeaking stays true across sentence boundaries so barge-in
+// detection isn't confused by the brief standby between two sentences.
+let ttsQueue = Promise.resolve()
+let ttsIsSpeaking = false  // true whenever audio is queued or playing
+let ttsPending = 0          // count of sentences not yet finished playing
+let ttsGeneration = 0       // incremented on stopSpeaking — invalidates all in-flight items
+
+function speakText(text) {
   if (!text) return
-  voiceStore.setStatus('speaking')
-
-  const vc = configStore.config.voiceCall || {}
-  const useOpenAITTS = (vc.ttsMode === 'openai' || vc.ttsMode === 'openai-hd') && vc.whisperApiKey
-  if (useOpenAITTS && window.electronAPI?.voice?.tts) {
-    // OpenAI TTS — costs per character ($15/1M normal, $30/1M HD)
-    try {
-      const result = await window.electronAPI.voice.tts({
-        text,
-        apiKey: vc.whisperApiKey,
-        baseURL: vc.whisperBaseURL || 'https://api.openai.com',
-        model: vc.ttsMode === 'openai-hd' ? 'tts-1-hd' : 'tts-1',
-      })
-      if (result.success && result.audio) {
-        const audioUrl = `data:audio/${result.format || 'mp3'};base64,${result.audio}`
-        activeAudioEl = new Audio(audioUrl)
-        activeAudioEl.onended = () => {
-          activeAudioEl = null
-          if (voiceStore.isCallActive) voiceStore.setStatus('listening')
-        }
-        activeAudioEl.onerror = () => {
-          activeAudioEl = null
-          if (voiceStore.isCallActive) voiceStore.setStatus('listening')
-        }
-        activeAudioEl.play()
-        return
-      }
-      // Fallback to browser TTS if OpenAI TTS fails
-      console.warn('OpenAI TTS failed, falling back to browser:', result.error)
-    } catch (err) {
-      console.warn('OpenAI TTS error, falling back to browser:', err)
-    }
-  }
-
-  // Browser SpeechSynthesis (free, default)
-  if (!window.speechSynthesis) { voiceStore.setStatus('listening'); return }
-  window.speechSynthesis.cancel()
-  const utterance = new SpeechSynthesisUtterance(text)
-  utterance.rate = 1.0
-  utterance.pitch = 1.0
-  utterance.volume = 1.0
-  utterance.onend = () => {
-    if (voiceStore.isCallActive) voiceStore.setStatus('listening')
-  }
-  utterance.onerror = () => {
-    if (voiceStore.isCallActive) voiceStore.setStatus('listening')
-  }
-  window.speechSynthesis.speak(utterance)
+  ttsIsSpeaking = true
+  ttsPending++
+  const gen = ttsGeneration  // capture generation at enqueue time
+  // Kick off TTS fetch immediately (runs concurrently with whatever is currently playing)
+  const audioReady = _fetchTTSAudio(text)
+  // Chain playback onto the serial queue — waits for prior sentence to finish, then plays
+  ttsQueue = ttsQueue.then(() => _playTTSAudio(text, audioReady, gen))
+  return ttsQueue
 }
 
-function stopSpeaking() {
+// Fetch TTS audio now (does NOT wait for previous sentence to finish).
+// Returns a Promise that resolves to { audioUrl } for OpenAI TTS, or null for browser TTS.
+async function _fetchTTSAudio(text) {
+  const vc = configStore.config.voiceCall || {}
+  const useOpenAITTS = (vc.ttsMode === 'openai' || vc.ttsMode === 'openai-hd') && vc.whisperApiKey
+  if (!useOpenAITTS || !window.electronAPI?.voice?.tts) return null
+  try {
+    const persona = personasStore.getPersonaById(voiceStore.activePersonaId)
+    const voiceId = persona?.voiceId || 'alloy'
+    const result = await window.electronAPI.voice.tts({
+      text,
+      apiKey: vc.whisperApiKey,
+      baseURL: vc.whisperBaseURL || 'https://api.openai.com',
+      model: vc.ttsMode === 'openai-hd' ? 'tts-1-hd' : 'tts-1',
+      voice: voiceId,
+    })
+    if (result.success && result.audio) {
+      return `data:audio/${result.format || 'mp3'};base64,${result.audio}`
+    }
+  } catch { /* fall through — playback will use browser TTS */ }
+  return null
+}
+
+// Play audio for a sentence. audioReady is the Promise from _fetchTTSAudio (may already be resolved).
+// gen must match ttsGeneration at play time — if stopSpeaking() fired since enqueue, drop silently.
+async function _playTTSAudio(text, audioReady, gen) {
+  const isStale = () => gen !== ttsGeneration || !voiceStore.isCallActive
+
+  if (isStale()) {
+    ttsPending = Math.max(0, ttsPending - 1)
+    if (ttsPending === 0) ttsIsSpeaking = false
+    return
+  }
+
+  const done = () => {
+    ttsPending = Math.max(0, ttsPending - 1)
+    if (ttsPending === 0) ttsIsSpeaking = false
+    micCooldownUntil = Date.now() + MIC_COOLDOWN_MS
+    if (voiceStore.isCallActive) voiceStore.setStatus('standby')
+  }
+
+  // Await the prefetched audio (usually already resolved at this point)
+  const audioUrl = await audioReady
+
+  // Re-check after await — stopSpeaking() may have fired while fetch was in-flight
+  if (isStale()) {
+    ttsPending = Math.max(0, ttsPending - 1)
+    if (ttsPending === 0) ttsIsSpeaking = false
+    return
+  }
+
+  if (audioUrl) {
+    return new Promise((resolve) => {
+      activeAudioEl = new Audio(audioUrl)
+      const speakerId = voiceStore.selectedSpeakerId
+      if (speakerId && typeof activeAudioEl.setSinkId === 'function') {
+        activeAudioEl.setSinkId(speakerId).catch(() => {})
+      }
+      const finish = () => {
+        activeAudioEl = null
+        done()
+        resolve()
+      }
+      activeAudioEl.onended = finish
+      activeAudioEl.onerror = () => finish()
+      voiceStore.setStatus('speaking')
+      activeAudioEl.play()
+    })
+  }
+
+  // Browser SpeechSynthesis fallback
+  if (!window.speechSynthesis) { done(); return }
+  return new Promise((resolve) => {
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.rate = 1.0
+    utterance.pitch = 1.0
+    utterance.volume = 1.0
+    const finish = () => { done(); resolve() }
+    utterance.onend = finish
+    utterance.onerror = () => finish()
+    voiceStore.setStatus('speaking')
+    window.speechSynthesis.speak(utterance)
+  })
+}
+
+// Cancel currently playing audio only — does NOT reset the queue.
+function cancelCurrentSpeech() {
   if (window.speechSynthesis) window.speechSynthesis.cancel()
   if (activeAudioEl) { activeAudioEl.pause(); activeAudioEl = null }
+}
+
+// Full stop: cancel audio AND discard all queued utterances.
+// Used for barge-in interruptions and call end.
+function stopSpeaking() {
+  cancelCurrentSpeech()
+  ttsGeneration++              // invalidate all in-flight _playTTSAudio calls
+  ttsQueue = Promise.resolve() // discard any queued utterances
+  ttsPending = 0
+  ttsIsSpeaking = false
+  // Clear speaking status — the VAD loop will set standby/listening on its next frame
+  if (voiceStore.status === 'speaking') voiceStore.setStatus('standby')
 }
 
 // ── Voice event listeners ──
@@ -1898,23 +2070,53 @@ function setupVoiceListeners() {
   const api = window.electronAPI?.voice
   if (!api) return
 
-  voiceCleanups.push(api.onStatus((status) => voiceStore.setStatus(status)))
+  voiceCleanups.push(api.onStatus((status) => {
+    // The VAD loop exclusively owns 'listening' and 'standby' — it runs at 60fps
+    // and knows exactly whether the mic is recording. Letting the backend also write
+    // these states causes races (backend 'standby' arrives late, VAD sees stale value).
+    // The backend only owns 'processing', 'speaking', and 'idle'.
+    if (status === 'listening' || status === 'standby') return
+    voiceStore.setStatus(status)
+  }))
 
   // Whisper transcript from backend
   voiceCleanups.push(api.onTranscription(({ text }) => {
     voiceStore.setTranscript(text)
-    addVoiceMessageToChat('user', text)
   }))
 
-  // AI response — add to chat + speak via SpeechSynthesis
-  voiceCleanups.push(api.onAiText(({ text }) => {
+  // AI response — speak it; don't add to chat (voice is ephemeral, task results go to chat via agent)
+  voiceCleanups.push(api.onAiText(({ text, taskSummary }) => {
     voiceStore.setAiText(text)
-    addVoiceMessageToChat('assistant', text)
-    speakText(text)
+    if (!taskSummary) {
+      speakText(text)
+    } else {
+      // Task summary: only speak if nothing is currently playing — otherwise drop it.
+      // The full result is already visible in the chat; voice is a courtesy notice only.
+      if (voiceStore.status !== 'speaking') {
+        speakText(text)
+      }
+    }
   }))
 
-  voiceCleanups.push(api.onError(({ message }) => console.error('Voice error:', message)))
+  voiceCleanups.push(api.onError(({ message }) => {
+    console.error('Voice error:', message)
+  }))
   voiceCleanups.push(api.onTaskTriggered(({ instruction }) => handleVoiceTask(instruction)))
+
+  // Accumulate voice + Whisper usage into the active chat's contextMetrics
+  if (api.onUsage) {
+    voiceCleanups.push(api.onUsage((usage) => {
+      const chatId = voiceStore.activeChatId
+      if (!chatId) return
+      const chat = chatsStore.chats.find(c => c.id === chatId)
+      if (!chat) return
+      const m = chat.contextMetrics
+      if (usage.whisperCalls) m.whisperCalls = (m.whisperCalls || 0) + usage.whisperCalls
+      if (usage.whisperSecs)  m.whisperSecs  = (m.whisperSecs  || 0) + usage.whisperSecs
+      if (usage.voiceInputTokens)  m.voiceInputTokens  = (m.voiceInputTokens  || 0) + usage.voiceInputTokens
+      if (usage.voiceOutputTokens) m.voiceOutputTokens = (m.voiceOutputTokens || 0) + usage.voiceOutputTokens
+    }))
+  }
 }
 
 // Add a voice exchange message to the active call's chat
@@ -1922,19 +2124,48 @@ function addVoiceMessageToChat(role, content) {
   const chatId = voiceStore.activeChatId
   if (!chatId || !content) return
   chatsStore.addMessage(chatId, { role, content, fromVoice: true })
+  // If the call's chat isn't the one currently visible, switch to it
+  if (chatsStore.activeChatId !== chatId) {
+    chatsStore.setActiveChat(chatId)
+  }
 }
 
-// Handle task triggered from voice call
-function handleVoiceTask(instruction) {
+// Handle task triggered from voice call.
+// The persona's own agent model runs the task via sendMessage().
+// Voice only speaks a brief completion/failure notice — never the full agent response.
+async function handleVoiceTask(instruction) {
   const chatId = voiceStore.activeChatId
   if (!chatId) return
-  // Switch to the chat if needed
-  if (chatsStore.activeChatId !== chatId) {
-    chatsStore.activeChatId = chatId
-  }
-  // Inject instruction as user input and trigger send
+  if (chatsStore.activeChatId !== chatId) chatsStore.activeChatId = chatId
+
+  // Inject instruction and await the agent run
   inputText.value = instruction
-  nextTick(() => sendMessage())
+  await nextTick()
+  await sendMessage()
+
+  // sendMessage is now done — get the last assistant message as the completion summary
+  if (!voiceStore.isCallActive) return
+  const chat = chatsStore.chats.find(c => c.id === chatId)
+  const lastAssistant = chat?.messages
+    ? [...chat.messages].reverse().find(m => m.role === 'assistant' && !m.streaming)
+    : null
+
+  // Pass full content — VoiceSession will use the LLM to produce a complete spoken summary
+  const summary = lastAssistant?.content || null
+
+  // Push updated chat history back to the voice session so it stays aware of new messages
+  const updatedChat = chatsStore.chats.find(c => c.id === chatId)
+  if (updatedChat?.messages && window.electronAPI?.voice?.updateHistory) {
+    const updatedHistory = updatedChat.messages.map(m => ({
+      role: m.role,
+      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+    }))
+    window.electronAPI.voice.updateHistory(updatedHistory)
+  }
+
+  if (window.electronAPI?.voice?.notifyTaskComplete) {
+    window.electronAPI.voice.notifyTaskComplete(summary)
+  }
 }
 
 // ── Grid mode state ──
@@ -2270,7 +2501,6 @@ let _draftSnapshot = null
 watch(showChatConfigModal, (open) => {
   if (!open) return
   ccmActiveTab.value = 'general'
-  chatModelFilter.value = ''
   _loadDraftFromChat()
   // Snapshot for cancel
   _draftSnapshot = {
@@ -2285,8 +2515,6 @@ watch(showChatConfigModal, (open) => {
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
     chatDangerOverrides: JSON.parse(JSON.stringify(draftChatDangerOverrides.value)),
   }
-  if (effectiveProvider.value === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
-  if (effectiveProvider.value === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
 })
 
 function saveChatSettings() {
@@ -2308,6 +2536,15 @@ function saveChatSettings() {
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
     chatDangerOverrides: JSON.parse(JSON.stringify(draftChatDangerOverrides.value)),
   })
+  // If the agent is currently running, push the new permission mode to it immediately
+  // so it takes effect for any pending/future tool calls in the current run.
+  const runningChat = chatsStore.chats.find(c => c.id === chatId && c.isRunning)
+  if (runningChat && window.electronAPI?.updatePermissionMode) {
+    window.electronAPI.updatePermissionMode(chatId, {
+      chatMode: draftPermissionMode.value,
+      chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
+    })
+  }
   _draftSnapshot = null
   showChatConfigModal.value = false
 }
@@ -2386,7 +2623,9 @@ function _loadDraftFromChat() {
   // Tools
   const allToolIds = toolsStore.tools.map(t => t.id)
   if (chat.enabledToolIds) {
-    chatEnabledToolIds.value = new Set(chat.enabledToolIds.filter(id => allToolIds.includes(id)))
+    chatEnabledToolIds.value = new Set(
+      chat.enabledToolIds.filter(id => allToolIds.includes(id))
+    )
   } else {
     chatEnabledToolIds.value = _defaultToolIds()
   }
@@ -2418,7 +2657,9 @@ watch(() => toolsStore.tools.map(t => t.id), (allIds) => {
   if (allIds.length === 0) return
   const chat = chatsStore.activeChat
   if (chat?.enabledToolIds) {
-    chatEnabledToolIds.value = new Set(chat.enabledToolIds.filter(id => allIds.includes(id)))
+    chatEnabledToolIds.value = new Set(
+      chat.enabledToolIds.filter(id => allIds.includes(id))
+    )
   } else if (chatEnabledToolIds.value.size === 0) {
     chatEnabledToolIds.value = _defaultToolIds()
   } else {
@@ -2572,9 +2813,7 @@ const enabledSkills = computed(() => skillsStore.skills.map(s => s.id))
 const enabledSkillObjects = computed(() => skillsStore.allSkillObjects)
 const debugModelId = computed(() => {
   const a = configStore.config.anthropic || {}
-  if (a.activeModel === 'opus')  return a.opusModel  || '(unset)'
-  if (a.activeModel === 'haiku') return a.haikuModel || '(unset)'
-  return a.sonnetModel || '(unset)'
+  return a.utilityModel || a.sonnetModel || '(unset)'
 })
 
 // Visible messages: show last N messages, but always include the final user+assistant pair
@@ -2661,8 +2900,9 @@ watch(chatFilterQuery, async (q) => {
 
 const filteredChats = computed(() => {
   const q = chatFilterQuery.value.trim().toLowerCase()
-  if (!q) return chatsStore.chats
-  return chatsStore.chats.filter(chat => {
+  const sorted = [...chatsStore.chats].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+  if (!q) return sorted
+  return sorted.filter(chat => {
     // Match title
     if (chat.title.toLowerCase().includes(q)) return true
     // Match cached message content
@@ -2766,6 +3006,7 @@ function cancelNewChat() {
 const confirmDeleteTarget = ref(null) // { type: 'chat'|'groupPersona', id, pid?, label }
 
 function requestDeleteChat(id) {
+  if (voiceStore.isCallActive && voiceStore.activeChatId === id) return
   const chat = chatsStore.chats.find(c => c.id === id)
   confirmDeleteTarget.value = {
     type: 'chat',
@@ -2811,6 +3052,8 @@ function openSoulViewer(personaId, personaType, personaName) {
     personaPrompt: persona?.prompt || '',
     personaProviderId: persona?.providerId || null,
     personaModelId: persona?.modelId || null,
+    personaVoiceId: persona?.voiceId || null,
+    personaAvatar: persona?.avatar || null,
   }
 }
 
@@ -2830,6 +3073,7 @@ async function handleSoulViewerUpdatePersona(updates) {
   soulViewerTarget.value.personaDescription = updated.description ?? soulViewerTarget.value.personaDescription
   if (updates.providerId !== undefined) soulViewerTarget.value.personaProviderId = updated.providerId ?? null
   if (updates.modelId !== undefined) soulViewerTarget.value.personaModelId = updated.modelId ?? null
+  if (updates.voiceId !== undefined) soulViewerTarget.value.personaVoiceId = updated.voiceId ?? null
 }
 
 // System persona config popover state moved to ChatHeader
@@ -2886,12 +3130,6 @@ const sortedSystemPersonas = computed(() =>
   [...personasStore.systemPersonas].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
 )
 
-// ── Provider / Model chip popovers ────────────────────────────────────────
-const showProviderPopover = ref(false)
-const showModelPopover = ref(false)
-const providerChipWrap = ref(null)
-const modelChipWrap = ref(null)
-
 // ── RAG chip popover ──────────────────────────────────────────────────────
 const showRagPopover = ref(false)
 const ragChipWrap = ref(null)
@@ -2911,107 +3149,10 @@ const ragEnabledIndexes = computed(() => {
       embeddingModel: cfg.embeddingModel || 'text-embedding-3-small'
     }))
 })
-const chatModelFilter = ref('')
-
-const filteredChatOpenRouterModels = computed(() => {
-  const q = chatModelFilter.value.trim().toLowerCase()
-  if (!q) return modelsStore.openrouterModels
-  return modelsStore.openrouterModels.filter(m =>
-    (m.name || '').toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
-  )
-})
-
-const filteredChatOpenAIModels = computed(() => {
-  const q = chatModelFilter.value.trim().toLowerCase()
-  if (!q) return modelsStore.openaiModels
-  return modelsStore.openaiModels.filter(m =>
-    (m.name || '').toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
-  )
-})
-
-const effectiveProvider = computed(() => {
-  const chatProvider = chatsStore.activeChat?.provider
-  if (chatProvider) return chatProvider
-  return 'anthropic'
-})
-
-const effectiveProviderLabel = computed(() => {
-  const p = effectiveProvider.value
-  if (p === 'openrouter') return 'OpenRouter'
-  if (p === 'openai') return 'OpenAI'
-  return 'Anthropic'
-})
-
-const anthropicModelChoices = computed(() => modelsStore.anthropicModels)
-
-const defaultModelLabel = computed(() =>
-  modelsStore.getDefaultModelLabel(effectiveProvider.value)
-)
-
-const effectiveModelLabel = computed(() => {
-  const model = chatsStore.activeChat?.model
-  if (!model) return 'Default'
-  // Try to find a friendly name from OpenRouter models cache
-  const orMatch = modelsStore.openrouterModels.find(m => m.id === model)
-  if (orMatch) return orMatch.name
-  // Try OpenAI models cache
-  const openaiMatch = modelsStore.openaiModels.find(m => m.id === model)
-  if (openaiMatch) return openaiMatch.name || openaiMatch.id
-  // Try Anthropic model choices
-  const anMatch = anthropicModelChoices.value.find(m => m.id === model)
-  if (anMatch) return anMatch.label
-  // Shorten the model ID for display
-  return model.length > 30 ? '…' + model.slice(-28) : model
-})
-
-function toggleProviderPopover() {
-  showProviderPopover.value = !showProviderPopover.value
-  showModelPopover.value = false
-}
-
-function toggleModelPopover() {
-  showModelPopover.value = !showModelPopover.value
-  showProviderPopover.value = false
-  chatModelFilter.value = ''
-  // Fetch models if needed
-  if (showModelPopover.value && effectiveProvider.value === 'openrouter' && !modelsStore.openrouterCached) {
-    modelsStore.fetchOpenRouterModels()
-  }
-  if (showModelPopover.value && effectiveProvider.value === 'openai' && !modelsStore.openaiCached) {
-    modelsStore.fetchOpenAIModels()
-  }
-}
-
-function selectProvider(provider) {
-  if (chatsStore.activeChatId) {
-    chatsStore.setChatProvider(chatsStore.activeChatId, provider)
-    // Set per-chat model to the provider's configured default
-    const c = configStore.config
-    let defaultModel = null
-    if (provider === 'anthropic') {
-      defaultModel = configStore.activeModelId
-    } else if (provider === 'openrouter') {
-      defaultModel = c.openrouterDefaultModel || c.openrouterModel || null
-    } else if (provider === 'openai') {
-      defaultModel = c.openaiDefaultModel || c.openaiModel || null
-    }
-    chatsStore.setChatModel(chatsStore.activeChatId, defaultModel)
-  }
-  showProviderPopover.value = false
-}
-
-function selectModel(model) {
-  if (chatsStore.activeChatId) {
-    chatsStore.setChatModel(chatsStore.activeChatId, model)
-  }
-  showModelPopover.value = false
-}
 
 
 // Close popovers on outside click (persona header popovers now handled by ChatHeader)
 function handlePopoverOutsideClick(e) {
-  if (providerChipWrap.value && !providerChipWrap.value.contains(e.target)) showProviderPopover.value = false
-  if (modelChipWrap.value && !modelChipWrap.value.contains(e.target)) showModelPopover.value = false
   if (ragChipWrap.value && !ragChipWrap.value.contains(e.target)) showRagPopover.value = false
   if (showGroupPersonaConfigId.value) {
     const configPopover = document.querySelector('.group-persona-config-popover')
@@ -3662,14 +3803,12 @@ function handleChatWindowSend(text) {
  * subsequent persona-to-persona collaboration rounds.
  */
 function buildPersonaRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPrompt, usrPersona) {
-  const chatProvider = targetChat.provider || 'anthropic'
   return respondingIds.map(pid => {
     const persona = personasStore.getPersonaById(pid)
     if (!persona) return null
-    const overrides = targetChat.groupPersonaOverrides?.[pid] || {}
 
     const personaCfg = { ...cfg }
-    const resolvedProvider = overrides.providerId || persona.providerId || chatProvider
+    const resolvedProvider = persona.providerId || 'anthropic'
     if (resolvedProvider === 'anthropic') {
       personaCfg.apiKey = cfg.anthropic?.apiKey || ''
       personaCfg.baseURL = cfg.anthropic?.baseURL || ''
@@ -3681,8 +3820,15 @@ function buildPersonaRuns(respondingIds, groupIds, cfg, targetChat, userPersonaP
       personaCfg.openaiBaseURL = cfg.openai?.baseURL || ''
       personaCfg._resolvedProvider = 'openai'
       personaCfg.defaultProvider = 'openai'
+    } else if (resolvedProvider === 'deepseek') {
+      personaCfg.openaiApiKey = cfg.deepseek?.apiKey || ''
+      personaCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
+      personaCfg._resolvedProvider = 'openai'
+      personaCfg._directAuth = true
+      personaCfg.defaultProvider = 'openai'
     }
-    const resolvedModel = overrides.modelId || persona.modelId || (targetChat.model || null)
+    // Model: chat override > persona.modelId
+    const resolvedModel = targetChat.personaModelOverrides?.[pid] || persona.modelId || null
     if (resolvedModel) personaCfg.customModel = resolvedModel
 
     const otherParticipants = groupIds
@@ -4022,9 +4168,15 @@ async function sendMessage() {
     .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content))
     .map(m => ({ role: m.role, content: m.content }))
 
+  // Resolve persona for this run
+  const sysPersonaId = isGroup
+    ? null  // group path resolves per-persona below
+    : (targetChat.systemPersonaId || personasStore.defaultSystemPersona?.id)
+  const sysPersona = sysPersonaId ? personasStore.getPersonaById(sysPersonaId) : personasStore.defaultSystemPersona
+
+  const chatProvider = sysPersona?.providerId || 'anthropic'
   const cfg = { ...configStore.config }
-  // Resolve per-chat provider/model overrides
-  const chatProvider = targetChat.provider || 'anthropic'
+
   if (chatProvider === 'anthropic') {
     cfg.apiKey = cfg.anthropic?.apiKey || ''
     cfg.baseURL = cfg.anthropic?.baseURL || ''
@@ -4036,9 +4188,27 @@ async function sendMessage() {
     cfg.openaiBaseURL = cfg.openai?.baseURL || ''
     cfg._resolvedProvider = 'openai'
     cfg.defaultProvider = 'openai'
+  } else if (chatProvider === 'deepseek') {
+    cfg.openaiApiKey = cfg.deepseek?.apiKey || ''
+    cfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
+    cfg._resolvedProvider = 'openai'
+    cfg._directAuth = true
+    cfg.defaultProvider = 'openai'
   }
-  if (targetChat.model) {
-    cfg.customModel = targetChat.model
+
+  // Model: chat override takes priority over persona.modelId
+  const chatOverrideModel = targetChat.personaModelOverrides?.[sysPersonaId] || null
+  const resolvedModel = chatOverrideModel || sysPersona?.modelId || null
+  if (resolvedModel) cfg.customModel = resolvedModel
+
+  // isActive guard
+  if (!isGroup && !configStore.config[chatProvider]?.isActive) {
+    await chatsStore.addMessage(chatId, {
+      role: 'assistant',
+      content: `⚠️ Provider **${chatProvider}** is not active. Go to **Configuration** and run Test Connection to activate it.`,
+    })
+    targetChat.isRunning = false
+    return
   }
   // Per-chat working path (artifact directory)
   if (targetChat.workingPath) {
@@ -4061,7 +4231,7 @@ async function sendMessage() {
       console.warn('[CodingMode] Failed to load CLAUDE.md context:', err)
     }
   }
-  dbg(`runAgent → chatId=${chatId} provider=${chatProvider} model=${targetChat.model || cfg.anthropic?.activeModel} msgs=${apiMessages.length} skills=[${enabledSkills.value.join(',')||'none'}] group=${isGroup}`)
+  dbg(`runAgent → chatId=${chatId} provider=${chatProvider} model=${resolvedModel || '(default)'} msgs=${apiMessages.length} skills=[${enabledSkills.value.join(',')||'none'}] group=${isGroup}`)
   dbg(`config → baseURL=${cfg.baseURL} apiKey=${cfg.apiKey ? cfg.apiKey.slice(0,8)+'…' : '(empty)'} sonnet=${cfg.anthropic?.sonnetModel}`)
 
   // Chunks are handled by the persistent handleChunk listener registered in onMounted
@@ -4162,30 +4332,13 @@ async function sendMessage() {
       resolvedPersonaPrompts.systemPersonaId = sysPersona?.id || '__default_system__'
       resolvedPersonaPrompts.userPersonaId = usrPersona?.id || '__default_user__'
 
-      // Resolve per-persona provider/model (tools now chat-level only)
-      const personaProvider = sysPersona?.providerId || chatProvider
-      // Persona inherits chat-level model when its own is null
-      const personaModel = sysPersona?.modelId || (chatsStore.activeChat?.model || null)
-      const singleCfg = { ...cfg }
-      if (personaProvider === 'anthropic') {
-        singleCfg.apiKey = cfg.anthropic?.apiKey || ''
-        singleCfg.baseURL = cfg.anthropic?.baseURL || ''
-      } else if (personaProvider === 'openrouter') {
-        singleCfg.apiKey = cfg.openrouter?.apiKey || ''
-        singleCfg.baseURL = cfg.openrouter?.baseURL || ''
-      } else if (personaProvider === 'openai') {
-        singleCfg.openaiApiKey = cfg.openai?.apiKey || ''
-        singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''
-        singleCfg._resolvedProvider = 'openai'
-        singleCfg.defaultProvider = 'openai'
-      }
-      if (personaModel) singleCfg.customModel = personaModel
+      // cfg already has provider creds + customModel resolved above
 
       dbg('Invoking window.electronAPI.runAgent…')
       const agentRunParams = {
         chatId,
         messages: JSON.parse(JSON.stringify(apiMessages)),
-        config: JSON.parse(JSON.stringify(singleCfg)),
+        config: JSON.parse(JSON.stringify(cfg)),
         enabledAgents: [],
         enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
         ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
@@ -4307,9 +4460,8 @@ async function sendMessage() {
     if (voiceStore.isCallActive && voiceStore.activeChatId === chatId) {
       // Get the last assistant message as a brief summary
       const lastMsg = finChat?.messages?.filter(m => m.role === 'assistant').pop()
-      const summary = lastMsg?.content
-        ? (typeof lastMsg.content === 'string' ? lastMsg.content.slice(0, 100) : 'Done')
-        : 'Done'
+      // Pass full content — VoiceSession will LLM-summarise into a spoken reply
+      const summary = (typeof lastMsg?.content === 'string' ? lastMsg.content : null)
       // Fire and forget — voice session will speak the notification
       if (window.electronAPI?.voice?.notifyTaskComplete) {
         window.electronAPI.voice.notifyTaskComplete(summary)
@@ -4384,6 +4536,17 @@ async function stopAgent() {
         if (msg.streaming) msg.streaming = false
       }
     }
+    // Inject a system info bubble so the user knows the agent was stopped
+    runningChat.messages.push({
+      id: uuidv4(),
+      role: 'system',
+      content: 'Agent stopped by user. Type **continue** or **resume** to pick up where it left off.',
+      segments: [{ type: 'text', content: 'Agent stopped by user. Type **continue** or **resume** to pick up where it left off.' }],
+      streaming: false,
+      timestamp: Date.now(),
+    })
+    await nextTick()
+    scrollToBottom()
   }
 }
 
@@ -4651,9 +4814,19 @@ watch(
   { immediate: true }
 )
 
-onMounted(async () => {
-  // Restore from PiP if a voice call is active for this view
+// KeepAlive lifecycle: fires every time the user navigates back to /chats
+onActivated(() => {
   if (voiceStore.isCallActive && voiceStore.isPip) voiceStore.setPip(false)
+})
+
+// KeepAlive lifecycle: fires when user navigates away — keep mic/TTS running, just show PiP
+onDeactivated(() => {
+  if (voiceStore.isCallActive) voiceStore.setPip(true)
+})
+
+onMounted(async () => {
+  // On first mount, also restore PiP (onActivated fires after onMounted on first render)
+  // — nothing extra needed here; onActivated handles it.
 
   personasStore.loadPersonas()
   await knowledgeStore.loadConfig()
@@ -4698,10 +4871,16 @@ watch(() => voiceStore.isCallActive, (active) => {
   }
 })
 
+// Restart mic capture when user picks a different microphone during a call
+watch(() => voiceStore.selectedMicId, (newId, oldId) => {
+  if (newId === oldId || !voiceStore.isCallActive) return
+  stopMicCapture()
+  startMicCapture()
+})
+
 onUnmounted(() => {
-  // Switch to PiP mode if a voice call is active
-  if (voiceStore.isCallActive) voiceStore.setPip(true)
-  // Clean voice listeners, mic capture, and TTS
+  // Clean voice listeners, mic capture, and TTS on true app teardown.
+  // PiP transition on navigation is handled by onDeactivated above.
   stopMicCapture()
   stopSpeaking()
   voiceCleanups.forEach(fn => fn())

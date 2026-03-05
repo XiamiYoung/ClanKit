@@ -55,23 +55,14 @@
               </div>
               <!-- Provider combo (system personas only) -->
               <div v-if="msg.providerPicker && msg.active" class="wiz-model-provider">
-                <div class="wiz-mp-field">
-                  <label>AI Provider</label>
-                  <select v-model="form.providerId" class="wiz-mp-select">
-                    <option value="anthropic">Anthropic</option>
-                    <option value="openrouter">OpenRouter</option>
-                    <option value="openai">OpenAI</option>
-                  </select>
-                </div>
-                <div class="wiz-mp-field">
-                  <label>Model</label>
-                  <ComboBox
-                    :model-value="form.modelId"
-                    :options="modelComboOptions"
-                    placeholder="Search or type model ID..."
-                    @update:model-value="onModelComboChange"
-                  />
-                </div>
+                <ProviderModelPicker
+                  :provider="form.providerId"
+                  :model="form.modelId"
+                  @update:provider="val => { form.providerId = val; form.modelId = null }"
+                  @update:model="val => form.modelId = val"
+                />
+                <span v-if="showValidation && !form.providerId" class="wiz-error">Provider is required</span>
+                <span v-if="showValidation && form.providerId && !form.modelId" class="wiz-error">Model is required</span>
                 <button class="wiz-option-done" @click="confirmProviderModel" style="margin-top:8px;">
                   <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                   Continue
@@ -129,28 +120,35 @@
         </div>
         <!-- Provider / Model config (system personas) — above prompt -->
         <div v-if="type === 'system'" class="wiz-preview-config">
-          <!-- Provider -->
           <div class="wpc-section">
-            <div class="wpc-label">Provider</div>
-            <div class="wpc-btn-row">
-              <button
-                v-for="prov in ['anthropic', 'openrouter', 'openai']"
-                :key="prov"
-                class="wpc-btn"
-                :class="{ active: form.providerId === prov }"
-                @click="onPreviewProviderChange(prov)"
-              >{{ prov === 'anthropic' ? 'Anthropic' : prov === 'openrouter' ? 'OpenRouter' : 'OpenAI' }}</button>
-            </div>
-          </div>
-          <!-- Model -->
-          <div class="wpc-section">
-            <div class="wpc-label">Model</div>
-            <ComboBox
-              :model-value="form.modelId"
-              :options="modelComboOptions"
-              placeholder="Search models..."
-              @update:model-value="onModelComboChange"
+            <div class="wpc-label">Provider & Model <span style="color:#EF4444">*</span></div>
+            <ProviderModelPicker
+              :provider="form.providerId"
+              :model="form.modelId"
+              @update:provider="val => { form.providerId = val; form.modelId = null }"
+              @update:model="val => form.modelId = val"
             />
+            <span v-if="showValidation && !form.providerId" class="wiz-error">Provider is required</span>
+            <span v-if="showValidation && form.providerId && !form.modelId" class="wiz-error">Model is required</span>
+          </div>
+        </div>
+        <!-- Voice selector (system personas) -->
+        <div v-if="type === 'system'" class="wiz-preview-config" style="margin-bottom:12px;">
+          <div class="wpc-section" style="margin-bottom:0;">
+            <div class="wpc-label">
+              <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+              TTS Voice
+            </div>
+            <div class="wpc-btn-row" style="flex-wrap:wrap;">
+              <button
+                v-for="v in voiceOptions"
+                :key="v.value"
+                class="wpc-btn"
+                :class="{ active: form.voiceId === v.value }"
+                :title="v.desc"
+                @click="form.voiceId = v.value"
+              >{{ v.label }}</button>
+            </div>
           </div>
         </div>
         <!-- Generated prompt -->
@@ -210,7 +208,7 @@ import { useModelsStore } from '../../stores/models'
 import { getAvatarDataUri } from './personaAvatars'
 import AvatarPicker from './AvatarPicker.vue'
 import AppButton from '../common/AppButton.vue'
-import ComboBox from '../common/ComboBox.vue'
+import ProviderModelPicker from '../common/ProviderModelPicker.vue'
 
 const props = defineProps({
   type: { type: String, required: true },
@@ -240,7 +238,17 @@ const form = reactive({
   generatedPrompt: '',
   providerId: 'anthropic',
   modelId: '',
+  voiceId: 'alloy',
 })
+
+const voiceOptions = [
+  { value: 'alloy',   label: 'Alloy',   desc: 'Neutral, balanced' },
+  { value: 'echo',    label: 'Echo',     desc: 'Warm, rounded' },
+  { value: 'fable',   label: 'Fable',    desc: 'Expressive, British' },
+  { value: 'onyx',    label: 'Onyx',     desc: 'Deep, authoritative' },
+  { value: 'nova',    label: 'Nova',     desc: 'Friendly, upbeat' },
+  { value: 'shimmer', label: 'Shimmer',  desc: 'Clear, gentle' },
+]
 
 // Chat conversation state
 const chatMessages = ref([])
@@ -253,19 +261,6 @@ const inputPlaceholder = ref('')
 const enhancing = ref(false)
 const preEnhancePrompt = ref(null)
 
-// ComboBox options for model selector (adapts modelsStore shape to ComboBox shape)
-const modelComboOptions = computed(() => {
-  const p = form.providerId || 'anthropic'
-  return modelsStore.getModelsForProvider(p).map(m => ({
-    id: m.id,
-    name: m.label || m.name || m.id,
-    detail: m.id,
-  }))
-})
-
-function onModelComboChange(val) {
-  form.modelId = val
-}
 
 // Tone options for system personas
 const toneOptions = [
@@ -316,7 +311,7 @@ const systemFlow = [
     type: 'text',
   },
   {
-    ai: "Select the <strong>AI provider and model</strong> for this persona. You can leave defaults to inherit from global config.",
+    ai: "Select the <strong>AI provider and model</strong> for this persona.",
     field: 'providerModel',
     type: 'provider_picker',
   },
@@ -456,9 +451,9 @@ function confirmOptions() {
 // ── Provider / Model picker ──────────────────────────────────────────────
 
 function confirmProviderModel() {
-  // Auto-fill default model if provider is set but model is not
-  if (form.providerId && !form.modelId) {
-    form.modelId = getDefaultModelForProvider(form.providerId)
+  if (!form.providerId || !form.modelId) {
+    showValidation.value = true
+    return
   }
   const parts = [form.providerId]
   if (form.modelId) parts.push(form.modelId)
@@ -466,24 +461,6 @@ function confirmProviderModel() {
   deactivateLastAI()
   conversationStep.value++
   setTimeout(() => advanceConversation(), 350)
-}
-
-function getDefaultModelForProvider(provider) {
-  const c = configStore.config
-  if (provider === 'anthropic') {
-    return configStore.activeModelId || ''
-  } else if (provider === 'openrouter') {
-    return c.openrouterDefaultModel || c.openrouterModel || ''
-  } else if (provider === 'openai') {
-    return c.openaiDefaultModel || c.openaiModel || ''
-  }
-  return ''
-}
-
-function onPreviewProviderChange(prov) {
-  form.providerId = prov
-  const defaultModel = getDefaultModelForProvider(prov)
-  form.modelId = defaultModel
 }
 
 // ── Avatar ────────────────────────────────────────────────────────────────
@@ -584,6 +561,7 @@ function revertEnhance() {
 // ── AI Description ────────────────────────────────────────────────────────
 
 const saving = ref(false)
+const showValidation = ref(false)
 
 async function generateDescription(prompt) {
   if (!prompt.trim()) return form.name || 'Untitled'
@@ -614,6 +592,11 @@ async function generateDescription(prompt) {
 // ── Save ──────────────────────────────────────────────────────────────────
 
 async function save() {
+  // System personas require provider + model
+  if (props.type === 'system' && (!form.providerId || !form.modelId)) {
+    showValidation.value = true
+    return
+  }
   saving.value = true
   try {
     const description = await generateDescription(form.generatedPrompt)
@@ -626,6 +609,7 @@ async function save() {
       prompt: form.generatedPrompt.trim(),
       providerId: form.providerId || null,
       modelId: form.modelId || null,
+      voiceId: form.voiceId || null,
     }
     await personasStore.savePersona(persona)
     emit('saved')
@@ -646,6 +630,7 @@ onMounted(() => {
     form.generatedPrompt = props.editPersona.prompt || ''
     form.providerId = props.editPersona.providerId || 'anthropic'
     form.modelId = props.editPersona.modelId || ''
+    form.voiceId = props.editPersona.voiceId || 'alloy'
     showPreview.value = true
   } else {
     advanceConversation()
@@ -831,6 +816,11 @@ onMounted(() => {
   border-radius: 10px;
   border: 1px solid #2A2A2A;
 }
+.wiz-error {
+  font-size: var(--fs-caption);
+  color: #EF4444;
+  font-weight: 600;
+}
 .wiz-mp-field {
   display: flex;
   flex-direction: column;
@@ -928,7 +918,7 @@ onMounted(() => {
 }
 .wiz-change-avatar-btn:hover { background: #222222; border-color: #374151; }
 .wiz-preview-prompt {
-  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  flex: 1; min-height: 120px; display: flex; flex-direction: column;
 }
 .wiz-preview-label {
   display: block; font-family: 'Inter', sans-serif; font-size: var(--fs-secondary);
@@ -981,10 +971,12 @@ onMounted(() => {
 }
 .wpc-btn-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 .wpc-btn {
   flex: 1;
+  min-width: 70px;
   padding: 5px 8px;
   border-radius: 8px;
   border: 1px solid #2A2A2A;

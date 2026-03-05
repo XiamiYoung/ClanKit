@@ -16,7 +16,7 @@ export const useChatsStore = defineStore('chats', () => {
 
   const activeChat = computed(() => chats.value.find(c => c.id === activeChatId.value) || null)
 
-  const defaultContextMetrics = () => ({ inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 200000, percentage: 0, compactionCount: 0 })
+  const defaultContextMetrics = () => ({ inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 200000, percentage: 0, compactionCount: 0, voiceInputTokens: 0, voiceOutputTokens: 0, whisperCalls: 0, whisperSecs: 0 })
 
   // ── Debounce timers ────────────────────────────────────────────────────────
   const _chatTimers = {}      // { [chatId]: timeoutId }
@@ -45,6 +45,7 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.codingMode === undefined) chat.codingMode = false
     if (chat.maxPersonaRounds === undefined) chat.maxPersonaRounds = null  // null = use default (10)
     if (chat.codingProvider === undefined) chat.codingProvider = 'claude-code'
+    if (chat.personaModelOverrides === undefined) chat.personaModelOverrides = {}
     // messages === null means "not loaded yet" (lazy)
     if (chat.messages) {
       for (const msg of chat.messages) {
@@ -129,6 +130,7 @@ export const useChatsStore = defineStore('chats', () => {
       codingMode: false,
       codingProvider: 'claude-code',
       maxOutputTokens: null,    // null = use global default from config
+      personaModelOverrides: {},
     }
     if (personaConfig && personaConfig.length === 1) {
       chat.systemPersonaId = personaConfig[0]
@@ -179,6 +181,7 @@ export const useChatsStore = defineStore('chats', () => {
       enabledMcpIds: source.enabledMcpIds ? [...source.enabledMcpIds] : null,
       codingMode: source.codingMode || false,
       codingProvider: source.codingProvider || 'claude-code',
+      personaModelOverrides: {},  // overrides are not copied — intentional
     }
     // Override personas if provided
     if (personaOverride && personaOverride.length > 0) {
@@ -281,6 +284,19 @@ export const useChatsStore = defineStore('chats', () => {
     chat.updatedAt = Date.now()
     await persistChat(chatId)
     await persistIndex()
+  }
+
+  function setChatPersonaModelOverride(chatId, personaId, modelId) {
+    const chat = chats.value.find(c => c.id === chatId)
+    if (!chat) return
+    if (!chat.personaModelOverrides) chat.personaModelOverrides = {}
+    if (modelId === null) {
+      delete chat.personaModelOverrides[personaId]
+    } else {
+      chat.personaModelOverrides[personaId] = modelId
+    }
+    chat.updatedAt = Date.now()
+    debouncedPersistChat(chatId)
   }
 
   async function setGroupPersonas(chatId, personaIds) {
@@ -591,7 +607,7 @@ export const useChatsStore = defineStore('chats', () => {
     chats, activeChatId, activeChat, isLoading, unreadChatIds, completedChatIds, pendingPermissionChatIds,
     loadChats, createChat, createChatFromHistory, removeChat, renameChat,
     setActiveChat, addMessage, updateLastAssistantMessage, setChatPersona,
-    setChatProvider, setChatModel, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
+    setChatProvider, setChatModel, setChatPersonaModelOverride, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
     setGroupPersonas, toggleGroupMode, setGroupPersonaOverride,
     removeGroupPersona, addGroupPersona, reorderChats,
     initChunkListener, setUiChunkCallback, clearUiChunkCallback, markAsRead, markCompleted,

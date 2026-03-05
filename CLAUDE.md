@@ -247,6 +247,7 @@ Text on gradient surfaces is always `#FFFFFF`. Secondary text on gradients uses 
 - `confirmClass="danger"` for destructive actions, `"primary"` for non-destructive
 
 #### Modals (General Rules)
+- **Modal-first rule**: All dialogs, pickers, confirmations, and configuration panels MUST be implemented as proper centered modals. **Never use inline popovers, anchored dropdowns, or absolutely-positioned panels attached to trigger elements.** If UI needs to float over content, it is a modal.
 - All modals are **true modals** — they do NOT close on backdrop click. Users must explicitly dismiss via Cancel, X button, or Escape key.
 - Use `<Teleport to="body">` with `position: fixed` + `z-index: 200`
 - Dark themed: `#0F0F0F` background, `#2A2A2A` borders, white text
@@ -443,6 +444,108 @@ All views follow a consistent structure:
 3. **Scrollable content** — Cards, grids, or lists in a padded container
 4. **Save row** (config pages) — Bottom-aligned save button with status indicator
 
+### Configuration Page Layout
+
+ConfigView uses a **two-level navigation** pattern — do not flatten it back to a single tab bar:
+
+- **Level 1 (top):** 2 primary tabs — `General` | `AI` — styled with bottom-border active indicator (not gradient)
+- **Level 2 (left column, 176px):** vertical sub-nav per primary tab, same visual style as the main Sidebar `NavItem` (black gradient active, gray inactive)
+- **Content area (right, flex-1):** max-width 860px (1000px on 4K), independently scrollable
+
+**Tab → Sub-tab mapping:**
+
+| Primary Tab | Sub-tabs |
+|-------------|---------|
+| General | Paths · Security · Email |
+| AI | Models · Voice · Knowledge |
+
+**Sub-nav status dots:** each sub-nav item has a 7px right-aligned dot — green (`#10B981`) when the section has data configured, gray (`#D1D5DB`) when empty. Active item dot uses `#34D399` / `rgba(255,255,255,0.3)`.
+
+**Content placement rules:**
+- Filesystem paths (Data, Artifact, Skills, Docs) → General → Paths
+- Max Output Tokens → AI → Models (it's a model-level setting)
+- Pinecone/RAG → AI → Knowledge (label: "Knowledge", not "RAG" or "AI Knowledge")
+
+---
+
+## Responsive Design System
+
+SparkAI targets **1920×1080 (HD)** as the primary resolution and **2560px+ (4K)** as the secondary. Design all UI for HD first; 4K gets proportional scaling via the global font-size step.
+
+### Breakpoints
+
+| Name | `min-width` | `html font-size` | Description |
+|------|-------------|------------------|-------------|
+| base | (default) | `100%` = 16px | < 1920px — graceful fallback |
+| `hd` | `1920px` | `112.5%` = 18px | 1080p — **primary target** |
+| `4k` | `2560px` | `125%` = 20px | 4K / large display |
+
+Tailwind custom screens `hd:` and `4k:` are registered. Use them instead of ad-hoc `@media` where possible.
+
+### Font Scale Strategy — Breakpoint Steps (not `clamp()`)
+
+`html { font-size }` steps at two breakpoints. All `rem` and `var(--fs-*)` values auto-scale with it — no per-component media queries needed for typography.
+
+```css
+html { font-size: 100%; }                          /* < 1920px */
+@media (min-width: 1920px) { font-size: 112.5%; } /* HD       */
+@media (min-width: 2560px) { font-size: 125%; }   /* 4K       */
+```
+
+### Spacing Unit Rule — `rem` not `px`
+
+**All spacing must use `rem`, not `px`.** This is mandatory so that padding, gaps, border-radius, and element sizes scale automatically with the font-size breakpoints.
+
+| Situation | Rule |
+|-----------|------|
+| `padding`, `gap`, `margin` | Always `rem` |
+| `width`, `height` for UI elements (buttons, avatars, icons containers) | Always `rem` |
+| `border-radius` | Use `var(--radius-*)` token or `rem` |
+| `font-size` | Use `var(--fs-*)` token (never raw `px`) |
+| `border: 1px solid` | Exception — `1px` stays `px` |
+| SVG `width`/`height` attributes | Exception — SVG attributes stay `px` |
+| Scrollbar `width: 6px` | Exception — stays `px` |
+| Decorative stripes `height: 3px` | Exception — stays `px` |
+
+**Quick conversion table (÷16):**
+
+| px | rem |
+|----|-----|
+| 4 | 0.25rem |
+| 6 | 0.375rem |
+| 8 | 0.5rem |
+| 10 | 0.625rem |
+| 12 | 0.75rem |
+| 14 | 0.875rem |
+| 16 | 1rem |
+| 20 | 1.25rem |
+| 24 | 1.5rem |
+| 28 | 1.75rem |
+| 32 | 2rem |
+| 42 | 2.625rem |
+
+### Card Grid Columns
+
+Card grids (MCP, Tools, Skills, Knowledge, Personas) use `min-width` breakpoints — never `max-width`:
+
+```css
+.some-grid { grid-template-columns: repeat(2, 1fr); } /* < 1920px */
+@media (min-width: 1920px) { grid-template-columns: repeat(3, 1fr); }
+@media (min-width: 2560px) { grid-template-columns: repeat(4, 1fr); }
+```
+
+### Sidebar Behavior
+
+- **Auto-collapse** when `window.innerWidth < 1920` (no user override set)
+- **Manual toggle** locks the state (`userOverride` ref) — subsequent auto-resize respects the override
+- Expanded: 200px · Collapsed: 64px · No drawer/overlay mode
+
+### Config Form Width Cap
+
+Config page inner content is capped to prevent fields from stretching uncomfortably wide on large screens:
+- HD: `max-width: 860px; margin: 0 auto`
+- 4K: `max-width: 1000px`
+
 ## Coding Guidelines
 
 - Use `var(--token)` CSS custom properties for all colors, radii, and font sizes
@@ -506,7 +609,6 @@ Do NOT write task state to files on disk — it conflicts across concurrent term
 - Never mark a task complete without proving it works
 - Diff behavior between main and your changes when relevant
 - Ask yourself: "Would a staff engineer approve this?"
-- Run tests, check logs, demonstrate correctness
 
 ### 6. Demand Elegance (Balanced)
 

@@ -2,13 +2,14 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 /**
- * Tools Store — manages tool configurations for HTTP, Code Snippet, and Prompt tools.
+ * Tools Store — manages tool configurations for HTTP, Code Snippet, Prompt, and SMTP tools.
  *
  * Tool schema:
- *   All types:  { id, name, description, category, type: 'http'|'code'|'prompt' }
+ *   All types:  { id, name, description, category, type: 'http'|'code'|'prompt'|'smtp' }
  *   HTTP:       + { method, endpoint, headers, bodyTemplate }
  *   Code:       + { language: 'javascript'|'python'|'bash', code }
  *   Prompt:     + { promptText }
+ *   SMTP:       (no extra fields — credentials come from Config → Email)
  *
  * On-disk format (dict):
  * {"tool-id":{"name":"...","type":"http",...}}
@@ -41,6 +42,10 @@ export const useToolsStore = defineStore('tools', () => {
         ...base,
         promptText: t.promptText || '',
       }
+    }
+
+    if (type === 'smtp') {
+      return base  // no extra fields — uses Config → Email credentials
     }
 
     // HTTP (default)
@@ -109,6 +114,8 @@ export const useToolsStore = defineStore('tools', () => {
         entry.code = t.code || ''
       } else if (t.type === 'prompt') {
         entry.promptText = t.promptText || ''
+      } else if (t.type === 'smtp') {
+        // no extra fields
       } else {
         // HTTP
         entry.method = t.method || 'GET'

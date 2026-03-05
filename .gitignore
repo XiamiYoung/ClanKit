@@ -36,3 +36,6 @@ dist-release/
 # Backup files
 *.bak
 *.bak*
+
+# docs
+docs/
