@@ -633,12 +633,11 @@ function cardGradient() {
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
 .mcp-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 20px;
 }
-@media (max-width: 1200px) { .mcp-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 900px)  { .mcp-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 600px)  { .mcp-grid { grid-template-columns: 1fr; } }
+@media (min-width: 1920px) { .mcp-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 2560px) { .mcp-grid { grid-template-columns: repeat(4, 1fr); } }
 
 /* ── Card ──────────────────────────────────────────────────────────────────── */
 .mcp-card {
@@ -675,7 +674,7 @@ function cardGradient() {
 }
 .mcp-default-label {
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: var(--fs-caption);
   font-weight: 600;
   color: #9CA3AF;
   letter-spacing: 0.04em;
@@ -703,7 +702,7 @@ function cardGradient() {
   align-items: center;
   gap: 4px;
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: var(--fs-caption);
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 6px;
@@ -840,7 +839,7 @@ function cardGradient() {
 .form-textarea {
   width: 100%; padding: 8px 10px; border-radius: 6px;
   border: 1px solid #2A2A2A; background: #111111;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-small);
   color: #FFFFFF; outline: none; resize: vertical; transition: border-color 0.15s;
 }
 .form-textarea:focus { border-color: #4B5563; }
@@ -900,7 +899,7 @@ function cardGradient() {
 .test-tools-list { display: flex; flex-direction: column; gap: 4px; }
 .test-tool-item { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; }
 .test-tool-name {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-small);
   font-weight: 600; color: #FFFFFF; flex-shrink: 0;
 }
 .test-tool-desc {
