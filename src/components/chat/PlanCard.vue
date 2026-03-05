@@ -61,10 +61,10 @@ defineEmits(['approve', 'refine', 'reject'])
 
 <style scoped>
 .plan-card {
-  margin-top: 10px;
+  margin-top: 0.625rem;
   background: #0F0F0F;
   border: 1px solid #2A2A2A;
-  border-radius: 14px;
+  border-radius: 0.875rem;
   overflow: hidden;
   transition: opacity 0.2s ease;
 }
@@ -75,17 +75,17 @@ defineEmits(['approve', 'refine', 'reject'])
 .plan-card__header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 14px 10px;
+  gap: 0.5rem;
+  padding: 0.75rem 0.875rem 0.625rem;
   border-bottom: 1px solid #1F1F1F;
 }
 .plan-card__icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 0.4375rem;
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   color: #fff;
   flex-shrink: 0;
@@ -101,20 +101,20 @@ defineEmits(['approve', 'refine', 'reject'])
 .plan-card__steps {
   list-style: none;
   margin: 0;
-  padding: 8px 0;
+  padding: 0.5rem 0;
 }
 .plan-card__step {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 14px;
+  gap: 0.625rem;
+  padding: 0.375rem 0.875rem;
 }
 .plan-card__step-num {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 1.25rem;
+  height: 1.25rem;
   border-radius: 50%;
   border: 1px solid #3A3A3A;
   background: #1A1A1A;
@@ -137,18 +137,18 @@ defineEmits(['approve', 'refine', 'reject'])
 
 .plan-card__actions {
   display: flex;
-  gap: 6px;
-  padding: 10px 14px 12px;
+  gap: 0.375rem;
+  padding: 0.625rem 0.875rem 0.75rem;
   border-top: 1px solid #1F1F1F;
 }
 .plan-card__btn {
   font-family: 'Inter', sans-serif;
   font-size: 0.75rem;
   font-weight: 600;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   border: none;
   cursor: pointer;
-  padding: 5px 12px;
+  padding: 0.3125rem 0.75rem;
   transition: all 0.15s ease;
 }
 .plan-card__btn--approve {
@@ -178,7 +178,7 @@ defineEmits(['approve', 'refine', 'reject'])
 }
 
 .plan-card__status {
-  padding: 8px 14px 10px;
+  padding: 0.5rem 0.875rem 0.625rem;
   border-top: 1px solid #1F1F1F;
   font-family: 'Inter', sans-serif;
   font-size: 0.75rem;
