@@ -111,8 +111,8 @@ const isProviderInactive = computed(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 200px;
-  border-radius: 16px;
+  min-height: 12.5rem;
+  border-radius: 1rem;
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
@@ -121,56 +121,56 @@ const isProviderInactive = computed(() => {
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .persona-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-0.1875rem);
   background: #FFFFFF;
   border-color: #E5E5EA;
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 .persona-card:active {
-  transform: translateY(-1px);
+  transform: translateY(-0.0625rem);
   transition-duration: 0.1s;
 }
 
 .persona-card-accent { height: 3px; width: 100%; flex-shrink: 0; }
-.persona-card-body { padding: 16px 16px 12px; display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.persona-card-title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.persona-card-body { padding: 1rem 1rem 0.75rem; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.persona-card-title-row { display: flex; align-items: center; gap: 0.625rem; margin-bottom: 0.625rem; }
 .persona-card-avatar { flex-shrink: 0; }
-.persona-card-avatar-img { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; }
+.persona-card-avatar-img { width: 2.625rem; height: 2.625rem; border-radius: 50%; object-fit: cover; }
 .persona-card-avatar-fallback {
-  width: 42px; height: 42px; border-radius: 50%;
+  width: 2.625rem; height: 2.625rem; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px; font-weight: 700; color: #fff;
+  font-size: 1rem; font-weight: 700; color: #fff;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
 }
-.persona-card-title-col { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.persona-card-title-col { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
 .persona-card-name {
   font-family: 'Inter', sans-serif; font-size: var(--fs-body); font-weight: 700;
   color: #1A1A1A; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .persona-card-type {
-  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 7px;
-  border-radius: 4px; width: fit-content;
+  font-family: 'Inter', sans-serif; font-size: 0.625rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; padding: 0.0625rem 0.4375rem;
+  border-radius: 0.25rem; width: fit-content;
 }
 .persona-card-type.system { background: rgba(0, 0, 0, 0.06); color: #1A1A1A; }
 .persona-card-type.user { background: rgba(0, 0, 0, 0.06); color: #1A1A1A; }
 .persona-card-desc {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); color: #6B7280;
-  line-height: 1.55; margin: 0 0 10px;
+  line-height: 1.55; margin: 0 0 0.625rem;
   max-height: calc(var(--fs-secondary) * 1.55 * 2); /* 2 lines — matches default persona */
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .pc-model-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   flex-wrap: wrap;
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
 }
 .pc-provider-badge {
   font-size: var(--fs-small);
   font-weight: 600;
-  padding: 1px 6px;
+  padding: 0.0625rem 0.375rem;
   border-radius: var(--radius-full);
   background: rgba(0,0,0,0.06);
   color: var(--text-secondary);
@@ -182,7 +182,7 @@ const isProviderInactive = computed(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 180px;
+  max-width: 11.25rem;
 }
 .pc-inactive-warn {
   font-size: var(--fs-small);
@@ -190,31 +190,31 @@ const isProviderInactive = computed(() => {
   font-weight: 600;
 }
 .persona-card-footer {
-  border-top: 1px solid rgba(229, 229, 234, 0.5); padding-top: 12px; margin-top: auto;
+  border-top: 1px solid rgba(229, 229, 234, 0.5); padding-top: 0.75rem; margin-top: auto;
   display: flex; align-items: center; justify-content: space-between;
 }
-.persona-card-badges { display: flex; align-items: center; gap: 6px; }
+.persona-card-badges { display: flex; align-items: center; gap: 0.375rem; }
 .persona-card-default-badge {
-  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
-  padding: 2px 8px; border-radius: 9999px;
+  font-family: 'Inter', sans-serif; font-size: 0.625rem; font-weight: 600;
+  padding: 0.125rem 0.5rem; border-radius: 9999px;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-  color: #FFFFFF; display: flex; align-items: center; gap: 4px;
+  color: #FFFFFF; display: flex; align-items: center; gap: 0.25rem;
 }
 .persona-card-builtin-badge {
-  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
-  padding: 2px 8px; border-radius: 9999px; background: rgba(0,0,0,0.06);
+  font-family: 'Inter', sans-serif; font-size: 0.625rem; font-weight: 600;
+  padding: 0.125rem 0.5rem; border-radius: 9999px; background: rgba(0,0,0,0.06);
   color: #1A1A1A; display: flex; align-items: center;
 }
 .persona-card-voice-badge {
-  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600;
-  padding: 2px 8px; border-radius: 9999px; background: rgba(0,0,0,0.06);
-  color: #6B7280; display: flex; align-items: center; gap: 3px;
+  font-family: 'Inter', sans-serif; font-size: 0.625rem; font-weight: 600;
+  padding: 0.125rem 0.5rem; border-radius: 9999px; background: rgba(0,0,0,0.06);
+  color: #6B7280; display: flex; align-items: center; gap: 0.1875rem;
   text-transform: capitalize;
 }
-.persona-card-footer-right { display: flex; align-items: center; gap: 2px; }
+.persona-card-footer-right { display: flex; align-items: center; gap: 0.125rem; }
 .persona-action-btn {
-  width: 28px; height: 28px; border-radius: 6px;
+  width: 1.75rem; height: 1.75rem; border-radius: 0.375rem;
   display: flex; align-items: center; justify-content: center;
   border: none; background: transparent; cursor: pointer;
   transition: background 0.15s, color 0.15s; flex-shrink: 0;
