@@ -2387,10 +2387,10 @@ const activeChatUsage = computed(() => {
 const activeChatCost = computed(() => {
   const usage = activeChatUsage.value
   const chat  = chatsStore.activeChat
-  if (\!usage || \!chat) return null
+  if (!usage || !chat) return null
   const modelId = chat.model || contextSnapshot.value?.model || ''
   const price   = resolveModelPrice(modelId, configStore.config.pricing)
-  if (\!price) return null
+  if (!price) return null
   const usd = calcCostUSD(usage, price)
   const all = convertCurrencies(usd, configStore.config.pricing?.currencyRates)
   return { usd, all, modelId }
