@@ -141,7 +141,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideClick))
 .pmp-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .pmp-select-wrap {
@@ -153,8 +153,8 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideClick))
 .pmp-trigger {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
@@ -186,20 +186,20 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideClick))
 /* Dropdown menu */
 .pmp-menu {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 0.25rem);
   left: 0;
-  min-width: 180px;
-  max-height: 260px;
+  min-width: 11.25rem;
+  max-height: 16.25rem;
   overflow-y: auto;
   background: #0F0F0F;
   border: 1px solid #2A2A2A;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.2);
   z-index: 1000;
-  padding: 6px;
+  padding: 0.375rem;
   animation: pmpMenuEnter 0.15s ease-out;
 }
-.pmp-menu-model { min-width: 260px; }
+.pmp-menu-model { min-width: 16.25rem; }
 
 @keyframes pmpMenuEnter {
   from { opacity: 0; transform: scale(0.96) translateY(4px); }
@@ -208,11 +208,11 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideClick))
 
 .pmp-search {
   width: 100%;
-  padding: 6px 10px;
-  margin-bottom: 4px;
+  padding: 0.375rem 0.625rem;
+  margin-bottom: 0.25rem;
   background: #1A1A1A;
   border: 1px solid #2A2A2A;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   color: #FFFFFF;
   font-size: var(--fs-caption);
   outline: none;
@@ -224,10 +224,10 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideClick))
 .pmp-option {
   display: block;
   width: 100%;
-  padding: 7px 10px;
+  padding: 0.4375rem 0.625rem;
   background: transparent;
   border: none;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   color: #9CA3AF;
   font-size: var(--fs-caption);
   font-family: 'JetBrains Mono', monospace;
@@ -245,7 +245,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideClick))
 }
 
 .pmp-empty {
-  padding: 10px;
+  padding: 0.625rem;
   color: #6B7280;
   font-size: var(--fs-caption);
   text-align: center;
@@ -257,14 +257,14 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideClick))
 }
 
 .pmp-loading {
-  padding: 10px;
+  padding: 0.625rem;
   color: #6B7280;
   font-size: var(--fs-caption);
   text-align: center;
 }
 
 .pmp-provider-readonly {
-  padding: 6px 12px;
+  padding: 0.375rem 0.75rem;
   background: #1A1A1A;
   border-radius: var(--radius-sm);
   color: rgba(255,255,255,0.6);
