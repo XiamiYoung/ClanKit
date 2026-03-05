@@ -801,7 +801,7 @@ onMounted(async () => {
 .news-page {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* flex-1 min-h-0 applied by App.vue's <component> wrapper */
   overflow: hidden;
   background: var(--bg-main);
   padding: 24px 28px 0;
@@ -821,7 +821,7 @@ onMounted(async () => {
 
 @media (min-width: 2560px) {
   .news-scroll {
-    overflow-y: hidden;
+    overflow: hidden;
     padding-bottom: 0;
   }
 }
@@ -1095,7 +1095,7 @@ onMounted(async () => {
     grid-template-rows: repeat(2, 1fr);
     grid-auto-rows: unset;
     flex: 1;
-    height: 90%;
+    height: 80%;
     min-height: 0;
   }
 }
