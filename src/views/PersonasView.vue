@@ -254,7 +254,7 @@ function getAvatarGradient(persona) {
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
 .personas-header {
-  padding: 24px 32px 20px;
+  padding: 1.5rem 2rem 1.25rem;
   background: #FFFFFF;
   border-bottom: 1px solid #E5E5EA;
 }
@@ -274,12 +274,12 @@ function getAvatarGradient(persona) {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   color: #6B7280;
-  margin: 4px 0 0 0;
+  margin: 0.25rem 0 0 0;
 }
 .personas-header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .persona-count-badge {
   font-family: 'Inter', sans-serif;
@@ -287,14 +287,14 @@ function getAvatarGradient(persona) {
   font-weight: 600;
   color: #9CA3AF;
   background: #F5F5F5;
-  padding: 4px 12px;
+  padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   border: 1px solid #E5E5EA;
 }
 
 /* ── Catalog container ───────────────────────────────────────────────────── */
 .personas-catalog {
-  padding: 0 32px;
+  padding: 0 2rem;
   display: flex;
   flex-direction: column;
 }
@@ -303,7 +303,7 @@ function getAvatarGradient(persona) {
 .personas-columns {
   display: flex;
   gap: 0;
-  padding-top: 24px;
+  padding-top: 1.5rem;
   flex: 1;
   min-height: 0; /* allow children to shrink below content size */
 }
@@ -317,13 +317,13 @@ function getAvatarGradient(persona) {
 .column-divider {
   width: 1px;
   align-self: stretch;
-  margin: 0 24px;
+  margin: 0 1.5rem;
   background: #E5E5EA;
 }
 @media (max-width: 800px) {
   .personas-columns {
     flex-direction: column;
-    gap: 24px;
+    gap: 1.5rem;
   }
   .column-divider {
     width: 100%;
@@ -341,17 +341,17 @@ function getAvatarGradient(persona) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 1rem;
 }
 .section-header-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
 }
 .section-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
+  width: 2.125rem;
+  height: 2.125rem;
+  border-radius: 0.5625rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -377,7 +377,7 @@ function getAvatarGradient(persona) {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   color: #9CA3AF;
-  margin: 2px 0 0 0;
+  margin: 0.125rem 0 0 0;
 }
 
 /* ── Scrollable grid area within each column ─────────────────────────────── */
@@ -385,12 +385,12 @@ function getAvatarGradient(persona) {
   flex: 1;
   overflow-y: auto;
   scrollbar-width: thin;
-  padding-bottom: 24px;
+  padding-bottom: 1.5rem;
 }
 .personas-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
+  gap: 0.875rem;
 }
 @media (min-width: 1920px) {
   .personas-grid { grid-template-columns: repeat(3, 1fr); }
@@ -401,15 +401,15 @@ function getAvatarGradient(persona) {
 
 /* ── Section empty state ─────────────────────────────────────────────────── */
 .section-empty {
-  padding: 24px;
+  padding: 1.5rem;
 }
 .section-empty-inner {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 28px 24px;
-  border-radius: 16px;
+  gap: 0.5rem;
+  padding: 1.75rem 1.5rem;
+  border-radius: 1rem;
   background: #F9F9F9;
   border: 1.5px dashed #D1D1D6;
 }
