@@ -248,7 +248,7 @@ Text on gradient surfaces is always `#FFFFFF`. Secondary text on gradients uses 
 
 #### Modals (General Rules)
 - **Modal-first rule**: All dialogs, pickers, confirmations, and configuration panels MUST be implemented as proper centered modals. **Never use inline popovers, anchored dropdowns, or absolutely-positioned panels attached to trigger elements.** If UI needs to float over content, it is a modal.
-- All modals are **true modals** — they do NOT close on backdrop click. Users must explicitly dismiss via Cancel, X button, or Escape key.
+- All modals are **true modals** — they do **NOT** close on backdrop click. **Never add `@click.self` or any click handler to the backdrop div.** Users must explicitly dismiss via Cancel, X button, or Escape key. No exceptions — this applies to every dialog including cost overview, settings panels, pickers, and confirmations.
 - Use `<Teleport to="body">` with `position: fixed` + `z-index: 200`
 - Dark themed: `#0F0F0F` background, `#2A2A2A` borders, white text
 - Header: icon in gradient container + title + close button
@@ -309,36 +309,37 @@ All "back" / "return" navigation buttons use the **black gradient** style to sta
 - Label should be short and descriptive (e.g., "Single View", "Skills")
 - Examples: grid-to-single-view button (`ChatGridLayout`), skill-detail-to-catalog button (`SkillsView`)
 
-#### Refresh / Action Buttons
+#### Page-Level Action Buttons (Standard)
 
-All toolbar action buttons (refresh, new file, new folder) use the **black gradient** style, matching the app's signature look:
+All page-level action buttons (Refresh, Add, New, etc.) in view headers **must use `<AppButton size="compact">`**. Do NOT use custom `.action-btn` CSS classes — those are obsolete.
 
-```css
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: var(--radius-sm, 8px);
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 600;
-  color: #FFFFFF;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.action-btn:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
-}
+```vue
+<!-- ✅ Correct -->
+<AppButton size="compact" @click="refresh" :loading="isRefreshing">
+  <svg style="width:14px;height:14px;" .../>
+  Refresh
+</AppButton>
+
+<AppButton size="compact" @click="openAdd">
+  <svg style="width:14px;height:14px;" .../>
+  Add Item
+</AppButton>
+
+<!-- ❌ Wrong — do not use custom button classes -->
+<button class="action-btn" @click="refresh">...</button>
 ```
 
-- Icon-only variants use `padding: 6px` (square) instead of `6px 14px`
-- Text+icon variants include a 14-16px SVG icon before the label
-- Examples: NotesView tree toolbar (File, Folder, Refresh), SkillsView catalog refresh, SkillsView sidebar refresh
+**`compact` size spec** (defined in `AppButton.vue`):
+- `padding: 0.375rem 0.875rem`
+- `border-radius: var(--radius-sm)`
+- `font-size: var(--fs-secondary)`
+- SVG icons: `14px × 14px`
+- Loading state: use `:loading` prop (built-in spinner), not custom `.btn-spinner`
+- Disabled state: use `:disabled` prop (built-in 0.5 opacity)
+
+Pages using this standard: ToolsView, McpView, PersonasView, KnowledgeView, SkillsView, NewsView.
+
+**Exception — NotesView tree toolbar**: Uses raw `<button class="action-btn">` because that toolbar is inside the notes file tree sidebar, not a page header. This is acceptable for that specific dense/icon-only context.
 
 #### Dark Dialogs / Dropdowns
 
@@ -457,14 +458,49 @@ ConfigView uses a **two-level navigation** pattern — do not flatten it back to
 | Primary Tab | Sub-tabs |
 |-------------|---------|
 | General | Paths · Security · Email |
-| AI | Models · Voice · Knowledge |
+| AI | Models · Voice · Knowledge · Pricing |
 
 **Sub-nav status dots:** each sub-nav item has a 7px right-aligned dot — green (`#10B981`) when the section has data configured, gray (`#D1D5DB`) when empty. Active item dot uses `#34D399` / `rgba(255,255,255,0.3)`.
 
 **Content placement rules:**
-- Filesystem paths (Data, Artifact, Skills, Docs) → General → Paths
-- Max Output Tokens → AI → Models (it's a model-level setting)
+- Filesystem paths (Data, Artifact, Skills) → General → Paths — each path in its own `config-card`
+- Global model settings (Max Output Tokens) → AI → Models → **Global Model Settings** card (provider-agnostic settings go here)
+- DeepSeek-specific limits (Max Output Tokens 8192 cap) → DeepSeek provider card → **Limits** section
 - Pinecone/RAG → AI → Knowledge (label: "Knowledge", not "RAG" or "AI Knowledge")
+
+#### Section Card Pattern
+
+Every logical group of related fields lives in its own `config-card` with a `form-section-header` at the top:
+
+```html
+<div class="config-card">
+  <div class="form-section-header">
+    <div class="section-icon-sm">
+      <svg class="icon-xs" viewBox="0 0 24 24" ...><!-- icon --></svg>
+    </div>
+    <h3 class="form-section-title">Section Title</h3>
+    <!-- optional: <span class="form-label-hint">subtitle or env var</span> -->
+  </div>
+  <!-- fields -->
+</div>
+```
+
+- `section-icon-sm`: 28×28px black gradient square, white icon inside
+- `form-section-title`: `font-weight: 700`, `var(--fs-body)`, `var(--text-primary)`
+- `form-label-hint`: monospace, `var(--fs-caption)`, `var(--text-muted)` — used for env var names or counts
+
+**Provider card internal sections** (each separated by `form-divider`):
+
+| Section | Icon | Applies to |
+|---------|------|------------|
+| Credentials | lock | all providers |
+| Models | box/package | Anthropic only (Sonnet/Opus/Haiku model IDs) |
+| Available Models | box/package + inline Fetch button | OpenRouter, OpenAI, DeepSeek |
+| Utility Model | sun/gear | all providers |
+| Limits | list | DeepSeek (provider-specific hard limits) |
+| Test | signal/pulse | all providers — always last |
+
+**Rule:** Settings that are **provider-specific** (e.g. DeepSeek's 8192 token cap) go in a dedicated section inside that provider's card, **before** the Test section. Settings that apply to **all providers** (e.g. global max output tokens) go in the Global Model Settings card above the provider tab selector.
 
 ---
 

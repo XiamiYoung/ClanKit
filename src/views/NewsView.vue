@@ -70,7 +70,7 @@
         <h1 class="news-title">News Feeds</h1>
         <div class="news-header-actions">
           <!-- Rotate -->
-          <button class="action-btn" @click="rotateAll" :disabled="isRefreshing">
+          <AppButton size="compact" @click="rotateAll" :disabled="isRefreshing" :loading="isRotating">
             <svg v-if="!isRotating" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="16 3 21 3 21 8"/>
               <line x1="4" y1="20" x2="21" y2="3"/>
@@ -78,33 +78,31 @@
               <line x1="15" y1="15" x2="21" y2="21"/>
               <line x1="4" y1="4" x2="9" y2="9"/>
             </svg>
-            <div v-else class="btn-spinner"></div>
-            <span>{{ isRotating ? 'Shuffling...' : 'Rotate' }}</span>
-          </button>
+            {{ isRotating ? 'Shuffling...' : 'Rotate' }}
+          </AppButton>
           <!-- Default (only when rotated) -->
-          <button v-if="newsStore.isRotated" class="action-btn" @click="restoreDefaults" :disabled="isRefreshing">
+          <AppButton v-if="newsStore.isRotated" size="compact" @click="restoreDefaults" :disabled="isRefreshing">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
               <polyline points="3 3 3 8 8 8"/>
             </svg>
-            <span>Default</span>
-          </button>
+            Default
+          </AppButton>
           <!-- Refresh -->
-          <button class="action-btn" @click="refreshAll" :disabled="isRefreshing">
+          <AppButton size="compact" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing">
             <svg v-if="!isRefreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="23 4 23 10 17 10"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
-            <div v-else class="btn-spinner"></div>
-            <span>{{ isRefreshing ? 'Loading...' : 'Refresh' }}</span>
-          </button>
+            {{ isRefreshing ? 'Loading...' : 'Refresh' }}
+          </AppButton>
           <!-- Configure Feeds -->
-          <button class="action-btn" @click="openFeedConfig">
+          <AppButton size="compact" @click="openFeedConfig">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>
             </svg>
-            <span>Feeds</span>
-          </button>
+            Feeds
+          </AppButton>
         </div>
       </div>
 
@@ -379,6 +377,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { useNewsStore } from '../stores/news'
 import { useConfigStore } from '../stores/config'
 import ComboBox from '../components/common/ComboBox.vue'
+import AppButton from '../components/common/AppButton.vue'
 
 const PAGE_SIZE = 20
 
@@ -843,16 +842,15 @@ onMounted(async () => {
   margin: 0;
 }
 
-/* ── Shared button styles ─────────────────────────────────────────── */
-.action-btn,
+/* ── Back button (embedded browser) ──────────────────────────────────── */
 .back-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
+  gap: 4px;
+  padding: 4px 10px 4px 7px;
   border-radius: var(--radius-sm, 8px);
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
+  font-size: var(--fs-caption);
   font-weight: 600;
   color: #FFFFFF;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -861,29 +859,9 @@ onMounted(async () => {
   transition: all 0.15s ease;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
-.action-btn:hover,
 .back-btn:hover {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
-}
-.action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #FFFFFF;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-.back-btn {
-  padding: 4px 10px 4px 7px;
-  font-size: var(--fs-caption);
-  gap: 4px;
 }
 
 /* ── Top Stories ──────────────────────────────────────────────────────── */

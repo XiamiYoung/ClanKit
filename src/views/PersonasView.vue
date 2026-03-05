@@ -40,9 +40,9 @@
                 <p class="section-desc">Configure how the AI behaves and responds.</p>
               </div>
             </div>
-            <AppButton @click="createNew('system')">
+            <AppButton size="compact" @click="createNew('system')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Configure
+              New
             </AppButton>
           </div>
 
@@ -87,9 +87,9 @@
                 <p class="section-desc">Configure your identity and context for the AI.</p>
               </div>
             </div>
-            <AppButton @click="createNew('user')">
+            <AppButton size="compact" @click="createNew('user')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Configure
+              New
             </AppButton>
           </div>
 
@@ -132,6 +132,7 @@
       :persona-model-id="soulViewerPersona.modelId || null"
       :persona-voice-id="soulViewerPersona.voiceId || null"
       :persona-avatar="soulViewerPersona.avatar || null"
+      :is-new="!!soulViewerPersona.isNew"
       @close="soulViewerPersona = null"
       @update-persona="onUpdatePersona"
     />
@@ -212,7 +213,6 @@ async function onUpdatePersona(updates) {
   // Use the existing name if the update didn't provide one (can happen for new personas)
   if (!updated.name) updated.name = 'Untitled Persona'
   await personasStore.savePersona(updated)
-  soulViewerPersona.value = updated
 }
 
 const confirmDeleteTarget = ref(null)
@@ -386,6 +386,7 @@ function getAvatarGradient(persona) {
   overflow-y: auto;
   scrollbar-width: thin;
   padding-bottom: 1.5rem;
+  padding-right: 0.5rem;
 }
 .personas-grid {
   display: grid;

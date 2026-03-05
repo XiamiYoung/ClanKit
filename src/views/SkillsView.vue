@@ -18,10 +18,10 @@
             <div class="catalog-count-badge">
               <span>{{ filteredSkills.length }} skill{{ filteredSkills.length !== 1 ? 's' : '' }}</span>
             </div>
-            <button @click="refresh" class="catalog-refresh-btn" title="Refresh skills">
-              <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            <AppButton size="compact" @click="refresh" title="Refresh skills">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
               Refresh
-            </button>
+            </AppButton>
           </div>
         </div>
 
@@ -371,6 +371,7 @@ import TurndownService from 'turndown'
 import { gfm } from 'turndown-plugin-gfm'
 import { useSkillsStore } from '../stores/skills'
 import { useConfigStore } from '../stores/config'
+import AppButton from '../components/common/AppButton.vue'
 
 const skillsStore = useSkillsStore()
 const configStore = useConfigStore()
@@ -848,26 +849,6 @@ const SkillTreeNode = defineComponent({
   font-size: var(--fs-body);
   color: #1A1A1A;
   font-weight: 600;
-}
-.catalog-refresh-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.875rem;
-  border-radius: var(--radius-sm, 8px);
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 600;
-  color: #FFFFFF;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.catalog-refresh-btn:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
 }
 
 /* ── Search bar ────────────────────────────────────────────────────────── */

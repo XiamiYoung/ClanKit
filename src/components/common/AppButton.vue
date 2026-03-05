@@ -92,9 +92,9 @@ defineProps({
   font-size: var(--fs-body);
 }
 
-/* ── Size: compact ───────────────────────────────────────────────────────── */
+/* ── Size: compact (standard page-level action buttons) ─────────────────── */
 .app-btn--compact {
-  padding: 0.375rem 0.75rem; border-radius: 0.625rem;
+  padding: 0.375rem 0.875rem; border-radius: var(--radius-sm);
   font-size: var(--fs-secondary);
 }
 
