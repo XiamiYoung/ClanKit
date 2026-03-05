@@ -289,10 +289,10 @@ onBeforeUnmount(() => {
 /* TipTap editor styling */
 .rich-editor-content .tiptap {
   outline: none;
-  min-height: 72px;
-  max-height: 200px;
+  min-height: 4.5rem;
+  max-height: 12.5rem;
   overflow-y: auto;
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
   font-size: var(--fs-body);
   line-height: 1.65;
   color: #1A1A1A;
@@ -334,7 +334,7 @@ onBeforeUnmount(() => {
 .rich-editor-content .tiptap code {
   background: #F5F5F5;
   color: #E11D48;
-  border-radius: 4px;
+  border-radius: 0.25rem;
   padding: 0.15em 0.35em;
   font-size: 0.85em;
   font-family: 'JetBrains Mono', monospace;
@@ -343,8 +343,8 @@ onBeforeUnmount(() => {
 .rich-editor-content .tiptap pre {
   background: #1A1A1A;
   color: #E5E5EA;
-  border-radius: 8px;
-  padding: 12px 16px;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
   margin: 0.5em 0;
   overflow-x: auto;
   font-family: 'JetBrains Mono', monospace;
@@ -362,7 +362,7 @@ onBeforeUnmount(() => {
 
 .rich-editor-content .tiptap blockquote {
   border-left: 3px solid #007AFF;
-  padding-left: 12px;
+  padding-left: 0.75rem;
   margin: 0.5em 0;
   color: #6B7280;
   font-style: italic;
