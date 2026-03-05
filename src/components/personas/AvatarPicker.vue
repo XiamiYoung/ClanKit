@@ -16,7 +16,7 @@
             :class="{ selected: selectedId === av.id }"
             @click="select(av.id)"
           >
-            <img :src="getUri(av.id)" alt="" style="width:80px;height:80px;border-radius:50%;" />
+            <img :src="getUri(av.id)" alt="" style="width:5rem;height:5rem;border-radius:50%;" />
           </button>
         </div>
       </div>
@@ -93,9 +93,9 @@ function confirm() {
   display: flex; align-items: center; justify-content: center;
 }
 .avpicker-dialog {
-  width: min(900px, 92vw); max-height: 88vh;
+  width: min(56.25rem, 92vw); max-height: 88vh;
   background: #0F0F0F; border: 1px solid #2A2A2A;
-  border-radius: 20px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+  border-radius: 1.25rem; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
   display: flex; flex-direction: column; overflow: hidden;
   animation: avpicker-enter 0.2s ease-out;
 }
@@ -105,32 +105,32 @@ function confirm() {
 }
 .avpicker-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 24px; border-bottom: 1px solid #1F1F1F;
+  padding: 1.125rem 1.5rem; border-bottom: 1px solid #1F1F1F;
 }
 .avpicker-title {
-  font-family: 'Inter', sans-serif; font-size: 18px; font-weight: 700;
+  font-family: 'Inter', sans-serif; font-size: 1.125rem; font-weight: 700;
   color: #FFFFFF; margin: 0;
 }
 .avpicker-close {
-  width: 32px; height: 32px; border-radius: 8px;
+  width: 2rem; height: 2rem; border-radius: 0.5rem;
   display: flex; align-items: center; justify-content: center;
   border: none; background: transparent; color: #6B7280;
   cursor: pointer; transition: all 0.15s;
 }
 .avpicker-close:hover { background: #1F1F1F; color: #FFFFFF; }
 .avpicker-grid-wrap {
-  flex: 1; overflow-y: auto; padding: 20px 24px;
+  flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem;
   scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
 .avpicker-grid {
-  display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.75rem;
 }
 @media (max-width: 800px) {
   .avpicker-grid { grid-template-columns: repeat(4, 1fr); }
 }
 .avpicker-item {
   display: flex; align-items: center; justify-content: center;
-  padding: 8px; border-radius: 14px; border: 2.5px solid transparent;
+  padding: 0.5rem; border-radius: 0.875rem; border: 2.5px solid transparent;
   background: transparent; cursor: pointer;
   transition: border-color 0.15s, background 0.15s, transform 0.15s;
 }
@@ -143,12 +143,12 @@ function confirm() {
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
 }
 .avpicker-footer {
-  display: flex; justify-content: flex-end; gap: 8px;
-  padding: 14px 24px; border-top: 1px solid #1F1F1F; background: #0A0A0A;
+  display: flex; justify-content: flex-end; gap: 0.5rem;
+  padding: 0.875rem 1.5rem; border-top: 1px solid #1F1F1F; background: #0A0A0A;
 }
 .avpicker-btn {
-  padding: 8px 20px; border-radius: 8px;
-  font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600;
+  padding: 0.5rem 1.25rem; border-radius: 0.5rem;
+  font-family: 'Inter', sans-serif; font-size: 0.875rem; font-weight: 600;
   cursor: pointer; border: none; transition: all 0.15s;
 }
 .avpicker-btn.primary {
@@ -159,12 +159,12 @@ function confirm() {
 .avpicker-btn.primary:hover { background: linear-gradient(135deg, #2D2D2D 0%, #374151 40%, #6B7280 100%); }
 .avpicker-btn.primary:disabled { background: #2A2A2A; color: #4B5563; cursor: not-allowed; border-color: #2A2A2A; }
 .avpicker-btn.shuffle {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 0.375rem;
   background: #1A1A1A; color: #FFFFFF; border: 1.5px solid #374151;
 }
 .avpicker-btn.shuffle:hover { background: #222222; border-color: #4B5563; }
 .avpicker-btn.defaults {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 0.375rem;
   background: #1A1A1A; color: #6B7280; border: 1.5px solid #2A2A2A;
 }
 .avpicker-btn.defaults:hover { background: #222222; border-color: #374151; color: #9CA3AF; }
