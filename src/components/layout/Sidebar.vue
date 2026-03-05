@@ -1,18 +1,18 @@
 <template>
   <nav
     class="flex flex-col shrink-0"
-    :style="{ width: isCollapsed ? '64px' : '200px', minWidth: isCollapsed ? '64px' : '200px', background: '#FFFFFF', height: '100%', overflow: 'hidden', position: 'relative', zIndex: 10, borderRight: '1px solid #E5E5EA', transition: 'width 0.2s ease, min-width 0.2s ease' }"
+    :style="{ width: isCollapsed ? '4rem' : '12.5rem', minWidth: isCollapsed ? '4rem' : '12.5rem', background: '#FFFFFF', height: '100%', overflow: 'hidden', position: 'relative', zIndex: 10, borderRight: '1px solid #E5E5EA', transition: 'width 0.2s ease, min-width 0.2s ease' }"
     aria-label="Main navigation"
   >
     <!-- Logo / Header -->
-    <div :style="{ padding: isCollapsed ? '16px 0' : '16px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
+    <div :style="{ padding: isCollapsed ? '1rem 0' : '1rem 1.25rem', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
       <img
         src="/icon.png"
         alt="SparkAI"
         :class="isCollapsed ? 'w-7 h-7 rounded-md' : 'w-9 h-9 rounded-xl'"
         style="object-fit:contain;flex-shrink:0;"
       />
-      <span v-show="!isCollapsed" style="font-family:'Inter','Figtree',system-ui,sans-serif; font-size:var(--fs-subtitle); font-weight:700; color:#1A1A1A; letter-spacing:-0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-left:10px;">
+      <span v-show="!isCollapsed" style="font-family:'Inter','Figtree',system-ui,sans-serif; font-size:var(--fs-subtitle); font-weight:700; color:#1A1A1A; letter-spacing:-0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-left:0.625rem;">
         SparkAI
       </span>
     </div>
@@ -26,7 +26,7 @@
 
     <!-- Navigation -->
     <div class="flex-1 px-3 py-3 flex flex-col gap-0.5 overflow-y-auto" style="scrollbar-width:thin;">
-      <div style="display:flex;align-items:center;justify-content:space-between;min-height:24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;min-height:1.5rem;">
         <p class="nav-section-label" v-show="!isCollapsed" style="margin:0;">AI Agent</p>
         <button @click="toggleCollapse" class="nav-collapse-btn" :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'" style="flex-shrink:0;">
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -42,11 +42,11 @@
       <NavItem to="/mcp"      :icon="IconMcp"      label="MCP Servers" :isCollapsed="isCollapsed" />
       <NavItem to="/knowledge" :icon="IconKnowledge" label="Knowledge" :isCollapsed="isCollapsed" />
       <NavItem to="/personas" :icon="IconPersonas" label="Personas" :isCollapsed="isCollapsed" />
-      <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:12px;">Workspace</p>
+      <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:0.75rem;">Workspace</p>
       <NavItem to="/news"     :icon="IconNews"     label="News"     :isCollapsed="isCollapsed" />
       <NavItem to="/notes"     :icon="IconNotes"     label="Documents"  :isCollapsed="isCollapsed" />
 
-      <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:12px;">System</p>
+      <p class="nav-section-label" v-show="!isCollapsed" style="margin-top:0.75rem;">System</p>
       <NavItem to="/config" :icon="IconConfig" label="Configuration" :isCollapsed="isCollapsed" />
 
     </div>
@@ -189,7 +189,7 @@ const NavItem = defineComponent({
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #9CA3AF;
-  padding: 10px 12px 4px;
+  padding: 0.625rem 0.75rem 0.25rem;
   font-family: 'Inter', sans-serif;
   font-weight: 600;
 }
@@ -197,12 +197,12 @@ const NavItem = defineComponent({
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-  border-radius: 10px;
+  gap: 0.625rem;
+  padding: 0.5625rem 0.75rem;
+  border-radius: 0.625rem;
   cursor: pointer;
   transition: all 0.15s ease;
-  margin-bottom: 1px;
+  margin-bottom: 0.0625rem;
   text-decoration: none;
   font-family: 'Inter', sans-serif;
 }
@@ -226,14 +226,14 @@ const NavItem = defineComponent({
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 2rem;
+  height: 2rem;
   flex-shrink: 0;
   border: none;
   background: transparent;
   color: #9CA3AF;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   transition: background 0.15s, color 0.15s;
 }
 .nav-collapse-btn:hover {
@@ -243,10 +243,10 @@ const NavItem = defineComponent({
 
 /* ── Voice call indicator ─────────────────────────────────────────────── */
 .sidebar-call-indicator {
-  display: flex; align-items: center; gap: 8px;
-  margin: 8px 12px 0; padding: 8px 12px;
+  display: flex; align-items: center; gap: 0.5rem;
+  margin: 0.5rem 0.75rem 0; padding: 0.5rem 0.75rem;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-radius: 10px; cursor: pointer;
+  border-radius: 0.625rem; cursor: pointer;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12);
   transition: all 0.15s ease;
   animation: sidebarCallPulse 2s ease-in-out infinite;
@@ -255,7 +255,7 @@ const NavItem = defineComponent({
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 .sidebar-call-dot {
-  width: 8px; height: 8px; border-radius: 50%;
+  width: 0.5rem; height: 0.5rem; border-radius: 50%;
   background: #10B981; flex-shrink: 0;
   box-shadow: 0 0 6px rgba(16,185,129,0.5);
   animation: dotPulse 1.5s ease-in-out infinite;
