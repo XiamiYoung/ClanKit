@@ -105,22 +105,22 @@
                   <span v-if="prov.usage.whisperCalls">Whisper: {{ prov.usage.whisperCalls }} calls</span>
                 </div>
                 <div class="cost-currency-row">
-                  <span>{{ fmtCost(prov.costs.USD, 'USD') }}</span>
+                  <span>{{ fmtCost(prov.costs.USD, 'USD') }} <span style="color:#6B7280;font-size:0.85em;">USD</span></span>
                   <span style="color:#4B5563;">/</span>
-                  <span>{{ fmtCost(prov.costs.CNY, 'CNY') }}</span>
+                  <span>{{ fmtCost(prov.costs.CNY, 'CNY') }} <span style="color:#6B7280;font-size:0.85em;">CNY</span></span>
                   <span style="color:#4B5563;">/</span>
-                  <span>{{ fmtCost(prov.costs.SGD, 'SGD') }}</span>
+                  <span>{{ fmtCost(prov.costs.SGD, 'SGD') }} <span style="color:#6B7280;font-size:0.85em;">SGD</span></span>
                 </div>
               </div>
 
               <div class="cost-total-row">
                 <span class="cost-total-label">TOTAL</span>
                 <div class="cost-currency-row" style="font-weight:700;">
-                  <span>{{ fmtCost(overviewTotal.USD, 'USD') }}</span>
+                  <span>{{ fmtCost(overviewTotal.USD, 'USD') }} <span style="color:#6B7280;font-size:0.85em;font-weight:400;">USD</span></span>
                   <span style="color:#4B5563;">/</span>
-                  <span>{{ fmtCost(overviewTotal.CNY, 'CNY') }}</span>
+                  <span>{{ fmtCost(overviewTotal.CNY, 'CNY') }} <span style="color:#6B7280;font-size:0.85em;font-weight:400;">CNY</span></span>
                   <span style="color:#4B5563;">/</span>
-                  <span>{{ fmtCost(overviewTotal.SGD, 'SGD') }}</span>
+                  <span>{{ fmtCost(overviewTotal.SGD, 'SGD') }} <span style="color:#6B7280;font-size:0.85em;font-weight:400;">SGD</span></span>
                 </div>
               </div>
             </template>

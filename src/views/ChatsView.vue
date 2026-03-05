@@ -375,11 +375,11 @@
                         <tr style="border-top:2px solid #E5E5EA;">
                           <td class="py-1.5 pr-4 font-semibold" style="color:#1A1A1A; white-space:nowrap;">Est. Cost</td>
                           <td class="py-1.5 font-semibold" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A;">
-                            {{ formatCost(activeChatCost.all.USD, 'USD') }}
+                            {{ formatCost(activeChatCost.all.USD, 'USD') }}<span style="color:#9CA3AF;font-size:0.85em;font-weight:400;"> USD</span>
                             &nbsp;/&nbsp;
-                            {{ formatCost(activeChatCost.all.CNY, 'CNY') }}
+                            {{ formatCost(activeChatCost.all.CNY, 'CNY') }}<span style="color:#9CA3AF;font-size:0.85em;font-weight:400;"> CNY</span>
                             &nbsp;/&nbsp;
-                            {{ formatCost(activeChatCost.all.SGD, 'SGD') }}
+                            {{ formatCost(activeChatCost.all.SGD, 'SGD') }}<span style="color:#9CA3AF;font-size:0.85em;font-weight:400;"> SGD</span>
                           </td>
                         </tr>
                       </template>
@@ -4639,22 +4639,36 @@ function getLastActiveMessage(chatId) {
 // If the message has content: append inline marker (LLM sees it on resume).
 // If the message is empty (agent stopped before outputting anything): delete the
 // pointless placeholder and push a system bubble instead.
-function _applyInterrupt(chat, msg) {
-  if (!msg) return
+// type: 'pause' — queue preserved, will auto-continue
+//       'stop'  — queue cleared, waiting for user input
+function _applyInterrupt(chat, msg, type) {
+  const inlineMarker = type === 'stop'
+    ? '[Request interrupted by user. Queue cleared.]'
+    : '[Request interrupted by user]'
+  const bubbleText = type === 'stop'
+    ? 'Request stopped by user. Queue cleared — type a new message to continue.'
+    : 'Request interrupted by user. Queued prompts will resume automatically.'
+
+  if (!msg) {
+    chat?.messages?.push({
+      id: uuidv4(), role: 'system', interruptType: type, content: bubbleText,
+      segments: [{ type: 'text', content: bubbleText }],
+      streaming: false, timestamp: Date.now(),
+    })
+    return
+  }
+
   const hasContent = msg.content?.trim().length > 0
   if (hasContent) {
-    msg.content += '\n\n[Request interrupted by user]'
+    msg.content += `\n\n${inlineMarker}`
     msg.streaming = false
   } else {
     const idx = chat?.messages?.indexOf(msg) ?? -1
     if (idx !== -1) chat.messages.splice(idx, 1)
     chat?.messages?.push({
-      id: uuidv4(),
-      role: 'system',
-      content: 'Request interrupted by user.',
-      segments: [{ type: 'text', content: 'Request interrupted by user.' }],
-      streaming: false,
-      timestamp: Date.now(),
+      id: uuidv4(), role: 'system', interruptType: type, content: bubbleText,
+      segments: [{ type: 'text', content: bubbleText }],
+      streaming: false, timestamp: Date.now(),
     })
   }
 }
@@ -4664,7 +4678,7 @@ async function pauseAgent(chatId) {
   if (!chatId) chatId = chatsStore.activeChatId
   if (window.electronAPI?.stopAgent) await window.electronAPI.stopAgent(chatId)
   const { chat, msg } = getLastActiveMessage(chatId)
-  _applyInterrupt(chat, msg)
+  _applyInterrupt(chat, msg, 'pause')
 }
 
 // Stop (hard stop): clear the queue first, then interrupt — nothing auto-runs afterwards.
@@ -4673,7 +4687,7 @@ async function stopAgent(chatId) {
   perChatQueue.delete(chatId)
   if (window.electronAPI?.stopAgent) await window.electronAPI.stopAgent(chatId)
   const { chat, msg } = getLastActiveMessage(chatId)
-  _applyInterrupt(chat, msg)
+  _applyInterrupt(chat, msg, 'stop')
 }
 
 // ── Plan Approval Functions ────────────────────────────────────────────────────
