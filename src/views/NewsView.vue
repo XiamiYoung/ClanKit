@@ -816,15 +816,10 @@ onMounted(async () => {
   flex-direction: column;
   gap: 20px;
   padding-bottom: 24px;
+  padding-right: 8px;
   scrollbar-width: thin;
 }
 
-@media (min-width: 3840px) {
-  .news-scroll {
-    overflow: hidden;
-    padding-bottom: 24px;
-  }
-}
 
 .news-header {
   display: flex;
@@ -936,7 +931,7 @@ onMounted(async () => {
 
 .top-news-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 10px;
 }
 
@@ -1060,25 +1055,6 @@ onMounted(async () => {
   animation: spin 0.7s linear infinite;
 }
 
-@media (min-width: 1920px) {
-  .top-news-row {
-    grid-template-columns: repeat(5, 1fr);
-  }
-}
-
-@media (min-width: 2560px) {
-  .top-news-row {
-    grid-template-columns: repeat(8, 1fr);
-    height: auto;
-  }
-}
-
-@media (min-width: 3840px) {
-  .top-news-row {
-    grid-template-columns: repeat(10, 1fr);
-    height: auto;
-  }
-}
 
 /* ── Grid ─────────────────────────────────────────────────────────────── */
 .news-grid {
@@ -1091,17 +1067,9 @@ onMounted(async () => {
 @media (min-width: 1920px) {
   .news-grid {
     grid-template-columns: repeat(4, 1fr);
-    grid-auto-rows: 360px;
-  }
-}
-
-@media (min-width: 3840px) {
-  .news-grid {
-    grid-template-columns: repeat(4, 1fr);
     grid-template-rows: repeat(2, 1fr);
     grid-auto-rows: unset;
     flex: 1;
-    height: 80%;
     min-height: 0;
   }
 }
@@ -1120,7 +1088,7 @@ onMounted(async () => {
   height: 360px;
 }
 
-@media (min-width: 3840px) {
+@media (min-width: 1920px) {
   .feed-card {
     height: 100%;
   }
