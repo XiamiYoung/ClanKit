@@ -78,6 +78,11 @@ export const useConfigStore = defineStore('config', () => {
       ttsMode: 'browser',   // 'browser' = free SpeechSynthesis, 'openai' = TTS $15/1M chars, 'openai-hd' = TTS HD $30/1M chars
       isActive: false,       // set to true after successful test connection
     },
+    pricing: {
+      models: {},
+      modelPriceMap: {},
+      currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 },
+    },
   })
 
   // True when at least one provider has both an API key and a baseURL configured.
@@ -120,6 +125,7 @@ export const useConfigStore = defineStore('config', () => {
           ? savedSandbox.dangerBlockList
           : defaults.sandboxConfig.dangerBlockList,
       },
+      pricing: { models: {}, modelPriceMap: {}, currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 }, ...(saved.pricing || {}) },
     }
     // Also load the env-backed paths
     await loadEnvPaths()
