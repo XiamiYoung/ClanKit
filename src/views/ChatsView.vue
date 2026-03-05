@@ -15,6 +15,7 @@
       @open-chat-settings="gridOpenChatSettings"
       @open-soul-viewer="(id, type, name) => openSoulViewer(id, type, name)"
       @remove-group-persona="(cId, pid) => requestRemoveGroupPersona(cId, pid)"
+      @start-call="handleStartCall"
     />
 
     <!-- ── Chat List Sidebar (single mode) ────────────────────────────────── -->
@@ -189,6 +190,7 @@
             {{ activeContextMetrics.compactionCount }}x compacted
           </span>
           <!-- Inspect button -->
+          <div style="position:relative;" @mouseenter="showInspectTooltip = true" @mouseleave="showInspectTooltip = false">
           <button
             @click="inspectContext"
             :disabled="!hasContextData"
@@ -204,7 +206,50 @@
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
             </svg>
             <span style="font-size:var(--fs-small);">Inspect</span>
+            <span v-if="activeChatCost" style="font-size:var(--fs-small); opacity:0.75; margin-left:0.125rem;">· {{ formatCost(activeChatCost.usd) }}</span>
           </button>
+
+          <!-- Cost breakdown tooltip -->
+          <div v-if="showInspectTooltip && activeChatCost" class="inspect-cost-tooltip">
+            <div class="ict-model">{{ activeChatCost.modelId }}</div>
+            <div class="ict-section">
+              <div class="ict-row">
+                <span>Input</span>
+                <span>{{ formatCost(activeChatCost.inputUsd) }}</span>
+              </div>
+              <div class="ict-row">
+                <span>Output</span>
+                <span>{{ formatCost(activeChatCost.outputUsd) }}</span>
+              </div>
+              <div v-if="activeChatCost.cacheWriteUsd > 0" class="ict-row">
+                <span>Cache write</span>
+                <span>{{ formatCost(activeChatCost.cacheWriteUsd) }}</span>
+              </div>
+              <div v-if="activeChatCost.cacheReadUsd > 0" class="ict-row">
+                <span>Cache read</span>
+                <span>{{ formatCost(activeChatCost.cacheReadUsd) }}</span>
+              </div>
+            </div>
+            <div v-if="activeChatUsage?.whisperCalls" class="ict-section ict-section-voice">
+              <div class="ict-section-label">Voice (Whisper)</div>
+              <div class="ict-row">
+                <span>{{ activeChatUsage.whisperCalls }} calls · {{ (activeChatUsage.whisperSecs || 0).toFixed(1) }}s</span>
+                <span>{{ formatCost(activeChatCost.whisperUsd) }}</span>
+              </div>
+            </div>
+            <div class="ict-total">
+              <span>Total</span>
+              <span>
+                {{ formatCost(activeChatCost.all.USD) }} <span class="ict-cur">USD</span>
+                &thinsp;/&thinsp;
+                {{ formatCost(activeChatCost.all.CNY, 'CNY') }} <span class="ict-cur">CNY</span>
+                &thinsp;/&thinsp;
+                {{ formatCost(activeChatCost.all.SGD, 'SGD') }} <span class="ict-cur">SGD</span>
+              </span>
+            </div>
+          </div>
+          </div><!-- /inspect wrapper -->
+
           <!-- Compact button -->
           <button
             @click="compactContext"
@@ -251,7 +296,7 @@
                   v-if="contextSnapshot"
                   class="px-1.5 py-0.5 rounded-full"
                   style="background:#F5F5F5; color:#6B7280; font-size:var(--fs-small);"
-                >{{ contextSnapshot.model }}</span>
+                >{{ activeChatModel || contextSnapshot.model }}</span>
               </div>
               <button
                 @click="showContextInspector = false"
@@ -386,7 +431,7 @@
                       <tr v-else-if="activeChatUsage.inputTokens || activeChatUsage.outputTokens">
                         <td class="py-1.5 pr-4" style="color:#9CA3AF;">Est. Cost</td>
                         <td class="py-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
-                          Price not configured for "{{ chatsStore.activeChat?.model || '?' }}" — set it in Config → AI → Pricing
+                          Price not configured for "{{ activeChatModel || '?' }}" — set it in Config → AI → Pricing
                         </td>
                       </tr>
                     </tbody>
@@ -2376,24 +2421,46 @@ const visibleLimit = ref(25)     // show last N messages (~1000 lines); user can
 const perChatDebugLogs = reactive(new Map())    // chatId → [{time, msg, level}]
 const perChatSnapshots = reactive(new Map())    // chatId → snapshot object
 const debugLog = computed(() => perChatDebugLogs.get(chatsStore.activeChatId) ?? [])
-const showContextInspector = ref(false)
+const showContextInspector  = ref(false)
+const showInspectTooltip    = ref(false)
+const inspectorUsage        = ref(null)   // usage loaded fresh from disk when inspector opens
 const contextSnapshot = computed(() => perChatSnapshots.get(chatsStore.activeChatId) ?? null)
 
 const activeChatUsage = computed(() => {
+  // Prefer fresh value loaded from disk when inspector is open (main process
+  // writes usage independently of the renderer store, so the store copy is stale)
+  if (inspectorUsage.value) return inspectorUsage.value
+  return chatsStore.activeChat?.usage || null
+})
+
+// Resolved model for the active chat: persona modelId → chat.model → contextSnapshot
+const activeChatModel = computed(() => {
   const chat = chatsStore.activeChat
-  return chat?.usage || null
+  if (!chat) return ''
+  const personaId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null)
+    || chat.systemPersonaId
+  const persona = personaId ? personasStore.getPersonaById(personaId) : null
+  return persona?.modelId || chat.model || contextSnapshot.value?.model || ''
 })
 
 const activeChatCost = computed(() => {
-  const usage = activeChatUsage.value
-  const chat  = chatsStore.activeChat
+  const usage   = activeChatUsage.value
+  const chat    = chatsStore.activeChat
   if (!usage || !chat) return null
-  const modelId = chat.model || contextSnapshot.value?.model || ''
+  const modelId = activeChatModel.value
   const price   = resolveModelPrice(modelId, configStore.config.pricing)
   if (!price) return null
-  const usd = calcCostUSD(usage, price)
+  const M = 1_000_000
+  const inputUsd      = ((usage.inputTokens         || 0) / M) * (price.input      || 0)
+  const outputUsd     = ((usage.outputTokens        || 0) / M) * (price.output     || 0)
+  const cacheWriteUsd = ((usage.cacheCreationTokens || 0) / M) * (price.cacheWrite || 0)
+  const cacheReadUsd  = ((usage.cacheReadTokens     || 0) / M) * (price.cacheRead  || 0)
+  const llmUsd = inputUsd + outputUsd + cacheWriteUsd + cacheReadUsd
+  const whisperPrice = resolveModelPrice('whisper-1', configStore.config.pricing)
+  const whisperUsd   = ((usage.whisperSecs || 0)) * (whisperPrice?.perSec || 0.0001)
+  const usd = llmUsd + whisperUsd
   const all = convertCurrencies(usd, configStore.config.pricing?.currencyRates)
-  return { usd, all, modelId }
+  return { usd, all, modelId, llmUsd, whisperUsd, inputUsd, outputUsd, cacheWriteUsd, cacheReadUsd }
 })
 
 const expandedMessages = reactive({})
@@ -4833,8 +4900,13 @@ async function compactContext() {
 async function inspectContext() {
   Object.keys(expandedMessages).forEach(k => delete expandedMessages[k])
   showContextInspector.value = true
-  // Fetch live snapshot from backend (works during and after agent run)
-  await refreshContextSnapshot()
+  // Fetch live snapshot and fresh usage from disk in parallel
+  // (main process writes usage independently, store copy is stale)
+  const [, freshChat] = await Promise.all([
+    refreshContextSnapshot(),
+    window.electronAPI.getChat(chatsStore.activeChatId),
+  ])
+  if (freshChat?.usage) inspectorUsage.value = freshChat.usage
 }
 
 async function refreshContextSnapshot() {
@@ -4852,6 +4924,7 @@ watch(() => chatsStore.activeChatId, () => {
   userScrolled.value = false
   visibleLimit.value = 25
   showContextInspector.value = false
+  inspectorUsage.value = null
   quotedMessage.value = null
   stickyTarget.value = null
 
@@ -7503,5 +7576,83 @@ onUnmounted(() => {
 .memory-banner-leave-to {
   opacity: 0;
   transform: translateY(8px);
+}
+
+/* ── Inspect button cost tooltip ─────────────────────────────────────────── */
+.inspect-cost-tooltip {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 15rem;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.2);
+  z-index: 1000;
+  pointer-events: none;
+  animation: fadeIn 0.12s ease;
+}
+.ict-model {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--fs-caption);
+  color: rgba(255,255,255,0.45);
+  margin-bottom: 0.375rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ict-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid #2A2A2A;
+  margin-bottom: 0.375rem;
+}
+.ict-section-voice {
+  padding-top: 0;
+}
+.ict-section-label {
+  font-size: var(--fs-small);
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 0.125rem;
+}
+.ict-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  font-size: var(--fs-small);
+  color: rgba(255,255,255,0.65);
+}
+.ict-row span:last-child {
+  font-family: 'JetBrains Mono', monospace;
+  color: rgba(255,255,255,0.85);
+  white-space: nowrap;
+}
+.ict-total {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding-top: 0.25rem;
+}
+.ict-total > span:first-child {
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: rgba(255,255,255,0.45);
+}
+.ict-total > span:last-child {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  color: #FFFFFF;
+  line-height: 1.6;
+}
+.ict-cur {
+  font-size: 0.75em;
+  font-weight: 400;
+  color: rgba(255,255,255,0.4);
+  margin-left: 0.125rem;
 }
 </style>
