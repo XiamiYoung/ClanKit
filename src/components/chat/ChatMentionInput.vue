@@ -369,14 +369,14 @@ defineExpose({ focus, resetHeight })
   overflow-y: auto;
   color: #1A1A1A;
   font-size: var(--fs-body, 0.9375rem);
-  min-height: 72px;
-  max-height: 200px;
+  min-height: 4.5rem;
+  max-height: 12.5rem;
   font-family: 'Inter', sans-serif;
 }
 
 .cmi-textarea-compact {
-  min-height: 36px;
-  max-height: 100px;
+  min-height: 2.25rem;
+  max-height: 6.25rem;
   font-size: var(--fs-secondary, 0.875rem);
 }
 </style>
@@ -387,23 +387,23 @@ defineExpose({ focus, resetHeight })
   position: absolute;
   bottom: 100%;
   left: 0;
-  margin-bottom: 6px;
+  margin-bottom: 0.375rem;
   background: #FFFFFF;
   border: 1px solid #E5E5EA;
-  border-radius: 14px;
+  border-radius: 0.875rem;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16), 0 4px 12px rgba(0,0,0,0.06);
   z-index: 50;
-  min-width: 300px;
-  max-width: 380px;
+  min-width: 18.75rem;
+  max-width: 23.75rem;
   overflow: hidden;
 }
 .cmi-mention-popup-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px 6px;
+  padding: 0.5rem 0.875rem 0.375rem;
   font-family: 'Inter', sans-serif;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -414,20 +414,20 @@ defineExpose({ focus, resetHeight })
   font-weight: 500;
   text-transform: none;
   letter-spacing: 0;
-  font-size: 10px;
+  font-size: 0.625rem;
   color: #D1D1D6;
 }
 .cmi-mention-popup-list {
-  padding: 4px 0;
-  max-height: 320px;
+  padding: 0.25rem 0;
+  max-height: 20rem;
   overflow-y: auto;
   scrollbar-width: thin;
 }
 .cmi-mention-popup-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
   width: 100%;
   border: none;
   background: transparent;
@@ -454,20 +454,20 @@ defineExpose({ focus, resetHeight })
   flex-shrink: 0;
 }
 .cmi-mention-popup-avatar-img {
-  width: 36px;
-  height: 36px;
+  width: 2.25rem;
+  height: 2.25rem;
   border-radius: 50%;
   object-fit: cover;
   display: block;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 .cmi-mention-popup-initial {
-  width: 36px;
-  height: 36px;
+  width: 2.25rem;
+  height: 2.25rem;
   border-radius: 50%;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #fff;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -480,36 +480,36 @@ defineExpose({ focus, resetHeight })
 .cmi-mention-popup-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
   min-width: 0;
   flex: 1;
 }
 .cmi-mention-popup-name-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .cmi-mention-popup-name {
   font-family: 'Inter', sans-serif;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: #1A1A1A;
   white-space: nowrap;
 }
 .cmi-mention-popup-meta {
   font-family: 'Inter', sans-serif;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   color: #fff;
   white-space: nowrap;
-  padding: 2px 6px;
+  padding: 0.125rem 0.375rem;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   letter-spacing: 0.01em;
 }
 .cmi-mention-popup-desc {
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   color: #374151;
   line-height: 1.3;
@@ -524,9 +524,9 @@ defineExpose({ focus, resetHeight })
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #fff;
   font-family: 'Inter', sans-serif;
-  padding: 10px 14px;
-  border-radius: 10px;
-  width: 280px;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.625rem;
+  width: 17.5rem;
   box-shadow: 0 8px 24px rgba(0,0,0,0.25);
   z-index: 9999;
   pointer-events: none;
@@ -541,12 +541,12 @@ defineExpose({ focus, resetHeight })
   border-right-color: #0F0F0F;
 }
 .cmi-mention-tooltip-name {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 .cmi-mention-tooltip-text {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.5;
   white-space: normal;
