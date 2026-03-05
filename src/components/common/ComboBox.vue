@@ -163,7 +163,7 @@ function clear() {
 .combo-box:focus-within { border-color: var(--text-primary); box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
 
 .combo-input {
-  width: 100%; display: block; padding: 9px 12px; border: none; border-radius: var(--radius-sm);
+  width: 100%; display: block; padding: 0.5625rem 0.75rem; border: none; border-radius: var(--radius-sm);
   background: transparent; color: var(--text-primary);
   font-family: 'Inter', sans-serif; font-size: var(--fs-body); outline: none;
 }
@@ -172,53 +172,53 @@ function clear() {
 
 /* ── Single chip ───────────────────────────────────────────────────────── */
 .combo-chip {
-  display: flex; align-items: center; gap: 8px; margin: 4px; padding: 5px 8px 5px 12px;
-  border-radius: 8px;
+  display: flex; align-items: center; gap: 0.5rem; margin: 0.25rem; padding: 0.3125rem 0.5rem 0.3125rem 0.75rem;
+  border-radius: 0.5rem;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .combo-chip-label {
-  font-family: 'JetBrains Mono', 'Inter', monospace; font-size: 13px; font-weight: 600;
+  font-family: 'JetBrains Mono', 'Inter', monospace; font-size: 0.8125rem; font-weight: 600;
   color: #FFFFFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;
 }
 .combo-chip-remove {
   display: flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
+  width: 1.25rem; height: 1.25rem; border-radius: 0.375rem; flex-shrink: 0;
   background: rgba(255,255,255,0.15); border: none; color: rgba(255,255,255,0.7);
   cursor: pointer; transition: background 0.12s, color 0.12s;
 }
 .combo-chip-remove:hover { background: rgba(255,255,255,0.25); color: #FFFFFF; }
 
-.icon-xs { width: 14px; height: 14px; flex-shrink: 0; }
+.icon-xs { width: 0.875rem; height: 0.875rem; flex-shrink: 0; }
 
 /* ── Multi-select bar ──────────────────────────────────────────────────── */
 .combo-multi-bar {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
-  padding: 4px 4px 4px 8px; min-height: 38px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.5rem; min-height: 2.375rem;
 }
-.combo-multi-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.combo-multi-chips { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .combo-multi-chip {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 6px 3px 10px; border-radius: 6px;
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.1875rem 0.375rem 0.1875rem 0.625rem; border-radius: 0.375rem;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   box-shadow: 0 1px 4px rgba(0,0,0,0.10);
 }
 .combo-multi-chip-label {
-  font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+  font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 600;
   color: #FFFFFF; white-space: nowrap;
 }
 .combo-multi-chip-x {
   display: flex; align-items: center; justify-content: center;
-  width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0;
+  width: 1rem; height: 1rem; border-radius: 0.25rem; flex-shrink: 0;
   background: rgba(255,255,255,0.15); border: none; color: rgba(255,255,255,0.7);
   cursor: pointer; transition: background 0.12s, color 0.12s;
 }
 .combo-multi-chip-x:hover { background: rgba(255,255,255,0.25); color: #FFFFFF; }
-.icon-xxs { width: 10px; height: 10px; flex-shrink: 0; }
+.icon-xxs { width: 0.625rem; height: 0.625rem; flex-shrink: 0; }
 
 .combo-multi-input {
-  flex: 1; min-width: 80px; border: none; background: transparent;
-  padding: 4px 4px; outline: none;
+  flex: 1; min-width: 5rem; border: none; background: transparent;
+  padding: 0.25rem 0.25rem; outline: none;
   font-family: 'Inter', sans-serif; font-size: var(--fs-body); color: var(--text-primary);
 }
 .combo-multi-input::placeholder { color: var(--text-muted); }
@@ -227,17 +227,17 @@ function clear() {
 /* ── Dropdown ──────────────────────────────────────────────────────────── */
 .combo-dropdown {
   position: absolute; left: 0; right: 0; top: 100%;
-  max-height: 280px; overflow-y: auto; background: #FFFFFF;
-  border: 1px solid #E5E5EA; border-radius: 12px;
+  max-height: 17.5rem; overflow-y: auto; background: #FFFFFF;
+  border: 1px solid #E5E5EA; border-radius: 0.75rem;
   box-shadow: 0 12px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06);
-  z-index: 50; margin-top: 4px; padding: 6px; scrollbar-width: thin;
-  display: flex; flex-direction: column; gap: 2px;
+  z-index: 50; margin-top: 0.25rem; padding: 0.375rem; scrollbar-width: thin;
+  display: flex; flex-direction: column; gap: 0.125rem;
 }
 .combo-option {
-  display: flex; flex-direction: column; width: 100%; padding: 8px 10px;
+  display: flex; flex-direction: column; width: 100%; padding: 0.5rem 0.625rem;
   background: transparent; cursor: pointer; text-align: left;
-  transition: all 0.12s; font-family: 'Inter', sans-serif; border-radius: 10px;
-  border: 1px solid transparent; gap: 2px;
+  transition: all 0.12s; font-family: 'Inter', sans-serif; border-radius: 0.625rem;
+  border: 1px solid transparent; gap: 0.125rem;
 }
 .combo-option:hover {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -251,8 +251,8 @@ function clear() {
   border-color: transparent;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
-.combo-option-name { font-size: 14px; color: #1A1A1A; font-weight: 500; }
+.combo-option-name { font-size: 0.875rem; color: #1A1A1A; font-weight: 500; }
 .combo-option.selected .combo-option-name { color: #FFFFFF; }
-.combo-option-id { font-size: 11px; color: #9CA3AF; font-family: 'JetBrains Mono', monospace; }
+.combo-option-id { font-size: 0.6875rem; color: #9CA3AF; font-family: 'JetBrains Mono', monospace; }
 .combo-option.selected .combo-option-id { color: rgba(255,255,255,0.6); }
 </style>
