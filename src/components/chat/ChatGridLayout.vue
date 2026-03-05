@@ -286,18 +286,18 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px;
+  padding: 0.5rem 1rem;
   background: var(--bg-card, #FFFFFF);
   border-bottom: 1px solid var(--border, #E5E5EA);
   flex-shrink: 0;
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .grid-back-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 12px 5px 8px;
+  gap: 0.3125rem;
+  padding: 0.3125rem 0.75rem 0.3125rem 0.5rem;
   border: none;
   border-radius: var(--radius-sm, 8px);
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -321,8 +321,8 @@ onUnmounted(() => {
 .grid-dropdown-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+  gap: 0.5rem;
+  padding: 0.375rem 0.875rem;
   border: none;
   border-radius: var(--radius-sm, 8px);
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -342,10 +342,10 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 6px;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: 0.375rem;
   background: rgba(255,255,255,0.15);
   font-size: 0.75rem;
   font-weight: 700;
@@ -353,15 +353,15 @@ onUnmounted(() => {
 }
 .grid-dropdown-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 0.375rem);
   left: 50%;
   transform: translateX(-50%);
-  width: 180px;
+  width: 11.25rem;
   background: #0F0F0F;
   border: 1px solid #2A2A2A;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   box-shadow: 0 12px 40px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.15);
-  padding: 4px;
+  padding: 0.25rem;
   z-index: 50;
   animation: gridDropEnter 0.12s ease-out;
 }
@@ -372,11 +372,11 @@ onUnmounted(() => {
 .grid-dropdown-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   width: 100%;
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
   border: none;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   background: transparent;
   color: #9CA3AF;
   font-family: 'Inter', sans-serif;
@@ -409,8 +409,8 @@ onUnmounted(() => {
 .grid-new-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
+  gap: 0.375rem;
+  padding: 0.375rem 0.875rem;
   border: none;
   border-radius: var(--radius-sm, 8px);
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
