@@ -748,17 +748,17 @@ const effectiveMaxOutputTokens = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 16px 4px;
+  padding: 0.5rem 1rem 0.25rem;
   position: relative;
-  min-height: 36px;
+  min-height: 2.25rem;
 }
 
 /* ── Title badge (centered) ── */
 .ch-title-badge {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 6px 4px 10px;
+  gap: 0.5rem;
+  padding: 0.25rem 0.375rem 0.25rem 0.625rem;
   border-radius: 9999px;
   background: #F5F5F5;
   border: 1px solid #E5E5EA;
@@ -769,8 +769,8 @@ const effectiveMaxOutputTokens = computed(() => {
   border-color: #D1D1D6;
 }
 .ch-title-icon {
-  width: 26px;
-  height: 26px;
+  width: 1.625rem;
+  height: 1.625rem;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -783,8 +783,8 @@ const effectiveMaxOutputTokens = computed(() => {
 /* ── Running spinner (before title) ── */
 .ch-title-spinner {
   flex-shrink: 0;
-  width: 12px;
-  height: 12px;
+  width: 0.75rem;
+  height: 0.75rem;
   border-radius: 50%;
   border: 2px solid transparent;
   border-top-color: #1A1A1A;
@@ -804,12 +804,12 @@ const effectiveMaxOutputTokens = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   margin: 0;
-  max-width: 200px;
+  max-width: 12.5rem;
   letter-spacing: -0.01em;
 }
 .ch-edit-btn {
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
   border: none;
   background: transparent;
@@ -830,8 +830,8 @@ const effectiveMaxOutputTokens = computed(() => {
 .ch-title-edit {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 6px 4px 10px;
+  gap: 0.5rem;
+  padding: 0.25rem 0.375rem 0.25rem 0.625rem;
   border-radius: 9999px;
   background: #FFFFFF;
   border: 1.5px solid #1A1A1A;
@@ -845,13 +845,13 @@ const effectiveMaxOutputTokens = computed(() => {
   border: none;
   outline: none;
   background: transparent;
-  width: 180px;
+  width: 11.25rem;
   letter-spacing: -0.01em;
 }
 .ch-title-input::placeholder { color: #D1D1D6; }
 .ch-edit-confirm {
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
   border: none;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -871,12 +871,12 @@ const effectiveMaxOutputTokens = computed(() => {
 /* ── Actions (right-aligned over the centered content) ── */
 .ch-row-top-actions {
   position: absolute;
-  right: 16px;
+  right: 1rem;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   flex-shrink: 0;
 }
 
@@ -887,7 +887,7 @@ const effectiveMaxOutputTokens = computed(() => {
 }
 .ch-call-btn {
   display: flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; border: none; border-radius: 8px;
+  width: 1.875rem; height: 1.875rem; border: none; border-radius: 0.5rem;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF; cursor: pointer; transition: all 0.15s ease;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
@@ -907,12 +907,12 @@ const effectiveMaxOutputTokens = computed(() => {
 .ch-row-bottom {
   display: flex;
   align-items: center;
-  padding: 4px 16px 8px;
+  padding: 0.25rem 1rem 0.5rem;
 }
 .ch-row-bottom-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
   margin-left: auto;
 }
 
@@ -925,8 +925,8 @@ const effectiveMaxOutputTokens = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 2.25rem;
+  height: 2.25rem;
   padding: 0;
   border-radius: 50%;
   border: none;
@@ -945,12 +945,12 @@ const effectiveMaxOutputTokens = computed(() => {
 .chat-config-tooltip {
   display: none;
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 0.5rem);
   right: 0;
   background: #1A1A1A;
-  border-radius: 10px;
-  padding: 10px 14px;
-  min-width: 220px;
+  border-radius: 0.625rem;
+  padding: 0.625rem 0.875rem;
+  min-width: 13.75rem;
   z-index: 50;
   box-shadow: 0 8px 24px rgba(0,0,0,0.18);
   pointer-events: none;
@@ -962,42 +962,42 @@ const effectiveMaxOutputTokens = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 12px;
-  padding: 2px 0;
+  gap: 0.75rem;
+  padding: 0.125rem 0;
 }
 .cct-key {
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   color: rgba(255,255,255,0.5);
   white-space: nowrap;
 }
 .cct-val {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #FFFFFF;
   white-space: nowrap;
   text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 160px;
+  max-width: 10rem;
 }
 
 /* ── Persona section layout ── */
 .persona-section {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
 }
 .persona-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   position: relative;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  padding: 4px 8px;
-  border-radius: 10px;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.625rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 
@@ -1006,12 +1006,12 @@ const effectiveMaxOutputTokens = computed(() => {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .persona-card {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   padding: 0;
   border-radius: 0;
   border: none;
@@ -1021,8 +1021,8 @@ const effectiveMaxOutputTokens = computed(() => {
   position: relative;
 }
 .persona-card-avatar {
-  width: 30px;
-  height: 30px;
+  width: 1.875rem;
+  height: 1.875rem;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1031,14 +1031,14 @@ const effectiveMaxOutputTokens = computed(() => {
   flex-shrink: 0;
 }
 .persona-card-avatar-img {
-  width: 30px;
-  height: 30px;
+  width: 1.875rem;
+  height: 1.875rem;
   border-radius: 50%;
   object-fit: cover;
 }
 .persona-card-avatar-default {
-  width: 30px;
-  height: 30px;
+  width: 1.875rem;
+  height: 1.875rem;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1050,28 +1050,28 @@ const effectiveMaxOutputTokens = computed(() => {
 .persona-card-info {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 0.25rem;
   min-width: 0;
 }
 .persona-card-name {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #FFFFFF;
   white-space: nowrap;
   flex-shrink: 0;
 }
 .persona-card-desc {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 500;
   color: rgba(255,255,255,0.6);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 80px;
+  max-width: 5rem;
 }
 .persona-card-summary-btn {
-  width: 20px;
-  height: 20px;
+  width: 1.25rem;
+  height: 1.25rem;
   border-radius: 50%;
   border: none;
   background: rgba(255,255,255,0.15);
@@ -1095,11 +1095,11 @@ const effectiveMaxOutputTokens = computed(() => {
   align-items: center;
 }
 .sys-avatar-item {
-  width: 30px;
-  height: 30px;
+  width: 1.875rem;
+  height: 1.875rem;
   border-radius: 50%;
   border: 2px solid rgba(255,255,255,0.2);
-  margin-left: -8px;
+  margin-left: -0.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1130,7 +1130,7 @@ const effectiveMaxOutputTokens = computed(() => {
 }
 .sys-avatar-fallback {
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   color: #fff;
   user-select: none;
@@ -1141,10 +1141,10 @@ const effectiveMaxOutputTokens = computed(() => {
 }
 .sys-avatar-remove {
   position: absolute;
-  top: -3px;
-  right: -3px;
-  width: 14px;
-  height: 14px;
+  top: -0.1875rem;
+  right: -0.1875rem;
+  width: 0.875rem;
+  height: 0.875rem;
   border-radius: 50%;
   background: #EF4444;
   color: #fff;
@@ -1165,13 +1165,13 @@ const effectiveMaxOutputTokens = computed(() => {
 .sys-persona-label {
   display: flex;
   align-items: baseline;
-  gap: 4px;
-  margin-left: 4px;
+  gap: 0.25rem;
+  margin-left: 0.25rem;
   flex-shrink: 0;
 }
 .sys-persona-name {
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #FFFFFF;
   white-space: nowrap;
@@ -1179,19 +1179,19 @@ const effectiveMaxOutputTokens = computed(() => {
 }
 .sys-persona-desc {
   font-family: 'Inter', sans-serif;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 500;
   color: rgba(255,255,255,0.6);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100px;
+  max-width: 6.25rem;
 }
 
 /* Add persona button */
 .sys-add-btn {
-  width: 28px;
-  height: 28px;
+  width: 1.75rem;
+  height: 1.75rem;
   border-radius: 50%;
   border: 1.5px dashed rgba(255,255,255,0.3);
   background: transparent;
@@ -1230,11 +1230,11 @@ const effectiveMaxOutputTokens = computed(() => {
   to { opacity: 1; }
 }
 .ch-modal {
-  width: min(440px, 90vw);
+  width: min(27.5rem, 90vw);
   max-height: 80vh;
   background: #0F0F0F;
   border: 1px solid #2A2A2A;
-  border-radius: 16px;
+  border-radius: 1rem;
   box-shadow: 0 25px 60px rgba(0,0,0,0.5);
   display: flex; flex-direction: column; overflow: hidden;
   animation: ch-modal-in 0.18s ease-out;
@@ -1244,17 +1244,17 @@ const effectiveMaxOutputTokens = computed(() => {
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .ch-modal-config {
-  width: min(360px, 90vw);
+  width: min(22.5rem, 90vw);
   max-height: 70vh;
 }
 .ch-modal-header {
-  display: flex; align-items: center; gap: 10px;
-  padding: 14px 16px 12px;
+  display: flex; align-items: center; gap: 0.625rem;
+  padding: 0.875rem 1rem 0.75rem;
   border-bottom: 1px solid #1F1F1F;
   flex-shrink: 0;
 }
 .ch-modal-header-icon {
-  width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+  width: 1.75rem; height: 1.75rem; border-radius: 0.5rem; flex-shrink: 0;
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
@@ -1269,22 +1269,22 @@ const effectiveMaxOutputTokens = computed(() => {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .ch-modal-close {
-  margin-left: auto; width: 28px; height: 28px; border-radius: 7px;
+  margin-left: auto; width: 1.75rem; height: 1.75rem; border-radius: 0.4375rem;
   border: none; background: transparent; color: #6B7280;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: all 0.15s; flex-shrink: 0;
 }
 .ch-modal-close:hover { background: #1F1F1F; color: #FFFFFF; }
 .ch-modal-soul-btn {
-  width: 26px; height: 26px; border-radius: 7px;
+  width: 1.625rem; height: 1.625rem; border-radius: 0.4375rem;
   border: 1px solid #2A2A2A; background: #1A1A1A; color: #9CA3AF;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: all 0.15s; flex-shrink: 0;
 }
 .ch-modal-soul-btn:hover { background: #2A2A2A; color: #FFFFFF; }
 .ch-modal-search {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 16px;
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.625rem 1rem;
   border-bottom: 1px solid #1A1A1A;
   flex-shrink: 0;
 }
@@ -1297,14 +1297,14 @@ const effectiveMaxOutputTokens = computed(() => {
 .ch-modal-search-input::placeholder { color: #4B5563; }
 .ch-modal-body {
   flex: 1; overflow-y: auto;
-  padding: 8px;
-  display: flex; flex-direction: column; gap: 3px;
+  padding: 0.5rem;
+  display: flex; flex-direction: column; gap: 0.1875rem;
   scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
 .ch-modal-item {
-  display: flex; align-items: center; gap: 12px;
-  width: 100%; padding: 10px 12px;
-  border-radius: 10px; border: 1px solid transparent;
+  display: flex; align-items: center; gap: 0.75rem;
+  width: 100%; padding: 0.625rem 0.75rem;
+  border-radius: 0.625rem; border: 1px solid transparent;
   background: transparent; cursor: pointer;
   font-family: 'Inter', sans-serif;
   transition: all 0.12s; text-align: left;
@@ -1318,26 +1318,26 @@ const effectiveMaxOutputTokens = computed(() => {
 }
 .ch-modal-item-check { align-items: flex-start; }
 .ch-modal-check-box {
-  width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0;
+  width: 1.125rem; height: 1.125rem; border-radius: 0.3125rem; flex-shrink: 0;
   border: 1.5px solid #374151;
   display: flex; align-items: center; justify-content: center;
-  position: relative; transition: all 0.12s; margin-top: 2px;
+  position: relative; transition: all 0.12s; margin-top: 0.125rem;
 }
 .ch-modal-check-box.checked {
   background: linear-gradient(135deg, #374151 0%, #4B5563 100%);
   border-color: #4B5563;
 }
 .ch-modal-item-avatar {
-  width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+  width: 2.5rem; height: 2.5rem; border-radius: 50%; flex-shrink: 0;
   overflow: hidden; display: flex; align-items: center; justify-content: center;
   background: linear-gradient(135deg, #1A1A1A 0%, #374151 100%);
 }
 .ch-modal-avatar-fallback {
-  font-family: 'Inter', sans-serif; font-size: 15px;
+  font-family: 'Inter', sans-serif; font-size: 0.9375rem;
   font-weight: 700; color: #fff; user-select: none;
 }
 .ch-modal-item-text {
-  display: flex; flex-direction: column; gap: 3px;
+  display: flex; flex-direction: column; gap: 0.1875rem;
   min-width: 0; flex: 1;
 }
 .ch-modal-item-name {
@@ -1354,27 +1354,27 @@ const effectiveMaxOutputTokens = computed(() => {
 .ch-modal-item.selected .ch-modal-item-desc { color: rgba(255,255,255,0.5); }
 .ch-modal-check { color: rgba(255,255,255,0.7); }
 .ch-modal-empty {
-  padding: 20px; text-align: center;
+  padding: 1.25rem; text-align: center;
   font-family: 'Inter', sans-serif; font-size: 0.8125rem; color: #4B5563;
 }
 /* Config modal specific */
 .ch-cfg-section { flex-shrink: 0; }
 .ch-cfg-label {
-  font-family: 'Inter', sans-serif; font-size: 10px;
+  font-family: 'Inter', sans-serif; font-size: 0.625rem;
   font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.06em; color: #4B5563; margin-bottom: 8px;
+  letter-spacing: 0.06em; color: #4B5563; margin-bottom: 0.5rem;
 }
 .ch-override-notice {
   font-size: var(--fs-caption, 0.8125rem);
-  margin-bottom: 8px;
-  padding: 6px 10px;
+  margin-bottom: 0.5rem;
+  padding: 0.375rem 0.625rem;
   background: rgba(251,191,36,0.08);
   border: 1px solid rgba(251,191,36,0.2);
   border-radius: var(--radius-sm, 8px);
   color: #D97706;
 }
 .ch-override-clear {
-  margin-top: 8px;
+  margin-top: 0.5rem;
   font-size: var(--fs-caption, 0.8125rem);
   color: #9CA3AF;
   background: none;
@@ -1388,18 +1388,18 @@ const effectiveMaxOutputTokens = computed(() => {
   font-size: var(--fs-caption, 0.8125rem);
   color: #EF4444;
   font-weight: 600;
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
   background: rgba(239,68,68,0.08);
   border-radius: var(--radius-sm, 8px);
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
 }
 .ch-modal-footer {
-  padding: 10px 16px; border-top: 1px solid #1F1F1F;
+  padding: 0.625rem 1rem; border-top: 1px solid #1F1F1F;
   background: #0A0A0A; display: flex; justify-content: flex-end;
   flex-shrink: 0;
 }
 .ch-modal-cancel {
-  padding: 7px 16px; border-radius: 8px;
+  padding: 0.4375rem 1rem; border-radius: 0.5rem;
   font-family: 'Inter', sans-serif; font-size: 0.8125rem; font-weight: 600;
   border: 1px solid #2A2A2A; background: #1A1A1A; color: #9CA3AF; cursor: pointer; transition: all 0.15s;
 }
@@ -1410,42 +1410,42 @@ const effectiveMaxOutputTokens = computed(() => {
   z-index: 9999;
   pointer-events: none;
   background: #1A1A1A;
-  border-radius: 10px;
-  padding: 10px 14px;
-  min-width: 200px;
+  border-radius: 0.625rem;
+  padding: 0.625rem 0.875rem;
+  min-width: 12.5rem;
   box-shadow: 0 8px 24px rgba(0,0,0,0.18);
 }
 .ch-call-tooltip-fixed .ch-call-tooltip-row {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 12px;
-  padding: 2px 0;
+  gap: 0.75rem;
+  padding: 0.125rem 0;
 }
 .ch-call-tooltip-fixed .ch-call-tooltip-reason {
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   color: rgba(255,255,255,0.75);
   line-height: 1.5;
 }
 .ch-call-tooltip-fixed .cct-key {
   font-family: 'Inter', sans-serif;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   color: rgba(255,255,255,0.5);
   white-space: nowrap;
 }
 .ch-call-tooltip-fixed .cct-val {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #FFFFFF;
   white-space: nowrap;
   text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 160px;
+  max-width: 10rem;
 }
 
 .ch-persona-tooltip-fixed {
@@ -1453,23 +1453,23 @@ const effectiveMaxOutputTokens = computed(() => {
   z-index: 9999;
   pointer-events: none;
   transform: translateX(-50%);
-  min-width: 200px;
-  max-width: 300px;
-  padding: 10px 14px;
+  min-width: 12.5rem;
+  max-width: 18.75rem;
+  padding: 0.625rem 0.875rem;
   background: rgba(0, 0, 0, 0.92);
-  border-radius: 10px;
+  border-radius: 0.625rem;
   box-shadow: 0 4px 12px rgba(0,0,0,0.12);
 }
 .ch-persona-tooltip-name {
   font-family: 'Inter', sans-serif;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #F5F5F5;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 .ch-persona-tooltip-text {
   font-family: 'Inter', sans-serif;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 400;
   color: #D1D1D6;
   line-height: 1.5;
