@@ -8,6 +8,7 @@
       @open-chat-settings="$emit('open-chat-settings', chatId)"
       @open-soul-viewer="(id, type, name) => $emit('open-soul-viewer', id, type, name)"
       @remove-group-persona="(cId, pid) => $emit('remove-group-persona', cId, pid)"
+      @start-call="cId => $emit('start-call', cId)"
     >
       <template #row-bottom-left>
         <span v-if="chatsStore.pendingPermissionChatIds.has(props.chatId)" class="gp-approval-badge">
@@ -48,6 +49,7 @@
       :showDelete="true"
       @send="onSend"
       @send-with-attachments="onSendWithAttachments"
+      @pause="pauseChat"
       @stop="stopChat"
       @delete-message="deleteMessage"
     >
@@ -108,16 +110,25 @@
               @attach="atts => gpAttachments.push(...atts)"
             />
 
-            <!-- Stop button -->
-            <button
-              v-if="isRunning"
-              @click="stopChat"
-              class="gp-icon-btn gp-stop-btn"
-              aria-label="Stop agent"
-              title="Stop agent"
-            >
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-            </button>
+            <!-- Pause / Stop buttons -->
+            <template v-if="isRunning">
+              <button
+                @click="pauseChat"
+                class="gp-icon-btn gp-stop-btn"
+                aria-label="Pause agent"
+                title="Pause (Esc) — interrupt but keep queue"
+              >
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+              </button>
+              <button
+                @click="stopChat"
+                class="gp-icon-btn gp-stop-btn"
+                aria-label="Stop agent"
+                title="Stop — interrupt and clear queue"
+              >
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+              </button>
+            </template>
 
             <!-- Send button -->
             <button
@@ -204,7 +215,7 @@ const props = defineProps({
   gridChatIds: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['select', 'swap-chat', 'maximize', 'open-chat-settings', 'open-soul-viewer', 'remove-group-persona'])
+const emit = defineEmits(['select', 'swap-chat', 'maximize', 'open-chat-settings', 'open-soul-viewer', 'remove-group-persona', 'start-call'])
 
 const chatsStore = useChatsStore()
 const configStore = useConfigStore()
@@ -532,10 +543,57 @@ async function onSend(text, pendingAttachments = []) {
   }
 }
 
+function _getLastActiveMessage() {
+  const c = chatsStore.chats.find(c => c.id === props.chatId)
+  if (!c?.messages?.length) return { chat: null, msg: null }
+  const streaming = [...c.messages].reverse().find(m => m.streaming)
+  return { chat: c, msg: streaming ?? ([...c.messages].reverse().find(m => m.role === 'assistant') ?? null) }
+}
+
+function _applyInterrupt(chat, msg, type) {
+  const inlineMarker = type === 'stop'
+    ? '[Request interrupted by user. Queue cleared.]'
+    : '[Request interrupted by user]'
+  const bubbleText = type === 'stop'
+    ? 'Request stopped by user. Type a new message to continue.'
+    : 'Request interrupted by user.'
+
+  if (!msg) {
+    chat?.messages?.push({
+      id: uuidv4(), role: 'system', interruptType: type, content: bubbleText,
+      segments: [{ type: 'text', content: bubbleText }],
+      streaming: false, timestamp: Date.now(),
+    })
+    return
+  }
+
+  const hasContent = msg.content?.trim().length > 0
+  if (hasContent) {
+    msg.content += `\n\n${inlineMarker}`
+    msg.streaming = false
+  } else {
+    const idx = chat?.messages?.indexOf(msg) ?? -1
+    if (idx !== -1) chat.messages.splice(idx, 1)
+    chat?.messages?.push({
+      id: uuidv4(), role: 'system', interruptType: type, content: bubbleText,
+      segments: [{ type: 'text', content: bubbleText }],
+      streaming: false, timestamp: Date.now(),
+    })
+  }
+}
+
+// Pause: interrupt the agent, preserve queue (grid panels manage their own send guards)
+async function pauseChat() {
+  if (window.electronAPI?.stopAgent) await window.electronAPI.stopAgent(props.chatId)
+  const { chat, msg } = _getLastActiveMessage()
+  _applyInterrupt(chat, msg, 'pause')
+}
+
+// Stop: same as pause for grid panels (no global queue to clear)
 async function stopChat() {
   if (window.electronAPI?.stopAgent) await window.electronAPI.stopAgent(props.chatId)
-  const c = chatsStore.chats.find(c => c.id === props.chatId)
-  if (c) { c.isRunning = false; c.isThinking = false; if (c.messages) for (const msg of c.messages) if (msg.streaming) msg.streaming = false }
+  const { chat, msg } = _getLastActiveMessage()
+  _applyInterrupt(chat, msg, 'stop')
 }
 
 function deleteMessage(msg) {
