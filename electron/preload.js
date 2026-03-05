@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── Agent Loop ────────────────────────────────────────────────────────────
   runAgent: (params) => ipcRenderer.invoke('agent:run', params),
   stopAgent: (chatId) => ipcRenderer.invoke('agent:stop', chatId),
+  accumulateVoiceUsage: (chatId, usage) => ipcRenderer.invoke('agent:accumulate-voice-usage', { chatId, usage }),
   permissionResponse: (chatId, payload) => ipcRenderer.invoke('agent:permission-response', chatId, payload),
   updatePermissionMode: (chatId, payload) => ipcRenderer.invoke('agent:update-permission-mode', chatId, payload),
   compactContext: (chatId) => ipcRenderer.invoke('agent:compact', chatId),

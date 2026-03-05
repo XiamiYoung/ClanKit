@@ -646,6 +646,34 @@ app.on('before-quit', () => {
 
 // --- IPC: Storage -----------------------------------------------------------
 
+/** Accumulate usage metrics into chat.usage and save atomically. */
+async function accumulateUsage(chatId, metrics) {
+  if (!chatId || !metrics) return
+  const file = path.join(CHATS_DIR, `${chatId}.json`)
+  let chat
+  try {
+    chat = await readJSONAsync(file, null)
+  } catch { return }
+  if (!chat) return
+
+  const u = chat.usage || {}
+  chat.usage = {
+    inputTokens:         (u.inputTokens         || 0) + (metrics.inputTokens         || 0),
+    outputTokens:        (u.outputTokens        || 0) + (metrics.outputTokens        || 0),
+    cacheCreationTokens: (u.cacheCreationTokens || 0) + (metrics.cacheCreationTokens || 0),
+    cacheReadTokens:     (u.cacheReadTokens     || 0) + (metrics.cacheReadTokens     || 0),
+    voiceInputTokens:    (u.voiceInputTokens    || 0) + (metrics.voiceInputTokens    || 0),
+    voiceOutputTokens:   (u.voiceOutputTokens   || 0) + (metrics.voiceOutputTokens   || 0),
+    whisperCalls:        (u.whisperCalls        || 0) + (metrics.whisperCalls        || 0),
+    whisperSecs:         (u.whisperSecs         || 0) + (metrics.whisperSecs         || 0),
+  }
+  try {
+    await writeJSONAtomic(file, chat)
+  } catch (err) {
+    logger.warn('accumulateUsage write failed', err.message)
+  }
+}
+
 // -- Per-chat granular operations ---------------------------------------------
 ipcMain.handle('store:get-chat-index', async () => {
   return readJSONAsync(CHATS_INDEX_FILE, [])
@@ -2502,6 +2530,14 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
             lastContextSnapshots.set(loopKey, activeLoops.get(loopKey).getContextSnapshot())
           }
           activeLoops.delete(loopKey)
+          // Persist cumulative usage
+          const _pMetrics = loop.contextManager.getMetrics()
+          accumulateUsage(chatId, {
+            inputTokens:         _pMetrics.inputTokens         || 0,
+            outputTokens:        _pMetrics.outputTokens        || 0,
+            cacheCreationTokens: _pMetrics.cacheCreationInputTokens || 0,
+            cacheReadTokens:     _pMetrics.cacheReadInputTokens     || 0,
+          }).catch(() => {})
         }
       })()
     })
@@ -2566,6 +2602,14 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       ragContext
     )
     logger.agent('run done', { chatId, success: result !== undefined, resultLen: typeof result === 'string' ? result.length : 0 })
+    // Persist cumulative usage to chat JSON
+    const _usageMetrics = loop.contextManager.getMetrics()
+    accumulateUsage(chatId, {
+      inputTokens:         _usageMetrics.inputTokens         || 0,
+      outputTokens:        _usageMetrics.outputTokens        || 0,
+      cacheCreationTokens: _usageMetrics.cacheCreationInputTokens || 0,
+      cacheReadTokens:     _usageMetrics.cacheReadInputTokens     || 0,
+    }).catch(() => {})
     // Fire-and-forget memory extraction -- single persona as participant for routing
     const singleParticipants = personaPrompts?.systemPersonaId
       ? [{ id: personaPrompts.systemPersonaId, name: personaPrompts.groupChatContext?.personaName || 'Assistant', type: 'system' }]
@@ -2582,6 +2626,11 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     }
     activeLoops.delete(chatId)
   }
+})
+
+ipcMain.handle('agent:accumulate-voice-usage', async (_, { chatId, usage }) => {
+  await accumulateUsage(chatId, usage)
+  return true
 })
 
 ipcMain.handle('agent:stop', (event, chatId) => {
