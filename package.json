@@ -2,6 +2,7 @@
   "name": "sparkai",
   "version": "1.0.0",
   "description": "SparkAI - Multi-LLM Desktop Application",
+  "license": "GPL-3.0-only",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on tcp:5173 && node scripts/run-electron.js\"",

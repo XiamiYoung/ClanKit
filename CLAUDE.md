@@ -18,60 +18,19 @@ SparkAI is a multi-LLM desktop chat application built with **Electron + Vue 3 + 
 
 ## Repository Structure
 
-```
-spark_ai/
-├── electron/                 # Electron main process (CommonJS)
-│   ├── main.js               # App entry, IPC handlers, window management
-│   ├── preload.js            # contextBridge → window.electronAPI
-│   ├── logger.js             # File-based logger
-│   └── agent/                # Agentic AI loop
-│       ├── agentLoop.js      # Core agent orchestration
-│       ├── core/             # LLM clients
-│       │   ├── AnthropicClient.js
-│       │   ├── OpenAIClient.js
-│       │   └── ContextManager.js
-│       ├── managers/         # Sub-agent & task management
-│       │   ├── SubAgentManager.js
-│       │   └── TaskManager.js
-│       ├── mcp/              # MCP protocol client/manager
-│       │   ├── McpClient.js
-│       │   └── McpManager.js
-│       └── tools/            # Agent tools (file, shell, git, web, etc.)
-│           ├── BaseTool.js
-│           ├── ToolRegistry.js
-│           ├── FileTool.js, ShellTool.js, GitTool.js, WebTool.js
-│           ├── DataTool.js, TodoTool.js, SoulTool.js
-│           └── ...
-├── src/                      # Vue renderer (ES modules)
-│   ├── main.js               # Vue app bootstrap (Pinia, Router)
-│   ├── App.vue               # Root layout (sidebar + router-view)
-│   ├── style.css             # Global styles, CSS variables, prose classes
-│   ├── router/index.js       # Hash-based routes
-│   ├── services/storage.js   # Storage abstraction (Electron IPC / localStorage)
-│   ├── stores/               # Pinia stores
-│   │   ├── chats.js          # Chat CRUD, lazy message loading, chunk listener
-│   │   ├── config.js         # API keys, model config, data paths
-│   │   ├── personas.js       # System & user persona management
-│   │   ├── mcp.js            # MCP server config
-│   │   ├── tools.js          # HTTP tool config
-│   │   ├── models.js         # Model lists (Anthropic/OpenRouter/OpenAI)
-│   │   └── knowledge.js      # Pinecone RAG integration
-│   ├── components/
-│   │   ├── layout/           # Sidebar, TitleBar
-│   │   ├── common/           # AppButton, ComboBox, ConfirmModal
-│   │   ├── chat/             # MessageRenderer, RichTextEditor, BabylonViewer
-│   │   └── personas/         # PersonaCard, PersonaWizard, AvatarPicker, SoulViewer
-│   ├── views/                # Route pages
-│   │   ├── ChatsView.vue, ConfigView.vue, PersonasView.vue
-│   │   ├── McpView.vue, ToolsView.vue, KnowledgeView.vue
-│   │   ├── NotesView.vue, SkillsView.vue
-│   │   └── ...
-│   └── utils/mentions.js
-├── tailwind.config.js
-├── vite.config.js
-├── postcss.config.js
-└── package.json
-```
+- `electron/` — Main process (CommonJS): `main.js`, `preload.js`, `logger.js`
+  - `electron/agent/` — Agent loop: `agentLoop.js`, `core/` (LLM clients), `managers/`, `mcp/`, `tools/`
+- `src/` — Vue renderer (ES modules)
+  - `src/main.js`, `src/App.vue`, `src/style.css`, `src/router/index.js`
+  - `src/services/storage.js` — storage abstraction (Electron IPC / localStorage)
+  - `src/stores/` — `chats.js`, `config.js`, `personas.js`, `mcp.js`, `tools.js`, `models.js`, `knowledge.js`, `news.js`, `obsidian.js`, `skills.js`, `voice.js`
+  - `src/components/layout/` — Sidebar, TitleBar
+  - `src/components/common/` — AppButton, ComboBox, ConfirmModal, CategoryModal, EmojiPicker
+  - `src/components/chat/` — MessageRenderer, RichTextEditor, BabylonViewer
+  - `src/components/personas/` — PersonaCard, PersonaWizard, AvatarPicker, SoulViewer
+  - `src/views/` — ChatsView, ConfigView, PersonasView, McpView, ToolsView, KnowledgeView, NotesView, SkillsView, DocsView, NewsView
+  - `src/utils/mentions.js`
+- `tailwind.config.js`, `vite.config.js`, `postcss.config.js`, `package.json`
 
 ## Commands
 
@@ -280,142 +239,15 @@ Text on gradient surfaces is always `#FFFFFF`. Secondary text on gradients uses 
 
 #### Sidebar / Nav Item Action Buttons (Rename, Delete, etc.)
 
-Inline icon buttons that appear on hover inside sidebar and left-nav list items (e.g. chat tree rename/delete, persona category rename/delete) follow the **chat tree pattern** — NOT a white box with a shadow:
-
-```css
-/* Action group — invisible until row hover */
-.nav-item-actions {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  opacity: 0;
-  transition: opacity 0.15s;
-  flex-shrink: 0;
-}
-.row:hover .nav-item-actions { opacity: 1; }
-
-/* Individual icon button */
-.nav-icon-btn {
-  width: 1.5rem;
-  height: 1.5rem;
-  border: none;
-  background: transparent;
-  color: rgba(26, 26, 26, 0.4);      /* dim on light bg */
-  border-radius: 0.3125rem;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-}
-.nav-icon-btn:hover            { background: rgba(26,26,26,0.08);  color: #1A1A1A; }
-.nav-icon-btn.danger:hover     { background: rgba(239,68,68,0.10); color: #EF4444; }
-
-/* When the row is active (dark gradient bg) — flip to white icons */
-.active-row .nav-icon-btn            { color: rgba(255,255,255,0.5); }
-.active-row .nav-icon-btn:hover      { background: rgba(255,255,255,0.15); color: #FFFFFF; }
-.active-row .nav-icon-btn.danger:hover { background: rgba(255,59,48,0.25); color: #FF6B6B; }
-```
-
-**Rules:**
-- **No white background box, no box-shadow, no border** on the action group container — pure transparency
-- Icon color is `rgba(26,26,26,0.4)` on light rows; flips to `rgba(255,255,255,0.5)` on active (gradient) rows
-- Hover uses low-opacity fill: `rgba(26,26,26,0.08)` on light, `rgba(255,255,255,0.15)` on dark
-- Danger hover: `rgba(239,68,68,0.10)` / `#EF4444` on light; `rgba(255,59,48,0.25)` / `#FF6B6B` on dark
+Nav hover icon buttons: transparent bg, no box-shadow/border on the action group. Icon color `rgba(26,26,26,0.4)` on light rows, `rgba(255,255,255,0.5)` on active/dark rows. Hover fills: `rgba(26,26,26,0.08)` light / `rgba(255,255,255,0.15)` dark. Danger hover: `rgba(239,68,68,0.10)` / `#EF4444` light; `rgba(255,59,48,0.25)` / `#FF6B6B` dark. Action group invisible until row hover (`opacity: 0` → `1`).
 
 #### Left Nav Category Rows (Full-Row Hover Background)
 
-Category rows in left nav panels (e.g. persona categories) use a **wrapper + transparent button** pattern so the entire row — including the action buttons on the right — gets the dark gradient background on hover/active. Never apply the background to the inner `<button>` only, as that leaves the action icons outside the background.
-
-**Structure:**
-```html
-<!-- Wrapper gets the gradient background -->
-<div class="nav-cat-wrap">
-  <!-- Button is transparent — wrapper provides the bg -->
-  <button class="nav-item nav-cat-btn" :class="{ active: isActive }">
-    <span class="nav-item-emoji">{{ cat.emoji }}</span>
-    <span class="nav-item-label">{{ cat.name }}</span>
-  </button>
-  <!-- Right-side siblings: count badge + action buttons -->
-  <div class="nav-cat-right">
-    <span class="nav-cat-count">{{ count }}</span>
-    <div class="nav-cat-actions">
-      <!-- rename + delete icon buttons -->
-    </div>
-  </div>
-</div>
-```
-
-**CSS pattern:**
-```css
-.nav-cat-wrap {
-  display: flex; align-items: center; border-radius: 0.5rem;
-  transition: background 0.12s ease, box-shadow 0.12s ease;
-  padding-right: 0.25rem;
-}
-/* Hover: full row gets the dark gradient */
-.nav-cat-wrap:hover {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-/* Active: same — use :has() to detect .active child */
-.nav-cat-wrap:has(.nav-item.active) {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-/* Button is transparent — wrapper provides the bg */
-.nav-cat-btn { flex: 1; min-width: 0; background: transparent !important; box-shadow: none !important; }
-.nav-cat-wrap:hover .nav-cat-btn,
-.nav-cat-wrap:has(.nav-item.active) .nav-cat-btn { color: #FFFFFF; }
-
-/* Hide count badge on hover/active; show action buttons instead */
-.nav-cat-wrap:hover .nav-cat-count,
-.nav-cat-wrap:has(.nav-item.active) .nav-cat-count { opacity: 0; pointer-events: none; }
-.nav-cat-wrap:hover .nav-cat-actions,
-.nav-cat-wrap:has(.nav-item.active) .nav-cat-actions { opacity: 1; }
-
-/* Icon buttons always white (they only appear on dark gradient bg) */
-.nav-icon-btn { color: rgba(255,255,255,0.5); background: transparent; }
-.nav-icon-btn:hover { background: rgba(255,255,255,0.15); color: #FFFFFF; }
-.nav-icon-btn-danger:hover { background: rgba(255,59,48,0.25); color: #FF6B6B; }
-```
-
-**Rules:**
-- The **wrapper div** (`nav-cat-wrap`) gets the gradient — never the inner button alone
-- The inner button must have `background: transparent !important` to let the wrapper bg show
-- The count badge and action buttons are **flex siblings** of the inner button (not children of it) — this ensures clicking action buttons does NOT trigger the nav button's click handler
-- Hide the count on hover/active (fade to `opacity: 0`) so the action buttons have room — both occupy the same `nav-cat-right` area with actions as `position: absolute`
-- Action icon buttons are always white-tinted (they only appear on the dark gradient bg)
-- Use CSS `:has(.nav-item.active)` to style the wrapper based on its active child
+Outer `nav-cat-wrap` div gets the dark gradient on hover/`:has(.active)` — **never the inner `<button>` alone**. Inner button: `background: transparent !important`. Count badge and action buttons are **flex siblings** of the button (not children) — so clicking actions doesn't trigger the nav button's click handler. Hide count badge on hover (opacity→0), show action buttons instead. Use CSS `:has(.nav-item.active)` to detect active state on the wrapper. Action icon buttons are always white-tinted (they only appear on the dark gradient bg).
 
 #### Back Buttons
 
-All "back" / "return" navigation buttons use the **black gradient** style to stay visually consistent with other primary interactive elements:
-
-```css
-.back-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px 6px 10px;
-  border: none;
-  border-radius: var(--radius-sm, 8px);
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary, 0.875rem);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.back-btn:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
-}
-```
-
-- Include a chevron-left SVG icon (14–16px) before the label text
-- Label should be short and descriptive (e.g., "Single View", "Skills")
-- Examples: grid-to-single-view button (`ChatGridLayout`), skill-detail-to-catalog button (`SkillsView`)
+Back/return navigation buttons: black gradient (`linear-gradient(135deg,#0F0F0F,#1A1A1A,#374151)`) + white text, `font-weight:600`, chevron-left SVG icon. Hover: lighter stops (#1A1A1A → #2D2D2D → #4B5563). Examples: `ChatGridLayout` (grid→single), `SkillsView` (detail→catalog).
 
 #### Page-Level Action Buttons (Standard)
 
@@ -451,56 +283,7 @@ Pages using this standard: ToolsView, McpView, PersonasView, KnowledgeView, Skil
 
 #### Dark Dialogs / Dropdowns
 
-Floating panels that appear over dark or mixed content (swap-chat dropdown, settings popovers) use a **dark theme** consistent with the app's dark gradient identity:
-
-```css
-.dark-dialog {
-  background: #0F0F0F;
-  border: 1px solid #2A2A2A;
-  border-radius: 16px;
-  box-shadow: 0 25px 60px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.2);
-  animation: dialogEnter 0.15s ease-out;
-}
-/* Header */
-.dark-dialog-header {
-  padding: 14px 16px 10px;
-  border-bottom: 1px solid #1F1F1F;
-  font-weight: 700;
-  color: #FFFFFF;
-}
-/* Header icon */
-.dark-dialog-header-icon {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
-/* Search bar */
-.dark-dialog-search {
-  background: #1A1A1A;
-  border: 1px solid #2A2A2A;
-  border-radius: 10px;
-  color: #FFFFFF;
-}
-.dark-dialog-search:focus-within { border-color: #4B5563; }
-.dark-dialog-search::placeholder { color: #6B7280; }
-/* List items */
-.dark-dialog-item {
-  color: #9CA3AF;
-  border-radius: 10px;
-}
-.dark-dialog-item:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #374151 100%);
-  color: #FFFFFF;
-}
-/* Scrollbar */
-scrollbar-width: thin;
-::-webkit-scrollbar-thumb { background: #374151; }
-```
-
-- Use `<Teleport to="body">` with `position: fixed` + `z-index: 9999` when the dialog must escape `overflow: hidden` containers (e.g., grid cells)
-- Move CSS for teleported elements to an **unscoped** `<style>` block (scoped styles don't apply outside the component DOM)
-- Entry animation: `scale(0.96) translateY(4px) → scale(1) translateY(0)` with opacity fade, 150ms ease-out
-- Examples: swap-chat dropdown (`ChatGridPanel`), Chat Settings tooltip (`ChatHeader`)
+Floating panels over dark/mixed content: `background:#0F0F0F`, `border:1px solid #2A2A2A`, `border-radius:16px`, heavy box-shadow. Header: `#FFFFFF` weight 700, icon in gradient container. Search: `#1A1A1A` bg, focus `#4B5563` border, placeholder `#6B7280`. List items: `#9CA3AF`, hover gets dark gradient + `#FFFFFF`. Use `<Teleport to="body">` + unscoped `<style>` + `z-index:9999` when escaping `overflow:hidden` containers. Entry: `scale(0.96) translateY(4px)→1/0` 150ms ease-out. Examples: swap-chat dropdown (`ChatGridPanel`), chat settings (`ChatHeader`).
 
 ### Animations & Transitions
 
@@ -578,24 +361,7 @@ ConfigView uses a **two-level navigation** pattern — do not flatten it back to
 
 #### Section Card Pattern
 
-Every logical group of related fields lives in its own `config-card` with a `form-section-header` at the top:
-
-```html
-<div class="config-card">
-  <div class="form-section-header">
-    <div class="section-icon-sm">
-      <svg class="icon-xs" viewBox="0 0 24 24" ...><!-- icon --></svg>
-    </div>
-    <h3 class="form-section-title">Section Title</h3>
-    <!-- optional: <span class="form-label-hint">subtitle or env var</span> -->
-  </div>
-  <!-- fields -->
-</div>
-```
-
-- `section-icon-sm`: 28×28px black gradient square, white icon inside
-- `form-section-title`: `font-weight: 700`, `var(--fs-body)`, `var(--text-primary)`
-- `form-label-hint`: monospace, `var(--fs-caption)`, `var(--text-muted)` — used for env var names or counts
+Each `config-card` starts with a `form-section-header`: `section-icon-sm` (28×28px black gradient square with white icon) + `form-section-title` (weight 700, `var(--fs-body)`) + optional `form-label-hint` (monospace caption for env var names or counts). Then the fields follow.
 
 **Provider card internal sections** (each separated by `form-divider`):
 
@@ -628,13 +394,7 @@ Tailwind custom screens `hd:` and `4k:` are registered. Use them instead of ad-h
 
 ### Font Scale Strategy — Breakpoint Steps (not `clamp()`)
 
-`html { font-size }` steps at two breakpoints. All `rem` and `var(--fs-*)` values auto-scale with it — no per-component media queries needed for typography.
-
-```css
-html { font-size: 100%; }                          /* < 1920px */
-@media (min-width: 1920px) { font-size: 112.5%; } /* HD       */
-@media (min-width: 2560px) { font-size: 125%; }   /* 4K       */
-```
+`html { font-size }` steps at two breakpoints (100% base → 112.5% at 1920px → 125% at 2560px). All `rem` and `var(--fs-*)` values auto-scale with it — no per-component media queries needed for typography.
 
 ### Spacing Unit Rule — `rem` not `px`
 
@@ -651,32 +411,11 @@ html { font-size: 100%; }                          /* < 1920px */
 | Scrollbar `width: 6px` | Exception — stays `px` |
 | Decorative stripes `height: 3px` | Exception — stays `px` |
 
-**Quick conversion table (÷16):**
-
-| px | rem |
-|----|-----|
-| 4 | 0.25rem |
-| 6 | 0.375rem |
-| 8 | 0.5rem |
-| 10 | 0.625rem |
-| 12 | 0.75rem |
-| 14 | 0.875rem |
-| 16 | 1rem |
-| 20 | 1.25rem |
-| 24 | 1.5rem |
-| 28 | 1.75rem |
-| 32 | 2rem |
-| 42 | 2.625rem |
+Conversion: divide `px` by 16 (e.g. 8px = 0.5rem, 16px = 1rem, 24px = 1.5rem).
 
 ### Card Grid Columns
 
-Card grids (MCP, Tools, Skills, Knowledge, Personas) use `min-width` breakpoints — never `max-width`:
-
-```css
-.some-grid { grid-template-columns: repeat(2, 1fr); } /* < 1920px */
-@media (min-width: 1920px) { grid-template-columns: repeat(3, 1fr); }
-@media (min-width: 2560px) { grid-template-columns: repeat(4, 1fr); }
-```
+Card grids (MCP, Tools, Skills, Knowledge, Personas) use `min-width` breakpoints — never `max-width`: 2 cols base → 3 cols at 1920px → 4 cols at 2560px.
 
 ### Sidebar Behavior
 
@@ -812,61 +551,14 @@ build/icons/
 └── icon-512x.png     # 512×512
 ```
 
-### Electron Window Icon
+### Electron / Builder / Sidebar
 
-Set in `electron/main.js` `BrowserWindow` config:
-
-```js
-const { app, BrowserWindow } = require('electron')
-const path = require('path')
-
-new BrowserWindow({
-  icon: path.join(__dirname, '../public/icon.png'),
-  // ...
-})
-```
-
-### Electron Builder Config (`package.json`)
-
-```json
-"build": {
-  "appId": "com.sparkai.app",
-  "productName": "SparkAI",
-  "icon": "build/icons/icon.png",
-  "win": { "icon": "build/icons/icon.png", "target": ["nsis", "portable"] },
-  "mac": { "icon": "build/icons/icon.png", "target": "dmg" },
-  "linux": { "icon": "build/icons", "target": "AppImage" }
-}
-```
-
-### Sidebar Logo
-
-The sidebar logo uses the icon image directly:
-
-```vue
-<!-- Expanded state -->
-<img src="/icon.png" alt="SparkAI" style="width:32px;height:32px;border-radius:8px;" />
-
-<!-- Collapsed state -->
-<img src="/icon.png" alt="SparkAI" style="width:28px;height:28px;border-radius:6px;" />
-```
+- **BrowserWindow icon:** `path.join(__dirname, '../public/icon.png')` in `electron/main.js`
+- **Electron Builder** (`package.json`): `appId: "com.sparkai.app"`, `productName: "SparkAI"`, icon path `build/icons/icon.png` for win/mac/linux targets
+- **Sidebar logo:** `<img src="/icon.png">`, 32px expanded / 28px collapsed, `border-radius:8px`/`6px`
 
 ### Regenerating Icons
 
-If you need to regenerate PNG sizes from the SVG source:
-
 ```bash
-# Using sharp (already in devDependencies)
 node scripts/generate-icons.js
-```
-
-Or manually with cairosvg (Python):
-
-```bash
-pip install cairosvg
-python3 -c "
-import cairosvg
-for size in [16,32,48,64,128,256,512,1024]:
-    cairosvg.svg2png(url='build/icons/icon.svg', write_to=f'build/icons/icon-{size}x.png', output_width=size, output_height=size)
-"
 ```

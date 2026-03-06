@@ -20,8 +20,8 @@
         </button>
       </div>
 
-      <!-- Tab bar (only for system personas) -->
-      <div v-if="personaType === 'system'" class="soul-tabs">
+      <!-- Tab bar -->
+      <div class="soul-tabs">
         <button class="soul-tab" :class="{ active: activeTab === 'summary' }" @click="activeTab = 'summary'">
           <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
@@ -37,7 +37,7 @@
           </svg>
           Memory
         </button>
-        <button class="soul-tab" :class="{ active: activeTab === 'model' }" @click="activeTab = 'model'">
+        <button v-if="personaType === 'system'" class="soul-tab" :class="{ active: activeTab === 'model' }" @click="activeTab = 'model'">
           <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
@@ -45,7 +45,7 @@
           AI Model
           <span v-if="hasModelErrors" class="soul-tab-error-dot"></span>
         </button>
-        <button class="soul-tab" :class="{ active: activeTab === 'voice' }" @click="activeTab = 'voice'">
+        <button v-if="personaType === 'system'" class="soul-tab" :class="{ active: activeTab === 'voice' }" @click="activeTab = 'voice'">
           <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>

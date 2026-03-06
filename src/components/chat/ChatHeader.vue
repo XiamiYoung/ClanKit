@@ -87,6 +87,17 @@
       </div>
     </div>
 
+    <!-- Hamburger tab hanging below the header -->
+    <button
+      class="ch-header-tab"
+      :title="headerExpanded ? 'Collapse header' : 'Expand header'"
+      @click.stop="headerExpanded = !headerExpanded"
+    >
+      <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
+      </svg>
+    </button>
+
     <!-- Row 2: Personas (right-aligned, left of Chat Settings) + Chat Settings button -->
     <div class="ch-row-bottom" :class="{ 'ch-row-bottom--collapsed': !headerExpanded }">
       <slot name="row-bottom-left" />
@@ -914,6 +925,29 @@ const effectiveMaxOutputTokens = computed(() => {
   border-bottom: 1px solid #E5E5EA;
   position: relative;
   z-index: 20;
+}
+.ch-header-tab {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translate(-50%, 100%);
+  z-index: 21;
+  width: 3.5rem;
+  height: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0 0 0.5rem 0.5rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  transition: height 0.15s ease, background 0.15s ease;
+}
+.ch-header-tab:hover {
+  height: 1.875rem;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 
 /* ── Row 1: Title row ── */

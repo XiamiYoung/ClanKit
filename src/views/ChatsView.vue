@@ -240,7 +240,6 @@
       <template v-if="chatsStore.activeChat">
         <!-- Chat Header (shared component) -->
         <ChatHeader
-          ref="chatHeaderRef"
           :chatId="chatsStore.activeChatId"
           @open-chat-settings="showChatConfigModal = true"
           @open-soul-viewer="(id, type, name) => openSoulViewer(id, type, name)"
@@ -395,16 +394,6 @@
             <span style="font-size:var(--fs-small);">{{ isCompacting ? 'Compacting…' : 'Compact' }}</span>
           </button>
         </div>
-        <!-- Tab below context bar -->
-        <button
-          class="ctx-header-tab"
-          :title="chatHeaderRef?.headerExpanded ? 'Collapse header' : 'Expand header'"
-          @click.stop="chatHeaderRef && (chatHeaderRef.headerExpanded = !chatHeaderRef.headerExpanded)"
-        >
-          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
-          </svg>
-        </button>
         </div>
 
         <!-- ── Context Inspector Modal ──────────────────────────────────────── -->
@@ -3125,7 +3114,6 @@ function getDefaultSidebarWidth() {
 }
 const sidebarWidth = ref(getDefaultSidebarWidth())
 const chatSidebarCollapsed = ref(false)
-const chatHeaderRef = ref(null)
 // Tracks the last-clicked tree node: { type: 'folder'|'chat', id }
 const treeLastSelected = ref(null)
 const selectedFolderId = ref(null)
@@ -6487,9 +6475,7 @@ onUnmounted(() => {
 
 /* ── Context bar ────────────────────────────────────────────────────────── */
 .chat-context-bar-wrap {
-  position: relative;
   flex-shrink: 0;
-  z-index: 10;
 }
 .chat-context-bar {
   padding: 0.375rem 1rem;
@@ -6498,29 +6484,6 @@ onUnmounted(() => {
   gap: 0.75rem;
   background: #FFFFFF;
   border-bottom: 1px solid #E5E5EA;
-}
-.ctx-header-tab {
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translate(-50%, 100%);
-  z-index: 21;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 3.5rem;
-  height: 1.4rem;
-  border: none;
-  border-radius: 0 0 0.5rem 0.5rem;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-  transition: height 0.15s ease, background 0.15s ease;
-}
-.ctx-header-tab:hover {
-  height: 1.875rem;
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 
 /* ── Messages area ──────────────────────────────────────────────────────── */
