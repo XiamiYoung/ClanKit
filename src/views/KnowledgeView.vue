@@ -7,7 +7,7 @@
         <div>
           <div style="display:flex; align-items:center; gap:0.5rem;">
             <h1 class="knowledge-title">AI Knowledge</h1>
-            <span class="count-badge">{{ knowledgeStore.indexes.length }}</span>
+            <span class="catalog-count-badge">{{ knowledgeStore.indexes.length }}</span>
           </div>
           <p class="knowledge-subtitle">
             Manage RAG with Pinecone vector database
@@ -705,7 +705,7 @@ function formatDate(ts) {
 .knowledge-title { font-family: 'Inter', sans-serif; font-size: var(--fs-page-title); font-weight: 700; color: var(--text-primary); margin: 0; }
 .knowledge-subtitle { font-family: 'Inter', sans-serif; font-size: var(--fs-body); color: var(--text-secondary); margin: 0.25rem 0 0 0; }
 .header-actions { display: flex; align-items: center; gap: 0.5rem; }
-.count-badge {
+.catalog-count-badge {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
   font-weight: 700;

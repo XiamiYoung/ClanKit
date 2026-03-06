@@ -15,22 +15,87 @@ class SubAgentManager {
     this.activeSubAgents = new Map()
   }
 
+  /** Get the tool definition for batch-dispatching multiple sub-agents in parallel */
+  getBatchToolDefinition() {
+    return {
+      name: 'dispatch_subagents',
+      description: 'Dispatch MULTIPLE sub-agents in parallel in a single call. Use this instead of multiple dispatch_subagent calls when you have 2 or more independent subtasks — all agents run concurrently, saving significant time. Returns an array of results in the same order as the input agents.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          agents: {
+            type: 'array',
+            description: 'Array of sub-agent tasks to run in parallel',
+            items: {
+              type: 'object',
+              properties: {
+                task:           { type: 'string', description: 'Clear description of what this sub-agent should do' },
+                specialization: { type: 'string', enum: ['researcher', 'coder', 'analyst', 'reviewer'], description: 'Sub-agent specialization' },
+                context:        { type: 'string', description: 'Relevant context the sub-agent needs' },
+                max_turns:      { type: 'number', description: 'Maximum turns (default 5, max 10)' },
+                todo_id:        { type: 'number', description: 'Optional: todo item ID to mark as completed when this agent finishes (auto-updates the default todo list)' }
+              },
+              required: ['task', 'specialization']
+            }
+          }
+        },
+        required: ['agents']
+      }
+    }
+  }
+
   /** Get the tool definition for dispatching sub-agents */
   getToolDefinition() {
     return {
       name: 'dispatch_subagent',
-      description: 'Dispatch a focused sub-agent to handle a specific subtask. The sub-agent runs independently and returns its result. Use this for tasks that can be done in parallel or that require specialized focus (research, code analysis, data processing).',
+      description: 'Dispatch a focused sub-agent to handle a specific subtask. The sub-agent runs independently and returns its result. Use this for tasks that can be done in parallel or that require specialized focus (research, code analysis, data processing). When dispatching multiple sub-agents, make multiple parallel dispatch_subagent tool calls in a single response to run them concurrently. Pass todo_chat_id and todo_id to auto-mark the corresponding todo item as completed when the sub-agent finishes.',
       input_schema: {
         type: 'object',
         properties: {
           task:        { type: 'string', description: 'Clear description of what the sub-agent should do' },
           specialization: { type: 'string', enum: ['researcher', 'coder', 'analyst', 'reviewer'], description: 'Sub-agent specialization' },
           context:     { type: 'string', description: 'Relevant context the sub-agent needs' },
-          max_turns:   { type: 'number', description: 'Maximum turns for the sub-agent (default 5, max 10)' }
+          max_turns:   { type: 'number', description: 'Maximum turns for the sub-agent (default 5, max 10)' },
+          todo_id:      { type: 'number', description: 'Optional: todo item ID to mark as completed when this sub-agent finishes (auto-updates the default todo list)' }
         },
         required: ['task', 'specialization']
       }
     }
+  }
+
+  /** Dispatch multiple sub-agents in parallel and auto-update todos */
+  async dispatchBatch(input, onChunk, toolRegistry) {
+    const agents = input.agents || []
+    logger.agent('SubAgent batch dispatch', { count: agents.length })
+
+    const results = await Promise.all(
+      agents.map(async (agentInput, idx) => {
+        const result = await this.dispatch(agentInput, (progress) => {
+          onChunk({ type: 'subagent_progress', agentIndex: idx, ...progress })
+        })
+        // Emit tool_call + tool_result back-to-back so they pair correctly in the UI
+        onChunk({ type: 'tool_call', name: 'dispatch_subagent', input: { task: agentInput.task, specialization: agentInput.specialization } })
+        onChunk({ type: 'tool_result', name: 'dispatch_subagent', result: { success: result.success, result: (result.result || '').slice(0, 300) } })
+        // Auto-update the linked todo item
+        if (agentInput.todo_id != null && toolRegistry) {
+          try {
+            const todoStatus = result.success ? 'completed' : 'blocked'
+            const todoTool = toolRegistry.getTodoTool()
+            const todoChatId = todoTool.findChatIdForTodo(agentInput.todo_id) || 'default'
+            logger.agent('todo auto-update (batch)', { todoId: agentInput.todo_id, chatId: todoChatId, status: todoStatus })
+            const todoInput = { action: 'update', chatId: todoChatId, id: agentInput.todo_id, status: todoStatus }
+            const todoResult = await toolRegistry.execute('todo_manager', todoInput)
+            logger.agent('todo auto-update result (batch)', { todoId: agentInput.todo_id, result: JSON.stringify(todoResult).slice(0, 120) })
+            onChunk({ type: 'tool_call', name: 'todo_manager', input: todoInput })
+            onChunk({ type: 'tool_result', name: 'todo_manager', result: todoResult })
+          } catch (e) { logger.error('todo auto-update failed (batch)', e.message) }
+        }
+        return { index: idx, task: (agentInput.task || '').slice(0, 80), ...result }
+      })
+    )
+
+    const successCount = results.filter(r => r.success).length
+    return { success: true, completed: successCount, total: agents.length, results }
   }
 
   /** Execute a sub-agent task */

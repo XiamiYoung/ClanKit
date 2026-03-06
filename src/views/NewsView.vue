@@ -66,9 +66,13 @@
     <!-- Main Content -->
     <template v-if="!embeddedUrl">
       <!-- Header -->
-      <div class="news-header">
-        <h1 class="news-title">News Feeds</h1>
-        <div class="news-header-actions">
+      <div class="catalog-header">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <h1 class="catalog-title">News Feeds</h1>
+            <p class="catalog-subtitle">Live RSS feeds from your configured sources.</p>
+          </div>
+          <div class="news-header-actions">
           <!-- Rotate -->
           <AppButton size="icon" @click="rotateAll" :disabled="isRefreshing" :loading="isRotating" title="Rotate feeds">
             <svg v-if="!isRotating" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -99,6 +103,7 @@
               <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>
             </svg>
           </AppButton>
+        </div>
         </div>
       </div>
 
@@ -794,8 +799,25 @@ onMounted(async () => {
   /* flex-1 min-h-0 applied by App.vue's <component> wrapper */
   overflow: hidden;
   background: var(--bg-main);
-  padding: 24px 28px 0;
-  gap: 20px;
+}
+.catalog-header {
+  flex-shrink: 0;
+  padding: 1rem 1.5rem 1rem;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5EA;
+}
+.catalog-title {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-page-title);
+  font-weight: 700;
+  color: #1A1A1A;
+  margin: 0;
+}
+.catalog-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  color: #6B7280;
+  margin: 0.25rem 0 0 0;
 }
 
 .news-scroll {
@@ -805,32 +827,15 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding-bottom: 24px;
-  padding-right: 8px;
+  padding: 24px 28px 24px;
+  padding-right: 28px;
   scrollbar-width: thin;
-}
-
-
-.news-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
 }
 
 .news-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.news-title {
-  font-family: 'Inter', 'Figtree', system-ui, sans-serif;
-  font-size: var(--fs-page-title);
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
-  margin: 0;
 }
 
 /* ── Back button (embedded browser) ──────────────────────────────────── */

@@ -432,11 +432,15 @@ async function onMentionSend(text) {
           streamingStartedAt: Date.now(), segments: [], personaId, personaName: persona.name,
         })
         const singleCfg = { ...cfg }
-        const pProvider = persona.providerId || chatProvider
-        if (pProvider === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || '' }
-        else if (pProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || '' }
-        else if (pProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai' }
-        const pModel = persona.modelId || targetChat.model || null
+        const rawPOverride = targetChat.personaModelOverrides?.[personaId]
+        const pOverrideModel    = rawPOverride ? (typeof rawPOverride === 'object' ? rawPOverride.model    : rawPOverride) : null
+        const pOverrideProvider = rawPOverride && typeof rawPOverride === 'object' ? rawPOverride.provider : null
+        const pProvider = pOverrideProvider || persona.providerId || chatProvider
+        if (pProvider === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
+        else if (pProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
+        else if (pProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai'; delete singleCfg._directAuth }
+        else if (pProvider === 'deepseek') { singleCfg.openaiApiKey = cfg.deepseek?.apiKey || ''; singleCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, ''); singleCfg._resolvedProvider = 'openai'; singleCfg._directAuth = true; singleCfg.defaultProvider = 'openai' }
+        const pModel = pOverrideModel || persona.modelId || targetChat.model || null
         if (pModel) singleCfg.customModel = pModel
         if (targetChat.workingPath) singleCfg.chatWorkingPath = targetChat.workingPath
 
@@ -539,7 +543,16 @@ async function onSend(text, pendingAttachments = []) {
   if (personaProvider === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || '' }
   else if (personaProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || '' }
   else if (personaProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai' }
-  const personaModel = sysPersona?.modelId || targetChat.model || null
+  const rawOverrideSingle = targetChat.personaModelOverrides?.[sysPersona?.id]
+  const overrideModelSingle    = rawOverrideSingle ? (typeof rawOverrideSingle === 'object' ? rawOverrideSingle.model    : rawOverrideSingle) : null
+  const overrideProviderSingle = rawOverrideSingle && typeof rawOverrideSingle === 'object' ? rawOverrideSingle.provider : null
+  if (overrideProviderSingle && overrideProviderSingle !== personaProvider) {
+    if (overrideProviderSingle === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
+    else if (overrideProviderSingle === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
+    else if (overrideProviderSingle === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai'; delete singleCfg._directAuth }
+    else if (overrideProviderSingle === 'deepseek') { singleCfg.openaiApiKey = cfg.deepseek?.apiKey || ''; singleCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, ''); singleCfg._resolvedProvider = 'openai'; singleCfg._directAuth = true; singleCfg.defaultProvider = 'openai' }
+  }
+  const personaModel = overrideModelSingle || sysPersona?.modelId || targetChat.model || null
   if (personaModel) singleCfg.customModel = personaModel
   try {
     const res = await window.electronAPI.runAgent({

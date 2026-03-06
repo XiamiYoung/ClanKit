@@ -2,13 +2,13 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 
-const LOG_DIR = path.join(os.homedir(), '.sparkai', 'logs')
+const LOG_DIR = path.join(os.homedir(), '.clankAI', 'logs')
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
 
 function logFile() {
   const d = new Date()
   const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-  return path.join(LOG_DIR, `sparkai-${date}.log`)
+  return path.join(LOG_DIR, `clankai-${date}.log`)
 }
 
 function write(level, ...args) {

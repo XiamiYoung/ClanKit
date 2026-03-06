@@ -16,7 +16,13 @@
         </span>
       </div>
       <!-- Centered chat title badge -->
-      <div class="ch-title-badge" v-if="!isEditing">
+      <div
+        class="ch-title-badge"
+        v-if="!isEditing"
+        ref="titleBadgeEl"
+        @mouseenter="showPathTooltip"
+        @mouseleave="hidePathTooltip"
+      >
         <div class="ch-title-icon">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -217,6 +223,15 @@
     </div>
 
   </div>
+
+  <!-- Folder path tooltip -->
+  <Teleport to="body">
+    <div
+      v-if="pathTooltip.visible"
+      class="ch-path-tooltip"
+      :style="{ top: pathTooltip.y + 'px', left: pathTooltip.x + 'px' }"
+    >{{ pathTooltip.text }}</div>
+  </Teleport>
 
   <!-- Floating persona tooltip (Teleport to body so it escapes overflow:hidden) -->
   <Teleport to="body">
@@ -453,16 +468,15 @@
               Override for this chat only — won't be saved to the persona.
             </div>
             <ProviderModelPicker
-              model-only
-              :provider-label="sysConfigProviderLabel"
-              :provider="sysConfigProvider"
-              :model="chatModelOverride(sysPersonaConfigId)"
-              @update:model="val => setChatModelOverride(sysPersonaConfigId, val)"
+              :provider="chatOverrideProvider(sysPersonaConfigId) || sysConfigProvider"
+              :model="chatOverrideModel(sysPersonaConfigId)"
+              @update:provider="val => setChatModelOverride(sysPersonaConfigId, val, null)"
+              @update:model="val => val !== null && setChatModelOverride(sysPersonaConfigId, chatOverrideProvider(sysPersonaConfigId) || sysConfigProvider, val)"
             />
             <button
-              v-if="chatModelOverride(sysPersonaConfigId)"
+              v-if="chatOverrideModel(sysPersonaConfigId)"
               class="ch-override-clear"
-              @click="setChatModelOverride(sysPersonaConfigId, null)"
+              @click="setChatModelOverride(sysPersonaConfigId, null, null)"
             >
               Clear override (use persona default: {{ personaModelLabel(sysPersonaConfigId) }})
             </button>
@@ -638,6 +652,21 @@ const knowledgeStore = useKnowledgeStore()
 // ── Computed chat reference ──
 const chat = computed(() => chatsStore.chats.find(c => c.id === props.chatId) || null)
 const resolvedChatId = computed(() => props.chatId)
+const chatFolderPath = computed(() => props.chatId ? chatsStore.getChatFolderPath(props.chatId) : '')
+
+// ── Folder path tooltip ──
+const titleBadgeEl = ref(null)
+const pathTooltip = ref({ visible: false, x: 0, y: 0, text: '' })
+function showPathTooltip() {
+  if (!titleBadgeEl.value || !chat.value) return
+  const rect = titleBadgeEl.value.getBoundingClientRect()
+  const folderPart = chatFolderPath.value
+  const text = `Path: ${folderPart ? `${folderPart}/${chat.value.title}` : chat.value.title}`
+  pathTooltip.value = { visible: true, x: rect.left + rect.width / 2, y: rect.bottom + 6, text }
+}
+function hidePathTooltip() {
+  pathTooltip.value.visible = false
+}
 
 // ── Running state ──
 const isRunning = computed(() => chat.value?.isRunning ?? false)
@@ -810,14 +839,25 @@ function openSysPersonaConfig(pid) {
 }
 
 // ── Chat-scope model override (does NOT touch persona) ──
-function chatModelOverride(personaId) {
-  return chat.value?.personaModelOverrides?.[personaId] || null
+function chatOverrideModel(personaId) {
+  const o = chat.value?.personaModelOverrides?.[personaId]
+  if (!o) return null
+  return typeof o === 'object' ? o.model : o   // back-compat: old entries were plain strings
 }
 
-function setChatModelOverride(personaId, modelId) {
-  if (!props.chatId) return
-  chatsStore.setChatPersonaModelOverride(props.chatId, personaId, modelId)
+function chatOverrideProvider(personaId) {
+  const o = chat.value?.personaModelOverrides?.[personaId]
+  if (!o || typeof o !== 'object') return null
+  return o.provider || null
 }
+
+function setChatModelOverride(personaId, providerId, modelId) {
+  if (!props.chatId) return
+  chatsStore.setChatPersonaModelOverride(props.chatId, personaId, providerId, modelId)
+}
+
+// kept for template backward compat (clear button condition)
+function chatModelOverride(personaId) { return chatOverrideModel(personaId) }
 
 function personaModelLabel(personaId) {
   return personasStore.getPersonaById(personaId)?.modelId || '(provider default)'
@@ -878,7 +918,10 @@ const effectiveModelLabel = computed(() => {
   const personaId = activeSystemPersonaIds.value[0]
   if (!personaId) return '—'
   const override = c.personaModelOverrides?.[personaId]
-  if (override) return `${override} (override)`
+  if (override) {
+    const m = typeof override === 'object' ? override.model : override
+    return `${m} (override)`
+  }
   return personasStore.getPersonaById(personaId)?.modelId || '—'
 })
 
@@ -903,7 +946,7 @@ const ragEnabledCount = computed(() => {
 })
 
 const effectiveWorkingPath = computed(() => {
-  return chat.value?.workingPath || configStore.config.artyfactPath || '~/.sparkai/artyfact'
+  return chat.value?.workingPath || configStore.config.artifactPath || (configStore.config.dataPath ? `${configStore.config.dataPath}/artifact` : '~/.clankAI/artifact')
 })
 
 const effectivePersonaRounds = computed(() => {
@@ -967,13 +1010,14 @@ const effectiveMaxOutputTokens = computed(() => {
   gap: 0.5rem;
   padding: 0.25rem 0.375rem 0.25rem 0.625rem;
   border-radius: 9999px;
-  background: #F5F5F5;
-  border: 1px solid #E5E5EA;
-  transition: all 0.15s;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border: 1px solid transparent;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  transition: none;
 }
 .ch-title-badge:hover {
-  background: #EFEFEF;
-  border-color: #D1D1D6;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
 }
 .ch-title-icon {
   width: 1.625rem;
@@ -982,10 +1026,9 @@ const effectiveMaxOutputTokens = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  background: rgba(255,255,255,0.12);
   color: #FFFFFF;
   flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
 }
 /* ── Running spinner (before title) ── */
 .ch-title-spinner {
@@ -994,8 +1037,8 @@ const effectiveMaxOutputTokens = computed(() => {
   height: 0.75rem;
   border-radius: 50%;
   border: 2px solid transparent;
-  border-top-color: #1A1A1A;
-  border-right-color: rgba(26, 26, 26, 0.4);
+  border-top-color: #FFFFFF;
+  border-right-color: rgba(255,255,255,0.4);
   animation: ch-title-spin 0.7s linear infinite;
 }
 @keyframes ch-title-spin {
@@ -1006,7 +1049,7 @@ const effectiveMaxOutputTokens = computed(() => {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary, 0.875rem);
   font-weight: 600;
-  color: #1A1A1A;
+  color: #FFFFFF;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1020,17 +1063,17 @@ const effectiveMaxOutputTokens = computed(() => {
   border-radius: 50%;
   border: none;
   background: transparent;
-  color: #9CA3AF;
+  color: rgba(255,255,255,0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: none;
   flex-shrink: 0;
 }
 .ch-edit-btn:hover {
-  background: #E5E5EA;
-  color: #1A1A1A;
+  background: rgba(255,255,255,0.15);
+  color: #FFFFFF;
 }
 
 /* ── Inline edit mode (centered) ── */
@@ -1040,22 +1083,22 @@ const effectiveMaxOutputTokens = computed(() => {
   gap: 0.5rem;
   padding: 0.25rem 0.375rem 0.25rem 0.625rem;
   border-radius: 9999px;
-  background: #FFFFFF;
-  border: 1.5px solid #1A1A1A;
-  box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border: 1.5px solid #4B5563;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.12);
 }
 .ch-title-input {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary, 0.875rem);
   font-weight: 600;
-  color: #1A1A1A;
+  color: #FFFFFF;
   border: none;
   outline: none;
   background: transparent;
   width: 11.25rem;
   letter-spacing: -0.01em;
 }
-.ch-title-input::placeholder { color: #D1D1D6; }
+.ch-title-input::placeholder { color: rgba(255,255,255,0.3); }
 .ch-edit-confirm {
   width: 1.5rem;
   height: 1.5rem;
@@ -1431,6 +1474,23 @@ const effectiveMaxOutputTokens = computed(() => {
 
 <!-- Global styles for teleported modals + tooltips (unscoped) -->
 <style>
+/* ── Folder path tooltip ── */
+.ch-path-tooltip {
+  position: fixed;
+  z-index: 9999;
+  transform: translateX(-50%);
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption, 0.8125rem);
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.12);
+}
+
 /* ── Persona modals (teleported) ── */
 .ch-modal-backdrop {
   position: fixed; inset: 0; z-index: 200;

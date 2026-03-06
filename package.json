@@ -1,7 +1,7 @@
 {
-  "name": "sparkai",
+  "name": "clankai",
   "version": "1.0.0",
-  "description": "SparkAI - Multi-LLM Desktop Application",
+  "description": "ClankAI - Multi-LLM Desktop Application",
   "license": "GPL-3.0-only",
   "main": "electron/main.js",
   "scripts": {
@@ -15,8 +15,8 @@
     "dist:linux": "npm run build && npx electron-builder --linux"
   },
   "build": {
-    "appId": "com.sparkai.app",
-    "productName": "SparkAI",
+    "appId": "com.clankai.app",
+    "productName": "ClankAI",
     "directories": {
       "output": "dist-release"
     },
@@ -46,7 +46,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "SparkAI"
+      "shortcutName": "ClankAI"
     },
     "mac": {
       "target": [
@@ -62,7 +62,7 @@
       "icon": "build/icons/icon.png"
     },
     "dmg": {
-      "title": "SparkAI",
+      "title": "ClankAI",
       "contents": [
         {
           "x": 130,

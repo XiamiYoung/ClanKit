@@ -58,7 +58,7 @@
                 </svg>
               </div>
               <h3 class="form-section-title">Data Path</h3>
-              <span class="form-label-hint">SPARKAI_DATA_PATH</span>
+              <span class="form-label-hint">CLANKAI_DATA_PATH</span>
             </div>
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
@@ -70,7 +70,7 @@
                 </button>
               </div>
               <p class="hint">
-                Directory where SparkAI stores all data (config, chats, personas, MCP servers, tools, souls).
+                Directory where ClankAI stores all data (config, chats, personas, MCP servers, tools, souls).
                 Stored in .env — requires restart to take effect.
                 Default: <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultDataPath }}</code>
               </p>
@@ -86,12 +86,12 @@
                 </svg>
               </div>
               <h3 class="form-section-title">Artifact Path</h3>
-              <span class="form-label-hint">SPARKAI_ARTYFACT_PATH</span>
+              <span class="form-label-hint">CLANKAI_ARTIFACT_PATH</span>
             </div>
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
-                <input id="artyfactPath" v-model="form.artyfactPath" type="text" :placeholder="defaultArtyfactPath" class="field font-mono" />
-                <button class="open-folder-btn" @click="openInExplorer(form.artyfactPath || defaultArtyfactPath)" title="Open in file explorer">
+                <input id="artifactPath" v-model="form.artifactPath" type="text" :placeholder="defaultArtifactPath" class="field font-mono" />
+                <button class="open-folder-btn" @click="openInExplorer(form.artifactPath || defaultArtifactPath)" title="Open in file explorer">
                   <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                   </svg>
@@ -99,7 +99,7 @@
               </div>
               <p class="hint">
                 Directory where the AI creates artifacts (markdown, temp files, docs, exports) during chats.
-                Default: <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultArtyfactPath }}</code>
+                Default: <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultArtifactPath }}</code>
               </p>
             </div>
           </div>
@@ -201,7 +201,7 @@
                     </svg>
                   </button>
                 </div>
-                <p class="hint">Stored locally in ~/.sparkai/config.json — never sent elsewhere</p>
+                <p class="hint">Stored locally in ~/.clankAI/config.json — never sent elsewhere</p>
               </div>
 
               <!-- Base URL -->
@@ -637,7 +637,7 @@
                   <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                 </button>
               </div>
-              <p class="hint">Your Pinecone API key — stored locally in ~/.sparkai/config.json</p>
+              <p class="hint">Your Pinecone API key — stored locally in ~/.clankAI/config.json</p>
             </div>
 
             <div class="form-divider"></div>
@@ -1455,9 +1455,9 @@ async function saveSecurity() {
 
 // General tab state
 const defaultDataPath = ref('')
-const defaultArtyfactPath = computed(() => {
+const defaultArtifactPath = computed(() => {
   const dp = form.dataPath || defaultDataPath.value
-  return dp ? `${dp}/artyfact` : ''
+  return dp ? `${dp}/artifact` : ''
 })
 const savingGeneral = ref(false)
 const savedGeneralMsg = ref('')
@@ -1547,7 +1547,7 @@ function switchTopTab(tab) {
 
 function getSubTabStatus(subTab) {
   switch (subTab) {
-    case 'paths':     return (form.dataPath || form.artyfactPath || form.skillsPath) ? 'configured' : 'empty'
+    case 'paths':     return (form.dataPath || form.artifactPath || form.skillsPath) ? 'configured' : 'empty'
     case 'security':  return 'configured'
     case 'email':     return form.smtp?.host ? 'configured' : 'empty'
     case 'models':    return Object.values(form).some(v => v?.apiKey) ? 'configured' : 'empty'
@@ -1724,7 +1724,7 @@ const form = reactive({
   pineconeApiKey:      '',
   ragEnabled:          true,
   dataPath:            '',
-  artyfactPath:        '',
+  artifactPath:        '',
   maxOutputTokens:     32768,
   voiceCall: {
     whisperApiKey:  '',
@@ -1799,11 +1799,11 @@ onMounted(async () => {
     defaultDataPath.value = info.defaultDataPath || ''
     form.dataPath = info.dataPath || info.defaultDataPath || ''
   }
-  // Load env-backed paths (skillsPath, artyfactPath)
+  // Load env-backed paths (skillsPath, artifactPath)
   if (window.electronAPI?.getEnvPaths) {
     const envPaths = await window.electronAPI.getEnvPaths()
     form.skillsPath  = envPaths.skillsPath  || ''
-    form.artyfactPath = envPaths.artyfactPath || ''
+    form.artifactPath = envPaths.artifactPath || ''
   }
   // Load sandboxConfig for security tab
   const sc = c.sandboxConfig || {}
@@ -1865,8 +1865,8 @@ async function saveGeneral() {
       const result = await window.electronAPI.saveDataPath(String(form.dataPath))
       if (!result.success) throw new Error(result.error || 'Failed to save data path')
     }
-    // Save artyfactPath to .env
-    await configStore.saveEnvPath('artyfactPath', String(form.artyfactPath))
+    // Save artifactPath to .env
+    await configStore.saveEnvPath('artifactPath', String(form.artifactPath))
     // Save skillsPath to config (merged into Paths section)
     await configStore.saveEnvPath('skillsPath', String(form.skillsPath))
     savedGeneralMsg.value = { ok: true, text: 'Saved — restart app for data path changes' }
@@ -1889,7 +1889,7 @@ async function saveModels() {
     const modelFields = JSON.parse(JSON.stringify(form))
     delete modelFields.skillsPath
     delete modelFields.dataPath
-    delete modelFields.artyfactPath
+    delete modelFields.artifactPath
     delete modelFields.DoCPath
     delete modelFields.voiceCall
     await configStore.saveConfig(modelFields)
@@ -1977,7 +1977,7 @@ async function demoTts(mode) {
   if (_demoAudio) { _demoAudio.pause(); _demoAudio = null }
   if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel()
 
-  const DEMO_TEXT = "Hello, I'm SparkAI. How can I help you today?"
+  const DEMO_TEXT = "Hello, I'm ClankAI. How can I help you today?"
 
   demoingTts.value = mode
   try {

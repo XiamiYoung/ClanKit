@@ -14,7 +14,7 @@
             <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
           </svg>
         </div>
-        <h2 style="font-family:'Inter',serif; font-size:var(--fs-page-title); font-weight:700; color:#1A1A1A; margin:0 0 8px;">
+        <h2 style="font-family:'Inter',sans-serif; font-size:var(--fs-page-title); font-weight:700; color:#1A1A1A; margin:0 0 8px;">
           Documents
         </h2>
         <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; margin:0 0 24px; line-height:1.6;">
@@ -32,29 +32,29 @@
     <!-- ── VAULT LOADED: File tree + Editor ── -->
     <template v-else>
       <!-- Header bar -->
-      <div
-        class="px-4 py-3 shrink-0 flex items-center justify-between"
-        style="background:#FFFFFF; border-bottom:1px solid #E5E5EA;"
-      >
-        <div class="flex items-center gap-3">
-          <h1 style="font-family:'Inter',serif; font-size:var(--fs-section); font-weight:600; color:#1A1A1A; margin:0;">
-            Documents
-          </h1>
-          <span
-            class="px-2.5 py-0.5 rounded-lg truncate"
-            style="font-family:'Inter',sans-serif; font-size:var(--fs-caption); color:#fff; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); max-width:300px; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
-            :title="store.vaultPath"
-          >{{ vaultName }}</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <AppButton size="icon" @click="store.loadTree()" title="Refresh">
-            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-          </AppButton>
-          <AppButton size="icon" @click="store.pickVault()" title="Browse folder">
-            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-          </AppButton>
+      <div class="docs-catalog-header">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <h1 class="docs-catalog-title">Documents</h1>
+              <span
+                class="catalog-count-badge truncate"
+                style="max-width:18rem;"
+                :title="store.vaultPath"
+              >{{ vaultName }}</span>
+            </div>
+            <p class="docs-catalog-subtitle">Markdown and draw.io files from your vault folder.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <AppButton size="icon" @click="store.loadTree()" title="Refresh">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </AppButton>
+            <AppButton size="icon" @click="store.pickVault()" title="Browse folder">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+            </AppButton>
+          </div>
         </div>
       </div>
 
@@ -1386,9 +1386,39 @@ const TreeNode = defineComponent({
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #F9F9F9;
+  background: #FFFFFF;
   position: relative;
   transition: width 0.2s ease, min-width 0.2s ease;
+}
+.docs-catalog-header {
+  flex-shrink: 0;
+  padding: 1rem 1.5rem 1rem;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5EA;
+}
+.docs-catalog-title {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-page-title);
+  font-weight: 700;
+  color: #1A1A1A;
+  margin: 0;
+}
+.docs-catalog-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  color: #6B7280;
+  margin: 0.25rem 0 0 0;
+}
+.catalog-count-badge {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  padding: 0.1875rem 0.5rem;
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  line-height: 1.4;
 }
 .doc-tree-icon-btn {
   display: flex;

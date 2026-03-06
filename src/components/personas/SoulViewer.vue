@@ -118,6 +118,7 @@
                   Provider inactive
                 </span>
               </div>
+              <span v-if="aiError" class="soul-ai-error">{{ aiError }}</span>
             </template>
             <textarea v-else class="soul-desc-textarea soul-desc-readonly" :value="draftDescription || '—'" readonly rows="2"></textarea>
           </div>
@@ -126,7 +127,7 @@
             <template v-if="!readOnly">
               <textarea v-model="draftPrompt" class="soul-editor soul-editor-prompt" :class="{ 'soul-input-error': errors.prompt }" spellcheck="false" :placeholder="personaType === 'system' ? 'Enter the persona system prompt...' : 'Describe yourself, your role, and context for the AI...'" @input="clearError('prompt')"></textarea>
               <span v-if="errors.prompt" class="soul-validation-error">{{ errors.prompt }}</span>
-              <div v-if="personaType === 'system'" class="soul-enhance-row">
+              <div class="soul-enhance-row">
                 <button class="soul-btn-inline soul-btn-enhance" :disabled="enhancing || !draftPrompt.trim() || !isProviderActive" :title="!isProviderActive ? providerInactiveTooltip : 'Enhance prompt with AI'" @click="enhancePrompt">
                   <svg v-if="!enhancing" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                   <span v-if="enhancing" class="soul-spinner"></span>
@@ -137,6 +138,7 @@
                   Provider inactive
                 </span>
               </div>
+              <span v-if="aiError" class="soul-ai-error">{{ aiError }}</span>
             </template>
             <pre v-else class="soul-persona-prompt">{{ personaPrompt || '—' }}</pre>
           </div>
@@ -485,10 +487,12 @@ const providerInactiveTooltip = computed(() => {
 
 // ── AI Enhance ──
 const enhancing = ref(false)
+const aiError = ref('')
 
 async function enhancePrompt() {
   if (enhancing.value || !draftPrompt.value.trim()) return
   enhancing.value = true
+  aiError.value = ''
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const res = await window.electronAPI.enhancePrompt({
@@ -498,10 +502,10 @@ async function enhancePrompt() {
     if (res.success && res.text) {
       draftPrompt.value = res.text.trim()
     } else if (!res.success) {
-      console.error('Enhancement failed:', res.error)
+      aiError.value = res.error || 'Enhancement failed.'
     }
   } catch (err) {
-    console.error('Enhancement failed:', err.message || err)
+    aiError.value = err.message || 'Enhancement failed.'
   }
   enhancing.value = false
 }
@@ -510,6 +514,7 @@ async function summarizeDescription() {
   const prompt = draftPrompt.value || props.personaPrompt
   if (summarizing.value || !prompt?.trim()) return
   summarizing.value = true
+  aiError.value = ''
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const res = await window.electronAPI.enhancePrompt({
@@ -519,10 +524,10 @@ async function summarizeDescription() {
     if (res.success && res.text) {
       draftDescription.value = res.text.trim().replace(/\.+$/, '')
     } else if (!res.success) {
-      console.error('Description generation failed:', res.error)
+      aiError.value = res.error || 'Description generation failed.'
     }
   } catch (err) {
-    console.error('Description generation failed:', err.message || err)
+    aiError.value = err.message || 'Description generation failed.'
   }
   summarizing.value = false
 }
@@ -768,6 +773,10 @@ onUnmounted(() => {
 .soul-validation-error {
   font-family: 'Inter', sans-serif; font-size: 0.6875rem; font-weight: 600;
   color: #EF4444; margin-top: 0.125rem;
+}
+.soul-ai-error {
+  display: block; font-family: 'Inter', sans-serif; font-size: 0.6875rem; font-weight: 500;
+  color: #FCA5A5; margin-top: 0.25rem; line-height: 1.4;
 }
 
 .soul-desc-textarea {

@@ -17,7 +17,7 @@
           @click="openImage(att)"
         />
       </div>
-      <div v-if="message.content" class="prose-sparkai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleContentClick" />
+      <div v-if="message.content" class="prose-clankai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleContentClick" />
       <BabylonViewer v-for="url in modelUrls" :key="url" :src="url" />
     </template>
 
@@ -69,7 +69,7 @@
     <template v-for="(seg, i) in message.segments" :key="i">
 
       <!-- Text segment -->
-      <div v-if="seg.type === 'text'" class="prose-sparkai" style="max-width:none;" v-html="renderMarkdown(seg.content)" @click="handleContentClick" />
+      <div v-if="seg.type === 'text'" class="prose-clankai" style="max-width:none;" v-html="renderMarkdown(seg.content)" @click="handleContentClick" />
 
       <!-- File diff (file_operation write/append) -->
       <div v-else-if="seg.type === 'tool' && isFileWrite(seg)" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #d1d5db; font-size:0.78rem;">

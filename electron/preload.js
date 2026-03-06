@@ -113,7 +113,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ── Memory Extraction ─────────────────────────────────────────────────
   memory: {
-    accept: (params) => ipcRenderer.invoke('memory:accept', params),
+    accept:              (params) => ipcRenderer.invoke('memory:accept', params),
+    extractOnChatSwitch: (params) => ipcRenderer.invoke('memory:extract-on-chat-switch', params),
   },
 
   // ── Knowledge / Pinecone RAG ─────────────────────────────────────────────

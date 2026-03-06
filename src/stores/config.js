@@ -38,7 +38,7 @@ export const useConfigStore = defineStore('config', () => {
     },
     skillsPath:  '',
     DoCPath:     '',
-    artyfactPath: '',
+    artifactPath: '',
     pineconeApiKey:    '',
     defaultToolIds:    null,       // null = all tools enabled by default; array = specific IDs
     defaultMcpServerIds: null,     // null = all MCP servers enabled by default; array = specific IDs

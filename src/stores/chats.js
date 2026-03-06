@@ -210,6 +210,24 @@ export const useChatsStore = defineStore('chats', () => {
     return search(chatTree.value, null)
   }
 
+  // Returns the ancestor folder path for a chat as a string, e.g. "A/B"
+  // Returns "" if the chat is at the root level.
+  function getChatFolderPath(chatId) {
+    function search(nodes, ancestors) {
+      for (const node of nodes) {
+        if (node.type === 'chat' && node.id === chatId) return ancestors
+        if (node.type === 'folder') {
+          const found = search(node.children || [], [...ancestors, node.name])
+          if (found) return found
+        }
+      }
+      return null
+    }
+    const parts = search(chatTree.value, [])
+    if (!parts) return ''
+    return parts.join('/')
+  }
+
   async function createChat(title = 'New Chat', personaConfig = null, folderId = null) {
     const chat = {
       type: 'chat',
@@ -530,14 +548,14 @@ export const useChatsStore = defineStore('chats', () => {
     await persistIndex()
   }
 
-  function setChatPersonaModelOverride(chatId, personaId, modelId) {
+  function setChatPersonaModelOverride(chatId, personaId, providerId, modelId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
     if (!chat.personaModelOverrides) chat.personaModelOverrides = {}
-    if (modelId === null) {
+    if (providerId === null && modelId === null) {
       delete chat.personaModelOverrides[personaId]
     } else {
-      chat.personaModelOverrides[personaId] = modelId
+      chat.personaModelOverrides[personaId] = { provider: providerId, model: modelId }
     }
     chat.updatedAt = Date.now()
     debouncedPersistChat(chatId)
@@ -861,6 +879,7 @@ export const useChatsStore = defineStore('chats', () => {
     setChatProvider, setChatModel, setChatPersonaModelOverride, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
     setGroupPersonas, toggleGroupMode, setGroupPersonaOverride,
     removeGroupPersona, addGroupPersona, reorderChats,
+    getChatFolderPath,
     createFolder, renameFolder, deleteFolder, toggleFolder, setAllFoldersExpanded,
     moveNodeToFolder, reorderNode,
     initChunkListener, setUiChunkCallback, clearUiChunkCallback, markAsRead, markCompleted,

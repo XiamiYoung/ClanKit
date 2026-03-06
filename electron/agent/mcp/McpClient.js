@@ -70,7 +70,7 @@ class McpClient extends EventEmitter {
     const initResult = await this._sendRequest('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: {},
-      clientInfo: { name: 'SparkAI', version: '1.0.0' },
+      clientInfo: { name: 'ClankAI', version: '1.0.0' },
     }, 0)
 
     logger.info(`[MCP:${this.name}] Initialized:`, {

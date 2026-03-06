@@ -97,6 +97,14 @@ class TodoTool extends BaseTool {
   getTodos(chatId) {
     return this._getTodos(chatId).map(t => ({ ...t }))
   }
+
+  /** Find which chatId a todo belongs to, by scanning all stores */
+  findChatIdForTodo(todoId) {
+    for (const [chatId, todos] of this.todosPerChat) {
+      if (todos.some(t => t.id === todoId)) return chatId
+    }
+    return null
+  }
 }
 
 module.exports = { TodoTool }

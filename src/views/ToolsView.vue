@@ -735,10 +735,10 @@ function truncateEndpoint(ep) {
 .catalog-search-input::placeholder { color: #9CA3AF; font-weight: 400; }
 .catalog-search-input:hover { border-color: #9CA3AF; }
 .catalog-search-input:focus {
-  border-color: #007AFF;
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+  border-color: #1A1A1A;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
 }
-.catalog-search-wrap:focus-within .catalog-search-icon { color: #007AFF; }
+.catalog-search-wrap:focus-within .catalog-search-icon { color: #1A1A1A; }
 .catalog-search-clear {
   position: absolute;
   right: 0.625rem;

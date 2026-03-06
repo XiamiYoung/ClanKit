@@ -123,18 +123,20 @@ class AgentLoop {
     logger.agent('AgentLoop init', {
       model: this.anthropicClient.resolveModel(),
       isOpenAI: this.isOpenAI,
-      permissionGate: {
-        globalMode: sandboxCfg.defaultMode || 'sandbox',
-        chatMode: config.chatPermissionMode || 'inherit',
-        sandboxAllowList: (sandboxCfg.sandboxAllowList || []).map(e => e.pattern),
-        chatAllowList: (config.chatAllowList || []).map(e => e.pattern),
-        dangerBlockList: effectiveDangerList.map(e => e.pattern),
-      }
+      globalMode: sandboxCfg.defaultMode || 'sandbox',
+      chatMode: config.chatPermissionMode || 'inherit',
+      allowList: (sandboxCfg.sandboxAllowList || []).length,
+      dangerList: effectiveDangerList.length,
     })
   }
 
   stop() {
     this.stopped = true
+    // Unblock any suspended permission prompts so their coroutines can exit cleanly
+    for (const [, resolve] of this._pendingPermissions) {
+      resolve('reject')
+    }
+    this._pendingPermissions.clear()
   }
 
   /**
@@ -323,7 +325,7 @@ class AgentLoop {
    */
   buildSystemPrompt(enabledAgents, enabledSkills, { systemPersonaPrompt, userPersonaPrompt, systemPersonaId, userPersonaId, groupChatContext } = {}, userSoulContent, systemSoulContent, participantSouls) {
     const basePrompt = (this.config.systemPrompt || '').trim()
-      || 'You are SparkAI, a versatile AI assistant running in a desktop application. You help users with a wide range of tasks including research, writing, analysis, coding, creative work, file management, and general knowledge.'
+      || 'You are ClankAI, a versatile AI assistant running in a desktop application. You help users with a wide range of tasks including research, writing, analysis, coding, creative work, file management, and general knowledge.'
 
     let system = `${basePrompt}
 
@@ -331,7 +333,8 @@ CORE TOOLS (always available):
 - execute_shell: Run shell commands (command + args separated, e.g. command:"ls" args:["/home"])
 - file_operation: Read, write, list, append, search, mkdir, delete files on the filesystem
 - todo_manager: Plan complex tasks with structured todo lists
-- dispatch_subagent: Delegate focused subtasks to specialized sub-agents
+- dispatch_subagent: Delegate a single focused subtask to a specialized sub-agent
+- dispatch_subagents: Dispatch MULTIPLE sub-agents in parallel at once (preferred for 2+ independent tasks)
 - background_task: Run long operations in the background`
 
     // List active skills — frontier only (name + summary).
@@ -353,29 +356,42 @@ Load a skill when the user's request clearly matches its description.`
       system += `\n\nACTIVE SKILLS: None enabled.`
     }
 
-    // ── SparkAI Data Directory ──
-    const dataPath = process.env.SPARKAI_DATA_PATH || path.join(require('os').homedir(), '.sparkai')
-    const artyfactPath = this.config.chatWorkingPath || process.env.ARTYFACT_PATH || this.config.artyfactPath || path.join(dataPath, 'artyfact')
-    system += `\n\nSPARKAI DATA DIRECTORY: ${dataPath}
-This is the local data folder for the SparkAI desktop application. Its structure:
+    // ── ClankAI Data Directory ──
+    const dataPath = process.env.CLANKAI_DATA_PATH || path.join(require('os').homedir(), '.clankAI')
+    const artifactPath = this.config.chatWorkingPath || this.config.artifactPath || path.join(dataPath, 'artifact')
+    const skillsPath = this.config.skillsPath || ''
+    const utilityModel = this.config.utilityModel || {}
+    const utilityProvider = utilityModel.provider || ''
+    const utilityModelId  = utilityModel.model    || ''
+    system += `\n\nCLANKAI DATA DIRECTORY: ${dataPath}
+This is the local data folder for the ClankAI desktop application. Its structure:
   ${dataPath}/
-  ├── config.json          — App settings (API keys, models, providers, dataPath)
-  ├── mcp-servers.json     — MCP server definitions (array of {id, name, command, args, env, description})
-  ├── tools.json           — HTTP tool definitions ({categories: {catName: {tools: [{id, name, method, endpoint, headers, bodyTemplate, description}]}}})
+  ├── config.json          — App settings (API keys, models, providers, paths)
+  ├── mcp-servers.json     — MCP server definitions
+  ├── tools.json           — HTTP tool definitions
   ├── personas.json        — AI persona definitions
   ├── knowledge.json       — RAG/Pinecone knowledge config
   ├── chats/               — Per-chat message history
   ├── souls/               — Persistent memory files (system/, users/)
-  └── artyfact/            — AI-generated artifacts (see below)
+  └── artifact/            — AI-generated artifacts (see WORKING PATH below)
 
-ARTIFACT PATH: ${artyfactPath}
-This is the default directory for ALL artifacts you create during chats. Whenever you generate files such as markdown documents, reports, temp files, exported docs, code snippets, or any other output files — ALWAYS write them to this directory (create subdirectories as needed). The directory will be auto-created on first write. Use descriptive filenames and organize by type when appropriate (e.g. ${artyfactPath}/docs/, ${artyfactPath}/exports/).
+WORKING PATH (this chat's default output directory): ${artifactPath}
+This is the default directory for ALL files you create during this chat. Whenever you generate files — markdown documents, reports, code scripts, exports, temp files, or any other output — ALWAYS write them here unless the user explicitly specifies a different location. Create subdirectories as needed (e.g. ${artifactPath}/docs/, ${artifactPath}/exports/). The directory is auto-created on first write.${skillsPath ? `
 
-When the user asks you to create or configure MCP servers, HTTP tools, personas, or other settings:
-- You understand the file formats above and can guide the user to create proper entries.
-- For MCP servers: each entry needs {id (uuid), name, command, args (array), env (object), description}. After creation, the user can click Refresh on the MCP page to see updates.
-- For HTTP tools: each tool lives under a category in tools.json. After creation, the user can click Refresh on the Tools page to see updates.
-- Always confirm with the user before modifying these files directly.`
+SKILLS PATH: ${skillsPath}
+This is the directory where skill folders are stored on disk. Each skill is a folder containing a skill definition file. Use this path if the user asks to inspect, create, or modify skills on disk.` : ''}
+
+DATA FILE ROUTING — when the user asks you to create or modify app configuration, act directly:
+- "create/add/edit a tool" or "add an HTTP tool"  → read then write ${dataPath}/tools.json
+  Format: {"categories":{"CategoryName":{"tools":[{"id":"<uuid>","name":"...","method":"GET|POST|...","endpoint":"...","headers":{},"bodyTemplate":"","description":"..."}]}}}
+- "create/add/edit an MCP server"                  → read then write ${dataPath}/mcp-servers.json
+  Format: [{"id":"<uuid>","name":"...","command":"...","args":[],"env":{},"description":"..."}]
+- "create/add/edit a persona"                      → read then write ${dataPath}/personas.json
+  Format: {"categories":[...],"personas":[...,{"id":"<uuid>","type":"system","name":"...","avatar":"a1","description":"...","prompt":"...","providerId":${utilityProvider ? `"${utilityProvider}"` : 'null'},"modelId":${utilityModelId ? `"${utilityModelId}"` : 'null'},"enabledSkillIds":null,"mcpServerIds":null,"voiceId":null,"categoryIds":[],"createdAt":<timestamp>,"updatedAt":<timestamp>}]}
+  IMPORTANT: always set "providerId" to ${utilityProvider ? `"${utilityProvider}"` : 'null'} and "modelId" to ${utilityModelId ? `"${utilityModelId}"` : 'null'} (the system utility model) unless the user explicitly asks for a different model.
+- "add/edit knowledge / RAG index"                 → read then write ${dataPath}/knowledge.json
+- Always read the file first to understand existing content before writing. Preserve all existing entries.
+- After writing, tell the user to click Refresh on the relevant page (MCP / Tools / Personas / Knowledge) to reload.`
 
     // ── Notes Vault Path + Markdown Placement ──
     const vaultPath = process.env.DOC_PATH || this.config.obsidianVaultPath || this.config.DoCPath
@@ -399,7 +415,7 @@ ${subfolderList}
 MARKDOWN FILE PLACEMENT:
 When generating .md markdown files (documents, reports, notes, summaries, analyses, etc.), ALWAYS ask the user where to save them by presenting these options:
 1. Notes vault: ${vaultPath} (with subfolder options: ${subfolders.length > 0 ? subfolders.join(', ') : 'root'})
-2. Artifact docs: ${artyfactPath}/docs/
+2. Artifact docs: ${artifactPath}/docs/
 Then write the file to the chosen location. For non-.md files, continue using the artifact path as default.`
     }
 
@@ -555,7 +571,7 @@ You have access to update_soul_memory and read_soul_memory tools to persist lear
 USER MEMORY (persona_type: "users", persona_id: "${userPersonaId || '__default_user__'}"):
 - Store facts about the user: preferences, habits, working style, personal info, projects they work on.
 - When the user states a clear preference or fact about themselves, memorize it automatically.
-- Examples: "I prefer dark mode", "I use Vue 3 + Pinia", "My name is Young", "I work on SparkAI".
+- Examples: "I prefer dark mode", "I use Vue 3 + Pinia", "My name is Young", "I work on ClankAI".
 
 PERSONA MEMORY (persona_type: "system", persona_id: "${systemPersonaId || '__default_system__'}"):
 - Store learnings about how YOU (this AI persona) should behave, respond, and adapt.
@@ -709,6 +725,7 @@ RULES:
     const allToolsAnthropic = [
       ...this.toolRegistry.getToolDefinitions(),
       this.subAgentManager.getToolDefinition(),
+      this.subAgentManager.getBatchToolDefinition(),
       this.taskManager.getToolDefinition()
     ]
 
@@ -1143,86 +1160,97 @@ RULES:
 
           // ── Handle tool_calls stop reason ──
           if ((stopReason === 'tool_calls' || stopReason === 'stop' && openaiToolCalls.length > 0) && !this.stopped) {
-            const toolResults = []
+            const toolResults = await Promise.all(
+              assistantContent
+                .filter(b => b.type === 'tool_use')
+                .map(async (block) => {
+                  const toolName  = block.name
+                  const toolInput = block.input
+                  onChunk({ type: 'tool_call', name: toolName, input: toolInput })
 
-            for (const block of assistantContent) {
-              if (block.type !== 'tool_use') continue
-              const toolName  = block.name
-              const toolInput = block.input
-              onChunk({ type: 'tool_call', name: toolName, input: toolInput })
-
-              let result
-              if (toolName === 'load_skill') {
-                const skillId = toolInput.skill_id
-                const prompt = this.skillPrompts.get(skillId)
-                result = prompt
-                  ? { success: true, skill_id: skillId, content: prompt }
-                  : { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
-              } else if (toolName === 'dispatch_subagent') {
-                result = await this.subAgentManager.dispatch(toolInput, (progress) => {
-                  onChunk({ type: 'subagent_progress', ...progress })
+                  let result
+                  if (toolName === 'load_skill') {
+                    const skillId = toolInput.skill_id
+                    const prompt = this.skillPrompts.get(skillId)
+                    result = prompt
+                      ? { success: true, skill_id: skillId, content: prompt }
+                      : { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
+                  } else if (toolName === 'dispatch_subagent') {
+                    result = await this.subAgentManager.dispatch(toolInput, (progress) => {
+                      onChunk({ type: 'subagent_progress', ...progress })
+                    })
+                    if (toolInput.todo_id != null) {
+                      try {
+                        const todoStatus = result.success ? 'completed' : 'blocked'
+                        const todoTool = this.toolRegistry.getTodoTool()
+                        const todoChatId = todoTool.findChatIdForTodo(toolInput.todo_id) || 'default'
+                        logger.agent('todo auto-update', { todoId: toolInput.todo_id, chatId: todoChatId, status: todoStatus })
+                        const todoInput = { action: 'update', chatId: todoChatId, id: toolInput.todo_id, status: todoStatus }
+                        const todoResult = await this.toolRegistry.execute('todo_manager', todoInput)
+                        logger.agent('todo auto-update result', { todoId: toolInput.todo_id, result: JSON.stringify(todoResult).slice(0, 120) })
+                        onChunk({ type: 'tool_call', name: 'todo_manager', input: todoInput })
+                        onChunk({ type: 'tool_result', name: 'todo_manager', result: todoResult })
+                      } catch (e) { logger.error('todo auto-update failed', e.message) }
+                    }
+                  } else if (toolName === 'dispatch_subagents') {
+                    result = await this.subAgentManager.dispatchBatch(toolInput, onChunk, this.toolRegistry)
+                  } else if (toolName === 'background_task') {
+                    result = await this.taskManager.execute(toolInput)
+                  } else if (toolName === 'search_mcp_tools') {
+                    const requestedNames = toolInput.server_names || []
+                    const matched = (this.mcpServers || []).filter(s => requestedNames.includes(s.name))
+                    if (matched.length === 0) {
+                      const available = (this.mcpServers || []).map(s => s.name).join(', ')
+                      result = { success: false, error: `No servers matched: ${requestedNames.join(', ')}. Available: ${available}` }
+                    } else {
+                      const newTools = await _loadMcpTools(matched)
+                      logger.agent('search_mcp_tools (openai)', { requested: requestedNames, loaded: newTools.length })
+                      result = newTools.length > 0
+                        ? { success: true, loaded: newTools.length, tools: newTools }
+                        : { success: false, error: `Servers found but no tools discovered: ${requestedNames.join(', ')}` }
+                    }
+                  } else if (mcpToolMap.has(toolName)) {
+                    const permCheckMcp = await this._checkPermission(toolName, toolInput, onChunk)
+                    if (permCheckMcp.decision === 'block' || permCheckMcp.decision === 'reject') {
+                      result = permCheckMcp.result
+                    } else {
+                      const { serverId, tool, serverConfig } = mcpToolMap.get(toolName)
+                      result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput, serverConfig)
+                    }
+                  } else if (httpToolMap.has(toolName)) {
+                    result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
+                  } else if (smtpToolMap.has(toolName)) {
+                    result = await this._executeSmtpTool(toolInput)
+                  } else if (codeToolMap.has(toolName)) {
+                    const codeTool = codeToolMap.get(toolName)
+                    result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
+                  } else if (promptToolMap.has(toolName)) {
+                    const promptTool = promptToolMap.get(toolName)
+                    result = { success: true, data: promptTool.promptText || '' }
+                  } else if (toolName === 'submit_plan') {
+                    onChunk({ type: 'plan_submitted', plan: toolInput })
+                    result = { success: true, status: 'awaiting_approval' }
+                    this._planPending = true
+                    return { tool_call_id: block.id, content: JSON.stringify(result) }
+                  } else {
+                    const permCheck = await this._checkPermission(toolName, toolInput, onChunk)
+                    if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
+                      result = permCheck.result
+                    } else {
+                      result = await this.toolRegistry.execute(toolName, toolInput)
+                    }
+                  }
+                  const mcpImages = result?._mcpImages
+                  if (mcpImages) delete result._mcpImages
+                  onChunk({ type: 'tool_result', name: toolName, result, ...(mcpImages ? { images: mcpImages } : {}) })
+                  let serialized = JSON.stringify(result)
+                  if (serialized.length > 100000) {
+                    logger.warn(`Tool result too large (${serialized.length} chars), truncating: ${toolName}`)
+                    serialized = JSON.stringify({ success: result?.success, data: `[Result truncated: ${serialized.length} chars original. Check UI for full output.]` })
+                  }
+                  return { tool_call_id: block.id, content: serialized }
                 })
-              } else if (toolName === 'background_task') {
-                result = await this.taskManager.execute(toolInput)
-              } else if (toolName === 'search_mcp_tools') {
-                const requestedNames = toolInput.server_names || []
-                const matched = (this.mcpServers || []).filter(s => requestedNames.includes(s.name))
-                if (matched.length === 0) {
-                  const available = (this.mcpServers || []).map(s => s.name).join(', ')
-                  result = { success: false, error: `No servers matched: ${requestedNames.join(', ')}. Available: ${available}` }
-                } else {
-                  const newTools = await _loadMcpTools(matched)
-                  logger.agent('search_mcp_tools (openai)', { requested: requestedNames, loaded: newTools.length })
-                  result = newTools.length > 0
-                    ? { success: true, loaded: newTools.length, tools: newTools }
-                    : { success: false, error: `Servers found but no tools discovered: ${requestedNames.join(', ')}` }
-                }
-              } else if (mcpToolMap.has(toolName)) {
-                // Permission check for MCP tools
-                const permCheckMcp = await this._checkPermission(toolName, toolInput, onChunk)
-                if (permCheckMcp.decision === 'block' || permCheckMcp.decision === 'reject') {
-                  result = permCheckMcp.result
-                } else {
-                  const { serverId, tool, serverConfig } = mcpToolMap.get(toolName)
-                  result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput, serverConfig)
-                }
-              } else if (httpToolMap.has(toolName)) {
-                result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
-              } else if (smtpToolMap.has(toolName)) {
-                result = await this._executeSmtpTool(toolInput)
-              } else if (codeToolMap.has(toolName)) {
-                const codeTool = codeToolMap.get(toolName)
-                result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
-              } else if (promptToolMap.has(toolName)) {
-                const promptTool = promptToolMap.get(toolName)
-                result = { success: true, data: promptTool.promptText || '' }
-              } else if (toolName === 'submit_plan') {
-                onChunk({ type: 'plan_submitted', plan: toolInput })
-                result = { success: true, status: 'awaiting_approval' }
-                toolResults.push({ tool_call_id: block.id, content: JSON.stringify(result) })
-                this._planPending = true
-                continue
-              } else {
-                // Permission check for execute_shell and file_operation (write/append/delete/mkdir)
-                const permCheck = await this._checkPermission(toolName, toolInput, onChunk)
-                if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
-                  result = permCheck.result
-                } else {
-                  result = await this.toolRegistry.execute(toolName, toolInput)
-                }
-              }
-              // Extract MCP images before they hit conversation context
-              const mcpImages = result?._mcpImages
-              if (mcpImages) delete result._mcpImages
-              onChunk({ type: 'tool_result', name: toolName, result, ...(mcpImages ? { images: mcpImages } : {}) })
-              let serialized = JSON.stringify(result)
-              // Safety cap: truncate tool results > 100KB to prevent context blowup
-              if (serialized.length > 100000) {
-                logger.warn(`Tool result too large (${serialized.length} chars), truncating: ${toolName}`)
-                serialized = JSON.stringify({ success: result?.success, data: `[Result truncated: ${serialized.length} chars original. Check UI for full output.]` })
-              }
-              toolResults.push({ tool_call_id: block.id, content: serialized })
-            }
+            )
 
             // Push tool results in OpenAI format — each as a separate message
             for (const tr of toolResults) {
@@ -1379,102 +1407,104 @@ RULES:
 
           // ── Handle tool_use stop reason ──
           if (stopReason === 'tool_use' && !this.stopped) {
-            const toolResults = []
+            const toolResults = await Promise.all(
+              assistantContent
+                .filter(b => b.type === 'tool_use')
+                .map(async (block) => {
+                  const toolName  = block.name
+                  const toolInput = block.input
 
-            for (const block of assistantContent) {
-              if (block.type !== 'tool_use') continue
+                  onChunk({ type: 'tool_call', name: toolName, input: toolInput })
 
-              const toolName  = block.name
-              const toolInput = block.input
+                  let result
 
-              onChunk({ type: 'tool_call', name: toolName, input: toolInput })
+                  if (toolName === 'load_skill') {
+                    const skillId = toolInput.skill_id
+                    const prompt = this.skillPrompts.get(skillId)
+                    if (prompt) {
+                      logger.agent('load_skill', { skillId, promptLen: prompt.length })
+                      result = { success: true, skill_id: skillId, content: prompt }
+                    } else {
+                      result = { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
+                    }
+                  } else if (toolName === 'dispatch_subagent') {
+                    result = await this.subAgentManager.dispatch(toolInput, (progress) => {
+                      onChunk({ type: 'subagent_progress', ...progress })
+                    })
+                    if (toolInput.todo_id != null) {
+                      try {
+                        const todoStatus = result.success ? 'completed' : 'blocked'
+                        const todoTool = this.toolRegistry.getTodoTool()
+                        const todoChatId = todoTool.findChatIdForTodo(toolInput.todo_id) || 'default'
+                        logger.agent('todo auto-update', { todoId: toolInput.todo_id, chatId: todoChatId, status: todoStatus })
+                        const todoInput = { action: 'update', chatId: todoChatId, id: toolInput.todo_id, status: todoStatus }
+                        const todoResult = await this.toolRegistry.execute('todo_manager', todoInput)
+                        logger.agent('todo auto-update result', { todoId: toolInput.todo_id, result: JSON.stringify(todoResult).slice(0, 120) })
+                        onChunk({ type: 'tool_call', name: 'todo_manager', input: todoInput })
+                        onChunk({ type: 'tool_result', name: 'todo_manager', result: todoResult })
+                      } catch (e) { logger.error('todo auto-update failed', e.message) }
+                    }
+                  } else if (toolName === 'dispatch_subagents') {
+                    result = await this.subAgentManager.dispatchBatch(toolInput, onChunk, this.toolRegistry)
+                  } else if (toolName === 'background_task') {
+                    result = await this.taskManager.execute(toolInput)
+                  } else if (toolName === 'search_mcp_tools') {
+                    const requestedNames = toolInput.server_names || []
+                    const matched = (this.mcpServers || []).filter(s => requestedNames.includes(s.name))
+                    if (matched.length === 0) {
+                      const available = (this.mcpServers || []).map(s => s.name).join(', ')
+                      result = { success: false, error: `No servers matched: ${requestedNames.join(', ')}. Available: ${available}` }
+                    } else {
+                      const newTools = await _loadMcpTools(matched)
+                      logger.agent('search_mcp_tools (anthropic)', { requested: requestedNames, loaded: newTools.length })
+                      result = newTools.length > 0
+                        ? { success: true, loaded: newTools.length, tools: newTools }
+                        : { success: false, error: `Servers found but no tools discovered: ${requestedNames.join(', ')}` }
+                    }
+                  } else if (mcpToolMap.has(toolName)) {
+                    const permCheck = await this._checkPermission(toolName, toolInput, onChunk)
+                    if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
+                      result = permCheck.result
+                    } else {
+                      const { serverId, tool, serverConfig } = mcpToolMap.get(toolName)
+                      result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput, serverConfig)
+                    }
+                  } else if (httpToolMap.has(toolName)) {
+                    result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
+                  } else if (smtpToolMap.has(toolName)) {
+                    result = await this._executeSmtpTool(toolInput)
+                  } else if (codeToolMap.has(toolName)) {
+                    const codeTool = codeToolMap.get(toolName)
+                    result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
+                  } else if (promptToolMap.has(toolName)) {
+                    const promptTool = promptToolMap.get(toolName)
+                    result = { success: true, data: promptTool.promptText || '' }
+                  } else if (toolName === 'submit_plan') {
+                    onChunk({ type: 'plan_submitted', plan: toolInput })
+                    result = { success: true, status: 'awaiting_approval' }
+                    this._planPending = true
+                    return { type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) }
+                  } else {
+                    const permCheck = await this._checkPermission(toolName, toolInput, onChunk)
+                    if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
+                      result = permCheck.result
+                    } else {
+                      result = await this.toolRegistry.execute(toolName, toolInput)
+                    }
+                  }
 
-              let result
+                  const mcpImages = result?._mcpImages
+                  if (mcpImages) delete result._mcpImages
+                  onChunk({ type: 'tool_result', name: toolName, result, ...(mcpImages ? { images: mcpImages } : {}) })
 
-              if (toolName === 'load_skill') {
-                const skillId = toolInput.skill_id
-                const prompt = this.skillPrompts.get(skillId)
-                if (prompt) {
-                  logger.agent('load_skill', { skillId, promptLen: prompt.length })
-                  result = { success: true, skill_id: skillId, content: prompt }
-                } else {
-                  result = { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
-                }
-              } else if (toolName === 'dispatch_subagent') {
-                result = await this.subAgentManager.dispatch(toolInput, (progress) => {
-                  onChunk({ type: 'subagent_progress', ...progress })
+                  let serialized = JSON.stringify(result)
+                  if (serialized.length > 100000) {
+                    logger.warn(`Tool result too large (${serialized.length} chars), truncating: ${toolName}`)
+                    serialized = JSON.stringify({ success: result?.success, data: `[Result truncated: ${serialized.length} chars original. Check UI for full output.]` })
+                  }
+                  return { type: 'tool_result', tool_use_id: block.id, content: serialized }
                 })
-              } else if (toolName === 'background_task') {
-                result = await this.taskManager.execute(toolInput)
-              } else if (toolName === 'search_mcp_tools') {
-                const requestedNames = toolInput.server_names || []
-                const matched = (this.mcpServers || []).filter(s => requestedNames.includes(s.name))
-                if (matched.length === 0) {
-                  const available = (this.mcpServers || []).map(s => s.name).join(', ')
-                  result = { success: false, error: `No servers matched: ${requestedNames.join(', ')}. Available: ${available}` }
-                } else {
-                  const newTools = await _loadMcpTools(matched)
-                  logger.agent('search_mcp_tools (anthropic)', { requested: requestedNames, loaded: newTools.length })
-                  result = newTools.length > 0
-                    ? { success: true, loaded: newTools.length, tools: newTools }
-                    : { success: false, error: `Servers found but no tools discovered: ${requestedNames.join(', ')}` }
-                }
-              } else if (mcpToolMap.has(toolName)) {
-                // Permission check for MCP tools
-                const permCheck = await this._checkPermission(toolName, toolInput, onChunk)
-                if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
-                  result = permCheck.result
-                } else {
-                  const { serverId, tool, serverConfig } = mcpToolMap.get(toolName)
-                  result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput, serverConfig)
-                }
-              } else if (httpToolMap.has(toolName)) {
-                result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
-              } else if (smtpToolMap.has(toolName)) {
-                result = await this._executeSmtpTool(toolInput)
-              } else if (codeToolMap.has(toolName)) {
-                const codeTool = codeToolMap.get(toolName)
-                result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
-              } else if (promptToolMap.has(toolName)) {
-                const promptTool = promptToolMap.get(toolName)
-                result = { success: true, data: promptTool.promptText || '' }
-              } else if (toolName === 'submit_plan') {
-                onChunk({ type: 'plan_submitted', plan: toolInput })
-                result = { success: true, status: 'awaiting_approval' }
-                toolResults.push({
-                  type: 'tool_result',
-                  tool_use_id: block.id,
-                  content: JSON.stringify(result)
-                })
-                this._planPending = true
-                continue
-              } else {
-                // Permission check for execute_shell and file_operation (write/append/delete/mkdir)
-                const permCheck = await this._checkPermission(toolName, toolInput, onChunk)
-                if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
-                  result = permCheck.result
-                } else {
-                  result = await this.toolRegistry.execute(toolName, toolInput)
-                }
-              }
-
-              // Extract MCP images before they hit conversation context
-              const mcpImages = result?._mcpImages
-              if (mcpImages) delete result._mcpImages
-              onChunk({ type: 'tool_result', name: toolName, result, ...(mcpImages ? { images: mcpImages } : {}) })
-
-              let serialized = JSON.stringify(result)
-              // Safety cap: truncate tool results > 100KB to prevent context blowup
-              if (serialized.length > 100000) {
-                logger.warn(`Tool result too large (${serialized.length} chars), truncating: ${toolName}`)
-                serialized = JSON.stringify({ success: result?.success, data: `[Result truncated: ${serialized.length} chars original. Check UI for full output.]` })
-              }
-              toolResults.push({
-                type: 'tool_result',
-                tool_use_id: block.id,
-                content: serialized
-              })
-            }
+            )
 
             conversationMessages.push({ role: 'user', content: toolResults })
 

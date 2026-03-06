@@ -1,14 +1,16 @@
 /**
- * MemoryExtractor — post-turn memory extraction via Haiku.
+ * MemoryExtractor — post-turn memory extraction via the configured utility model.
  *
- * After each agent turn completes, this module analyses the last exchange
+ * After agent turns complete, this module analyses the last exchange
  * (user message + assistant response) against existing soul content and
- * returns candidate memory entries for user confirmation.
+ * returns candidate memory entries with confidence scores for routing.
+ *
+ * High-confidence (≥0.8): auto-saved directly to soul files.
+ * Medium-confidence (0.5–0.8): injected into next system prompt for conversational confirmation.
+ * Low-confidence (<0.5): silently discarded.
  */
-const Anthropic = require('@anthropic-ai/sdk')
 const { logger } = require('../../logger')
 
-const EXTRACTION_MODEL = 'claude-haiku-4-5'
 const MAX_TOKENS = 1024
 
 /**
@@ -63,6 +65,11 @@ WHAT TO IGNORE (never extract these):
 
 CRITICAL: Only extract from what the USER explicitly said. If the user message is a greeting or contains no substantive personal information, return an EMPTY array. Do not infer, assume, or fabricate. When in doubt, return empty.
 
+CONFIDENCE SCORING:
+- 0.9–1.0: Very certain explicit fact directly stated by the user (e.g. "I work at Google", "I prefer TypeScript")
+- 0.5–0.8: Plausible but uncertain — implied or mentioned in passing, worth asking about
+- Below 0.5: Skip entirely — do not include
+
 Rules:
 - ${targetInstructions}
 - Choose the most appropriate section: Preferences, Communication, Technical, Projects, Personal, Interaction Notes
@@ -70,20 +77,22 @@ Rules:
 - If there is nothing worth remembering, return an empty array
 
 Respond with ONLY valid JSON (no markdown fences, no explanation):
-{"memories": [{"target": "${hasParticipants ? 'user|<persona_name>' : 'user|system'}", "section": "<section name>", "entry": "<the memory entry>"}]}`
+{"memories": [{"target": "${hasParticipants ? 'user|<persona_name>' : 'user|system'}", "section": "<section name>", "entry": "<the memory entry>", "confidence": 0.85}]}`
 }
 
 class MemoryExtractor {
   /**
-   * @param {object} config — must include apiKey (and optionally baseURL)
+   * @param {object} opts
+   * @param {string} opts.model — model ID to use
+   * @param {string} opts.apiKey — API key
+   * @param {string} opts.baseURL — provider base URL
+   * @param {boolean} [opts.isOpenAI] — use OpenAI-compatible API (openai, deepseek, openrouter with OAI compat)
    */
-  constructor(config) {
-    this.config = config
-    const clientOpts = {}
-    const baseURL = config.baseURL || config.anthropic?.baseURL
-    if (baseURL) clientOpts.baseURL = baseURL
-    clientOpts.apiKey = config.apiKey || config.anthropic?.apiKey || ''
-    this.client = new Anthropic(clientOpts)
+  constructor({ model, apiKey, baseURL, isOpenAI = false }) {
+    this.model = model
+    this.apiKey = apiKey
+    this.baseURL = baseURL
+    this.isOpenAI = isOpenAI
   }
 
   /**
@@ -97,7 +106,7 @@ class MemoryExtractor {
    * @param {string} params.userPersonaId
    * @param {string} params.systemPersonaId
    * @param {Array<{id: string, name: string, type: string}>} [params.participants] — all AI personas in the conversation
-   * @returns {Promise<Array<{target: string, section: string, entry: string, personaId: string, personaType: string}>>}
+   * @returns {Promise<Array<{target: string, section: string, entry: string, confidence: number, personaId: string, personaType: string}>>}
    */
   async extract({ lastUserMessage, lastAssistantMessage, userSoulContent, systemSoulContent, userPersonaId, systemPersonaId, participants }) {
     if (!lastUserMessage || !lastAssistantMessage) return []
@@ -106,17 +115,12 @@ class MemoryExtractor {
     const systemPrompt = buildExtractionPrompt(participants)
 
     try {
-      const response = await this.client.messages.create({
-        model: EXTRACTION_MODEL,
-        max_tokens: MAX_TOKENS,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userContent }],
-      })
-
-      const text = response.content
-        ?.filter(b => b.type === 'text')
-        .map(b => b.text)
-        .join('') || ''
+      let text
+      if (this.isOpenAI) {
+        text = await this._extractOpenAI(systemPrompt, userContent)
+      } else {
+        text = await this._extractAnthropic(systemPrompt, userContent)
+      }
 
       const parsed = this._parseResponse(text)
       if (!parsed || !Array.isArray(parsed.memories)) return []
@@ -132,55 +136,69 @@ class MemoryExtractor {
       // Map each memory to include persona IDs with participant-aware routing
       return parsed.memories
         .filter(m => m.target && m.section && m.entry)
+        .filter(m => (m.confidence ?? 1) >= 0.5)   // drop low-confidence before returning
         .map(m => {
+          const confidence = typeof m.confidence === 'number' ? m.confidence : 1.0
+
           // "user" target → user soul file
           if (m.target === 'user') {
-            return {
-              target: m.target,
-              section: m.section,
-              entry: m.entry,
-              personaId: userPersonaId,
-              personaType: 'users',
-            }
+            return { target: m.target, section: m.section, entry: m.entry, confidence, personaId: userPersonaId, personaType: 'users' }
           }
 
           // Legacy "system" target (no participants) → active persona
           if (m.target === 'system') {
-            return {
-              target: m.target,
-              section: m.section,
-              entry: m.entry,
-              personaId: systemPersonaId,
-              personaType: 'system',
-            }
+            return { target: m.target, section: m.section, entry: m.entry, confidence, personaId: systemPersonaId, personaType: 'system' }
           }
 
           // Participant name target → route to that persona's soul file
           const matched = participantByName.get(m.target.toLowerCase())
           if (matched) {
-            return {
-              target: m.target,
-              section: m.section,
-              entry: m.entry,
-              personaId: matched.id,
-              personaType: matched.type || 'system',
-            }
+            return { target: m.target, section: m.section, entry: m.entry, confidence, personaId: matched.id, personaType: matched.type || 'system' }
           }
 
           // Fallback: unrecognized name → route to active persona
           logger.warn('MemoryExtractor: unrecognized target name, falling back to active persona', { target: m.target })
-          return {
-            target: m.target,
-            section: m.section,
-            entry: m.entry,
-            personaId: systemPersonaId,
-            personaType: 'system',
-          }
+          return { target: m.target, section: m.section, entry: m.entry, confidence, personaId: systemPersonaId, personaType: 'system' }
         })
     } catch (err) {
       logger.error('MemoryExtractor.extract failed', err.message)
       return []
     }
+  }
+
+  async _extractAnthropic(systemPrompt, userContent) {
+    const Anthropic = require('@anthropic-ai/sdk')
+    const clientOpts = { apiKey: this.apiKey }
+    if (this.baseURL) clientOpts.baseURL = this.baseURL.replace(/\/+$/, '')
+    const client = new Anthropic(clientOpts)
+    const response = await client.messages.create({
+      model: this.model,
+      max_tokens: MAX_TOKENS,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }],
+    })
+    return response.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
+  }
+
+  async _extractOpenAI(systemPrompt, userContent) {
+    const { OpenAIClient } = require('./OpenAIClient')
+    const cfg = {
+      openaiApiKey: this.apiKey,
+      openaiBaseURL: this.baseURL.replace(/\/+$/, ''),
+      customModel: this.model,
+      _resolvedProvider: 'openai',
+      defaultProvider: 'openai',
+    }
+    const client = new OpenAIClient(cfg).getClient()
+    const response = await client.chat.completions.create({
+      model: this.model,
+      max_tokens: MAX_TOKENS,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
+      ],
+    })
+    return response.choices?.[0]?.message?.content || ''
   }
 
   _buildUserContent(userMsg, assistantMsg, userSoul, systemSoul, participants) {

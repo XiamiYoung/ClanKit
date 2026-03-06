@@ -127,41 +127,41 @@
   }
 
   /* Prose styles for markdown rendering inside chat bubbles */
-  .prose-sparkai {
+  .prose-clankai {
     color: var(--text-primary);
     line-height: 1.65;
     font-size: var(--fs-body);
   }
-  .prose-sparkai h1,
-  .prose-sparkai h2,
-  .prose-sparkai h3 {
+  .prose-clankai h1,
+  .prose-clankai h2,
+  .prose-clankai h3 {
     font-family: 'Inter', 'Figtree', system-ui, sans-serif;
     color: var(--text-primary);
     font-weight: 600;
     margin-top: 1rem;
     margin-bottom: 0.5rem;
   }
-  .prose-sparkai h1 { font-size: var(--fs-section); }
-  .prose-sparkai h2 { font-size: var(--fs-subtitle); }
-  .prose-sparkai h3 { font-size: var(--fs-body); }
-  .prose-sparkai p  { margin-bottom: 0.75rem; }
-  .prose-sparkai ul,
-  .prose-sparkai ol {
+  .prose-clankai h1 { font-size: var(--fs-section); }
+  .prose-clankai h2 { font-size: var(--fs-subtitle); }
+  .prose-clankai h3 { font-size: var(--fs-body); }
+  .prose-clankai p  { margin-bottom: 0.75rem; }
+  .prose-clankai ul,
+  .prose-clankai ol {
     margin-left: 1.25rem;
     margin-bottom: 0.75rem;
   }
-  .prose-sparkai ul { list-style-type: disc; }
-  .prose-sparkai ol { list-style-type: decimal; }
-  .prose-sparkai a  { color: var(--accent); text-decoration: underline; }
-  .prose-sparkai a:hover { color: var(--accent-hover); }
-  .prose-sparkai blockquote {
+  .prose-clankai ul { list-style-type: disc; }
+  .prose-clankai ol { list-style-type: decimal; }
+  .prose-clankai a  { color: var(--accent); text-decoration: underline; }
+  .prose-clankai a:hover { color: var(--accent-hover); }
+  .prose-clankai blockquote {
     border-left: 3px solid var(--border);
     padding-left: 0.75rem;
     color: var(--text-muted);
     font-style: italic;
     margin: 0.75rem 0;
   }
-  .prose-sparkai code:not(pre code) {
+  .prose-clankai code:not(pre code) {
     background: var(--accent-light);
     color: var(--accent);
     padding: 0.1rem 0.35rem;
@@ -169,7 +169,7 @@
     font-size: 0.85em;
     font-family: 'JetBrains Mono', monospace;
   }
-  .prose-sparkai pre {
+  .prose-clankai pre {
     background: #1C1C1E;
     color: #E5E5EA;
     border-radius: var(--radius-md);
@@ -178,13 +178,13 @@
     margin-bottom: 0.75rem;
     border: 1px solid #2C2C2E;
   }
-  .prose-sparkai pre code {
+  .prose-clankai pre code {
     font-size: var(--fs-secondary);
     font-family: 'JetBrains Mono', monospace;
     color: inherit;
   }
   /* Wrap tables so they scroll horizontally on narrow windows */
-  .prose-sparkai table {
+  .prose-clankai table {
     display: block;
     width: 100%;
     overflow-x: auto;
@@ -192,7 +192,7 @@
     margin-bottom: 0.75rem;
     font-size: var(--fs-secondary);
   }
-  .prose-sparkai th {
+  .prose-clankai th {
     background: #F9F9F9;
     color: var(--text-secondary);
     padding: 0.5rem 0.75rem;
@@ -200,17 +200,17 @@
     font-weight: 600;
     border: 1px solid var(--border);
   }
-  .prose-sparkai td {
+  .prose-clankai td {
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border);
   }
-  .prose-sparkai img    { border-radius: var(--radius-md); max-width: 100%; margin: 0.5rem 0; }
-  .prose-sparkai hr     { border-color: var(--border); margin: 1rem 0; }
-  .prose-sparkai strong { font-weight: 600; }
-  .prose-sparkai em     { font-style: italic; }
+  .prose-clankai img    { border-radius: var(--radius-md); max-width: 100%; margin: 0.5rem 0; }
+  .prose-clankai hr     { border-color: var(--border); margin: 1rem 0; }
+  .prose-clankai strong { font-weight: 600; }
+  .prose-clankai em     { font-style: italic; }
 
   /* Legacy alias */
-  .prose-botanic { @apply prose-sparkai; }
+  .prose-botanic { @apply prose-clankai; }
 
   /* Busy indicator bouncing dots */
   .busy-dot {

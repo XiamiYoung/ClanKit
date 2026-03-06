@@ -5,7 +5,7 @@
     <div class="personas-header">
       <div class="personas-title-row">
         <h1 class="personas-title">Personas</h1>
-        <span class="persona-count-badge">{{ personasStore.personas.length }}</span>
+        <span class="catalog-count-badge">{{ personasStore.personas.length }}</span>
       </div>
       <p class="personas-subtitle">Configure AI personalities and user profiles for your chats.</p>
     </div>
@@ -43,6 +43,9 @@
           </button>
         </div>
         <div class="content-header-right">
+          <AppButton size="icon" @click="refreshPersonas" :loading="refreshing" title="Refresh">
+            <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </AppButton>
           <template v-if="selectedView.type === 'category'">
             <AppButton v-if="selectMode && selectedPersonaIds.size > 0" size="compact" variant="danger" @click="unassignSelected">
               Unassign
@@ -339,10 +342,20 @@ import AppButton from '../components/common/AppButton.vue'
 import CategoryModal from '../components/personas/CategoryModal.vue'
 
 const personasStore = usePersonasStore()
+const refreshing = ref(false)
 
 onMounted(async () => {
   await personasStore.loadPersonas()
 })
+
+async function refreshPersonas() {
+  refreshing.value = true
+  try {
+    await personasStore.loadPersonas()
+  } finally {
+    refreshing.value = false
+  }
+}
 
 // ── Nav panel resize ────────────────────────────────────────────────────────
 const NAV_MIN = 200
@@ -685,7 +698,7 @@ function getAvatarGradient(persona) {
   color: #1A1A1A;
   margin: 0;
 }
-.persona-count-badge {
+.catalog-count-badge {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
   font-weight: 700;
@@ -1099,7 +1112,7 @@ function getAvatarGradient(persona) {
   flex-shrink: 0;
   transition: color 0.15s;
 }
-.content-filter-wrap:focus-within .content-filter-icon { color: #6B7280; }
+.content-filter-wrap:focus-within .content-filter-icon { color: #1A1A1A; }
 .content-filter-input {
   flex: 1;
   border: none;

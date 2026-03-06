@@ -22,7 +22,7 @@
 
     <!-- App name -->
     <span style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#1A1A1A; letter-spacing:0.02em;">
-      SparkAI
+      ClankAI
     </span>
 
     <div style="flex:1;" />

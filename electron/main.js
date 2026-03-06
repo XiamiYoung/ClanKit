@@ -18,8 +18,8 @@ const { logger, LOG_DIR } = require('./logger')
 // Load .env into the Electron main process using a direct parser.
 // dotenv v17 has ESM-first issues in Electron; plain fs is 100% reliable.
 // Supports multi-line JSON values (brace-balanced accumulation).
-// Two-pass strategy: load the default .env first (to discover SPARKAI_DATA_PATH),
-// then if DATA_DIR differs, also load DATA_DIR/.env. SPARKAI_DATA_PATH is the
+// Two-pass strategy: load the default .env first (to discover CLANKAI_DATA_PATH),
+// then if DATA_DIR differs, also load DATA_DIR/.env. CLANKAI_DATA_PATH is the
 // only runtime key still stored in .env; all other paths live in config.json.
 ;(function loadEnv() {
   function parseFile(filePath) {
@@ -73,30 +73,30 @@ const { logger, LOG_DIR } = require('./logger')
   }
 
   // Pass 1: load the default user env (or project fallback in dev).
-  // This is needed to discover SPARKAI_DATA_PATH.
-  const defaultUserEnv = path.join(os.homedir(), '.sparkai', '.env')
+  // This is needed to discover CLANKAI_DATA_PATH.
+  const defaultUserEnv = path.join(os.homedir(), '.clankAI', '.env')
   const projectEnv     = path.join(__dirname, '..', '.env')
   if (fs.existsSync(defaultUserEnv)) parseFile(defaultUserEnv)
   else parseFile(projectEnv)
 
-  // Pass 2: if SPARKAI_DATA_PATH points to a different directory, also load
-  // that .env so any remaining keys there (e.g. SPARKAI_DATA_PATH itself) are not missed.
-  if (process.env.SPARKAI_DATA_PATH) {
-    const dataEnv = path.join(process.env.SPARKAI_DATA_PATH, '.env')
+  // Pass 2: if CLANKAI_DATA_PATH points to a different directory, also load
+  // that .env so any remaining keys there (e.g. CLANKAI_DATA_PATH itself) are not missed.
+  if (process.env.CLANKAI_DATA_PATH) {
+    const dataEnv = path.join(process.env.CLANKAI_DATA_PATH, '.env')
     if (dataEnv !== defaultUserEnv && dataEnv !== projectEnv) {
       parseFile(dataEnv)
     }
   }
 })()
 
-logger.info('=== SparkAI starting ===')
+logger.info('=== ClankAI starting ===')
 
 // Dev mode: run-electron.js sets ELECTRON_DEV=true
 const isDev = process.env.ELECTRON_DEV === 'true'
 
 // --- Storage ----------------------------------------------------------------
-const DEFAULT_DATA_PATH = path.join(os.homedir(), '.sparkai')
-const DATA_DIR = process.env.SPARKAI_DATA_PATH || DEFAULT_DATA_PATH
+const DEFAULT_DATA_PATH = path.join(os.homedir(), '.clankAI')
+const DATA_DIR = process.env.CLANKAI_DATA_PATH || DEFAULT_DATA_PATH
 const CHATS_FILE = path.join(DATA_DIR, 'chats.json')
 const CHATS_DIR = path.join(DATA_DIR, 'chats')
 const CHATS_INDEX_FILE = path.join(CHATS_DIR, 'index.json')
@@ -110,13 +110,13 @@ const ENV_FILE = path.join(DATA_DIR, '.env')
 const UTILITY_USAGE_FILE = path.join(DATA_DIR, 'utility-usage.json')
 
 // --- Env-backed path accessors -----------------------------------------------
-// These three paths are stored in config.json under SPARKAI_DATA_PATH.
+// These three paths are stored in config.json under CLANKAI_DATA_PATH.
 function getEnvPaths() {
   const cfg = readJSON(CONFIG_FILE, {})
   return {
     skillsPath:   cfg.skillsPath   || '',
     DoCPath:      cfg.DoCPath      || '',
-    artyfactPath: cfg.artyfactPath || '',
+    artifactPath: cfg.artifactPath || cfg.artyfactPath || '',
   }
 }
 
@@ -154,7 +154,7 @@ function ensureDataDir() {
       if (fs.existsSync(oldFile) && !fs.existsSync(newFile)) {
         try {
           fs.copyFileSync(oldFile, newFile)
-          logger.info(`Migrated ${file} from .maestro-agent to .sparkai`)
+          logger.info(`Migrated ${file} from .maestro-agent to .clankAI`)
         } catch (err) {
           logger.error(`Failed to migrate ${file}:`, err.message)
         }
@@ -314,8 +314,6 @@ async function migrateEnvDataIfNeeded() {
       'openrouter.baseURL':    'OPENROUTER_BASE_URL',
       'openai.apiKey':         'OPENAI_API_KEY',
       'openai.baseURL':        'OPENAI_BASE_URL',
-      systemPrompt:            'SPARK_SYSTEM_PROMPT',
-      obsidianVaultPath:       'OBSIDIAN_VAULT_PATH',
       pineconeApiKey:          'PINECONE_API_KEY'
     }
     if (!cfg.anthropic)  cfg.anthropic = {}
@@ -387,14 +385,14 @@ async function migrateEnvDataIfNeeded() {
   const cfgForDp = readJSON(CONFIG_FILE, {})
   if (cfgForDp.dataPath && cfgForDp.dataPath !== DEFAULT_DATA_PATH) {
     // Write to .env if not already there
-    if (!process.env.SPARKAI_DATA_PATH) {
+    if (!process.env.CLANKAI_DATA_PATH) {
       let envLines = []
       if (fs.existsSync(ENV_FILE)) {
         envLines = fs.readFileSync(ENV_FILE, 'utf8').split('\n')
       }
-      const hasLine = envLines.some(l => l.trim().startsWith('SPARKAI_DATA_PATH='))
+      const hasLine = envLines.some(l => l.trim().startsWith('CLANKAI_DATA_PATH='))
       if (!hasLine) {
-        envLines.push('# Data directory for SparkAI', `SPARKAI_DATA_PATH=${cfgForDp.dataPath}`)
+        envLines.push('# Data directory for ClankAI', `CLANKAI_DATA_PATH=${cfgForDp.dataPath}`)
         fs.writeFileSync(ENV_FILE, envLines.join('\n'), 'utf8')
         logger.info('Migrated dataPath from config.json to .env:', cfgForDp.dataPath)
       }
@@ -449,7 +447,7 @@ const DEFAULT_CONFIG = {
   systemPrompt:      '',
   skillsPath:        '',
   DoCPath:           '',
-  artyfactPath:      '',
+  artifactPath:      '',
   pineconeApiKey:    '',
   newsFeeds: [],
   sandboxConfig: {
@@ -823,7 +821,7 @@ ipcMain.handle('store:get-config', () => {
   return result
 })
 ipcMain.handle('store:save-config', (_, config) => {
-  // dataPath lives in .env (as SPARKAI_DATA_PATH), not config.json
+  // dataPath lives in .env (as CLANKAI_DATA_PATH), not config.json
   delete config.dataPath
   delete config.obsidianVaultPath
   // Read-merge-write: merge incoming config into existing file to avoid
@@ -870,7 +868,7 @@ ipcMain.handle('store:get-utility-usage', async () => {
   return readJSONAsync(UTILITY_USAGE_FILE, null)
 })
 
-// Save SPARKAI_DATA_PATH to .env file
+// Save CLANKAI_DATA_PATH to .env file
 ipcMain.handle('store:save-data-path', (_, newDataPath) => {
   try {
     const envPath = ENV_FILE
@@ -878,32 +876,32 @@ ipcMain.handle('store:save-data-path', (_, newDataPath) => {
     if (fs.existsSync(envPath)) {
       lines = fs.readFileSync(envPath, 'utf8').split('\n')
     }
-    // Replace or append SPARKAI_DATA_PATH
+    // Replace or append CLANKAI_DATA_PATH
     let found = false
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].trim().startsWith('SPARKAI_DATA_PATH=')) {
-        lines[i] = `SPARKAI_DATA_PATH=${newDataPath}`
+      if (lines[i].trim().startsWith('CLANKAI_DATA_PATH=')) {
+        lines[i] = `CLANKAI_DATA_PATH=${newDataPath}`
         found = true
         break
       }
     }
     if (!found) {
-      lines.push('# Data directory for SparkAI', `SPARKAI_DATA_PATH=${newDataPath}`)
+      lines.push('# Data directory for ClankAI', `CLANKAI_DATA_PATH=${newDataPath}`)
     }
     fs.writeFileSync(envPath, lines.join('\n'), 'utf8')
-    logger.info('Saved SPARKAI_DATA_PATH to .env:', newDataPath)
+    logger.info('Saved CLANKAI_DATA_PATH to .env:', newDataPath)
     return { success: true }
   } catch (err) {
-    logger.error('Failed to save SPARKAI_DATA_PATH to .env:', err.message)
+    logger.error('Failed to save CLANKAI_DATA_PATH to .env:', err.message)
     return { success: false, error: err.message }
   }
 })
 
-// --- IPC: Config-backed paths (skillsPath, DoCPath, artyfactPath) ------------
-// These three paths are stored in config.json under SPARKAI_DATA_PATH.
+// --- IPC: Config-backed paths (skillsPath, DoCPath, artifactPath) ------------
+// These three paths are stored in config.json under CLANKAI_DATA_PATH.
 ipcMain.handle('store:get-env-paths', () => getEnvPaths())
 ipcMain.handle('store:save-env-path', (_, key, value) => {
-  const allowed = ['skillsPath', 'DoCPath', 'artyfactPath']
+  const allowed = ['skillsPath', 'DoCPath', 'artifactPath']
   if (!allowed.includes(key)) return { success: false, error: 'Unknown path key' }
   try {
     const existing = readJSON(CONFIG_FILE, {})
@@ -990,7 +988,20 @@ ipcMain.handle('memory:accept', async (_, { personaId, personaType, section, ent
   }
 })
 
-// --- IPC: MCP Server Configuration (~/.sparkai/mcp-servers.json) -------------
+// --- IPC: Memory extraction on chat switch / window close ------------------
+// Force extraction for any remaining unprocessed messages, bypassing the N=10 threshold.
+ipcMain.handle('memory:extract-on-chat-switch', async (event, { chatId, messages, config, participants, personaPrompts }) => {
+  try {
+    lastExtractedMsgCount.set(chatId, messages.length)
+    await runMemoryExtraction(event, chatId, messages, config, personaPrompts, participants)
+    return { success: true }
+  } catch (err) {
+    logger.error('memory:extract-on-chat-switch error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// --- IPC: MCP Server Configuration (~/.clankAI/mcp-servers.json) -------------
 
 ipcMain.handle('mcp:get-config', () => readJSON(MCP_SERVERS_FILE, {}))
 
@@ -1004,7 +1015,7 @@ ipcMain.handle('mcp:save-config', async (_, mcpServers) => {
   }
 })
 
-// --- IPC: HTTP Tools Configuration (~/.sparkai/tools.json) -------------------
+// --- IPC: HTTP Tools Configuration (~/.clankAI/tools.json) -------------------
 
 ipcMain.handle('tools:get-config', () => readJSON(TOOLS_FILE, {}))
 
@@ -1909,7 +1920,7 @@ ipcMain.handle('news:fetch-feeds', async (_, feedConfigs) => {
       }
       const fetcher = url.startsWith('https') ? https : http
       const req = fetcher.get(url, {
-        headers: { 'User-Agent': 'SparkAI/1.0 RSS Reader', 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
+        headers: { 'User-Agent': 'ClankAI/1.0 RSS Reader', 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
         timeout: 15000
       }, (res) => {
         // Follow redirects (301, 302, 307, 308)
@@ -1919,7 +1930,7 @@ ipcMain.handle('news:fetch-feeds', async (_, feedConfigs) => {
             const redirectUrl = new URL(res.headers.location, url).href
             const rFetcher = redirectUrl.startsWith('https') ? https : http
             const rReq = rFetcher.get(redirectUrl, {
-              headers: { 'User-Agent': 'SparkAI/1.0 RSS Reader', 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
+              headers: { 'User-Agent': 'ClankAI/1.0 RSS Reader', 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
               timeout: 15000
             }, (rRes) => {
               let body = ''
@@ -2347,6 +2358,8 @@ const { mcpManager } = require('./agent/mcp/McpManager')
 const { MemoryExtractor } = require('./agent/core/MemoryExtractor')
 const activeLoops = new Map()          // chatId -> AgentLoop
 const lastContextSnapshots = new Map() // chatId -> snapshot
+const lastExtractedMsgCount = new Map() // chatId -> message count at last extraction
+const pendingMemoryFacts = new Map()    // chatId -> Array of pending fact objects (medium-confidence)
 
 /** Read a soul file from disk. Returns null if not found. */
 function readSoulFileSync(personaId, personaType) {
@@ -2361,17 +2374,28 @@ function readSoulFileSync(personaId, personaType) {
 }
 
 /**
- * Run post-turn memory extraction via Haiku.
+ * Run post-turn memory extraction using the configured utility model.
  * Non-fatal -- failures are logged and silently ignored.
+ *
+ * High-confidence (≥0.8): auto-saved directly to soul files.
+ * Medium-confidence (0.5–0.8): stored as pending facts for conversational confirmation.
+ * Low-confidence (<0.5): discarded (filtered out in MemoryExtractor).
  */
 async function runMemoryExtraction(event, chatId, messages, config, personaPrompts, participants) {
   try {
-    // Memory extraction always uses the Anthropic provider (Haiku model).
-    // Use the explicitly configured Anthropic key/baseURL — never the per-chat
-    // overridden config.apiKey which may belong to a different provider.
-    const apiKey = config.anthropic?.apiKey
-    const baseURL = config.anthropic?.baseURL
-    if (!apiKey || !baseURL) return
+    // Use the globally configured utility model — supports all providers.
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) return  // utility model not configured, skip silently
+    const providerCfg = config[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) return
+
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    const extractor = new MemoryExtractor({
+      model: um.model,
+      apiKey: providerCfg.apiKey,
+      baseURL: providerCfg.baseURL,
+      isOpenAI,
+    })
 
     // Extract last user message + last assistant response
     const reversed = [...messages].reverse()
@@ -2394,7 +2418,6 @@ async function runMemoryExtraction(event, chatId, messages, config, personaPromp
     const userSoulContent = readSoulFileSync(userPersonaId, 'users')
     const systemSoulContent = readSoulFileSync(systemPersonaId, 'system')
 
-    const extractor = new MemoryExtractor({ apiKey, baseURL })
     const suggestions = await extractor.extract({
       lastUserMessage: lastUserText,
       lastAssistantMessage: lastAssistantText,
@@ -2405,12 +2428,34 @@ async function runMemoryExtraction(event, chatId, messages, config, personaPromp
       participants: participants || null,
     })
 
-    if (suggestions.length > 0 && !event.sender.isDestroyed()) {
-      event.sender.send('agent:chunk', {
-        chatId,
-        chunk: { type: 'memory_suggestions', items: suggestions }
-      })
-      logger.agent('Memory extraction', { chatId, count: suggestions.length })
+    if (suggestions.length === 0) return
+
+    logger.agent('Memory extraction', { chatId, count: suggestions.length, model: um.model, provider: um.provider })
+
+    const autoSave = suggestions.filter(s => s.confidence >= 0.8)
+    const pending  = suggestions.filter(s => s.confidence >= 0.5 && s.confidence < 0.8)
+
+    // Auto-save high-confidence facts directly to soul files
+    if (autoSave.length > 0) {
+      const { SoulUpdateTool: SoulUpdateToolForMemory } = require('./agent/tools/SoulTool')
+      const soulTool = new SoulUpdateToolForMemory(SOULS_DIR)
+      for (const item of autoSave) {
+        await soulTool.execute({
+          persona_id: item.personaId,
+          persona_type: item.personaType,
+          section: item.section,
+          action: 'add',
+          entry: item.entry,
+        }).catch(err => logger.warn('Memory auto-save failed', { entry: item.entry, error: err.message }))
+      }
+      logger.agent('Memory auto-saved', { chatId, count: autoSave.length })
+    }
+
+    // Store medium-confidence facts for conversational AI confirmation
+    if (pending.length > 0) {
+      const existing = pendingMemoryFacts.get(chatId) || []
+      pendingMemoryFacts.set(chatId, [...existing, ...pending])
+      logger.agent('Memory pending confirmation', { chatId, count: pending.length })
     }
   } catch (err) {
     logger.error('Memory extraction failed (non-fatal)', { chatId, error: err.message })
@@ -2421,15 +2466,7 @@ logger.info('IPC handlers registered: agent:run, agent:stop')
 
 ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts, mcpServers, httpTools, personaRuns, knowledgeConfig, injectedPlan, chatPermissionMode, chatAllowList, chatDangerOverrides, maxOutputTokens }) => {
   logger.agent('IPC agent:run received', { chatId, model: config?.anthropic?.activeModel || config?.activeModel, msgCount: messages?.length, personaRuns: personaRuns?.length || 0 })
-  logger.agent('config snapshot', {
-    baseURL: config?.baseURL,
-    hasApiKey: !!(config?.apiKey),
-    apiKeyPrefix: config?.apiKey ? config.apiKey.slice(0, 8) + '...' : '(empty)',
-    sonnetModel: config?.anthropic?.sonnetModel,
-    activeModel: config?.anthropic?.activeModel,
-    customModel: config?.customModel || null,
-    provider: config?.defaultProvider || 'anthropic'
-  })
+  logger.agent('config', { provider: config?.defaultProvider || 'anthropic', model: config?.anthropic?.activeModel, hasKey: !!(config?.apiKey) })
 
   // If this chat already has a running loop, stop it first
   for (const [key, loop] of activeLoops) {
@@ -2537,11 +2574,32 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       // Per-chat value takes precedence; fall back to global config default
       loopConfig.maxOutputTokens = maxOutputTokens || groupCfg.maxOutputTokens || null
       loopConfig.smtpConfig = groupCfg.smtp || null
+      // Inject config-backed paths — all personas share the same global paths
+      loopConfig.artifactPath = groupCfg.artifactPath || groupCfg.artyfactPath || ''
+      loopConfig.skillsPath   = groupCfg.skillsPath   || ''
+      loopConfig.DoCPath      = groupCfg.DoCPath      || ''
       const loop = new AgentLoop(loopConfig)
       activeLoops.set(loopKey, loop)
 
       return (async () => {
         try {
+          // Inject pending memory facts for conversational confirmation (one-shot per run)
+          const runPersonaPrompts = run.personaPrompts || personaPrompts
+          const groupPending = pendingMemoryFacts.get(chatId)
+          if (groupPending?.length > 0) {
+            pendingMemoryFacts.delete(chatId)
+            const block = [
+              '\n\n[MEMORY PENDING CONFIRMATION]',
+              'The following facts were observed but need user confirmation.',
+              'At an appropriate moment, naturally ask the user if they want you to remember them.',
+              'If confirmed, call update_soul_memory. Do not be abrupt — integrate naturally.',
+              ...groupPending.map(p => `- [${p.section}] ${p.entry} (for ${p.target})`),
+              '[/MEMORY PENDING CONFIRMATION]',
+            ].join('\n')
+            if (runPersonaPrompts) {
+              runPersonaPrompts.systemPersonaPrompt = (runPersonaPrompts.systemPersonaPrompt || '') + block
+            }
+          }
           const result = await loop.run(
             baseMessages,
             run.enabledAgents || enabledAgents,
@@ -2555,7 +2613,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
               }
             },
             currentAttachments,
-            run.personaPrompts || personaPrompts,
+            runPersonaPrompts,
             run.mcpServers || mcpServers,
             run.httpTools || httpTools,
             ragContext
@@ -2605,9 +2663,14 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     }
 
     // Fire-and-forget memory extraction for group chat -- pass all participants for routing
+    // N=10 trigger: only extract when at least 10 new messages since last extraction
     if (personaRuns.length > 0) {
-      const groupParticipants = personaRuns.map(r => ({ id: r.personaId, name: r.personaName, type: 'system' }))
-      runMemoryExtraction(event, chatId, messages, config, personaRuns[0].personaPrompts || personaPrompts, groupParticipants)
+      const prevCount = lastExtractedMsgCount.get(chatId) || 0
+      if (messages.length - prevCount >= 10) {
+        lastExtractedMsgCount.set(chatId, messages.length)
+        const groupParticipants = personaRuns.map(r => ({ id: r.personaId, name: r.personaName, type: 'system' }))
+        runMemoryExtraction(event, chatId, messages, config, personaRuns[0].personaPrompts || personaPrompts, groupParticipants)
+      }
     }
 
     return { success: true, results }
@@ -2624,15 +2687,30 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   // Per-chat value takes precedence; fall back to global config default
   loopConfig.maxOutputTokens = maxOutputTokens || fullCfg.maxOutputTokens || null
   loopConfig.smtpConfig = fullCfg.smtp || null
+  // Inject config-backed paths so the agent always has them regardless of what the renderer sent
+  loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
+  loopConfig.skillsPath   = fullCfg.skillsPath   || ''
+  loopConfig.DoCPath      = fullCfg.DoCPath      || ''
   const loop = new AgentLoop(loopConfig)
   activeLoops.set(chatId, loop)
 
-  const skillsForLog = (enabledSkills || []).map(s => ({
-    id: s.id,
-    name: s.name,
-    summary: (s.summary || s.systemPrompt || '').slice(0, 200),
-  }))
-  logger.agent('run start', { chatId, model: config.anthropic?.activeModel || config.activeModel, msgCount: messages.length, agents: enabledAgents, skills: skillsForLog })
+  logger.agent('run start', { chatId, model: config.anthropic?.activeModel || config.activeModel, msgCount: messages.length, agents: enabledAgents?.length || 0, skills: (enabledSkills || []).map(s => s.id) })
+
+  // Inject pending memory facts for conversational confirmation (one-shot per run)
+  const singlePending = pendingMemoryFacts.get(chatId)
+  if (singlePending?.length > 0) {
+    pendingMemoryFacts.delete(chatId)
+    const block = [
+      '\n\n[MEMORY PENDING CONFIRMATION]',
+      'The following facts were observed but need user confirmation.',
+      'At an appropriate moment, naturally ask the user if they want you to remember them.',
+      'If confirmed, call update_soul_memory. Do not be abrupt — integrate naturally.',
+      ...singlePending.map(p => `- [${p.section}] ${p.entry} (for ${p.target})`),
+      '[/MEMORY PENDING CONFIRMATION]',
+    ].join('\n')
+    if (!personaPrompts) personaPrompts = {}
+    personaPrompts.systemPersonaPrompt = (personaPrompts.systemPersonaPrompt || '') + block
+  }
 
   try {
     const result = await loop.run(
@@ -2661,11 +2739,15 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       cacheCreationTokens: _usageMetrics.cacheCreationInputTokens || 0,
       cacheReadTokens:     _usageMetrics.cacheReadInputTokens     || 0,
     }, _provider, _model).catch(() => {})
-    // Fire-and-forget memory extraction -- single persona as participant for routing
-    const singleParticipants = personaPrompts?.systemPersonaId
-      ? [{ id: personaPrompts.systemPersonaId, name: personaPrompts.groupChatContext?.personaName || 'Assistant', type: 'system' }]
-      : null
-    runMemoryExtraction(event, chatId, messages, config, personaPrompts, singleParticipants)
+    // Fire-and-forget memory extraction -- N=10 trigger: only when 10+ new messages since last extraction
+    const prevCount = lastExtractedMsgCount.get(chatId) || 0
+    if (messages.length - prevCount >= 10) {
+      lastExtractedMsgCount.set(chatId, messages.length)
+      const singleParticipants = personaPrompts?.systemPersonaId
+        ? [{ id: personaPrompts.systemPersonaId, name: personaPrompts.groupChatContext?.personaName || 'Assistant', type: 'system' }]
+        : null
+      runMemoryExtraction(event, chatId, messages, config, personaPrompts, singleParticipants)
+    }
     return { success: true, result }
   } catch (err) {
     logger.error('agent:run error', { chatId, error: err.message })

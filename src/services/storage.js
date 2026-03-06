@@ -58,18 +58,18 @@ export const storage = {
   // ── Chats (bulk — backward compat) ─────────────────────────────────────────
   async getChats() {
     if (isElectron()) return window.electronAPI.getChats()
-    return lsGet('sparkai:chats', [])
+    return lsGet('clankai:chats', [])
   },
   async saveChats(chats) {
     if (isElectron()) return window.electronAPI.saveChats(chats)
-    lsSet('sparkai:chats', chats)
+    lsSet('clankai:chats', chats)
   },
 
   // ── Chats (per-chat granular) ─────────────────────────────────────────────
   async getChatIndex() {
     if (isElectron()) return window.electronAPI.getChatIndex()
     // localStorage fallback: extract metadata from full chats
-    const chats = lsGet('sparkai:chats', [])
+    const chats = lsGet('clankai:chats', [])
     return chats.map(({ messages, ...meta }) => meta)
   },
   async saveChatIndex(index) {
@@ -79,28 +79,28 @@ export const storage = {
   async getChat(id) {
     if (isElectron()) return window.electronAPI.getChat(id)
     // localStorage fallback: find in full array
-    const chats = lsGet('sparkai:chats', [])
+    const chats = lsGet('clankai:chats', [])
     return chats.find(c => c.id === id) || null
   },
   async saveChat(chat) {
     if (isElectron()) return window.electronAPI.saveChat(chat)
     // localStorage fallback: update in full array
-    const chats = lsGet('sparkai:chats', [])
+    const chats = lsGet('clankai:chats', [])
     const idx = chats.findIndex(c => c.id === chat.id)
     if (idx >= 0) chats[idx] = chat
     else chats.unshift(chat)
-    lsSet('sparkai:chats', chats)
+    lsSet('clankai:chats', chats)
   },
   async deleteChat(id) {
     if (isElectron()) return window.electronAPI.deleteChat(id)
-    const chats = lsGet('sparkai:chats', [])
-    lsSet('sparkai:chats', chats.filter(c => c.id !== id))
+    const chats = lsGet('clankai:chats', [])
+    lsSet('clankai:chats', chats.filter(c => c.id !== id))
   },
 
   // ── Config ─────────────────────────────────────────────────────────────────
   async getConfig() {
     if (isElectron()) return window.electronAPI.getConfig()
-    const saved = lsGet('sparkai:config', {})
+    const saved = lsGet('clankai:config', {})
     const defaults = browserDefaultConfig()
     // Only let saved values override defaults when non-empty
     const nonEmpty = Object.fromEntries(
@@ -116,7 +116,7 @@ export const storage = {
   },
   async saveConfig(config) {
     if (isElectron()) return window.electronAPI.saveConfig(config)
-    lsSet('sparkai:config', config)
+    lsSet('clankai:config', config)
   },
 
   // ── Personas ────────────────────────────────────────────────────────────────
@@ -132,15 +132,15 @@ export const storage = {
   // ── Soul Memory ────────────────────────────────────────────────────────────
   async getSoul(personaId, type) {
     if (isElectron()) return window.electronAPI.souls.read(personaId, type)
-    return lsGet(`sparkai:soul:${type}:${personaId}`, null)
+    return lsGet(`clankai:soul:${type}:${personaId}`, null)
   },
   async saveSoul(personaId, type, content) {
     if (isElectron()) return window.electronAPI.souls.write(personaId, type, content)
-    lsSet(`sparkai:soul:${type}:${personaId}`, content)
+    lsSet(`clankai:soul:${type}:${personaId}`, content)
   },
   async soulExists(personaId, type) {
     if (isElectron()) return window.electronAPI.souls.exists(personaId, type)
-    return lsGet(`sparkai:soul:${type}:${personaId}`, null) !== null
+    return lsGet(`clankai:soul:${type}:${personaId}`, null) !== null
   },
 
 }

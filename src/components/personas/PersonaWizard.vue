@@ -177,6 +177,7 @@
             @click="revertEnhance"
           >Revert</AppButton>
         </div>
+        <span v-if="aiError" class="wiz-ai-error">{{ aiError }}</span>
       </div>
 
       <!-- Footer with actions (matches ccm-footer) -->
@@ -515,10 +516,13 @@ function generatePrompt() {
 
 // ── AI Enhance ────────────────────────────────────────────────────────────
 
+const aiError = ref('')
+
 async function enhancePrompt() {
   if (enhancing.value || !form.generatedPrompt.trim()) return
   preEnhancePrompt.value = form.generatedPrompt
   enhancing.value = true
+  aiError.value = ''
 
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
@@ -529,10 +533,10 @@ async function enhancePrompt() {
     if (res.success && res.text) {
       form.generatedPrompt = res.text.trim()
     } else if (!res.success) {
-      console.error('Enhancement failed:', res.error)
+      aiError.value = res.error || 'Enhancement failed.'
     }
   } catch (err) {
-    console.error('Enhancement failed:', err.message || err)
+    aiError.value = err.message || 'Enhancement failed.'
   }
   enhancing.value = false
 }
@@ -561,7 +565,7 @@ async function generateDescription(prompt) {
       return res.text.trim().replace(/\.+$/, '')
     }
   } catch (err) {
-    console.error('Description generation failed:', err)
+    aiError.value = err.message || 'Description generation failed.'
   }
   // Fallback: use name or role
   return form.role || form.name || 'Untitled'
@@ -911,6 +915,10 @@ onMounted(() => {
 .wiz-preview-textarea:focus { border-color: #4B5563; }
 
 /* -- Enhance row ----------------------------------------------------------- */
+.wiz-ai-error {
+  display: block; font-family: 'Inter', sans-serif; font-size: 0.6875rem; font-weight: 500;
+  color: #EF4444; margin-top: 0.25rem; line-height: 1.4;
+}
 .wiz-enhance-row {
   display: flex;
   align-items: center;

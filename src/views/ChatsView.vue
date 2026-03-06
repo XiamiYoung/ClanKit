@@ -82,11 +82,11 @@
         </div>
 
         <!-- Search mode: flat filtered list -->
-        <template v-if="chatFilterQuery.trim()">
+        <template v-if="!chatsStore.isLoading && chatFilterQuery.trim()">
           <div
             v-for="chat in filteredChats"
             :key="chat.id"
-            @click="chatsStore.setActiveChat(chat.id); chatsStore.markAsRead(chat.id)"
+            @click="triggerMemoryExtractionOnSwitch(chatsStore.activeChatId); chatsStore.setActiveChat(chat.id); chatsStore.markAsRead(chat.id)"
             class="chat-sidebar-item group"
             :class="{ active: chat.id === chatsStore.activeChatId }"
           >
@@ -111,7 +111,7 @@
         </template>
 
         <!-- Tree mode: root folder row + recursive node rendering -->
-        <template v-else>
+        <template v-else-if="!chatsStore.isLoading">
           <!-- Root folder row -->
           <div class="chat-root-row">
             <div class="chat-root-row-left" @click="rootExpanded = !rootExpanded">
@@ -152,7 +152,7 @@
               :pendingPermissionChatIds="chatsStore.pendingPermissionChatIds"
               :draggingId="draggingNodeId"
               :selectedFolderId="selectedFolderId"
-              @select-chat="(id) => { chatsStore.setActiveChat(id); chatsStore.markAsRead(id); selectedFolderId = null; treeLastSelected = { type: 'chat', id } }"
+              @select-chat="(id) => { triggerMemoryExtractionOnSwitch(chatsStore.activeChatId); chatsStore.setActiveChat(id); chatsStore.markAsRead(id); selectedFolderId = null; treeLastSelected = { type: 'chat', id } }"
               @toggle-folder="(id) => { chatsStore.toggleFolder(id); selectedFolderId = id; treeLastSelected = { type: 'folder', id } }"
 
               @rename-chat="(chat) => startRename(chat)"
@@ -808,50 +808,6 @@
               </div>
             </div>
 
-            <!-- Memory Suggestions Banner -->
-            <Transition name="memory-banner">
-              <div
-                v-if="pendingMemorySuggestions.length > 0"
-                class="memory-banner"
-              >
-                <div class="memory-banner-header">
-                  <div class="memory-banner-title">
-                    <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
-                      <line x1="10" y1="22" x2="14" y2="22"/>
-                    </svg>
-                    <span>Memories detected</span>
-                    <span class="memory-banner-count">{{ pendingMemorySuggestions.length }}</span>
-                  </div>
-                  <div class="memory-banner-actions">
-                    <button class="memory-banner-btn accept-all" @click="acceptAllMemories">Accept All</button>
-                    <button class="memory-banner-btn dismiss-all" @click="dismissAllMemories">Dismiss All</button>
-                  </div>
-                </div>
-                <div class="memory-banner-list">
-                  <div
-                    v-for="item in pendingMemorySuggestions"
-                    :key="item.id"
-                    class="memory-banner-item"
-                  >
-                    <div class="memory-banner-item-content">
-                      <span class="memory-banner-target" :class="item.target">{{ item.target === 'user' ? 'You' : 'AI' }}</span>
-                      <span class="memory-banner-section">{{ item.section }}</span>
-                      <span class="memory-banner-entry">{{ item.entry }}</span>
-                    </div>
-                    <div class="memory-banner-item-actions">
-                      <button class="memory-item-btn accept" @click="acceptMemory(item)" title="Accept">
-                        <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                      </button>
-                      <button class="memory-item-btn dismiss" @click="dismissMemory(item)" title="Dismiss">
-                        <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Transition>
-
             <!-- Input Area -->
             <div class="chat-input-area">
               <!-- Attachment preview strip -->
@@ -1296,7 +1252,7 @@
                   <input
                     v-model="draftWorkingPath"
                     type="text"
-                    :placeholder="configStore.config.artyfactPath || '~/.sparkai/artyfact'"
+                    :placeholder="configStore.config.artifactPath || (configStore.config.dataPath ? `${configStore.config.dataPath}/artifact` : '~/.clankAI/artifact')"
                     class="ccm-working-path-input"
                   />
                   <button class="ccm-working-path-browse" @click="browseWorkingPath" title="Browse folder">
@@ -1317,7 +1273,7 @@
                     </svg>
                     <div v-if="showCodingInfoTooltip" class="ccm-coding-tooltip">
                       <div class="ccm-coding-tooltip-title">What is Coding Mode?</div>
-                      <div class="ccm-coding-tooltip-body">Activates project-aware AI assistance. When enabled, SparkAI reads <code>CLAUDE.md</code> instruction files from your project hierarchy and injects them into the system prompt — the same way Claude Code does. Files are watched for changes and context updates automatically.</div>
+                      <div class="ccm-coding-tooltip-body">Activates project-aware AI assistance. When enabled, ClankAI reads <code>CLAUDE.md</code> instruction files from your project hierarchy and injects them into the system prompt — the same way Claude Code does. Files are watched for changes and context updates automatically.</div>
                       <div class="ccm-coding-tooltip-hint">Set your project root as the Working Path above, then select a coding provider.</div>
                     </div>
                   </span>
@@ -1956,7 +1912,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted, onActivated, onDeactivated, onErrorCaptured, watch, defineComponent, h } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, onActivated, onDeactivated, onErrorCaptured, watch, defineComponent, h, toRaw } from 'vue'
 defineOptions({ name: 'ChatsView', inheritAttrs: false })
 import { useChatsStore } from '../stores/chats'
 import { useSkillsStore } from '../stores/skills'
@@ -2925,7 +2881,46 @@ async function gridNewChat() {
   }
 }
 
+/**
+ * Fire-and-forget memory extraction for a chat we are navigating away from.
+ * Bypasses the N=10 threshold so any un-extracted messages are processed.
+ */
+function triggerMemoryExtractionOnSwitch(leavingChatId) {
+  if (!leavingChatId || !window.electronAPI?.memory?.extractOnChatSwitch) return
+  const chat = chatsStore.chats.find(c => c.id === leavingChatId)
+  if (!chat?.messages?.length) return
+  const cfg = configStore.config
+  if (!cfg.utilityModel?.provider || !cfg.utilityModel?.model) return
+
+  const sysId = chat.systemPersonaId || personasStore.defaultSystemPersona?.id
+  const usrId = chat.userPersonaId || personasStore.defaultUserPersona?.id
+  const participants = chat.groupPersonaIds?.length > 0
+    ? chat.groupPersonaIds.map(pid => {
+        const p = personasStore.getPersonaById(pid)
+        return p ? { id: p.id, name: p.name, type: 'system' } : null
+      }).filter(Boolean)
+    : (sysId ? [{ id: sysId, name: personasStore.getPersonaById(sysId)?.name || 'Assistant', type: 'system' }] : null)
+
+  const personaPrompts = {
+    systemPersonaId: sysId || '__default_system__',
+    userPersonaId: usrId || '__default_user__',
+  }
+
+  try {
+    window.electronAPI.memory.extractOnChatSwitch({
+      chatId: leavingChatId,
+      messages: JSON.parse(JSON.stringify(toRaw(chat.messages))),
+      config: JSON.parse(JSON.stringify(toRaw(cfg))),
+      participants,
+      personaPrompts,
+    }).catch(() => {})
+  } catch {
+    // Non-fatal — messages may contain non-serializable attachments
+  }
+}
+
 function gridSelectChat(chatId) {
+  triggerMemoryExtractionOnSwitch(chatsStore.activeChatId)
   chatsStore.setActiveChat(chatId)
 }
 
@@ -2958,10 +2953,6 @@ const inputFocused = ref(false)
 const perChatActivityLines = reactive(new Map())
 const copiedId = ref(null)
 const quotedMessage = ref(null)  // { role, content } of the message being quoted
-
-// ── Memory suggestions (post-turn extraction) ──────────────────────────────
-const memorySuggestions = ref(new Map()) // chatId → [{id, target, personaType, personaId, section, entry, status}]
-let memoryAutoDismissTimer = null
 
 // ── Drag & drop (tree-based) ──────────────────────────────────────────────────
 const draggingNodeId = ref(null)
@@ -3622,7 +3613,7 @@ const persistedEnabledMcpServers = computed(() =>
 )
 const persistedWorkingPath = computed(() => {
   const chat = chatsStore.activeChat
-  return chat?.workingPath || configStore.config.artyfactPath || ''
+  return chat?.workingPath || configStore.config.artifactPath || ''
 })
 
 // Per-chat state — reads from the active chat object in the store
@@ -4536,7 +4527,7 @@ function lastTextSeg(chatId) {
 function lastToolSeg(chatId) {
   const segments = perChatStreamingSegments.get(chatId) || []
   for (let i = segments.length - 1; i >= 0; i--) {
-    if (segments[i].type === 'tool') return segments[i]
+    if (segments[i].type === 'tool' && segments[i].output === undefined) return segments[i]
   }
   return null
 }
@@ -4566,24 +4557,6 @@ function flushSegments(key) {
 }
 
 function handleChunk(cId, chunk) {
-  // ── Memory suggestions (post-turn extraction) ──
-  if (chunk.type === 'memory_suggestions') {
-    const items = (chunk.items || []).map((m, idx) => ({
-      id: `${cId}-mem-${Date.now()}-${idx}`,
-      target: m.target,
-      personaType: m.personaType,
-      personaId: m.personaId,
-      section: m.section,
-      entry: m.entry,
-      status: 'pending',
-    }))
-    if (items.length > 0) {
-      memorySuggestions.value.set(cId, items)
-      scheduleMemoryAutoDismiss(cId)
-    }
-    return
-  }
-
   if (chunk.type === 'plan_submitted') {
     const chat = chatsStore.chats.find(c => c.id === cId)
     if (chat?.messages) {
@@ -4724,53 +4697,6 @@ function handleChunk(cId, chunk) {
 // flushSegments for group chat needs to find message by routeKey (chatId:personaId)
 // Override flushSegments to handle both single and group keys
 
-// ── Memory suggestions helpers ─────────────────────────────────────────────
-const pendingMemorySuggestions = computed(() => {
-  const items = memorySuggestions.value.get(chatsStore.activeChatId) || []
-  return items.filter(i => i.status === 'pending')
-})
-
-function scheduleMemoryAutoDismiss(chatId) {
-  if (memoryAutoDismissTimer) clearTimeout(memoryAutoDismissTimer)
-  memoryAutoDismissTimer = setTimeout(() => {
-    const items = memorySuggestions.value.get(chatId)
-    if (items) {
-      items.forEach(i => { if (i.status === 'pending') i.status = 'dismissed' })
-    }
-  }, 30000)
-}
-
-async function acceptMemory(item) {
-  if (!window.electronAPI?.memory?.accept) return
-  item.status = 'accepted'
-  try {
-    await window.electronAPI.memory.accept({
-      personaId: item.personaId,
-      personaType: item.personaType,
-      section: item.section,
-      entry: item.entry,
-    })
-  } catch (err) {
-    dbg(`Memory accept failed: ${err.message}`, 'error')
-  }
-}
-
-function dismissMemory(item) {
-  item.status = 'dismissed'
-}
-
-async function acceptAllMemories() {
-  const items = memorySuggestions.value.get(chatsStore.activeChatId) || []
-  for (const item of items) {
-    if (item.status === 'pending') await acceptMemory(item)
-  }
-}
-
-function dismissAllMemories() {
-  const items = memorySuggestions.value.get(chatsStore.activeChatId) || []
-  items.forEach(i => { if (i.status === 'pending') i.status = 'dismissed' })
-}
-
 // Bridge for ChatWindow's send event (only fires if default input is used)
 function handleChatWindowSend(text) {
   if (text) inputText.value = text
@@ -4794,14 +4720,25 @@ function buildPersonaRuns(respondingIds, groupIds, cfg, targetChat, userPersonaP
     if (resolvedProvider === 'anthropic') {
       personaCfg.apiKey = cfg.anthropic?.apiKey || ''
       personaCfg.baseURL = cfg.anthropic?.baseURL || ''
+      delete personaCfg._directAuth
+      delete personaCfg.openaiApiKey
+      delete personaCfg.openaiBaseURL
+      personaCfg._resolvedProvider = undefined
+      personaCfg.defaultProvider = undefined
     } else if (resolvedProvider === 'openrouter') {
       personaCfg.apiKey = cfg.openrouter?.apiKey || ''
       personaCfg.baseURL = cfg.openrouter?.baseURL || ''
+      delete personaCfg._directAuth
+      delete personaCfg.openaiApiKey
+      delete personaCfg.openaiBaseURL
+      personaCfg._resolvedProvider = undefined
+      personaCfg.defaultProvider = undefined
     } else if (resolvedProvider === 'openai') {
       personaCfg.openaiApiKey = cfg.openai?.apiKey || ''
       personaCfg.openaiBaseURL = cfg.openai?.baseURL || ''
       personaCfg._resolvedProvider = 'openai'
       personaCfg.defaultProvider = 'openai'
+      delete personaCfg._directAuth
     } else if (resolvedProvider === 'deepseek') {
       personaCfg.openaiApiKey = cfg.deepseek?.apiKey || ''
       personaCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
@@ -4809,8 +4746,42 @@ function buildPersonaRuns(respondingIds, groupIds, cfg, targetChat, userPersonaP
       personaCfg._directAuth = true
       personaCfg.defaultProvider = 'openai'
     }
-    // Model: chat override > persona.modelId
-    const resolvedModel = targetChat.personaModelOverrides?.[pid] || persona.modelId || null
+    // Model+provider override (chat-scoped): takes priority over persona settings
+    const rawOverride = targetChat.personaModelOverrides?.[pid]
+    const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
+    const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
+    if (overrideProvider && overrideProvider !== resolvedProvider) {
+      if (overrideProvider === 'anthropic') {
+        personaCfg.apiKey = cfg.anthropic?.apiKey || ''
+        personaCfg.baseURL = cfg.anthropic?.baseURL || ''
+        delete personaCfg._directAuth
+        delete personaCfg.openaiApiKey
+        delete personaCfg.openaiBaseURL
+        personaCfg._resolvedProvider = undefined
+        personaCfg.defaultProvider = undefined
+      } else if (overrideProvider === 'openrouter') {
+        personaCfg.apiKey = cfg.openrouter?.apiKey || ''
+        personaCfg.baseURL = cfg.openrouter?.baseURL || ''
+        delete personaCfg._directAuth
+        delete personaCfg.openaiApiKey
+        delete personaCfg.openaiBaseURL
+        personaCfg._resolvedProvider = undefined
+        personaCfg.defaultProvider = undefined
+      } else if (overrideProvider === 'openai') {
+        personaCfg.openaiApiKey = cfg.openai?.apiKey || ''
+        personaCfg.openaiBaseURL = cfg.openai?.baseURL || ''
+        personaCfg._resolvedProvider = 'openai'
+        personaCfg.defaultProvider = 'openai'
+        delete personaCfg._directAuth
+      } else if (overrideProvider === 'deepseek') {
+        personaCfg.openaiApiKey = cfg.deepseek?.apiKey || ''
+        personaCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
+        personaCfg._resolvedProvider = 'openai'
+        personaCfg._directAuth = true
+        personaCfg.defaultProvider = 'openai'
+      }
+    }
+    const resolvedModel = overrideModel || persona.modelId || null
     if (resolvedModel) personaCfg.customModel = resolvedModel
 
     const otherParticipants = groupIds
@@ -5178,8 +5149,41 @@ async function sendMessage() {
     cfg.defaultProvider = 'openai'
   }
 
-  // Model: chat override takes priority over persona.modelId
-  const chatOverrideModel = targetChat.personaModelOverrides?.[sysPersonaId] || null
+  // Model+provider override (chat-scoped): takes priority over persona settings
+  const rawOverride = targetChat.personaModelOverrides?.[sysPersonaId]
+  const chatOverrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
+  const chatOverrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
+  if (chatOverrideProvider && chatOverrideProvider !== chatProvider) {
+    if (chatOverrideProvider === 'anthropic') {
+      cfg.apiKey = cfg.anthropic?.apiKey || ''
+      cfg.baseURL = cfg.anthropic?.baseURL || ''
+      delete cfg._directAuth
+      delete cfg.openaiApiKey
+      delete cfg.openaiBaseURL
+      cfg._resolvedProvider = undefined
+      cfg.defaultProvider = undefined
+    } else if (chatOverrideProvider === 'openrouter') {
+      cfg.apiKey = cfg.openrouter?.apiKey || ''
+      cfg.baseURL = cfg.openrouter?.baseURL || ''
+      delete cfg._directAuth
+      delete cfg.openaiApiKey
+      delete cfg.openaiBaseURL
+      cfg._resolvedProvider = undefined
+      cfg.defaultProvider = undefined
+    } else if (chatOverrideProvider === 'openai') {
+      cfg.openaiApiKey = cfg.openai?.apiKey || ''
+      cfg.openaiBaseURL = cfg.openai?.baseURL || ''
+      cfg._resolvedProvider = 'openai'
+      cfg.defaultProvider = 'openai'
+      delete cfg._directAuth
+    } else if (chatOverrideProvider === 'deepseek') {
+      cfg.openaiApiKey = cfg.deepseek?.apiKey || ''
+      cfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
+      cfg._resolvedProvider = 'openai'
+      cfg._directAuth = true
+      cfg.defaultProvider = 'openai'
+    }
+  }
   const resolvedModel = chatOverrideModel || sysPersona?.modelId || null
   if (resolvedModel) cfg.customModel = resolvedModel
 
@@ -5698,7 +5702,8 @@ async function compactContext() {
       cfg._directAuth = true
       cfg.defaultProvider = 'openai'
     }
-    const resolvedModel = targetChat.personaModelOverrides?.[sysPersonaId] || sysPersona?.modelId || null
+    const rawOvr = targetChat.personaModelOverrides?.[sysPersonaId]
+    const resolvedModel = (rawOvr ? (typeof rawOvr === 'object' ? rawOvr.model : rawOvr) : null) || sysPersona?.modelId || null
     if (resolvedModel) cfg.customModel = resolvedModel
 
     const res = await window.electronAPI.compactContextStandalone({
@@ -5994,10 +5999,11 @@ onUnmounted(() => {
     fileDropUnsubscribe = null
   }
 
-  if (memoryAutoDismissTimer) {
-    clearTimeout(memoryAutoDismissTimer)
-    memoryAutoDismissTimer = null
+  // Trigger memory extraction for the active chat on window close
+  if (chatsStore.activeChatId) {
+    triggerMemoryExtractionOnSwitch(chatsStore.activeChatId)
   }
+
 })
 </script>
 
@@ -6068,7 +6074,7 @@ onUnmounted(() => {
 }
 .chat-sidebar-title {
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-subtitle);
+  font-size: var(--fs-page-title);
   font-weight: 700;
   color: #1A1A1A;
 }
@@ -6184,8 +6190,8 @@ onUnmounted(() => {
   border-color: #9CA3AF;
 }
 .chat-filter-input:focus {
-  border-color: #007AFF;
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+  border-color: #1A1A1A;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
 }
 .chat-filter-icon {
   position: absolute;
@@ -6199,7 +6205,7 @@ onUnmounted(() => {
   transition: color 0.2s;
 }
 .chat-sidebar-filter:focus-within .chat-filter-icon {
-  color: #007AFF;
+  color: #1A1A1A;
 }
 .chat-filter-clear {
   position: absolute;
@@ -6257,7 +6263,11 @@ onUnmounted(() => {
   margin-bottom: 0.125rem;
 }
 .chat-sidebar-item:hover {
-  background: #F5F5F5;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  color: #ffffff;
+}
+.chat-sidebar-item:hover .chat-sidebar-item-title {
+  color: #ffffff;
 }
 .chat-sidebar-item.active {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -8477,176 +8487,6 @@ onUnmounted(() => {
   font-size: 11px;
   color: #9CA3AF;
   margin-top: 0.125rem;
-}
-
-/* ── Memory Suggestions Banner ──────────────────────────────────────────── */
-.memory-banner {
-  flex-shrink: 0;
-  margin: 0 1.25rem;
-  padding: 0.625rem 0.875rem;
-  background: var(--bg-card, #FFFFFF);
-  border: 1px solid var(--border, #E5E5EA);
-  border-radius: var(--radius-md, 12px);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
-}
-.memory-banner-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-.memory-banner-title {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary, 0.875rem);
-  font-weight: 600;
-  color: var(--text-primary, #1A1A1A);
-}
-.memory-banner-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.125rem;
-  height: 1.125rem;
-  padding: 0 0.3125rem;
-  border-radius: 0.5625rem;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  font-size: 11px;
-  font-weight: 600;
-}
-.memory-banner-actions {
-  display: flex;
-  gap: 0.375rem;
-}
-.memory-banner-btn {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-small, 0.75rem);
-  font-weight: 600;
-  padding: 0.1875rem 0.625rem;
-  border-radius: var(--radius-sm, 8px);
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.memory-banner-btn.accept-all {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.memory-banner-btn.accept-all:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-}
-.memory-banner-btn.dismiss-all {
-  background: #F5F5F5;
-  color: var(--text-secondary, #6B7280);
-}
-.memory-banner-btn.dismiss-all:hover {
-  background: #E5E5EA;
-  color: var(--text-primary, #1A1A1A);
-}
-.memory-banner-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-.memory-banner-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.375rem 0.625rem;
-  border-radius: var(--radius-sm, 8px);
-  background: #F9FAFB;
-  border: 1px solid #F3F4F6;
-}
-.memory-banner-item-content {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  flex: 1;
-  min-width: 0;
-}
-.memory-banner-target {
-  flex-shrink: 0;
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-}
-.memory-banner-target.user {
-  background: rgba(0, 122, 255, 0.1);
-  color: #007AFF;
-}
-.memory-banner-target.system {
-  background: rgba(139, 92, 246, 0.1);
-  color: #8B5CF6;
-}
-.memory-banner-section {
-  flex-shrink: 0;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-small, 0.75rem);
-  color: var(--text-muted, #9CA3AF);
-  font-weight: 500;
-}
-.memory-banner-entry {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary, 0.875rem);
-  color: var(--text-primary, #1A1A1A);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.memory-banner-item-actions {
-  display: flex;
-  gap: 0.25rem;
-  flex-shrink: 0;
-}
-.memory-item-btn {
-  width: 1.625rem;
-  height: 1.625rem;
-  border-radius: 0.375rem;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.memory-item-btn.accept {
-  background: rgba(34, 197, 94, 0.1);
-  color: #16A34A;
-}
-.memory-item-btn.accept:hover {
-  background: rgba(34, 197, 94, 0.2);
-}
-.memory-item-btn.dismiss {
-  background: rgba(239, 68, 68, 0.08);
-  color: #EF4444;
-}
-.memory-item-btn.dismiss:hover {
-  background: rgba(239, 68, 68, 0.16);
-}
-
-/* Memory banner transition */
-.memory-banner-enter-active {
-  transition: all 0.2s ease-out;
-}
-.memory-banner-leave-active {
-  transition: all 0.15s ease-in;
-}
-.memory-banner-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-}
-.memory-banner-leave-to {
-  opacity: 0;
-  transform: translateY(8px);
 }
 
 /* ── Inspect button cost tooltip ─────────────────────────────────────────── */

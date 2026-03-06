@@ -158,7 +158,7 @@
               <div v-if="msg.streaming && (!msg.content && (!msg.segments || msg.segments.length === 0))" class="cw-thinking">
                 <span class="dot"></span><span class="dot"></span><span class="dot"></span>
               </div>
-              <div :class="msg.role === 'user' ? 'user-content' : 'prose-sparkai'">
+              <div :class="msg.role === 'user' ? 'user-content' : 'prose-clankai'">
                 <MessageRenderer :message="msg" />
               </div>
               <PlanCard

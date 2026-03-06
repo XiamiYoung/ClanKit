@@ -1,8 +1,8 @@
-# CLAUDE.md — SparkAI Project Guide
+# CLAUDE.md — ClankAI Project Guide
 
 ## Project Overview
 
-SparkAI is a multi-LLM desktop chat application built with **Electron + Vue 3 + Vite**. It supports Anthropic (Claude), OpenRouter, and OpenAI-compatible backends. Features include persona management, MCP server integration, HTTP tools, knowledge base (RAG via Pinecone), skills, and an agentic tool-use loop.
+ClankAI is a multi-LLM desktop chat application built with **Electron + Vue 3 + Vite**. It supports Anthropic (Claude), OpenRouter, and OpenAI-compatible backends. Features include persona management, MCP server integration, HTTP tools, knowledge base (RAG via Pinecone), skills, and an agentic tool-use loop.
 
 ## Tech Stack
 
@@ -80,18 +80,18 @@ npm run electron
 
 ### Data Storage
 
-- All data stored in `~/.sparkai/` (configurable via `SPARKAI_DATA_PATH`)
+- All data stored in `~/.clankAI/` (configurable via `CLANKAI_DATA_PATH`)
 - Files: `config.json`, `personas.json`, `mcp-servers.json`, `tools.json`, `knowledge.json`
 - Chats: `chats/index.json` (metadata) + `chats/{id}.json` (per-chat with messages)
 - Souls: `souls/{personaId}/{type}.md`
 
 ### `.env` vs `config.json` — What Lives Where
 
-- **`.env`** (at `DATA_DIR/.env`) stores only **`SPARKAI_DATA_PATH`** — the data directory override. It must live outside `config.json` because it determines where `config.json` is.
+- **`.env`** (at `DATA_DIR/.env`) stores only **`CLANKAI_DATA_PATH`** — the data directory override. It must live outside `config.json` because it determines where `config.json` is.
 - **`config.json`** stores everything else, including the three user-configured paths:
   - `skillsPath` — directory of skill folders (default: `~/.claude/skills`)
   - `DoCPath` — documents / vault folder path
-  - `artyfactPath` — directory where AI artifacts are written during chats
+  - `artifactPath` — directory where AI artifacts are written during chats
 - These paths are read/written via the `store:get-env-paths` / `store:save-env-path` IPC channels (named for historical reasons), but they no longer touch `.env`.
 - The renderer accesses them through `configStore.config.skillsPath` etc., populated by `loadEnvPaths()` in `src/stores/config.js`.
 
@@ -304,11 +304,11 @@ Floating panels over dark/mixed content: `background:#0F0F0F`, `border:1px solid
 ### Chat Bubbles
 
 - **User messages:** Black gradient background (`linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)`), all text forced to `#FFFFFF !important` via `.user-content` class
-- **Assistant messages:** White/light card background with prose-sparkai styling
+- **Assistant messages:** White/light card background with prose-clankai styling
 - **Code blocks:** Dark background `#1C1C1E` with `#E5E5EA` text, 12px border-radius, 1px `#2C2C2E` border
 - **Inline code:** `var(--accent-light)` background, `var(--accent)` text color
 
-### Markdown Prose (`prose-sparkai`)
+### Markdown Prose (`prose-clankai`)
 
 - Line height: 1.65
 - Links: `var(--accent)` with underline
@@ -380,7 +380,7 @@ Each `config-card` starts with a `form-section-header`: `section-icon-sm` (28×2
 
 ## Responsive Design System
 
-SparkAI targets **1920×1080 (HD)** as the primary resolution and **2560px+ (4K)** as the secondary. Design all UI for HD first; 4K gets proportional scaling via the global font-size step.
+ClankAI targets **1920×1080 (HD)** as the primary resolution and **2560px+ (4K)** as the secondary. Design all UI for HD first; 4K gets proportional scaling via the global font-size step.
 
 ### Breakpoints
 
@@ -525,7 +525,7 @@ Do NOT write task state to files on disk — it conflicts across concurrent term
 
 ### Icon Design
 
-SparkAI uses a custom **black-theme icon** — a metallic gold lightning bolt on a pure black background with a gold orbit ring. Designed to match the app's signature dark aesthetic.
+ClankAI uses a custom **black-theme icon** — a metallic gold lightning bolt on a pure black background with a gold orbit ring. Designed to match the app's signature dark aesthetic.
 
 - **Style:** Flat + glow, dark premium (Linear/Raycast-inspired)
 - **Colors:** Pure black `#0a0a0a` background · Metallic gold bolt (#FFD700 → #FFA500) · Gold ring with shimmer
@@ -554,7 +554,7 @@ build/icons/
 ### Electron / Builder / Sidebar
 
 - **BrowserWindow icon:** `path.join(__dirname, '../public/icon.png')` in `electron/main.js`
-- **Electron Builder** (`package.json`): `appId: "com.sparkai.app"`, `productName: "SparkAI"`, icon path `build/icons/icon.png` for win/mac/linux targets
+- **Electron Builder** (`package.json`): `appId: "com.clankai.app"`, `productName: "ClankAI"`, icon path `build/icons/icon.png` for win/mac/linux targets
 - **Sidebar logo:** `<img src="/icon.png">`, 32px expanded / 28px collapsed, `border-radius:8px`/`6px`
 
 ### Regenerating Icons

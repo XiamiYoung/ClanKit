@@ -1,4 +1,4 @@
-# SparkAI
+# ClankAI
 
 Multi-LLM desktop chat application with agentic tool use, built with Electron and Vue 3.
 
@@ -81,7 +81,7 @@ src/                   Vue renderer
   services/storage.js  Storage abstraction (Electron IPC / localStorage fallback)
 ```
 
-See [SPARKAI_ARCHITECTURE.md](./SPARKAI_ARCHITECTURE.md) for full architectural documentation.
+See [CLANKAI_ARCHITECTURE.md](./CLANKAI_ARCHITECTURE.md) for full architectural documentation.
 
 ## Tech Stack
 
