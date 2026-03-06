@@ -10,18 +10,6 @@
       @remove-group-persona="(cId, pid) => $emit('remove-group-persona', cId, pid)"
       @start-call="cId => $emit('start-call', cId)"
     >
-      <template #row-bottom-left>
-        <span v-if="chatsStore.pendingPermissionChatIds.has(props.chatId)" class="gp-approval-badge">
-          <svg style="width:10px;height:10px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-          Approval
-        </span>
-        <span v-else-if="isRunning" class="gp-running-badge">
-          <span class="gp-running-dot"></span>
-          Running
-        </span>
-      </template>
       <template #actions>
         <!-- Maximize (black gradient style) -->
         <button class="gp-maximize-btn" @click.stop="$emit('maximize')" title="Open in single view">
@@ -181,14 +169,33 @@
         <input v-model="swapSearch" type="text" placeholder="Search chats..." class="gp-swap-search" ref="swapSearchEl" />
       </div>
       <div class="gp-swap-list">
-        <button v-for="c in swapCandidates" :key="c.id" class="gp-swap-item" @click="doSwap(c.id)">
-          <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          <span class="gp-swap-item-title">{{ c.title || 'Untitled' }}</span>
-          <span class="gp-swap-item-meta">{{ c.messages?.length ?? '?' }} msgs</span>
-        </button>
-        <div v-if="swapCandidates.length === 0" class="gp-swap-empty">No other chats</div>
+        <template v-if="swapTree.length > 0">
+          <template v-for="node in swapTree" :key="node.type === 'folder' ? 'f-' + node.id : node.id">
+            <!-- Folder row -->
+            <template v-if="node.type === 'folder'">
+              <button class="gp-swap-folder" @click.stop="toggleSwapFolder(node.id)">
+                <svg style="width:12px;height:12px;flex-shrink:0;transition:transform 0.15s;" :style="collapsedFolders.has(node.id) ? '' : 'transform:rotate(90deg)'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span class="gp-swap-folder-name">{{ node.name }}</span>
+                <span class="gp-swap-folder-count">{{ node.children.length }}</span>
+              </button>
+              <template v-if="!collapsedFolders.has(node.id)">
+                <button v-for="c in node.children" :key="c.id" class="gp-swap-item gp-swap-item-indent" @click="doSwap(c.id)">
+                  <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  <span class="gp-swap-item-title">{{ c.title || 'Untitled' }}</span>
+                  <span class="gp-swap-item-meta">{{ c.messages?.length ?? '?' }} msgs</span>
+                </button>
+              </template>
+            </template>
+            <!-- Root chat row -->
+            <button v-else class="gp-swap-item" @click="doSwap(node.id)">
+              <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span class="gp-swap-item-title">{{ node.title || 'Untitled' }}</span>
+              <span class="gp-swap-item-meta">{{ node.messages?.length ?? '?' }} msgs</span>
+            </button>
+          </template>
+        </template>
+        <div v-else class="gp-swap-empty">No other chats</div>
       </div>
     </div>
   </Teleport>
@@ -287,14 +294,39 @@ const chat = computed(() => chatsStore.chats.find(c => c.id === props.chatId) ||
 const isRunning = computed(() => chat.value?.isRunning ?? false)
 
 // ── Swap ──
-const swapCandidates = computed(() => {
+const collapsedFolders = ref(new Set())
+function toggleSwapFolder(id) {
+  const s = new Set(collapsedFolders.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  collapsedFolders.value = s
+}
+
+const swapTree = computed(() => {
   const q = swapSearch.value.toLowerCase()
-  return chatsStore.chats
-    .filter(c => !props.gridChatIds.includes(c.id))
-    .filter(c => !q || (c.title || '').toLowerCase().includes(q))
-    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-    .slice(0, 20)
+  const excluded = new Set(props.gridChatIds)
+
+  function matchChat(c) {
+    return !excluded.has(c.id) && (!q || (c.title || '').toLowerCase().includes(q))
+  }
+
+  function buildTree(nodes) {
+    const result = []
+    for (const node of nodes) {
+      if (node.type === 'folder') {
+        const children = (node.children || []).filter(c => c.type === 'chat' && matchChat(c))
+        if (!q || children.length > 0 || node.name.toLowerCase().includes(q)) {
+          if (children.length > 0) result.push({ ...node, children })
+        }
+      } else if (matchChat(node)) {
+        result.push(node)
+      }
+    }
+    return result
+  }
+
+  return buildTree(chatsStore.chatTree)
 })
+
 function doSwap(newId) { emit('swap-chat', props.chatId, newId); showSwapMenu.value = false; swapSearch.value = '' }
 function onDocClick(e) {
   if (!showSwapMenu.value) return
@@ -950,4 +982,32 @@ function deleteMessage(msg) {
   font-size: var(--fs-secondary, 0.875rem);
   color: #6B7280;
 }
+.gp-swap-folder {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  padding: 0.375rem 0.75rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #6B7280;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption, 0.8125rem);
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: background 0.12s, color 0.12s;
+}
+.gp-swap-folder:hover { background: rgba(255,255,255,0.06); color: #9CA3AF; }
+.gp-swap-folder-name { flex: 1; }
+.gp-swap-folder-count {
+  font-size: 0.7rem;
+  background: rgba(255,255,255,0.08);
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.35rem;
+}
+.gp-swap-item-indent { padding-left: 1.75rem; }
 </style>

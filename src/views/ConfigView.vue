@@ -2407,7 +2407,7 @@ async function savePricing() {
   transition: background 0.1s, color 0.1s;
   user-select: none;
 }
-.model-list-item:hover { background: #F5F5F5; }
+.model-list-item:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); color: #FFFFFF; }
 .model-list-item.selected {
   background: #1A1A1A;
   color: #FFFFFF;

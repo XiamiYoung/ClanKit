@@ -122,7 +122,7 @@ export const storage = {
   // ── Personas ────────────────────────────────────────────────────────────────
   async getPersonas() {
     if (isElectron()) return window.electronAPI.getPersonas()
-    return lsGet('maestro:personas', [])
+    return lsGet('maestro:personas', { categories: [], personas: [] })
   },
   async savePersonas(personas) {
     if (isElectron()) return window.electronAPI.savePersonas(personas)

@@ -2,13 +2,19 @@
   <div class="grid-layout">
     <!-- Toolbar -->
     <div class="grid-toolbar">
+      <!-- Left: back + new chat -->
       <button class="grid-back-btn" @click="$emit('exit-grid')" title="Back to single view">
         <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="15 18 9 12 15 6"/>
         </svg>
-        <span>Single View</span>
+      </button>
+      <button class="grid-new-btn" @click="$emit('new-chat')" title="New chat">
+        <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
       </button>
 
+      <!-- Center: grid selector (absolutely centered) -->
       <div class="grid-dropdown-wrap" ref="dropdownWrapEl">
         <button class="grid-dropdown-btn" @click.stop="showDropdown = !showDropdown">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -37,14 +43,15 @@
           </button>
         </div>
       </div>
-
-      <button class="grid-new-btn" @click="$emit('new-chat')" title="New chat in grid">
-        <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        <span>New Chat</span>
-      </button>
     </div>
+
+    <!-- Toast notification -->
+    <Transition name="grid-toast">
+      <div v-if="toastMsg" class="grid-toast">
+        <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        {{ toastMsg }}
+      </div>
+    </Transition>
 
     <!-- Grid area (relative wrapper for handle overlay) -->
     <div class="grid-area">
@@ -95,7 +102,8 @@ import ChatGridPanel from './ChatGridPanel.vue'
 
 const props = defineProps({
   gridCount: { type: Number, default: 4 },
-  gridChatIds: { type: Array, default: () => [] }
+  gridChatIds: { type: Array, default: () => [] },
+  toastMsg: { type: String, default: '' }
 })
 
 const emit = defineEmits(['update:gridCount', 'update:gridChatIds', 'exit-grid', 'new-chat', 'select-chat', 'swap-chat', 'maximize-chat', 'open-chat-settings', 'open-soul-viewer', 'remove-group-persona', 'start-call'])
@@ -284,31 +292,36 @@ onUnmounted(() => {
 }
 
 .grid-toolbar {
+  position: relative;
+  z-index: 50;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.375rem;
   padding: 0.5rem 1rem;
   background: var(--bg-card, #FFFFFF);
   border-bottom: 1px solid var(--border, #E5E5EA);
   flex-shrink: 0;
-  gap: 0.75rem;
+}
+.grid-toolbar .grid-dropdown-wrap {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .grid-back-btn {
   display: flex;
   align-items: center;
-  gap: 0.3125rem;
-  padding: 0.3125rem 0.75rem 0.3125rem 0.5rem;
+  justify-content: center;
+  width: 1.875rem;
+  height: 1.875rem;
   border: none;
-  border-radius: var(--radius-sm, 8px);
+  border-radius: 0.5rem;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-caption, 0.8125rem);
-  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  flex-shrink: 0;
 }
 .grid-back-btn:hover {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
@@ -363,7 +376,7 @@ onUnmounted(() => {
   border-radius: 0.75rem;
   box-shadow: 0 12px 40px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.15);
   padding: 0.25rem;
-  z-index: 50;
+  z-index: 200;
   animation: gridDropEnter 0.12s ease-out;
 }
 @keyframes gridDropEnter {
@@ -410,21 +423,21 @@ onUnmounted(() => {
 .grid-new-btn {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.875rem;
+  justify-content: center;
+  width: 1.875rem;
+  height: 1.875rem;
   border: none;
-  border-radius: var(--radius-sm, 8px);
+  border-radius: 0.5rem;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary, 0.875rem);
-  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  flex-shrink: 0;
 }
 .grid-new-btn:hover {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
 }
 
 .grid-area {
@@ -495,4 +508,28 @@ onUnmounted(() => {
   top: 2px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
+/* ── Toast ── */
+.grid-toast {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary, 0.875rem);
+  font-weight: 500;
+  border-radius: var(--radius-md, 12px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  z-index: 100;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.grid-toast-enter-active, .grid-toast-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.grid-toast-enter-from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+.grid-toast-leave-to  { opacity: 0; transform: translateX(-50%) translateY(6px); }
 </style>

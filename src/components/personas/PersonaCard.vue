@@ -50,7 +50,7 @@
         </div>
         <div class="persona-card-footer-right">
           <button
-            v-if="!persona.isDefault"
+            v-if="!persona.isDefault && !hideSetDefault && !showUnassign"
             @click.stop="$emit('set-default')"
             class="persona-action-btn star-btn-always"
             title="Set as default"
@@ -59,7 +59,17 @@
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </button>
           <button
-            v-if="!persona.isBuiltin"
+            v-if="showUnassign"
+            @click.stop="$emit('unassign')"
+            class="unassign-chip"
+            title="Unassign from category"
+            aria-label="Unassign from category"
+          >
+            <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Unassign
+          </button>
+          <button
+            v-if="!persona.isBuiltin && !hideDelete"
             @click.stop="$emit('delete')"
             class="persona-action-btn delete-btn-always"
             title="Delete persona"
@@ -88,11 +98,14 @@ const PROVIDER_LABELS = {
 const configStore = useConfigStore()
 
 const props = defineProps({
-  persona: { type: Object, required: true },
-  gradient: { type: String, default: 'linear-gradient(135deg, #0F0F0F, #374151)' },
+  persona:      { type: Object,  required: true },
+  gradient:     { type: String,  default: 'linear-gradient(135deg, #0F0F0F, #374151)' },
+  hideDelete:     { type: Boolean, default: false },
+  hideSetDefault: { type: Boolean, default: false },
+  showUnassign:   { type: Boolean, default: false },
 })
 
-defineEmits(['click', 'delete', 'set-default'])
+defineEmits(['click', 'delete', 'unassign', 'set-default'])
 
 const avatarDataUri = computed(() => getAvatarDataUri(props.persona.avatar))
 
@@ -223,6 +236,27 @@ const isProviderInactive = computed(() => {
 .star-btn-always:hover { background: #F5F5F5; color: #F59E0B; }
 .delete-btn-always { color: #D1D5DB; }
 .delete-btn-always:hover { background: #FEE2E2; color: #DC2626; }
+.unassign-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid #E5E5EA;
+  background: #F5F5F5;
+  color: #6B7280;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.unassign-chip:hover {
+  background: #FFF3CD;
+  border-color: #FCD34D;
+  color: #92400E;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .persona-card { transition: none; }

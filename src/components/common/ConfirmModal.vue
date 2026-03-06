@@ -18,7 +18,7 @@
 
         <!-- Footer -->
         <div class="confirm-footer">
-          <button class="confirm-cancel-btn" @click="$emit('close')" :disabled="loading">{{ cancelText }}</button>
+          <button v-if="cancelText" class="confirm-cancel-btn" @click="$emit('close')" :disabled="loading">{{ cancelText }}</button>
           <button
             class="confirm-action-btn"
             :class="[confirmClass, { 'confirm-action-loading': loading }]"

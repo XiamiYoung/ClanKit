@@ -2,6 +2,19 @@
   <div class="chat-header">
     <!-- Row 1: Centered title badge + slot for extra actions -->
     <div class="ch-row-top">
+      <!-- Running / approval indicator (left-aligned) -->
+      <div class="ch-row-top-status">
+        <span v-if="chatsStore.pendingPermissionChatIds.has(resolvedChatId)" class="ch-status-badge ch-status-badge--approval">
+          <svg style="width:10px;height:10px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          Approval
+        </span>
+        <span v-else-if="isRunning" class="ch-status-badge ch-status-badge--running">
+          <span class="ch-status-dot"></span>
+          Running
+        </span>
+      </div>
       <!-- Centered chat title badge -->
       <div class="ch-title-badge" v-if="!isEditing">
         <div class="ch-title-icon">
@@ -59,12 +72,23 @@
             </svg>
           </button>
         </div>
+        <!-- Grid view button — only shown in single-chat mode -->
+        <button
+          v-if="!isGridView"
+          class="ch-call-btn"
+          title="Multi-chat grid view"
+          @click.stop="emit('enter-grid')"
+        >
+          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+        </button>
         <slot name="actions" />
       </div>
     </div>
 
     <!-- Row 2: Personas (right-aligned, left of Chat Settings) + Chat Settings button -->
-    <div class="ch-row-bottom">
+    <div class="ch-row-bottom" :class="{ 'ch-row-bottom--collapsed': !headerExpanded }">
       <slot name="row-bottom-left" />
       <div class="ch-row-bottom-right">
         <!-- Persona selectors -->
@@ -173,24 +197,14 @@
         </div>
 
         <!-- Chat Settings button -->
-        <div class="chat-config-btn-wrap">
+        <div ref="configBtnEl" class="chat-config-btn-wrap" @mouseenter="showConfigTooltip" @mouseleave="hideConfigTooltip">
           <button class="chat-config-btn" @click="$emit('open-chat-settings')">
             <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
-          <!-- Hover tooltip summary -->
-          <div class="chat-config-tooltip">
-            <div class="chat-config-tooltip-row"><span class="cct-key">Provider</span><span class="cct-val">{{ effectiveProviderLabel }}</span></div>
-            <div class="chat-config-tooltip-row"><span class="cct-key">Model</span><span class="cct-val">{{ effectiveModelLabel }}</span></div>
-            <div class="chat-config-tooltip-row"><span class="cct-key">Tools</span><span class="cct-val">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }} ({{ formatTokens(toolsTokenEstimate) }})</span></div>
-            <div class="chat-config-tooltip-row"><span class="cct-key">MCP</span><span class="cct-val">{{ enabledMcpServers.length }}/{{ mcpStore.servers.length }} ({{ formatTokens(mcpTokenEstimate) }})</span></div>
-            <div class="chat-config-tooltip-row"><span class="cct-key">RAG</span><span class="cct-val">{{ ragEnabledCount }} index{{ ragEnabledCount !== 1 ? 'es' : '' }}</span></div>
-            <div class="chat-config-tooltip-row"><span class="cct-key">Path</span><span class="cct-val">{{ effectiveWorkingPath }}</span></div>
-            <div class="chat-config-tooltip-row"><span class="cct-key">Rounds</span><span class="cct-val">{{ effectivePersonaRounds }}</span></div>
-            <div class="chat-config-tooltip-row"><span class="cct-key">Max Tokens</span><span class="cct-val">{{ effectiveMaxOutputTokens.toLocaleString() }}</span></div>
-          </div>
         </div>
       </div>
     </div>
+
   </div>
 
   <!-- Floating persona tooltip (Teleport to body so it escapes overflow:hidden) -->
@@ -219,23 +233,62 @@
           </button>
         </div>
         <div class="ch-modal-body">
-          <button
-            v-for="p in sortedUserPersonas"
-            :key="p.id"
-            class="ch-modal-item"
-            :class="{ selected: resolvedUserPersonaId === p.id }"
-            @click="selectPersona('user', p.isDefault ? null : p.id)"
-          >
-            <div class="ch-modal-item-avatar">
-              <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
-              <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+          <!-- User categories -->
+          <div v-for="cat in personasStore.userCategories" :key="cat.id" class="ch-cat-section">
+            <button class="ch-cat-header" @click="toggleUserCat(cat.id)">
+              <svg class="ch-cat-chevron" :class="{ expanded: expandedUserCatIds.has(cat.id) }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+              <span v-if="cat.emoji" class="ch-cat-emoji">{{ cat.emoji }}</span>
+              <span class="ch-cat-name">{{ cat.name }}</span>
+              <span class="ch-cat-count">{{ personasStore.personasInCategory(cat.id).length }}</span>
+            </button>
+            <div v-if="expandedUserCatIds.has(cat.id)" class="ch-cat-items">
+              <button
+                v-for="p in personasStore.personasInCategory(cat.id)"
+                :key="p.id"
+                class="ch-modal-item"
+                :class="{ selected: resolvedUserPersonaId === p.id }"
+                @click="selectPersona('user', p.isDefault ? null : p.id)"
+              >
+                <div class="ch-modal-item-avatar">
+                  <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                  <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+                </div>
+                <div class="ch-modal-item-text">
+                  <span class="ch-modal-item-name">{{ p.name }}</span>
+                  <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+                </div>
+                <svg v-if="resolvedUserPersonaId === p.id" class="ch-modal-check" style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <div v-if="personasStore.personasInCategory(cat.id).length === 0" class="ch-cat-empty">No personas</div>
             </div>
-            <div class="ch-modal-item-text">
-              <span class="ch-modal-item-name">{{ p.name }}</span>
-              <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+          </div>
+          <!-- All (fallback) section — always last -->
+          <div class="ch-cat-section">
+            <button class="ch-cat-header" @click="toggleUserCat('__all__')">
+              <svg class="ch-cat-chevron" :class="{ expanded: expandedUserCatIds.has('__all__') }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+              <span class="ch-cat-name">All</span>
+              <span class="ch-cat-count">{{ sortedUserPersonas.length }}</span>
+            </button>
+            <div v-if="expandedUserCatIds.has('__all__')" class="ch-cat-items">
+              <button
+                v-for="p in sortedUserPersonas"
+                :key="p.id"
+                class="ch-modal-item"
+                :class="{ selected: resolvedUserPersonaId === p.id }"
+                @click="selectPersona('user', p.isDefault ? null : p.id)"
+              >
+                <div class="ch-modal-item-avatar">
+                  <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                  <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+                </div>
+                <div class="ch-modal-item-text">
+                  <span class="ch-modal-item-name">{{ p.name }}</span>
+                  <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+                </div>
+                <svg v-if="resolvedUserPersonaId === p.id" class="ch-modal-check" style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
             </div>
-            <svg v-if="resolvedUserPersonaId === p.id" class="ch-modal-check" style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          </button>
+          </div>
         </div>
       </div>
     </div>
@@ -265,26 +318,92 @@
           />
         </div>
         <div class="ch-modal-body">
-          <label
-            v-for="p in filteredSystemPersonas"
-            :key="p.id"
-            class="ch-modal-item ch-modal-item-check"
-            :class="{ selected: activeSystemPersonaIds.includes(p.id) }"
-          >
-            <div class="ch-modal-check-box" :class="{ checked: activeSystemPersonaIds.includes(p.id) }">
-              <input type="checkbox" :checked="activeSystemPersonaIds.includes(p.id)" @change="toggleSystemPersona(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
-              <svg v-if="activeSystemPersonaIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          <!-- When searching: flat filtered list -->
+          <template v-if="personaSearchQuery.trim()">
+            <label
+              v-for="p in filteredSystemPersonas"
+              :key="p.id"
+              class="ch-modal-item ch-modal-item-check"
+              :class="{ selected: activeSystemPersonaIds.includes(p.id) }"
+            >
+              <div class="ch-modal-check-box" :class="{ checked: activeSystemPersonaIds.includes(p.id) }">
+                <input type="checkbox" :checked="activeSystemPersonaIds.includes(p.id)" @change="toggleSystemPersona(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
+                <svg v-if="activeSystemPersonaIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="ch-modal-item-avatar">
+                <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+              </div>
+              <div class="ch-modal-item-text">
+                <span class="ch-modal-item-name">{{ p.name }}</span>
+                <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+              </div>
+            </label>
+            <div v-if="filteredSystemPersonas.length === 0" class="ch-modal-empty">No personas match</div>
+          </template>
+          <!-- No search: category tree -->
+          <template v-else>
+            <!-- System categories -->
+            <div v-for="cat in personasStore.systemCategories" :key="cat.id" class="ch-cat-section">
+              <button class="ch-cat-header" @click="toggleSysCat(cat.id)">
+                <svg class="ch-cat-chevron" :class="{ expanded: expandedSysCatIds.has(cat.id) }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <span v-if="cat.emoji" class="ch-cat-emoji">{{ cat.emoji }}</span>
+                <span class="ch-cat-name">{{ cat.name }}</span>
+                <span class="ch-cat-count">{{ personasStore.personasInCategory(cat.id).length }}</span>
+              </button>
+              <div v-if="expandedSysCatIds.has(cat.id)" class="ch-cat-items">
+                <label
+                  v-for="p in personasStore.personasInCategory(cat.id)"
+                  :key="p.id"
+                  class="ch-modal-item ch-modal-item-check"
+                  :class="{ selected: activeSystemPersonaIds.includes(p.id) }"
+                >
+                  <div class="ch-modal-check-box" :class="{ checked: activeSystemPersonaIds.includes(p.id) }">
+                    <input type="checkbox" :checked="activeSystemPersonaIds.includes(p.id)" @change="toggleSystemPersona(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
+                    <svg v-if="activeSystemPersonaIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <div class="ch-modal-item-avatar">
+                    <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                    <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+                  </div>
+                  <div class="ch-modal-item-text">
+                    <span class="ch-modal-item-name">{{ p.name }}</span>
+                    <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+                  </div>
+                </label>
+                <div v-if="personasStore.personasInCategory(cat.id).length === 0" class="ch-cat-empty">No personas</div>
+              </div>
             </div>
-            <div class="ch-modal-item-avatar">
-              <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
-              <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+            <!-- All (fallback) section — always last -->
+            <div class="ch-cat-section">
+              <button class="ch-cat-header" @click="toggleSysCat('__all__')">
+                <svg class="ch-cat-chevron" :class="{ expanded: expandedSysCatIds.has('__all__') }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <span class="ch-cat-name">All</span>
+                <span class="ch-cat-count">{{ sortedSystemPersonas.length }}</span>
+              </button>
+              <div v-if="expandedSysCatIds.has('__all__')" class="ch-cat-items">
+                <label
+                  v-for="p in sortedSystemPersonas"
+                  :key="p.id"
+                  class="ch-modal-item ch-modal-item-check"
+                  :class="{ selected: activeSystemPersonaIds.includes(p.id) }"
+                >
+                  <div class="ch-modal-check-box" :class="{ checked: activeSystemPersonaIds.includes(p.id) }">
+                    <input type="checkbox" :checked="activeSystemPersonaIds.includes(p.id)" @change="toggleSystemPersona(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
+                    <svg v-if="activeSystemPersonaIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <div class="ch-modal-item-avatar">
+                    <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                    <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+                  </div>
+                  <div class="ch-modal-item-text">
+                    <span class="ch-modal-item-name">{{ p.name }}</span>
+                    <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+                  </div>
+                </label>
+              </div>
             </div>
-            <div class="ch-modal-item-text">
-              <span class="ch-modal-item-name">{{ p.name }}</span>
-              <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
-            </div>
-          </label>
-          <div v-if="filteredSystemPersonas.length === 0" class="ch-modal-empty">No personas match</div>
+          </template>
         </div>
       </div>
     </div>
@@ -345,6 +464,24 @@
     </div>
   </Teleport>
 
+  <!-- Floating chat settings tooltip (Teleport to body to escape stacking contexts) -->
+  <Teleport to="body">
+    <div
+      v-if="configTooltipVisible"
+      class="ch-config-tooltip-fixed"
+      :style="{ top: configTooltipY + 'px', right: configTooltipRight + 'px' }"
+    >
+      <div class="ch-config-tooltip-row"><span class="cct-key">Provider</span><span class="cct-val">{{ effectiveProviderLabel }}</span></div>
+      <div class="ch-config-tooltip-row"><span class="cct-key">Model</span><span class="cct-val">{{ effectiveModelLabel }}</span></div>
+      <div class="ch-config-tooltip-row"><span class="cct-key">Tools</span><span class="cct-val">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }} ({{ formatTokens(toolsTokenEstimate) }})</span></div>
+      <div class="ch-config-tooltip-row"><span class="cct-key">MCP</span><span class="cct-val">{{ enabledMcpServers.length }}/{{ mcpStore.servers.length }} ({{ formatTokens(mcpTokenEstimate) }})</span></div>
+      <div class="ch-config-tooltip-row"><span class="cct-key">RAG</span><span class="cct-val">{{ ragEnabledCount }} index{{ ragEnabledCount !== 1 ? 'es' : '' }}</span></div>
+      <div class="ch-config-tooltip-row"><span class="cct-key">Path</span><span class="cct-val">{{ effectiveWorkingPath }}</span></div>
+      <div class="ch-config-tooltip-row"><span class="cct-key">Rounds</span><span class="cct-val">{{ effectivePersonaRounds }}</span></div>
+      <div class="ch-config-tooltip-row"><span class="cct-key">Max Tokens</span><span class="cct-val">{{ effectiveMaxOutputTokens.toLocaleString() }}</span></div>
+    </div>
+  </Teleport>
+
   <!-- Floating call button tooltip (Teleport to body to escape stacking contexts) -->
   <Teleport to="body">
     <div
@@ -399,7 +536,12 @@ const emit = defineEmits([
   'open-soul-viewer',
   'remove-group-persona',
   'start-call',
+  'enter-grid',
 ])
+
+// Collapse state — starts collapsed in grid, expanded in single view
+const headerExpanded = ref(!props.isGridView)
+defineExpose({ headerExpanded })
 
 const chatsStore = useChatsStore()
 const configStore = useConfigStore()
@@ -422,6 +564,23 @@ function showCallTooltip() {
 
 function hideCallTooltip() {
   callTooltipVisible.value = false
+}
+
+const configBtnEl = ref(null)
+const configTooltipVisible = ref(false)
+const configTooltipY = ref(0)
+const configTooltipRight = ref(0)
+
+function showConfigTooltip() {
+  if (!configBtnEl.value) return
+  const rect = configBtnEl.value.getBoundingClientRect()
+  configTooltipY.value = rect.bottom + 8
+  configTooltipRight.value = window.innerWidth - rect.right
+  configTooltipVisible.value = true
+}
+
+function hideConfigTooltip() {
+  configTooltipVisible.value = false
 }
 
 // Close any open modal on Escape
@@ -507,12 +666,14 @@ function cancelEdit() {
 // ── User persona popover ──
 const showUsrPopover = ref(false)
 const usrChipWrap = ref(null)
+const expandedUserCatIds = ref(new Set())
 
 // ── Group add popover ──
 const showGroupAddPopover = ref(false)
 const groupAddChipWrap = ref(null)
 const personaSearchEl = ref(null)
 const personaSearchQuery = ref('')
+const expandedSysCatIds = ref(new Set())
 
 // ── System persona config popover ──
 const sysPersonaConfigId = ref(null)
@@ -568,9 +729,22 @@ const filteredSystemPersonas = computed(() => {
   )
 })
 
+// ── Category tree toggle helpers ──
+function toggleUserCat(id) {
+  const s = new Set(expandedUserCatIds.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  expandedUserCatIds.value = s
+}
+function toggleSysCat(id) {
+  const s = new Set(expandedSysCatIds.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  expandedSysCatIds.value = s
+}
+
 // ── Popover functions ──
 function togglePopover(type) {
   if (type === 'user') {
+    expandedUserCatIds.value = new Set()
     showUsrPopover.value = !showUsrPopover.value
   }
 }
@@ -584,6 +758,7 @@ function openPersonaCombobox() {
   showGroupAddPopover.value = !showGroupAddPopover.value
   if (showGroupAddPopover.value) {
     personaSearchQuery.value = ''
+    expandedSysCatIds.value = new Set()
     nextTick(() => personaSearchEl.value?.focus())
   }
 }
@@ -866,6 +1041,44 @@ const effectiveMaxOutputTokens = computed(() => {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 
+/* ── Status indicator (left-aligned, title row) ── */
+.ch-row-top-status {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+}
+.ch-status-badge {
+  display: flex; align-items: center; gap: 0.3125rem;
+  padding: 0.1875rem 0.625rem 0.1875rem 0.5rem;
+  border-radius: var(--radius-full, 9999px);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small, 0.75rem);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ch-status-badge--approval {
+  background: #EF4444;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(239,68,68,0.25);
+  animation: chApprovalPulse 1.5s ease-in-out infinite;
+}
+@keyframes chApprovalPulse { 0%,100%{ opacity:1; } 50%{ opacity:0.65; } }
+.ch-status-badge--running {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  animation: chRunningPulse 1.2s ease-in-out infinite;
+}
+.ch-status-dot {
+  width: 0.375rem; height: 0.375rem; border-radius: 50%;
+  background: #FFFFFF;
+  animation: chRunningPulse 1.2s ease-in-out infinite;
+}
+@keyframes chRunningPulse { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
+
 /* ── Actions (right-aligned over the centered content) ── */
 .ch-row-top-actions {
   position: absolute;
@@ -906,6 +1119,17 @@ const effectiveMaxOutputTokens = computed(() => {
   display: flex;
   align-items: center;
   padding: 0.25rem 1rem 0.5rem;
+  overflow: hidden;
+  max-height: 4rem;
+  opacity: 1;
+  transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+}
+.ch-row-bottom--collapsed {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  pointer-events: none;
 }
 .ch-row-bottom-right {
   display: flex;
@@ -940,48 +1164,6 @@ const effectiveMaxOutputTokens = computed(() => {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
 }
-.chat-config-tooltip {
-  display: none;
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
-  background: #1A1A1A;
-  border-radius: 0.625rem;
-  padding: 0.625rem 0.875rem;
-  min-width: 13.75rem;
-  z-index: 50;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
-  pointer-events: none;
-}
-.chat-config-btn-wrap:hover .chat-config-tooltip {
-  display: block;
-}
-.chat-config-tooltip-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.75rem;
-  padding: 0.125rem 0;
-}
-.cct-key {
-  font-family: 'Inter', sans-serif;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  color: rgba(255,255,255,0.5);
-  white-space: nowrap;
-}
-.cct-val {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: #FFFFFF;
-  white-space: nowrap;
-  text-align: right;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 10rem;
-}
-
 /* ── Persona section layout ── */
 .persona-section {
   display: flex;
@@ -1355,6 +1537,42 @@ const effectiveMaxOutputTokens = computed(() => {
   padding: 1.25rem; text-align: center;
   font-family: 'Inter', sans-serif; font-size: 0.8125rem; color: #4B5563;
 }
+
+/* Category tree inside persona modals */
+.ch-cat-section { display: flex; flex-direction: column; }
+.ch-cat-header {
+  display: flex; align-items: center; gap: 0.375rem;
+  width: 100%; padding: 0.3125rem 0.5rem;
+  background: transparent; border: none; cursor: pointer;
+  border-radius: 0.375rem;
+  font-family: 'Inter', sans-serif;
+  color: #6B7280;
+  transition: background 0.12s;
+}
+.ch-cat-header:hover { background: rgba(255,255,255,0.05); color: #9CA3AF; }
+.ch-cat-chevron {
+  flex-shrink: 0; color: #4B5563;
+  transition: transform 0.15s;
+  transform: rotate(0deg);
+}
+.ch-cat-chevron.expanded { transform: rotate(90deg); }
+.ch-cat-emoji { font-size: 0.8125rem; line-height: 1; }
+.ch-cat-name {
+  flex: 1; text-align: left;
+  font-size: 0.75rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.ch-cat-count {
+  font-size: 0.6875rem; font-weight: 600;
+  padding: 0.0625rem 0.3125rem; border-radius: 9999px;
+  background: rgba(255,255,255,0.08); color: #6B7280;
+}
+.ch-cat-items { display: flex; flex-direction: column; gap: 0.125rem; padding-left: 0.75rem; }
+.ch-cat-empty {
+  padding: 0.375rem 0.5rem;
+  font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #4B5563;
+  font-style: italic;
+}
 /* Config modal specific */
 .ch-cfg-section { flex-shrink: 0; }
 .ch-cfg-label {
@@ -1412,6 +1630,38 @@ const effectiveMaxOutputTokens = computed(() => {
   padding: 0.625rem 0.875rem;
   min-width: 12.5rem;
   box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+}
+.ch-config-tooltip-fixed {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: #1A1A1A;
+  border-radius: 0.625rem;
+  padding: 0.625rem 0.875rem;
+  min-width: 13.75rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+}
+.ch-config-tooltip-fixed .ch-config-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.125rem 0;
+}
+.ch-config-tooltip-fixed .cct-key {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.5);
+  white-space: nowrap;
+}
+.ch-config-tooltip-fixed .cct-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #FFFFFF;
+  text-align: right;
+  word-break: break-all;
 }
 .ch-call-tooltip-fixed .ch-call-tooltip-row {
   display: flex;

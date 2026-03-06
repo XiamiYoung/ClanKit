@@ -278,6 +278,114 @@ Text on gradient surfaces is always `#FFFFFF`. Secondary text on gradients uses 
 - Title: `--fs-section`, weight 700
 - Description: `--fs-body`, color `#9CA3AF`, line-height 1.6
 
+#### Sidebar / Nav Item Action Buttons (Rename, Delete, etc.)
+
+Inline icon buttons that appear on hover inside sidebar and left-nav list items (e.g. chat tree rename/delete, persona category rename/delete) follow the **chat tree pattern** — NOT a white box with a shadow:
+
+```css
+/* Action group — invisible until row hover */
+.nav-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.row:hover .nav-item-actions { opacity: 1; }
+
+/* Individual icon button */
+.nav-icon-btn {
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  background: transparent;
+  color: rgba(26, 26, 26, 0.4);      /* dim on light bg */
+  border-radius: 0.3125rem;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.nav-icon-btn:hover            { background: rgba(26,26,26,0.08);  color: #1A1A1A; }
+.nav-icon-btn.danger:hover     { background: rgba(239,68,68,0.10); color: #EF4444; }
+
+/* When the row is active (dark gradient bg) — flip to white icons */
+.active-row .nav-icon-btn            { color: rgba(255,255,255,0.5); }
+.active-row .nav-icon-btn:hover      { background: rgba(255,255,255,0.15); color: #FFFFFF; }
+.active-row .nav-icon-btn.danger:hover { background: rgba(255,59,48,0.25); color: #FF6B6B; }
+```
+
+**Rules:**
+- **No white background box, no box-shadow, no border** on the action group container — pure transparency
+- Icon color is `rgba(26,26,26,0.4)` on light rows; flips to `rgba(255,255,255,0.5)` on active (gradient) rows
+- Hover uses low-opacity fill: `rgba(26,26,26,0.08)` on light, `rgba(255,255,255,0.15)` on dark
+- Danger hover: `rgba(239,68,68,0.10)` / `#EF4444` on light; `rgba(255,59,48,0.25)` / `#FF6B6B` on dark
+
+#### Left Nav Category Rows (Full-Row Hover Background)
+
+Category rows in left nav panels (e.g. persona categories) use a **wrapper + transparent button** pattern so the entire row — including the action buttons on the right — gets the dark gradient background on hover/active. Never apply the background to the inner `<button>` only, as that leaves the action icons outside the background.
+
+**Structure:**
+```html
+<!-- Wrapper gets the gradient background -->
+<div class="nav-cat-wrap">
+  <!-- Button is transparent — wrapper provides the bg -->
+  <button class="nav-item nav-cat-btn" :class="{ active: isActive }">
+    <span class="nav-item-emoji">{{ cat.emoji }}</span>
+    <span class="nav-item-label">{{ cat.name }}</span>
+  </button>
+  <!-- Right-side siblings: count badge + action buttons -->
+  <div class="nav-cat-right">
+    <span class="nav-cat-count">{{ count }}</span>
+    <div class="nav-cat-actions">
+      <!-- rename + delete icon buttons -->
+    </div>
+  </div>
+</div>
+```
+
+**CSS pattern:**
+```css
+.nav-cat-wrap {
+  display: flex; align-items: center; border-radius: 0.5rem;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+  padding-right: 0.25rem;
+}
+/* Hover: full row gets the dark gradient */
+.nav-cat-wrap:hover {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+/* Active: same — use :has() to detect .active child */
+.nav-cat-wrap:has(.nav-item.active) {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+/* Button is transparent — wrapper provides the bg */
+.nav-cat-btn { flex: 1; min-width: 0; background: transparent !important; box-shadow: none !important; }
+.nav-cat-wrap:hover .nav-cat-btn,
+.nav-cat-wrap:has(.nav-item.active) .nav-cat-btn { color: #FFFFFF; }
+
+/* Hide count badge on hover/active; show action buttons instead */
+.nav-cat-wrap:hover .nav-cat-count,
+.nav-cat-wrap:has(.nav-item.active) .nav-cat-count { opacity: 0; pointer-events: none; }
+.nav-cat-wrap:hover .nav-cat-actions,
+.nav-cat-wrap:has(.nav-item.active) .nav-cat-actions { opacity: 1; }
+
+/* Icon buttons always white (they only appear on dark gradient bg) */
+.nav-icon-btn { color: rgba(255,255,255,0.5); background: transparent; }
+.nav-icon-btn:hover { background: rgba(255,255,255,0.15); color: #FFFFFF; }
+.nav-icon-btn-danger:hover { background: rgba(255,59,48,0.25); color: #FF6B6B; }
+```
+
+**Rules:**
+- The **wrapper div** (`nav-cat-wrap`) gets the gradient — never the inner button alone
+- The inner button must have `background: transparent !important` to let the wrapper bg show
+- The count badge and action buttons are **flex siblings** of the inner button (not children of it) — this ensures clicking action buttons does NOT trigger the nav button's click handler
+- Hide the count on hover/active (fade to `opacity: 0`) so the action buttons have room — both occupy the same `nav-cat-right` area with actions as `position: absolute`
+- Action icon buttons are always white-tinted (they only appear on the dark gradient bg)
+- Use CSS `:has(.nav-item.active)` to style the wrapper based on its active child
+
 #### Back Buttons
 
 All "back" / "return" navigation buttons use the **black gradient** style to stay visually consistent with other primary interactive elements:

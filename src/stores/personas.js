@@ -38,10 +38,14 @@ Respond in a clear, helpful manner suitable for a broad audience.`,
 }
 
 export const usePersonasStore = defineStore('personas', () => {
-  const personas = ref([])
+  const personas   = ref([])
+  const categories = ref([])
 
   const systemPersonas = computed(() => personas.value.filter(p => p.type === 'system'))
   const userPersonas   = computed(() => personas.value.filter(p => p.type === 'user'))
+
+  const systemCategories = computed(() => categories.value.filter(c => c.type === 'system'))
+  const userCategories   = computed(() => categories.value.filter(c => c.type === 'user'))
 
   const defaultSystemPersona = computed(() => personas.value.find(p => p.type === 'system' && p.isDefault) || null)
   const defaultUserPersona   = computed(() => personas.value.find(p => p.type === 'user'   && p.isDefault) || null)
@@ -50,14 +54,34 @@ export const usePersonasStore = defineStore('personas', () => {
     return personas.value.find(p => p.id === id) || null
   }
 
+  function getCategoryById(id) {
+    return categories.value.find(c => c.id === id) || null
+  }
+
+  function personasInCategory(categoryId) {
+    return personas.value.filter(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(categoryId))
+  }
+
+  function uncategorizedPersonas(type) {
+    return personas.value.filter(p => p.type === type && (!Array.isArray(p.categoryIds) || p.categoryIds.length === 0))
+  }
+
   async function loadPersonas() {
     const stored = await storage.getPersonas()
-    const list = stored || []
+
+    // Handle both old (plain array) and new ({ categories, personas }) formats
+    let list, cats
+    if (Array.isArray(stored)) {
+      list = stored || []
+      cats = []
+    } else {
+      list = stored?.personas || []
+      cats = stored?.categories || []
+    }
 
     // Ensure built-in system persona exists
     const sysIdx = list.findIndex(p => p.id === BUILTIN_SYSTEM_PERSONA_ID)
     if (sysIdx >= 0) {
-      // Preserve user edits but keep isBuiltin flag
       list[sysIdx] = { ...list[sysIdx], isBuiltin: true }
     } else {
       list.unshift({ ...BUILTIN_SYSTEM_PERSONA })
@@ -68,18 +92,18 @@ export const usePersonasStore = defineStore('personas', () => {
     if (usrIdx >= 0) {
       list[usrIdx] = { ...list[usrIdx], isBuiltin: true }
     } else {
-      // Insert after all system personas
       const lastSysIdx = list.reduce((acc, p, i) => p.type === 'system' ? i : acc, -1)
       list.splice(lastSysIdx + 1, 0, { ...BUILTIN_USER_PERSONA })
     }
 
-    // Backfill optional persona fields for group chat support
+    // Backfill optional persona fields
     for (const p of list) {
       if (p.providerId === undefined) p.providerId = null
       if (p.modelId === undefined) p.modelId = null
       if (p.enabledSkillIds === undefined) p.enabledSkillIds = null
       if (p.mcpServerIds === undefined) p.mcpServerIds = null
       if (p.voiceId === undefined) p.voiceId = null
+      if (!Array.isArray(p.categoryIds)) p.categoryIds = []
     }
 
     // Ensure at least one default per type
@@ -92,22 +116,28 @@ export const usePersonasStore = defineStore('personas', () => {
       if (usr) usr.isDefault = true
     }
 
-    personas.value = list
+    personas.value   = list
+    categories.value = cats
     await persist()
   }
 
   async function savePersona(persona) {
     const idx = personas.value.findIndex(p => p.id === persona.id)
     if (idx >= 0) {
-      // Preserve isBuiltin flag on edits
       const existing = personas.value[idx]
-      personas.value[idx] = { ...persona, isBuiltin: existing.isBuiltin || false, updatedAt: Date.now() }
+      personas.value[idx] = {
+        ...persona,
+        isBuiltin: existing.isBuiltin || false,
+        categoryIds: existing.categoryIds || [],
+        updatedAt: Date.now(),
+      }
     } else {
       personas.value.push({
         id: uuidv4(),
         createdAt: Date.now(),
         updatedAt: Date.now(),
         isBuiltin: false,
+        categoryIds: [],
         ...persona,
       })
     }
@@ -116,7 +146,7 @@ export const usePersonasStore = defineStore('personas', () => {
 
   async function deletePersona(id) {
     const persona = personas.value.find(p => p.id === id)
-    if (persona?.isBuiltin) return // Cannot delete built-in personas
+    if (persona?.isBuiltin) return
     personas.value = personas.value.filter(p => p.id !== id)
     await persist()
   }
@@ -124,7 +154,6 @@ export const usePersonasStore = defineStore('personas', () => {
   async function setDefault(id) {
     const target = personas.value.find(p => p.id === id)
     if (!target) return
-    // Clear previous default of the same type
     for (const p of personas.value) {
       if (p.type === target.type) p.isDefault = false
     }
@@ -133,13 +162,79 @@ export const usePersonasStore = defineStore('personas', () => {
     await persist()
   }
 
+  // ── Category CRUD ──────────────────────────────────────────────────────────
+
+  async function addCategory(name, emoji, type) {
+    const id = uuidv4()
+    categories.value.push({ id, name, emoji, type })
+    await persist()
+    return id
+  }
+
+  async function renameCategory(id, name, emoji) {
+    const cat = categories.value.find(c => c.id === id)
+    if (!cat) return
+    cat.name  = name
+    cat.emoji = emoji
+    await persist()
+  }
+
+  async function deleteCategory(id) {
+    // Only allowed when no personas are assigned
+    const assigned = personas.value.some(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(id))
+    if (assigned) return false
+    categories.value = categories.value.filter(c => c.id !== id)
+    await persist()
+    return true
+  }
+
+  async function reorderCategory(draggedId, targetId) {
+    const list = categories.value
+    const from = list.findIndex(c => c.id === draggedId)
+    const to   = list.findIndex(c => c.id === targetId)
+    if (from === -1 || to === -1 || from === to) return
+    const moved = list.splice(from, 1)[0]
+    list.splice(to, 0, moved)
+    await persist()
+  }
+
+  // ── Assignment ────────────────────────────────────────────────────────────
+
+  async function assignToCategory(personaId, categoryId) {
+    const persona  = personas.value.find(p => p.id === personaId)
+    const category = categories.value.find(c => c.id === categoryId)
+    if (!persona || !category) return
+    if (persona.type !== category.type) return
+    if (!Array.isArray(persona.categoryIds)) persona.categoryIds = []
+    if (!persona.categoryIds.includes(categoryId)) {
+      persona.categoryIds.push(categoryId)
+      await persist()
+    }
+  }
+
+  async function unassignFromCategory(personaId, categoryId) {
+    const persona = personas.value.find(p => p.id === personaId)
+    if (!persona || !Array.isArray(persona.categoryIds)) return
+    persona.categoryIds = persona.categoryIds.filter(id => id !== categoryId)
+    await persist()
+  }
+
   async function persist() {
-    await storage.savePersonas(JSON.parse(JSON.stringify(personas.value)))
+    await storage.savePersonas({
+      categories: JSON.parse(JSON.stringify(categories.value)),
+      personas:   JSON.parse(JSON.stringify(personas.value)),
+    })
   }
 
   return {
-    personas, systemPersonas, userPersonas,
+    personas, categories,
+    systemPersonas, userPersonas,
+    systemCategories, userCategories,
     defaultSystemPersona, defaultUserPersona,
-    getPersonaById, loadPersonas, savePersona, deletePersona, setDefault,
+    getPersonaById, getCategoryById,
+    personasInCategory, uncategorizedPersonas,
+    loadPersonas, savePersona, deletePersona, setDefault,
+    addCategory, renameCategory, deleteCategory, reorderCategory,
+    assignToCategory, unassignFromCategory,
   }
 })

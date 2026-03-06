@@ -20,18 +20,12 @@
         <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; margin:0 0 24px; line-height:1.6;">
           Select a folder to use as your vault. Markdown and draw.io diagram files will be available for viewing and editing.
         </p>
-        <button
-          @click="store.pickVault()"
-          class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer"
-          style="background:#F5F5F5; color:#6B7280; font-family:'Inter',sans-serif; font-size:var(--fs-body); border:1px solid #E5E5EA;"
-          @mouseenter="e => { e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A' }"
-          @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#6B7280' }"
-        >
-          <svg style="width:20px;height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <AppButton size="compact" @click="store.pickVault()">
+          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
-          Browse with Folder Picker
-        </button>
+          Browse Folder
+        </AppButton>
       </div>
     </div>
 
@@ -53,14 +47,14 @@
           >{{ vaultName }}</span>
         </div>
         <div class="flex items-center gap-2">
-          <button
-            @click="store.pickVault()"
-            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer"
-            style="color:#fff; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); border:none; font-family:'Inter',sans-serif; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
-            @mouseenter="e => { e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }"
-            @mouseleave="e => { e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }"
-            title="Change folder"
-          >Browse</button>
+          <AppButton size="icon" @click="store.loadTree()" title="Refresh">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </AppButton>
+          <AppButton size="icon" @click="store.pickVault()" title="Browse folder">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+          </AppButton>
         </div>
       </div>
 
@@ -69,27 +63,18 @@
 
         <!-- ── LEFT: File Tree Panel (resizable) ── -->
         <div
-          class="shrink-0 flex flex-col overflow-hidden"
-          :style="{ width: notesSidebarWidth + 'px', minWidth: '180px', maxWidth: '600px', background: '#F9F9F9', borderRight: 'none', position: 'relative' }"
+          class="doc-tree-panel"
+          :style="docTreeCollapsed ? { width: '0', minWidth: '0', overflow: 'hidden' } : { width: notesSidebarWidth + 'px', minWidth: '180px', maxWidth: '600px' }"
         >
           <!-- Resize handle -->
           <div
+            v-if="!docTreeCollapsed"
             class="notes-resize-handle"
             @mousedown="startNotesResize"
           ></div>
           <!-- Tree toolbar -->
           <div class="px-3 py-2 flex items-center gap-1 shrink-0" style="border-bottom:1px solid #E5E5EA;">
             <span style="font-family:'Inter',sans-serif;font-size:var(--fs-caption);color:#9CA3AF;">Right-click to add files</span>
-            <button
-              @click="store.loadTree()"
-              class="ml-auto p-1.5 rounded-lg transition-all duration-150 cursor-pointer"
-              style="color:#fff; border:none; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
-              @mouseenter="e => e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'"
-              @mouseleave="e => e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
-              title="Refresh"
-            >
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            </button>
           </div>
 
           <!-- File tree (root drop zone) -->
@@ -123,6 +108,17 @@
 
         <!-- ── RIGHT: Editor / Preview Panel ── -->
         <div class="flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;">
+          <!-- Hamburger toggle tab -->
+          <button
+            @click="docTreeCollapsed = !docTreeCollapsed"
+            class="doc-tree-expand-tab"
+            :title="docTreeCollapsed ? 'Expand file tree' : 'Collapse file tree'"
+            :aria-label="docTreeCollapsed ? 'Expand file tree' : 'Collapse file tree'"
+          >
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
+            </svg>
+          </button>
           <!-- Resize blocker: covers the panel during sidebar drag so the webview doesn't swallow mousemove events -->
           <div v-if="isResizing" style="position:absolute;inset:0;z-index:50;cursor:col-resize;"></div>
 
@@ -354,8 +350,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onBeforeUnmount, defineComponent, h } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onActivated, onBeforeUnmount, defineComponent, h } from 'vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import AppButton from '../components/common/AppButton.vue'
 import DrawioEditor from '../components/notes/DrawioEditor.vue'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
@@ -705,6 +702,16 @@ watch(editMode, async (val) => {
   if (!val) await refreshFormattedHtml()
 })
 
+// Refresh tree + re-render active md file when navigating to this view
+async function onViewEnter() {
+  if (store.vaultPath) store.loadTree()
+  if (store.activeFile && !store.activeFile.name?.endsWith('.drawio')) {
+    await refreshFormattedHtml()
+  }
+}
+onMounted(onViewEnter)
+onActivated(onViewEnter)
+
 // Auto-focus context action input when it appears
 watch(() => ctxAction.value.visible, async (v) => {
   if (v) { await nextTick(); ctxInputRef.value?.focus() }
@@ -896,6 +903,7 @@ async function executeDelete() {
 
 // ── Resizable sidebar ──
 const notesSidebarWidth = ref(280)
+const docTreeCollapsed = ref(false)
 const isResizing = ref(false)
 
 function startNotesResize(e) {
@@ -1372,5 +1380,55 @@ const TreeNode = defineComponent({
 .notes-resize-handle:hover,
 .notes-resize-handle:active {
   background: #007AFF;
+}
+.doc-tree-panel {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #F9F9F9;
+  position: relative;
+  transition: width 0.2s ease, min-width 0.2s ease;
+}
+.doc-tree-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  flex-shrink: 0;
+}
+.doc-tree-icon-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+}
+.doc-tree-expand-tab {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 3rem;
+  border: none;
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  cursor: pointer;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.12);
+  transition: width 0.15s ease, background 0.15s ease;
+}
+.doc-tree-expand-tab:hover {
+  width: 1.875rem;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 </style>

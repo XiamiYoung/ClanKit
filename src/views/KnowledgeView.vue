@@ -5,18 +5,20 @@
     <div class="knowledge-header">
       <div class="knowledge-header-top">
         <div>
-          <h1 class="knowledge-title">AI Knowledge</h1>
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <h1 class="knowledge-title">AI Knowledge</h1>
+            <span class="count-badge">{{ knowledgeStore.indexes.length }}</span>
+          </div>
           <p class="knowledge-subtitle">
             Manage RAG with Pinecone vector database
           </p>
         </div>
         <div class="header-actions">
-          <AppButton size="compact" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing">
+          <AppButton size="icon" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing" title="Refresh">
             <svg v-if="!isRefreshing" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="23 4 23 10 17 10"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
-            {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
           </AppButton>
         </div>
       </div>
@@ -703,6 +705,17 @@ function formatDate(ts) {
 .knowledge-title { font-family: 'Inter', sans-serif; font-size: var(--fs-page-title); font-weight: 700; color: var(--text-primary); margin: 0; }
 .knowledge-subtitle { font-family: 'Inter', sans-serif; font-size: var(--fs-body); color: var(--text-secondary); margin: 0.25rem 0 0 0; }
 .header-actions { display: flex; align-items: center; gap: 0.5rem; }
+.count-badge {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  padding: 0.1875rem 0.5rem;
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  line-height: 1.4;
+}
 
 /* ── Content area ────────────────────────────────────────────────────────── */
 .knowledge-content { flex: 1; overflow-y: auto; padding: 1.5rem 2rem 2rem; scrollbar-width: thin; }

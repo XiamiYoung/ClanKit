@@ -9,18 +9,17 @@
       <div class="catalog-header">
         <div style="display:flex; align-items:center; justify-content:space-between;">
           <div>
-            <h1 style="font-family:'Inter',sans-serif; font-size:var(--fs-page-title); font-weight:700; color:#1A1A1A; margin:0;">Skills</h1>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <h1 style="font-family:'Inter',sans-serif; font-size:var(--fs-page-title); font-weight:700; color:#1A1A1A; margin:0;">Skills</h1>
+              <span class="catalog-count-badge">{{ filteredSkills.length }}</span>
+            </div>
             <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#6B7280; margin:0.25rem 0 0 0;">
               Skills are loaded from your skills directory. Each subfolder with a SKILL.md is a skill.
             </p>
           </div>
           <div class="flex items-center gap-2">
-            <div class="catalog-count-badge">
-              <span>{{ filteredSkills.length }} skill{{ filteredSkills.length !== 1 ? 's' : '' }}</span>
-            </div>
-            <AppButton size="compact" @click="refresh" title="Refresh skills">
+            <AppButton size="icon" @click="refresh" title="Refresh skills">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-              Refresh
             </AppButton>
           </div>
         </div>
@@ -150,19 +149,21 @@
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
-          Skills
         </button>
-        <div class="detail-divider"></div>
-        <div class="detail-icon">
-          <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
-        </div>
-        <h1 class="detail-title">{{ skillDisplayName(selectedSkill) }}</h1>
       </div>
 
       <!-- File explorer + content viewer -->
-      <div class="flex-1 flex overflow-hidden">
+      <div class="flex-1 flex overflow-hidden" style="flex-direction:column;">
+        <!-- Skill title row -->
+        <div class="detail-title-row">
+          <div class="detail-icon">
+            <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+          </div>
+          <h1 class="detail-title">{{ skillDisplayName(selectedSkill) }}</h1>
+        </div>
+        <div class="flex-1 flex overflow-hidden">
 
         <!-- LEFT: File tree sidebar (resizable) -->
         <div class="detail-sidebar" :style="{ width: skillsSidebarWidth + 'px' }">
@@ -336,6 +337,7 @@
               <pre class="detail-raw-code">{{ fileContent }}</pre>
             </div>
           </template>
+        </div>
         </div>
       </div>
     </template>
@@ -772,7 +774,7 @@ const SkillTreeNode = defineComponent({
             borderRadius: isActive ? '0.5rem' : '0',
             margin: isActive ? '0 0.5rem' : '0',
             fontFamily: "'Inter',sans-serif",
-            fontSize: 'var(--fs-body)',
+            fontSize: 'var(--fs-secondary)',
             transition: 'background 0.15s, color 0.15s, box-shadow 0.15s',
           },
           onClick: () => {
@@ -838,17 +840,15 @@ const SkillTreeNode = defineComponent({
   border-bottom: 1px solid #E5E5EA;
 }
 .catalog-count-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.1);
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body);
-  color: #1A1A1A;
-  font-weight: 600;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  padding: 0.1875rem 0.5rem;
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  line-height: 1.4;
 }
 
 /* ── Search bar ────────────────────────────────────────────────────────── */
@@ -1067,21 +1067,30 @@ const SkillTreeNode = defineComponent({
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
+  padding: 0.625rem 1.25rem;
   background: #FFFFFF;
   border-bottom: 1px solid #E5E5EA;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-shrink: 0;
+  padding: 0.625rem 1.25rem;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5EA;
+}
 .detail-back-btn {
   display: flex;
   align-items: center;
-  gap: 0.3125rem;
-  padding: 0.3125rem 0.75rem 0.3125rem 0.5rem;
+  gap: 0;
+  width: 2rem; height: 2rem; padding: 0;
   border-radius: var(--radius-sm, 8px);
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-caption, 0.8125rem);
+  font-size: var(--fs-secondary, 0.875rem);
   font-weight: 600;
+  justify-content: center;
   color: #FFFFFF;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   border: none;

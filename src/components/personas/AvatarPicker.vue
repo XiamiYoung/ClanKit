@@ -7,10 +7,12 @@
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
-      <div class="avpicker-grid-wrap" ref="gridWrap">
+
+      <!-- Fixed-height grid — never changes size across pages -->
+      <div class="avpicker-grid-wrap">
         <div class="avpicker-grid">
           <button
-            v-for="av in avatars"
+            v-for="av in currentPageAvatars"
             :key="av.id"
             class="avpicker-item"
             :class="{ selected: selectedId === av.id }"
@@ -20,15 +22,29 @@
           </button>
         </div>
       </div>
+
       <div class="avpicker-footer">
-        <button class="avpicker-btn shuffle" @click="randomize" title="Generate new random avatars">
-          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-          Shuffle
-        </button>
-        <button v-if="isShowingRandom" class="avpicker-btn defaults" @click="resetToDefaults" title="Show default avatars">
-          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-          Defaults
-        </button>
+        <!-- Pagination -->
+        <div class="avpicker-pagination">
+          <button
+            class="avpicker-page-btn"
+            :disabled="currentPage === 0"
+            @click="currentPage--"
+            aria-label="Previous page"
+          >
+            <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span class="avpicker-page-info">{{ currentPage + 1 }} / {{ totalPages }}</span>
+          <button
+            class="avpicker-page-btn"
+            :disabled="currentPage >= totalPages - 1"
+            @click="currentPage++"
+            aria-label="Next page"
+          >
+            <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+
         <div style="flex:1;"></div>
         <button class="avpicker-btn secondary" @click="$emit('close')">Cancel</button>
         <button class="avpicker-btn primary" :disabled="!selectedId" @click="confirm">Select Avatar</button>
@@ -38,18 +54,30 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, computed } from 'vue'
 import { PERSONA_AVATARS, getAvatarDataUri, generateRandomBatch } from './personaAvatars'
+
+const PAGE_SIZE   = 36  // 6 cols × 6 rows
+const EXTRA_PAGES = 9   // pages 2–10 are randomly generated at mount
 
 const props = defineProps({
   currentAvatarId: { type: String, default: '' },
 })
 
 const emit = defineEmits(['close', 'select'])
-const avatars = ref([...PERSONA_AVATARS])
-const selectedId = ref(props.currentAvatarId || '')
-const gridWrap = ref(null)
-const isShowingRandom = ref(false)
+
+// Build all pages once — stable for the lifetime of this dialog instance
+const allPages = [
+  [...PERSONA_AVATARS],                          // page 1: presets
+  ...Array.from({ length: EXTRA_PAGES }, () => generateRandomBatch(PAGE_SIZE)), // pages 2–10
+]
+
+const selectedId  = ref(props.currentAvatarId || '')
+const currentPage = ref(0)
+
+const totalPages = computed(() => allPages.length)
+
+const currentPageAvatars = computed(() => allPages[currentPage.value] || [])
 
 function getUri(id) {
   return getAvatarDataUri(id)
@@ -57,25 +85,6 @@ function getUri(id) {
 
 function select(id) {
   selectedId.value = id
-}
-
-function randomize() {
-  // Replace the entire grid with a new batch of random avatars
-  avatars.value = generateRandomBatch(36)
-  isShowingRandom.value = true
-  // Scroll back to top so user sees the new batch
-  nextTick(() => {
-    if (gridWrap.value) gridWrap.value.scrollTop = 0
-  })
-}
-
-function resetToDefaults() {
-  avatars.value = [...PERSONA_AVATARS]
-  isShowingRandom.value = false
-  // Scroll back to top
-  nextTick(() => {
-    if (gridWrap.value) gridWrap.value.scrollTop = 0
-  })
 }
 
 function confirm() {
@@ -93,7 +102,8 @@ function confirm() {
   display: flex; align-items: center; justify-content: center;
 }
 .avpicker-dialog {
-  width: min(56.25rem, 92vw); max-height: 88vh;
+  width: min(56.25rem, 92vw);
+  max-height: 88vh;
   background: #0F0F0F; border: 1px solid #2A2A2A;
   border-radius: 1.25rem; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
   display: flex; flex-direction: column; overflow: hidden;
@@ -118,12 +128,18 @@ function confirm() {
   cursor: pointer; transition: all 0.15s;
 }
 .avpicker-close:hover { background: #1F1F1F; color: #FFFFFF; }
+
+/* Scrollable grid — capped so dialog doesn't exceed screen */
 .avpicker-grid-wrap {
-  flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem;
-  scrollbar-width: thin; scrollbar-color: #333 transparent;
+  padding: 1.25rem 1.5rem;
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
 }
 .avpicker-grid {
   display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.75rem;
+  width: 100%;
 }
 @media (max-width: 800px) {
   .avpicker-grid { grid-template-columns: repeat(4, 1fr); }
@@ -143,9 +159,30 @@ function confirm() {
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
 }
 .avpicker-footer {
-  display: flex; justify-content: flex-end; gap: 0.5rem;
+  display: flex; align-items: center; gap: 0.5rem;
   padding: 0.875rem 1.5rem; border-top: 1px solid #1F1F1F; background: #0A0A0A;
 }
+
+/* Pagination */
+.avpicker-pagination {
+  display: flex; align-items: center; gap: 0.375rem;
+}
+.avpicker-page-btn {
+  width: 1.875rem; height: 1.875rem;
+  border-radius: 0.5rem;
+  border: 1px solid #2A2A2A;
+  background: #1A1A1A;
+  color: #9CA3AF;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.12s;
+}
+.avpicker-page-btn:hover:not(:disabled) { background: #2A2A2A; color: #FFFFFF; border-color: #374151; }
+.avpicker-page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.avpicker-page-info {
+  font-family: 'Inter', sans-serif; font-size: 0.8125rem;
+  color: #6B7280; min-width: 3.25rem; text-align: center;
+}
+
 .avpicker-btn {
   padding: 0.5rem 1.25rem; border-radius: 0.5rem;
   font-family: 'Inter', sans-serif; font-size: 0.875rem; font-weight: 600;
@@ -158,16 +195,6 @@ function confirm() {
 }
 .avpicker-btn.primary:hover { background: linear-gradient(135deg, #2D2D2D 0%, #374151 40%, #6B7280 100%); }
 .avpicker-btn.primary:disabled { background: #2A2A2A; color: #4B5563; cursor: not-allowed; border-color: #2A2A2A; }
-.avpicker-btn.shuffle {
-  display: flex; align-items: center; gap: 0.375rem;
-  background: #1A1A1A; color: #FFFFFF; border: 1.5px solid #374151;
-}
-.avpicker-btn.shuffle:hover { background: #222222; border-color: #4B5563; }
-.avpicker-btn.defaults {
-  display: flex; align-items: center; gap: 0.375rem;
-  background: #1A1A1A; color: #6B7280; border: 1.5px solid #2A2A2A;
-}
-.avpicker-btn.defaults:hover { background: #222222; border-color: #374151; color: #9CA3AF; }
 .avpicker-btn.secondary {
   background: #1A1A1A; color: #9CA3AF; border: 1px solid #2A2A2A;
 }

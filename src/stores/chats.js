@@ -4,8 +4,10 @@ import { v4 as uuidv4 } from 'uuid'
 import { storage } from '../services/storage'
 
 export const useChatsStore = defineStore('chats', () => {
-  const chats = ref([])
+  // chatTree holds ChatTreeNode[] — folders and chats in a nested structure
+  const chatTree = ref([])
   const activeChatId = ref(null)
+  const activeFolderId = ref(null)  // folder context for new chats
   const isLoading = ref(false)
   const unreadChatIds = ref(new Set())
   const completedChatIds = ref(new Set())
@@ -13,6 +15,24 @@ export const useChatsStore = defineStore('chats', () => {
 
   // UI chunk callback — set by ChatsView when mounted, cleared on unmount
   let _uiChunkCallback = null
+
+  // ── Tree helpers ──────────────────────────────────────────────────────────
+
+  // Recursively flatten tree to get only chat nodes (for backward compat)
+  function flattenChats(nodes) {
+    const result = []
+    for (const node of nodes) {
+      if (node.type === 'folder') {
+        result.push(...flattenChats(node.children || []))
+      } else {
+        result.push(node)
+      }
+    }
+    return result
+  }
+
+  // Backward-compat flat list — all callers using chatsStore.chats continue working
+  const chats = computed(() => flattenChats(chatTree.value))
 
   const activeChat = computed(() => chats.value.find(c => c.id === activeChatId.value) || null)
 
@@ -55,6 +75,42 @@ export const useChatsStore = defineStore('chats', () => {
     }
   }
 
+  // Recursively backfill runtime fields for all nodes in the tree
+  function wrapTree(nodes) {
+    return (nodes || []).map(node => {
+      if (node.type === 'folder') {
+        return {
+          ...node,
+          children: wrapTree(node.children || []),
+        }
+      } else {
+        // chat node
+        const chat = { ...node, messages: null }
+        backfillChat(chat)
+        return chat
+      }
+    })
+  }
+
+  // Collect all chat IDs that are nested inside folders (at any depth)
+  function _collectFolderChatIds(nodes, ids = new Set()) {
+    for (const node of nodes) {
+      if (node.type === 'folder') {
+        for (const child of node.children || []) {
+          if (child.type !== 'folder') ids.add(child.id)
+          else _collectFolderChatIds([child], ids)
+        }
+      }
+    }
+    return ids
+  }
+
+  // Remove root-level chat duplicates that also appear inside folders
+  function _deduplicateTree(nodes) {
+    const nestedIds = _collectFolderChatIds(nodes)
+    return nodes.filter(n => !(n.type !== 'folder' && nestedIds.has(n.id)))
+  }
+
   // ── Lazy loading ───────────────────────────────────────────────────────────
   const _loadingPromises = {}  // { [chatId]: Promise } — dedup concurrent loads
 
@@ -91,15 +147,23 @@ export const useChatsStore = defineStore('chats', () => {
     try {
       const index = await storage.getChatIndex()
       if (index && index.length > 0) {
-        for (const meta of index) {
-          // Index entries have no messages — set to null (lazy)
-          meta.messages = null
-          backfillChat(meta)
+        // Migration: if first item has no 'type', it's the old flat format
+        if (index[0]?.type === undefined) {
+          // Old flat format — wrap each entry as a chat node
+          chatTree.value = index.map(meta => {
+            const chat = { type: 'chat', ...meta, messages: null }
+            backfillChat(chat)
+            return chat
+          })
+        } else {
+          chatTree.value = _deduplicateTree(wrapTree(index))
         }
-        chats.value = index
-        activeChatId.value = index[0].id
-        // Only load the active chat eagerly — others load on demand when selected
-        ensureMessages(activeChatId.value)  // fire-and-forget, non-blocking
+        // Find first chat to set active
+        const firstChat = flattenChats(chatTree.value)[0]
+        if (firstChat) {
+          activeChatId.value = firstChat.id
+          ensureMessages(firstChat.id)  // fire-and-forget, non-blocking
+        }
       } else {
         await createChat('New Chat')
       }
@@ -108,8 +172,47 @@ export const useChatsStore = defineStore('chats', () => {
     }
   }
 
-  async function createChat(title = 'New Chat', personaConfig = null) {
+  // ── Find node helpers ─────────────────────────────────────────────────────
+
+  // Find a node by id in the tree, returns { node, parent (array), index }
+  function _findNode(id, nodes, parent = null) {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]
+      if (node.id === id) return { node, parent: nodes, index: i }
+      if (node.type === 'folder') {
+        const found = _findNode(id, node.children || [], nodes)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  // Find the parent array for a given folderId (null = root)
+  function _getTargetChildren(folderId) {
+    if (!folderId) return chatTree.value
+    const found = _findNode(folderId, chatTree.value)
+    if (found && found.node.type === 'folder') return found.node.children
+    return chatTree.value
+  }
+
+  // Get the folder id that contains a node (null = root)
+  function _getParentFolderId(nodeId) {
+    function search(nodes, parentFolderId) {
+      for (const node of nodes) {
+        if (node.id === nodeId) return parentFolderId
+        if (node.type === 'folder') {
+          const found = search(node.children || [], node.id)
+          if (found !== undefined) return found
+        }
+      }
+      return undefined
+    }
+    return search(chatTree.value, null)
+  }
+
+  async function createChat(title = 'New Chat', personaConfig = null, folderId = null) {
     const chat = {
+      type: 'chat',
       id: uuidv4(),
       title,
       messages: [],
@@ -139,7 +242,10 @@ export const useChatsStore = defineStore('chats', () => {
       chat.isGroupChat = true
       chat.groupPersonaIds = [...personaConfig]
     }
-    chats.value.unshift(chat)
+    // Insert at top of target folder (or active folder if no explicit folderId)
+    const targetFolderId = folderId !== undefined ? folderId : activeFolderId.value
+    const target = _getTargetChildren(targetFolderId)
+    target.unshift(chat)
     activeChatId.value = chat.id
     await persistChat(chat.id)
     await persistIndex()
@@ -161,6 +267,7 @@ export const useChatsStore = defineStore('chats', () => {
       return copy
     })
     const chat = {
+      type: 'chat',
       id: uuidv4(),
       title,
       messages: copiedMessages,
@@ -198,7 +305,8 @@ export const useChatsStore = defineStore('chats', () => {
         chat.groupPersonaOverrides = {}
       }
     }
-    chats.value.unshift(chat)
+    // Insert at root (copy from history goes to root)
+    chatTree.value.unshift(chat)
     activeChatId.value = chat.id
     await persistChat(chat.id)
     await persistIndex()
@@ -206,13 +314,14 @@ export const useChatsStore = defineStore('chats', () => {
   }
 
   async function removeChat(id) {
-    const idx = chats.value.findIndex(c => c.id === id)
-    if (idx === -1) return
-    chats.value.splice(idx, 1)
+    const found = _findNode(id, chatTree.value)
+    if (!found) return
+    found.parent.splice(found.index, 1)
     // Cancel any pending debounce for this chat
     if (_chatTimers[id]) { clearTimeout(_chatTimers[id]); delete _chatTimers[id] }
     if (activeChatId.value === id) {
-      activeChatId.value = chats.value[0]?.id || null
+      const remaining = flattenChats(chatTree.value)
+      activeChatId.value = remaining[0]?.id || null
       if (!activeChatId.value) await createChat()
     }
     await storage.deleteChat(id)
@@ -230,8 +339,142 @@ export const useChatsStore = defineStore('chats', () => {
 
   async function setActiveChat(id) {
     activeChatId.value = id
+    // Update active folder context based on which folder the chat is in
+    const parentFolderId = _getParentFolderId(id)
+    if (parentFolderId !== undefined) activeFolderId.value = parentFolderId
     ensureMessages(id)  // fire-and-forget: UI shows loading indicator, never blocks
   }
+
+  function clearActiveChat() {
+    activeChatId.value = null
+  }
+
+  // ── Folder CRUD ───────────────────────────────────────────────────────────
+
+  async function createFolder(name, parentFolderId = null) {
+    const folder = {
+      type: 'folder',
+      id: uuidv4(),
+      name: name || 'New Folder',
+      expanded: true,
+      children: [],
+    }
+    const target = _getTargetChildren(parentFolderId)
+    target.unshift(folder)
+    await persistIndex()
+    return folder
+  }
+
+  async function renameFolder(folderId, newName) {
+    const found = _findNode(folderId, chatTree.value)
+    if (found && found.node.type === 'folder') {
+      found.node.name = newName
+      await persistIndex()
+    }
+  }
+
+  // Returns false if folder is not empty (block delete)
+  async function deleteFolder(folderId) {
+    const found = _findNode(folderId, chatTree.value)
+    if (!found || found.node.type !== 'folder') return false
+    const folder = found.node
+    if (folder.children && folder.children.length > 0) return false
+    found.parent.splice(found.index, 1)
+    // If active folder was this one, reset
+    if (activeFolderId.value === folderId) activeFolderId.value = null
+    await persistIndex()
+    return true
+  }
+
+  function toggleFolder(folderId) {
+    const found = _findNode(folderId, chatTree.value)
+    if (found && found.node.type === 'folder') {
+      found.node.expanded = !found.node.expanded
+      // Don't persist for every expand/collapse — debounce it
+      debouncedPersistIndex()
+    }
+  }
+
+  function setAllFoldersExpanded(expanded) {
+    function walk(nodes) {
+      for (const node of nodes) {
+        if (node.type === 'folder') {
+          node.expanded = expanded
+          if (node.children?.length) walk(node.children)
+        }
+      }
+    }
+    walk(chatTree.value)
+    debouncedPersistIndex()
+  }
+
+  // Move a node (chat or folder) to a new parent folder (null = root), inserting at top
+  async function moveNodeToFolder(nodeId, targetFolderId) {
+    const found = _findNode(nodeId, chatTree.value)
+    if (!found) return
+    // Prevent moving a folder into itself or its descendants
+    if (found.node.type === 'folder') {
+      const targetFound = _findNode(targetFolderId, chatTree.value)
+      if (targetFound) {
+        // Check if targetFolderId is inside nodeId's subtree
+        function isDescendant(folder, id) {
+          for (const child of (folder.children || [])) {
+            if (child.id === id) return true
+            if (child.type === 'folder' && isDescendant(child, id)) return true
+          }
+          return false
+        }
+        if (targetFolderId === nodeId || isDescendant(found.node, targetFolderId)) return
+      }
+    }
+    // Remove from current location
+    const node = found.parent.splice(found.index, 1)[0]
+    // Insert into target
+    const target = _getTargetChildren(targetFolderId)
+    target.unshift(node)
+    await persistIndex()
+  }
+
+  // Reorder a node relative to another node (before/after/inside)
+  async function reorderNode(nodeId, targetId, position) {
+    const found = _findNode(nodeId, chatTree.value)
+    if (!found) return
+    const node = found.parent.splice(found.index, 1)[0]
+
+    if (position === 'inside') {
+      const targetFound = _findNode(targetId, chatTree.value)
+      if (targetFound && targetFound.node.type === 'folder') {
+        targetFound.node.children.unshift(node)
+      } else {
+        // Fallback: put back where we took it
+        found.parent.splice(found.index, 0, node)
+        return
+      }
+    } else {
+      // before or after
+      const targetFound = _findNode(targetId, chatTree.value)
+      if (!targetFound) {
+        found.parent.splice(found.index, 0, node)
+        return
+      }
+      let insertIdx = targetFound.index
+      if (position === 'after') insertIdx++
+      targetFound.parent.splice(insertIdx, 0, node)
+    }
+    await persistIndex()
+  }
+
+  // Legacy reorderChats — now works on root-level chat nodes
+  async function reorderChats(fromIndex, toIndex) {
+    if (fromIndex === toIndex) return
+    const flatRoot = chatTree.value.filter(n => n.type === 'chat')
+    // This is a best-effort for root-level chats only; tree drag handles the rest
+    const item = chatTree.value.splice(fromIndex, 1)[0]
+    chatTree.value.splice(toIndex, 0, item)
+    await persistIndex()
+  }
+
+  // ── Message operations (unchanged) ────────────────────────────────────────
 
   async function addMessage(chatId, message) {
     const chat = chats.value.find(c => c.id === chatId)
@@ -395,13 +638,6 @@ export const useChatsStore = defineStore('chats', () => {
     }
   }
 
-  async function reorderChats(fromIndex, toIndex) {
-    if (fromIndex === toIndex) return
-    const item = chats.value.splice(fromIndex, 1)[0]
-    chats.value.splice(toIndex, 0, item)
-    await persistIndex()
-  }
-
   // ── Persistence helpers ────────────────────────────────────────────────────
 
   function _serializeChat(chatId) {
@@ -436,24 +672,37 @@ export const useChatsStore = defineStore('chats', () => {
     }, DEBOUNCE_MS)
   }
 
+  // Serialize the tree for the index file — strips runtime fields from chats
+  function _serializeTree(nodes) {
+    return nodes.map(node => {
+      if (node.type === 'folder') {
+        return {
+          type: 'folder',
+          id: node.id,
+          name: node.name,
+          expanded: node.expanded,
+          children: _serializeTree(node.children || []),
+        }
+      } else {
+        // chat node — strip messages and runtime flags
+        const { messages, isRunning, isThinking, isLoadingMessages, contextMetrics, ...meta } = JSON.parse(JSON.stringify(node))
+        return meta
+      }
+    })
+  }
+
   async function persistIndex() {
     if (_indexTimer) { clearTimeout(_indexTimer); _indexTimer = null }
-    const index = chats.value.map(c => {
-      const { messages, ...meta } = JSON.parse(JSON.stringify(c))
-      return meta
-    })
-    await storage.saveChatIndex(index)
+    const tree = _serializeTree(chatTree.value)
+    await storage.saveChatIndex(tree)
   }
 
   function debouncedPersistIndex() {
     if (_indexTimer) clearTimeout(_indexTimer)
     _indexTimer = setTimeout(() => {
       _indexTimer = null
-      const index = chats.value.map(c => {
-        const { messages, ...meta } = JSON.parse(JSON.stringify(c))
-        return meta
-      })
-      storage.saveChatIndex(index)
+      const tree = _serializeTree(chatTree.value)
+      storage.saveChatIndex(tree)
     }, DEBOUNCE_MS)
   }
 
@@ -605,12 +854,15 @@ export const useChatsStore = defineStore('chats', () => {
   }
 
   return {
-    chats, activeChatId, activeChat, isLoading, unreadChatIds, completedChatIds, pendingPermissionChatIds,
+    chatTree, chats, activeChatId, activeFolderId, activeChat, isLoading,
+    unreadChatIds, completedChatIds, pendingPermissionChatIds,
     loadChats, createChat, createChatFromHistory, removeChat, renameChat,
-    setActiveChat, addMessage, updateLastAssistantMessage, setChatPersona,
+    setActiveChat, clearActiveChat, addMessage, updateLastAssistantMessage, setChatPersona,
     setChatProvider, setChatModel, setChatPersonaModelOverride, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
     setGroupPersonas, toggleGroupMode, setGroupPersonaOverride,
     removeGroupPersona, addGroupPersona, reorderChats,
+    createFolder, renameFolder, deleteFolder, toggleFolder, setAllFoldersExpanded,
+    moveNodeToFolder, reorderNode,
     initChunkListener, setUiChunkCallback, clearUiChunkCallback, markAsRead, markCompleted,
     markPermissionPending, clearPermissionPending,
     setPlanState, storePlanRunParams, getPlanRunParams,

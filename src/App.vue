@@ -84,6 +84,7 @@ onMounted(async () => {
   // Auto-fetch models for providers that have API keys configured
   if (configStore.config.openrouter?.apiKey) modelsStore.fetchOpenRouterModels()
   if (configStore.config.openai?.apiKey) modelsStore.fetchOpenAIModels()
+  if (configStore.config.deepseek?.apiKey && configStore.config.deepseek?.baseURL) modelsStore.fetchDeepSeekModels()
 
   // Fire all store loads concurrently — none blocks the UI
   Promise.all([

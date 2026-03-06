@@ -5,22 +5,20 @@
     <div class="catalog-header">
       <div style="display:flex; align-items:center; justify-content:space-between;">
         <div>
-          <h1 class="catalog-title">Tools</h1>
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <h1 class="catalog-title">Tools</h1>
+            <span class="catalog-count-badge">{{ toolsStore.tools.length }}</span>
+          </div>
           <p class="catalog-subtitle">
             Define HTTP endpoints, code snippets, prompt templates, and SMTP email tools the AI agent can use.
           </p>
         </div>
         <div class="flex items-center gap-2">
-          <div class="catalog-count-badge">
-            {{ toolsStore.tools.length }} tool{{ toolsStore.tools.length !== 1 ? 's' : '' }}
-          </div>
-          <AppButton size="compact" @click="refreshTools" :loading="refreshing">
+          <AppButton size="icon" @click="refreshTools" :loading="refreshing" title="Refresh">
             <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            Refresh
           </AppButton>
-          <AppButton size="compact" @click="openAdd">
+          <AppButton size="icon" @click="openAdd" title="Add Tool">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add Tool
           </AppButton>
         </div>
       </div>
@@ -526,12 +524,7 @@ const filteredTools = computed(() => {
       (t.type || 'http').includes(q)
     )
   }
-  // Sort defaults to front
-  return [...list].sort((a, b) => {
-    const aD = isToolDefault(a.id) ? 0 : 1
-    const bD = isToolDefault(b.id) ? 0 : 1
-    return aD - bD
-  })
+  return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 })
 
 const modalTitle = computed(() => {
@@ -700,17 +693,15 @@ function truncateEndpoint(ep) {
   margin: 0.25rem 0 0 0;
 }
 .catalog-count-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 600;
-  color: #9CA3AF;
-  background: rgba(245, 245, 245, 0.8);
-  padding: 0.3125rem 0.75rem;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  padding: 0.1875rem 0.5rem;
   border-radius: 9999px;
-  border: 1px solid rgba(229, 229, 234, 0.5);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  line-height: 1.4;
 }
 /* ── Search bar ────────────────────────────────────────────────────────────── */
 .catalog-search-wrap {

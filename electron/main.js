@@ -107,6 +107,7 @@ const TOOLS_FILE = path.join(DATA_DIR, 'tools.json')
 const SOULS_DIR = path.join(DATA_DIR, 'souls')
 const KNOWLEDGE_FILE = path.join(DATA_DIR, 'knowledge.json')
 const ENV_FILE = path.join(DATA_DIR, '.env')
+const UTILITY_USAGE_FILE = path.join(DATA_DIR, 'utility-usage.json')
 
 // --- Env-backed path accessors -----------------------------------------------
 // These three paths are stored in config.json under SPARKAI_DATA_PATH.
@@ -679,6 +680,23 @@ async function accumulateUsage(chatId, metrics, provider, model) {
   }
 }
 
+/** Accumulate utility model token usage into utility-usage.json. */
+async function accumulateUtilityUsage(model, provider, inputTokens, outputTokens) {
+  if (!model || (!inputTokens && !outputTokens)) return
+  try {
+    const existing = await readJSONAsync(UTILITY_USAGE_FILE, { model, provider, inputTokens: 0, outputTokens: 0 })
+    const updated = {
+      model:        model,
+      provider:     provider || existing.provider || '',
+      inputTokens:  (existing.inputTokens  || 0) + (inputTokens  || 0),
+      outputTokens: (existing.outputTokens || 0) + (outputTokens || 0),
+    }
+    await writeJSONAtomic(UTILITY_USAGE_FILE, updated)
+  } catch (err) {
+    logger.warn('accumulateUtilityUsage write failed', err.message)
+  }
+}
+
 // -- Per-chat granular operations ---------------------------------------------
 ipcMain.handle('store:get-chat-index', async () => {
   return readJSONAsync(CHATS_INDEX_FILE, [])
@@ -848,6 +866,10 @@ ipcMain.handle('store:get-data-path', () => ({
   platform: process.platform,
 }))
 
+ipcMain.handle('store:get-utility-usage', async () => {
+  return readJSONAsync(UTILITY_USAGE_FILE, null)
+})
+
 // Save SPARKAI_DATA_PATH to .env file
 ipcMain.handle('store:save-data-path', (_, newDataPath) => {
   try {
@@ -894,8 +916,8 @@ ipcMain.handle('store:save-env-path', (_, key, value) => {
   }
 })
 
-ipcMain.handle('store:get-personas', () => readJSON(PERSONAS_FILE, []))
-ipcMain.handle('store:save-personas', (_, personas) => { writeJSON(PERSONAS_FILE, personas); return true })
+ipcMain.handle('store:get-personas', () => readJSON(PERSONAS_FILE, { categories: [], personas: [] }))
+ipcMain.handle('store:save-personas', (_, data) => { writeJSON(PERSONAS_FILE, data); return true })
 
 // --- IPC: Soul Memory Files -------------------------------------------------
 function ensureSoulsDir(type) {
@@ -2818,6 +2840,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
         messages: [{ role: 'user', content: prompt }],
       })
       const text = response.choices?.[0]?.message?.content || ''
+      accumulateUtilityUsage(um.model, um.provider, response.usage?.prompt_tokens || 0, response.usage?.completion_tokens || 0).catch(() => {})
       return { success: true, text }
     } else {
       // anthropic or openrouter — both use AnthropicClient
@@ -2834,6 +2857,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
         messages: [{ role: 'user', content: prompt }],
       })
       const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+      accumulateUtilityUsage(um.model, um.provider, response.usage?.input_tokens || 0, response.usage?.output_tokens || 0).catch(() => {})
       return { success: true, text }
     }
   } catch (err) {
@@ -2902,6 +2926,7 @@ If none should respond, reply with [].`
         ],
       })
       raw = resp.choices?.[0]?.message?.content || ''
+      accumulateUtilityUsage(um.model, um.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
     } else {
       // anthropic or openrouter
       const { AnthropicClient } = require('./agent/core/AnthropicClient')
@@ -2917,6 +2942,7 @@ If none should respond, reply with [].`
         messages: [{ role: 'user', content: userContent }],
       })
       raw = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
+      accumulateUtilityUsage(um.model, um.provider, resp.usage?.input_tokens || 0, resp.usage?.output_tokens || 0).catch(() => {})
     }
 
     // Extract JSON array from response (may have surrounding prose)

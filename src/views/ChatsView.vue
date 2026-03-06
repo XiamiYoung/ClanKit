@@ -6,6 +6,7 @@
       class="flex-1 min-w-0"
       :gridCount="gridCount"
       :gridChatIds="gridChatIds"
+      :toastMsg="gridToastMsg"
       @update:gridCount="gridCount = $event"
       @exit-grid="exitGridMode"
       @new-chat="gridNewChat"
@@ -19,24 +20,25 @@
     />
 
     <!-- ── Chat List Sidebar (single mode) ────────────────────────────────── -->
-    <aside v-if="!gridMode" class="chat-sidebar" :style="{ width: sidebarWidth + 'px' }">
+    <aside v-if="!gridMode" class="chat-sidebar" :style="{ width: chatSidebarCollapsed ? '0' : sidebarWidth + 'px', minWidth: chatSidebarCollapsed ? '0' : undefined, overflow: chatSidebarCollapsed ? 'hidden' : undefined }">
       <!-- Header -->
       <div class="chat-sidebar-header">
         <span class="chat-sidebar-title">Chats</span>
         <div class="flex items-center gap-1">
+          <!-- New Folder button -->
           <button
-            @click="enterGridMode"
+            @click="(e) => openCtxDialog('newFolder', '', selectedFolderId ?? chatsStore.activeFolderId ?? null, e.clientX, e.clientY)"
             class="chat-sidebar-new-btn"
-            :class="{ 'grid-toggle-active': gridMode }"
-            aria-label="Grid view"
-            title="Multi-chat grid view"
+            aria-label="New folder"
+            title="New folder"
           >
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
             </svg>
           </button>
           <button
-            @click="newChat"
+            @click="newChat()"
             class="chat-sidebar-new-btn"
             aria-label="New chat"
             title="New chat"
@@ -64,64 +66,137 @@
         </button>
       </div>
 
-      <!-- Chat Items -->
-      <div class="chat-sidebar-list">
+      <!-- Chat Tree / Filtered List -->
+      <div
+        class="chat-sidebar-list"
+        @dragover.prevent="onRootDragOver"
+        @dragleave="onRootDragLeave"
+        @drop.prevent="onRootDrop"
+        @contextmenu.prevent="openTreeContextMenu($event, null)"
+        :class="{ 'root-drag-over': rootDragOver }"
+      >
         <!-- Sidebar loading indicator -->
         <div v-if="chatsStore.isLoading" class="chat-sidebar-loading">
           <div class="chat-sidebar-spinner"></div>
           <span style="font-size:var(--fs-small); color:#9CA3AF;">Loading chats</span>
         </div>
-        <div
-          v-for="(chat, index) in filteredChats"
-          :key="chat.id"
-          @click="chatsStore.setActiveChat(chat.id); chatsStore.markAsRead(chat.id)"
-          class="chat-sidebar-item group"
-          :class="{ active: chat.id === chatsStore.activeChatId, 'drag-over': dragOverIndex === index }"
-          draggable="true"
-          @dragstart="onChatDragStart(index, $event)"
-          @dragover.prevent="onChatDragOver(index)"
-          @dragleave="onChatDragLeave"
-          @drop.prevent="onChatDrop(index)"
-          @dragend="onChatDragEnd"
-        >
-          <svg style="width:16px;height:16px;color:#9CA3AF;opacity:0.7;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
 
-          <span v-if="((chat.isRunning && chat.id !== chatsStore.activeChatId) || chatsStore.unreadChatIds.has(chat.id)) && !chatsStore.completedChatIds.has(chat.id) && !chatsStore.pendingPermissionChatIds.has(chat.id)" class="chat-unread-spinner"></span>
-
-          <span class="chat-sidebar-item-title">{{ chat.title }}</span>
-
-          <!-- Approval chip (permission awaiting user) -->
-          <span v-if="chatsStore.pendingPermissionChatIds.has(chat.id) && chat.id !== chatsStore.activeChatId" class="chat-approval-chip">Approval</span>
-          <!-- Completed chip (only when not the active chat) -->
-          <span v-else-if="chatsStore.completedChatIds.has(chat.id) && chat.id !== chatsStore.activeChatId" class="chat-completed-chip">Done</span>
-
-          <!-- Actions -->
+        <!-- Search mode: flat filtered list -->
+        <template v-if="chatFilterQuery.trim()">
           <div
-            v-if="chat.id === chatsStore.activeChatId"
-            class="chat-sidebar-item-actions"
+            v-for="chat in filteredChats"
+            :key="chat.id"
+            @click="chatsStore.setActiveChat(chat.id); chatsStore.markAsRead(chat.id)"
+            class="chat-sidebar-item group"
+            :class="{ active: chat.id === chatsStore.activeChatId }"
           >
-            <button @click.stop="startRename(chat)" class="chat-sidebar-action-btn" aria-label="Rename chat">
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            <svg style="width:16px;height:16px;color:#9CA3AF;opacity:0.7;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span v-if="((chat.isRunning && chat.id !== chatsStore.activeChatId) || chatsStore.unreadChatIds.has(chat.id)) && !chatsStore.completedChatIds.has(chat.id) && !chatsStore.pendingPermissionChatIds.has(chat.id)" class="chat-unread-spinner"></span>
+            <span class="chat-sidebar-item-title">{{ chat.title }}</span>
+            <!-- Folder badge in search mode -->
+            <span v-if="chat._folderName" class="chat-folder-badge">{{ chat._folderName }}</span>
+            <span v-if="chatsStore.pendingPermissionChatIds.has(chat.id) && chat.id !== chatsStore.activeChatId" class="chat-approval-chip">Approval</span>
+            <span v-else-if="chatsStore.completedChatIds.has(chat.id) && chat.id !== chatsStore.activeChatId" class="chat-completed-chip">Done</span>
+            <div class="chat-sidebar-item-actions">
+              <button @click.stop="startRename(chat)" class="chat-sidebar-action-btn" aria-label="Rename chat">
+                <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button @click.stop="requestDeleteChat(chat.id)" class="chat-sidebar-action-btn danger" aria-label="Delete chat">
+                <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <!-- Tree mode: root folder row + recursive node rendering -->
+        <template v-else>
+          <!-- Root folder row -->
+          <div class="chat-root-row">
+            <div class="chat-root-row-left" @click="rootExpanded = !rootExpanded">
+              <svg class="chat-root-chevron" :style="{ transform: rootExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"/>
               </svg>
-            </button>
-            <button @click.stop="requestDeleteChat(chat.id)" class="chat-sidebar-action-btn danger" aria-label="Delete chat">
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              <svg style="width:16px;height:16px;flex-shrink:0;color:#6B7280;" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
+              </svg>
+              <span class="chat-root-label">All Chats</span>
+            </div>
+            <!-- Fold/Unfold all folders button — only visible when folders exist -->
+            <button
+              v-if="hasFolders"
+              class="chat-root-fold-btn"
+              :title="anyFolderExpanded ? 'Collapse all folders' : 'Expand all folders'"
+              @click.stop="chatsStore.setAllFoldersExpanded(!anyFolderExpanded)"
+            >
+              <svg v-if="anyFolderExpanded" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="18 15 12 9 6 15"/>
+              </svg>
+              <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="6 9 12 15 18 9"/>
               </svg>
             </button>
           </div>
-        </div>
+
+          <!-- Tree nodes (visible when root is expanded) -->
+          <template v-if="rootExpanded">
+            <ChatTreeNodeView
+              v-for="node in chatsStore.chatTree"
+              :key="node.id"
+              :node="node"
+              :depth="1"
+              :activeChatId="chatsStore.activeChatId"
+              :unreadChatIds="chatsStore.unreadChatIds"
+              :completedChatIds="chatsStore.completedChatIds"
+              :pendingPermissionChatIds="chatsStore.pendingPermissionChatIds"
+              :draggingId="draggingNodeId"
+              :selectedFolderId="selectedFolderId"
+              @select-chat="(id) => { chatsStore.setActiveChat(id); chatsStore.markAsRead(id); selectedFolderId = null; treeLastSelected = { type: 'chat', id } }"
+              @toggle-folder="(id) => { chatsStore.toggleFolder(id); selectedFolderId = id; treeLastSelected = { type: 'folder', id } }"
+
+              @rename-chat="(chat) => startRename(chat)"
+              @delete-chat="(id) => requestDeleteChat(id)"
+              @context-menu="(e, node, action) => openTreeContextMenu(e, node, action)"
+              @drag-start="(id) => { draggingNodeId = id }"
+              @drag-end="() => { draggingNodeId = null; treeDropTarget = null }"
+              @drop-into="(nodeId, targetId) => onTreeDrop(nodeId, targetId, 'inside')"
+              @drop-before="(nodeId, targetId) => onTreeDrop(nodeId, targetId, 'before')"
+              @drop-after="(nodeId, targetId) => onTreeDrop(nodeId, targetId, 'after')"
+            />
+          </template>
+        </template>
       </div>
 
+      <!-- Tree Context Menu (Teleported) -->
+      <Teleport to="body">
+        <div v-if="treeCtxMenu.visible" class="chat-ctx-overlay" @click="closeTreeCtxMenu" @contextmenu.prevent="closeTreeCtxMenu" />
+        <div v-if="treeCtxMenu.visible" class="chat-ctx-menu" :style="{ top: treeCtxMenu.y + 'px', left: treeCtxMenu.x + 'px' }" @click.stop>
+          <!-- Create actions -->
+          <button class="chat-ctx-item" @click="ctxNewChat()">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="9" y1="12" x2="15" y2="12"/></svg>
+            New Chat
+          </button>
+          <button class="chat-ctx-item" @click="ctxNewFolder()">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+            New Folder
+          </button>
+        </div>
+        <!-- Rename dialog (dark floating input, DocsView style) -->
+        <div v-if="treeCtxDialog.visible" class="chat-ctx-dialog" :style="{ top: treeCtxDialog.y + 'px', left: treeCtxDialog.x + 'px' }" @click.stop @keydown.escape="cancelCtxDialog">
+          <div class="chat-ctx-dialog-title">{{ treeCtxDialog.title }}</div>
+          <input ref="ctxDialogInputRef" v-model="treeCtxDialog.value" class="chat-ctx-dialog-input" :placeholder="treeCtxDialog.placeholder" @keydown.enter="commitCtxDialog" @keydown.escape="cancelCtxDialog" />
+          <div class="chat-ctx-dialog-footer">
+            <button class="chat-ctx-dialog-cancel" @click="cancelCtxDialog">Cancel</button>
+            <button class="chat-ctx-dialog-confirm" @click="commitCtxDialog">{{ treeCtxDialog.type === 'rename' ? 'Rename' : 'Create' }}</button>
+          </div>
+        </div>
+      </Teleport>
     </aside>
 
     <!-- Resize handle -->
     <div
-      v-if="!gridMode"
+      v-if="!gridMode && !chatSidebarCollapsed"
       class="chat-sidebar-resize"
       @mousedown.prevent="startResize"
     ></div>
@@ -135,6 +210,18 @@
       @dragleave.prevent="onDragLeave"
       @drop.prevent="onDrop"
     >
+      <!-- Hamburger toggle tab -->
+      <button
+        @click="chatSidebarCollapsed = !chatSidebarCollapsed"
+        class="chat-sidebar-expand-tab"
+        :title="chatSidebarCollapsed ? 'Expand chat list' : 'Collapse chat list'"
+        :aria-label="chatSidebarCollapsed ? 'Expand chat list' : 'Collapse chat list'"
+      >
+        <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
+        </svg>
+      </button>
+
       <!-- Drag-over overlay (full chat window) -->
       <div
         v-if="isDragOver"
@@ -153,14 +240,17 @@
       <template v-if="chatsStore.activeChat">
         <!-- Chat Header (shared component) -->
         <ChatHeader
+          ref="chatHeaderRef"
           :chatId="chatsStore.activeChatId"
           @open-chat-settings="showChatConfigModal = true"
           @open-soul-viewer="(id, type, name) => openSoulViewer(id, type, name)"
           @remove-group-persona="(cId, pid) => requestRemoveGroupPersona(cId, pid)"
           @start-call="handleStartCall"
+          @enter-grid="enterGridMode"
         />
 
         <!-- ── Context Window Usage Bar (always visible) ────────────────────── -->
+        <div class="chat-context-bar-wrap">
         <div class="chat-context-bar">
           <span style="color:#6B7280; font-size:var(--fs-small); white-space:nowrap;">Context</span>
           <!-- Progress bar -->
@@ -304,6 +394,17 @@
             </svg>
             <span style="font-size:var(--fs-small);">{{ isCompacting ? 'Compacting…' : 'Compact' }}</span>
           </button>
+        </div>
+        <!-- Tab below context bar -->
+        <button
+          class="ctx-header-tab"
+          :title="chatHeaderRef?.headerExpanded ? 'Collapse header' : 'Expand header'"
+          @click.stop="chatHeaderRef && (chatHeaderRef.headerExpanded = !chatHeaderRef.headerExpanded)"
+        >
+          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
+          </svg>
+        </button>
         </div>
 
         <!-- ── Context Inspector Modal ──────────────────────────────────────── -->
@@ -1338,29 +1439,37 @@
                 </div>
                 <span class="ccm-list-summary">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }} enabled · {{ formatTokens(toolsTokenEstimate) }}</span>
               </div>
-              <!-- Tool list -->
+              <!-- Grouped tool list -->
               <div class="ccm-item-list">
-                <div v-if="toolsStore.tools.length === 0 && !ccmToolSearch" class="ccm-list-empty">No tools configured. Go to the Tools page to add some.</div>
-                <div v-else-if="ccmFilteredTools.length === 0 && ccmToolSearch" class="ccm-list-empty">No tools match "{{ ccmToolSearch }}"</div>
-                <div
-                  v-for="t in ccmFilteredTools"
-                  :key="t.id"
-                  class="ccm-item-card"
-                  :class="{ enabled: chatEnabledToolIds.has(t.id) }"
-                  @click="toggleTool(t.id)"
-                >
-                  <div class="ccm-item-card-info">
-                    <div class="ccm-item-card-top">
-                      <span class="ccm-item-card-name">{{ t.name }}</span>
-                      <span class="ccm-item-card-type" :class="'ccm-type-' + (t.type || 'http')">{{ {http:'HTTP',code:'Code',prompt:'Prompt',smtp:'SMTP'}[t.type || 'http'] }}</span>
-                    </div>
-                    <span class="ccm-item-card-desc">{{ t.description || 'No description' }}</span>
+                <div v-if="toolsStore.tools.length === 0" class="ccm-list-empty">No tools configured. Go to the Tools page to add some.</div>
+                <div v-else-if="ccmGroupedTools.length === 0 && ccmToolSearch" class="ccm-list-empty">No tools match "{{ ccmToolSearch }}"</div>
+                <template v-else v-for="group in ccmGroupedTools" :key="group.type">
+                  <!-- Category header -->
+                  <div class="ccm-group-header">
+                    <span class="ccm-group-label">{{ group.label }}</span>
+                    <span class="ccm-group-count">{{ group.enabledCount }}/{{ group.tools.length }} enabled</span>
                   </div>
-                  <label class="ccm-toggle" @click.stop>
-                    <input type="checkbox" :checked="chatEnabledToolIds.has(t.id)" @change="toggleTool(t.id)" />
-                    <span class="ccm-toggle-track"><span class="ccm-toggle-thumb"></span></span>
-                  </label>
-                </div>
+                  <!-- Tools in this group -->
+                  <div
+                    v-for="t in group.tools"
+                    :key="t.id"
+                    class="ccm-item-row"
+                    :class="{ enabled: chatEnabledToolIds.has(t.id) }"
+                    @click="toggleTool(t.id)"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="chatEnabledToolIds.has(t.id)"
+                      @change="toggleTool(t.id)"
+                      @click.stop
+                      class="ccm-row-checkbox"
+                    />
+                    <div class="ccm-row-info">
+                      <span class="ccm-row-name">{{ t.name }}</span>
+                      <span class="ccm-row-desc">{{ t.description || 'No description' }}</span>
+                    </div>
+                  </div>
+                </template>
               </div>
             </div>
 
@@ -1585,70 +1694,65 @@
 
   <!-- New Chat Modal -->
     <div v-if="showNewChatModal" class="rename-backdrop">
-      <div class="rename-modal" style="width:min(460px, 90vw);" @keydown.escape="cancelNewChat" @keydown.enter="confirmNewChat">
+      <div class="rename-modal" style="width:min(460px, 90vw);" @keydown.escape="cancelNewChat" @keydown.enter.prevent="confirmNewChat">
         <div class="rename-header">
           <h3 class="rename-title">New Chat</h3>
           <button class="rename-close-btn" @click="cancelNewChat" aria-label="Close">
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
-        <div style="padding:16px 20px;">
-          <p style="font-size:var(--fs-body); color:#9CA3AF; margin:0 0 12px;">
-            Optionally copy message history from an existing chat.
-          </p>
-          <div class="newchat-source-list">
-            <div
-              class="newchat-source-item newchat-name-row"
-              :class="{ selected: newChatSourceId === null }"
-              @click="selectNewChatSource(null)"
-            >
-              <svg style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-              <input
-                v-model="newChatName"
-                type="text"
-                placeholder="Empty Chat"
-                class="newchat-name-input"
-                @click.stop="selectNewChatSource(null)"
-              />
-              <button class="newchat-persona-cfg-btn" @click.stop="showNewChatPersonaPopover = true" title="Configure personas">
-                <div class="newchat-persona-cfg-avatars" v-if="newChatPersonaIds.length > 0">
-                  <template v-for="(pid, i) in newChatPersonaIds.slice(0, 3)" :key="pid">
-                    <img v-if="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" :src="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" alt="" class="newchat-persona-cfg-avatar-img" :style="{ zIndex: 10 - i }" />
-                    <span v-else class="newchat-persona-cfg-avatar-fb" :style="{ zIndex: 10 - i }">{{ (personasStore.getPersonaById(pid)?.name || '?').charAt(0) }}</span>
-                  </template>
-                  <span v-if="newChatPersonaIds.length > 3" class="newchat-persona-cfg-avatar-fb newchat-persona-cfg-overflow" :style="{ zIndex: 5 }">+{{ newChatPersonaIds.length - 3 }}</span>
-                </div>
-                <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
-              </button>
-            </div>
-            <button
-              v-for="chat in chatsStore.chats"
-              :key="chat.id"
-              class="newchat-source-item"
-              :class="{ selected: newChatSourceId === chat.id }"
-              @click="selectNewChatSource(chat.id)"
-            >
-              <svg style="width:16px;height:16px;color:#9CA3AF;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-              <span class="newchat-source-title">{{ chat.title }}</span>
-              <div class="newchat-persona-cfg-btn" role="button" @click.stop="selectNewChatSource(chat.id); showNewChatPersonaPopover = true" title="Configure personas">
-                <div class="newchat-persona-cfg-avatars" v-if="newChatSourceId === chat.id && newChatPersonaIds.length > 0">
-                  <template v-for="(pid, i) in newChatPersonaIds.slice(0, 3)" :key="pid">
-                    <img v-if="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" :src="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" alt="" class="newchat-persona-cfg-avatar-img" :style="{ zIndex: 10 - i }" />
-                    <span v-else class="newchat-persona-cfg-avatar-fb" :style="{ zIndex: 10 - i }">{{ (personasStore.getPersonaById(pid)?.name || '?').charAt(0) }}</span>
-                  </template>
-                  <span v-if="newChatPersonaIds.length > 3" class="newchat-persona-cfg-avatar-fb newchat-persona-cfg-overflow" :style="{ zIndex: 5 }">+{{ newChatPersonaIds.length - 3 }}</span>
-                </div>
-                <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
+        <div style="padding:1rem 1.25rem 1.25rem; display:flex; flex-direction:column; gap:0.875rem;">
+          <!-- Row 1: Chat name + persona picker -->
+          <div class="newchat-name-row-v2">
+            <svg style="width:16px;height:16px;flex-shrink:0;color:#6B7280;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <input
+              ref="newChatNameInputRef"
+              v-model="newChatName"
+              type="text"
+              placeholder="Chat name (optional)"
+              class="newchat-name-input"
+            />
+            <button class="newchat-persona-cfg-btn" @click.stop="showNewChatPersonaPopover = true" title="Configure personas">
+              <div class="newchat-persona-cfg-avatars" v-if="newChatPersonaIds.length > 0">
+                <template v-for="(pid, i) in newChatPersonaIds.slice(0, 3)" :key="pid">
+                  <img v-if="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" :src="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" alt="" class="newchat-persona-cfg-avatar-img" :style="{ zIndex: 10 - i }" />
+                  <span v-else class="newchat-persona-cfg-avatar-fb" :style="{ zIndex: 10 - i }">{{ (personasStore.getPersonaById(pid)?.name || '?').charAt(0) }}</span>
+                </template>
+                <span v-if="newChatPersonaIds.length > 3" class="newchat-persona-cfg-avatar-fb newchat-persona-cfg-overflow" :style="{ zIndex: 5 }">+{{ newChatPersonaIds.length - 3 }}</span>
               </div>
+              <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
             </button>
+          </div>
+          <!-- Row 2: Folder tree selector -->
+          <div v-if="chatsStore.chatTree.some(n => n.type === 'folder')" class="newchat-folder-tree-wrap">
+            <div class="newchat-folder-tree-label">Save to folder</div>
+            <div class="newchat-folder-tree">
+              <!-- Root option -->
+              <button
+                class="newchat-ftree-item"
+                v-bind="newChatFolderId === null ? { 'data-active': '' } : {}"
+                @click="newChatFolderId = null"
+              >
+                <svg style="width:14px;height:14px;flex-shrink:0;opacity:0.75;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <span>Root (no folder)</span>
+              </button>
+              <!-- Recursive folder tree -->
+              <template v-for="node in chatsStore.chatTree" :key="node.id">
+                <FolderTreeItem
+                  v-if="node.type === 'folder'"
+                  :node="node"
+                  :depth="0"
+                  :selected-id="newChatFolderId"
+                  :expanded-ids="newChatFolderTreeExpanded"
+                  @select="newChatFolderId = $event"
+                  @toggle="toggleNewChatFolderExpand($event)"
+                />
+              </template>
+            </div>
           </div>
         </div>
         <div class="rename-actions">
@@ -1696,26 +1800,92 @@
 
         <!-- Persona list -->
         <div class="ncp-list">
-          <label
-            v-for="p in filteredNewChatPersonas"
-            :key="p.id"
-            class="ncp-item"
-            :class="{ selected: newChatPersonaIds.includes(p.id) }"
-          >
-            <div class="ncp-check">
-              <input type="checkbox" :checked="newChatPersonaIds.includes(p.id)" @change="toggleNewChatPersona(p.id)" />
-              <svg v-if="newChatPersonaIds.includes(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          <!-- When searching: flat filtered list -->
+          <template v-if="newChatPersonaSearch.trim()">
+            <label
+              v-for="p in filteredNewChatPersonas"
+              :key="p.id"
+              class="ncp-item"
+              :class="{ selected: newChatPersonaIds.includes(p.id) }"
+            >
+              <div class="ncp-check">
+                <input type="checkbox" :checked="newChatPersonaIds.includes(p.id)" @change="toggleNewChatPersona(p.id)" />
+                <svg v-if="newChatPersonaIds.includes(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="ncp-avatar">
+                <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" class="ncp-avatar-img" />
+                <span v-else class="ncp-avatar-fallback">{{ p.name.charAt(0) }}</span>
+              </div>
+              <div class="ncp-info">
+                <span class="ncp-name">{{ p.name }}</span>
+                <span v-if="p.description" class="ncp-desc">{{ p.description }}</span>
+              </div>
+            </label>
+            <div v-if="filteredNewChatPersonas.length === 0" class="ncp-empty">No personas match your search</div>
+          </template>
+          <!-- No search: category tree -->
+          <template v-else>
+            <!-- System categories -->
+            <div v-for="cat in personasStore.systemCategories" :key="cat.id" class="ncp-cat-section">
+              <button class="ncp-cat-header" @click="toggleNcpCat(cat.id)">
+                <svg class="ncp-cat-chevron" :class="{ expanded: ncpExpandedCatIds.has(cat.id) }" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <span v-if="cat.emoji" class="ncp-cat-emoji">{{ cat.emoji }}</span>
+                <span class="ncp-cat-name">{{ cat.name }}</span>
+                <span class="ncp-cat-count">{{ personasStore.personasInCategory(cat.id).length }}</span>
+              </button>
+              <div v-if="ncpExpandedCatIds.has(cat.id)" class="ncp-cat-items">
+                <label
+                  v-for="p in personasStore.personasInCategory(cat.id)"
+                  :key="p.id"
+                  class="ncp-item"
+                  :class="{ selected: newChatPersonaIds.includes(p.id) }"
+                >
+                  <div class="ncp-check">
+                    <input type="checkbox" :checked="newChatPersonaIds.includes(p.id)" @change="toggleNewChatPersona(p.id)" />
+                    <svg v-if="newChatPersonaIds.includes(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <div class="ncp-avatar">
+                    <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" class="ncp-avatar-img" />
+                    <span v-else class="ncp-avatar-fallback">{{ p.name.charAt(0) }}</span>
+                  </div>
+                  <div class="ncp-info">
+                    <span class="ncp-name">{{ p.name }}</span>
+                    <span v-if="p.description" class="ncp-desc">{{ p.description }}</span>
+                  </div>
+                </label>
+                <div v-if="personasStore.personasInCategory(cat.id).length === 0" class="ncp-empty" style="padding: 0.375rem 0.5rem; font-size: 0.75rem; font-style: italic;">No personas</div>
+              </div>
             </div>
-            <div class="ncp-avatar">
-              <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" class="ncp-avatar-img" />
-              <span v-else class="ncp-avatar-fallback">{{ p.name.charAt(0) }}</span>
+            <!-- All (fallback) section — always last -->
+            <div class="ncp-cat-section">
+              <button class="ncp-cat-header" @click="toggleNcpCat('__all__')">
+                <svg class="ncp-cat-chevron" :class="{ expanded: ncpExpandedCatIds.has('__all__') }" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <span class="ncp-cat-name">All</span>
+                <span class="ncp-cat-count">{{ sortedSystemPersonas.length }}</span>
+              </button>
+              <div v-if="ncpExpandedCatIds.has('__all__')" class="ncp-cat-items">
+                <label
+                  v-for="p in sortedSystemPersonas"
+                  :key="p.id"
+                  class="ncp-item"
+                  :class="{ selected: newChatPersonaIds.includes(p.id) }"
+                >
+                  <div class="ncp-check">
+                    <input type="checkbox" :checked="newChatPersonaIds.includes(p.id)" @change="toggleNewChatPersona(p.id)" />
+                    <svg v-if="newChatPersonaIds.includes(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <div class="ncp-avatar">
+                    <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" class="ncp-avatar-img" />
+                    <span v-else class="ncp-avatar-fallback">{{ p.name.charAt(0) }}</span>
+                  </div>
+                  <div class="ncp-info">
+                    <span class="ncp-name">{{ p.name }}</span>
+                    <span v-if="p.description" class="ncp-desc">{{ p.description }}</span>
+                  </div>
+                </label>
+              </div>
             </div>
-            <div class="ncp-info">
-              <span class="ncp-name">{{ p.name }}</span>
-              <span v-if="p.description" class="ncp-desc">{{ p.description }}</span>
-            </div>
-          </label>
-          <div v-if="filteredNewChatPersonas.length === 0" class="ncp-empty">No personas match your search</div>
+          </template>
         </div>
 
         <!-- Footer -->
@@ -1747,17 +1917,40 @@
   <!-- Confirm Delete Modal -->
   <ConfirmModal
     v-if="confirmDeleteTarget"
-    :title="confirmDeleteTarget.type === 'message' ? 'Delete Message' : confirmDeleteTarget.type === 'chat' ? 'Delete Chat' : 'Remove Persona'"
+    :title="confirmDeleteTarget.type === 'message' ? 'Delete Message' : confirmDeleteTarget.type === 'chat' ? 'Delete Chat' : confirmDeleteTarget.type === 'folder' ? 'Delete Folder' : 'Remove Persona'"
     :message="confirmDeleteTarget.type === 'message'
       ? 'Are you sure you want to delete this message? It will be removed from the chat history and context window.'
       : confirmDeleteTarget.type === 'chat'
         ? `Are you sure you want to delete &quot;${confirmDeleteTarget.label}&quot;? This action cannot be undone.`
-        : `Remove &quot;${confirmDeleteTarget.label}&quot; from this group chat?`"
+        : confirmDeleteTarget.type === 'folder'
+          ? `Delete the folder &quot;${confirmDeleteTarget.label}&quot;? The folder will be removed.`
+          : `Remove &quot;${confirmDeleteTarget.label}&quot; from this group chat?`"
     :confirm-text="'Delete'"
     confirm-class="danger"
     @confirm="executeConfirmedDelete"
     @close="confirmDeleteTarget = null"
   />
+
+  <!-- Non-empty folder alert -->
+  <ConfirmModal
+    v-if="folderNonEmptyAlert"
+    title="Cannot Delete Folder"
+    :message="`&quot;${folderNonEmptyAlert}&quot; is not empty. Only empty folders can be deleted — move or delete all chats and subfolders inside it first.`"
+    confirm-text="OK"
+    confirm-class="primary"
+    cancel-text="Close"
+    @confirm="folderNonEmptyAlert = null"
+    @close="folderNonEmptyAlert = null"
+  />
+
+  <!-- Tree item name tooltip (teleported — escapes sidebar overflow clip) -->
+  <Teleport to="body">
+    <div
+      v-if="treeTooltip.visible"
+      class="tree-name-tooltip"
+      :style="{ right: treeTooltip.right + 'px', top: (treeTooltip.top - 4) + 'px' }"
+    >{{ treeTooltip.text }}</div>
+  </Teleport>
 
   <!-- Teleport tooltips to body so they escape all stacking contexts -->
   <Teleport to="body">
@@ -1774,7 +1967,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted, onActivated, onDeactivated, onErrorCaptured, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, onActivated, onDeactivated, onErrorCaptured, watch, defineComponent, h } from 'vue'
 defineOptions({ name: 'ChatsView', inheritAttrs: false })
 import { useChatsStore } from '../stores/chats'
 import { useSkillsStore } from '../stores/skills'
@@ -1798,6 +1991,369 @@ import ChatGridLayout from '../components/chat/ChatGridLayout.vue'
 import ChatMentionInput from '../components/chat/ChatMentionInput.vue'
 import { estimateToolTokens, estimateMcpTokens, formatTokens, tokenPercentage } from '../utils/tokenEstimate'
 import { resolveModelPrice, calcCostUSD, convertCurrencies, formatCost } from '../utils/pricing.js'
+
+// ── FolderTreeItem — recursive folder picker for new chat modal ──────────────
+const FolderTreeItem = defineComponent({
+  name: 'FolderTreeItem',
+  props: {
+    node:        { type: Object,  required: true },
+    depth:       { type: Number,  default: 0 },
+    selectedId:  { type: String,  default: null },
+    expandedIds: { type: Set,     required: true },
+  },
+  emits: ['select', 'toggle'],
+  setup(props, { emit }) {
+    return () => {
+      const { node, depth, selectedId, expandedIds } = props
+      const isExpanded = expandedIds.has(node.id)
+      const isSelected = selectedId === node.id
+      const indent = depth * 14
+
+      const row = h('button', {
+        class: 'newchat-ftree-item',
+        style: { paddingLeft: (10 + indent) + 'px' },
+        'data-active': isSelected ? '' : undefined,
+        onClick: () => emit('select', node.id),
+      }, [
+        // Chevron — only if has sub-folders; uses currentColor so it inherits text color
+        node.children?.some(c => c.type === 'folder')
+          ? h('svg', {
+              style: { width: '12px', height: '12px', flexShrink: 0, opacity: 0.6, transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' },
+              viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.5',
+              onClick: (e) => { e.stopPropagation(); emit('toggle', node.id) },
+            }, [h('polyline', { points: '9 18 15 12 9 6' })])
+          : h('span', { style: 'width:12px;display:inline-block;flex-shrink:0;' }),
+        // Folder icon — inherits currentColor
+        h('svg', {
+          style: { width: '14px', height: '14px', flexShrink: 0, opacity: 0.75 },
+          viewBox: '0 0 24 24', fill: 'currentColor',
+        }, [h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })]),
+        // Name — inherits currentColor
+        h('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, node.name),
+      ])
+
+      const children = (isExpanded && node.children?.length)
+        ? node.children
+            .filter(c => c.type === 'folder')
+            .map(child => h(FolderTreeItem, {
+              node: child,
+              depth: depth + 1,
+              selectedId,
+              expandedIds,
+              onSelect: (id) => emit('select', id),
+              onToggle: (id) => emit('toggle', id),
+            }))
+        : []
+
+      return h('div', null, [row, ...children])
+    }
+  },
+})
+
+// ── ChatTreeNodeView — recursive component for chat tree (DocsView style) ────
+const ChatTreeNodeView = defineComponent({
+  name: 'ChatTreeNodeView',
+  props: {
+    node: { type: Object, required: true },
+    depth: { type: Number, default: 0 },
+    activeChatId: { type: String, default: null },
+    unreadChatIds: { type: Object, default: () => new Set() },
+    completedChatIds: { type: Object, default: () => new Set() },
+    pendingPermissionChatIds: { type: Object, default: () => new Set() },
+    draggingId: { type: String, default: null },
+    selectedFolderId: { type: String, default: null },
+  },
+  emits: [
+    'select-chat', 'toggle-folder',
+    'rename-chat', 'delete-chat',
+    'context-menu',
+    'drag-start', 'drag-end',
+    'drop-into', 'drop-before', 'drop-after',
+  ],
+  setup(props, { emit }) {
+    const dragOver = ref(null) // 'top' | 'middle' | 'bottom' | null
+    const hovered = ref(false)
+
+    function onDragStart(e) {
+      e.stopPropagation()
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/plain', props.node.id)
+      emit('drag-start', props.node.id)
+      e.currentTarget.classList.add('chat-tree-dragging')
+    }
+
+    function onDragEnd(e) {
+      e.currentTarget.classList.remove('chat-tree-dragging')
+      dragOver.value = null
+      emit('drag-end')
+    }
+
+    function onDragOver(e) {
+      if (!props.draggingId || props.draggingId === props.node.id) return
+      e.preventDefault()
+      e.stopPropagation()
+      const rect = e.currentTarget.getBoundingClientRect()
+      const y = e.clientY - rect.top
+      const rowH = rect.height
+      if (props.node.type === 'folder') {
+        if (y < rowH * 0.25) dragOver.value = 'top'
+        else if (y > rowH * 0.75) dragOver.value = 'bottom'
+        else dragOver.value = 'middle'
+      } else {
+        dragOver.value = y < rowH / 2 ? 'top' : 'bottom'
+      }
+    }
+
+    function onDragLeave(e) {
+      if (!e.currentTarget.contains(e.relatedTarget)) dragOver.value = null
+    }
+
+    function onDrop(e) {
+      e.preventDefault()
+      e.stopPropagation()
+      const nodeId = props.draggingId || e.dataTransfer.getData('text/plain')
+      if (!nodeId || nodeId === props.node.id) { dragOver.value = null; return }
+      const zone = dragOver.value
+      dragOver.value = null
+      if (zone === 'middle' && props.node.type === 'folder') emit('drop-into', nodeId, props.node.id)
+      else if (zone === 'top') emit('drop-before', nodeId, props.node.id)
+      else emit('drop-after', nodeId, props.node.id)
+    }
+
+    // Shared child props passthrough
+    function childProps(child) {
+      return {
+        key: child.id,
+        node: child,
+        depth: props.depth + 1,
+        activeChatId: props.activeChatId,
+        unreadChatIds: props.unreadChatIds,
+        completedChatIds: props.completedChatIds,
+        pendingPermissionChatIds: props.pendingPermissionChatIds,
+        draggingId: props.draggingId,
+        selectedFolderId: props.selectedFolderId,
+        onSelectChat: (id) => emit('select-chat', id),
+        onToggleFolder: (id) => emit('toggle-folder', id),
+        onRenameChat: (chat) => emit('rename-chat', chat),
+        onDeleteChat: (id) => emit('delete-chat', id),
+        onContextMenu: (e, node, action) => emit('context-menu', e, node, action),
+        onDragStart: (id) => emit('drag-start', id),
+        onDragEnd: () => emit('drag-end'),
+        onDropInto: (nId, tId) => emit('drop-into', nId, tId),
+        onDropBefore: (nId, tId) => emit('drop-before', nId, tId),
+        onDropAfter: (nId, tId) => emit('drop-after', nId, tId),
+      }
+    }
+
+    return () => {
+      const { node, depth, activeChatId, unreadChatIds, completedChatIds, pendingPermissionChatIds, selectedFolderId } = props
+      // DocsView indent: 12 + depth * 18
+      const indent = 12 + depth * 18
+
+      const dragAttrs = {
+        draggable: true,
+        onDragstart: onDragStart,
+        onDragend: onDragEnd,
+        onDragover: onDragOver,
+        onDragleave: onDragLeave,
+        onDrop: onDrop,
+      }
+
+      // Helper: recursively check if any chat in subtree is running
+      function subtreeHasRunning(n) {
+        if (n.type === 'chat') return !!n.isRunning
+        for (const child of (n.children || [])) {
+          if (subtreeHasRunning(child)) return true
+        }
+        return false
+      }
+
+      if (node.type === 'folder') {
+        const isExpanded = node.expanded
+        const isSelected = node.id === selectedFolderId
+        const dragOverFolder = dragOver.value === 'middle'
+        let rowBg = isSelected
+          ? 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'
+          : hovered.value
+            ? 'linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'
+            : 'transparent'
+        if (dragOverFolder) rowBg = 'rgba(0, 122, 255, 0.08)'
+        const isDark = isSelected || hovered.value
+        const isHoveredOrDrag = isDark || dragOverFolder
+        const textColor = isHoveredOrDrag && !dragOverFolder ? '#fff' : '#1A1A1A'
+
+        const folderRow = h('div', {
+          class: 'flex items-center gap-1 py-0.5 pr-2 cursor-pointer group relative chat-tree-row',
+          style: {
+            paddingLeft: indent + 'px',
+            background: rowBg,
+            color: textColor,
+            boxShadow: isSelected ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            borderRadius: '6px',
+            margin: '3px 2px',
+            fontFamily: "'Inter',sans-serif",
+            fontSize: 'var(--fs-secondary)',
+            transition: 'background 0.15s, color 0.15s',
+            // Use individual border properties — never mix with shorthand to avoid height shifts
+            borderTop: dragOver.value === 'top' ? '2px solid #1A1A1A' : '2px solid transparent',
+            borderRight: '0px solid transparent',
+            borderBottom: dragOver.value === 'bottom' ? '2px solid #1A1A1A' : '2px solid transparent',
+            borderLeft: '0px solid transparent',
+            // Drag-over-folder shown via outline (doesn't affect layout)
+            outline: dragOverFolder ? '1px dashed #007AFF' : 'none',
+          },
+          onClick: () => emit('toggle-folder', node.id),
+          onContextmenu: (e) => { e.preventDefault(); e.stopPropagation(); emit('context-menu', e, node) },
+          onMouseenter: (e) => {
+            hovered.value = true
+            const nameEl = e.currentTarget.querySelector('.truncate')
+            if (nameEl && nameEl.scrollWidth > nameEl.clientWidth) {
+              const rect = e.currentTarget.getBoundingClientRect()
+              treeTooltip.value = { visible: true, text: node.name, right: (globalThis.innerWidth ?? document.documentElement.clientWidth) - rect.right, top: rect.top }
+            }
+          },
+          onMouseleave: () => { hovered.value = false; treeTooltip.value.visible = false },
+          ...dragAttrs,
+        }, [
+          // Chevron
+          h('svg', {
+            style: { width: '14px', height: '14px', flexShrink: 0, color: isDark ? 'rgba(255,255,255,0.5)' : '#9CA3AF', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s, color 0.15s' },
+            viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2',
+          }, [h('polyline', { points: '9 18 15 12 9 6' })]),
+          // Folder icon (filled, DocsView style)
+          h('svg', {
+            style: { width: '16px', height: '16px', flexShrink: 0, color: isDark ? 'rgba(255,255,255,0.7)' : '#6B7280', transition: 'color 0.15s' },
+            viewBox: '0 0 24 24', fill: 'currentColor',
+          }, [h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })]),
+          // Spinner: show when folder is collapsed and has a running chat inside
+          (!isExpanded && subtreeHasRunning(node))
+            ? h('span', { class: isDark ? 'chat-unread-spinner chat-unread-spinner--light' : 'chat-unread-spinner' })
+            : null,
+          // Name
+          h('span', {
+            class: 'truncate flex-1',
+            style: { fontWeight: '600', color: isDark ? '#fff' : '#1A1A1A', userSelect: 'none', transition: 'color 0.15s' },
+          }, node.name),
+          // Hover action buttons — rename + delete (same style as chat items)
+          h('div', { class: 'chat-tree-folder-actions' }, [
+            h('button', {
+              class: 'chat-sidebar-action-btn',
+              title: 'Rename folder',
+              onClick: (e) => { e.stopPropagation(); emit('context-menu', e, node, 'rename') },
+            }, [
+              h('svg', { style: { width: '13px', height: '13px' }, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+                h('path', { d: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7' }),
+                h('path', { d: 'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z' }),
+              ]),
+            ]),
+            h('button', {
+              class: 'chat-sidebar-action-btn danger',
+              title: 'Delete folder',
+              onClick: (e) => { e.stopPropagation(); emit('context-menu', e, node, 'delete') },
+            }, [
+              h('svg', { style: { width: '13px', height: '13px' }, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+                h('polyline', { points: '3 6 5 6 21 6' }),
+                h('path', { d: 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6' }),
+                h('path', { d: 'M10 11v6M14 11v6' }),
+              ]),
+            ]),
+          ]),
+        ])
+
+        const childNodes = (isExpanded && node.children?.length)
+          ? node.children.map(child => h(ChatTreeNodeView, childProps(child)))
+          : []
+
+        return h('div', { style: { marginTop: depth === 0 ? '6px' : '0' } }, [folderRow, ...childNodes])
+
+      } else {
+        // Chat row — DocsView style (active = black gradient)
+        const isActive = node.id === activeChatId
+        const isUnread = unreadChatIds.has(node.id)
+        const isCompleted = completedChatIds.has(node.id)
+        const isPendingPermission = pendingPermissionChatIds.has(node.id)
+        const showSpinner = (isUnread || (node.isRunning && !isActive)) && !isCompleted && !isPendingPermission
+
+        const isDark = isActive || hovered.value
+        const rowBg = isActive
+          ? 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'
+          : hovered.value
+            ? 'linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'
+            : 'transparent'
+
+        return h('div', {
+          class: 'flex items-center gap-1 py-0.5 pr-2 cursor-pointer group relative chat-tree-row',
+          style: {
+            paddingLeft: indent + 'px',
+            background: rowBg,
+            color: isDark ? '#fff' : '#1A1A1A',
+            boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            borderRadius: '6px',
+            margin: '3px 2px',
+            fontFamily: "'Inter',sans-serif",
+            fontSize: 'var(--fs-secondary)',
+            transition: 'background 0.15s, color 0.15s',
+            // Individual border properties — never mix with shorthand to avoid height shifts
+            borderTop: dragOver.value === 'top' ? '2px solid #fff' : '2px solid transparent',
+            borderRight: '0px solid transparent',
+            borderBottom: dragOver.value === 'bottom' ? '2px solid #fff' : '2px solid transparent',
+            borderLeft: '0px solid transparent',
+          },
+          onClick: () => emit('select-chat', node.id),
+          onContextmenu: (e) => { e.preventDefault(); e.stopPropagation(); emit('context-menu', e, node) },
+          onMouseenter: (e) => {
+            hovered.value = true
+            const nameEl = e.currentTarget.querySelector('.truncate')
+            if (nameEl && nameEl.scrollWidth > nameEl.clientWidth) {
+              const rect = e.currentTarget.getBoundingClientRect()
+              treeTooltip.value = { visible: true, text: node.title, right: (globalThis.innerWidth ?? document.documentElement.clientWidth) - rect.right, top: rect.top }
+            }
+          },
+          onMouseleave: () => { hovered.value = false; treeTooltip.value.visible = false },
+          ...dragAttrs,
+        }, [
+          // Spacer aligned with folder chevron
+          h('span', { style: 'width:14px;display:inline-block;flex-shrink:0;' }),
+          // Chat icon
+          h('svg', {
+            style: { width: '16px', height: '16px', flexShrink: 0, color: isDark ? 'rgba(255,255,255,0.7)' : '#9CA3AF', transition: 'color 0.15s' },
+            viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2',
+          }, [h('path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' })]),
+          showSpinner ? h('span', { class: isDark ? 'chat-unread-spinner chat-unread-spinner--light' : 'chat-unread-spinner' }) : null,
+          h('span', { class: 'truncate flex-1', style: { fontWeight: isActive ? '600' : '400', color: isDark ? '#fff' : '#1A1A1A', transition: 'color 0.15s' } }, node.title),
+          // Status chips
+          isPendingPermission && !isActive ? h('span', { class: 'chat-approval-chip' }, 'Approval') : null,
+          (!isPendingPermission && isCompleted && !isActive) ? h('span', { class: 'chat-completed-chip' }, 'Done') : null,
+          // Action buttons — always rendered, shown only on row hover via CSS
+          h('div', { class: 'chat-sidebar-item-actions' }, [
+            h('button', {
+              class: 'chat-sidebar-action-btn',
+              'aria-label': 'Rename chat',
+              onClick: (e) => { e.stopPropagation(); emit('rename-chat', node) },
+            }, [
+              h('svg', { style: { width: '13px', height: '13px' }, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+                h('path', { d: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7' }),
+                h('path', { d: 'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z' }),
+              ]),
+            ]),
+            h('button', {
+              class: 'chat-sidebar-action-btn danger',
+              'aria-label': 'Delete chat',
+              onClick: (e) => { e.stopPropagation(); emit('delete-chat', node.id) },
+            }, [
+              h('svg', { style: { width: '13px', height: '13px' }, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+                h('polyline', { points: '3 6 5 6 21 6' }),
+                h('path', { d: 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6' }),
+                h('path', { d: 'M10 11v6M14 11v6' }),
+                h('path', { d: 'M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2' }),
+              ]),
+            ]),
+          ]),
+        ])
+      }
+    }
+  }
+})
 
 const chatsStore = useChatsStore()
 const skillsStore = useSkillsStore()
@@ -2348,13 +2904,7 @@ watch(gridCount, (newCount) => {
 })
 
 function enterGridMode() {
-  // Only recalculate if grid hasn't been initialized or all IDs are stale
-  const validIds = gridChatIds.value.filter(id => chatsStore.chats.some(c => c.id === id))
-  if (validIds.length === 0) {
-    refreshGridChatIds()
-  } else {
-    gridChatIds.value = validIds.slice(0, gridCount.value)
-  }
+  refreshGridChatIds()
   gridMode.value = true
 }
 
@@ -2368,11 +2918,21 @@ function gridMaximizeChat(chatId) {
   gridMode.value = false
 }
 
+const gridToastMsg = ref('')
+let gridToastTimer = null
+
+function showGridToast(msg) {
+  gridToastMsg.value = msg
+  clearTimeout(gridToastTimer)
+  gridToastTimer = setTimeout(() => { gridToastMsg.value = '' }, 2500)
+}
+
 async function gridNewChat() {
   const chat = await chatsStore.createChat('New Chat')
   if (chat) {
     chatsStore.setActiveChat(chat.id)
     gridChatIds.value = [chat.id, ...gridChatIds.value.filter(id => id !== chat.id)].slice(0, gridCount.value)
+    showGridToast('New chat created')
   }
 }
 
@@ -2414,37 +2974,37 @@ const quotedMessage = ref(null)  // { role, content } of the message being quote
 const memorySuggestions = ref(new Map()) // chatId → [{id, target, personaType, personaId, section, entry, status}]
 let memoryAutoDismissTimer = null
 
-// ── Drag & drop reorder ──────────────────────────────────────────────────────
-const dragIndex = ref(null)
-const dragOverIndex = ref(null)
+// ── Drag & drop (tree-based) ──────────────────────────────────────────────────
+const draggingNodeId = ref(null)
+const treeDropTarget = ref(null)
+const rootDragOver = ref(false)
 
-function onChatDragStart(index, e) {
-  dragIndex.value = index
-  e.dataTransfer.effectAllowed = 'move'
-  e.dataTransfer.setData('text/plain', index)
-  e.currentTarget.style.opacity = '0.5'
+function onTreeDrop(nodeId, targetId, position) {
+  if (!nodeId) return
+  chatsStore.reorderNode(nodeId, targetId, position)
+  draggingNodeId.value = null
+  treeDropTarget.value = null
 }
 
-function onChatDragOver(index) {
-  dragOverIndex.value = index
+function onRootDragOver(e) {
+  if (!draggingNodeId.value) return
+  e.preventDefault()
+  rootDragOver.value = true
 }
 
-function onChatDragLeave() {
-  dragOverIndex.value = null
-}
-
-function onChatDrop(toIndex) {
-  if (dragIndex.value !== null && dragIndex.value !== toIndex) {
-    chatsStore.reorderChats(dragIndex.value, toIndex)
+function onRootDragLeave(e) {
+  // Only clear if leaving the list entirely (not entering a child)
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    rootDragOver.value = false
   }
-  dragOverIndex.value = null
-  dragIndex.value = null
 }
 
-function onChatDragEnd(e) {
-  e.currentTarget.style.opacity = '1'
-  dragOverIndex.value = null
-  dragIndex.value = null
+function onRootDrop(e) {
+  if (!draggingNodeId.value) return
+  rootDragOver.value = false
+  // Drop onto root area = move to root
+  chatsStore.moveNodeToFolder(draggingNodeId.value, null)
+  draggingNodeId.value = null
 }
 const userScrolled = ref(false)  // true when user manually scrolled up during streaming
 let programmaticScrollCount = 0   // counter to ignore scroll events triggered by scrollToBottom
@@ -2559,12 +3119,41 @@ const isCompacting = ref(false)
 
 // ── Resizable sidebar ────────────────────────────────────────────────────────
 function getDefaultSidebarWidth() {
-  if (window.innerWidth >= 2560) return 280
-  if (window.innerWidth >= 1920) return 240
-  return 220
+  if (window.innerWidth >= 2560) return 340
+  if (window.innerWidth >= 1920) return 300
+  return 260
 }
 const sidebarWidth = ref(getDefaultSidebarWidth())
+const chatSidebarCollapsed = ref(false)
+const chatHeaderRef = ref(null)
+// Tracks the last-clicked tree node: { type: 'folder'|'chat', id }
+const treeLastSelected = ref(null)
+const selectedFolderId = ref(null)
+const rootExpanded = ref(true)
 const isResizing = ref(false)
+
+const anyFolderExpanded = computed(() => {
+  function check(nodes) {
+    for (const node of nodes) {
+      if (node.type === 'folder') {
+        if (node.expanded) return true
+        if (node.children?.length && check(node.children)) return true
+      }
+    }
+    return false
+  }
+  return check(chatsStore.chatTree)
+})
+
+const hasFolders = computed(() => {
+  function has(nodes) {
+    for (const node of nodes) {
+      if (node.type === 'folder') return true
+    }
+    return false
+  }
+  return has(chatsStore.chatTree)
+})
 
 function startResize(e) {
   isResizing.value = true
@@ -2712,13 +3301,27 @@ const ccmFilteredTools = computed(() => {
       (t.type || 'http').includes(q)
     )
   }
-  // Sort: enabled first, then alphabetical
-  return [...list].sort((a, b) => {
-    const aE = chatEnabledToolIds.value.has(a.id) ? 0 : 1
-    const bE = chatEnabledToolIds.value.has(b.id) ? 0 : 1
-    if (aE !== bE) return aE - bE
-    return (a.name || '').localeCompare(b.name || '')
-  })
+  return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+})
+
+// Group filtered tools by type for the grouped-by-category UI
+const TYPE_LABELS = { http: 'HTTP', code: 'Code', prompt: 'Prompt', smtp: 'SMTP' }
+const TYPE_ORDER = ['http', 'code', 'prompt', 'smtp']
+const ccmGroupedTools = computed(() => {
+  const groups = {}
+  for (const t of ccmFilteredTools.value) {
+    const type = t.type || 'http'
+    if (!groups[type]) groups[type] = []
+    groups[type].push(t)
+  }
+  return TYPE_ORDER
+    .filter(k => groups[k])
+    .map(k => ({
+      type: k,
+      label: TYPE_LABELS[k] || k,
+      tools: groups[k],
+      enabledCount: groups[k].filter(t => chatEnabledToolIds.value.has(t.id)).length
+    }))
 })
 
 const ccmFilteredMcp = computed(() => {
@@ -2730,12 +3333,7 @@ const ccmFilteredMcp = computed(() => {
       s.description?.toLowerCase().includes(q)
     )
   }
-  return [...list].sort((a, b) => {
-    const aE = chatEnabledMcpIds.value.has(a.id) ? 0 : 1
-    const bE = chatEnabledMcpIds.value.has(b.id) ? 0 : 1
-    if (aE !== bE) return aE - bE
-    return (a.name || '').localeCompare(b.name || '')
-  })
+  return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 })
 
 // Snapshot of draft state before modal opens (for cancel/revert)
@@ -3142,28 +3740,183 @@ watch(chatFilterQuery, async (q) => {
   }
 })
 
+// Build a map of chatId → folderName for search badges
+function _buildFolderNameMap(nodes, parentName = null, result = {}) {
+  for (const node of nodes) {
+    if (node.type === 'folder') {
+      _buildFolderNameMap(node.children || [], node.name, result)
+    } else {
+      result[node.id] = parentName
+    }
+  }
+  return result
+}
+
 const filteredChats = computed(() => {
   const q = chatFilterQuery.value.trim().toLowerCase()
-  const sorted = [...chatsStore.chats].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-  if (!q) return sorted
-  return sorted.filter(chat => {
-    // Match title
-    if (chat.title.toLowerCase().includes(q)) return true
-    // Match cached message content
-    const cached = chatSearchCache.value[chat.id]
-    if (cached && cached.includes(q)) return true
-    return false
-  })
+  const allChats = chatsStore.chats
+  if (!q) return allChats
+  const folderNameMap = _buildFolderNameMap(chatsStore.chatTree)
+  const sorted = [...allChats].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+  return sorted
+    .filter(chat => {
+      if (chat.title.toLowerCase().includes(q)) return true
+      const cached = chatSearchCache.value[chat.id]
+      if (cached && cached.includes(q)) return true
+      return false
+    })
+    .map(chat => ({ ...chat, _folderName: folderNameMap[chat.id] || null }))
 })
+
+// ── Tree Context Menu (DocsView pattern) ──────────────────────────────────────
+const treeCtxMenu = ref({ visible: false, x: 0, y: 0, node: null })
+const treeCtxDialog = ref({ visible: false, type: '', title: '', placeholder: '', value: '', x: 0, y: 0, folderId: null })
+const ctxDialogInputRef = ref(null)
+const treeTooltip = ref({ visible: false, text: '', right: 0, top: 0 })
+
+function openTreeContextMenu(e, node, action = null) {
+  e.preventDefault?.()
+  e.stopPropagation?.()
+  const x = Math.min(e.clientX, window.innerWidth - 220)
+  const y = Math.min(e.clientY, window.innerHeight - 200)
+  // Select the node on right-click (same as left-click selection)
+  if (node?.type === 'folder') {
+    selectedFolderId.value = node.id
+    treeLastSelected.value = { type: 'folder', id: node.id }
+  } else if (node?.type === 'chat') {
+    selectedFolderId.value = null
+    chatsStore.setActiveChat(node.id)
+    treeLastSelected.value = { type: 'chat', id: node.id }
+  }
+  // If an action was passed directly (from hover button click), run it immediately
+  if (action === 'rename' && node?.type === 'folder') {
+    openCtxDialog('rename', node.name, node.id, x, y)
+    return
+  }
+  if (action === 'delete' && node?.type === 'folder') {
+    closeTreeCtxMenu()
+    doDeleteFolder(node.id)
+    return
+  }
+  treeCtxMenu.value = { visible: true, x, y, node }
+}
+
+function closeTreeCtxMenu() {
+  treeCtxMenu.value.visible = false
+}
+
+function openCtxDialog(type, defaultValue, folderId, x, y) {
+  closeTreeCtxMenu()
+  const titles = { rename: 'Rename Folder', newFolder: 'New Folder', newChat: 'New Chat' }
+  const placeholders = { rename: 'Folder name', newFolder: 'Folder name', newChat: 'Chat name' }
+  treeCtxDialog.value = {
+    visible: true, type,
+    title: titles[type] || type,
+    placeholder: placeholders[type] || '',
+    value: defaultValue || '',
+    x: Math.min(x, window.innerWidth - 240),
+    y: Math.min(y, window.innerHeight - 160),
+    folderId,
+  }
+  nextTick(() => {
+    ctxDialogInputRef.value?.focus()
+    ctxDialogInputRef.value?.select()
+  })
+}
+
+function cancelCtxDialog() {
+  treeCtxDialog.value.visible = false
+}
+
+async function commitCtxDialog() {
+  const { type, value, folderId } = treeCtxDialog.value
+  const name = value.trim()
+  treeCtxDialog.value.visible = false
+  if (!name) return
+  if (type === 'rename') {
+    await chatsStore.renameFolder(folderId, name)
+  } else if (type === 'newFolder') {
+    await chatsStore.createFolder(name, folderId)
+  }
+}
+
+// Context menu action handlers
+function ctxNewChat() {
+  const node = treeCtxMenu.value.node
+  const folderId = node?.type === 'folder' ? node.id : null
+  closeTreeCtxMenu()
+  // Open the standard new-chat modal (persona selection) with folder context
+  newChat(folderId)
+}
+
+function ctxNewFolder() {
+  const node = treeCtxMenu.value.node
+  const parentFolderId = node?.type === 'folder' ? node.id : null
+  const pos = { x: treeCtxMenu.value.x, y: treeCtxMenu.value.y }
+  closeTreeCtxMenu()
+  openCtxDialog('newFolder', '', parentFolderId, pos.x, pos.y)
+}
+
+function ctxRenameFolder() {
+  const node = treeCtxMenu.value.node
+  const pos = { x: treeCtxMenu.value.x, y: treeCtxMenu.value.y }
+  closeTreeCtxMenu()
+  if (node?.type === 'folder') openCtxDialog('rename', node.name, node.id, pos.x, pos.y)
+}
+
+function ctxDeleteFolder() {
+  const node = treeCtxMenu.value.node
+  closeTreeCtxMenu()
+  if (node?.type === 'folder') doDeleteFolder(node.id)
+}
+
+function doDeleteFolder(folderId) {
+  const node = _findFolderNodeById(folderId)
+  if (node && node.children && node.children.length > 0) {
+    folderNonEmptyAlert.value = node.name
+    return
+  }
+  confirmDeleteTarget.value = { type: 'folder', id: folderId, label: node?.name || 'this folder' }
+}
+
+function _findFolderNodeById(folderId) {
+  function walk(nodes) {
+    for (const n of nodes) {
+      if (n.id === folderId) return n
+      if (n.children?.length) { const r = walk(n.children); if (r) return r }
+    }
+    return null
+  }
+  return walk(chatsStore.chatTree)
+}
+
+const folderNonEmptyAlert = ref(null)
 
 // ── Chat Management ──────────────────────────────────────────────────────────
 const showNewChatModal = ref(false)
-const newChatSourceId = ref(null)
 const newChatName = ref('')
+const newChatFolderId = ref(null)
+const newChatNameInputRef = ref(null)
 const newChatPersonaIds = ref([])
 const showNewChatPersonaPopover = ref(false)
 const newChatPersonaSearch = ref('')
 const newChatPersonaSearchEl = ref(null)
+const newChatFolderTreeExpanded = ref(new Set())
+const ncpExpandedCatIds = ref(new Set())
+
+function toggleNcpCat(id) {
+  const s = new Set(ncpExpandedCatIds.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  ncpExpandedCatIds.value = s
+}
+
+function toggleNewChatFolderExpand(folderId) {
+  const s = newChatFolderTreeExpanded.value
+  if (s.has(folderId)) s.delete(folderId)
+  else s.add(folderId)
+  // Trigger reactivity
+  newChatFolderTreeExpanded.value = new Set(s)
+}
 
 const filteredNewChatPersonas = computed(() => {
   const q = newChatPersonaSearch.value.toLowerCase().trim()
@@ -3178,6 +3931,7 @@ const filteredNewChatPersonas = computed(() => {
 watch(showNewChatPersonaPopover, (open) => {
   if (open) {
     newChatPersonaSearch.value = ''
+    ncpExpandedCatIds.value = new Set()
     nextTick(() => newChatPersonaSearchEl.value?.focus())
   }
 })
@@ -3185,25 +3939,6 @@ watch(showNewChatPersonaPopover, (open) => {
 function defaultPersonaIds() {
   const def = personasStore.defaultSystemPersona
   return def ? [def.id] : []
-}
-
-function selectNewChatSource(chatId) {
-  newChatSourceId.value = chatId
-  showNewChatPersonaPopover.value = false
-  if (chatId) {
-    const source = chatsStore.chats.find(c => c.id === chatId)
-    if (source) {
-      if (source.isGroupChat && source.groupPersonaIds?.length > 0) {
-        newChatPersonaIds.value = [...source.groupPersonaIds]
-      } else if (source.systemPersonaId) {
-        newChatPersonaIds.value = [source.systemPersonaId]
-      } else {
-        newChatPersonaIds.value = defaultPersonaIds()
-      }
-    }
-  } else {
-    newChatPersonaIds.value = defaultPersonaIds()
-  }
 }
 
 function toggleNewChatPersona(personaId) {
@@ -3215,33 +3950,45 @@ function toggleNewChatPersona(personaId) {
   }
 }
 
-function newChat() {
+// folderId: null = root, undefined = use active folder context
+function newChat(folderId) {
+  const resolvedFolder = folderId !== undefined ? folderId : (chatsStore.activeFolderId?.value ?? null)
   showNewChatModal.value = true
-  newChatSourceId.value = null
   newChatName.value = ''
+  newChatFolderId.value = resolvedFolder
   newChatPersonaIds.value = defaultPersonaIds()
   showNewChatPersonaPopover.value = false
   newChatPersonaSearch.value = ''
+  // Pre-expand ancestors of pre-selected folder
+  newChatFolderTreeExpanded.value = new Set(getAncestorFolderIds(resolvedFolder, chatsStore.chatTree))
+  nextTick(() => newChatNameInputRef.value?.focus())
+}
+
+function getAncestorFolderIds(targetId, nodes, path = []) {
+  if (!targetId) return []
+  for (const n of nodes) {
+    if (n.type !== 'folder') continue
+    if (n.id === targetId) return path.map(p => p.id)
+    if (n.children?.length) {
+      const found = getAncestorFolderIds(targetId, n.children, [...path, n])
+      if (found !== null) return found
+    }
+  }
+  return null
 }
 
 async function confirmNewChat() {
   showNewChatModal.value = false
+  const title = newChatName.value.trim() || 'New Chat'
   const personaCfg = newChatPersonaIds.value.length > 0 ? [...newChatPersonaIds.value] : null
-  if (newChatSourceId.value) {
-    const source = chatsStore.chats.find(c => c.id === newChatSourceId.value)
-    const title = source ? `${source.title} (copy)` : 'New Chat'
-    await chatsStore.createChatFromHistory(newChatSourceId.value, title, personaCfg)
-  } else {
-    const title = newChatName.value.trim() || 'New Chat'
-    await chatsStore.createChat(title, personaCfg)
-  }
+  await chatsStore.createChat(title, personaCfg, newChatFolderId.value)
   nextTick(() => mentionInputRef.value?.focus())
 }
 
 function cancelNewChat() {
   showNewChatModal.value = false
-  newChatSourceId.value = null
   newChatName.value = ''
+  newChatFolderId.value = null
   newChatPersonaIds.value = []
   showNewChatPersonaPopover.value = false
   newChatPersonaSearch.value = ''
@@ -3280,6 +4027,8 @@ async function executeConfirmedDelete() {
     chatsStore.removeGroupPersona(target.id, target.pid)
   } else if (target.type === 'message') {
     await chatsStore.deleteMessage(target.id, target.msgId)
+  } else if (target.type === 'folder') {
+    await chatsStore.deleteFolder(target.id)
   }
 }
 
@@ -5284,6 +6033,30 @@ onUnmounted(() => {
   flex-direction: column;
   background: #FFFFFF;
   border-right: 1px solid #E5E5EA;
+  transition: width 0.2s ease, min-width 0.2s ease;
+}
+.chat-sidebar-expand-tab {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 3rem;
+  border: none;
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  cursor: pointer;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.12);
+  transition: width 0.15s ease, background 0.15s ease;
+}
+.chat-sidebar-expand-tab:hover {
+  width: 1.875rem;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 .chat-sidebar-resize {
   width: 4px;
@@ -5312,9 +6085,9 @@ onUnmounted(() => {
   color: #1A1A1A;
 }
 .chat-sidebar-new-btn {
-  width: 2.125rem;
-  height: 2.125rem;
-  border-radius: 0.75rem;
+  width: 1.875rem;
+  height: 1.875rem;
+  border-radius: 0.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5335,6 +6108,65 @@ onUnmounted(() => {
 .chat-sidebar-new-btn.grid-toggle-active {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   box-shadow: 0 0 0 2px rgba(0,122,255,0.4), 0 2px 8px rgba(0,0,0,0.12);
+}
+/* ── Root folder row ─────────────────────────────────────────────────── */
+.chat-root-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3125rem 0.5rem 0.3125rem 0.75rem;
+  margin: 0.25rem 0.125rem 0.125rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  user-select: none;
+}
+.chat-root-row:hover {
+  background: #F5F5F5;
+}
+.chat-root-row-left {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.chat-root-chevron {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #9CA3AF;
+  transition: transform 0.15s;
+}
+.chat-root-label {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: #6B7280;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-root-fold-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.chat-root-fold-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 /* ── Chat filter ────────────────────────────────────────────────────────── */
 .chat-sidebar-filter {
@@ -5459,65 +6291,6 @@ onUnmounted(() => {
   color: #ffffff;
   font-weight: 600;
 }
-.chat-unread-spinner {
-  flex-shrink: 0;
-  width: 0.75rem;
-  height: 0.75rem;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  border-top-color: #1A1A1A;
-  border-right-color: rgba(26, 26, 26, 0.4);
-  animation: unread-spin 0.7s linear infinite;
-}
-.chat-sidebar-item.active .chat-unread-spinner {
-  border-top-color: #fff;
-  border-right-color: rgba(255, 255, 255, 0.4);
-}
-@keyframes unread-spin {
-  to { transform: rotate(360deg); }
-}
-.chat-completed-chip {
-  flex-shrink: 0;
-  padding: 0.0625rem 0.4375rem;
-  border-radius: 0.375rem;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-small);
-  font-weight: 600;
-  background: #1A1A1A;
-  color: #fff;
-  letter-spacing: 0.01em;
-}
-.chat-sidebar-item.active .chat-completed-chip {
-  background: rgba(255, 255, 255, 0.2);
-}
-.chat-approval-chip {
-  flex-shrink: 0;
-  padding: 0.0625rem 0.4375rem;
-  border-radius: 0.375rem;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-small);
-  font-weight: 600;
-  background: #EF4444;
-  color: #fff;
-  letter-spacing: 0.01em;
-  animation: approval-pulse 1.5s ease-in-out infinite;
-}
-@keyframes approval-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.65; }
-}
-.chat-sidebar-item-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.125rem;
-  opacity: 0;
-  transition: opacity 0.15s;
-  flex-shrink: 0;
-}
-.chat-sidebar-item:hover .chat-sidebar-item-actions,
-.chat-sidebar-item.active .chat-sidebar-item-actions {
-  opacity: 1;
-}
 .chat-sidebar-item[draggable="true"] {
   cursor: grab;
 }
@@ -5527,27 +6300,149 @@ onUnmounted(() => {
 .chat-sidebar-item.drag-over {
   border-top: 2px solid #1A1A1A;
 }
-.chat-sidebar-action-btn {
-  width: 1.625rem;
-  height: 1.625rem;
+
+/* Root drop zone highlight */
+.root-drag-over {
+  background: rgba(0, 122, 255, 0.04);
+}
+
+/* Tree item name tooltip */
+.tree-name-tooltip {
+  position: fixed;
+  transform: translateY(-100%);
+  white-space: nowrap;
+  background: #1A1A1A;
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
   border-radius: 0.375rem;
+  border: 1px solid #2A2A2A;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  pointer-events: none;
+  z-index: 9999;
+  margin-top: -0.25rem;
+}
+
+/* Folder badge in search results */
+.chat-folder-badge {
+  font-size: var(--fs-small);
+  color: #9CA3AF;
+  background: #F5F5F5;
+  border-radius: var(--radius-full);
+  padding: 0.0625rem 0.4rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+  max-width: 5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Chat tree context menu (DocsView style, dark) ───────────────────────── */
+.chat-ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+}
+.chat-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 10px;
+  padding: 4px;
+  min-width: 190px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
+  animation: chatCtxEnter 0.1s ease-out;
+}
+@keyframes chatCtxEnter {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.chat-ctx-item {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
   border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #E5E5EA;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+.chat-ctx-item:hover { background: #1F1F1F; color: #FFFFFF; }
+.chat-ctx-danger { color: #FF453A; }
+.chat-ctx-danger:hover { background: rgba(255,69,58,0.15) !important; color: #FF453A !important; }
+/* Rename / new dialog */
+.chat-ctx-dialog {
+  position: fixed;
+  z-index: 9999;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 12px;
+  padding: 16px;
+  width: 220px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  animation: chatCtxEnter 0.15s ease-out;
+}
+.chat-ctx-dialog-title {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: #FFFFFF;
+  margin-bottom: 10px;
+}
+.chat-ctx-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  background: #1A1A1A;
+  border: 1px solid #2A2A2A;
+  border-radius: 8px;
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  outline: none;
+}
+.chat-ctx-dialog-input:focus { border-color: #4B5563; }
+.chat-ctx-dialog-input::placeholder { color: #4B5563; }
+.chat-ctx-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.chat-ctx-dialog-cancel {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #2A2A2A;
   background: transparent;
   color: #9CA3AF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
 }
-.chat-sidebar-action-btn:hover {
-  background: #F5F5F5;
-  color: #1A1A1A;
+.chat-ctx-dialog-cancel:hover { background: #1A1A1A; color: #FFFFFF; }
+.chat-ctx-dialog-confirm {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
-.chat-sidebar-action-btn.danger:hover {
-  background: #F5F5F5;
-  color: #1A1A1A;
-}
+.chat-ctx-dialog-confirm:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
+
 /* Active (black bg) item: white action buttons */
 .chat-sidebar-item.active .chat-sidebar-action-btn {
   color: rgba(255, 255, 255, 0.5);
@@ -5562,7 +6457,7 @@ onUnmounted(() => {
 }
 /* ── Chat window ────────────────────────────────────────────────────────── */
 .chat-window {
-  background: #F2F2F7;
+  background: #FFFFFF;
 }
 
 /* ── Chat header ────────────────────────────────────────────────────────── */
@@ -5591,14 +6486,41 @@ onUnmounted(() => {
 }
 
 /* ── Context bar ────────────────────────────────────────────────────────── */
-.chat-context-bar {
+.chat-context-bar-wrap {
+  position: relative;
   flex-shrink: 0;
+  z-index: 10;
+}
+.chat-context-bar {
   padding: 0.375rem 1rem;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   background: #FFFFFF;
   border-bottom: 1px solid #E5E5EA;
+}
+.ctx-header-tab {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translate(-50%, 100%);
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 1.4rem;
+  border: none;
+  border-radius: 0 0 0.5rem 0.5rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  transition: height 0.15s ease, background 0.15s ease;
+}
+.ctx-header-tab:hover {
+  height: 1.875rem;
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 
 /* ── Messages area ──────────────────────────────────────────────────────── */
@@ -6514,6 +7436,49 @@ onUnmounted(() => {
 }
 .ccm-item-card.enabled .ccm-item-card-desc { color: #6B7280; }
 
+/* Grouped tool list */
+.ccm-group-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.625rem 0.25rem 0.25rem;
+  border-bottom: 1px solid #1F1F1F;
+  margin-bottom: 0.125rem;
+}
+.ccm-group-header:not(:first-child) { margin-top: 0.75rem; }
+.ccm-group-label {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption);
+  font-weight: 700; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.ccm-group-count {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption);
+  color: #4B5563;
+}
+.ccm-item-row {
+  display: flex; align-items: flex-start; gap: 0.625rem;
+  padding: 0.5rem 0.5rem; border-radius: 0.5rem;
+  cursor: pointer; transition: background 0.12s;
+}
+.ccm-item-row:hover { background: rgba(255,255,255,0.04); }
+.ccm-item-row.enabled { background: rgba(55,65,81,0.2); }
+.ccm-item-row.enabled:hover { background: rgba(55,65,81,0.3); }
+.ccm-row-checkbox {
+  margin-top: 0.1875rem; flex-shrink: 0;
+  width: 0.875rem; height: 0.875rem; accent-color: #6B7280; cursor: pointer;
+}
+.ccm-row-info {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.125rem;
+}
+.ccm-row-name {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body);
+  font-weight: 500; color: #9CA3AF; line-height: 1.3;
+}
+.ccm-item-row.enabled .ccm-row-name { color: #FFFFFF; font-weight: 600; }
+.ccm-row-desc {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption);
+  color: #4B5563; line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ccm-item-row.enabled .ccm-row-desc { color: #6B7280; }
+
 /* Toggle switch (dark) */
 .ccm-toggle {
   display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0;
@@ -6764,62 +7729,45 @@ onUnmounted(() => {
   padding: 0.75rem 1.25rem 1rem;
 }
 
-/* ── New chat source list ──────────────────────────────────────────────── */
-.newchat-source-list {
-  max-height: 16.25rem; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 0.25rem;
-  scrollbar-width: thin; scrollbar-color: #333 transparent;
-}
-.newchat-source-item {
+/* ── New chat modal rows ───────────────────────────────────────────────── */
+.newchat-name-row-v2 {
   display: flex; align-items: center; gap: 0.625rem;
-  padding: 0.625rem 0.875rem; border-radius: 0.625rem;
-  border: 1px solid #1F1F1F; background: #1A1A1A;
-  cursor: pointer; transition: all 0.15s;
-  text-align: left; width: 100%;
-  font-family: 'Inter', sans-serif;
-}
-.newchat-source-item:hover {
-  background: #222222; border-color: #2A2A2A;
-}
-.newchat-source-item:hover .newchat-source-title,
-.newchat-source-item:hover span,
-.newchat-source-item:hover svg {
-  color: #FFFFFF !important;
-}
-.newchat-source-item.selected {
-  background: linear-gradient(135deg, #1A1A1A 0%, #1F2937 100%);
-  border-color: #374151;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.2);
-}
-.newchat-source-item.selected .newchat-source-title,
-.newchat-source-item.selected span,
-.newchat-source-item.selected svg {
-  color: #FFFFFF !important;
-}
-.newchat-source-title {
-  flex: 1; min-width: 0;
-  font-size: var(--fs-body); font-weight: 600; color: #9CA3AF;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 0.5rem 0.75rem; border-radius: 0.625rem;
+  border: 1px solid #2A2A2A; background: #1A1A1A;
 }
 .newchat-name-input {
-  flex: 1; min-width: 0; padding: 0.375rem 0.625rem;
-  border-radius: 0.5rem; border: 1px solid #2A2A2A;
-  background: #111111;
+  flex: 1; min-width: 0; padding: 0.25rem 0.375rem;
+  border-radius: 0.375rem; border: none;
+  background: transparent;
   font-family: 'Inter', sans-serif; font-size: var(--fs-body);
-  font-weight: 600; color: #FFFFFF; outline: none;
+  font-weight: 500; color: #FFFFFF; outline: none;
 }
-.newchat-name-input::placeholder { color: #4B5563; font-weight: 500; }
-.newchat-name-row { cursor: pointer; }
-.newchat-name-row svg { color: #6B7280; }
-.newchat-name-row.selected svg { color: #FFFFFF !important; }
+.newchat-name-input::placeholder { color: #4B5563; font-weight: 400; }
 
-/* ── New chat source item persona config button ──────────────────────── */
+/* ── Folder tree selector ─────────────────────────────────────────────── */
+.newchat-folder-tree-wrap {
+  display: flex; flex-direction: column; gap: 0.375rem;
+}
+.newchat-folder-tree-label {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption);
+  font-weight: 600; color: #6B7280;
+}
+.newchat-folder-tree {
+  background: #111111; border: 1px solid #2A2A2A;
+  border-radius: 0.625rem;
+  max-height: 10rem; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+  padding: 0.25rem;
+  display: flex; flex-direction: column; gap: 1px;
+}
+
+/* ── Persona config button ────────────────────────────────────────────── */
 .newchat-persona-cfg-btn {
   width: 1.875rem;
   height: 1.875rem;
   border-radius: 0.5rem;
   border: 1px solid #2A2A2A;
-  background: #1A1A1A;
+  background: transparent;
   color: #6B7280;
   display: flex;
   align-items: center;
@@ -6833,9 +7781,6 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   border-color: #374151;
   color: #FFFFFF;
-}
-.newchat-source-item.selected .newchat-persona-cfg-btn {
-  border-color: #4B5563;
 }
 .newchat-persona-cfg-avatars {
   display: flex;
@@ -7020,6 +7965,37 @@ onUnmounted(() => {
   padding: 2rem 0.875rem; text-align: center;
   font-family: 'Inter', sans-serif; font-size: 13px; color: #4B5563;
 }
+
+/* Category tree inside ncp dialog */
+.ncp-cat-section { display: flex; flex-direction: column; }
+.ncp-cat-header {
+  display: flex; align-items: center; gap: 0.375rem;
+  width: 100%; padding: 0.3125rem 0.25rem;
+  background: transparent; border: none; cursor: pointer;
+  border-radius: 0.375rem;
+  font-family: 'Inter', sans-serif;
+  color: #6B7280;
+  transition: background 0.12s;
+}
+.ncp-cat-header:hover { background: rgba(255,255,255,0.05); color: #9CA3AF; }
+.ncp-cat-chevron {
+  flex-shrink: 0; color: #4B5563;
+  transition: transform 0.15s;
+  transform: rotate(0deg);
+}
+.ncp-cat-chevron.expanded { transform: rotate(90deg); }
+.ncp-cat-emoji { font-size: 0.8125rem; line-height: 1; }
+.ncp-cat-name {
+  flex: 1; text-align: left;
+  font-size: 0.6875rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em; color: #6B7280;
+}
+.ncp-cat-count {
+  font-size: 0.625rem; font-weight: 600;
+  padding: 0.0625rem 0.3125rem; border-radius: 9999px;
+  background: rgba(255,255,255,0.08); color: #6B7280;
+}
+.ncp-cat-items { display: flex; flex-direction: column; gap: 0.125rem; padding-left: 0.625rem; }
 
 /* Footer */
 .ncp-footer {
@@ -7861,5 +8837,144 @@ onUnmounted(() => {
 .ict-blank {
   font-family: 'JetBrains Mono', monospace;
   color: #D1D5DB;
+}
+</style>
+
+<style>
+/* ── Tree node rules — unscoped because ChatTreeNodeView uses h() render functions ── */
+.chat-sidebar-action-btn {
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.chat-sidebar-action-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #FFFFFF;
+}
+.chat-sidebar-action-btn.danger:hover {
+  background: rgba(255, 59, 48, 0.25);
+  color: #FF6B6B;
+}
+.chat-sidebar-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.chat-sidebar-item:hover .chat-sidebar-item-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.chat-tree-row {
+  position: relative;
+}
+.chat-tree-row:hover .chat-sidebar-item-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.chat-tree-folder-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.chat-tree-row:hover .chat-tree-folder-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.chat-tree-dragging {
+  opacity: 0.4;
+}
+/* Chips — unscoped so ChatTreeNodeView h() render elements pick them up */
+.chat-completed-chip {
+  flex-shrink: 0;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 0.375rem;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  background: #1A1A1A;
+  color: #fff;
+  letter-spacing: 0.01em;
+}
+.chat-sidebar-item.active .chat-completed-chip {
+  background: rgba(255, 255, 255, 0.2);
+}
+.chat-approval-chip {
+  flex-shrink: 0;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 0.375rem;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  background: #EF4444;
+  color: #fff;
+  letter-spacing: 0.01em;
+  animation: approval-pulse 1.5s ease-in-out infinite;
+}
+@keyframes approval-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+/* Spinner — unscoped so ChatTreeNodeView h() render elements pick it up */
+.chat-unread-spinner {
+  flex-shrink: 0;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: #1A1A1A;
+  border-right-color: rgba(26, 26, 26, 0.4);
+  animation: unread-spin 0.7s linear infinite;
+}
+.chat-unread-spinner--light {
+  border-top-color: #fff;
+  border-right-color: rgba(255, 255, 255, 0.4);
+}
+@keyframes unread-spin {
+  to { transform: rotate(360deg); }
+}
+
+
+/* ── Folder picker tree items — unscoped: rendered by FolderTreeItem h() ── */
+.newchat-ftree-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3rem 0.625rem;
+  border-radius: 0.375rem;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  color: #9CA3AF;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  box-sizing: border-box;
+}
+.newchat-ftree-item:hover {
+  background: #1E1E1E;
+  color: #FFFFFF;
+}
+.newchat-ftree-item[data-active] {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
 }
 </style>

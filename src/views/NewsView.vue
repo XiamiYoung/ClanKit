@@ -70,7 +70,7 @@
         <h1 class="news-title">News Feeds</h1>
         <div class="news-header-actions">
           <!-- Rotate -->
-          <AppButton size="compact" @click="rotateAll" :disabled="isRefreshing" :loading="isRotating">
+          <AppButton size="icon" @click="rotateAll" :disabled="isRefreshing" :loading="isRotating" title="Rotate feeds">
             <svg v-if="!isRotating" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="16 3 21 3 21 8"/>
               <line x1="4" y1="20" x2="21" y2="3"/>
@@ -78,30 +78,26 @@
               <line x1="15" y1="15" x2="21" y2="21"/>
               <line x1="4" y1="4" x2="9" y2="9"/>
             </svg>
-            {{ isRotating ? 'Shuffling...' : 'Rotate' }}
           </AppButton>
           <!-- Default (only when rotated) -->
-          <AppButton v-if="newsStore.isRotated" size="compact" @click="restoreDefaults" :disabled="isRefreshing">
+          <AppButton v-if="newsStore.isRotated" size="icon" @click="restoreDefaults" :disabled="isRefreshing" title="Restore defaults">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
               <polyline points="3 3 3 8 8 8"/>
             </svg>
-            Default
           </AppButton>
           <!-- Refresh -->
-          <AppButton size="compact" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing">
+          <AppButton size="icon" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing" title="Refresh">
             <svg v-if="!isRefreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="23 4 23 10 17 10"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
-            {{ isRefreshing ? 'Loading...' : 'Refresh' }}
           </AppButton>
           <!-- Configure Feeds -->
-          <AppButton size="compact" @click="openFeedConfig">
+          <AppButton size="icon" @click="openFeedConfig" title="Configure feeds">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>
             </svg>
-            Feeds
           </AppButton>
         </div>
       </div>

@@ -327,6 +327,34 @@ watch(showCostOverview, async (open) => {
       return { label: p.label, models, costs: convertCurrencies(provUSD, rates), whisperCalls, whisperSecs }
     })
 
+    // Load utility model usage from its dedicated file
+    const utilityUsage = await window.electronAPI.getUtilityUsage?.()
+    if (utilityUsage && (utilityUsage.inputTokens || 0) + (utilityUsage.outputTokens || 0) > 0) {
+      const uModel = utilityUsage.model
+      const uPrice = resolveModelPrice(uModel, pricing)
+      const utilInputUsd  = uPrice ? ((utilityUsage.inputTokens  || 0) / M) * (uPrice.input  || 0) : 0
+      const utilOutputUsd = uPrice ? ((utilityUsage.outputTokens || 0) / M) * (uPrice.output || 0) : 0
+      const utilUsd = utilInputUsd + utilOutputUsd
+      const utilModel = {
+        modelId: uModel,
+        usage: { inputTokens: utilityUsage.inputTokens || 0, outputTokens: utilityUsage.outputTokens || 0 },
+        usd: utilUsd,
+        llmUsd: utilUsd,
+        whisperUsd: 0, ttsUsd: 0, whisperPerSec: 0, ttsPerChar: 0,
+        inputPricePerToken:  uPrice ? (uPrice.input  || 0) / M : 0,
+        outputPricePerToken: uPrice ? (uPrice.output || 0) / M : 0,
+        costs: convertCurrencies(utilUsd, rates),
+      }
+      const utilProviderLabel = `Utility (${PROVIDER_LABELS[utilityUsage.provider] || utilityUsage.provider || 'Unknown'})`
+      providers.push({
+        label: utilProviderLabel,
+        models: [utilModel],
+        costs: convertCurrencies(utilUsd, rates),
+        whisperCalls: 0,
+        whisperSecs: 0,
+      })
+    }
+
     const totalUSD = providers.reduce((s, p) => s + p.costs.USD, 0)
     overviewData.value = { providers, total: convertCurrencies(totalUSD, rates) }
   } catch (err) {

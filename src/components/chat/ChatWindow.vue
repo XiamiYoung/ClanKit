@@ -153,7 +153,7 @@
 
             <div
               class="cw-msg-bubble"
-              :class="msg.role === 'user' ? 'cw-msg-bubble-user' : 'cw-msg-bubble-assistant'"
+              :class="[msg.role === 'user' ? 'cw-msg-bubble-user' : 'cw-msg-bubble-assistant', shakingIds.has(msg.id) ? 'bubble-shake' : '']"
             >
               <div v-if="msg.streaming && (!msg.content && (!msg.segments || msg.segments.length === 0))" class="cw-thinking">
                 <span class="dot"></span><span class="dot"></span><span class="dot"></span>
@@ -345,6 +345,15 @@ const quotedMessage = ref(null)
 const chat = computed(() => chatsStore.chats.find(c => c.id === props.chatId) || null)
 const isRunning = computed(() => chat.value?.isRunning ?? false)
 
+// ── Bubble shake animation ──
+const shakingIds = ref(new Set())
+function triggerShake(id) {
+  shakingIds.value = new Set([...shakingIds.value, id])
+  setTimeout(() => {
+    shakingIds.value = new Set([...shakingIds.value].filter(x => x !== id))
+  }, 600)
+}
+
 // ── Persona helpers ──
 function getAvatarUri(persona) {
   if (!persona?.avatar) return null
@@ -418,6 +427,23 @@ const hasHiddenMessages = computed(() => {
 function loadMoreMessages() {
   visibleLimit.value += 25
 }
+
+// ── Bubble shake watchers (must be after visibleMessages is defined) ──
+watch(visibleMessages, (msgs, prev) => {
+  if (msgs.length > (prev?.length ?? 0)) {
+    const newest = msgs[msgs.length - 1]
+    if (newest?.role === 'user') triggerShake(newest.id)
+  }
+}, { flush: 'post' })
+const _shookIds = new Set()
+watch(visibleMessages, (msgs) => {
+  for (const msg of msgs) {
+    if (msg.role === 'assistant' && msg.streaming === false && msg.content && !_shookIds.has(msg.id)) {
+      _shookIds.add(msg.id)
+      triggerShake(msg.id)
+    }
+  }
+}, { deep: true, flush: 'post' })
 
 // ── Time formatter ──
 function formatTime(ts) {
@@ -799,18 +825,32 @@ defineExpose({ scrollToBottom })
 .cw-msg-bubble :deep(> div:last-child ol:last-child) {
   margin-bottom: 0;
 }
+/* ── Bubble shake animation ── */
+@keyframes bubble-shake {
+  0%   { transform: translateX(0); }
+  15%  { transform: translateX(-5px); }
+  30%  { transform: translateX(5px); }
+  45%  { transform: translateX(-4px); }
+  60%  { transform: translateX(4px); }
+  75%  { transform: translateX(-2px); }
+  90%  { transform: translateX(2px); }
+  100% { transform: translateX(0); }
+}
+.bubble-shake { animation: bubble-shake 0.55s ease-in-out; }
+@media (prefers-reduced-motion: reduce) { .bubble-shake { animation: none; } }
+
 .cw-msg-bubble-user {
   background: linear-gradient(135deg, #4338CA 0%, #6366F1 50%, #818CF8 100%);
   color: #ffffff;
   border-radius: 1.125rem;
-  box-shadow: 0 4px 16px rgba(99,102,241,0.25), 0 1px 4px rgba(67,56,202,0.15);
+  box-shadow: 0 4px 16px rgba(99,102,241,0.3), 0 2px 8px rgba(67,56,202,0.2), 0 1px 3px rgba(0,0,0,0.12);
 }
 .cw-msg-bubble-user :deep(*) { color: #FFFFFF !important; }
 .cw-msg-bubble-assistant {
-  background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
+  background: #F4F4F8;
   border: none;
   color: #1A1A1A;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.03);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
   border-radius: 1.125rem;
 }
 

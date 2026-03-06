@@ -28,7 +28,7 @@ defineProps({
   size: {
     type: String,
     default: 'default',
-    validator: v => ['default', 'compact', 'save', 'modal'].includes(v),
+    validator: v => ['default', 'compact', 'icon', 'save', 'modal'].includes(v),
   },
   disabled: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
@@ -98,6 +98,14 @@ defineProps({
   font-size: var(--fs-secondary);
 }
 
+/* ── Size: icon (square icon-only buttons, same height/width) ────────────── */
+.app-btn--icon {
+  width: 2rem; height: 2rem; padding: 0;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-secondary);
+  justify-content: center;
+}
+
 /* ── Size: save ──────────────────────────────────────────────────────────── */
 .app-btn--save {
   padding: 0.625rem 1.25rem; border-radius: var(--radius-md);
@@ -124,6 +132,7 @@ defineProps({
   animation: app-btn-spin 0.8s linear infinite;
 }
 .app-btn--compact .app-btn-spinner { width: 0.875rem; height: 0.875rem; }
+.app-btn--icon .app-btn-spinner { width: 0.875rem; height: 0.875rem; }
 
 @keyframes app-btn-spin {
   from { transform: rotate(0deg); }

@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveDataPath: (dataPath) => ipcRenderer.invoke('store:save-data-path', dataPath),
   getEnvPaths: () => ipcRenderer.invoke('store:get-env-paths'),
   saveEnvPath: (key, value) => ipcRenderer.invoke('store:save-env-path', key, value),
+  getUtilityUsage: () => ipcRenderer.invoke('store:get-utility-usage'),
 
   getPersonas: () => ipcRenderer.invoke('store:get-personas'),
   savePersonas: (personas) => ipcRenderer.invoke('store:save-personas', personas),
