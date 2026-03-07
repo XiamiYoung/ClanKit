@@ -107,8 +107,8 @@ async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRen
         // Accumulate text chunks for the IM reply
         if (chunk.type === 'text') fullText += chunk.text || ''
       },
-      [],   // currentAttachments
-      null, // personaPrompts
+      [],        // currentAttachments
+      undefined, // personaPrompts
       [],   // mcpServers
       [],   // httpTools
       null  // ragContext
