@@ -16,8 +16,8 @@ function readIndex() {
 function flattenIndex(nodes) {
   const result = []
   for (const node of (nodes || [])) {
-    if (node.type === 'folder') result.push(...flattenIndex(node.children))
-    else result.push(node)
+    if (node.type === 'folder') result.push(...flattenIndex(node.children || []))
+    else if (node.type === 'chat' || node.id) result.push(node)
   }
   return result
 }

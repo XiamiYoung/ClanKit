@@ -79,8 +79,8 @@ async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRen
   }
   appendMessage(chatId, userMsg)
 
-  // Notify renderer: new user message arrived (triggers UI refresh)
-  notifyRenderer('agent:chunk', { chatId, chunk: { type: 'im_user_message', message: userMsg } })
+  // Notify renderer that messages changed for this chat
+  notifyRenderer('im:chat-updated', { chatId })
 
   const config = readJSON(CONFIG_FILE, {})
   const messages = loadMessages(chatId)
@@ -126,9 +126,6 @@ async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRen
       [],   // enabledAgents
       [],   // enabledSkills
       (chunk) => {
-        // Forward chunk to renderer for live UI update
-        notifyRenderer('agent:chunk', { chatId, chunk })
-        // Accumulate text chunks for the IM reply
         if (chunk.type === 'text') fullText += chunk.text || ''
       },
       [],        // currentAttachments
@@ -156,10 +153,9 @@ async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRen
     appendMessage(chatId, assistantMsg)
     // Send to IM
     await sendToIM(fullText)
+    // Notify renderer that assistant message is now in the chat file
+    notifyRenderer('im:chat-updated', { chatId })
   }
-
-  // Signal agent done so the renderer clears the running state
-  notifyRenderer('agent:chunk', { chatId, chunk: { type: 'done' } })
 }
 
 module.exports = { routeMessage }

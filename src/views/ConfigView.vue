@@ -1313,6 +1313,10 @@
                 </svg>
               </div>
               <h3 class="form-section-title">Telegram</h3>
+              <button class="im-guide-btn" @click="showIMGuide = true" style="margin-left:auto;">
+                <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></svg>
+                Setup Guide
+              </button>
             </div>
 
             <div class="form-group">
@@ -1383,6 +1387,68 @@
       </div>
     </div>
   </div>
+
+  <!-- IM Setup Guide Modal -->
+  <Teleport to="body">
+    <div v-if="showIMGuide" class="im-guide-backdrop" @keydown.esc="showIMGuide = false">
+      <div class="im-guide-modal" role="dialog" aria-modal="true">
+        <div class="im-guide-header">
+          <div class="im-guide-header-icon">
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <span class="im-guide-title">IM Bridge Setup Guide</span>
+          <button class="im-guide-close" @click="showIMGuide = false">
+            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="im-guide-body">
+
+          <!-- Telegram Setup -->
+          <div class="im-guide-section">
+            <div class="im-guide-section-title">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              Telegram — 4 steps
+            </div>
+            <ol class="im-guide-steps">
+              <li>Open Telegram and search for <code>@BotFather</code></li>
+              <li>Send <code>/newbot</code>, follow the prompts to name your bot</li>
+              <li>Copy the bot token (looks like <code>123456:ABC-xyz…</code>)</li>
+              <li>Paste the token here, check <em>Enable Telegram Bot</em>, click <strong>Save</strong> then <strong>Start Bridge</strong></li>
+            </ol>
+            <p class="im-guide-note">To restrict access, add your Telegram username to <em>Allowed Users</em>. Leave empty to allow anyone.</p>
+          </div>
+
+          <div class="im-guide-divider" />
+
+          <!-- Commands Reference -->
+          <div class="im-guide-section">
+            <div class="im-guide-section-title">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              Bot Commands
+            </div>
+            <table class="im-guide-table">
+              <tbody>
+                <tr><td><code>/list</code></td><td>Show all chats with numbers</td></tr>
+                <tr><td><code>/switch &lt;n&gt;</code></td><td>Switch active chat to #n from /list</td></tr>
+                <tr><td><code>/new [title]</code></td><td>Create a new chat and switch to it</td></tr>
+                <tr><td><code>/current</code></td><td>Show name of the active chat</td></tr>
+                <tr><td><code>/status</code></td><td>Check if the bridge is running</td></tr>
+              </tbody>
+            </table>
+            <p class="im-guide-note">Any non-command message is sent directly to the active chat as a user message. If no chat is active, one is created automatically.</p>
+          </div>
+
+        </div>
+
+        <div class="im-guide-footer">
+          <button class="im-guide-ok-btn" @click="showIMGuide = false">Got it</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -1647,6 +1713,7 @@ function getSubTabStatus(subTab) {
 
 // ── IM Bridge state & handlers ────────────────────────────────────────────────
 const showTgToken    = ref(false)
+const showIMGuide    = ref(false)
 const savingIM       = ref(false)
 const startingBridge = ref(false)
 const savedIMMsg     = ref(null)
@@ -2860,5 +2927,159 @@ async function savePricing() {
   font-size: var(--fs-caption);
   color: var(--text-muted);
   margin: 0.125rem 0 0;
+}
+
+/* IM Guide button (in Telegram card header) */
+.im-guide-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.im-guide-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+}
+</style>
+
+<style>
+/* IM Setup Guide modal — unscoped (Teleport escapes component DOM) */
+.im-guide-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: imGuideIn 0.2s ease-out;
+}
+@keyframes imGuideIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.im-guide-modal {
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 1rem;
+  width: min(540px, 92vw);
+  box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  animation: imGuideSlide 0.2s ease-out;
+}
+@keyframes imGuideSlide {
+  from { transform: scale(0.95) translateY(8px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+.im-guide-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid #1E1E1E;
+}
+.im-guide-header-icon {
+  width: 2rem; height: 2rem;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; flex-shrink: 0;
+}
+.im-guide-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  flex: 1;
+}
+.im-guide-close {
+  background: transparent;
+  border: none;
+  color: #6B7280;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 0.375rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.im-guide-close:hover { background: #1E1E1E; color: #fff; }
+.im-guide-body {
+  padding: 1.25rem 1.5rem;
+  overflow-y: auto;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.im-guide-section { display: flex; flex-direction: column; gap: 0.75rem; }
+.im-guide-section-title {
+  display: flex; align-items: center; gap: 0.4rem;
+  color: #FFFFFF; font-size: 0.875rem; font-weight: 700;
+}
+.im-guide-steps {
+  margin: 0; padding-left: 1.25rem;
+  display: flex; flex-direction: column; gap: 0.5rem;
+  color: #9CA3AF; font-size: 0.875rem; line-height: 1.6;
+}
+.im-guide-steps li { padding-left: 0.25rem; }
+.im-guide-steps code {
+  background: #1A1A1A; color: #E5E7EB;
+  padding: 0.1rem 0.35rem; border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+}
+.im-guide-note {
+  margin: 0; padding: 0.625rem 0.875rem;
+  background: rgba(0,122,255,0.08); border-left: 3px solid #007AFF;
+  border-radius: 0 6px 6px 0;
+  color: #9CA3AF; font-size: 0.8125rem; line-height: 1.5;
+}
+.im-guide-divider { border: none; border-top: 1px solid #1E1E1E; margin: 0; }
+.im-guide-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.im-guide-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid #1A1A1A;
+  color: #9CA3AF; vertical-align: top;
+}
+.im-guide-table tr:last-child td { border-bottom: none; }
+.im-guide-table td:first-child { width: 38%; }
+.im-guide-table code {
+  background: #1A1A1A; color: #E5E7EB;
+  padding: 0.1rem 0.35rem; border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+  white-space: nowrap;
+}
+.im-guide-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #1A1A1A;
+  display: flex; justify-content: flex-end;
+  background: #0A0A0A;
+  border-radius: 0 0 1rem 1rem;
+}
+.im-guide-ok-btn {
+  padding: 0.5rem 1.5rem;
+  border-radius: 0.5rem;
+  border: none;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #fff;
+  font-weight: 600; font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.im-guide-ok-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 </style>

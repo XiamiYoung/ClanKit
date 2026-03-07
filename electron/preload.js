@@ -209,5 +209,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('im:chats-updated', () => cb())
       return () => ipcRenderer.removeAllListeners('im:chats-updated')
     },
+    onChatUpdated: (cb) => {
+      ipcRenderer.removeAllListeners('im:chat-updated')
+      ipcRenderer.on('im:chat-updated', (_e, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('im:chat-updated')
+    },
   },
 })

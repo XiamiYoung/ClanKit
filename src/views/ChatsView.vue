@@ -5940,10 +5940,23 @@ onMounted(async () => {
   // Mark current chat as read on mount
   if (chatsStore.activeChatId) chatsStore.markAsRead(chatsStore.activeChatId)
 
-  // Reload chat list when IM bridge creates or modifies chats
+  // Reload chat list when IM bridge creates a new chat
   if (window.electronAPI?.im?.onChatsUpdated) {
     window.electronAPI.im.onChatsUpdated(async () => {
       await chatsStore.loadChats()
+    })
+  }
+  // Reload messages for a specific chat when IM bridge appends to it
+  if (window.electronAPI?.im?.onChatUpdated) {
+    window.electronAPI.im.onChatUpdated(async ({ chatId }) => {
+      const chat = chatsStore.chats.find(c => c.id === chatId)
+      if (!chat) {
+        await chatsStore.loadChats()
+        return
+      }
+      // Force-reload messages from disk by resetting to null then fetching
+      chat.messages = null
+      await chatsStore.ensureMessages(chatId)
     })
   }
 
