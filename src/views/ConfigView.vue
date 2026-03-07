@@ -1299,6 +1299,86 @@
           </div>
         </template>
 
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- IM Bridge (General > IM) -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <template v-if="activeTopTab === 'general' && activeSubTab === 'im'">
+
+          <!-- Telegram -->
+          <div class="config-card">
+            <div class="form-section-header">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </div>
+              <h3 class="form-section-title">Telegram</h3>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">
+                <input type="checkbox" v-model="form.im.telegram.enabled" style="margin-right:0.5rem;" />
+                Enable Telegram Bot
+              </label>
+            </div>
+
+            <div class="form-divider" />
+
+            <div class="form-group">
+              <label class="form-label" for="tgBotToken">Bot Token</label>
+              <input
+                id="tgBotToken"
+                v-model="form.im.telegram.botToken"
+                :type="showTgToken ? 'text' : 'password'"
+                placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                class="field font-mono"
+              />
+              <p class="hint">Get a bot token from <strong>@BotFather</strong> on Telegram.</p>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="tgAllowedUsers">Allowed Users <span class="form-label-hint">comma-separated usernames or chat IDs</span></label>
+              <input
+                id="tgAllowedUsers"
+                :value="(form.im.telegram.allowedUsers || []).join(',')"
+                @input="form.im.telegram.allowedUsers = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+                placeholder="username1,username2"
+                class="field font-mono"
+              />
+              <p class="hint">Leave empty to allow all users (not recommended for public bots).</p>
+            </div>
+          </div>
+
+          <!-- Status + Save row -->
+          <div class="config-card">
+            <div class="form-section-header">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+              </div>
+              <h3 class="form-section-title">Bridge Status</h3>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+              <span :style="{ color: imStatus.running ? '#10B981' : '#9CA3AF', fontWeight: 600 }">
+                {{ imStatus.running ? '● Running' : '○ Stopped' }}
+              </span>
+              <span v-if="imStatus.running" style="color:#6B7280; font-size:var(--fs-caption);">
+                {{ imStatus.sessions?.length || 0 }} active session(s)
+              </span>
+            </div>
+            <div style="display:flex; gap:0.5rem; margin-top:1rem; flex-wrap:wrap;">
+              <AppButton size="compact" @click="saveIM" :loading="savingIM">Save</AppButton>
+              <AppButton v-if="!imStatus.running" size="compact" variant="secondary" @click="startBridge" :loading="startingBridge">Start Bridge</AppButton>
+              <AppButton v-else size="compact" variant="danger-ghost" @click="stopBridge">Stop Bridge</AppButton>
+            </div>
+            <p v-if="savedIMMsg" :style="{ color: savedIMMsg.ok ? '#10B981' : '#EF4444', marginTop:'0.5rem', fontSize:'var(--fs-caption)' }">
+              {{ savedIMMsg.text }}
+            </p>
+          </div>
+
+        </template>
+
         </div>
       </div>
     </div>
@@ -1509,6 +1589,11 @@ const IconPaths = defineComponent({
     h('path', { d: 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' })
   ])
 })
+const IconIM = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' })
+  ])
+})
 const IconPricing = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
     h('line', { x1: '12', y1: '1', x2: '12', y2: '23' }),
@@ -1526,6 +1611,7 @@ const subTabsGeneral = [
   { value: 'paths',    label: 'Paths',    icon: IconPaths    },
   { value: 'security', label: 'Security', icon: IconSecurity },
   { value: 'email',    label: 'Email',    icon: IconEmail    },
+  { value: 'im',       label: 'IM',       icon: IconIM       },
 ]
 const subTabsAI = [
   { value: 'models',    label: 'Models',    icon: IconModels    },
@@ -1550,12 +1636,52 @@ function getSubTabStatus(subTab) {
     case 'paths':     return (form.dataPath || form.artifactPath || form.skillsPath) ? 'configured' : 'empty'
     case 'security':  return 'configured'
     case 'email':     return form.smtp?.host ? 'configured' : 'empty'
+    case 'im':        return form.im?.telegram?.botToken ? 'configured' : 'empty'
     case 'models':    return Object.values(form).some(v => v?.apiKey) ? 'configured' : 'empty'
     case 'voice':     return form.voiceCall?.whisperApiKey ? 'configured' : 'empty'
     case 'knowledge': return form.pineconeApiKey ? 'configured' : 'empty'
     case 'pricing':   return 'configured'
     default:          return 'empty'
   }
+}
+
+// ── IM Bridge state & handlers ────────────────────────────────────────────────
+const showTgToken    = ref(false)
+const savingIM       = ref(false)
+const startingBridge = ref(false)
+const savedIMMsg     = ref(null)
+const imStatus       = ref({ running: false, sessions: [] })
+
+async function loadIMStatus() {
+  if (window.electronAPI?.im) {
+    imStatus.value = await window.electronAPI.im.getStatus()
+  }
+}
+
+async function saveIM() {
+  savingIM.value = true
+  savedIMMsg.value = null
+  try {
+    await configStore.saveConfig({ im: JSON.parse(JSON.stringify(form.im)) })
+    savedIMMsg.value = { ok: true, text: 'Saved' }
+  } catch (err) {
+    savedIMMsg.value = { ok: false, text: err.message || 'Save failed' }
+  } finally {
+    savingIM.value = false
+  }
+}
+
+async function startBridge() {
+  startingBridge.value = true
+  try {
+    imStatus.value = await window.electronAPI.im.start()
+  } finally {
+    startingBridge.value = false
+  }
+}
+
+async function stopBridge() {
+  imStatus.value = await window.electronAPI.im.stop()
 }
 
 // Provider icon components
@@ -1749,6 +1875,13 @@ const form = reactive({
     modelPriceMap: {},
     currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 },
   },
+  im: {
+    telegram: {
+      enabled: false,
+      botToken: '',
+      allowedUsers: [],
+    },
+  },
 })
 
 // Reset isActive when key fields change (skip initial population)
@@ -1774,6 +1907,13 @@ onMounted(async () => {
   if (c.voiceCall)    Object.assign(form.voiceCall, c.voiceCall)
   if (c.smtp)         Object.assign(form.smtp, c.smtp)
   if (c.utilityModel) Object.assign(form.utilityModel, c.utilityModel)
+  form.im = {
+    telegram: {
+      enabled:      c.im?.telegram?.enabled      ?? false,
+      botToken:     c.im?.telegram?.botToken      ?? '',
+      allowedUsers: c.im?.telegram?.allowedUsers  ?? [],
+    },
+  }
   form.pricing = {
     models: {},
     modelPriceMap: {},
@@ -1810,6 +1950,8 @@ onMounted(async () => {
   sandboxForm.defaultMode = sc.defaultMode || 'sandbox'
   sandboxForm.sandboxAllowList = JSON.parse(JSON.stringify(sc.sandboxAllowList || []))
   sandboxForm.dangerBlockList  = JSON.parse(JSON.stringify(sc.dangerBlockList  || []))
+  // Load IM bridge status
+  await loadIMStatus()
   // Enable watcher-based isActive reset now that initial population is done
   nextTick(() => { formReady.value = true })
 })

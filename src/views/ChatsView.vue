@@ -5940,6 +5940,13 @@ onMounted(async () => {
   // Mark current chat as read on mount
   if (chatsStore.activeChatId) chatsStore.markAsRead(chatsStore.activeChatId)
 
+  // Reload chat list when IM bridge creates or modifies chats
+  if (window.electronAPI?.im?.onChatsUpdated) {
+    window.electronAPI.im.onChatsUpdated(async () => {
+      await chatsStore.loadChats()
+    })
+  }
+
   // Prevent Electron from navigating when files are dropped anywhere on the page
   document.addEventListener('dragover', preventNav)
   document.addEventListener('drop', preventNav)
