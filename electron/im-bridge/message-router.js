@@ -81,8 +81,15 @@ async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRen
   const config = readJSON(CONFIG_FILE, {})
   const messages = loadMessages(chatId)
 
+  // Resolve active provider and flatten credentials to top-level (AgentLoop expects
+  // config.apiKey / config.baseURL at the top level, same as what the renderer sends).
+  const provider = config.defaultProvider || 'anthropic'
+  const providerCfg = config[provider] || {}
+
   const loopConfig = {
     ...config,
+    ...providerCfg,
+    defaultProvider: provider,
     soulsDir: path.join(DATA_DIR, 'souls'),
     chatPermissionMode: 'allow_all',  // IM sessions auto-approve tools
     chatAllowList: [],
