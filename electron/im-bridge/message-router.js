@@ -71,7 +71,6 @@ function appendMessage(chatId, msg) {
  * @param {Function} opts.notifyRenderer - (channel, data) => void  — calls mainWindow.webContents.send(...)
  */
 async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRenderer }) {
-  console.log('[im-bridge:router] routeMessage START', { chatId: chatId.slice(0,8), userText: userText.slice(0,40) })
   const userMsg = {
     id: uuidv4(),
     role: 'user',
@@ -79,9 +78,6 @@ async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRen
     createdAt: Date.now(),
   }
   appendMessage(chatId, userMsg)
-  // Verify what was written to disk
-  const afterUser = readJSON(chatFile(chatId), {})
-  console.log('[im-bridge:router] after appendUser — disk messages:', (afterUser.messages||[]).map(m => ({ role: m.role, len: m.content?.length, content: m.content?.slice(0,30) })))
 
   // Notify renderer that messages changed for this chat
   notifyRenderer('im:chat-updated', { chatId })
@@ -131,7 +127,6 @@ async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRen
       [],   // enabledSkills
       (chunk) => {
         if (chunk.type === 'text') fullText += chunk.text || ''
-        else console.log('[im-bridge:router] chunk type:', chunk.type)
       },
       [],        // currentAttachments
       undefined, // personaPrompts
@@ -147,26 +142,20 @@ async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRen
     loop.stop?.()
   }
 
-  console.log('[im-bridge:router] agentLoop done — fullText length:', fullText.length, 'preview:', fullText.slice(0,60))
-
   // Persist assistant message
   if (fullText) {
     const assistantMsg = {
       id: uuidv4(),
       role: 'assistant',
       content: fullText,
+      segments: [{ type: 'text', content: fullText }],
       createdAt: Date.now(),
     }
     appendMessage(chatId, assistantMsg)
-    // Verify what was written to disk
-    const afterAssistant = readJSON(chatFile(chatId), {})
-    console.log('[im-bridge:router] after appendAssistant — disk messages:', (afterAssistant.messages||[]).map(m => ({ role: m.role, len: m.content?.length, content: m.content?.slice(0,30) })))
     // Send to IM
     await sendToIM(fullText)
     // Notify renderer that assistant message is now in the chat file
     notifyRenderer('im:chat-updated', { chatId })
-  } else {
-    console.warn('[im-bridge:router] WARNING: fullText is empty — no assistant message appended')
   }
 }
 
