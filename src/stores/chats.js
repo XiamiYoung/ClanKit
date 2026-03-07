@@ -689,7 +689,7 @@ export const useChatsStore = defineStore('chats', () => {
 
   // ── Persistence helpers ────────────────────────────────────────────────────
 
-  const TOOL_OUTPUT_TRUNCATE_CHARS = 8000
+  const TOOL_OUTPUT_TRUNCATE_CHARS = 50000
 
   function _truncateToolOutputs(messages) {
     if (!messages) return messages
