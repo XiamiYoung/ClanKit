@@ -27,7 +27,11 @@ function chatFile(chatId) {
 }
 
 function loadMessages(chatId) {
-  return readJSON(chatFile(chatId), { messages: [] }).messages || []
+  const all = readJSON(chatFile(chatId), { messages: [] }).messages || []
+  // Mirror the renderer's filter: only user/assistant roles, skip system interrupts and streaming placeholders
+  return all
+    .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content))
+    .map(m => ({ role: m.role, content: m.content }))
 }
 
 function appendMessage(chatId, msg) {
@@ -81,24 +85,37 @@ async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRen
   const config = readJSON(CONFIG_FILE, {})
   const messages = loadMessages(chatId)
 
-  // Resolve active provider and flatten credentials to top-level (AgentLoop expects
-  // config.apiKey / config.baseURL at the top level, same as what the renderer sends).
+  // Flatten provider credentials exactly as the renderer does in ChatsView runAgent().
   const provider = config.defaultProvider || 'anthropic'
-  const providerCfg = config[provider] || {}
+  const loopConfig = { ...config }
 
-  const loopConfig = {
-    ...config,
-    ...providerCfg,
-    defaultProvider: provider,
-    soulsDir: path.join(DATA_DIR, 'souls'),
-    chatPermissionMode: 'allow_all',  // IM sessions auto-approve tools
-    chatAllowList: [],
-    chatDangerOverrides: [],
-    maxOutputTokens: config.maxOutputTokens || null,
-    artifactPath: config.artifactPath || config.artyfactPath || '',
-    skillsPath: config.skillsPath || '',
-    DoCPath: config.DoCPath || '',
+  if (provider === 'anthropic') {
+    loopConfig.apiKey  = config.anthropic?.apiKey  || ''
+    loopConfig.baseURL = config.anthropic?.baseURL || ''
+  } else if (provider === 'openrouter') {
+    loopConfig.apiKey  = config.openrouter?.apiKey  || ''
+    loopConfig.baseURL = config.openrouter?.baseURL || ''
+  } else if (provider === 'openai') {
+    loopConfig.openaiApiKey  = config.openai?.apiKey  || ''
+    loopConfig.openaiBaseURL = config.openai?.baseURL || ''
+    loopConfig._resolvedProvider = 'openai'
+    loopConfig.defaultProvider   = 'openai'
+  } else if (provider === 'deepseek') {
+    loopConfig.openaiApiKey  = config.deepseek?.apiKey  || ''
+    loopConfig.openaiBaseURL = (config.deepseek?.baseURL || '').replace(/\/+$/, '')
+    loopConfig._resolvedProvider = 'openai'
+    loopConfig._directAuth       = true
+    loopConfig.defaultProvider   = 'openai'
   }
+
+  loopConfig.soulsDir          = path.join(DATA_DIR, 'souls')
+  loopConfig.chatPermissionMode = 'allow_all'
+  loopConfig.chatAllowList      = []
+  loopConfig.chatDangerOverrides = []
+  loopConfig.maxOutputTokens    = config.maxOutputTokens || null
+  loopConfig.artifactPath       = config.artifactPath || config.artyfactPath || ''
+  loopConfig.skillsPath         = config.skillsPath || ''
+  loopConfig.DoCPath            = config.DoCPath || ''
 
   const loop = new AgentLoop(loopConfig)
   let fullText = ''
