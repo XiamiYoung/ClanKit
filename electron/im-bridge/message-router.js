@@ -4,7 +4,7 @@ const fs      = require('fs')
 const path    = require('path')
 const os      = require('os')
 const { v4: uuidv4 } = require('uuid')
-const AgentLoop = require('../agent/agentLoop')
+const { AgentLoop } = require('../agent/agentLoop')
 
 const DATA_DIR    = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankAI')
 const CHATS_DIR   = path.join(DATA_DIR, 'chats')
