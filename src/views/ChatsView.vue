@@ -5949,14 +5949,18 @@ onMounted(async () => {
   // Reload messages for a specific chat when IM bridge appends to it
   if (window.electronAPI?.im?.onChatUpdated) {
     window.electronAPI.im.onChatUpdated(async ({ chatId }) => {
+      console.log('[im-bridge:renderer] onChatUpdated received', chatId?.slice(0,8), 'activeChatId=', chatsStore.activeChatId?.slice(0,8))
       const chat = chatsStore.chats.find(c => c.id === chatId)
       if (!chat) {
+        console.log('[im-bridge:renderer] chat not in store — reloading index')
         await chatsStore.loadChats()
         return
       }
+      console.log('[im-bridge:renderer] before reload — chat.messages:', chat.messages === null ? 'null' : `array(${chat.messages?.length})`)
       // Force-reload messages from disk by resetting to null then fetching
       chat.messages = null
       await chatsStore.ensureMessages(chatId)
+      console.log('[im-bridge:renderer] after reload — chat.messages:', chat.messages === null ? 'null' : `array(${chat.messages?.length})`, chat.messages?.map(m => ({ role: m.role, len: m.content?.length, preview: m.content?.slice(0,30) })))
     })
   }
 
