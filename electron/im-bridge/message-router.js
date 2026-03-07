@@ -31,7 +31,7 @@ function loadMessages(chatId) {
   const all = readJSON(chatFile(chatId), { messages: [] }).messages || []
   return all
     .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content))
-    .map(m => ({ role: m.role, content: m.content }))
+    .map(m => ({ role: m.role, content: m.content || '[Image]' }))
 }
 
 function appendMessage(chatId, msg) {

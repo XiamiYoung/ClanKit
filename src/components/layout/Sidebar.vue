@@ -5,14 +5,14 @@
     aria-label="Main navigation"
   >
     <!-- Logo / Header -->
-    <div :style="{ padding: isCollapsed ? '1.25rem 0' : '1.25rem 1.25rem', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }">
+    <div :style="{ padding: isCollapsed ? '1.25rem 0' : '1rem 1.25rem', borderBottom: '1px solid #F0F0F0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }">
       <img
         src="/icon.png"
         alt="ClankAI"
-        :class="isCollapsed ? 'w-8 h-8 rounded-lg' : 'w-11 h-11 rounded-xl'"
+        :class="isCollapsed ? 'w-12 h-12 rounded-xl' : 'w-20 h-20 rounded-2xl'"
         style="object-fit:contain;flex-shrink:0;"
       />
-      <span v-show="!isCollapsed" style="font-family:'Inter','Figtree',system-ui,sans-serif; font-size:1.5rem; font-weight:800; color:#1A1A1A; letter-spacing:-0.03em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-left:0.75rem;">
+      <span v-show="!isCollapsed" style="font-family:'Inter','Figtree',system-ui,sans-serif; font-size:1.75rem; font-weight:800; color:#1A1A1A; letter-spacing:-0.03em;">
         ClankAI
       </span>
     </div>
