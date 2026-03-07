@@ -84,11 +84,9 @@ export const useConfigStore = defineStore('config', () => {
       currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 },
     },
     im: {
-      telegram: {
-        enabled: false,
-        botToken: '',
-        allowedUsers: [],
-      },
+      telegram: { enabled: false, botToken: '', allowedUsers: [] },
+      whatsapp: { enabled: false, allowedUsers: [] },
+      feishu:   { enabled: false, appId: '', appSecret: '', allowedUsers: [] },
     },
   })
 
@@ -136,6 +134,8 @@ export const useConfigStore = defineStore('config', () => {
       pricing: { models: {}, modelPriceMap: {}, currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 }, ...(saved.pricing || {}) },
       im: {
         telegram: { ...defaults.im.telegram, ...(saved.im?.telegram || {}) },
+        whatsapp: { ...defaults.im.whatsapp, ...(saved.im?.whatsapp || {}) },
+        feishu:   { ...defaults.im.feishu,   ...(saved.im?.feishu   || {}) },
       },
     }
     // Also load the env-backed paths
@@ -168,6 +168,8 @@ export const useConfigStore = defineStore('config', () => {
       utilityModel: { ...prev.utilityModel, ...newConfig.utilityModel },
       im: {
         telegram: { ...prev.im?.telegram, ...(newConfig.im?.telegram || {}) },
+        whatsapp: { ...prev.im?.whatsapp, ...(newConfig.im?.whatsapp || {}) },
+        feishu:   { ...prev.im?.feishu,   ...(newConfig.im?.feishu   || {}) },
       },
     }
     await storage.saveConfig(JSON.parse(JSON.stringify(toRaw(config.value))))

@@ -239,17 +239,16 @@
             </svg>
           </button>
         </div>
-        <!-- Attachment preview strip -->
-        <div v-if="attachments.length > 0" class="cw-attachments">
-          <div v-for="att in attachments" :key="att.id" class="cw-att-chip">
-            <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-            </svg>
-            <span class="cw-att-name">{{ att.name }}</span>
-            <button class="cw-att-remove" @click="removeAttachment(att.id)" title="Remove">
-              <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>
+        <!-- Attachment preview strip: image thumbnails only -->
+        <div v-if="attachments.some(a => a.type === 'image' && a.preview)" class="cw-attachments">
+          <template v-for="att in attachments" :key="att.id">
+            <div v-if="att.type === 'image' && att.preview" class="cw-att-thumb">
+              <img :src="att.preview" :alt="att.name" style="width:100%;height:100%;object-fit:cover;display:block;" />
+              <button class="cw-att-remove" @click="removeAttachment(att.id)" title="Remove">
+                <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </template>
         </div>
         <div class="cw-input-box" :class="{ focused: inputFocused }">
           <!-- Attach button -->
@@ -400,8 +399,8 @@ function showAvatarTooltip(event, msg) {
   if (msg.role === 'user') {
     persona = userPersona.value
   } else {
-    const pid = msg.personaId || chat.value?.systemPersonaId
-    persona = pid ? personasStore.getPersonaById(pid) : personasStore.defaultSystemPersona
+    const pid = msg.personaId || systemPersonaIds.value[0]
+    persona = pid ? personasStore.getPersonaById(pid) : null
   }
   if (!persona) { avatarTooltip.visible = false; return }
   const rect = event.currentTarget.getBoundingClientRect()
@@ -580,19 +579,44 @@ onMounted(async () => {
 })
 
 // ── File attachment ──
+function handleAttachResults(results) {
+  const imageAtts = []
+  const pathTexts = []
+  for (const att of results) {
+    if (att.type === 'image') {
+      const placeholder = att.path || att.name
+      imageAtts.push({ ...att, placeholderText: placeholder })
+      pathTexts.push(placeholder)
+    } else {
+      if (att.path) pathTexts.push(att.path)
+    }
+  }
+  if (imageAtts.length > 0) attachments.value.push(...imageAtts)
+  if (pathTexts.length > 0) {
+    const prefix = defaultInputText.value.trimEnd()
+    defaultInputText.value = prefix ? `${prefix}\n${pathTexts.join('\n')}` : pathTexts.join('\n')
+  }
+}
+
 async function pickFiles() {
   if (!window.electronAPI?.pickFiles) return
   try {
     const results = await window.electronAPI.pickFiles()
-    if (results && results.length > 0) {
-      attachments.value.push(...results)
-    }
+    if (results && results.length > 0) handleAttachResults(results)
   } catch (err) {
     console.error('pickFiles error:', err.message)
   }
 }
 
 function removeAttachment(id) {
+  const att = attachments.value.find(a => a.id === id)
+  if (att?.placeholderText) {
+    const placeholder = att.placeholderText
+    defaultInputText.value = defaultInputText.value
+      .split('\n')
+      .filter(line => line !== placeholder)
+      .join('\n')
+  }
   attachments.value = attachments.value.filter(a => a.id !== id)
 }
 
@@ -908,33 +932,26 @@ defineExpose({ scrollToBottom })
   background: #FFFFFF;
   border-top: 1px solid #E5E5EA;
 }
-.cw-att-chip {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.5rem;
+.cw-att-thumb {
+  position: relative;
+  width: 3.75rem;
+  height: 3.75rem;
   border-radius: 0.5rem;
-  background: #F5F5F5;
-  border: 1px solid #E5E5EA;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  color: #1A1A1A;
-  max-width: 12.5rem;
-}
-.cw-att-name {
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
+  border: 1px solid #93C5FD;
+  background: #EFF6FF;
+  flex-shrink: 0;
 }
 .cw-att-remove {
+  position: absolute;
+  top: 0.125rem;
+  right: 0.125rem;
   width: 1.125rem;
   height: 1.125rem;
   border-radius: 50%;
   border: none;
-  background: #E5E5EA;
-  color: #6B7280;
+  background: rgba(0,0,0,0.55);
+  color: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: center;

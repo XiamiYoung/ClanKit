@@ -601,10 +601,14 @@ app.whenReady().then(async () => {
   createWindow()
 
   // ── IM Bridge ──────────────────────────────────────────────────────────────
+  // setMainWindow is synchronous and fast — do it immediately so the bridge
+  // has the window reference before any IPC arrives.
+  // imBridge.start() can take 1-2s (Telegram/WhatsApp session restore), so
+  // defer it past the current event loop tick to avoid blocking main startup.
   const _imCfg = readJSON(CONFIG_FILE, {})
   imBridge.setMainWindow(mainWindow)
-  if (_imCfg.im?.telegram?.enabled && _imCfg.im?.telegram?.botToken) {
-    imBridge.start(_imCfg.im)
+  if (_imCfg.im?.telegram?.enabled || _imCfg.im?.whatsapp?.enabled || _imCfg.im?.feishu?.enabled) {
+    setImmediate(() => imBridge.start(_imCfg))
   }
 
   // -- Content Security Policy --
@@ -656,7 +660,7 @@ ipcMain.handle('im:get-status', () => imBridge.getStatus())
 
 ipcMain.handle('im:start', () => {
   const cfg = readJSON(CONFIG_FILE, {})
-  imBridge.start(cfg.im)
+  imBridge.start(cfg)
   return imBridge.getStatus()
 })
 
@@ -666,6 +670,16 @@ ipcMain.handle('im:stop', () => {
 })
 
 ipcMain.handle('im:get-sessions', () => imBridge.getStatus().sessions)
+ipcMain.handle('im:start-platform', (_, platform) => {
+  const cfg = readJSON(CONFIG_FILE, {})
+  imBridge.start(cfg)          // refresh stored config
+  return imBridge.startPlatform(platform)
+})
+ipcMain.handle('im:stop-platform',  (_, platform) => imBridge.stopPlatform(platform))
+
+ipcMain.handle('im:whatsapp-request-qr', () => {
+  imBridge.requestWhatsAppQR()
+})
 
 // --- IPC: Storage -----------------------------------------------------------
 
@@ -979,7 +993,7 @@ ipcMain.handle('store:save-env-path', (_, key, value) => {
   }
 })
 
-ipcMain.handle('store:get-personas', () => readJSON(PERSONAS_FILE, { categories: [], personas: [] }))
+ipcMain.handle('store:get-personas', async () => readJSONAsync(PERSONAS_FILE, { categories: [], personas: [] }))
 ipcMain.handle('store:save-personas', (_, data) => { writeJSON(PERSONAS_FILE, data); return true })
 
 // --- IPC: Soul Memory Files -------------------------------------------------
@@ -1068,7 +1082,7 @@ ipcMain.handle('memory:extract-on-chat-switch', async (event, { chatId, messages
 
 // --- IPC: MCP Server Configuration (~/.clankAI/mcp-servers.json) -------------
 
-ipcMain.handle('mcp:get-config', () => readJSON(MCP_SERVERS_FILE, {}))
+ipcMain.handle('mcp:get-config', async () => readJSONAsync(MCP_SERVERS_FILE, {}))
 
 ipcMain.handle('mcp:save-config', async (_, mcpServers) => {
   try {
@@ -1082,7 +1096,7 @@ ipcMain.handle('mcp:save-config', async (_, mcpServers) => {
 
 // --- IPC: HTTP Tools Configuration (~/.clankAI/tools.json) -------------------
 
-ipcMain.handle('tools:get-config', () => readJSON(TOOLS_FILE, {}))
+ipcMain.handle('tools:get-config', async () => readJSONAsync(TOOLS_FILE, {}))
 
 ipcMain.handle('tools:save-config', async (_, toolsConfig) => {
   try {
@@ -1096,9 +1110,11 @@ ipcMain.handle('tools:save-config', async (_, toolsConfig) => {
 
 // --- IPC: Knowledge / Pinecone RAG ------------------------------------------
 
-ipcMain.handle('knowledge:get-config', () => {
-  const cfg = readJSON(CONFIG_FILE, {})
-  const saved = readJSON(KNOWLEDGE_FILE, {})
+ipcMain.handle('knowledge:get-config', async () => {
+  const [cfg, saved] = await Promise.all([
+    readJSONAsync(CONFIG_FILE, {}),
+    readJSONAsync(KNOWLEDGE_FILE, {}),
+  ])
   return {
     pineconeApiKey:    cfg.pineconeApiKey || '',
     pineconeIndexName: saved.pineconeIndexName || '',
@@ -2148,47 +2164,44 @@ function extractSummary(mdContent) {
   return paragraphLines.join(' ').slice(0, 200)
 }
 
-ipcMain.handle('skills:scan-dir', (_, dirPath) => {
+ipcMain.handle('skills:scan-dir', async (_, dirPath) => {
   const dir = resolveSkillsPath(dirPath)
   try {
-    if (!fs.existsSync(dir)) return []
-    const entries = fs.readdirSync(dir, { withFileTypes: true })
-    const skills = []
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith('.')) continue
-      const skillDir = path.join(dir, entry.name)
-      // Look for SKILL.md first, then any .md file as fallback
-      let mdFile = null
-      const skillMd = path.join(skillDir, 'SKILL.md')
-      if (fs.existsSync(skillMd)) {
-        mdFile = skillMd
-      } else {
-        try {
-          const files = fs.readdirSync(skillDir).filter(f => f.endsWith('.md'))
-          if (files.length > 0) mdFile = path.join(skillDir, files[0])
-        } catch {}
-      }
-      let summary = ''
-      let displayName = ''
-      let description = ''
-      if (mdFile) {
-        try {
-          const content = fs.readFileSync(mdFile, 'utf8')
-          const { meta } = parseFrontmatter(content)
-          displayName = meta.name || ''
-          description = meta.description || ''
-          summary = extractSummary(content)
-        } catch {}
-      }
-      skills.push({
-        id: entry.name,
-        name: entry.name,
-        displayName,
-        description,
-        summary,
-        path: skillDir
-      })
-    }
+    let entries
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true })
+    } catch { return [] }
+
+    const skills = await Promise.all(
+      entries
+        .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+        .map(async entry => {
+          const skillDir = path.join(dir, entry.name)
+          // Look for SKILL.md first, then any .md file as fallback
+          let mdFile = null
+          const skillMd = path.join(skillDir, 'SKILL.md')
+          const skillMdExists = await fs.promises.access(skillMd).then(() => true).catch(() => false)
+          if (skillMdExists) {
+            mdFile = skillMd
+          } else {
+            try {
+              const files = (await fs.promises.readdir(skillDir)).filter(f => f.endsWith('.md'))
+              if (files.length > 0) mdFile = path.join(skillDir, files[0])
+            } catch {}
+          }
+          let summary = '', displayName = '', description = ''
+          if (mdFile) {
+            try {
+              const content = await fs.promises.readFile(mdFile, 'utf8')
+              const { meta } = parseFrontmatter(content)
+              displayName = meta.name || ''
+              description = meta.description || ''
+              summary = extractSummary(content)
+            } catch {}
+          }
+          return { id: entry.name, name: entry.name, displayName, description, summary, path: skillDir }
+        })
+    )
     return skills
   } catch (err) {
     logger.error('skills:scan-dir error', err.message)
@@ -2254,28 +2267,26 @@ ipcMain.handle('skills:write-file', (_, rawPath, content) => {
   }
 })
 
-ipcMain.handle('skills:load-all-prompts', (_, dirPath) => {
+ipcMain.handle('skills:load-all-prompts', async (_, dirPath) => {
   const dir = resolveSkillsPath(dirPath)
   try {
-    if (!fs.existsSync(dir)) return []
-    const entries = fs.readdirSync(dir, { withFileTypes: true })
-    const skills = []
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith('.')) continue
-      const skillDir = path.join(dir, entry.name)
-      const skillMd = path.join(skillDir, 'SKILL.md')
-      if (fs.existsSync(skillMd)) {
-        try {
-          const content = fs.readFileSync(skillMd, 'utf8')
-          skills.push({
-            id: entry.name,
-            name: entry.name,
-            systemPrompt: content
-          })
-        } catch {}
-      }
-    }
-    return skills
+    let entries
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true })
+    } catch { return [] }
+
+    const skills = await Promise.all(
+      entries
+        .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+        .map(async entry => {
+          const skillMd = path.join(dir, entry.name, 'SKILL.md')
+          try {
+            const content = await fs.promises.readFile(skillMd, 'utf8')
+            return { id: entry.name, name: entry.name, systemPrompt: content }
+          } catch { return null }
+        })
+    )
+    return skills.filter(Boolean)
   } catch (err) {
     logger.error('skills:load-all-prompts error', err.message)
     return []
@@ -2419,6 +2430,8 @@ ipcMain.handle('shell:exec', async (_, { cmd, args }) => {
 
 // --- IPC: Agent Loop ---------------------------------------------------------
 const { AgentLoop } = require('./agent/agentLoop')
+// Ensure im-bridge modules resolve DATA_DIR to the same path as main.js
+process.env.CLANKAI_DATA_PATH = DATA_DIR
 const imBridge = require('./im-bridge')
 const { mcpManager } = require('./agent/mcp/McpManager')
 const { MemoryExtractor } = require('./agent/core/MemoryExtractor')
@@ -2814,23 +2827,6 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
         : null
       runMemoryExtraction(event, chatId, messages, config, personaPrompts, singleParticipants)
     }
-    // Forward final AI response to IM if this chat has an active IM session
-    if (typeof result === 'string' && result) {
-      const _sessions = imBridge.getStatus().sessions
-      const _bound = _sessions.find(s => s.clankChatId === chatId)
-      if (_bound) {
-        ;(async () => {
-          try {
-            if (_bound.platform === 'telegram') {
-              const telegram = require('./im-bridge/adapters/telegram')
-              await telegram.sendMessage(_bound.channelId, result)
-            }
-          } catch (fwdErr) {
-            logger.error('im-bridge forward error', { chatId, error: fwdErr.message })
-          }
-        })()
-      }
-    }
     return { success: true, result }
   } catch (err) {
     logger.error('agent:run error', { chatId, error: err.message })
@@ -3200,7 +3196,6 @@ const MEDIA_TYPES = {
 
 const IMAGE_EXTS = new Set(Object.keys(MEDIA_TYPES))
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024   // 20 MB
-const MAX_TEXT_SIZE = 1 * 1024 * 1024      // 1 MB
 
 // Detect WSL environment
 const IS_WSL = (() => {
@@ -3264,60 +3259,26 @@ function readAttachment(rawPath) {
 
   try {
     const stat = fs.statSync(filePath)
-
-    // -- Folder --
-    if (stat.isDirectory()) {
-      let listing = ''
-      try {
-        const entries = fs.readdirSync(filePath, { withFileTypes: true })
-          .filter(e => !e.name.startsWith('.'))
-          .sort((a, b) => {
-            if (a.isDirectory() && !b.isDirectory()) return -1
-            if (!a.isDirectory() && b.isDirectory()) return 1
-            return a.name.localeCompare(b.name)
-          })
-        listing = entries.map(e => (e.isDirectory() ? '[dir]  ' : '       ') + e.name).join('\n')
-      } catch {}
-      return {
-        id, name, path: filePath, type: 'folder', size: 0,
-        preview: `Folder: ${filePath}` + (listing ? `\n${listing}` : '')
-      }
-    }
-
     const ext = path.extname(name).toLowerCase()
 
-    // -- Image --
-    if (IMAGE_EXTS.has(ext)) {
+    // -- Image: read base64 for visual preview --
+    if (!stat.isDirectory() && IMAGE_EXTS.has(ext)) {
       if (stat.size > MAX_IMAGE_SIZE) {
-        return { id, name, path: filePath, type: 'error', error: `Image too large (${(stat.size / 1024 / 1024).toFixed(1)} MB, max 20 MB)`, preview: name }
+        return { id, name, path: filePath, type: 'image_error', error: `Image too large (${(stat.size / 1024 / 1024).toFixed(1)} MB, max 20 MB)` }
       }
       const base64 = fs.readFileSync(filePath).toString('base64')
+      const mediaType = MEDIA_TYPES[ext]
       return {
         id, name, path: filePath, type: 'image',
-        mediaType: MEDIA_TYPES[ext],
-        base64, size: stat.size,
-        preview: `Image: ${name} (${(stat.size / 1024).toFixed(1)} KB)`
+        mediaType, base64, size: stat.size,
+        preview: `data:${mediaType};base64,${base64}`
       }
     }
 
-    // -- Text / code file --
-    if (stat.size > MAX_TEXT_SIZE) {
-      return { id, name, path: filePath, type: 'error', error: `File too large (${(stat.size / 1024 / 1024).toFixed(1)} MB, max 1 MB)`, preview: name }
-    }
-    const buf = fs.readFileSync(filePath)
-    // Binary detection: check for null bytes in the first 8KB
-    const sample = buf.subarray(0, 8192)
-    if (sample.includes(0)) {
-      return { id, name, path: filePath, type: 'error', error: 'Binary file -- not supported', preview: name }
-    }
-    const content = buf.toString('utf8')
-    return {
-      id, name, path: filePath, type: 'text',
-      content, size: stat.size,
-      preview: `${name} (${(stat.size / 1024).toFixed(1)} KB)`
-    }
+    // -- Everything else (folder, text, binary): path only --
+    return { id, name, path: filePath, type: 'path' }
   } catch (err) {
-    return { id, name, path: filePath, type: 'error', error: err.message, preview: name }
+    return { id, name, path: filePath, type: 'path' }
   }
 }
 
@@ -3411,25 +3372,14 @@ $owner.Close()
   })
 }
 
-// files:pick -- on WSL use native Windows dialog, otherwise GTK
+// files:pick -- native OS dialog (supports multi-select, files and folders)
 ipcMain.handle('files:pick', async () => {
   if (filePickerOpen) return []
   filePickerOpen = true
   try {
-    if (IS_WSL) {
-      try {
-        const winPaths = await showWindowsFilePicker()
-        if (winPaths.length === 0) return []
-        return winPaths.map(wp => readAttachment(wp))
-      } catch (err) {
-        logger.error('Windows file picker failed, falling back to GTK:', err.message)
-        // fall through to GTK dialog
-      }
-    }
-
     const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openFile', 'openDirectory', 'multiSelections'],
-      title: 'Attach Files or Folders'
+      properties: ['openFile', 'multiSelections'],
+      title: 'Attach Files'
     })
     if (result.canceled || result.filePaths.length === 0) return []
     return result.filePaths.map(fp => readAttachment(fp))
@@ -3475,8 +3425,8 @@ function toLinuxPath(p) {
 }
 
 // Config persistence -- DoCPath stored in config.json
-ipcMain.handle('obsidian:get-config', () => {
-  const cfg = readJSON(CONFIG_FILE, {})
+ipcMain.handle('obsidian:get-config', async () => {
+  const cfg = await readJSONAsync(CONFIG_FILE, {})
   return { vaultPath: cfg.DoCPath || '' }
 })
 ipcMain.handle('obsidian:save-config', async (_, config) => {
@@ -3721,6 +3671,19 @@ ipcMain.handle('obsidian:delete-file', (_, rawPath) => {
   }
 })
 
+// Check whether a directory is empty on disk (ignores hidden/system files starting with .)
+ipcMain.handle('obsidian:is-dir-empty', (_, rawPath) => {
+  try {
+    const p = toLinuxPath(rawPath)
+    const stat = fs.statSync(p)
+    if (!stat.isDirectory()) return { isDir: false }
+    const entries = fs.readdirSync(p).filter(e => !e.startsWith('.'))
+    return { isDir: true, empty: entries.length === 0 }
+  } catch (err) {
+    return { error: err.message }
+  }
+})
+
 // Rename a file or folder
 ipcMain.handle('obsidian:rename', (_, rawOld, rawNew) => {
   try {
@@ -3732,6 +3695,42 @@ ipcMain.handle('obsidian:rename', (_, rawOld, rawNew) => {
   } catch (err) {
     return { error: err.message }
   }
+})
+
+// Copy external files into a vault directory (system drag-drop / paste)
+// sourcePaths: array of absolute paths (Windows or Linux)
+// rawDestDir: destination directory inside the vault
+ipcMain.handle('obsidian:copy-files-to-dir', (_, sourcePaths, rawDestDir) => {
+  const results = []
+  const destDir = toLinuxPath(rawDestDir)
+  if (!fs.existsSync(destDir)) {
+    try { fs.mkdirSync(destDir, { recursive: true }) } catch (err) {
+      return [{ error: err.message }]
+    }
+  }
+  for (const rawSrc of sourcePaths) {
+    try {
+      const src = toLinuxPath(rawSrc)
+      if (!fs.existsSync(src)) { results.push({ error: `Not found: ${src}` }); continue }
+      const stat = fs.statSync(src)
+      if (stat.isDirectory()) { results.push({ error: `Directories not supported: ${src}` }); continue }
+      const baseName = path.basename(src)
+      // Resolve name collision: append (1), (2), … before the extension
+      const ext = path.extname(baseName)
+      const stem = path.basename(baseName, ext)
+      let destPath = path.join(destDir, baseName)
+      let counter = 1
+      while (fs.existsSync(destPath)) {
+        destPath = path.join(destDir, `${stem} (${counter})${ext}`)
+        counter++
+      }
+      fs.copyFileSync(src, destPath)
+      results.push({ success: true, path: destPath, name: path.basename(destPath) })
+    } catch (err) {
+      results.push({ error: err.message })
+    }
+  }
+  return results
 })
 
 // -- File Reveal / Open -------------------------------------------------------
@@ -4019,38 +4018,4 @@ ipcMain.handle('voice:tts', async (event, { text, apiKey, baseURL, model, voice 
   }
 })
 
-// ── Computer Use ─────────────────────────────────────────────────────────────
-// Active CU sessions: chatId → ComputerUseLoop instance
-const cuSessions = new Map()
-
-ipcMain.handle('computer-use:start', async (event, { task, chatId, msgId, apiKey, baseURL }) => {
-  try {
-    const { ComputerUseLoop } = require('./agent/computerUseLoop')
-    const loop = new ComputerUseLoop({
-      apiKey,
-      baseURL,
-      task,
-      onChunk: (chunk) => {
-        event.sender.send('computer-use:chunk', { chatId, msgId, chunk })
-      },
-    })
-    cuSessions.set(chatId, loop)
-    loop.run().catch(err => {
-      logger.error('ComputerUseLoop uncaught error', err)
-      event.sender.send('computer-use:chunk', {
-        chatId, msgId,
-        chunk: { type: 'cu_error', error: err.message || String(err) },
-      })
-    }).finally(() => cuSessions.delete(chatId))
-    return { ok: true }
-  } catch (err) {
-    logger.error('computer-use:start error', err)
-    return { ok: false, error: err.message }
-  }
-})
-
-ipcMain.handle('computer-use:stop', async (_, { chatId }) => {
-  cuSessions.get(chatId)?.stop()
-  return { ok: true }
-})
 

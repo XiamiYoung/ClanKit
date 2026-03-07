@@ -1,205 +1,212 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <defs>
-    <!-- Dark navy background -->
-    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#0d2137"/>
-      <stop offset="100%" stop-color="#0a192f"/>
+
+    <!-- Yellow worn paint: flat, no sphere highlight -->
+    <linearGradient id="headYellow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#D0D0D0"/>
+      <stop offset="40%"  stop-color="#909090"/>
+      <stop offset="75%"  stop-color="#505050"/>
+      <stop offset="100%" stop-color="#1A1A1A"/>
+    </linearGradient>
+
+    <!-- Ear outer rubber ring -->
+    <radialGradient id="earRing" cx="38%" cy="34%" r="66%">
+      <stop offset="0%"   stop-color="#484848"/>
+      <stop offset="58%"  stop-color="#282828"/>
+      <stop offset="100%" stop-color="#0A0A0A"/>
     </radialGradient>
-    <!-- Silver metallic for head and body -->
-    <linearGradient id="silver" x1="10%" y1="0%" x2="90%" y2="100%">
-      <stop offset="0%"   stop-color="#D2DDE8"/>
-      <stop offset="45%"  stop-color="#A4B8CC"/>
-      <stop offset="100%" stop-color="#627080"/>
+
+    <!-- Ear face orange panel -->
+    <radialGradient id="earFace" cx="40%" cy="36%" r="64%">
+      <stop offset="0%"   stop-color="#4A4A4A"/>
+      <stop offset="55%"  stop-color="#2E2E2E"/>
+      <stop offset="100%" stop-color="#141414"/>
+    </radialGradient>
+
+    <!-- Eye bezel: flat dark, no directional shine -->
+    <linearGradient id="eyeBezel" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%"   stop-color="#1C1814"/>
+      <stop offset="100%" stop-color="#080604"/>
     </linearGradient>
-    <!-- Darker silver for ears, joints, feet -->
-    <linearGradient id="darkSilver" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"   stop-color="#8090A8"/>
-      <stop offset="100%" stop-color="#425060"/>
+
+    <!-- Socket recess: near-black -->
+    <linearGradient id="eyeSocket" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#0A0A0A"/>
+      <stop offset="100%" stop-color="#020202"/>
     </linearGradient>
-    <!-- Left ear: shadow on left, light on right -->
-    <linearGradient id="leftEarGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%"   stop-color="#303D50"/>
-      <stop offset="50%"  stop-color="#5A6A80"/>
-      <stop offset="100%" stop-color="#8090A8"/>
+
+    <!-- Cyan lens: flat, uniform teal — NOT a sphere -->
+    <linearGradient id="lensCyan" x1="25%" y1="0%" x2="75%" y2="100%">
+      <stop offset="0%"   stop-color="#3AC8DC"/>
+      <stop offset="40%"  stop-color="#14A4BE"/>
+      <stop offset="75%"  stop-color="#0880A0"/>
+      <stop offset="100%" stop-color="#044E68"/>
     </linearGradient>
-    <!-- Right ear: mirror -->
-    <linearGradient id="rightEarGrad" x1="100%" y1="0%" x2="0%" y2="0%">
-      <stop offset="0%"   stop-color="#303D50"/>
-      <stop offset="50%"  stop-color="#5A6A80"/>
-      <stop offset="100%" stop-color="#8090A8"/>
+
+    <!-- Antenna shaft -->
+    <linearGradient id="antShaft" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#282828"/>
+      <stop offset="50%"  stop-color="#404040"/>
+      <stop offset="100%" stop-color="#282828"/>
     </linearGradient>
-    <!-- Neck gradient -->
-    <linearGradient id="neckGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%"   stop-color="#7A8CA0"/>
-      <stop offset="100%" stop-color="#425060"/>
-    </linearGradient>
-    <!-- Eye glow -->
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="7" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
+
+    <!-- Head shadow -->
+    <filter id="headShadow" x="-10%" y="-8%" width="128%" height="128%">
+      <feDropShadow dx="0" dy="12" stdDeviation="22"
+                    flood-color="#000000" flood-opacity="0.40"/>
     </filter>
-    <!-- Soft drop shadow -->
-    <filter id="shadow" x="-8%" y="-5%" width="120%" height="120%">
-      <feDropShadow dx="4" dy="8" stdDeviation="14" flood-color="#000000" flood-opacity="0.5"/>
+
+    <!-- Ear shadow -->
+    <filter id="earShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8"
+                    flood-color="#000000" flood-opacity="0.55"/>
     </filter>
+
+    <!-- Eye inset shadow: makes lens look RECESSED, not raised -->
+    <filter id="eyeInset" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="4" stdDeviation="10"
+                    flood-color="#000000" flood-opacity="0.75"/>
+    </filter>
+
   </defs>
 
-  <!-- ── Background ─────────────────────────────────── -->
-  <rect width="1024" height="1024" rx="180" ry="180" fill="url(#bgGrad)"/>
+  <!-- Ground shadow -->
+  <ellipse cx="512" cy="910" rx="265" ry="22" fill="#2A1400" opacity="0.14"/>
 
-  <!-- Faint ambient glow centered on robot -->
-  <ellipse cx="512" cy="512" rx="370" ry="400" fill="#00d4ff" opacity="0.03"/>
+  <!-- ══════════════════════════════════
+       LEFT EAR — small, tighter against head
+       Head left edge: x=142. Ear cx=92, r=62.
+       ══════════════════════════════════ -->
+  <circle cx="92"  cy="508" r="62" fill="url(#earRing)" filter="url(#earShadow)"/>
+  <circle cx="92"  cy="508" r="48" fill="url(#earFace)"/>
+  <line x1="92"  y1="460" x2="92"  y2="556" stroke="#0A0A0A" stroke-width="4.5" opacity="0.65"/>
+  <line x1="44"  y1="508" x2="140" y2="508" stroke="#0A0A0A" stroke-width="4.5" opacity="0.65"/>
+  <circle cx="92"  cy="508" r="14" fill="#180E00"/>
+  <circle cx="92"  cy="508" r="8"  fill="#281800"/>
+  <circle cx="92"  cy="508" r="4"  fill="#383020"/>
+  <ellipse cx="81" cy="497" rx="9" ry="6"
+           fill="white" opacity="0.13" transform="rotate(-14,81,497)"/>
 
-  <!-- ═══════════════════════════════════════════════════
-       ROBOT — Clank-inspired
-       Bounding box: x 142–882 (740 px), y 102–922 (820 px = 80%)
-       Center: (512, 512)
-       ═══════════════════════════════════════════════════ -->
+  <!-- ══════════════════════════════════
+       RIGHT EAR (mirror)
+       Head right edge: x=882. Ear cx=932, r=62.
+       ══════════════════════════════════ -->
+  <circle cx="932" cy="508" r="62" fill="url(#earRing)" filter="url(#earShadow)"/>
+  <circle cx="932" cy="508" r="48" fill="url(#earFace)"/>
+  <line x1="932" y1="460" x2="932" y2="556" stroke="#0A0A0A" stroke-width="4.5" opacity="0.65"/>
+  <line x1="884" y1="508" x2="980" y2="508" stroke="#0A0A0A" stroke-width="4.5" opacity="0.65"/>
+  <circle cx="932" cy="508" r="14" fill="#180E00"/>
+  <circle cx="932" cy="508" r="8"  fill="#281800"/>
+  <circle cx="932" cy="508" r="4"  fill="#383020"/>
+  <ellipse cx="921" cy="497" rx="9" ry="6"
+           fill="white" opacity="0.13" transform="rotate(-14,921,497)"/>
 
-  <!-- ── EAR PANELS (drawn first, behind head) ───────── -->
+  <!-- ══════════════════════════════════
+       HEAD — HIGHLY ROUNDED rectangle
+       x=142, y=138, w=740, h=740, rx=148
+       rx=148 on a 740px wide rect gives very soft pill-like corners (matches reference).
+       center: x=512, y=508
+       ══════════════════════════════════ -->
+  <rect x="142" y="138" width="740" height="740" rx="148" ry="148"
+        fill="url(#headYellow)" filter="url(#headShadow)"/>
 
-  <!-- LEFT EAR -->
-  <rect x="142" y="142" width="140" height="242" rx="24" ry="24"
-        fill="url(#leftEarGrad)" filter="url(#shadow)"/>
-  <!-- Inner recessed panel -->
-  <rect x="160" y="160" width="104" height="206" rx="14" ry="14" fill="#1A2A3E"/>
-  <!-- Horizontal vent lines -->
-  <g stroke="#2E5070" stroke-width="2.5" stroke-linecap="round" opacity="0.9">
-    <line x1="174" y1="186" x2="250" y2="186"/>
-    <line x1="174" y1="206" x2="250" y2="206"/>
-    <line x1="174" y1="226" x2="250" y2="226"/>
-    <line x1="174" y1="246" x2="250" y2="246"/>
-    <line x1="174" y1="266" x2="250" y2="266"/>
-    <line x1="174" y1="286" x2="250" y2="286"/>
-    <line x1="174" y1="306" x2="250" y2="306"/>
-    <line x1="174" y1="326" x2="250" y2="326"/>
-    <line x1="174" y1="346" x2="250" y2="346"/>
-  </g>
-  <!-- Ear status LED (bottom) -->
-  <circle cx="212" cy="354" r="10" fill="#00d4ff" filter="url(#glow)" opacity="0.95"/>
+  <!-- Worn paint chips — irregular ellipses -->
+  <ellipse cx="248" cy="268" rx="48" ry="30" fill="#383838" opacity="0.26" transform="rotate(-22,248,268)"/>
+  <ellipse cx="716" cy="248" rx="40" ry="24" fill="#484848" opacity="0.20" transform="rotate(13,716,248)"/>
+  <ellipse cx="224" cy="718" rx="55" ry="34" fill="#343434" opacity="0.30" transform="rotate(-10,224,718)"/>
+  <ellipse cx="774" cy="748" rx="42" ry="26" fill="#3E3E3E" opacity="0.24" transform="rotate(17,774,748)"/>
+  <ellipse cx="634" cy="204" rx="19" ry="10" fill="#2A2A2A" opacity="0.38" transform="rotate(28,634,204)"/>
+  <ellipse cx="296" cy="772" rx="15" ry="9"  fill="#242424" opacity="0.34" transform="rotate(-24,296,772)"/>
 
-  <!-- RIGHT EAR -->
-  <rect x="742" y="142" width="140" height="242" rx="24" ry="24"
-        fill="url(#rightEarGrad)" filter="url(#shadow)"/>
-  <rect x="760" y="160" width="104" height="206" rx="14" ry="14" fill="#1A2A3E"/>
-  <g stroke="#2E5070" stroke-width="2.5" stroke-linecap="round" opacity="0.9">
-    <line x1="774" y1="186" x2="850" y2="186"/>
-    <line x1="774" y1="206" x2="850" y2="206"/>
-    <line x1="774" y1="226" x2="850" y2="226"/>
-    <line x1="774" y1="246" x2="850" y2="246"/>
-    <line x1="774" y1="266" x2="850" y2="266"/>
-    <line x1="774" y1="286" x2="850" y2="286"/>
-    <line x1="774" y1="306" x2="850" y2="306"/>
-    <line x1="774" y1="326" x2="850" y2="326"/>
-    <line x1="774" y1="346" x2="850" y2="346"/>
-  </g>
-  <circle cx="812" cy="354" r="10" fill="#00d4ff" filter="url(#glow)" opacity="0.95"/>
+  <!-- Fine scratches -->
+  <line x1="284" y1="222" x2="316" y2="240" stroke="#505050" stroke-width="2.5" opacity="0.46"/>
+  <line x1="291" y1="237" x2="318" y2="250" stroke="#404040" stroke-width="1.5" opacity="0.38"/>
+  <line x1="648" y1="210" x2="676" y2="230" stroke="#545454" stroke-width="2.5" opacity="0.42"/>
+  <line x1="202" y1="634" x2="226" y2="643" stroke="#585858" stroke-width="2"   opacity="0.44"/>
+  <line x1="762" y1="684" x2="786" y2="698" stroke="#525252" stroke-width="2"   opacity="0.40"/>
 
-  <!-- ── HEAD ─────────────────────────────────────────── -->
-  <!-- Main head shape — rounded rect, silver metallic -->
-  <rect x="272" y="102" width="480" height="322" rx="62" ry="62"
-        fill="url(#silver)" filter="url(#shadow)"/>
-  <!-- Specular highlight (top-left catch light) -->
-  <ellipse cx="436" cy="148" rx="130" ry="44" fill="white" opacity="0.13"/>
+  <!-- Head rim — dark edge -->
+  <rect x="142" y="138" width="740" height="740" rx="148" ry="148"
+        fill="none" stroke="#0A0A0A" stroke-width="8" opacity="0.55"/>
 
-  <!-- Face visor — dark recessed area with eyes -->
-  <rect x="302" y="142" width="420" height="242" rx="36" ry="36" fill="#051220"/>
-  <!-- Visor rim glow -->
-  <rect x="302" y="142" width="420" height="242" rx="36" ry="36"
-        fill="none" stroke="#00d4ff" stroke-width="1.5" opacity="0.3"/>
+  <!-- ══════════════════════════════════
+       STATUS PANEL — top strip inside head
+       ══════════════════════════════════ -->
+  <rect x="406" y="168" width="212" height="40" rx="7" fill="#080808" opacity="0.80"/>
+  <rect x="406" y="168" width="212" height="40" rx="7"
+        fill="none" stroke="#2A2A2A" stroke-width="1.5" opacity="0.60"/>
+  <rect x="420" y="178" width="78" height="22" rx="4" fill="#00304A" opacity="0.90"/>
+  <rect x="420" y="178" width="78" height="22" rx="4"
+        fill="none" stroke="#00A8C0" stroke-width="1" opacity="0.52"/>
+  <rect x="424" y="182" width="40" height="14" rx="3" fill="#00C8E8" opacity="0.68"/>
+  <rect x="508" y="180" width="17" height="17" rx="3" fill="#C05000" opacity="0.76"/>
+  <circle cx="414" cy="188" r="3"  fill="#1A1A1A" opacity="0.58"/>
+  <circle cx="610" cy="188" r="3"  fill="#1A1A1A" opacity="0.58"/>
 
-  <!-- LEFT EYE (large, Clank-style glowing circle) -->
-  <!-- Outer dark socket -->
-  <circle cx="430" cy="260" r="80" fill="#030C18"/>
-  <!-- Outer glow ring -->
-  <circle cx="430" cy="260" r="80" fill="none" stroke="#00d4ff" stroke-width="3"
-          filter="url(#glow)" opacity="0.9"/>
-  <!-- Iris -->
-  <circle cx="430" cy="260" r="62" fill="#013050"/>
-  <!-- Inner glow wash -->
-  <circle cx="430" cy="260" r="48" fill="#00d4ff" filter="url(#glow)" opacity="0.22"/>
-  <!-- Pupil -->
-  <circle cx="430" cy="260" r="34" fill="#00A8CC"/>
-  <!-- Bright core -->
-  <circle cx="430" cy="260" r="20" fill="#44EEFF"/>
-  <!-- Specular highlight -->
-  <circle cx="414" cy="242" r="13" fill="white" opacity="0.88"/>
-  <circle cx="448" cy="278" r="5"  fill="white" opacity="0.32"/>
+  <!-- ANTENNA -->
+  <rect x="618" y="70" width="9" height="78" rx="4.5" fill="url(#antShaft)"/>
+  <circle cx="622" cy="68" r="11" fill="#181818"/>
+  <circle cx="622" cy="68" r="6"  fill="#2A2A2A"/>
+  <ellipse cx="619" cy="64" rx="3" ry="2" fill="white" opacity="0.26"/>
 
-  <!-- RIGHT EYE -->
-  <circle cx="594" cy="260" r="80" fill="#030C18"/>
-  <circle cx="594" cy="260" r="80" fill="none" stroke="#00d4ff" stroke-width="3"
-          filter="url(#glow)" opacity="0.9"/>
-  <circle cx="594" cy="260" r="62" fill="#013050"/>
-  <circle cx="594" cy="260" r="48" fill="#00d4ff" filter="url(#glow)" opacity="0.22"/>
-  <circle cx="594" cy="260" r="34" fill="#00A8CC"/>
-  <circle cx="594" cy="260" r="20" fill="#44EEFF"/>
-  <circle cx="578" cy="242" r="13" fill="white" opacity="0.88"/>
-  <circle cx="612" cy="278" r="5"  fill="white" opacity="0.32"/>
+  <!-- ══════════════════════════════════
+       LEFT EYE
+       Large — eyes fill most of the face.
+       Center: cx=344, cy=506
+       Outer bezel r=150. Total eye ø=300px on face w=740 → each eye = 40.5% of face.
+       Two eyes + gap = 300+54+300 = 654 of 740 = 88% face width.
 
-  <!-- ── NECK ──────────────────────────────────────────── -->
-  <rect x="422" y="424" width="180" height="68" rx="18" ry="18"
-        fill="url(#neckGrad)" filter="url(#shadow)"/>
-  <!-- Neck segment lines -->
-  <line x1="422" y1="449" x2="602" y2="449" stroke="#243040" stroke-width="2" opacity="0.8"/>
-  <line x1="422" y1="469" x2="602" y2="469" stroke="#243040" stroke-width="2" opacity="0.8"/>
+       Layers:
+         Bezel      r=150   flat dark (dominant black outer ring)
+         Step ring  r=138   crisp inner border
+         Socket     r=131   near-black recess
+         Cyan lens  r= 96   teal area (96/150 = 64% → visible ring = 96-56=40px)
+         Groove     r= 81   thin groove line
+         Pupil      r= 56   large black center
+         Catchlight dot r=8
+       ══════════════════════════════════ -->
 
-  <!-- ── BODY ──────────────────────────────────────────── -->
-  <rect x="252" y="492" width="520" height="420" rx="48" ry="48"
-        fill="url(#silver)" filter="url(#shadow)"/>
-  <!-- Body top specular -->
-  <ellipse cx="440" cy="526" rx="160" ry="36" fill="white" opacity="0.08"/>
+  <!-- Bezel outer -->
+  <circle cx="344" cy="506" r="150" fill="url(#eyeBezel)"/>
+  <!-- Knurl ticks on bezel edge -->
+  <circle cx="344" cy="506" r="150"
+          fill="none" stroke="#484035" stroke-width="2" opacity="0.20"
+          stroke-dasharray="5 5"/>
+  <!-- Inner hard step ring -->
+  <circle cx="344" cy="506" r="138"
+          fill="none" stroke="#0A0806" stroke-width="5" opacity="0.85"/>
+  <circle cx="344" cy="506" r="133"
+          fill="none" stroke="#242018" stroke-width="2" opacity="0.50"/>
+  <!-- Deep socket recess (inset shadow = recessed look) -->
+  <circle cx="344" cy="506" r="127" fill="url(#eyeSocket)" filter="url(#eyeInset)"/>
+  <!-- Cyan lens — flat linear gradient, NOT radial sphere -->
+  <circle cx="344" cy="506" r="96"  fill="url(#lensCyan)"/>
+  <!-- Single thin groove on lens -->
+  <circle cx="344" cy="506" r="81"
+          fill="none" stroke="#0898B0" stroke-width="2" opacity="0.38"/>
+  <!-- Large black pupil -->
+  <circle cx="344" cy="506" r="56"  fill="#050D14"/>
+  <!-- Tiny single catchlight dot -->
+  <circle cx="328" cy="490" r="8"   fill="white" opacity="0.52"/>
 
-  <!-- Chest display panel -->
-  <rect x="312" y="534" width="400" height="242" rx="22" ry="22" fill="#051220"/>
-  <!-- Panel glow rim -->
-  <rect x="312" y="534" width="400" height="242" rx="22" ry="22"
-        fill="none" stroke="#00d4ff" stroke-width="2" filter="url(#glow)" opacity="0.7"/>
-
-  <!-- Neural / brainwave display on chest -->
-  <g filter="url(#glow)" stroke="#00d4ff" stroke-width="3" fill="none">
-    <polyline points="330,650 354,622 378,666 402,600 426,672 450,614 474,660 498,604 522,654 546,618 570,648 594,612 618,638 642,606 666,632 690,616 704,625"/>
-    <polyline points="330,676 354,654 378,698 402,634 426,704 450,646 474,692 498,638 522,684 546,650 570,676 594,644" opacity="0.30"/>
-  </g>
-
-  <!-- Horizontal body seam lines -->
-  <line x1="252" y1="604" x2="772" y2="604" stroke="#90A8BC" stroke-width="1.5" opacity="0.35"/>
-  <line x1="252" y1="808" x2="772" y2="808" stroke="#90A8BC" stroke-width="1.5" opacity="0.35"/>
-
-  <!-- Belly panel -->
-  <rect x="352" y="816" width="320" height="66" rx="16" ry="16" fill="#1A2A3E" opacity="0.7"/>
-  <!-- Belly LEDs -->
-  <circle cx="432" cy="849" r="11" fill="#d4af37" filter="url(#glow)" opacity="0.88"/>
-  <circle cx="512" cy="849" r="11" fill="#00d4ff" filter="url(#glow)" opacity="0.88"/>
-  <circle cx="592" cy="849" r="11" fill="#d4af37" filter="url(#glow)" opacity="0.88"/>
-
-  <!-- ── ARMS ──────────────────────────────────────────── -->
-
-  <!-- Left arm -->
-  <rect x="162" y="512" width="90" height="266" rx="28" ry="28"
-        fill="url(#silver)" filter="url(#shadow)"/>
-  <!-- Shoulder joint sphere -->
-  <circle cx="207" cy="512" r="36" fill="url(#darkSilver)" filter="url(#shadow)"/>
-  <circle cx="193" cy="498" r="10" fill="white" opacity="0.15"/>
-  <!-- Left hand / gripper -->
-  <rect x="170" y="748" width="74" height="56" rx="22" ry="22" fill="url(#darkSilver)"/>
-
-  <!-- Right arm -->
-  <rect x="772" y="512" width="90" height="266" rx="28" ry="28"
-        fill="url(#silver)" filter="url(#shadow)"/>
-  <!-- Shoulder joint sphere -->
-  <circle cx="817" cy="512" r="36" fill="url(#darkSilver)" filter="url(#shadow)"/>
-  <circle cx="803" cy="498" r="10" fill="white" opacity="0.15"/>
-  <!-- Right hand / gripper -->
-  <rect x="780" y="748" width="74" height="56" rx="22" ry="22" fill="url(#darkSilver)"/>
-
-  <!-- ── FEET ──────────────────────────────────────────── -->
-  <rect x="282" y="872" width="196" height="50" rx="22" ry="22"
-        fill="url(#darkSilver)" filter="url(#shadow)"/>
-  <rect x="546" y="872" width="196" height="50" rx="22" ry="22"
-        fill="url(#darkSilver)" filter="url(#shadow)"/>
+  <!-- ══════════════════════════════════
+       RIGHT EYE (exact mirror, cx=680)
+       Gap between eyes: 680-150=530, 344+150=494 → gap=36px ← tight
+       Actually: left right edge=344+150=494, right left edge=680-150=530, gap=36px. OK.
+       ══════════════════════════════════ -->
+  <circle cx="680" cy="506" r="150" fill="url(#eyeBezel)"/>
+  <circle cx="680" cy="506" r="150"
+          fill="none" stroke="#484035" stroke-width="2" opacity="0.20"
+          stroke-dasharray="5 5"/>
+  <circle cx="680" cy="506" r="138"
+          fill="none" stroke="#0A0806" stroke-width="5" opacity="0.85"/>
+  <circle cx="680" cy="506" r="133"
+          fill="none" stroke="#242018" stroke-width="2" opacity="0.50"/>
+  <circle cx="680" cy="506" r="127" fill="url(#eyeSocket)" filter="url(#eyeInset)"/>
+  <circle cx="680" cy="506" r="96"  fill="url(#lensCyan)"/>
+  <circle cx="680" cy="506" r="81"
+          fill="none" stroke="#0898B0" stroke-width="2" opacity="0.38"/>
+  <circle cx="680" cy="506" r="56"  fill="#050D14"/>
+  <circle cx="664" cy="490" r="8"   fill="white" opacity="0.52"/>
 
 </svg>

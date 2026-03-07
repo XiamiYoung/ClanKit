@@ -4,11 +4,14 @@
 const FormData = require('form-data')
 
 class WhisperSTT {
-  constructor({ apiKey, baseURL }) {
+  constructor({ apiKey, baseURL, model }) {
     if (!apiKey) throw new Error('WhisperSTT: apiKey is required')
     this.apiKey = apiKey
     this.baseURL = (baseURL || 'https://api.openai.com').replace(/\/+$/, '')
-    this.isStandardOpenAI = this.baseURL.includes('api.openai.com')
+    this.model = model || 'whisper-1'
+    // Proxy mode: only for the internal mlaas proxy — all other endpoints
+    // (OpenAI, Groq, Deepgram-compatible, etc.) use standard OpenAI format.
+    this.isProxy = this.baseURL.includes('mlaas.virtuosgames.com')
   }
 
   /**
@@ -24,7 +27,7 @@ class WhisperSTT {
     const ext = mimeType.includes('wav') ? 'wav' : 'webm'
     const form = new FormData()
     form.append('file', audioBuffer, { filename: `audio.${ext}`, contentType: mimeType })
-    form.append('model', 'whisper-1')
+    form.append('model', this.model)
     form.append('response_format', 'verbose_json')
     // Providing a language avoids Whisper spending inference on language detection
     // and significantly reduces hallucinations on low-signal/background-noise audio.
@@ -32,13 +35,13 @@ class WhisperSTT {
     // A prompt biases the decoder toward real speech and away from hallucinated filler.
     if (opts.prompt) form.append('prompt', opts.prompt)
 
-    const url = this.isStandardOpenAI
-      ? `${this.baseURL}/v1/audio/transcriptions`
-      : `${this.baseURL}/proxy/openai/v1/audio/transcriptions`
+    const url = this.isProxy
+      ? `${this.baseURL}/proxy/openai/v1/audio/transcriptions`
+      : `${this.baseURL}/v1/audio/transcriptions`
 
-    const authHeader = this.isStandardOpenAI
-      ? { 'Authorization': `Bearer ${this.apiKey}` }
-      : { 'x-api-key': this.apiKey }
+    const authHeader = this.isProxy
+      ? { 'x-api-key': this.apiKey }
+      : { 'Authorization': `Bearer ${this.apiKey}` }
 
     // Abort if the API takes more than 10s — prevents _voiceBusy from getting stuck forever.
     // Normal Whisper: 1–3s. Slow but valid: 4–8s. Hung connection: never resolves.

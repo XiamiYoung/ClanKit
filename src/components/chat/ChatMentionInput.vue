@@ -258,18 +258,36 @@ function hideTooltip() {
 }
 
 /**
- * Append resolved file paths into the textarea text.
+ * Append text into the textarea (below existing content).
  */
-function appendPathsToInput(results) {
-  const paths = results.filter(r => r.path).map(r => r.path)
-  if (paths.length === 0) return
+function appendTextToInput(text) {
   const prefix = localText.value.trimEnd()
-  localText.value = prefix ? `${prefix}\n${paths.join('\n')}` : paths.join('\n')
+  localText.value = prefix ? `${prefix}\n${text}` : text
+}
+
+/**
+ * Route resolved attachment results: images get chips + path in textarea;
+ * all other types (path/folder/etc.) get only path in textarea.
+ */
+function handleAttachResults(results) {
+  const imageAtts = []
+  const pathTexts = []
+  for (const att of results) {
+    if (att.type === 'image') {
+      const placeholder = att.path || att.name
+      imageAtts.push({ ...att, placeholderText: placeholder })
+      pathTexts.push(placeholder)
+    } else {
+      if (att.path) pathTexts.push(att.path)
+    }
+  }
+  if (imageAtts.length > 0) emit('attach', imageAtts)
+  if (pathTexts.length > 0) appendTextToInput(pathTexts.join('\n'))
 }
 
 /**
  * Handle paste: files from OS, path strings, or clipboard screenshots.
- * Emits 'attach' with resolved attachment objects for the parent to store.
+ * Emits 'attach' with image attachment objects for the parent to store.
  */
 async function onPaste(e) {
   const cd = e.clipboardData
@@ -281,10 +299,7 @@ async function onPaste(e) {
       e.preventDefault()
       try {
         const results = await window.electronAPI.resolveDropPaths(filePaths)
-        if (results?.length > 0) {
-          emit('attach', results)
-          appendPathsToInput(results)
-        }
+        if (results?.length > 0) handleAttachResults(results)
       } catch { /* ignore */ }
       return
     }
@@ -302,10 +317,7 @@ async function onPaste(e) {
       e.preventDefault()
       try {
         const results = await window.electronAPI.resolveDropPaths(pathLines)
-        if (results?.length > 0) {
-          emit('attach', results)
-          appendPathsToInput(results)
-        }
+        if (results?.length > 0) handleAttachResults(results)
       } catch { /* ignore */ }
       return
     }
@@ -322,6 +334,7 @@ async function onPaste(e) {
         const mediaType = item.type
         const ext = mediaType.split('/')[1] || 'png'
         const name = `screenshot-${Date.now()}.${ext}`
+        const placeholder = `[${name}]`
         const reader = new FileReader()
         reader.onload = (ev) => {
           const dataUri = ev.target.result
@@ -329,8 +342,9 @@ async function onPaste(e) {
           emit('attach', [{
             id: uuidv4(), name, type: 'image',
             base64, mediaType, preview: dataUri,
-            size: file.size, path: null,
+            size: file.size, path: null, placeholderText: placeholder,
           }])
+          appendTextToInput(placeholder)
         }
         reader.readAsDataURL(file)
         return

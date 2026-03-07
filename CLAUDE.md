@@ -78,6 +78,49 @@ npm run electron
 - Routes: `/chats`, `/personas`, `/skills`, `/knowledge`, `/mcp`, `/tools`, `/notes`, `/config`
 - Default redirect: `/` → `/chats`
 
+### Persona Model Architecture — Global Default vs Per-Chat Override
+
+**This logic is intentional and must not be changed without explicit developer confirmation.**
+
+#### Two separate layers
+
+| Layer | Storage location | Scope | Write path |
+|-------|-----------------|-------|------------|
+| **Global default** | `personas.json` → `persona.providerId` / `persona.modelId` | All chats that use this persona | Personas page → `PersonaWizard.vue` → `personasStore.savePersona()` |
+| **Per-chat override** | `chats/{id}.json` → `chat.personaModelOverrides[personaId]` = `{ provider, model }` | This chat only | Chat header persona modal → `ChatHeader.vue` → `chatsStore.setChatPersonaModelOverride()` |
+
+#### Priority at runtime (both desktop and IM bridge)
+
+```
+chat.personaModelOverrides[personaId]   ← highest priority (this chat only)
+  → persona.providerId / persona.modelId ← persona global default
+    → config.defaultProvider             ← global fallback
+```
+
+#### Key invariants — never break these
+
+1. **`PersonaWizard.vue` is the only place that writes `persona.providerId` / `persona.modelId`** to `personas.json`. The chat persona modal (`ChatHeader.vue`) must never call `personasStore.savePersona()` with model fields.
+
+2. **`setChatPersonaModelOverride(chatId, personaId, providerId, modelId)` in `chats.js`** is the only path for per-chat overrides. It writes `chat.personaModelOverrides[personaId] = { provider, model }`. Passing `null, null` clears the override and restores the persona default.
+
+3. **Never write a partial override** (`{ provider: x, model: null }`). The `ChatHeader` modal uses a local `draftOverrideProvider` ref to hold the in-flight provider selection, and only calls `setChatPersonaModelOverride` once both provider **and** model are confirmed. See `ChatHeader.vue → openSysPersonaConfig / draftOverrideProvider`.
+
+4. **Group chat: each persona has its own independent override.** `buildPersonaRuns()` in `ChatsView.vue` iterates each `pid` and reads `targetChat.personaModelOverrides?.[pid]` separately, producing an independent `config` per persona.
+
+5. **Overrides are per-chat, never copied.** `createChatFromHistory()` in `chats.js` intentionally sets `personaModelOverrides: {}` — overrides must not propagate to new chats.
+
+6. **Display must reflect the active override.** `activeChatModel` computed in `ChatsView.vue` and `getPersonaProviderLabel()` both read `personaModelOverrides` first, before falling back to `persona.modelId`. Do not simplify these to read only the persona global fields.
+
+#### Files involved
+
+- `src/components/personas/PersonaWizard.vue` — global model edit (Personas page)
+- `src/components/chat/ChatHeader.vue` — per-chat override modal (`draftOverrideProvider`, `setChatModelOverride`)
+- `src/stores/chats.js:setChatPersonaModelOverride` — write per-chat override
+- `src/views/ChatsView.vue:buildPersonaRuns` — group chat, per-persona config build (reads override per pid)
+- `src/views/ChatsView.vue:sendMessage` (single path, ~line 5152) — single chat config build (reads override)
+- `src/views/ChatsView.vue:activeChatModel` — display: override → persona global → fallback
+- `src/views/ChatsView.vue:getPersonaProviderLabel` — mention popup display, shows override when active
+
 ### Data Storage
 
 - All data stored in `~/.clankAI/` (configurable via `CLANKAI_DATA_PATH`)

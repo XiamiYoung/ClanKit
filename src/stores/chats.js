@@ -400,11 +400,12 @@ export const useChatsStore = defineStore('chats', () => {
 
   // ── Folder CRUD ───────────────────────────────────────────────────────────
 
-  async function createFolder(name, parentFolderId = null) {
+  async function createFolder(name, parentFolderId = null, emoji = '📁') {
     const folder = {
       type: 'folder',
       id: uuidv4(),
       name: name || 'New Folder',
+      emoji,
       expanded: true,
       children: [],
     }
@@ -414,10 +415,11 @@ export const useChatsStore = defineStore('chats', () => {
     return folder
   }
 
-  async function renameFolder(folderId, newName) {
+  async function renameFolder(folderId, newName, emoji = null) {
     const found = _findNode(folderId, chatTree.value)
     if (found && found.node.type === 'folder') {
       found.node.name = newName
+      if (emoji !== null) found.node.emoji = emoji
       await persistIndex()
     }
   }
@@ -747,6 +749,7 @@ export const useChatsStore = defineStore('chats', () => {
           type: 'folder',
           id: node.id,
           name: node.name,
+          emoji: node.emoji || '📁',
           expanded: node.expanded,
           children: _serializeTree(node.children || []),
         }

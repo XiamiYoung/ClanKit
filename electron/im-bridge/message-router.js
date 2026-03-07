@@ -6,10 +6,11 @@ const os      = require('os')
 const { v4: uuidv4 } = require('uuid')
 const { AgentLoop } = require('../agent/agentLoop')
 
-const DATA_DIR    = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankAI')
-const CHATS_DIR   = path.join(DATA_DIR, 'chats')
-const CHATS_INDEX = path.join(CHATS_DIR, 'index.json')
-const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
+const DATA_DIR      = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankAI')
+const CHATS_DIR     = path.join(DATA_DIR, 'chats')
+const CHATS_INDEX   = path.join(CHATS_DIR, 'index.json')
+const CONFIG_FILE   = path.join(DATA_DIR, 'config.json')
+const PERSONAS_FILE = path.join(DATA_DIR, 'personas.json')
 
 function readJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return fallback }
@@ -28,7 +29,6 @@ function chatFile(chatId) {
 
 function loadMessages(chatId) {
   const all = readJSON(chatFile(chatId), { messages: [] }).messages || []
-  // Mirror the renderer's filter: only user/assistant roles, skip system interrupts and streaming placeholders
   return all
     .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content))
     .map(m => ({ role: m.role, content: m.content }))
@@ -40,7 +40,6 @@ function appendMessage(chatId, msg) {
   chat.updatedAt = Date.now()
   writeAtomic(chatFile(chatId), chat)
 
-  // Update index entry updatedAt
   try {
     const index = readJSON(CHATS_INDEX, [])
     function touch(nodes) {
@@ -55,39 +54,227 @@ function appendMessage(chatId, msg) {
   } catch { /* non-fatal */ }
 }
 
-/**
- * Route an incoming IM message:
- *  1. Append user message to chat file
- *  2. Run AgentLoop
- *  3. Stream chunks to renderer (via webContents) + accumulate full text
- *  4. Append assistant message to chat file
- *  5. Send full text back to IM
- *
- * @param {object} opts
- * @param {string} opts.chatId
- * @param {string} opts.userText
- * @param {string} opts.displayName  - IM username, used as the user message author hint
- * @param {Function} opts.sendToIM   - (text: string) => Promise<void>
- * @param {Function} opts.notifyRenderer - (channel, data) => void  — calls mainWindow.webContents.send(...)
- */
-async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRenderer }) {
+function readPersonas() {
+  const data = readJSON(PERSONAS_FILE, [])
+  return Array.isArray(data) ? data : (data.personas || [])
+}
+
+function buildLoopConfig(baseConfig, persona) {
+  const cfg = { ...baseConfig }
+  const resolvedProvider = persona.providerId || baseConfig.defaultProvider || 'anthropic'
+
+  delete cfg.apiKey
+  delete cfg.baseURL
+  delete cfg.openaiApiKey
+  delete cfg.openaiBaseURL
+  delete cfg._directAuth
+  delete cfg._resolvedProvider
+
+  if (resolvedProvider === 'anthropic') {
+    cfg.apiKey  = baseConfig.anthropic?.apiKey  || ''
+    cfg.baseURL = baseConfig.anthropic?.baseURL || ''
+  } else if (resolvedProvider === 'openrouter') {
+    cfg.apiKey  = baseConfig.openrouter?.apiKey  || ''
+    cfg.baseURL = baseConfig.openrouter?.baseURL || ''
+  } else if (resolvedProvider === 'openai') {
+    cfg.openaiApiKey  = baseConfig.openai?.apiKey  || ''
+    cfg.openaiBaseURL = baseConfig.openai?.baseURL || ''
+    cfg._resolvedProvider = 'openai'
+    cfg.defaultProvider   = 'openai'
+  } else if (resolvedProvider === 'deepseek') {
+    cfg.openaiApiKey  = baseConfig.deepseek?.apiKey  || ''
+    cfg.openaiBaseURL = (baseConfig.deepseek?.baseURL || '').replace(/\/+$/, '')
+    cfg._resolvedProvider = 'openai'
+    cfg._directAuth       = true
+    cfg.defaultProvider   = 'openai'
+  }
+
+  if (persona.modelId) cfg.customModel = persona.modelId
+
+  return cfg
+}
+
+function parseIMAtMentions(text, personas) {
+  if (/@all\b/i.test(text)) {
+    return { mentionAll: true, matches: [] }
+  }
+
+  const mentioned = []
+  const mentionRegex = /@([\w\u00C0-\u024F\u4E00-\u9FFF\uAC00-\uD7FF]+)/g
+  let m
+  while ((m = mentionRegex.exec(text)) !== null) {
+    const name = m[1].toLowerCase()
+    const found = personas.find(p => p.name.toLowerCase() === name)
+    if (found && !mentioned.includes(found.id)) {
+      mentioned.push(found.id)
+    }
+  }
+
+  return { mentionAll: false, matches: mentioned }
+}
+
+async function routeMessage({ chatId, userText, displayName, imageAttachment, sendToIM, notifyRenderer }) {
+  const now = Date.now()
   const userMsg = {
     id: uuidv4(),
     role: 'user',
     content: userText,
-    createdAt: Date.now(),
+    timestamp: now,
+    createdAt: now,
+  }
+  if (imageAttachment) {
+    userMsg.attachments = [{
+      id:        uuidv4(),
+      name:      imageAttachment.name || 'image.jpg',
+      type:      'image',
+      mediaType: imageAttachment.mediaType || 'image/jpeg',
+      preview:   `data:${imageAttachment.mediaType || 'image/jpeg'};base64,${imageAttachment.base64}`,
+    }]
   }
   appendMessage(chatId, userMsg)
-
-  // Notify renderer that messages changed for this chat
   notifyRenderer('im:chat-updated', { chatId })
 
-  const config = readJSON(CONFIG_FILE, {})
+  const config   = readJSON(CONFIG_FILE, {})
+  const chat     = readJSON(chatFile(chatId), { id: chatId, messages: [] })
+  const personas = readPersonas()
+
+  const personaById = {}
+  for (const p of personas) personaById[p.id] = p
+
+  const isGroupChat     = !!(chat.isGroupChat && chat.groupPersonaIds && chat.groupPersonaIds.length > 0)
+  const groupPersonaIds = chat.groupPersonaIds || []
+
+  let respondingIds = []
+
+  if (isGroupChat) {
+    const { mentionAll, matches } = parseIMAtMentions(userText, personas)
+    if (mentionAll || matches.length === 0) {
+      respondingIds = [...groupPersonaIds]
+    } else {
+      respondingIds = matches.filter(id => groupPersonaIds.includes(id))
+      if (respondingIds.length === 0) respondingIds = [...groupPersonaIds]
+    }
+  } else {
+    const pid = chat.systemPersonaId || null
+    if (pid && personaById[pid]) {
+      respondingIds = [pid]
+    } else {
+      const defSys = personas.find(p => p.type === 'system' && p.isDefault)
+        || personas.find(p => p.type === 'system')
+      if (defSys) respondingIds = [defSys.id]
+    }
+  }
+
+  if (respondingIds.length === 0) {
+    await runWithBaseConfig(config, chatId, imageAttachment, sendToIM, notifyRenderer)
+    return
+  }
+
   const messages = loadMessages(chatId)
 
-  // Flatten provider credentials exactly as the renderer does in ChatsView runAgent().
+  const baseConfig = {
+    ...config,
+    soulsDir:            path.join(DATA_DIR, 'souls'),
+    chatPermissionMode:  'allow_all',
+    chatAllowList:       [],
+    chatDangerOverrides: [],
+    maxOutputTokens:     config.maxOutputTokens || null,
+    artifactPath:        config.artifactPath || config.artyfactPath || '',
+    skillsPath:          config.skillsPath || '',
+    DoCPath:             config.DoCPath || '',
+  }
+
+  for (const pid of respondingIds) {
+    const persona = personaById[pid]
+    if (!persona) continue
+
+    const loopConfig = buildLoopConfig(baseConfig, persona)
+
+    const personaPrompts = {
+      systemPersonaPrompt: persona.prompt || '',
+      systemPersonaId:     pid,
+      userPersonaId:       '__im_user__',
+    }
+
+    if (isGroupChat) {
+      const otherParticipants = groupPersonaIds
+        .filter(id => id !== pid)
+        .map(id => {
+          const p = personaById[id]
+          return { id, name: p?.name || 'Unknown', description: p?.description || '', prompt: p?.prompt || '' }
+        })
+      personaPrompts.groupChatContext = {
+        personaName:        persona.name,
+        personaDescription: persona.description || '',
+        otherParticipants,
+      }
+    }
+
+    const loop = new AgentLoop(loopConfig)
+    let fullText = ''
+
+    try {
+      await loop.run(
+        messages,
+        [],
+        [],
+        (chunk) => { if (chunk.type === 'text') fullText += chunk.text || '' },
+        imageAttachment ? [imageAttachment] : [],
+        personaPrompts,
+        [],
+        [],
+        null
+      )
+    } catch (err) {
+      console.error(`[im-bridge] agentLoop error (persona ${persona.name}):`, err.message)
+      await sendToIM(`Error: ${err.message}`)
+      continue
+    } finally {
+      loop.stop?.()
+    }
+
+    if (fullText) {
+      const assistantMsg = {
+        id:        uuidv4(),
+        role:      'assistant',
+        content:   fullText,
+        personaId: pid,
+        segments:  [{ type: 'text', content: fullText }],
+        timestamp: Date.now(),
+        createdAt: Date.now(),
+      }
+      appendMessage(chatId, assistantMsg)
+      notifyRenderer('im:chat-updated', { chatId })
+
+      const replyText = isGroupChat && respondingIds.length > 1
+        ? `**${persona.name}**: ${fullText}`
+        : fullText
+      await sendToIM(replyText)
+
+      // Only accumulate history in single-persona mode; in group mode each
+      // persona responds independently to the same snapshot — appending an
+      // assistant message here would cause the next persona's call to end
+      // with an assistant turn, which some models reject (no prefill support).
+      if (respondingIds.length === 1) {
+        messages.push({ role: 'assistant', content: fullText })
+      }
+    }
+  }
+}
+
+async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, notifyRenderer) {
   const provider = config.defaultProvider || 'anthropic'
-  const loopConfig = { ...config }
+  const loopConfig = {
+    ...config,
+    soulsDir:            path.join(DATA_DIR, 'souls'),
+    chatPermissionMode:  'allow_all',
+    chatAllowList:       [],
+    chatDangerOverrides: [],
+    maxOutputTokens:     config.maxOutputTokens || null,
+    artifactPath:        config.artifactPath || config.artyfactPath || '',
+    skillsPath:          config.skillsPath || '',
+    DoCPath:             config.DoCPath || '',
+  }
 
   if (provider === 'anthropic') {
     loopConfig.apiKey  = config.anthropic?.apiKey  || ''
@@ -108,32 +295,14 @@ async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRen
     loopConfig.defaultProvider   = 'openai'
   }
 
-  loopConfig.soulsDir          = path.join(DATA_DIR, 'souls')
-  loopConfig.chatPermissionMode = 'allow_all'
-  loopConfig.chatAllowList      = []
-  loopConfig.chatDangerOverrides = []
-  loopConfig.maxOutputTokens    = config.maxOutputTokens || null
-  loopConfig.artifactPath       = config.artifactPath || config.artyfactPath || ''
-  loopConfig.skillsPath         = config.skillsPath || ''
-  loopConfig.DoCPath            = config.DoCPath || ''
-
+  const messages = loadMessages(chatId)
   const loop = new AgentLoop(loopConfig)
   let fullText = ''
 
   try {
-    await loop.run(
-      messages,
-      [],   // enabledAgents
-      [],   // enabledSkills
-      (chunk) => {
-        if (chunk.type === 'text') fullText += chunk.text || ''
-      },
-      [],        // currentAttachments
-      undefined, // personaPrompts
-      [],   // mcpServers
-      [],   // httpTools
-      null  // ragContext
-    )
+    await loop.run(messages, [], [], (chunk) => {
+      if (chunk.type === 'text') fullText += chunk.text || ''
+    }, imageAttachment ? [imageAttachment] : [], undefined, [], [], null)
   } catch (err) {
     console.error('[im-bridge] agentLoop error:', err.message)
     await sendToIM('Error: ' + err.message)
@@ -142,19 +311,16 @@ async function routeMessage({ chatId, userText, displayName, sendToIM, notifyRen
     loop.stop?.()
   }
 
-  // Persist assistant message
   if (fullText) {
-    const assistantMsg = {
-      id: uuidv4(),
-      role: 'assistant',
-      content: fullText,
-      segments: [{ type: 'text', content: fullText }],
+    appendMessage(chatId, {
+      id:        uuidv4(),
+      role:      'assistant',
+      content:   fullText,
+      segments:  [{ type: 'text', content: fullText }],
+      timestamp: Date.now(),
       createdAt: Date.now(),
-    }
-    appendMessage(chatId, assistantMsg)
-    // Send to IM
+    })
     await sendToIM(fullText)
-    // Notify renderer that assistant message is now in the chat file
     notifyRenderer('im:chat-updated', { chatId })
   }
 }

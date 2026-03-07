@@ -74,16 +74,18 @@
           ></div>
           <!-- Tree toolbar -->
           <div class="px-3 py-2 flex items-center gap-1 shrink-0" style="border-bottom:1px solid #E5E5EA;">
-            <span style="font-family:'Inter',sans-serif;font-size:var(--fs-caption);color:#9CA3AF;">Right-click to add files</span>
+            <span style="font-family:'Inter',sans-serif;font-size:var(--fs-caption);color:#9CA3AF;">Right-click or drag &amp; drop files here</span>
           </div>
 
           <!-- File tree (root drop zone) -->
           <div
             class="flex-1 overflow-y-auto py-1"
             style="scrollbar-width:thin;"
+            tabindex="0"
             @dragover.prevent="onRootDragOver"
             @dragleave="onRootDragLeave"
             @drop.prevent="handleRootDrop"
+            @paste="handleTreePaste"
             @contextmenu.prevent="openContextMenu($event, store.vaultPath, '')"
             :class="{ 'root-drag-over': rootDragOver }"
           >
@@ -101,6 +103,7 @@
               @toggle-folder="(p) => store.toggleFolder(p)"
               @delete-item="handleDeleteItem"
               @move-item="handleMoveItem"
+              @copy-files="(paths, dest) => copySystemFilesToDir(paths, dest)"
               @context-menu="(e, node) => openContextMenu(e, node.path, node.type)"
             />
           </div>
@@ -304,6 +307,11 @@
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             Rename
           </button>
+          <div class="ctx-divider" />
+          <button class="ctx-item ctx-danger" @click="startCtxDelete(ctxMenu.targetPath, ctxMenu.targetType)">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            Delete
+          </button>
         </template>
       </div>
 
@@ -333,13 +341,26 @@
       </div>
     </Teleport>
 
-    <!-- Confirm Delete Modal -->
+    <!-- Confirm Delete Modal (blocked: folder not empty) -->
     <ConfirmModal
-      v-if="confirmDeleteTarget"
-      title="Delete Item"
-      :message="`Are you sure you want to delete &quot;${confirmDeleteTarget.name}&quot;? This action cannot be undone.`"
-      confirm-text="Delete"
+      v-if="confirmDeleteTarget?.blocked"
+      title="Cannot Delete Folder"
+      :message="confirmDeleteTarget.blocked"
+      confirm-text="OK"
       confirm-class="primary"
+      cancel-text=""
+      @confirm="closeDeleteDialog"
+      @close="closeDeleteDialog"
+    />
+    <!-- Confirm Delete Modal (normal) -->
+    <ConfirmModal
+      v-else-if="confirmDeleteTarget"
+      :title="confirmDeleteTarget.isDir ? 'Delete Folder' : 'Delete File'"
+      :message="confirmDeleteTarget.isDir
+        ? `Delete the folder &quot;${confirmDeleteTarget.name}&quot;? It is empty and will be permanently removed.`
+        : `Delete &quot;${confirmDeleteTarget.name}&quot;? This cannot be undone.`"
+      confirm-text="Delete"
+      confirm-class="danger"
       :loading="deleting"
       loading-text="Deleting…"
       :error="deleteError"
@@ -874,11 +895,34 @@ const confirmDeleteTarget = ref(null)
 const deleting = ref(false)
 const deleteError = ref('')
 
-function handleDeleteItem(itemPath) {
+// Called from both context menu and TreeNode delete-item events.
+// For directories: checks real disk emptiness before showing confirm dialog.
+async function startCtxDelete(itemPath, itemType) {
+  closeContextMenu()
   const parts = itemPath.split(/[/\\]/)
   const name = parts[parts.length - 1] || itemPath
   deleteError.value = ''
-  confirmDeleteTarget.value = { path: itemPath, name }
+
+  if (itemType === 'dir') {
+    const res = await window.electronAPI.obsidian.isDirEmpty(itemPath)
+    if (res?.error) {
+      // Can't stat — show error via modal so the user knows
+      confirmDeleteTarget.value = { path: itemPath, name, isDir: true, blocked: res.error }
+      return
+    }
+    if (!res?.empty) {
+      // Folder has contents on disk — block deletion
+      confirmDeleteTarget.value = { path: itemPath, name, isDir: true, blocked: 'This folder is not empty. Remove all files inside it first.' }
+      return
+    }
+  }
+
+  confirmDeleteTarget.value = { path: itemPath, name, isDir: itemType === 'dir', blocked: null }
+}
+
+// Legacy entry point kept for TreeNode @delete-item events (which only fire for files)
+function handleDeleteItem(itemPath) {
+  startCtxDelete(itemPath, 'file')
 }
 
 function closeDeleteDialog() {
@@ -889,13 +933,15 @@ function closeDeleteDialog() {
 
 async function executeDelete() {
   if (!confirmDeleteTarget.value || deleting.value) return
+  if (confirmDeleteTarget.value.blocked) return
   deleting.value = true
   deleteError.value = ''
   try {
-    await store.deleteItem(confirmDeleteTarget.value.path)
+    const result = await store.deleteItem(confirmDeleteTarget.value.path)
+    if (result?.error) throw new Error(result.error)
     confirmDeleteTarget.value = null
   } catch (err) {
-    deleteError.value = err.message || 'Failed to delete item'
+    deleteError.value = err.message || 'Failed to delete'
   } finally {
     deleting.value = false
   }
@@ -945,8 +991,28 @@ async function handleMoveItem(sourcePath, destFolderPath) {
   }
 }
 
+// Copy system files (from OS drag-drop or paste) into a vault directory.
+// Accepts either a FileList/File[] (from drop/paste events) or a plain string[].
+async function copySystemFilesToDir(filesOrPaths, destDir) {
+  if (!filesOrPaths || filesOrPaths.length === 0) return
+  let paths
+  if (typeof filesOrPaths[0] === 'string') {
+    paths = filesOrPaths.filter(Boolean)
+  } else {
+    paths = Array.from(filesOrPaths).map(f => f.path).filter(Boolean)
+  }
+  if (paths.length === 0) return
+  try {
+    await window.electronAPI.obsidian.copyFilesToDir(paths, destDir)
+    await store.loadTree()
+  } catch (err) {
+    console.error('Copy failed:', err)
+  }
+}
+
 function onRootDragOver(e) {
-  e.dataTransfer.dropEffect = 'move'
+  const hasSystemFiles = e.dataTransfer.types.includes('Files')
+  e.dataTransfer.dropEffect = hasSystemFiles ? 'copy' : 'move'
   rootDragOver.value = true
 }
 
@@ -956,12 +1022,27 @@ function onRootDragLeave(e) {
   }
 }
 
-function handleRootDrop(e) {
+async function handleRootDrop(e) {
   rootDragOver.value = false
+  if (!store.vaultPath) return
+  // System file drop (from OS file manager) — files have a .path property in Electron
+  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    await copySystemFilesToDir(e.dataTransfer.files, store.vaultPath)
+    return
+  }
+  // Internal tree node move
   const sourcePath = e.dataTransfer.getData('text/plain')
-  if (!sourcePath || !store.vaultPath) return
-  // Move to vault root
+  if (!sourcePath) return
   handleMoveItem(sourcePath, store.vaultPath)
+}
+
+async function handleTreePaste(e) {
+  if (!store.vaultPath) return
+  const files = e.clipboardData?.files
+  if (files && files.length > 0) {
+    e.preventDefault()
+    await copySystemFilesToDir(files, store.vaultPath)
+  }
 }
 
 // ── File-type icon helper ──
@@ -1044,7 +1125,7 @@ const TreeNode = defineComponent({
     activePath: String,
     expandedFolders: Object
   },
-  emits: ['select-file', 'toggle-folder', 'delete-item', 'move-item', 'context-menu'],
+  emits: ['select-file', 'toggle-folder', 'delete-item', 'move-item', 'copy-files', 'context-menu'],
   setup(props, { emit }) {
     const hovered = ref(false)
     const dragOver = ref(false)
@@ -1075,7 +1156,8 @@ const TreeNode = defineComponent({
       if (isDir) {
         dragEvents.onDragover = (e) => {
           e.preventDefault()
-          e.dataTransfer.dropEffect = 'move'
+          const hasSystemFiles = e.dataTransfer.types.includes('Files')
+          e.dataTransfer.dropEffect = hasSystemFiles ? 'copy' : 'move'
           dragOver.value = true
         }
         dragEvents.onDragleave = (e) => {
@@ -1088,9 +1170,15 @@ const TreeNode = defineComponent({
           e.preventDefault()
           e.stopPropagation()
           dragOver.value = false
+          const destFolder = props.node.path
+          // System file drop (from OS file manager)
+          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            emit('copy-files', Array.from(e.dataTransfer.files).map(f => f.path).filter(Boolean), destFolder)
+            return
+          }
+          // Internal tree node move
           const sourcePath = e.dataTransfer.getData('text/plain')
           if (!sourcePath) return
-          const destFolder = props.node.path
           // Prevent dropping onto self or into own subtree
           if (sourcePath === destFolder || destFolder.startsWith(sourcePath + '/')) return
           emit('move-item', sourcePath, destFolder)
@@ -1163,6 +1251,7 @@ const TreeNode = defineComponent({
               'onToggle-folder': (p) => emit('toggle-folder', p),
               'onDelete-item': (p) => emit('delete-item', p),
               'onMove-item': (src, dest) => emit('move-item', src, dest),
+              'onCopy-files': (paths, dest) => emit('copy-files', paths, dest),
               'onContext-menu': (e, node) => emit('context-menu', e, node),
             })
           )

@@ -213,6 +213,7 @@
                 <input id="baseURL" v-model="form.anthropic.baseURL" type="url" placeholder="https://api.anthropic.com" class="field" />
                 <p class="hint">Change for custom backends: LiteLLM, Ollama, corporate proxy, etc.</p>
               </div>
+
             </div>
 
             <!-- Models section -->
@@ -1304,82 +1305,409 @@
         <!-- ════════════════════════════════════════════════════════════════ -->
         <template v-if="activeTopTab === 'general' && activeSubTab === 'im'">
 
-          <!-- Telegram -->
-          <div class="config-card">
-            <div class="form-section-header">
-              <div class="section-icon-sm">
-                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-              </div>
-              <h3 class="form-section-title">Telegram</h3>
-              <button class="im-guide-btn" @click="showIMGuide = true" style="margin-left:auto;">
-                <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></svg>
-                Setup Guide
-              </button>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">
-                <input type="checkbox" v-model="form.im.telegram.enabled" style="margin-right:0.5rem;" />
-                Enable Telegram Bot
-              </label>
-            </div>
-
-            <div class="form-divider" />
-
-            <div class="form-group">
-              <label class="form-label" for="tgBotToken">Bot Token</label>
-              <input
-                id="tgBotToken"
-                v-model="form.im.telegram.botToken"
-                :type="showTgToken ? 'text' : 'password'"
-                placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-                class="field font-mono"
-              />
-              <p class="hint">Get a bot token from <strong>@BotFather</strong> on Telegram.</p>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="tgAllowedUsers">Allowed Users <span class="form-label-hint">comma-separated usernames or chat IDs</span></label>
-              <input
-                id="tgAllowedUsers"
-                :value="(form.im.telegram.allowedUsers || []).join(',')"
-                @input="form.im.telegram.allowedUsers = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
-                placeholder="username1,username2"
-                class="field font-mono"
-              />
-              <p class="hint">Leave empty to allow all users (not recommended for public bots).</p>
-            </div>
+          <!-- IM platform tab bar: Telegram | WhatsApp | Feishu | Bridge -->
+          <div class="provider-tab-group">
+            <button @click="activeIMTab = 'telegram'" class="config-tab-btn" :class="{ active: activeIMTab === 'telegram' }">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              Telegram
+              <span class="prov-dot" :class="telegramReady ? 'active' : 'inactive'" />
+            </button>
+            <button @click="activeIMTab = 'whatsapp'" class="config-tab-btn" :class="{ active: activeIMTab === 'whatsapp' }">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              WhatsApp
+              <span class="prov-dot" :class="whatsappReady ? 'active' : (whatsappQr ? 'pending' : 'inactive')" />
+            </button>
+            <button @click="activeIMTab = 'feishu'" class="config-tab-btn" :class="{ active: activeIMTab === 'feishu' }">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              Feishu
+              <span class="prov-dot" :class="feishuReady ? 'active' : 'inactive'" />
+            </button>
+            <button @click="activeIMTab = 'bridge'" class="config-tab-btn" :class="{ active: activeIMTab === 'bridge' }">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              Bridge
+              <span class="prov-dot" :class="imStatus.running ? 'active' : 'inactive'" />
+            </button>
           </div>
 
-          <!-- Status + Save row -->
-          <div class="config-card">
-            <div class="form-section-header">
-              <div class="section-icon-sm">
-                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                </svg>
+          <!-- ══════════ TELEGRAM TAB ══════════ -->
+          <template v-if="activeIMTab === 'telegram'">
+            <div class="config-card">
+              <div class="form-section-header">
+                <div class="section-icon-sm">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <h3 class="form-section-title">Telegram</h3>
+                <span class="im-platform-status" :class="telegramReady ? 'ready' : 'idle'">
+                  {{ telegramReady ? '● Configured' : '○ Not configured' }}
+                </span>
               </div>
-              <h3 class="form-section-title">Bridge Status</h3>
+
+              <div class="im-enable-row">
+                <span class="im-enable-label">Enable Telegram Bot</span>
+                <label class="im-toggle" @click.stop>
+                  <input type="checkbox" v-model="form.im.telegram.enabled" />
+                  <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                </label>
+              </div>
+
+              <div class="form-divider" />
+
+              <div class="form-group">
+                <label class="form-label" for="tgBotToken">Bot Token</label>
+                <div style="position:relative;">
+                  <input
+                    id="tgBotToken"
+                    v-model="form.im.telegram.botToken"
+                    :type="showTgToken ? 'text' : 'password'"
+                    placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                    class="field font-mono"
+                    style="padding-right:2.5rem;"
+                  />
+                  <button type="button" @click="showTgToken = !showTgToken" class="im-reveal-btn" :title="showTgToken ? 'Hide' : 'Show'">
+                    <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <template v-if="showTgToken"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></template>
+                      <template v-else><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></template>
+                    </svg>
+                  </button>
+                </div>
+                <p class="hint">Get a bot token from <strong>@BotFather</strong> on Telegram.</p>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="tgAllowedUsers">Allowed Users <span class="form-label-hint">comma-separated usernames or chat IDs</span></label>
+                <input
+                  id="tgAllowedUsers"
+                  :value="(form.im.telegram.allowedUsers || []).join(',')"
+                  @input="form.im.telegram.allowedUsers = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+                  placeholder="username1,username2"
+                  class="field font-mono"
+                />
+                <p class="hint">Leave empty to allow all users.</p>
+              </div>
+
+              <div class="form-divider" />
+              <details class="im-setup-guide">
+                <summary class="im-setup-guide-summary">
+                  <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></svg>
+                  Setup Guide
+                  <svg class="im-setup-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <ol class="im-setup-steps">
+                  <li>Open Telegram and search for <code>@BotFather</code></li>
+                  <li>Send <code>/newbot</code> — BotFather will ask for a display name and a username (must end in <code>bot</code>)</li>
+                  <li>BotFather replies with your <strong>bot token</strong> — copy it</li>
+                  <li>Paste the token in the <em>Bot Token</em> field above</li>
+                  <li>Toggle <strong>Enable Telegram Bot</strong> on and click <strong>Save</strong></li>
+                  <li>Go to the <strong>Bridge</strong> tab and click <strong>Start Bridge</strong></li>
+                  <li>In Telegram, search for your bot by its username and send it any message — it will reply via ClankAI</li>
+                </ol>
+                <p class="im-setup-note">Add your Telegram username (without @) to <em>Allowed Users</em> to restrict access to your account only.</p>
+              </details>
+
+              <div class="form-divider" style="margin-top:1rem;" />
+              <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-top:0.75rem;">
+                <AppButton size="compact" @click="saveIM" :loading="savingIM">
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  Save
+                </AppButton>
+                <span v-if="savedIMMsg" class="save-indicator" :class="savedIMMsg.ok ? 'success' : 'error'">
+                  <svg v-if="savedIMMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  {{ savedIMMsg.text }}
+                </span>
+              </div>
             </div>
-            <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-              <span :style="{ color: imStatus.running ? '#10B981' : '#9CA3AF', fontWeight: 600 }">
-                {{ imStatus.running ? '● Running' : '○ Stopped' }}
-              </span>
-              <span v-if="imStatus.running" style="color:#6B7280; font-size:var(--fs-caption);">
-                {{ imStatus.sessions?.length || 0 }} active session(s)
-              </span>
+          </template>
+
+          <!-- ══════════ WHATSAPP TAB ══════════ -->
+          <template v-else-if="activeIMTab === 'whatsapp'">
+            <div class="config-card">
+              <div class="form-section-header">
+                <div class="section-icon-sm">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                </div>
+                <h3 class="form-section-title">WhatsApp</h3>
+                <span class="im-platform-status" :class="whatsappReady ? 'ready' : (whatsappQr ? 'pending' : 'idle')">
+                  {{ whatsappReady ? '● Connected' : (whatsappQr ? '◌ Awaiting scan' : '○ Not connected') }}
+                </span>
+              </div>
+
+              <div class="im-enable-row">
+                <span class="im-enable-label">Enable WhatsApp</span>
+                <label class="im-toggle" @click.stop>
+                  <input type="checkbox" v-model="form.im.whatsapp.enabled" />
+                  <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                </label>
+              </div>
+
+              <div class="form-divider" />
+
+              <div class="form-group">
+                <label class="form-label" for="waAllowedUsers">Allowed Users <span class="form-label-hint">comma-separated phone numbers or JIDs</span></label>
+                <input
+                  id="waAllowedUsers"
+                  :value="(form.im.whatsapp.allowedUsers || []).join(',')"
+                  @input="form.im.whatsapp.allowedUsers = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+                  placeholder="6512345678,6587654321"
+                  class="field font-mono"
+                />
+                <p class="hint">Leave empty to allow all senders. Use phone numbers without the + prefix.</p>
+              </div>
+
+              <div class="form-divider" />
+
+              <!-- Device linking section -->
+              <div class="im-wa-link-section">
+                <div class="im-wa-link-header">
+                  <div>
+                    <p class="form-label" style="margin:0 0 0.2rem;">Device Linking</p>
+                    <p class="hint" style="margin:0;">
+                      <template v-if="whatsappReady">Your phone is linked. Session is saved and persists across restarts.</template>
+                      <template v-else>Link a WhatsApp account to this device by scanning a QR code.</template>
+                    </p>
+                  </div>
+                  <AppButton size="compact" variant="primary" @click="requestWhatsAppLink" :loading="waLinking" :disabled="waLinking">
+                    <svg v-if="!waLinking" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    {{ waLinking ? 'Generating…' : (whatsappReady ? 'Re-link Device' : 'Link Device') }}
+                  </AppButton>
+                </div>
+
+                <!-- QR code -->
+                <div v-if="whatsappQr && !whatsappConnected" class="im-qr-block">
+                  <img :src="whatsappQr" alt="WhatsApp QR Code" class="im-qr-img" />
+                  <div class="im-qr-instructions">
+                    <p style="margin:0 0 0.4rem; font-weight:600; font-size:var(--fs-secondary); color:var(--text-primary);">Scan with WhatsApp</p>
+                    <ol class="im-inline-steps" style="margin:0; padding-left:1rem;">
+                      <li>Open WhatsApp on your phone</li>
+                      <li>Go to Settings → Linked Devices</li>
+                      <li>Tap <strong>Link a Device</strong> and scan this QR</li>
+                    </ol>
+                    <p class="im-inline-note" style="margin-top:0.5rem;">QR expires after 60 seconds — click Link Device again if it disappears.</p>
+                  </div>
+                </div>
+
+                <!-- Connected state -->
+                <div v-else-if="whatsappReady" class="im-wa-connected">
+                  <svg style="width:18px;height:18px;color:#10B981;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span>Phone linked successfully. Session is active.</span>
+                </div>
+              </div>
+
+              <div class="form-divider" />
+              <details class="im-setup-guide">
+                <summary class="im-setup-guide-summary">
+                  <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></svg>
+                  Setup Guide
+                  <svg class="im-setup-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <ol class="im-setup-steps">
+                  <li>Toggle <strong>Enable WhatsApp</strong> on and click <strong>Save</strong></li>
+                  <li>Click the <strong>Link Device</strong> button above — a QR code will appear</li>
+                  <li>Open WhatsApp on your phone → tap <strong>Settings</strong> (or the three-dot menu) → <strong>Linked Devices</strong> → <strong>Link a Device</strong></li>
+                  <li>Point your phone at the QR code to scan it — WhatsApp will confirm the link instantly</li>
+                  <li>Go to the <strong>Bridge</strong> tab and click <strong>Start Bridge</strong></li>
+                  <li>From any other phone or your own phone, open WhatsApp and send a message <strong>to your linked number</strong> (the same number whose phone you used to scan the QR) — ClankAI will reply to that message</li>
+                </ol>
+                <p class="im-setup-note">The session is saved automatically — no need to scan again after restarts. Your phone must remain connected to the internet (same as WhatsApp Web).</p>
+              </details>
+
+              <div class="form-divider" style="margin-top:1rem;" />
+              <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-top:0.75rem;">
+                <AppButton size="compact" @click="saveIM" :loading="savingIM">
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  Save
+                </AppButton>
+                <span v-if="savedIMMsg" class="save-indicator" :class="savedIMMsg.ok ? 'success' : 'error'">
+                  <svg v-if="savedIMMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  {{ savedIMMsg.text }}
+                </span>
+              </div>
             </div>
-            <div style="display:flex; gap:0.5rem; margin-top:1rem; flex-wrap:wrap;">
-              <AppButton size="compact" @click="saveIM" :loading="savingIM">Save</AppButton>
-              <AppButton v-if="!imStatus.running" size="compact" variant="secondary" @click="startBridge" :loading="startingBridge">Start Bridge</AppButton>
-              <AppButton v-else size="compact" variant="danger-ghost" @click="stopBridge">Stop Bridge</AppButton>
+          </template>
+
+          <!-- ══════════ FEISHU TAB ══════════ -->
+          <template v-else-if="activeIMTab === 'feishu'">
+            <div class="config-card">
+              <div class="form-section-header">
+                <div class="section-icon-sm">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                </div>
+                <h3 class="form-section-title">Feishu / Lark</h3>
+                <span class="im-platform-status" :class="feishuReady ? 'ready' : 'idle'">
+                  {{ feishuReady ? '● Configured' : '○ Not configured' }}
+                </span>
+              </div>
+
+              <div class="im-enable-row">
+                <span class="im-enable-label">Enable Feishu / Lark Bot</span>
+                <label class="im-toggle" @click.stop>
+                  <input type="checkbox" v-model="form.im.feishu.enabled" />
+                  <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                </label>
+              </div>
+
+              <div class="form-divider" />
+
+              <div class="form-group">
+                <label class="form-label" for="feishuAppId">App ID</label>
+                <input
+                  id="feishuAppId"
+                  v-model="form.im.feishu.appId"
+                  type="text"
+                  placeholder="cli_xxxxxxxxxxxxxxxx"
+                  class="field font-mono"
+                />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="feishuAppSecret">App Secret</label>
+                <div style="position:relative;">
+                  <input
+                    id="feishuAppSecret"
+                    v-model="form.im.feishu.appSecret"
+                    :type="showWaSecret ? 'text' : 'password'"
+                    placeholder="••••••••••••••••"
+                    class="field font-mono"
+                    style="padding-right:2.5rem;"
+                  />
+                  <button type="button" @click="showWaSecret = !showWaSecret" class="im-reveal-btn" :title="showWaSecret ? 'Hide' : 'Show'">
+                    <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <template v-if="showWaSecret"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></template>
+                      <template v-else><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></template>
+                    </svg>
+                  </button>
+                </div>
+                <p class="hint">Get App ID and App Secret from <strong>open.feishu.cn/app</strong>.</p>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="feishuAllowedUsers">Allowed Users <span class="form-label-hint">comma-separated open_ids</span></label>
+                <input
+                  id="feishuAllowedUsers"
+                  :value="(form.im.feishu.allowedUsers || []).join(',')"
+                  @input="form.im.feishu.allowedUsers = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+                  placeholder="ou_xxxxxxxx,ou_yyyyyyyy"
+                  class="field font-mono"
+                />
+                <p class="hint">Leave empty to allow all workspace users.</p>
+              </div>
+
+              <div class="form-divider" />
+              <details class="im-setup-guide">
+                <summary class="im-setup-guide-summary">
+                  <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></svg>
+                  Setup Guide
+                  <svg class="im-setup-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <ol class="im-setup-steps">
+                  <li>Go to <strong>open.feishu.cn/app</strong> (or <strong>open.larksuite.com/app</strong> for Lark) and create a new <em>Custom App</em></li>
+                  <li>Under <strong>Capabilities</strong>, enable the <strong>Bot</strong> feature</li>
+                  <li>Under <strong>Permissions &amp; Scopes</strong>, add the permission <code>im:message:receive_v1</code></li>
+                  <li>Under <strong>Event Subscriptions</strong>, add the <code>im.message.receive_v1</code> event and set connection mode to <strong>Long Connection (WebSocket)</strong></li>
+                  <li>Under <strong>Credentials &amp; Basic Info</strong>, copy your <strong>App ID</strong> and <strong>App Secret</strong></li>
+                  <li>Paste them in the fields above, toggle <strong>Enable</strong> on, and click <strong>Save</strong></li>
+                  <li>Publish the app to your workspace (release → publish)</li>
+                  <li>Go to the <strong>Bridge</strong> tab and click <strong>Start Bridge</strong></li>
+                  <li>In Feishu, open a chat with your bot (search its name in the top bar) and send it a message — ClankAI will respond</li>
+                </ol>
+                <p class="im-setup-note">No public URL required — the bridge uses a persistent WebSocket connection to Feishu's servers.</p>
+              </details>
+
+              <div class="form-divider" style="margin-top:1rem;" />
+              <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-top:0.75rem;">
+                <AppButton size="compact" @click="saveIM" :loading="savingIM">
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  Save
+                </AppButton>
+                <span v-if="savedIMMsg" class="save-indicator" :class="savedIMMsg.ok ? 'success' : 'error'">
+                  <svg v-if="savedIMMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  {{ savedIMMsg.text }}
+                </span>
+              </div>
             </div>
-            <p v-if="savedIMMsg" :style="{ color: savedIMMsg.ok ? '#10B981' : '#EF4444', marginTop:'0.5rem', fontSize:'var(--fs-caption)' }">
-              {{ savedIMMsg.text }}
-            </p>
-          </div>
+          </template>
+
+          <!-- ══════════ BRIDGE TAB ══════════ -->
+          <template v-else-if="activeIMTab === 'bridge'">
+            <div class="config-card">
+              <div class="form-section-header">
+                <div class="section-icon-sm">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                </div>
+                <h3 class="form-section-title">Bridge Control</h3>
+              </div>
+
+              <!-- Per-platform toggle rows -->
+              <div class="im-bridge-rows">
+                <!-- Telegram -->
+                <div class="im-bridge-row">
+                  <svg style="width:15px;height:15px;flex-shrink:0;color:var(--text-muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  <div class="im-bridge-info">
+                    <span class="im-bridge-name">Telegram</span>
+                    <span class="im-bridge-sub" :class="imStatus.platforms?.telegram ? 'running' : (telegramReady ? 'ready' : 'idle')">
+                      {{ imStatus.platforms?.telegram ? '● Running' : (telegramReady ? '○ Configured' : '○ Not configured') }}
+                    </span>
+                  </div>
+                  <label class="im-toggle" :class="{ disabled: !telegramReady }" @click.stop>
+                    <input type="checkbox" :checked="!!imStatus.platforms?.telegram" :disabled="!telegramReady"
+                      @change="togglePlatform('telegram', $event.target.checked)" />
+                    <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="form-divider" style="margin:0;" />
+
+                <!-- WhatsApp -->
+                <div class="im-bridge-row">
+                  <svg style="width:15px;height:15px;flex-shrink:0;color:var(--text-muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                  <div class="im-bridge-info">
+                    <span class="im-bridge-name">WhatsApp</span>
+                    <span class="im-bridge-sub" :class="imStatus.platforms?.whatsapp ? 'running' : (whatsappReady ? 'ready' : 'idle')">
+                      {{ imStatus.platforms?.whatsapp ? '● Running' : (whatsappReady ? '○ Linked' : '○ Not linked') }}
+                    </span>
+                  </div>
+                  <label class="im-toggle" :class="{ disabled: !whatsappReady }" @click.stop>
+                    <input type="checkbox" :checked="!!imStatus.platforms?.whatsapp" :disabled="!whatsappReady"
+                      @change="togglePlatform('whatsapp', $event.target.checked)" />
+                    <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="form-divider" style="margin:0;" />
+
+                <!-- Feishu -->
+                <div class="im-bridge-row">
+                  <svg style="width:15px;height:15px;flex-shrink:0;color:var(--text-muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                  <div class="im-bridge-info">
+                    <span class="im-bridge-name">Feishu / Lark</span>
+                    <span class="im-bridge-sub" :class="imStatus.platforms?.feishu ? 'running' : (feishuReady ? 'ready' : 'idle')">
+                      {{ imStatus.platforms?.feishu ? '● Running' : (feishuReady ? '○ Configured' : '○ Not configured') }}
+                    </span>
+                  </div>
+                  <label class="im-toggle" :class="{ disabled: !feishuReady }" @click.stop>
+                    <input type="checkbox" :checked="!!imStatus.platforms?.feishu" :disabled="!feishuReady"
+                      @change="togglePlatform('feishu', $event.target.checked)" />
+                    <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Active sessions -->
+              <div v-if="imStatus.sessions?.length" style="margin-top:1.25rem;">
+                <p class="form-label" style="margin-bottom:0.5rem;">Active Sessions</p>
+                <div class="im-sessions-list">
+                  <div v-for="(session, i) in imStatus.sessions" :key="i" class="im-session-row">
+                    <span class="font-mono" style="font-size:var(--fs-caption);color:var(--text-secondary);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                      {{ session.channelId || session.id || session }}
+                    </span>
+                    <span v-if="session.platform" class="im-session-badge">{{ session.platform }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
 
         </template>
 
@@ -1423,11 +1751,98 @@
 
           <div class="im-guide-divider" />
 
+          <!-- WhatsApp Setup -->
+          <div class="im-guide-section">
+            <div class="im-guide-section-title">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              WhatsApp — 3 steps
+            </div>
+            <ol class="im-guide-steps">
+              <li>Enable WhatsApp, click <strong>Save</strong> then <strong>Start Bridge</strong></li>
+              <li>A QR code appears in the config page — open WhatsApp on your phone → Settings → Linked Devices → Link a Device → scan the QR</li>
+              <li>Session is saved automatically — no need to scan again after restarts</li>
+            </ol>
+            <p class="im-guide-note">Your phone must stay connected to the internet (same as WhatsApp Web). To restrict access, add phone numbers (without +) to <em>Allowed Users</em>.</p>
+          </div>
+
+          <div class="im-guide-divider" />
+
+          <!-- Feishu Setup -->
+          <div class="im-guide-section">
+            <div class="im-guide-section-title">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              Feishu / Lark — 6 steps
+            </div>
+            <ol class="im-guide-steps">
+              <li>Go to <strong>open.feishu.cn/app</strong> → Create App (Custom App)</li>
+              <li>Under <em>Capabilities</em>, enable <strong>Bot</strong></li>
+              <li>Under <em>Permissions &amp; Scopes</em>, add <code>im:message:receive_v1</code></li>
+              <li>Under <em>Event Subscriptions</em>, add event <code>im.message.receive_v1</code> and set delivery to <strong>WebSocket</strong> mode</li>
+              <li>Publish the app to your workspace</li>
+              <li>Paste App ID and App Secret here, enable Feishu, click <strong>Save</strong> then <strong>Start Bridge</strong></li>
+            </ol>
+            <p class="im-guide-note">No public URL is required — the bridge uses a persistent WebSocket connection to Feishu's servers.</p>
+          </div>
+
+          <div class="im-guide-divider" />
+
+          <!-- Personas -->
+          <div class="im-guide-section">
+            <div class="im-guide-section-title">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+              Personas
+            </div>
+            <p class="im-guide-note" style="border-color:#10B981;">
+              Each chat automatically uses the persona assigned to it. In a group chat, all assigned personas respond in turn.
+            </p>
+            <table class="im-guide-table">
+              <tbody>
+                <tr><td><code>/personas</code></td><td>List all available personas</td></tr>
+                <tr><td><code>/persona &lt;name&gt;</code></td><td>Show persona details (prompt, model, provider)</td></tr>
+                <tr><td><code>/persona add &lt;name&gt;</code></td><td>Add a persona to the current chat</td></tr>
+                <tr><td><code>/persona remove &lt;name&gt;</code></td><td>Remove a persona from the current chat</td></tr>
+                <tr><td><code>/persona model &lt;name&gt;</code></td><td>Change persona's provider &amp; model via inline buttons</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="im-guide-divider" />
+
+          <!-- @mentions -->
+          <div class="im-guide-section">
+            <div class="im-guide-section-title">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>
+              @mentions in group chats
+            </div>
+            <table class="im-guide-table">
+              <tbody>
+                <tr><td><code>@all</code></td><td>All personas in the chat respond</td></tr>
+                <tr><td><code>@Mark</code></td><td>Only Mark responds (case-insensitive)</td></tr>
+                <tr><td><em>no mention</em></td><td>All personas respond (same as @all)</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="im-guide-divider" />
+
+          <!-- Voice -->
+          <div class="im-guide-section">
+            <div class="im-guide-section-title">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              Voice notes (Telegram)
+            </div>
+            <p class="im-guide-note">
+              Voice messages are automatically transcribed via Whisper and routed as text. Requires an <strong>OpenAI API key</strong> configured in <em>AI → Models → OpenAI</em>.
+            </p>
+          </div>
+
+          <div class="im-guide-divider" />
+
           <!-- Commands Reference -->
           <div class="im-guide-section">
             <div class="im-guide-section-title">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-              Bot Commands
+              Chat Commands
             </div>
             <table class="im-guide-table">
               <tbody>
@@ -1436,9 +1851,10 @@
                 <tr><td><code>/new [title]</code></td><td>Create a new chat and switch to it</td></tr>
                 <tr><td><code>/current</code></td><td>Show name of the active chat</td></tr>
                 <tr><td><code>/status</code></td><td>Check if the bridge is running</td></tr>
+                <tr><td><code>/help</code></td><td>Show all available commands</td></tr>
               </tbody>
             </table>
-            <p class="im-guide-note">Any non-command message is sent directly to the active chat as a user message. If no chat is active, one is created automatically.</p>
+            <p class="im-guide-note">Any non-command message is sent directly to the active chat. If no chat is active, one is created automatically.</p>
           </div>
 
         </div>
@@ -1452,7 +1868,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch, nextTick, defineComponent, h } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick, defineComponent, h } from 'vue'
+defineOptions({ inheritAttrs: false })
 import { useRoute } from 'vue-router'
 import { useConfigStore } from '../stores/config'
 import { useModelsStore } from '../stores/models'
@@ -1702,7 +2119,7 @@ function getSubTabStatus(subTab) {
     case 'paths':     return (form.dataPath || form.artifactPath || form.skillsPath) ? 'configured' : 'empty'
     case 'security':  return 'configured'
     case 'email':     return form.smtp?.host ? 'configured' : 'empty'
-    case 'im':        return form.im?.telegram?.botToken ? 'configured' : 'empty'
+    case 'im':        return (form.im?.telegram?.botToken || form.im?.whatsapp?.enabled || form.im?.feishu?.appId) ? 'configured' : 'empty'
     case 'models':    return Object.values(form).some(v => v?.apiKey) ? 'configured' : 'empty'
     case 'voice':     return form.voiceCall?.whisperApiKey ? 'configured' : 'empty'
     case 'knowledge': return form.pineconeApiKey ? 'configured' : 'empty'
@@ -1712,12 +2129,56 @@ function getSubTabStatus(subTab) {
 }
 
 // ── IM Bridge state & handlers ────────────────────────────────────────────────
-const showTgToken    = ref(false)
-const showIMGuide    = ref(false)
-const savingIM       = ref(false)
-const startingBridge = ref(false)
-const savedIMMsg     = ref(null)
-const imStatus       = ref({ running: false, sessions: [] })
+const showTgToken       = ref(false)
+const showWaSecret      = ref(false)
+const showIMGuide       = ref(false)
+const savingIM          = ref(false)
+const startingBridge    = ref(false)
+const savedIMMsg        = ref(null)
+const imStatus          = ref({ running: false, sessions: [] })
+const whatsappQr        = ref(null)   // data URI — shown until connected
+const whatsappConnected = ref(false)
+const activeIMTab       = ref('telegram')  // 'telegram' | 'whatsapp' | 'feishu' | 'bridge'
+
+// Per-platform "properly enabled" indicators
+const telegramReady = computed(() =>
+  !!(form.im.telegram?.enabled && form.im.telegram?.botToken?.trim())
+)
+const whatsappReady = computed(() =>
+  !!(form.im.whatsapp?.enabled && whatsappConnected.value)
+)
+const feishuReady = computed(() =>
+  !!(form.im.feishu?.enabled && form.im.feishu?.appId?.trim() && form.im.feishu?.appSecret?.trim())
+)
+const imAnyReady = computed(() => telegramReady.value || whatsappReady.value || feishuReady.value)
+
+// Reset IM inner tab to first platform when navigating back to the IM sub-section
+watch(activeSubTab, (val) => { if (val === 'im') activeIMTab.value = 'telegram' })
+
+// WhatsApp QR flow state
+const waLinking = ref(false)  // true while requestQR is in-flight
+
+async function requestWhatsAppLink() {
+  waLinking.value = true
+  whatsappQr.value = null
+  whatsappConnected.value = false
+
+  // Auto-reset spinner after 10s in case QR never arrives
+  const timeout = setTimeout(() => { waLinking.value = false }, 10000)
+
+  try {
+    if (window.electronAPI?.im?.requestWhatsAppQr) {
+      await window.electronAPI.im.requestWhatsAppQr()
+    } else if (window.electronAPI?.im?.start) {
+      imStatus.value = await window.electronAPI.im.start()
+    }
+  } catch (err) {
+    console.error('[im] requestWhatsAppLink error:', err.message)
+  } finally {
+    clearTimeout(timeout)
+    waLinking.value = false
+  }
+}
 
 async function loadIMStatus() {
   if (window.electronAPI?.im) {
@@ -1730,11 +2191,21 @@ async function saveIM() {
   savedIMMsg.value = null
   try {
     await configStore.saveConfig({ im: JSON.parse(JSON.stringify(form.im)) })
-    savedIMMsg.value = { ok: true, text: 'Saved' }
+    savedIMMsg.value = { ok: true, text: 'Saved successfully' }
   } catch (err) {
     savedIMMsg.value = { ok: false, text: err.message || 'Save failed' }
   } finally {
     savingIM.value = false
+    setTimeout(() => { savedIMMsg.value = null }, 3000)
+  }
+}
+
+async function togglePlatform(platform, enable) {
+  if (!window.electronAPI?.im) return
+  if (enable) {
+    imStatus.value = await window.electronAPI.im.startPlatform(platform)
+  } else {
+    imStatus.value = await window.electronAPI.im.stopPlatform(platform)
   }
 }
 
@@ -1943,11 +2414,9 @@ const form = reactive({
     currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 },
   },
   im: {
-    telegram: {
-      enabled: false,
-      botToken: '',
-      allowedUsers: [],
-    },
+    telegram: { enabled: false, botToken: '', allowedUsers: [] },
+    whatsapp: { enabled: false, allowedUsers: [] },
+    feishu:   { enabled: false, appId: '', appSecret: '', allowedUsers: [] },
   },
 })
 
@@ -1979,6 +2448,16 @@ onMounted(async () => {
       enabled:      c.im?.telegram?.enabled      ?? false,
       botToken:     c.im?.telegram?.botToken      ?? '',
       allowedUsers: c.im?.telegram?.allowedUsers  ?? [],
+    },
+    whatsapp: {
+      enabled:      c.im?.whatsapp?.enabled      ?? false,
+      allowedUsers: c.im?.whatsapp?.allowedUsers ?? [],
+    },
+    feishu: {
+      enabled:      c.im?.feishu?.enabled      ?? false,
+      appId:        c.im?.feishu?.appId        ?? '',
+      appSecret:    c.im?.feishu?.appSecret    ?? '',
+      allowedUsers: c.im?.feishu?.allowedUsers ?? [],
     },
   }
   form.pricing = {
@@ -2019,8 +2498,43 @@ onMounted(async () => {
   sandboxForm.dangerBlockList  = JSON.parse(JSON.stringify(sc.dangerBlockList  || []))
   // Load IM bridge status
   await loadIMStatus()
+  // Seed connection state from current bridge status (handles case where
+  // bridge was already running before ConfigView was opened)
+  if (imStatus.value?.platforms?.whatsapp) {
+    whatsappConnected.value = true
+  }
+  // Subscribe to WhatsApp QR / Ready events from main process
+  if (window.electronAPI?.im?.onWhatsAppQr) {
+    window.electronAPI.im.onWhatsAppQr((d) => {
+      whatsappQr.value = d.qr
+      whatsappConnected.value = false
+    })
+    window.electronAPI.im.onWhatsAppReady(async () => {
+      whatsappConnected.value = true
+      whatsappQr.value = null
+      // Socket is now live — attach the real message handler and refresh status
+      await window.electronAPI.im.startPlatform?.('whatsapp')
+      await loadIMStatus()
+    })
+  }
+  if (window.electronAPI?.im?.onPlatformStopped) {
+    window.electronAPI.im.onPlatformStopped(async ({ platform }) => {
+      if (platform === 'whatsapp') {
+        whatsappConnected.value = false
+        whatsappQr.value = null
+      }
+      // Refresh bridge status so toggle switches reflect reality
+      await loadIMStatus()
+    })
+  }
   // Enable watcher-based isActive reset now that initial population is done
   nextTick(() => { formReady.value = true })
+})
+
+onUnmounted(() => {
+  window.electronAPI?.im?.onWhatsAppQr?.(() => {})
+  window.electronAPI?.im?.onWhatsAppReady?.(() => {})
+  window.electronAPI?.im?.onPlatformStopped?.(() => {})
 })
 
 async function fetchOrModels() {
@@ -2658,6 +3172,7 @@ async function savePricing() {
 }
 .prov-dot.active   { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.5); }
 .prov-dot.inactive { background: #9CA3AF; }
+.prov-dot.pending  { background: #F59E0B; box-shadow: 0 0 4px rgba(245,158,11,0.5); }
 .cfg-required { color: #EF4444; margin-left: 2px; }
 .cfg-hint { display: block; font-size: var(--fs-caption); color: var(--text-muted); margin-bottom: 6px; line-height: 1.4; }
 
@@ -2929,7 +3444,7 @@ async function savePricing() {
   margin: 0.125rem 0 0;
 }
 
-/* IM Guide button (in Telegram card header) */
+/* IM Guide button */
 .im-guide-btn {
   display: inline-flex;
   align-items: center;
@@ -2948,6 +3463,384 @@ async function savePricing() {
   background: var(--bg-card);
   color: var(--text-primary);
   border-color: var(--text-primary);
+}
+
+/* ── IM enable toggle row ───────────────────────────────────────────────── */
+.im-enable-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.125rem 0;
+}
+.im-enable-label {
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.im-toggle {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.im-toggle input { display: none; }
+.im-toggle-track {
+  position: relative;
+  width: 2.5rem;
+  height: 1.375rem;
+  border-radius: 0.6875rem;
+  background: #D1D5DB;
+  border: 1px solid #E5E7EB;
+  transition: background 0.2s, border-color 0.2s;
+}
+.im-toggle input:checked + .im-toggle-track {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border-color: #1A1A1A;
+}
+.im-toggle-thumb {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.2s, background 0.2s;
+}
+.im-toggle input:checked + .im-toggle-track .im-toggle-thumb {
+  transform: translateX(1.125rem);
+}
+
+/* ── IM reveal (eye) button inside inputs ──────────────────────────────── */
+.im-reveal-btn {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+.im-reveal-btn:hover { color: var(--text-primary); }
+
+/* ── Platform status label (in card header) ────────────────────────────── */
+.im-platform-status {
+  margin-left: auto;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+.im-platform-status.ready   { color: #10B981; }
+.im-platform-status.pending { color: #F59E0B; }
+.im-platform-status.idle    { color: #9CA3AF; }
+
+/* ── Inline collapsible setup guide ────────────────────────────────────── */
+.im-inline-guide { border: none; outline: none; }
+.im-inline-guide-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--text-secondary);
+  list-style: none;
+  padding: 0.25rem 0;
+  transition: color 0.15s;
+  user-select: none;
+}
+.im-inline-guide-summary:hover { color: var(--text-primary); }
+.im-inline-guide-summary::-webkit-details-marker { display: none; }
+.im-inline-steps {
+  margin: 0.625rem 0 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+  line-height: 1.6;
+}
+.im-inline-steps li { padding-left: 0.25rem; }
+.im-inline-steps code {
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+}
+.im-inline-note {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  background: rgba(0,122,255,0.05);
+  border-left: 2px solid rgba(0,122,255,0.3);
+  border-radius: 0 4px 4px 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+
+/* ── Collapsible setup guide ────────────────────────────────────────────── */
+.im-setup-guide {
+  background: #FAFAFA;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.im-setup-guide-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.625rem 0.875rem;
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+  user-select: none;
+  transition: background 0.12s;
+}
+.im-setup-guide-summary::-webkit-details-marker { display: none; }
+.im-setup-guide-summary:hover { background: #F5F5F5; }
+.im-setup-chevron {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+.im-setup-guide[open] .im-setup-chevron { transform: rotate(180deg); }
+.im-setup-guide[open] .im-setup-summary { border-bottom: 1px solid var(--border-light); }
+.im-setup-steps {
+  margin: 0;
+  padding: 0.75rem 1rem 0.75rem 2.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+  line-height: 1.6;
+  border-top: 1px solid var(--border-light);
+}
+.im-setup-steps li { padding-left: 0.2rem; }
+.im-setup-steps code {
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+}
+.im-setup-note {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  background: rgba(0,122,255,0.04);
+  border-top: 1px solid rgba(0,122,255,0.12);
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+
+/* ── WhatsApp device linking ────────────────────────────────────────────── */
+.im-wa-link-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.875rem;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+}
+.im-wa-link-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.im-wa-connected {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: #059669;
+}
+
+/* ── QR code block ──────────────────────────────────────────────────────── */
+.im-qr-block {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.im-qr-instructions {
+  flex: 1;
+  min-width: 10rem;
+}
+.im-qr-img {
+  width: 10rem;
+  height: 10rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Save tab summary rows ──────────────────────────────────────────────── */
+.im-save-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.im-save-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+}
+.im-save-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.im-save-dot.ready   { background: #10B981; box-shadow: 0 0 4px rgba(16,185,129,0.4); }
+.im-save-dot.pending { background: #F59E0B; }
+.im-save-dot.idle    { background: #D1D5DB; }
+.im-save-label {
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
+  width: 7rem;
+  flex-shrink: 0;
+}
+.im-save-state {
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+/* ── Manage tab platform rows ───────────────────────────────────────────── */
+/* ── Bridge per-platform toggle rows ────────────────────────────────────── */
+.im-bridge-rows {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.im-bridge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+.im-bridge-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+.im-bridge-name {
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.im-bridge-sub {
+  font-size: var(--fs-caption);
+  font-weight: 500;
+}
+.im-bridge-sub.running { color: #10B981; }
+.im-bridge-sub.ready   { color: #6B7280; }
+.im-bridge-sub.idle    { color: #9CA3AF; }
+.im-toggle.disabled { opacity: 0.4; pointer-events: none; }
+
+.im-manage-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.im-manage-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+}
+.im-manage-label {
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
+  width: 5.5rem;
+  flex-shrink: 0;
+}
+.im-manage-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.im-manage-dot.ready   { background: #10B981; box-shadow: 0 0 4px rgba(16,185,129,0.4); }
+.im-manage-dot.pending { background: #F59E0B; }
+.im-manage-dot.idle    { background: #D1D5DB; }
+.im-manage-state {
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+  flex: 1;
+}
+.im-manage-badge {
+  font-size: var(--fs-small);
+  font-weight: 700;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+.im-manage-badge.running {
+  background: rgba(16,185,129,0.1);
+  color: #059669;
+}
+
+/* ── Active sessions list ───────────────────────────────────────────────── */
+.im-sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  max-height: 10rem;
+  overflow-y: auto;
+}
+.im-session-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+}
+.im-session-badge {
+  font-size: var(--fs-small);
+  font-weight: 700;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-full);
+  background: rgba(0,122,255,0.08);
+  color: var(--accent);
+  flex-shrink: 0;
 }
 </style>
 

@@ -149,7 +149,6 @@
                 v-for="(pid, idx) in visibleSystemPersonaIds"
                 :key="pid"
                 class="sys-avatar-item"
-                :class="{ active: sysPersonaConfigId === pid }"
                 :style="{ zIndex: activeSystemPersonaIds.length - idx }"
                 @click.stop="onSysAvatarClick(pid)"
                 @mouseenter="showPersonaTooltip($event, pid)"
@@ -435,60 +434,6 @@
     </div>
   </Teleport>
 
-  <!-- ── System Persona Config Modal ── -->
-  <Teleport to="body">
-    <div v-if="sysPersonaConfigId" class="ch-modal-backdrop">
-      <div class="ch-modal ch-modal-config" role="dialog" aria-modal="true">
-        <div class="ch-modal-header">
-          <div class="ch-modal-header-icon">
-            <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:1px;min-width:0;">
-            <span class="ch-modal-title">{{ personasStore.getPersonaById(sysPersonaConfigId)?.name || 'Persona' }}</span>
-            <span v-if="personasStore.getPersonaById(sysPersonaConfigId)?.description" class="ch-modal-subtitle">{{ personasStore.getPersonaById(sysPersonaConfigId).description }}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
-            <button v-if="activeSystemPersonaIds.length > 1" class="ch-modal-soul-btn" @click="$emit('open-soul-viewer', sysPersonaConfigId, 'system', personasStore.getPersonaById(sysPersonaConfigId)?.name || 'System'); sysPersonaConfigId = null" title="View memory">
-              <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><line x1="10" y1="22" x2="14" y2="22"/></svg>
-            </button>
-            <button class="ch-modal-close" @click="sysPersonaConfigId = null">
-              <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-            </button>
-          </div>
-        </div>
-        <div class="ch-modal-body" style="gap:16px;">
-          <!-- Inactive provider warning -->
-          <div v-if="isPersonaProviderInactive(sysPersonaConfigId)" class="ch-inactive-warn">
-            &#9888; Provider inactive. Go to Configuration to fix.
-          </div>
-          <!-- Model override (chat-scoped) -->
-          <div class="ch-cfg-section">
-            <div class="ch-cfg-label">Model</div>
-            <div class="ch-override-notice">
-              Override for this chat only — won't be saved to the persona.
-            </div>
-            <ProviderModelPicker
-              :provider="chatOverrideProvider(sysPersonaConfigId) || sysConfigProvider"
-              :model="chatOverrideModel(sysPersonaConfigId)"
-              @update:provider="val => setChatModelOverride(sysPersonaConfigId, val, null)"
-              @update:model="val => val !== null && setChatModelOverride(sysPersonaConfigId, chatOverrideProvider(sysPersonaConfigId) || sysConfigProvider, val)"
-            />
-            <button
-              v-if="chatOverrideModel(sysPersonaConfigId)"
-              class="ch-override-clear"
-              @click="setChatModelOverride(sysPersonaConfigId, null, null)"
-            >
-              Clear override (use persona default: {{ personaModelLabel(sysPersonaConfigId) }})
-            </button>
-          </div>
-        </div>
-        <div class="ch-modal-footer">
-          <button class="ch-modal-cancel" @click="sysPersonaConfigId = null">Close</button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
-
   <!-- Floating chat settings tooltip (Teleport to body to escape stacking contexts) -->
   <Teleport to="body">
     <div
@@ -546,7 +491,6 @@ import { useToolsStore } from '../../stores/tools'
 import { useMcpStore } from '../../stores/mcp'
 import { useKnowledgeStore } from '../../stores/knowledge'
 import { getAvatarDataUri } from '../personas/personaAvatars'
-import ProviderModelPicker from '../common/ProviderModelPicker.vue'
 import { estimateToolTokens, estimateMcpTokens, formatTokens } from '../../utils/tokenEstimate'
 import { useVoiceStore } from '../../stores/voice'
 
@@ -611,7 +555,6 @@ function hideConfigTooltip() {
 // Close any open modal on Escape
 function onKeyDown(e) {
   if (e.key !== 'Escape') return
-  if (sysPersonaConfigId.value) { sysPersonaConfigId.value = null; return }
   if (showGroupAddPopover.value) { showGroupAddPopover.value = false; return }
   if (showUsrPopover.value) { showUsrPopover.value = false; return }
 }
@@ -714,9 +657,6 @@ const groupAddChipWrap = ref(null)
 const personaSearchEl = ref(null)
 const personaSearchQuery = ref('')
 const expandedSysCatIds = ref(new Set())
-
-// ── System persona config popover ──
-const sysPersonaConfigId = ref(null)
 
 // ── Own tooltip state (not shared with parent) ──
 const tooltipState = reactive({ visible: false, name: '', text: '', x: 0, y: 0 })
@@ -828,59 +768,6 @@ function onSysAvatarClick(pid) {
   }
   // Normal single-persona view: no action on avatar click (use View Summary btn instead)
 }
-
-// ── System persona config popover ──
-function openSysPersonaConfig(pid) {
-  if (sysPersonaConfigId.value === pid) {
-    sysPersonaConfigId.value = null
-  } else {
-    sysPersonaConfigId.value = pid
-  }
-}
-
-// ── Chat-scope model override (does NOT touch persona) ──
-function chatOverrideModel(personaId) {
-  const o = chat.value?.personaModelOverrides?.[personaId]
-  if (!o) return null
-  return typeof o === 'object' ? o.model : o   // back-compat: old entries were plain strings
-}
-
-function chatOverrideProvider(personaId) {
-  const o = chat.value?.personaModelOverrides?.[personaId]
-  if (!o || typeof o !== 'object') return null
-  return o.provider || null
-}
-
-function setChatModelOverride(personaId, providerId, modelId) {
-  if (!props.chatId) return
-  chatsStore.setChatPersonaModelOverride(props.chatId, personaId, providerId, modelId)
-}
-
-// kept for template backward compat (clear button condition)
-function chatModelOverride(personaId) { return chatOverrideModel(personaId) }
-
-function personaModelLabel(personaId) {
-  return personasStore.getPersonaById(personaId)?.modelId || '(provider default)'
-}
-
-function isPersonaProviderInactive(personaId) {
-  const p = personasStore.getPersonaById(personaId)
-  if (!p?.providerId) return false
-  return !configStore.config[p.providerId]?.isActive
-}
-
-const sysConfigProvider = computed(() => {
-  if (!sysPersonaConfigId.value) return 'anthropic'
-  const p = personasStore.getPersonaById(sysPersonaConfigId.value)
-  return p?.providerId || 'anthropic'
-})
-
-const sysConfigProviderLabel = computed(() => {
-  if (!sysPersonaConfigId.value) return ''
-  const p = personasStore.getPersonaById(sysPersonaConfigId.value)
-  const labels = { anthropic: 'Anthropic', openrouter: 'OpenRouter', openai: 'OpenAI', deepseek: 'DeepSeek' }
-  return labels[p?.providerId] || p?.providerId || ''
-})
 
 // ── Persona tooltip (header-only) ──
 function showPersonaTooltip(event, pid) {
@@ -1517,10 +1404,6 @@ const effectiveMaxOutputTokens = computed(() => {
   from { opacity: 0; transform: scale(0.95) translateY(8px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
-.ch-modal-config {
-  width: min(22.5rem, 90vw);
-  max-height: 70vh;
-}
 .ch-modal-header {
   display: flex; align-items: center; gap: 0.625rem;
   padding: 0.875rem 1rem 0.75rem;
@@ -1549,13 +1432,6 @@ const effectiveMaxOutputTokens = computed(() => {
   cursor: pointer; transition: all 0.15s; flex-shrink: 0;
 }
 .ch-modal-close:hover { background: #1F1F1F; color: #FFFFFF; }
-.ch-modal-soul-btn {
-  width: 1.625rem; height: 1.625rem; border-radius: 0.4375rem;
-  border: 1px solid #2A2A2A; background: #1A1A1A; color: #9CA3AF;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: all 0.15s; flex-shrink: 0;
-}
-.ch-modal-soul-btn:hover { background: #2A2A2A; color: #FFFFFF; }
 .ch-modal-search {
   display: flex; align-items: center; gap: 0.5rem;
   padding: 0.625rem 1rem;
@@ -1667,54 +1543,6 @@ const effectiveMaxOutputTokens = computed(() => {
   font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #4B5563;
   font-style: italic;
 }
-/* Config modal specific */
-.ch-cfg-section { flex-shrink: 0; }
-.ch-cfg-label {
-  font-family: 'Inter', sans-serif; font-size: 0.625rem;
-  font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.06em; color: #4B5563; margin-bottom: 0.5rem;
-}
-.ch-override-notice {
-  font-size: var(--fs-caption, 0.8125rem);
-  margin-bottom: 0.5rem;
-  padding: 0.375rem 0.625rem;
-  background: rgba(251,191,36,0.08);
-  border: 1px solid rgba(251,191,36,0.2);
-  border-radius: var(--radius-sm, 8px);
-  color: #D97706;
-}
-.ch-override-clear {
-  margin-top: 0.5rem;
-  font-size: var(--fs-caption, 0.8125rem);
-  color: #9CA3AF;
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-decoration: underline;
-  padding: 0;
-}
-.ch-override-clear:hover { color: #FFFFFF; }
-.ch-inactive-warn {
-  font-size: var(--fs-caption, 0.8125rem);
-  color: #EF4444;
-  font-weight: 600;
-  padding: 0.5rem 0.75rem;
-  background: rgba(239,68,68,0.08);
-  border-radius: var(--radius-sm, 8px);
-  margin-bottom: 0.5rem;
-}
-.ch-modal-footer {
-  padding: 0.625rem 1rem; border-top: 1px solid #1F1F1F;
-  background: #0A0A0A; display: flex; justify-content: flex-end;
-  flex-shrink: 0;
-}
-.ch-modal-cancel {
-  padding: 0.4375rem 1rem; border-radius: 0.5rem;
-  font-family: 'Inter', sans-serif; font-size: 0.8125rem; font-weight: 600;
-  border: 1px solid #2A2A2A; background: #1A1A1A; color: #9CA3AF; cursor: pointer; transition: all 0.15s;
-}
-.ch-modal-cancel:hover { background: #222; color: #FFFFFF; border-color: #374151; }
-
 .ch-call-tooltip-fixed {
   position: fixed;
   z-index: 9999;

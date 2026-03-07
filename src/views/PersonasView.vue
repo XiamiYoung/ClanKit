@@ -446,7 +446,8 @@ const visiblePersonas = computed(() => {
 const soulViewerPersona = ref(null)
 
 function openSoulViewer(persona) {
-  soulViewerPersona.value = persona
+  // Shallow-clone so SoulViewer never holds a reference to the store object.
+  soulViewerPersona.value = { ...persona }
 }
 
 function createNew(type) {

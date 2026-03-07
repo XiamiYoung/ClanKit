@@ -152,8 +152,9 @@
               :pendingPermissionChatIds="chatsStore.pendingPermissionChatIds"
               :draggingId="draggingNodeId"
               :selectedFolderId="selectedFolderId"
+              :contextMenuNodeId="treeCtxMenu.visible ? treeCtxMenu.node?.id : null"
               @select-chat="(id) => { triggerMemoryExtractionOnSwitch(chatsStore.activeChatId); chatsStore.setActiveChat(id); chatsStore.markAsRead(id); selectedFolderId = null; treeLastSelected = { type: 'chat', id } }"
-              @toggle-folder="(id) => { chatsStore.toggleFolder(id); selectedFolderId = id; treeLastSelected = { type: 'folder', id } }"
+              @toggle-folder="(id) => { chatsStore.toggleFolder(id) }"
 
               @rename-chat="(chat) => startRename(chat)"
               @delete-chat="(id) => requestDeleteChat(id)"
@@ -181,6 +182,18 @@
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
             New Folder
           </button>
+          <!-- Folder-specific actions (rename / delete) -->
+          <template v-if="treeCtxMenu.node?.type === 'folder'">
+            <div style="height:1px; background:#2A2A2A; margin:4px 8px;"></div>
+            <button class="chat-ctx-item" @click="openCtxDialog('rename', treeCtxMenu.node.name, treeCtxMenu.node.id, treeCtxMenu.x, treeCtxMenu.y)">
+              <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Configure Folder
+            </button>
+            <button class="chat-ctx-item chat-ctx-danger" @click="closeTreeCtxMenu(); doDeleteFolder(treeCtxMenu.node.id)">
+              <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+              Delete Folder
+            </button>
+          </template>
         </div>
         <!-- Rename dialog (dark floating input, DocsView style) -->
         <div v-if="treeCtxDialog.visible" class="chat-ctx-dialog" :style="{ top: treeCtxDialog.y + 'px', left: treeCtxDialog.x + 'px' }" @click.stop @keydown.escape="cancelCtxDialog">
@@ -193,6 +206,18 @@
         </div>
       </Teleport>
     </aside>
+
+    <!-- Folder create/rename modal -->
+    <CategoryModal
+      v-if="folderModal.visible"
+      :mode="folderModal.mode"
+      :initial="folderModal.initial"
+      noun="Folder"
+      renameTitle="Configure Folder"
+      :showTypeSelector="false"
+      @confirm="onFolderModalConfirm"
+      @close="folderModal.visible = false"
+    />
 
     <!-- Resize handle -->
     <div
@@ -833,46 +858,6 @@
                       class="absolute top-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer"
                       style="background:rgba(0,0,0,0.55); color:#fff; border:none;"
                       aria-label="Remove image"
-                    >
-                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                      </svg>
-                    </button>
-                  </div>
-                  <!-- Non-image attachment: chip -->
-                  <div
-                    v-else
-                    class="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs max-w-[200px]"
-                    :style="att.type === 'image'
-                      ? 'background:rgba(0,122,255,0.1); color:#0056CC; border:1px solid #93C5FD;'
-                      : att.type === 'folder'
-                        ? 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'
-                        : att.type === 'error'
-                          ? 'background:#FEE2E2; color:#991B1B; border:1px solid #FCA5A5;'
-                          : 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'"
-                  >
-                    <!-- Type icon -->
-                    <svg v-if="att.type === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                    </svg>
-                    <svg v-else-if="att.type === 'folder'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    <svg v-else-if="att.type === 'error'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
-                    </svg>
-                    <svg v-else class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                    </svg>
-                    <span class="truncate">{{ att.name }}</span>
-                    <!-- Remove button -->
-                    <button
-                      @click="removeAttachment(att.id)"
-                      class="w-4 h-4 rounded flex items-center justify-center shrink-0 cursor-pointer transition-colors"
-                      style="color:inherit; opacity:0.6;"
-                      @mouseenter="e => e.currentTarget.style.opacity='1'"
-                      @mouseleave="e => e.currentTarget.style.opacity='0.6'"
-                      aria-label="Remove attachment"
                     >
                       <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -1933,6 +1918,7 @@ import { parseMentions } from '../utils/mentions'
 import { v4 as uuidv4 } from 'uuid'
 import AppButton from '../components/common/AppButton.vue'
 import ChatGridLayout from '../components/chat/ChatGridLayout.vue'
+import CategoryModal from '../components/personas/CategoryModal.vue'
 import ChatMentionInput from '../components/chat/ChatMentionInput.vue'
 import { estimateToolTokens, estimateMcpTokens, formatTokens, tokenPercentage } from '../utils/tokenEstimate'
 import { resolveModelPrice, calcCostUSD, convertCurrencies, formatCost } from '../utils/pricing.js'
@@ -2007,6 +1993,7 @@ const ChatTreeNodeView = defineComponent({
     pendingPermissionChatIds: { type: Object, default: () => new Set() },
     draggingId: { type: String, default: null },
     selectedFolderId: { type: String, default: null },
+    contextMenuNodeId: { type: String, default: null },
   },
   emits: [
     'select-chat', 'toggle-folder',
@@ -2077,6 +2064,7 @@ const ChatTreeNodeView = defineComponent({
         pendingPermissionChatIds: props.pendingPermissionChatIds,
         draggingId: props.draggingId,
         selectedFolderId: props.selectedFolderId,
+        contextMenuNodeId: props.contextMenuNodeId,
         onSelectChat: (id) => emit('select-chat', id),
         onToggleFolder: (id) => emit('toggle-folder', id),
         onRenameChat: (chat) => emit('rename-chat', chat),
@@ -2092,7 +2080,6 @@ const ChatTreeNodeView = defineComponent({
 
     return () => {
       const { node, depth, activeChatId, unreadChatIds, completedChatIds, pendingPermissionChatIds, selectedFolderId } = props
-      // DocsView indent: 12 + depth * 18
       const indent = 12 + depth * 18
 
       const dragAttrs = {
@@ -2115,31 +2102,29 @@ const ChatTreeNodeView = defineComponent({
 
       if (node.type === 'folder') {
         const isExpanded = node.expanded
-        const isSelected = node.id === selectedFolderId
         const dragOverFolder = dragOver.value === 'middle'
-        let rowBg = isSelected
-          ? 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'
-          : hovered.value
-            ? 'linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'
-            : 'transparent'
+        const hasCtxMenu = props.contextMenuNodeId === node.id
+        let rowBg = (hovered.value || hasCtxMenu)
+          ? '#F5F5F5'
+          : 'transparent'
         if (dragOverFolder) rowBg = 'rgba(0, 122, 255, 0.08)'
-        const isDark = isSelected || hovered.value
-        const isHoveredOrDrag = isDark || dragOverFolder
-        const textColor = isHoveredOrDrag && !dragOverFolder ? '#fff' : '#1A1A1A'
+        const textColor = '#1A1A1A'
 
         const folderRow = h('div', {
-          class: 'flex items-center gap-1 py-0.5 pr-2 cursor-pointer group relative chat-tree-row',
+          class: 'flex items-center gap-0.5 pr-1 cursor-pointer group relative chat-tree-row',
           style: {
             paddingLeft: indent + 'px',
+            paddingTop: '2px',
+            paddingBottom: '2px',
             background: rowBg,
             color: textColor,
-            boxShadow: isSelected ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none',
-            borderRadius: '6px',
-            margin: '3px 2px',
+            borderRadius: '4px',
+            margin: '1px 2px',
             fontFamily: "'Inter',sans-serif",
-            fontSize: 'var(--fs-secondary)',
-            transition: 'background 0.15s, color 0.15s',
-            // Use individual border properties — never mix with shorthand to avoid height shifts
+            fontSize: 'var(--fs-caption)',
+            fontWeight: '600',
+            letterSpacing: '0.01em',
+            transition: 'background 0.15s',
             borderTop: dragOver.value === 'top' ? '2px solid #1A1A1A' : '2px solid transparent',
             borderRight: '0px solid transparent',
             borderBottom: dragOver.value === 'bottom' ? '2px solid #1A1A1A' : '2px solid transparent',
@@ -2162,54 +2147,29 @@ const ChatTreeNodeView = defineComponent({
         }, [
           // Chevron
           h('svg', {
-            style: { width: '14px', height: '14px', flexShrink: 0, color: isDark ? 'rgba(255,255,255,0.5)' : '#9CA3AF', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s, color 0.15s' },
+            style: { width: '14px', height: '14px', flexShrink: 0, color: '#9CA3AF', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' },
             viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2',
           }, [h('polyline', { points: '9 18 15 12 9 6' })]),
-          // Folder icon (filled, DocsView style)
-          h('svg', {
-            style: { width: '16px', height: '16px', flexShrink: 0, color: isDark ? 'rgba(255,255,255,0.7)' : '#6B7280', transition: 'color 0.15s' },
-            viewBox: '0 0 24 24', fill: 'currentColor',
-          }, [h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })]),
+          // Folder emoji
+          h('span', {
+            style: { fontSize: '13px', lineHeight: '1', flexShrink: 0, userSelect: 'none' },
+          }, node.emoji || '📁'),
           // Spinner: show when folder is collapsed and has a running chat inside
           (!isExpanded && subtreeHasRunning(node))
-            ? h('span', { class: isDark ? 'chat-unread-spinner chat-unread-spinner--light' : 'chat-unread-spinner' })
+            ? h('span', { class: 'chat-unread-spinner' })
             : null,
           // Name
           h('span', {
             class: 'truncate flex-1',
-            style: { fontWeight: '600', color: isDark ? '#fff' : '#1A1A1A', userSelect: 'none', transition: 'color 0.15s' },
+            style: { color: '#1A1A1A', userSelect: 'none', textTransform: 'uppercase', letterSpacing: '0.03em' },
           }, node.name),
-          // Hover action buttons — rename + delete (same style as chat items)
-          h('div', { class: 'chat-tree-folder-actions' }, [
-            h('button', {
-              class: 'chat-sidebar-action-btn',
-              title: 'Rename folder',
-              onClick: (e) => { e.stopPropagation(); emit('context-menu', e, node, 'rename') },
-            }, [
-              h('svg', { style: { width: '13px', height: '13px' }, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-                h('path', { d: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7' }),
-                h('path', { d: 'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z' }),
-              ]),
-            ]),
-            h('button', {
-              class: 'chat-sidebar-action-btn danger',
-              title: 'Delete folder',
-              onClick: (e) => { e.stopPropagation(); emit('context-menu', e, node, 'delete') },
-            }, [
-              h('svg', { style: { width: '13px', height: '13px' }, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-                h('polyline', { points: '3 6 5 6 21 6' }),
-                h('path', { d: 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6' }),
-                h('path', { d: 'M10 11v6M14 11v6' }),
-              ]),
-            ]),
-          ]),
         ])
 
         const childNodes = (isExpanded && node.children?.length)
           ? node.children.map(child => h(ChatTreeNodeView, childProps(child)))
           : []
 
-        return h('div', { style: { marginTop: depth === 0 ? '6px' : '0' } }, [folderRow, ...childNodes])
+        return h('div', { style: { marginTop: depth === 0 ? '2px' : '0' } }, [folderRow, ...childNodes])
 
       } else {
         // Chat row — DocsView style (active = black gradient)
@@ -2227,16 +2187,18 @@ const ChatTreeNodeView = defineComponent({
             : 'transparent'
 
         return h('div', {
-          class: 'flex items-center gap-1 py-0.5 pr-2 cursor-pointer group relative chat-tree-row',
+          class: 'flex items-center gap-0.5 pr-1 cursor-pointer group relative chat-tree-row',
           style: {
             paddingLeft: indent + 'px',
+            paddingTop: '2px',
+            paddingBottom: '2px',
             background: rowBg,
             color: isDark ? '#fff' : '#1A1A1A',
             boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none',
-            borderRadius: '6px',
-            margin: '3px 2px',
+            borderRadius: '0.625rem',
+            margin: '1px 2px',
             fontFamily: "'Inter',sans-serif",
-            fontSize: 'var(--fs-secondary)',
+            fontSize: 'var(--fs-caption)',
             transition: 'background 0.15s, color 0.15s',
             // Individual border properties — never mix with shorthand to avoid height shifts
             borderTop: dragOver.value === 'top' ? '2px solid #fff' : '2px solid transparent',
@@ -2257,15 +2219,15 @@ const ChatTreeNodeView = defineComponent({
           onMouseleave: () => { hovered.value = false; treeTooltip.value.visible = false },
           ...dragAttrs,
         }, [
-          // Spacer aligned with folder chevron
+          // Spacer matching folder chevron width for vertical alignment
           h('span', { style: 'width:14px;display:inline-block;flex-shrink:0;' }),
-          // Chat icon
+          // Chat bubble with dots icon
           h('svg', {
-            style: { width: '16px', height: '16px', flexShrink: 0, color: isDark ? 'rgba(255,255,255,0.7)' : '#9CA3AF', transition: 'color 0.15s' },
+            style: { width: '14px', height: '14px', flexShrink: 0, color: isDark ? 'rgba(255,255,255,0.5)' : '#9CA3AF', transition: 'color 0.15s' },
             viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2',
-          }, [h('path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' })]),
+          }, [h('path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' }), h('circle', { cx: '8', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' }), h('circle', { cx: '12', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' }), h('circle', { cx: '16', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' })]),
           showSpinner ? h('span', { class: isDark ? 'chat-unread-spinner chat-unread-spinner--light' : 'chat-unread-spinner' }) : null,
-          h('span', { class: 'truncate flex-1', style: { fontWeight: isActive ? '600' : '400', color: isDark ? '#fff' : '#1A1A1A', transition: 'color 0.15s' } }, node.title),
+          h('span', { class: 'truncate flex-1', style: { fontWeight: isActive ? '600' : '500', color: isDark ? '#fff' : '#1A1A1A', transition: 'color 0.15s' } }, node.title),
           // Status chips
           isPendingPermission && !isActive ? h('span', { class: 'chat-approval-chip' }, 'Approval') : null,
           (!isPendingPermission && isCompleted && !isActive) ? h('span', { class: 'chat-completed-chip' }, 'Done') : null,
@@ -3021,14 +2983,16 @@ const activeChatUsage = computed(() => {
   }
 })
 
-// Resolved model for the active chat: persona modelId → chat.model → contextSnapshot
+// Resolved model for the active chat: per-chat override → persona modelId → chat.model → contextSnapshot
 const activeChatModel = computed(() => {
   const chat = chatsStore.activeChat
   if (!chat) return ''
   const personaId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null)
     || chat.systemPersonaId
+  const override = personaId ? chat.personaModelOverrides?.[personaId] : null
+  const overrideModel = override ? (typeof override === 'object' ? override.model : override) : null
   const persona = personaId ? personasStore.getPersonaById(personaId) : null
-  return persona?.modelId || chat.model || contextSnapshot.value?.model || ''
+  return overrideModel || persona?.modelId || chat.model || contextSnapshot.value?.model || ''
 })
 
 // Persona info for the inspector — prefers snapshot data (has prompts), falls back to store (has names)
@@ -3750,6 +3714,7 @@ const filteredChats = computed(() => {
 // ── Tree Context Menu (DocsView pattern) ──────────────────────────────────────
 const treeCtxMenu = ref({ visible: false, x: 0, y: 0, node: null })
 const treeCtxDialog = ref({ visible: false, type: '', title: '', placeholder: '', value: '', x: 0, y: 0, folderId: null })
+const folderModal = ref({ visible: false, mode: 'create', initial: { name: '', emoji: '📁' }, parentFolderId: null, editFolderId: null })
 const ctxDialogInputRef = ref(null)
 const treeTooltip = ref({ visible: false, text: '', right: 0, top: 0 })
 
@@ -3758,9 +3723,8 @@ function openTreeContextMenu(e, node, action = null) {
   e.stopPropagation?.()
   const x = Math.min(e.clientX, window.innerWidth - 220)
   const y = Math.min(e.clientY, window.innerHeight - 200)
-  // Select the node on right-click (same as left-click selection)
   if (node?.type === 'folder') {
-    selectedFolderId.value = node.id
+    // Folders are not selectable — context menu only
     treeLastSelected.value = { type: 'folder', id: node.id }
   } else if (node?.type === 'chat') {
     selectedFolderId.value = null
@@ -3786,12 +3750,21 @@ function closeTreeCtxMenu() {
 
 function openCtxDialog(type, defaultValue, folderId, x, y) {
   closeTreeCtxMenu()
-  const titles = { rename: 'Rename Folder', newFolder: 'New Folder', newChat: 'New Chat' }
-  const placeholders = { rename: 'Folder name', newFolder: 'Folder name', newChat: 'Chat name' }
+  if (type === 'newFolder') {
+    folderModal.value = { visible: true, mode: 'create', initial: { name: '', emoji: '📁' }, parentFolderId: folderId, editFolderId: null }
+    return
+  }
+  if (type === 'rename') {
+    // Find the folder node to get current emoji
+    const found = chatsStore.chatTree ? _findFolderNode(folderId, chatsStore.chatTree) : null
+    folderModal.value = { visible: true, mode: 'rename', initial: { name: defaultValue || '', emoji: found?.emoji || '📁' }, parentFolderId: null, editFolderId: folderId }
+    return
+  }
+  // newChat — keep old inline dialog path
   treeCtxDialog.value = {
     visible: true, type,
-    title: titles[type] || type,
-    placeholder: placeholders[type] || '',
+    title: 'New Chat',
+    placeholder: 'Chat name',
     value: defaultValue || '',
     x: Math.min(x, window.innerWidth - 240),
     y: Math.min(y, window.innerHeight - 160),
@@ -3803,6 +3776,17 @@ function openCtxDialog(type, defaultValue, folderId, x, y) {
   })
 }
 
+function _findFolderNode(id, nodes) {
+  for (const n of nodes) {
+    if (n.id === id) return n
+    if (n.children?.length) {
+      const found = _findFolderNode(id, n.children)
+      if (found) return found
+    }
+  }
+  return null
+}
+
 function cancelCtxDialog() {
   treeCtxDialog.value.visible = false
 }
@@ -3812,10 +3796,19 @@ async function commitCtxDialog() {
   const name = value.trim()
   treeCtxDialog.value.visible = false
   if (!name) return
-  if (type === 'rename') {
-    await chatsStore.renameFolder(folderId, name)
-  } else if (type === 'newFolder') {
-    await chatsStore.createFolder(name, folderId)
+  // Only newChat remains here; folder ops moved to folderModal
+  if (type === 'newChat') {
+    // handled elsewhere
+  }
+}
+
+async function onFolderModalConfirm({ name, emoji }) {
+  const { mode, parentFolderId, editFolderId } = folderModal.value
+  folderModal.value.visible = false
+  if (mode === 'create') {
+    await chatsStore.createFolder(name, parentFolderId, emoji)
+  } else {
+    await chatsStore.renameFolder(editFolderId, name, emoji)
   }
 }
 
@@ -4016,14 +4009,19 @@ const soulViewerTarget = ref(null) // { personaId, personaType, personaName }
 
 function openSoulViewer(personaId, personaType, personaName) {
   const persona = personasStore.getPersonaById(personaId)
+  // Per-chat override takes priority over global persona model for display
+  const chat = chatsStore.activeChat
+  const rawOverride = chat?.personaModelOverrides?.[personaId]
+  const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
+  const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model : rawOverride) : null
   soulViewerTarget.value = {
     personaId,
     personaType,
     personaName: persona?.name || personaName || 'Persona',
     personaDescription: persona?.description || '',
     personaPrompt: persona?.prompt || '',
-    personaProviderId: persona?.providerId || null,
-    personaModelId: persona?.modelId || null,
+    personaProviderId: overrideProvider || persona?.providerId || null,
+    personaModelId: overrideModel || persona?.modelId || null,
     personaVoiceId: persona?.voiceId || null,
     personaAvatar: persona?.avatar || null,
   }
@@ -4038,15 +4036,32 @@ async function handleSoulViewerUpdatePersona(updates) {
   const pid = soulViewerTarget.value.personaId
   const persona = personasStore.getPersonaById(pid)
   if (!persona) return
-  const updated = { ...persona, ...updates }
-  await personasStore.savePersona(updated)
-  // Re-check after await — viewer may have been closed while save was in flight
-  if (!soulViewerTarget.value) return
-  soulViewerTarget.value.personaPrompt = updated.prompt ?? soulViewerTarget.value.personaPrompt
-  soulViewerTarget.value.personaDescription = updated.description ?? soulViewerTarget.value.personaDescription
-  if (updates.providerId !== undefined) soulViewerTarget.value.personaProviderId = updated.providerId ?? null
-  if (updates.modelId !== undefined) soulViewerTarget.value.personaModelId = updated.modelId ?? null
-  if (updates.voiceId !== undefined) soulViewerTarget.value.personaVoiceId = updated.voiceId ?? null
+  const chatId = chatsStore.activeChatId
+
+  // ── Model/provider changes → per-chat override (not global) ──
+  if (chatId && (updates.providerId !== undefined || updates.modelId !== undefined)) {
+    const newProvider = updates.providerId ?? persona.providerId ?? null
+    const newModel    = updates.modelId ?? persona.modelId ?? null
+    chatsStore.setChatPersonaModelOverride(chatId, pid, newProvider, newModel)
+    // Update the soul viewer target so it shows the new override
+    if (soulViewerTarget.value) {
+      if (updates.providerId !== undefined) soulViewerTarget.value.personaProviderId = newProvider
+      if (updates.modelId !== undefined) soulViewerTarget.value.personaModelId = newModel
+    }
+  }
+
+  // ── Other fields (name, avatar, description, prompt, voice) → global persona ──
+  const globalUpdates = { ...updates }
+  delete globalUpdates.providerId
+  delete globalUpdates.modelId
+  if (Object.keys(globalUpdates).length > 0) {
+    const updated = { ...persona, ...globalUpdates }
+    await personasStore.savePersona(updated)
+    if (!soulViewerTarget.value) return
+    soulViewerTarget.value.personaPrompt = updated.prompt ?? soulViewerTarget.value.personaPrompt
+    soulViewerTarget.value.personaDescription = updated.description ?? soulViewerTarget.value.personaDescription
+    if (globalUpdates.voiceId !== undefined) soulViewerTarget.value.personaVoiceId = updated.voiceId ?? null
+  }
 }
 
 // System persona config popover state moved to ChatHeader
@@ -4086,14 +4101,21 @@ const activeSystemPersonaIds = computed(() => {
 // toggleSystemPersona moved to ChatHeader
 
 // getPersonaProviderLabel kept — also used in mention popup
+// Shows per-chat override when active, otherwise falls back to persona global settings.
 function getPersonaProviderLabel(personaId) {
   const persona = personasStore.getPersonaById(personaId)
   if (!persona) return 'Default'
-  const provider = persona.providerId || 'anthropic'
-  const model = persona.modelId || ''
+  const chat = chatsStore.activeChat
+  const rawOverride = chat?.personaModelOverrides?.[personaId]
+  const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
+  const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
+  const provider = overrideProvider || persona.providerId || 'anthropic'
+  const model    = overrideModel    || persona.modelId    || ''
   if (model) {
     const short = model.split('/').pop().split(':')[0]
-    return `${provider} · ${short}`
+    return overrideProvider || overrideModel
+      ? `${provider} · ${short} (override)`
+      : `${provider} · ${short}`
   }
   return provider
 }
@@ -4280,115 +4302,54 @@ async function onDrop(e) {
   try {
     // Send all paths to main process for WSL path conversion + reading
     const results = await window.electronAPI.resolveDropPaths(rawPaths)
-    if (results && results.length > 0) {
-      attachments.value.push(...results)
-    }
+    if (results && results.length > 0) handleAttachResults(results)
   } catch (err) {
     dbg(`Drop resolve error: ${err.message}`, 'error')
   }
 }
 
 /**
- * Append resolved attachment paths to the textarea text.
+ * Route resolved attachment results: images get chips + path in textarea;
+ * all other types get only path text in textarea.
  */
-function appendPathsToInput(results) {
-  const paths = results.filter(r => r.path).map(r => r.path)
-  if (paths.length === 0) return
-  const prefix = inputText.value.trimEnd()
-  inputText.value = prefix ? `${prefix}\n${paths.join('\n')}` : paths.join('\n')
-}
-
-/**
- * Handle paste events on the input.
- * Order: (1) cd.files with .path [Explorer Ctrl+C], (2) text/plain path strings,
- * (3) clipboard image [PrtSc], (4) default text paste.
- */
-async function onPaste(e) {
-  const cd = e.clipboardData
-
-  if (window.electronAPI?.resolveDropPaths) {
-    // 1. Files copied from OS (Windows Explorer Ctrl+C) — .path exposed by Electron
-    const filePaths = Array.from(cd?.files || []).map(f => f.path).filter(Boolean)
-    if (filePaths.length > 0) {
-      e.preventDefault()
-      try {
-        const results = await window.electronAPI.resolveDropPaths(filePaths)
-        if (results?.length > 0) {
-          attachments.value.push(...results)
-          appendPathsToInput(results)
-        }
-      } catch (err) {
-        dbg(`Paste attach error: ${err.message}`, 'error')
-      }
-      return
-    }
-
-    // 2. Manually pasted path strings in text/plain
-    const pasted = cd?.getData('text/plain') || ''
-    const lines = pasted.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean)
-    const pathLines = lines.filter(l =>
-      /^[A-Za-z]:[/\\]/.test(l) ||   // Windows: C:\foo or C:/foo
-      l.startsWith('/') ||             // Linux: /home/...
-      l.startsWith('file://') ||       // URI: file:///C:/...
-      l.startsWith('\\\\')             // UNC: \\server\share
-    )
-    if (pathLines.length > 0 && pathLines.length === lines.length) {
-      e.preventDefault()
-      try {
-        const results = await window.electronAPI.resolveDropPaths(pathLines)
-        if (results?.length > 0) {
-          attachments.value.push(...results)
-          appendPathsToInput(results)
-        }
-      } catch (err) {
-        dbg(`Paste attach error: ${err.message}`, 'error')
-      }
-      return
+function handleAttachResults(results) {
+  const imageAtts = []
+  const pathTexts = []
+  for (const att of results) {
+    if (att.type === 'image') {
+      const placeholder = att.path || att.name
+      imageAtts.push({ ...att, placeholderText: placeholder })
+      pathTexts.push(placeholder)
+    } else {
+      if (att.path) pathTexts.push(att.path)
     }
   }
-
-  // 3. Clipboard image (PrtSc / screenshot tool)
-  const items = cd?.items
-  if (items) {
-    for (const item of items) {
-      if (item.kind === 'file' && item.type.startsWith('image/')) {
-        e.preventDefault()
-        const file = item.getAsFile()
-        if (!file) continue
-        const mediaType = item.type
-        const ext = mediaType.split('/')[1] || 'png'
-        const name = `screenshot-${Date.now()}.${ext}`
-        const reader = new FileReader()
-        reader.onload = (ev) => {
-          const dataUri = ev.target.result
-          const base64 = dataUri.split(',')[1]
-          attachments.value.push({
-            id: uuidv4(), name, type: 'image',
-            base64, mediaType, preview: dataUri,
-            size: file.size, path: null
-          })
-        }
-        reader.readAsDataURL(file)
-        return
-      }
-    }
+  if (imageAtts.length > 0) attachments.value.push(...imageAtts)
+  if (pathTexts.length > 0) {
+    const prefix = inputText.value.trimEnd()
+    inputText.value = prefix ? `${prefix}\n${pathTexts.join('\n')}` : pathTexts.join('\n')
   }
-  // 4. Default: let browser paste text normally
 }
 
 async function pickFiles() {
   if (!window.electronAPI?.pickFiles) return
   try {
     const results = await window.electronAPI.pickFiles()
-    if (results && results.length > 0) {
-      attachments.value.push(...results)
-    }
+    if (results && results.length > 0) handleAttachResults(results)
   } catch (err) {
     dbg(`pickFiles error: ${err.message}`, 'error')
   }
 }
 
 function removeAttachment(id) {
+  const att = attachments.value.find(a => a.id === id)
+  if (att?.placeholderText) {
+    const placeholder = att.placeholderText
+    inputText.value = inputText.value
+      .split('\n')
+      .filter(line => line !== placeholder)
+      .join('\n')
+  }
   attachments.value = attachments.value.filter(a => a.id !== id)
 }
 
@@ -4955,7 +4916,7 @@ async function triggerPersonaCollaboration(chatId, groupIds, cfg, userPersonaPro
 
     // Rebuild apiMessages before each persona so it sees prior personas' output
     const seqApiMessages = targetChat.messages
-      .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content))
+      .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
       .map(m => ({ role: m.role, content: m.content }))
 
     // Ensure conversation ends with a user message (API requirement)
@@ -5042,12 +5003,8 @@ async function sendMessage() {
   // Reset scroll-lock for this new answer
   userScrolled.value = false
 
-  // Build display content — append [Attached: name] labels for text-based display
+  // Display content — paths are already in the textarea text
   let displayContent = text
-  if (pendingAttachments.length > 0) {
-    const labels = pendingAttachments.map(a => `[Attached: ${a.name}]`).join(' ')
-    displayContent = displayContent ? `${displayContent}\n${labels}` : labels
-  }
 
   // Store attachment metadata (without heavy base64 data) on the user message for display
   const attachmentMeta = pendingAttachments.map(a => ({
@@ -5118,7 +5075,7 @@ async function sendMessage() {
   dbg(`targetChat=${targetChat.id} messages=${targetChat.messages?.length ?? 'N/A'}`)
 
   const apiMessages = targetChat.messages
-    .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content))
+    .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
     .map(m => ({ role: m.role, content: m.content }))
 
   // Resolve persona for this run
@@ -5314,6 +5271,9 @@ async function sendMessage() {
         : personasStore.defaultSystemPersona
       if (sysPersona?.prompt) resolvedPersonaPrompts.systemPersonaPrompt = sysPersona.prompt
       if (userPersonaPrompt) resolvedPersonaPrompts.userPersonaPrompt = userPersonaPrompt
+      // Pass persona identity for system prompt injection
+      resolvedPersonaPrompts.systemPersonaName = sysPersona?.name || null
+      resolvedPersonaPrompts.systemPersonaDescription = sysPersona?.description || null
       // Pass persona IDs for soul memory system
       resolvedPersonaPrompts.systemPersonaId = sysPersona?.id || '__default_system__'
       resolvedPersonaPrompts.userPersonaId = usrPersona?.id || '__default_user__'
@@ -5674,7 +5634,7 @@ async function compactContext() {
 
   try {
     const apiMessages = targetChat.messages
-      .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content))
+      .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
       .map(m => ({ role: m.role, content: m.content }))
 
     // Build a flat config the AgentLoop constructor expects (same pattern as sendMessage).
@@ -5954,7 +5914,16 @@ onMounted(async () => {
         await chatsStore.loadChats()
         return
       }
-      // Force-reload messages from disk by resetting to null then fetching
+      // Reload full chat from disk to pick up metadata changes (persona, group settings)
+      // as well as new messages
+      const full = await window.electronAPI.getChat(chatId)
+      if (full) {
+        chat.systemPersonaId    = full.systemPersonaId ?? chat.systemPersonaId
+        chat.isGroupChat        = full.isGroupChat ?? chat.isGroupChat
+        chat.groupPersonaIds    = full.groupPersonaIds ?? chat.groupPersonaIds
+        chat.groupPersonaOverrides = full.groupPersonaOverrides ?? chat.groupPersonaOverrides
+      }
+      // Force-reload messages from disk
       chat.messages = null
       await chatsStore.ensureMessages(chatId)
     })
@@ -6128,7 +6097,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.3125rem 0.5rem 0.3125rem 0.75rem;
+  padding: 0.3125rem 0.5rem 0.3125rem 0;
   margin: 0.25rem 0.125rem 0.125rem;
   border-radius: 0.375rem;
   cursor: pointer;
@@ -6140,7 +6109,7 @@ onUnmounted(() => {
 .chat-root-row-left {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.125rem;
   flex: 1;
   min-width: 0;
   cursor: pointer;

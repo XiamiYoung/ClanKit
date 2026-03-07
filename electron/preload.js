@@ -155,7 +155,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     createFolder: (dir, name)          => ipcRenderer.invoke('obsidian:create-folder', dir, name),
     createDrawio: (dir, name)          => ipcRenderer.invoke('obsidian:create-drawio', dir, name),
     deleteFile:   (filePath)           => ipcRenderer.invoke('obsidian:delete-file', filePath),
+    isDirEmpty:   (dirPath)            => ipcRenderer.invoke('obsidian:is-dir-empty', dirPath),
     rename:       (oldPath, newPath)   => ipcRenderer.invoke('obsidian:rename', oldPath, newPath),
+    copyFilesToDir: (sourcePaths, destDir) => ipcRenderer.invoke('obsidian:copy-files-to-dir', sourcePaths, destDir),
   },
 
   // -- Coding Mode / Claude Context ------------------------------------------
@@ -199,23 +201,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getPreloadPath:  () => ipcRenderer.invoke('drawio:get-preload-path'),
   },
 
-  // ── Computer Use ─────────────────────────────────────────────────────────
-  computerUse: {
-    start:  (params) => ipcRenderer.invoke('computer-use:start', params),
-    stop:   (params) => ipcRenderer.invoke('computer-use:stop', params),
-    onChunk: (cb) => {
-      ipcRenderer.removeAllListeners('computer-use:chunk')
-      ipcRenderer.on('computer-use:chunk', (_, data) => cb(data))
-      return () => ipcRenderer.removeAllListeners('computer-use:chunk')
-    },
-  },
-
   // ── IM Bridge ─────────────────────────────────────────────────────────────
   im: {
     getStatus:   ()       => ipcRenderer.invoke('im:get-status'),
     start:       ()       => ipcRenderer.invoke('im:start'),
     stop:        ()       => ipcRenderer.invoke('im:stop'),
-    getSessions: ()       => ipcRenderer.invoke('im:get-sessions'),
+    getSessions:     ()         => ipcRenderer.invoke('im:get-sessions'),
+    startPlatform:   (platform) => ipcRenderer.invoke('im:start-platform', platform),
+    stopPlatform:    (platform) => ipcRenderer.invoke('im:stop-platform', platform),
     onChatsUpdated: (cb)  => {
       ipcRenderer.removeAllListeners('im:chats-updated')
       ipcRenderer.on('im:chats-updated', () => cb())
@@ -225,6 +218,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeAllListeners('im:chat-updated')
       ipcRenderer.on('im:chat-updated', (_e, data) => cb(data))
       return () => ipcRenderer.removeAllListeners('im:chat-updated')
+    },
+    requestWhatsAppQr: () => ipcRenderer.invoke('im:whatsapp-request-qr'),
+    onWhatsAppQr: (cb) => {
+      ipcRenderer.removeAllListeners('im:whatsapp-qr')
+      ipcRenderer.on('im:whatsapp-qr', (_e, d) => cb(d))
+      return () => ipcRenderer.removeAllListeners('im:whatsapp-qr')
+    },
+    onWhatsAppReady: (cb) => {
+      ipcRenderer.removeAllListeners('im:whatsapp-ready')
+      ipcRenderer.on('im:whatsapp-ready', () => cb())
+      return () => ipcRenderer.removeAllListeners('im:whatsapp-ready')
+    },
+    onPlatformStopped: (cb) => {
+      ipcRenderer.removeAllListeners('im:platform-stopped')
+      ipcRenderer.on('im:platform-stopped', (_e, d) => cb(d))
+      return () => ipcRenderer.removeAllListeners('im:platform-stopped')
     },
   },
 })

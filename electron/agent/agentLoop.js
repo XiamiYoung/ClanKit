@@ -323,11 +323,22 @@ class AgentLoop {
    * @param {Array<string|{id:string, name:string, systemPrompt?:string}>} enabledSkills
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
-  buildSystemPrompt(enabledAgents, enabledSkills, { systemPersonaPrompt, userPersonaPrompt, systemPersonaId, userPersonaId, groupChatContext } = {}, userSoulContent, systemSoulContent, participantSouls) {
-    const basePrompt = (this.config.systemPrompt || '').trim()
-      || 'You are ClankAI, a versatile AI assistant running in a desktop application. You help users with a wide range of tasks including research, writing, analysis, coding, creative work, file management, and general knowledge.'
+  buildSystemPrompt(enabledAgents, enabledSkills, { systemPersonaPrompt, userPersonaPrompt, systemPersonaId, userPersonaId, systemPersonaName, systemPersonaDescription, groupChatContext } = {}, userSoulContent, systemSoulContent, participantSouls) {
+    // When a named persona is active, use it as the opening identity (highest priority).
+    // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
+    let openingIdentity
+    if (!groupChatContext && systemPersonaName) {
+      let line = `You are "${systemPersonaName}"`
+      if (systemPersonaDescription) line += ` — ${systemPersonaDescription}`
+      line += '.'
+      if (systemPersonaPrompt) line += `\n\n${systemPersonaPrompt}`
+      openingIdentity = line
+    } else {
+      openingIdentity = (this.config.systemPrompt || '').trim()
+        || 'You are a versatile AI assistant running in a desktop application. You help users with a wide range of tasks including research, writing, analysis, coding, creative work, file management, and general knowledge.'
+    }
 
-    let system = `${basePrompt}
+    let system = `${openingIdentity}
 
 CORE TOOLS (always available):
 - execute_shell: Run shell commands (command + args separated, e.g. command:"ls" args:["/home"])
@@ -493,10 +504,6 @@ Always confirm recipient, subject, and content before sending unless the user ex
       system += `\n\n## PROJECT CONTEXT (CLAUDE.md)\n${claudeContext}`
     }
 
-    // Append persona context if provided
-    if (systemPersonaPrompt) {
-      system += `\n\n## SYSTEM PERSONA\n${systemPersonaPrompt}`
-    }
     if (userPersonaPrompt) {
       system += `\n\n## USER CONTEXT\n${userPersonaPrompt}`
     }

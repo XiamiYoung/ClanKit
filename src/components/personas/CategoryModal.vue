@@ -10,7 +10,7 @@
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             </svg>
           </div>
-          <span class="cat-modal-title">{{ mode === 'create' ? 'New Category' : 'Rename Category' }}</span>
+          <span class="cat-modal-title">{{ mode === 'create' ? `New ${noun}` : (renameTitle || `Rename ${noun}`) }}</span>
           <button class="cat-modal-close" @click="$emit('close')" aria-label="Close">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
@@ -18,22 +18,24 @@
 
         <!-- Body -->
         <div class="cat-modal-body">
-          <!-- Type selector (create mode only) -->
-          <div v-if="mode === 'create'" class="cat-type-row">
-            <button
-              class="cat-type-btn"
-              :class="{ active: localType === 'system' }"
-              @click="localType = 'system'"
-            >System</button>
-            <button
-              class="cat-type-btn"
-              :class="{ active: localType === 'user' }"
-              @click="localType = 'user'"
-            >User</button>
-          </div>
-          <p v-else class="cat-modal-subtitle">
-            {{ type === 'system' ? 'System' : 'User' }} category
-          </p>
+          <!-- Type selector (create mode only, persona categories) -->
+          <template v-if="showTypeSelector">
+            <div v-if="mode === 'create'" class="cat-type-row">
+              <button
+                class="cat-type-btn"
+                :class="{ active: localType === 'system' }"
+                @click="localType = 'system'"
+              >System</button>
+              <button
+                class="cat-type-btn"
+                :class="{ active: localType === 'user' }"
+                @click="localType = 'user'"
+              >User</button>
+            </div>
+            <p v-else class="cat-modal-subtitle">
+              {{ type === 'system' ? 'System' : 'User' }} category
+            </p>
+          </template>
 
           <div class="cat-field-row">
             <!-- Emoji button -->
@@ -91,9 +93,12 @@ import { ref, onMounted, nextTick } from 'vue'
 import EmojiPicker from './EmojiPicker.vue'
 
 const props = defineProps({
-  mode:    { type: String, default: 'create' }, // 'create' | 'rename'
-  type:    { type: String, default: 'system' }, // 'system' | 'user'
-  initial: { type: Object, default: () => ({ name: '', emoji: '📁' }) },
+  mode:             { type: String,  default: 'create' },  // 'create' | 'rename'
+  type:             { type: String,  default: 'system' },  // 'system' | 'user'
+  initial:          { type: Object,  default: () => ({ name: '', emoji: '📁' }) },
+  noun:             { type: String,  default: 'Category' }, // e.g. 'Category' | 'Folder'
+  renameTitle:      { type: String,  default: '' },          // override rename mode title
+  showTypeSelector: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['confirm', 'close'])
