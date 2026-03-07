@@ -658,6 +658,23 @@ export const useChatsStore = defineStore('chats', () => {
 
   // ── Persistence helpers ────────────────────────────────────────────────────
 
+  const TOOL_OUTPUT_TRUNCATE_CHARS = 8000
+
+  function _truncateToolOutputs(messages) {
+    if (!messages) return messages
+    for (const msg of messages) {
+      if (!msg.segments) continue
+      for (const seg of msg.segments) {
+        if (seg.type === 'tool' && typeof seg.output === 'string' && seg.output.length > TOOL_OUTPUT_TRUNCATE_CHARS) {
+          const original = seg.output.length
+          seg.output = seg.output.slice(0, TOOL_OUTPUT_TRUNCATE_CHARS) +
+            `\n\n[output truncated — original length: ${original.toLocaleString()} chars]`
+        }
+      }
+    }
+    return messages
+  }
+
   function _serializeChat(chatId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return null
@@ -671,6 +688,7 @@ export const useChatsStore = defineStore('chats', () => {
       // per-chat file — only the index. Return null to signal that.
       return null
     }
+    raw.messages = _truncateToolOutputs(raw.messages)
     return raw
   }
 
