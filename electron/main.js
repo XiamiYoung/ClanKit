@@ -600,6 +600,13 @@ app.whenReady().then(async () => {
   await migrateEnvDataIfNeeded()
   createWindow()
 
+  // ── IM Bridge ──────────────────────────────────────────────────────────────
+  const _imCfg = readJSON(CONFIG_FILE, {})
+  imBridge.setMainWindow(mainWindow)
+  if (_imCfg.im?.telegram?.enabled && _imCfg.im?.telegram?.botToken) {
+    imBridge.start(_imCfg.im)
+  }
+
   // -- Content Security Policy --
   // Only apply restrictive CSP to the app's own pages, not to external sites
   // loaded inside <webview> (they need their own CSS/JS/fonts to render properly).
@@ -641,7 +648,24 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   mcpManager.stopAll().catch(err => logger.error('MCP cleanup error:', err.message))
+  imBridge.stop()
 })
+
+// --- IPC: IM Bridge -----------------------------------------------------------
+ipcMain.handle('im:get-status', () => imBridge.getStatus())
+
+ipcMain.handle('im:start', () => {
+  const cfg = readJSON(CONFIG_FILE, {})
+  imBridge.start(cfg.im)
+  return imBridge.getStatus()
+})
+
+ipcMain.handle('im:stop', () => {
+  imBridge.stop()
+  return imBridge.getStatus()
+})
+
+ipcMain.handle('im:get-sessions', () => imBridge.getStatus().sessions)
 
 // --- IPC: Storage -----------------------------------------------------------
 
@@ -2354,6 +2378,7 @@ ipcMain.handle('shell:exec', async (_, { cmd, args }) => {
 
 // --- IPC: Agent Loop ---------------------------------------------------------
 const { AgentLoop } = require('./agent/agentLoop')
+const imBridge = require('./im-bridge')
 const { mcpManager } = require('./agent/mcp/McpManager')
 const { MemoryExtractor } = require('./agent/core/MemoryExtractor')
 const activeLoops = new Map()          // chatId -> AgentLoop
@@ -2747,6 +2772,23 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
         ? [{ id: personaPrompts.systemPersonaId, name: personaPrompts.groupChatContext?.personaName || 'Assistant', type: 'system' }]
         : null
       runMemoryExtraction(event, chatId, messages, config, personaPrompts, singleParticipants)
+    }
+    // Forward final AI response to IM if this chat has an active IM session
+    if (typeof result === 'string' && result) {
+      const _sessions = imBridge.getStatus().sessions
+      const _bound = _sessions.find(s => s.clankChatId === chatId)
+      if (_bound) {
+        ;(async () => {
+          try {
+            if (_bound.platform === 'telegram') {
+              const telegram = require('./im-bridge/adapters/telegram')
+              await telegram.sendMessage(_bound.channelId, result)
+            }
+          } catch (fwdErr) {
+            logger.error('im-bridge forward error', { chatId, error: fwdErr.message })
+          }
+        })()
+      }
     }
     return { success: true, result }
   } catch (err) {
