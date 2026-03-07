@@ -756,16 +756,6 @@ ipcMain.handle('store:save-chat', async (_, chat) => {
   }
   // Write the per-chat file atomically
   await writeJSONAtomic(path.join(CHATS_DIR, `${chat.id}.json`), chat)
-  // Update the index entry
-  const index = await readJSONAsync(CHATS_INDEX_FILE, [])
-  const meta = chatMetaFromChat(chat)
-  const idx = index.findIndex(e => e.id === chat.id)
-  if (idx >= 0) {
-    index[idx] = meta
-  } else {
-    index.unshift(meta)
-  }
-  await writeJSONAtomic(CHATS_INDEX_FILE, index)
   return true
 })
 
