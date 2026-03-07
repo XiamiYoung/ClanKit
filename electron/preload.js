@@ -197,4 +197,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getFramePath:    () => ipcRenderer.invoke('drawio:get-frame-path'),
     getPreloadPath:  () => ipcRenderer.invoke('drawio:get-preload-path'),
   },
+
+  // ── IM Bridge ─────────────────────────────────────────────────────────────
+  im: {
+    getStatus:   ()       => ipcRenderer.invoke('im:get-status'),
+    start:       ()       => ipcRenderer.invoke('im:start'),
+    stop:        ()       => ipcRenderer.invoke('im:stop'),
+    getSessions: ()       => ipcRenderer.invoke('im:get-sessions'),
+    onChatsUpdated: (cb)  => {
+      ipcRenderer.removeAllListeners('im:chats-updated')
+      ipcRenderer.on('im:chats-updated', () => cb())
+      return () => ipcRenderer.removeAllListeners('im:chats-updated')
+    },
+  },
 })
