@@ -83,6 +83,13 @@ export const useConfigStore = defineStore('config', () => {
       modelPriceMap: {},
       currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 },
     },
+    im: {
+      telegram: {
+        enabled: false,
+        botToken: '',
+        allowedUsers: [],
+      },
+    },
   })
 
   // True when at least one provider has both an API key and a baseURL configured.
@@ -127,6 +134,9 @@ export const useConfigStore = defineStore('config', () => {
           : defaults.sandboxConfig.dangerBlockList,
       },
       pricing: { models: {}, modelPriceMap: {}, currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 }, ...(saved.pricing || {}) },
+      im: {
+        telegram: { ...defaults.im.telegram, ...(saved.im?.telegram || {}) },
+      },
     }
     // Also load the env-backed paths
     await loadEnvPaths()
@@ -156,6 +166,9 @@ export const useConfigStore = defineStore('config', () => {
       voiceCall:    { ...prev.voiceCall,    ...newConfig.voiceCall },
       smtp:         { ...prev.smtp,         ...newConfig.smtp },
       utilityModel: { ...prev.utilityModel, ...newConfig.utilityModel },
+      im: {
+        telegram: { ...prev.im?.telegram, ...(newConfig.im?.telegram || {}) },
+      },
     }
     await storage.saveConfig(JSON.parse(JSON.stringify(toRaw(config.value))))
   }
