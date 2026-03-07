@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getChatIndex: () => ipcRenderer.invoke('store:get-chat-index'),
   saveChatIndex: (index) => ipcRenderer.invoke('store:save-chat-index', index),
   getChat: (id) => ipcRenderer.invoke('store:get-chat', id),
+  getChatSegments: (params) => ipcRenderer.invoke('store:get-chat-segments', params),
   saveChat: (chat) => ipcRenderer.invoke('store:save-chat', chat),
   deleteChat: (id) => ipcRenderer.invoke('store:delete-chat', id),
 
@@ -196,6 +197,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   drawio: {
     getFramePath:    () => ipcRenderer.invoke('drawio:get-frame-path'),
     getPreloadPath:  () => ipcRenderer.invoke('drawio:get-preload-path'),
+  },
+
+  // ── Computer Use ─────────────────────────────────────────────────────────
+  computerUse: {
+    start:  (params) => ipcRenderer.invoke('computer-use:start', params),
+    stop:   (params) => ipcRenderer.invoke('computer-use:stop', params),
+    onChunk: (cb) => {
+      ipcRenderer.removeAllListeners('computer-use:chunk')
+      ipcRenderer.on('computer-use:chunk', (_, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('computer-use:chunk')
+    },
   },
 
   // ── IM Bridge ─────────────────────────────────────────────────────────────

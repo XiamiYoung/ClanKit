@@ -131,6 +131,10 @@ export const useChatsStore = defineStore('chats', () => {
           for (const msg of chat.messages) {
             if (msg.streaming) msg.streaming = false
           }
+          if (full.segmentCount) {
+            chat.segmentCount = full.segmentCount
+            chat._nextSegToLoad = full.segmentCount
+          }
         } else {
           chat.messages = []
         }
@@ -140,6 +144,33 @@ export const useChatsStore = defineStore('chats', () => {
       }
     })()
     return _loadingPromises[chatId]
+  }
+
+  async function loadOlderSegments(chatId) {
+    const chat = chats.value.find(c => c.id === chatId)
+    if (!chat || chat.messages === null) return false
+    if (!chat.segmentCount || chat.segmentCount < 1) return false
+    if (chat._nextSegToLoad === undefined) chat._nextSegToLoad = chat.segmentCount
+    if (chat._nextSegToLoad < 1) return false  // all segments already loaded
+
+    const toSeg = chat._nextSegToLoad
+    const fromSeg = toSeg
+    const olderMessages = await storage.getChatSegments({ chatId, fromSeg, toSeg })
+    if (!olderMessages || olderMessages.length === 0) {
+      chat._nextSegToLoad = toSeg - 1
+      return false
+    }
+    // Prepend older messages to the front of the in-memory array
+    chat.messages = [...olderMessages, ...chat.messages]
+    chat._nextSegToLoad = toSeg - 1
+    return true
+  }
+
+  function hasOlderSegments(chatId) {
+    const chat = chats.value.find(c => c.id === chatId)
+    if (!chat) return false
+    const nextSeg = chat._nextSegToLoad !== undefined ? chat._nextSegToLoad : (chat.segmentCount || 0)
+    return nextSeg >= 1
   }
 
   async function loadChats() {
@@ -895,6 +926,7 @@ export const useChatsStore = defineStore('chats', () => {
     loadChats, createChat, createChatFromHistory, removeChat, renameChat,
     setActiveChat, clearActiveChat, addMessage, updateLastAssistantMessage, setChatPersona,
     setChatProvider, setChatModel, setChatPersonaModelOverride, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
+    loadOlderSegments, hasOlderSegments,
     setGroupPersonas, toggleGroupMode, setGroupPersonaOverride,
     removeGroupPersona, addGroupPersona, reorderChats,
     getChatFolderPath,

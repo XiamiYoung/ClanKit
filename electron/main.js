@@ -719,6 +719,38 @@ async function accumulateUtilityUsage(model, provider, inputTokens, outputTokens
   }
 }
 
+// -- Segment archiving --------------------------------------------------------
+const SEGMENT_HOT_COUNT = 100
+const SEGMENT_SIZE = 100
+
+/**
+ * Archive old messages from chat into segment files.
+ * Mutates chat.messages in place — keeps only the newest SEGMENT_HOT_COUNT messages.
+ * Writes archived batches as {chatId}.seg.{n}.json (write-once).
+ */
+async function archiveOldSegments(chat) {
+  if (!chat.messages || chat.messages.length <= SEGMENT_HOT_COUNT) return
+
+  const toArchive = chat.messages.slice(0, chat.messages.length - SEGMENT_HOT_COUNT)
+  chat.messages = chat.messages.slice(chat.messages.length - SEGMENT_HOT_COUNT)
+
+  // Find highest existing segment index
+  let maxSeg = chat.segmentCount || 0
+
+  // Write new segment files (oldest first, batched by SEGMENT_SIZE)
+  for (let i = 0; i < toArchive.length; i += SEGMENT_SIZE) {
+    maxSeg++
+    const batch = toArchive.slice(i, i + SEGMENT_SIZE)
+    const segFile = path.join(CHATS_DIR, `${chat.id}.seg.${maxSeg}.json`)
+    // Only write if file doesn't already exist (write-once guarantee)
+    if (!fs.existsSync(segFile)) {
+      await writeJSONAtomic(segFile, { chatId: chat.id, segIndex: maxSeg, messages: batch })
+    }
+  }
+
+  chat.segmentCount = maxSeg
+}
+
 // -- Per-chat granular operations ---------------------------------------------
 ipcMain.handle('store:get-chat-index', async () => {
   return readJSONAsync(CHATS_INDEX_FILE, [])
@@ -732,6 +764,19 @@ ipcMain.handle('store:save-chat-index', async (_, index) => {
 ipcMain.handle('store:get-chat', async (_, chatId) => {
   const file = path.join(CHATS_DIR, `${chatId}.json`)
   return readJSONAsync(file, null)
+})
+
+ipcMain.handle('store:get-chat-segments', async (_, { chatId, fromSeg, toSeg }) => {
+  // Returns messages from segment files fromSeg..toSeg (inclusive), oldest first.
+  const messages = []
+  for (let i = fromSeg; i <= toSeg; i++) {
+    const segFile = path.join(CHATS_DIR, `${chatId}.seg.${i}.json`)
+    const seg = await readJSONAsync(segFile, null)
+    if (seg && seg.messages) {
+      messages.push(...seg.messages)
+    }
+  }
+  return messages
 })
 
 ipcMain.handle('store:save-chat', async (_, chat) => {
@@ -753,7 +798,13 @@ ipcMain.handle('store:save-chat', async (_, chat) => {
         }
       }
     }
+    // Preserve segmentCount from disk (renderer doesn't track this)
+    if (existing.segmentCount && !chat.segmentCount) {
+      chat.segmentCount = existing.segmentCount
+    }
   }
+  // Archive old messages into segment files before writing
+  await archiveOldSegments(chat)
   // Write the per-chat file atomically
   await writeJSONAtomic(path.join(CHATS_DIR, `${chat.id}.json`), chat)
   return true
@@ -3966,5 +4017,40 @@ ipcMain.handle('voice:tts', async (event, { text, apiKey, baseURL, model, voice 
   } catch (err) {
     return { success: false, error: err.message }
   }
+})
+
+// ── Computer Use ─────────────────────────────────────────────────────────────
+// Active CU sessions: chatId → ComputerUseLoop instance
+const cuSessions = new Map()
+
+ipcMain.handle('computer-use:start', async (event, { task, chatId, msgId, apiKey, baseURL }) => {
+  try {
+    const { ComputerUseLoop } = require('./agent/computerUseLoop')
+    const loop = new ComputerUseLoop({
+      apiKey,
+      baseURL,
+      task,
+      onChunk: (chunk) => {
+        event.sender.send('computer-use:chunk', { chatId, msgId, chunk })
+      },
+    })
+    cuSessions.set(chatId, loop)
+    loop.run().catch(err => {
+      logger.error('ComputerUseLoop uncaught error', err)
+      event.sender.send('computer-use:chunk', {
+        chatId, msgId,
+        chunk: { type: 'cu_error', error: err.message || String(err) },
+      })
+    }).finally(() => cuSessions.delete(chatId))
+    return { ok: true }
+  } catch (err) {
+    logger.error('computer-use:start error', err)
+    return { ok: false, error: err.message }
+  }
+})
+
+ipcMain.handle('computer-use:stop', async (_, { chatId }) => {
+  cuSessions.get(chatId)?.stop()
+  return { ok: true }
 })
 

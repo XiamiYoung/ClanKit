@@ -26,12 +26,17 @@
         <div v-if="hasHiddenMessages" class="flex justify-center pb-2">
           <button
             @click="loadMoreMessages"
+            :disabled="isLoadingSegment"
             class="px-4 py-1.5 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer"
             style="background:#F5F5F5; color:#1A1A1A; border:1px solid #E5E5EA;"
             @mouseenter="e => e.currentTarget.style.background='rgba(0,122,255,0.1)'"
             @mouseleave="e => e.currentTarget.style.background='#F5F5F5'"
           >
-            Show earlier messages ({{ chat.messages.length - visibleMessages.length }} hidden)
+            <span v-if="isLoadingSegment">Loading…</span>
+            <span v-else-if="(chat?.messages?.filter(m=>!m.hidden)?.length ?? 0) > visibleLimit">
+              Show earlier messages ({{ (chat?.messages?.filter(m=>!m.hidden)?.length ?? 0) - visibleLimit }} hidden)
+            </span>
+            <span v-else>Load older messages</span>
           </button>
         </div>
         <div
@@ -422,10 +427,31 @@ const visibleMessages = computed(() => {
 })
 const hasHiddenMessages = computed(() => {
   const all = (chat.value?.messages ?? []).filter(m => !m.hidden)
-  return all.length > visibleLimit.value
+  if (all.length > visibleLimit.value) return true
+  return chatsStore.hasOlderSegments(props.chatId)
 })
-function loadMoreMessages() {
-  visibleLimit.value += 25
+const isLoadingSegment = ref(false)
+
+async function loadMoreMessages() {
+  const all = (chat.value?.messages ?? []).filter(m => !m.hidden)
+  if (all.length > visibleLimit.value) {
+    // Still have in-memory messages to show — just reveal more
+    visibleLimit.value += 25
+    return
+  }
+  // All in-memory messages are visible — try to load older segment from disk
+  if (isLoadingSegment.value) return
+  isLoadingSegment.value = true
+  try {
+    const loaded = await chatsStore.loadOlderSegments(props.chatId)
+    if (loaded) {
+      // Show all messages including newly loaded ones (they're prepended)
+      const newAll = (chat.value?.messages ?? []).filter(m => !m.hidden)
+      visibleLimit.value = newAll.length
+    }
+  } finally {
+    isLoadingSegment.value = false
+  }
 }
 
 // ── Bubble shake watchers (must be after visibleMessages is defined) ──

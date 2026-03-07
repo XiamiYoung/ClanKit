@@ -82,6 +82,10 @@ export const storage = {
     const chats = lsGet('clankai:chats', [])
     return chats.find(c => c.id === id) || null
   },
+  async getChatSegments(params) {
+    if (isElectron()) return window.electronAPI.getChatSegments(params)
+    return []
+  },
   async saveChat(chat) {
     if (isElectron()) return window.electronAPI.saveChat(chat)
     // localStorage fallback: update in full array
