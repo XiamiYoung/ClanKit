@@ -45,3 +45,6 @@ scripts/
 
 # Docs
 docs/
+
+# playwright
+.playwright-mcp/

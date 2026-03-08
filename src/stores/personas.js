@@ -41,8 +41,10 @@ export const usePersonasStore = defineStore('personas', () => {
   const personas   = ref([])
   const categories = ref([])
 
-  const systemPersonas = computed(() => personas.value.filter(p => p.type === 'system'))
-  const userPersonas   = computed(() => personas.value.filter(p => p.type === 'user'))
+  const byCreatedDesc = (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
+
+  const systemPersonas = computed(() => personas.value.filter(p => p.type === 'system').sort(byCreatedDesc))
+  const userPersonas   = computed(() => personas.value.filter(p => p.type === 'user').sort(byCreatedDesc))
 
   const systemCategories = computed(() => categories.value.filter(c => c.type === 'system'))
   const userCategories   = computed(() => categories.value.filter(c => c.type === 'user'))
@@ -59,11 +61,11 @@ export const usePersonasStore = defineStore('personas', () => {
   }
 
   function personasInCategory(categoryId) {
-    return personas.value.filter(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(categoryId))
+    return personas.value.filter(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(categoryId)).sort(byCreatedDesc)
   }
 
   function uncategorizedPersonas(type) {
-    return personas.value.filter(p => p.type === type && (!Array.isArray(p.categoryIds) || p.categoryIds.length === 0))
+    return personas.value.filter(p => p.type === type && (!Array.isArray(p.categoryIds) || p.categoryIds.length === 0)).sort(byCreatedDesc)
   }
 
   async function loadPersonas() {

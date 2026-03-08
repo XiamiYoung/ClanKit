@@ -590,7 +590,7 @@
                 {{ testUtilityModelResult.message }}
               </div>
               <p class="hint">
-                Used for: @mention routing, context compaction, AI enhancements, title generation.
+                Used for generic background Tasks.
                 Pick the cheapest/fastest model across any active provider.
               </p>
             </div>

@@ -2,28 +2,37 @@
   <!-- Full-width drag region — clicks on buttons are excluded via no-drag -->
   <div
     class="titlebar flex items-center shrink-0 select-none"
-    style="height:2.375rem; background:#FFFFFF; border-bottom:1px solid #E5E5EA; -webkit-app-region:drag; padding:0 0.5rem 0 0.875rem;"
+    style="height:2.375rem; background:#FFFFFF; border-bottom:1px solid #E5E5EA; -webkit-app-region:drag; padding:0 0.5rem 0 0.25rem;"
   >
-    <!-- Sidebar toggle -->
-    <button
-      @click.stop="$emit('toggle-sidebar')"
-      class="flex items-center justify-center rounded transition-colors mr-2"
-      style="-webkit-app-region:no-drag; width:1.75rem; height:1.75rem; color:#6B7280; background:transparent; border:none; cursor:pointer; flex-shrink:0;"
-      @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
-      @mouseleave="e => e.currentTarget.style.background='transparent'"
-      title="Toggle sidebar"
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="3" y1="6"  x2="21" y2="6"/>
-        <line x1="3" y1="12" x2="21" y2="12"/>
-        <line x1="3" y1="18" x2="21" y2="18"/>
-      </svg>
-    </button>
+    <!-- Left group: PanelLeft + minibar -->
+    <div class="flex items-center gap-1" style="-webkit-app-region:no-drag; padding-left:0.5rem;">
+      <!-- Sidebar toggle (PanelLeft icon) -->
+      <button
+        @click.stop="$emit('toggle-sidebar')"
+        class="tb-btn"
+        title="Toggle sidebar"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <path d="M9 3v18"/>
+        </svg>
+      </button>
 
-    <!-- App name -->
-    <span style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#1A1A1A; letter-spacing:0.02em;">
-      ClankAI
-    </span>
+      <!-- Minibar toggle -->
+      <button
+        @click.stop="toggleMinibar"
+        class="tb-btn"
+        :class="{ 'tb-btn-active': isMinibar }"
+        title="Minibar mode"
+      >
+        <!-- Compress-to-bar icon: rectangle being squashed into a thin strip -->
+        <!-- PanelTop: window with filled header bar = compact/minibar mode -->
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <rect x="3" y="3" width="18" height="7" rx="2" fill="currentColor" stroke="none"/>
+        </svg>
+      </button>
+    </div>
 
     <div style="flex:1;" />
 
@@ -82,28 +91,65 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useFocusModeStore } from '../../stores/focusMode'
 
 defineEmits(['toggle-sidebar'])
 
+const focusModeStore = useFocusModeStore()
+const isMinibar = computed(() => focusModeStore.isMinibarMode)
+
+function toggleMinibar() {
+  if (focusModeStore.isMinibarMode) {
+    focusModeStore.exitMinibar()
+    window.electronAPI?.window?.setMinibar(false)
+  } else {
+    focusModeStore.enterMinibar()
+    window.electronAPI?.window?.setMinibar(true)
+  }
+}
+
 const isMaximized = ref(false)
 
-async function minimize() {
-  await window.electronAPI?.windowMinimize()
-}
+async function minimize() { await window.electronAPI?.windowMinimize() }
 async function toggleMaximize() {
   const maximized = await window.electronAPI?.windowMaximize()
   if (maximized !== undefined) isMaximized.value = maximized
 }
-async function close() {
-  await window.electronAPI?.windowClose()
-}
+async function close() { await window.electronAPI?.windowClose() }
 
 let unsubMaximized = null
-
 onMounted(async () => {
   isMaximized.value = (await window.electronAPI?.windowIsMaximized()) ?? false
   unsubMaximized = window.electronAPI?.onWindowMaximized(v => { isMaximized.value = v })
 })
 onUnmounted(() => { unsubMaximized?.() })
 </script>
+
+<style scoped>
+.tb-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #6B7280;
+  cursor: pointer;
+  border-radius: 0.375rem;
+  transition: background 0.15s, color 0.15s;
+}
+.tb-btn:hover {
+  background: #F5F5F5;
+  color: #1A1A1A;
+}
+.tb-btn-active {
+  color: #007AFF;
+}
+.tb-btn-active:hover {
+  background: rgba(0, 122, 255, 0.08);
+  color: #007AFF;
+}
+</style>

@@ -1,23 +1,30 @@
 <template>
-  <div class="cost-footer" :class="{ collapsed: isCollapsed }">
+  <div class="cost-footer" :class="{ 'cost-footer-collapsed': isCollapsed }">
 
+    <!-- Ambient cost readout — passive metric, click opens breakdown -->
     <button
-      class="cost-trigger-btn"
-      :class="{ collapsed: isCollapsed }"
+      class="cost-readout"
+      :class="{ 'cost-readout-collapsed': isCollapsed }"
       @click="open"
-      @mouseenter="isCollapsed ? showTooltip($event) : undefined"
-      @mouseleave="isCollapsed ? hideTooltip() : undefined"
-      title="Cost Overview"
+      @mouseenter="showReadoutTooltip($event)"
+      @mouseleave="hideTooltip()"
     >
-      <svg style="width:18px;height:18px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="12" y1="1" x2="12" y2="23"></line>
-        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+      <!-- $ icon -->
+      <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="1" x2="12" y2="23"/>
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
       </svg>
-      <span v-show="!isCollapsed" class="cost-trigger-label">Cost</span>
+      <template v-if="!isCollapsed">
+        <span class="cost-readout-value">{{ data ? fmtCost(total.USD) : '—' }}</span>
+        <span class="cost-readout-cur">USD</span>
+        <svg class="cost-readout-arrow" style="width:11px;height:11px;margin-left:auto;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+        </svg>
+      </template>
     </button>
 
     <Teleport to="body">
-      <div v-if="tooltipVisible" class="cost-nav-tooltip" :style="tooltipStyle">Cost Overview</div>
+      <div v-if="tooltipVisible" class="cost-nav-tooltip" :style="tooltipStyle">{{ tooltipText }}</div>
     </Teleport>
 
     <Teleport to="body">
@@ -107,10 +114,10 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useConfigStore } from '../../stores/config'
 import { usePersonasStore } from '../../stores/personas'
-import { resolveModelPrice, calcCostUSD, convertCurrencies, formatCost } from '../../utils/pricing.js'
+import { resolveModelPrice, convertCurrencies, formatCost } from '../../utils/pricing.js'
 
 const props = defineProps({
   isCollapsed: { type: Boolean, default: false },
@@ -121,10 +128,12 @@ const personasStore = usePersonasStore()
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 const tooltipVisible = ref(false)
+const tooltipText    = ref('')
 const tooltipStyle   = ref({})
 
-function showTooltip(event) {
+function _showTip(text, event) {
   const r = event.currentTarget.getBoundingClientRect()
+  tooltipText.value  = text
   tooltipStyle.value = {
     top:       (r.top + r.height / 2) + 'px',
     left:      (r.right + 8) + 'px',
@@ -132,9 +141,14 @@ function showTooltip(event) {
   }
   tooltipVisible.value = true
 }
-function hideTooltip() {
-  tooltipVisible.value = false
+function showReadoutTooltip(event) {
+  // Collapsed: show the number in the tooltip; expanded: show action hint
+  const label = props.isCollapsed
+    ? (data.value ? `${fmtCost(total.value.USD)} USD` : 'Cost Overview')
+    : 'See cost breakdown'
+  _showTip(label, event)
 }
+function hideTooltip() { tooltipVisible.value = false }
 
 // ── Modal state ────────────────────────────────────────────────────────────────
 const isOpen    = ref(false)
@@ -169,10 +183,12 @@ const PROVIDER_LABELS = {
 
 const USAGE_KEYS = ['inputTokens','outputTokens','cacheCreationTokens','cacheReadTokens','voiceInputTokens','voiceOutputTokens','whisperCalls','whisperSecs','ttsChars']
 
-watch(isOpen, async (open) => {
-  if (!open) return
-  isLoading.value = true
-  data.value = null
+// ── Data loading ─────────────────────────────────────────────────────────────
+// fresh=true: triggered by modal open — clears old data and shows spinner
+// fresh=false: silent background load on mount for the ambient readout chip
+async function loadUsageData(fresh = true) {
+  if (!fresh && data.value) return   // already have data, chip is already showing a number
+  if (fresh) { isLoading.value = true; data.value = null }
   try {
     const index  = await window.electronAPI.getChatIndex()
     const provMap = {}
@@ -274,7 +290,13 @@ watch(isOpen, async (open) => {
   } finally {
     isLoading.value = false
   }
-})
+}
+
+// Open modal → fresh load (shows spinner, clears stale data)
+watch(isOpen, (v) => { if (v) loadUsageData(true) })
+
+// Mount → silent background load so the ambient chip shows a number immediately
+onMounted(() => { loadUsageData(false) })
 
 function _ensureProv(map, key, label) {
   if (!map[key]) map[key] = { label: label || PROVIDER_LABELS[key] || key, models: {} }
@@ -295,39 +317,57 @@ const total     = computed(() => data.value?.total     || { USD: 0, CNY: 0, SGD:
   padding: 0.5rem 0.75rem;
   border-top: 1px solid #F0F0F0;
 }
-.cost-footer.collapsed {
+.cost-footer-collapsed {
   padding: 0.5rem 0.5rem;
-  display: flex;
-  justify-content: center;
 }
 
-.cost-trigger-btn {
+/* Ambient cost readout chip */
+.cost-readout {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  background: none;
-  border: none;
-  cursor: pointer;
+  gap: 0.375rem;
   width: 100%;
+  padding: 0.4375rem 0.625rem;
+  border: none;
+  border-radius: 0.625rem;
+  background: transparent;
   color: #6B7280;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
   font-weight: 500;
-  transition: background 0.15s, color 0.15s;
+  cursor: pointer;
+  transition: all 0.15s ease;
   text-align: left;
 }
-.cost-trigger-btn:hover { background: #F5F5F5; color: #1A1A1A; }
-.cost-trigger-btn.collapsed {
-  width: auto;
-  padding: 0.5rem;
+/* Collapsed: icon only, centered */
+.cost-readout-collapsed {
   justify-content: center;
+  padding: 0.5rem;
+  width: 2.5rem;
 }
-.cost-trigger-label {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.cost-readout:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1A1A1A;
+}
+.cost-readout:hover .cost-readout-arrow {
+  opacity: 1;
+}
+
+.cost-readout-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: #1A1A1A;
+}
+.cost-readout-cur {
+  font-size: var(--fs-small);
+  color: #9CA3AF;
+  letter-spacing: 0.04em;
+}
+.cost-readout-arrow {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  color: #6B7280;
 }
 </style>
 

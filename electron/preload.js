@@ -192,6 +192,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
     accumulateUsage:(chatId, usage) => ipcRenderer.invoke('agent:accumulate-voice-usage', { chatId, usage }),
   },
 
+  // ── Window ─────────────────────────────────────────────────────────────────
+  window: {
+    setFullScreen:   (flag) => ipcRenderer.invoke('window:set-fullscreen', flag),
+    setMinibar:      (flag) => ipcRenderer.invoke('window:set-minibar', flag),
+    saveMinibarBounds: ()   => ipcRenderer.invoke('window:save-minibar-bounds'),
+    setPosition:     (x, y) => ipcRenderer.invoke('window:set-position', x, y),
+    minimize:        ()     => ipcRenderer.invoke('window:minimize'),
+    maximize:        ()     => ipcRenderer.invoke('window:maximize'),
+    close:           ()     => ipcRenderer.invoke('window:close'),
+    isMaximized:     ()     => ipcRenderer.invoke('window:is-maximized'),
+    onMaximized:     (cb)   => {
+      const handler = (_e, v) => cb(v)
+      ipcRenderer.on('window:maximized', handler)
+      return () => ipcRenderer.removeListener('window:maximized', handler)
+    },
+  },
+
+  // Keep legacy top-level aliases used by the existing TitleBar.vue
+  windowMinimize:     () => ipcRenderer.invoke('window:minimize'),
+  windowMaximize:     () => ipcRenderer.invoke('window:maximize'),
+  windowClose:        () => ipcRenderer.invoke('window:close'),
+  windowIsMaximized:  () => ipcRenderer.invoke('window:is-maximized'),
+  onWindowMaximized:  (cb) => {
+    const handler = (_e, v) => cb(v)
+    ipcRenderer.on('window:maximized', handler)
+    return () => ipcRenderer.removeListener('window:maximized', handler)
+  },
+
   // ── Email / SMTP ────────────────────────────────────────────────────────────
   testSmtp: (smtpConfig) => ipcRenderer.invoke('store:test-smtp', smtpConfig),
 

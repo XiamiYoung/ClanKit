@@ -1954,11 +1954,8 @@ const FolderTreeItem = defineComponent({
               onClick: (e) => { e.stopPropagation(); emit('toggle', node.id) },
             }, [h('polyline', { points: '9 18 15 12 9 6' })])
           : h('span', { style: 'width:12px;display:inline-block;flex-shrink:0;' }),
-        // Folder icon — inherits currentColor
-        h('svg', {
-          style: { width: '14px', height: '14px', flexShrink: 0, opacity: 0.75 },
-          viewBox: '0 0 24 24', fill: 'currentColor',
-        }, [h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })]),
+        // Folder emoji — matches sidebar chat tree
+        h('span', { style: { fontSize: '13px', lineHeight: '1', flexShrink: 0, userSelect: 'none' } }, node.emoji || '📁'),
         // Name — inherits currentColor
         h('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, node.name),
       ])
@@ -3908,11 +3905,6 @@ watch(showNewChatPersonaPopover, (open) => {
   }
 })
 
-function defaultPersonaIds() {
-  const def = personasStore.defaultSystemPersona
-  return def ? [def.id] : []
-}
-
 function toggleNewChatPersona(personaId) {
   const idx = newChatPersonaIds.value.indexOf(personaId)
   if (idx >= 0) {
@@ -3928,7 +3920,7 @@ function newChat(folderId) {
   showNewChatModal.value = true
   newChatName.value = ''
   newChatFolderId.value = resolvedFolder
-  newChatPersonaIds.value = defaultPersonaIds()
+  newChatPersonaIds.value = []
   showNewChatPersonaPopover.value = false
   newChatPersonaSearch.value = ''
   // Pre-expand ancestors of pre-selected folder
@@ -3952,8 +3944,20 @@ function getAncestorFolderIds(targetId, nodes, path = []) {
 async function confirmNewChat() {
   showNewChatModal.value = false
   const title = newChatName.value.trim() || 'New Chat'
-  const personaCfg = newChatPersonaIds.value.length > 0 ? [...newChatPersonaIds.value] : null
-  await chatsStore.createChat(title, personaCfg, newChatFolderId.value)
+  let selectedIds = newChatPersonaIds.value
+  if (selectedIds.length === 0) {
+    const def = personasStore.defaultSystemPersona
+    selectedIds = def ? [def.id] : []
+  }
+  const personaCfg = selectedIds.length > 0 ? [...selectedIds] : null
+  const folderId = newChatFolderId.value
+  await chatsStore.createChat(title, personaCfg, folderId)
+  // Expand the target folder and all its ancestors so the new chat is visible
+  if (folderId) {
+    const ancestors = getAncestorFolderIds(folderId, chatsStore.chatTree) || []
+    for (const aid of ancestors) chatsStore.expandFolder(aid)
+    chatsStore.expandFolder(folderId)
+  }
   nextTick(() => mentionInputRef.value?.focus())
 }
 
@@ -5994,6 +5998,8 @@ onUnmounted(() => {
   }
 
 })
+
+defineExpose({ chatSidebarCollapsed })
 </script>
 
 <style scoped>

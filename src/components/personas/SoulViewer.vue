@@ -58,6 +58,39 @@
 
       <!-- ═══ SUMMARY TAB ═══ -->
       <div v-if="activeTab === 'summary'" class="soul-body soul-summary-body">
+
+        <!-- AI creation bar (new persona only) -->
+        <div v-if="isNew && !readOnly" class="soul-ai-create-bar">
+          <span class="soul-ai-create-label">Start with AI:</span>
+          <button class="soul-btn-inline soul-btn-enhance" :disabled="generating" @click="toggleDescribeInput">
+            <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            Describe it
+          </button>
+          <button class="soul-btn-inline soul-btn-enhance" :disabled="generating" @click="generatePersonaFromAI(null, false)">
+            <svg v-if="!generating" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.5 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.7l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg>
+            <span v-if="generating" class="soul-spinner"></span>
+            {{ generating ? 'Generating...' : 'Surprise me' }}
+          </button>
+        </div>
+        <!-- Describe input (toggled) -->
+        <div v-if="showDescribeInput && !readOnly" class="soul-describe-wrap">
+          <textarea
+            v-model="describeText"
+            class="soul-describe-textarea"
+            placeholder='Describe who you want... e.g. "a grumpy doctor like House MD", "Gordon Ramsay for code reviews", "Yoda as a DevOps engineer"'
+            rows="3"
+            autofocus
+          ></textarea>
+          <div class="soul-describe-actions">
+            <button class="soul-btn-inline soul-btn-enhance" :disabled="!describeText.trim() || generating" @click="generatePersonaFromAI(describeText, false)">
+              <svg v-if="!generating" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              <span v-if="generating" class="soul-spinner"></span>
+              {{ generating ? 'Generating...' : 'Generate' }}
+            </button>
+            <button class="soul-btn-inline" :disabled="generating" @click="showDescribeInput = false; describeText = ''">Cancel</button>
+          </div>
+        </div>
+
         <div class="soul-persona-card">
           <!-- Avatar + Name row -->
           <div class="soul-identity-row">
@@ -128,15 +161,36 @@
               <textarea v-model="draftPrompt" class="soul-editor soul-editor-prompt" :class="{ 'soul-input-error': errors.prompt }" spellcheck="false" :placeholder="personaType === 'system' ? 'Enter the persona system prompt...' : 'Describe yourself, your role, and context for the AI...'" @input="clearError('prompt')"></textarea>
               <span v-if="errors.prompt" class="soul-validation-error">{{ errors.prompt }}</span>
               <div class="soul-enhance-row">
-                <button class="soul-btn-inline soul-btn-enhance" :disabled="enhancing || !draftPrompt.trim() || !isProviderActive" :title="!isProviderActive ? providerInactiveTooltip : 'Enhance prompt with AI'" @click="enhancePrompt">
+                <button class="soul-btn-inline soul-btn-enhance" :disabled="enhancing || generating || !draftPrompt.trim() || !isProviderActive" :title="!isProviderActive ? providerInactiveTooltip : 'Enhance prompt with AI'" @click="enhancePrompt">
                   <svg v-if="!enhancing" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                   <span v-if="enhancing" class="soul-spinner"></span>
                   {{ enhancing ? 'Enhancing...' : 'AI Enhance' }}
+                </button>
+                <button class="soul-btn-inline soul-btn-enhance" :disabled="enhancing || generating || !draftPrompt.trim()" @click="toggleRewriteInput">
+                  <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  Rewrite from description
                 </button>
                 <span v-if="!isProviderActive" class="soul-provider-inactive-chip" :title="providerInactiveTooltip">
                   <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                   Provider inactive
                 </span>
+              </div>
+              <!-- Rewrite input (inline, toggled) -->
+              <div v-if="showRewriteInput" class="soul-rewrite-wrap">
+                <textarea
+                  v-model="rewriteText"
+                  class="soul-describe-textarea"
+                  placeholder='Give an instruction to update this persona... e.g. "translate to Chinese", "make this a female character", "make the tone more aggressive"'
+                  rows="3"
+                ></textarea>
+                <div class="soul-describe-actions">
+                  <button class="soul-btn-inline soul-btn-enhance" :disabled="!rewriteText.trim() || generating" @click="applyRewriteInstruction">
+                    <svg v-if="!generating" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    <span v-if="generating" class="soul-spinner"></span>
+                    {{ generating ? 'Applying...' : 'Apply' }}
+                  </button>
+                  <button class="soul-btn-inline" :disabled="generating" @click="showRewriteInput = false; rewriteText = ''">Cancel</button>
+                </div>
               </div>
               <span v-if="aiError" class="soul-ai-error">{{ aiError }}</span>
             </template>
@@ -530,6 +584,117 @@ async function summarizeDescription() {
     aiError.value = err.message || 'Description generation failed.'
   }
   summarizing.value = false
+}
+
+// ── AI Generation (Describe / Surprise me / Rewrite) ─────────────────────
+const generating = ref(false)
+const showDescribeInput = ref(false)
+const describeText = ref('')
+const showRewriteInput = ref(false)
+const rewriteText = ref('')
+
+function toggleDescribeInput() {
+  showDescribeInput.value = !showDescribeInput.value
+  describeText.value = ''
+}
+
+function toggleRewriteInput() {
+  showRewriteInput.value = !showRewriteInput.value
+  rewriteText.value = ''
+}
+
+function detectLanguage() {
+  const text = (draftDescription.value || '') + ' ' + (draftPrompt.value || '')
+  if (/[\u4e00-\u9fff]/.test(text)) return 'Chinese'
+  if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'Japanese'
+  if (/[\uac00-\ud7af]/.test(text)) return 'Korean'
+  return null // default: English
+}
+
+function extractJSON(text) {
+  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (match) return match[1].trim()
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start >= 0 && end > start) return text.slice(start, end + 1)
+  return text.trim()
+}
+
+async function generatePersonaFromAI(description, isRewrite) {
+  generating.value = true
+  aiError.value = ''
+  try {
+    const config = JSON.parse(JSON.stringify(configStore.config))
+    const descLine = description
+      ? `The user wants a persona described as: "${description}"\n\n`
+      : 'Generate a completely random, creative, and surprising persona. Be imaginative — pick something unexpected.\n\n'
+
+    const lang = detectLanguage()
+    const langInstruction = lang ? `\n\nIMPORTANT: Generate ALL fields (name, description, prompt) entirely in ${lang}.` : ''
+    const res = await window.electronAPI.enhancePrompt({
+      prompt: `${descLine}Create a detailed AI persona character. Be specific and creative. It can be a fictional character, historical figure, professional archetype, mythological being, movie/TV character, or anything interesting.\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"character name","role":"brief role or identity (5-10 words)","description":"one sentence who they are (max 15 words)","prompt":"300-500 word character prompt — start with 'You are [name]...', include: who they are, how they speak day-to-day, their personality quirks, what they genuinely care about, what annoys them, their background. Make them feel like a real person or character — NOT an AI assistant. No \\"Certainly!\\", no formal helper voice."}${langInstruction}`,
+      config,
+    })
+
+    if (res.success && res.text) {
+      let data
+      try {
+        data = JSON.parse(extractJSON(res.text))
+      } catch {
+        aiError.value = 'AI returned invalid JSON. Try again.'
+        generating.value = false
+        return
+      }
+      draftName.value = data.name || draftName.value || 'Unnamed'
+      draftDescription.value = data.description || ''
+      draftPrompt.value = data.prompt || ''
+      if (!isRewrite) {
+        draftAvatar.value = `a${Math.floor(Math.random() * 36) + 1}`
+      }
+      showDescribeInput.value = false
+      describeText.value = ''
+    } else {
+      aiError.value = res.error || 'Generation failed. Make sure your utility model is configured in Config → AI → Models.'
+    }
+  } catch (err) {
+    aiError.value = err.message || 'Generation failed.'
+  }
+  generating.value = false
+}
+
+async function applyRewriteInstruction() {
+  const instruction = rewriteText.value.trim()
+  if (!instruction) return
+  generating.value = true
+  aiError.value = ''
+  try {
+    const config = JSON.parse(JSON.stringify(configStore.config))
+    const res = await window.electronAPI.enhancePrompt({
+      prompt: `You are updating an existing AI persona based on the user's instruction. Apply the instruction to the name, description, and prompt — only change what the instruction requires, keep everything else intact.\n\nCurrent persona:\n- Name: ${draftName.value}\n- Description: ${draftDescription.value}\n- Prompt: ${draftPrompt.value}\n\nUser instruction: "${instruction}"\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"updated name","description":"updated description","prompt":"updated full prompt"}`,
+      config,
+    })
+
+    if (res.success && res.text) {
+      let data
+      try {
+        data = JSON.parse(extractJSON(res.text))
+      } catch {
+        aiError.value = 'AI returned invalid JSON. Try again.'
+        generating.value = false
+        return
+      }
+      if (data.name) draftName.value = data.name
+      if (data.description) draftDescription.value = data.description
+      if (data.prompt) draftPrompt.value = data.prompt
+      showRewriteInput.value = false
+      rewriteText.value = ''
+    } else {
+      aiError.value = res.error || 'Rewrite failed. Make sure your utility model is configured in Config → AI → Models.'
+    }
+  } catch (err) {
+    aiError.value = err.message || 'Rewrite failed.'
+  }
+  generating.value = false
 }
 
 const fileSize = computed(() => content.value ? new Blob([content.value]).size : 0)
@@ -1109,5 +1274,60 @@ onUnmounted(() => {
 @keyframes soul-eq {
   0% { height: 0.1875rem; }
   100% { height: 0.625rem; }
+}
+
+/* -- AI creation bar (new persona) --------------------------------------- */
+.soul-ai-create-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  background: rgba(245, 158, 11, 0.05);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  border-radius: 0.625rem;
+  margin-bottom: 0.875rem;
+  flex-shrink: 0;
+}
+.soul-ai-create-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #6B7280;
+  margin-right: 0.125rem;
+}
+
+/* -- Describe / Rewrite input -------------------------------------------- */
+.soul-describe-wrap,
+.soul-rewrite-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  background: #111111;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.625rem;
+  margin-bottom: 0.5rem;
+  flex-shrink: 0;
+}
+.soul-describe-textarea {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.5rem;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  color: #FFFFFF;
+  background: #1A1A1A;
+  outline: none;
+  resize: none;
+  line-height: 1.5;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.soul-describe-textarea:focus { border-color: #4B5563; }
+.soul-describe-textarea::placeholder { color: #4B5563; }
+.soul-describe-actions {
+  display: flex;
+  gap: 0.375rem;
 }
 </style>

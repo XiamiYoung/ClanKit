@@ -1262,6 +1262,8 @@ const TreeNode = defineComponent({
     }
   }
 })
+
+defineExpose({ docTreeCollapsed })
 </script>
 
 <style>

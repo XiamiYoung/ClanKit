@@ -75,7 +75,7 @@
   html, body, #app {
     height: 100%;
     overflow: hidden;
-    background-color: var(--bg-main);
+    background-color: transparent;
   }
 
   body {

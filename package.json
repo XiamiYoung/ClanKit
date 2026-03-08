@@ -83,6 +83,7 @@
     "@babylonjs/core": "^8.52.1",
     "@babylonjs/loaders": "^8.52.1",
     "@dicebear/avataaars": "^9.3.2",
+    "@dicebear/collection": "^9.4.0",
     "@dicebear/core": "^9.3.2",
     "@larksuiteoapi/node-sdk": "^1.59.0",
     "@tiptap/extension-placeholder": "^3.20.0",

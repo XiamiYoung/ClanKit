@@ -332,6 +332,7 @@ class AgentLoop {
       if (systemPersonaDescription) line += ` — ${systemPersonaDescription}`
       line += '.'
       if (systemPersonaPrompt) line += `\n\n${systemPersonaPrompt}`
+      line += `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${systemPersonaName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant`
       openingIdentity = line
     } else {
       openingIdentity = (this.config.systemPrompt || '').trim()
@@ -430,7 +431,15 @@ When generating .md markdown files (documents, reports, notes, summaries, analys
 Then write the file to the chosen location. For non-.md files, continue using the artifact path as default.`
     }
 
-    system += `\n\nGUIDELINES:
+    if (systemPersonaName && !groupChatContext) {
+      system += `\n\nOPERATIONAL NOTES (secondary to your character — use these naturally, not robotically):
+- For complex multi-step tasks, use a todo list to stay organized.
+- Delegate independent subtasks to sub-agents when it makes sense.
+- Use background_task for long-running operations.
+- Report progress on large tasks in your own voice and style.
+- The chat UI has a built-in 3D viewer that automatically renders 3D model URLs (.glb, .gltf, .obj, .stl, .babylon, .fbx). When a 3D asset URL appears, acknowledge it in character.`
+    } else {
+      system += `\n\nGUIDELINES:
 - Be concise and precise. Explain your reasoning when using tools.
 - For complex multi-step tasks, ALWAYS create a todo list first using todo_manager.
 - When a subtask is independent and focused, delegate it to a sub-agent.
@@ -438,6 +447,7 @@ Then write the file to the chosen location. For non-.md files, continue using th
 - When asked about your capabilities or tools, report the core tools and any active skills listed above.
 - Always report progress on large tasks.
 - The chat UI has a built-in 3D viewer that automatically renders 3D model URLs (.glb, .gltf, .obj, .stl, .babylon, .fbx). When the user shares a 3D asset URL, acknowledge it — the viewer is already displaying it inline. You can discuss the model, suggest interactions (rotate, zoom, wireframe toggle), or help with 3D-related questions.`
+    }
 
     // Append MCP server info if any are enabled
     const mcpServers = this.mcpServers || []

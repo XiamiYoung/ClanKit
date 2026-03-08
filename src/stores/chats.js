@@ -13,6 +13,9 @@ export const useChatsStore = defineStore('chats', () => {
   const completedChatIds = ref(new Set())
   const pendingPermissionChatIds = ref(new Set())
 
+  // Minibar quick-send signal: set by MinibarOverlay, consumed by ChatsView
+  const pendingMinibarSend = ref(null) // { text, chatId } | null
+
   // UI chunk callback — set by ChatsView when mounted, cleared on unmount
   let _uiChunkCallback = null
 
@@ -446,6 +449,14 @@ export const useChatsStore = defineStore('chats', () => {
     }
   }
 
+  function expandFolder(folderId) {
+    const found = _findNode(folderId, chatTree.value)
+    if (found && found.node.type === 'folder' && !found.node.expanded) {
+      found.node.expanded = true
+      debouncedPersistIndex()
+    }
+  }
+
   function setAllFoldersExpanded(expanded) {
     function walk(nodes) {
       for (const node of nodes) {
@@ -834,6 +845,14 @@ export const useChatsStore = defineStore('chats', () => {
       const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
       if (msg) {
         msg.content = (msg.content || '') + chunk.text
+        // Keep a minimal segments array so MessageRenderer can display the text
+        if (!msg.segments || msg.segments.length === 0) {
+          msg.segments = [{ type: 'text', content: msg.content }]
+        } else if (msg.segments[msg.segments.length - 1].type === 'text') {
+          msg.segments[msg.segments.length - 1].content = msg.content
+        } else {
+          msg.segments.push({ type: 'text', content: chunk.text })
+        }
       }
     } else if (chunk.type === 'thinking_start') {
       chat.isThinking = true
@@ -848,8 +867,12 @@ export const useChatsStore = defineStore('chats', () => {
     } else if (chunk.type === 'max_tokens_reached') {
       const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
       if (msg) {
-        msg.content = (msg.content || '') +
-          `\n\n---\n⚠️ **Output truncated** — the model reached the ${(chunk.limit || 0).toLocaleString()}-token output limit. Send a follow-up to continue.`
+        const suffix = `\n\n---\n⚠️ **Output truncated** — the model reached the ${(chunk.limit || 0).toLocaleString()}-token output limit. Send a follow-up to continue.`
+        msg.content = (msg.content || '') + suffix
+        if (!msg.segments) msg.segments = []
+        const lastSeg = msg.segments[msg.segments.length - 1]
+        if (lastSeg?.type === 'text') lastSeg.content = msg.content
+        else msg.segments.push({ type: 'text', content: msg.content })
       }
     }
     // tool_call, tool_result, compaction, subagent_progress handled by UI callback only
@@ -923,6 +946,139 @@ export const useChatsStore = defineStore('chats', () => {
     return _planRunParams[chatId] || null
   }
 
+  function triggerMinibarSend(text, chatId) {
+    pendingMinibarSend.value = { text, chatId }
+  }
+  function clearMinibarSend() {
+    pendingMinibarSend.value = null
+  }
+
+  async function sendMinibarMessage(text, chatId) {
+    const { useConfigStore }   = await import('./config')
+    const { usePersonasStore } = await import('./personas')
+    const configStore   = useConfigStore()
+    const personasStore = usePersonasStore()
+
+    const targetChat = chats.value.find(c => c.id === chatId)
+    if (!targetChat) return
+
+    await ensureMessages(chatId)
+    activeChatId.value = chatId
+
+    // Add user message
+    await addMessage(chatId, { role: 'user', content: text })
+
+    // Streaming placeholder
+    const streamingMsgId = uuidv4()
+    await addMessage(chatId, { id: streamingMsgId, role: 'assistant', content: '', streaming: true, streamingStartedAt: Date.now() })
+
+    targetChat.isRunning = true
+
+    // Build API messages (history before this send)
+    const apiMessages = (targetChat.messages || [])
+      .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
+      .map(m => ({ role: m.role, content: m.content }))
+
+    // Resolve persona + provider
+    const sysPersonaId = targetChat.systemPersonaId || personasStore.defaultSystemPersona?.id
+    const sysPersona   = sysPersonaId ? personasStore.getPersonaById(sysPersonaId) : personasStore.defaultSystemPersona
+    const chatProvider = sysPersona?.providerId || 'anthropic'
+    const cfg = { ...configStore.config }
+
+    if (chatProvider === 'anthropic') {
+      cfg.apiKey = cfg.anthropic?.apiKey || ''; cfg.baseURL = cfg.anthropic?.baseURL || ''
+    } else if (chatProvider === 'openrouter') {
+      cfg.apiKey = cfg.openrouter?.apiKey || ''; cfg.baseURL = cfg.openrouter?.baseURL || ''
+    } else if (chatProvider === 'openai') {
+      cfg.openaiApiKey = cfg.openai?.apiKey || ''; cfg.openaiBaseURL = cfg.openai?.baseURL || ''
+      cfg._resolvedProvider = 'openai'; cfg.defaultProvider = 'openai'
+    } else if (chatProvider === 'deepseek') {
+      cfg.openaiApiKey = cfg.deepseek?.apiKey || ''
+      cfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
+      cfg._resolvedProvider = 'openai'; cfg._directAuth = true; cfg.defaultProvider = 'openai'
+    }
+
+    // Per-chat model override
+    const rawOverride = targetChat.personaModelOverrides?.[sysPersonaId]
+    const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
+    const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
+    if (overrideProvider && overrideProvider !== chatProvider) {
+      if (overrideProvider === 'anthropic') {
+        cfg.apiKey = cfg.anthropic?.apiKey || ''; cfg.baseURL = cfg.anthropic?.baseURL || ''
+        delete cfg._directAuth; delete cfg.openaiApiKey; delete cfg.openaiBaseURL
+        cfg._resolvedProvider = undefined; cfg.defaultProvider = undefined
+      } else if (overrideProvider === 'openrouter') {
+        cfg.apiKey = cfg.openrouter?.apiKey || ''; cfg.baseURL = cfg.openrouter?.baseURL || ''
+        delete cfg._directAuth; delete cfg.openaiApiKey; delete cfg.openaiBaseURL
+        cfg._resolvedProvider = undefined; cfg.defaultProvider = undefined
+      } else if (overrideProvider === 'openai') {
+        cfg.openaiApiKey = cfg.openai?.apiKey || ''; cfg.openaiBaseURL = cfg.openai?.baseURL || ''
+        cfg._resolvedProvider = 'openai'; cfg.defaultProvider = 'openai'; delete cfg._directAuth
+      } else if (overrideProvider === 'deepseek') {
+        cfg.openaiApiKey = cfg.deepseek?.apiKey || ''
+        cfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
+        cfg._resolvedProvider = 'openai'; cfg._directAuth = true; cfg.defaultProvider = 'openai'
+      }
+    }
+    const resolvedModel = overrideModel || sysPersona?.modelId || null
+    if (resolvedModel) cfg.customModel = resolvedModel
+    if (targetChat.workingPath) cfg.chatWorkingPath = targetChat.workingPath
+
+    const usrPersonaId = targetChat.userPersonaId
+    const usrPersona   = usrPersonaId ? personasStore.getPersonaById(usrPersonaId) : personasStore.defaultUserPersona
+    const userPersonaPrompt = usrPersona?.prompt || null
+
+    const personaPrompts = {
+      systemPersonaPrompt:       sysPersona?.prompt || null,
+      systemPersonaName:         sysPersona?.name || null,
+      systemPersonaDescription:  sysPersona?.description || null,
+      systemPersonaId:           sysPersona?.id || '__default_system__',
+      userPersonaId:             usrPersona?.id || '__default_user__',
+      userPersonaPrompt,
+    }
+
+    try {
+      const res = await window.electronAPI.runAgent({
+        chatId,
+        messages: JSON.parse(JSON.stringify(apiMessages)),
+        config: JSON.parse(JSON.stringify(cfg)),
+        enabledAgents: [],
+        enabledSkills: [],
+        personaPrompts,
+        streamingMsgId,
+        mcpServers: [],
+        httpTools: [],
+        chatPermissionMode: targetChat.permissionMode || 'inherit',
+        chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
+        chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
+        maxOutputTokens: targetChat.maxOutputTokens || null,
+        knowledgeConfig: { ragEnabled: false },
+      })
+
+      // Chunks already updated msg.content+segments via _applyChunk; just finalize streaming flag
+      const msg = (targetChat.messages || []).find(m => m.id === streamingMsgId)
+      if (msg) {
+        if (!msg.content && res?.result) {
+          msg.content = res.result
+          msg.segments = [{ type: 'text', content: res.result }]
+        }
+        msg.streaming = false
+        if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
+      }
+    } catch (err) {
+      console.error('[minibar send] runAgent error:', err)
+      const msg = (targetChat.messages || []).find(m => m.id === streamingMsgId)
+      if (msg) {
+        msg.content = `Error: ${err.message}`
+        msg.segments = [{ type: 'text', content: msg.content }]
+        msg.streaming = false
+      }
+    } finally {
+      targetChat.isRunning = false
+      debouncedPersistChat(chatId)
+    }
+  }
+
   return {
     chatTree, chats, activeChatId, activeFolderId, activeChat, isLoading,
     unreadChatIds, completedChatIds, pendingPermissionChatIds,
@@ -933,10 +1089,11 @@ export const useChatsStore = defineStore('chats', () => {
     setGroupPersonas, toggleGroupMode, setGroupPersonaOverride,
     removeGroupPersona, addGroupPersona, reorderChats,
     getChatFolderPath,
-    createFolder, renameFolder, deleteFolder, toggleFolder, setAllFoldersExpanded,
+    createFolder, renameFolder, deleteFolder, toggleFolder, expandFolder, setAllFoldersExpanded,
     moveNodeToFolder, reorderNode,
     initChunkListener, setUiChunkCallback, clearUiChunkCallback, markAsRead, markCompleted,
     markPermissionPending, clearPermissionPending,
     setPlanState, storePlanRunParams, getPlanRunParams,
+    pendingMinibarSend, triggerMinibarSend, clearMinibarSend, sendMinibarMessage,
   }
 })

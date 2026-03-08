@@ -483,6 +483,10 @@ function createWindow() {
     y: Math.round((screenH - winH) / 2),
     minWidth: 600,
     minHeight: 400,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -500,6 +504,9 @@ function createWindow() {
   }
 
   mainWindow.on('closed', () => { mainWindow = null })
+  mainWindow.on('maximize',   () => mainWindow?.webContents.send('window:maximized', true))
+  mainWindow.on('unmaximize', () => mainWindow?.webContents.send('window:maximized', false))
+  _attachMinibarMovedGuard(mainWindow)
 
   // -- Grant microphone access for voice calls --
   mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
@@ -3780,6 +3787,119 @@ ipcMain.handle('shell:open-external', async (_, url) => {
     return { error: err.message }
   }
 })
+
+ipcMain.handle('window:set-fullscreen', (_, flag) => {
+  mainWindow?.setFullScreen(!!flag)
+})
+
+ipcMain.handle('window:minimize', () => { mainWindow?.minimize() })
+ipcMain.handle('window:maximize', () => {
+  if (!mainWindow) return false
+  if (mainWindow.isMaximized()) mainWindow.unmaximize()
+  else mainWindow.maximize()
+  return mainWindow.isMaximized()
+})
+ipcMain.handle('window:close', () => { app.quit() })
+ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false)
+
+const MINIBAR_DEFAULT_W = 230
+let _minibarIntendedW = MINIBAR_DEFAULT_W
+let _minibarIntendedH = 80
+const MINIBAR_MAX_W = 1400 // sanity cap — anything wider is a stale/corrupt save
+let _preMinibarBounds = null
+// Load persisted minibar bounds from config.json (survives restarts)
+let _lastMinibarBounds = (() => {
+  const cfg = readJSON(CONFIG_FILE, {})
+  const b = cfg._minibarBounds
+  if (b && typeof b.width === 'number' && b.width >= 200 && b.width <= MINIBAR_MAX_W) {
+    return b
+  }
+  if (b) {
+    try { cfg._minibarBounds = null; writeJSON(CONFIG_FILE, cfg) } catch {}
+  }
+  return null
+})()
+ipcMain.handle('window:set-minibar', (_, arg) => {
+  if (!mainWindow) return
+  // arg can be a plain boolean (initial enter/exit) or { enable, height?, width? }
+  const enable = typeof arg === 'object' ? arg.enable : !!arg
+  const { width: sw } = screen.getPrimaryDisplay().workAreaSize
+  if (enable) {
+    const explicitW = typeof arg === 'object' && arg.width
+    const explicitH = typeof arg === 'object' && arg.height
+    const barW = explicitW ? arg.width  : MINIBAR_DEFAULT_W
+    const barH = explicitH ? arg.height : 80
+    if (!_preMinibarBounds) {
+      // Entering minibar mode: save normal bounds, disable OS resize, apply constraints
+      _preMinibarBounds = mainWindow.getBounds()
+      mainWindow.setMinimumSize(200, 80)
+      mainWindow.setResizable(false)
+      mainWindow.setAlwaysOnTop(true, 'floating')
+      if (_lastMinibarBounds) {
+        _minibarIntendedW = _lastMinibarBounds.width
+        _minibarIntendedH = _lastMinibarBounds.height
+        mainWindow.setBounds(_lastMinibarBounds)
+      } else {
+        _minibarIntendedW = barW
+        _minibarIntendedH = barH
+        mainWindow.setBounds({ x: Math.round((sw - barW) / 2), y: 0, width: barW, height: barH })
+      }
+    } else {
+      // Already in minibar mode: only update what was explicitly passed
+      const cur = mainWindow.getBounds()
+      const newW = explicitW ? arg.width : _minibarIntendedW
+      const newH = explicitH ? arg.height : _minibarIntendedH
+      _minibarIntendedW = newW
+      _minibarIntendedH = newH
+      mainWindow.setBounds({ x: cur.x, y: cur.y, width: newW, height: newH })
+    }
+  } else {
+    // Exiting: snapshot and persist current minibar bounds
+    _saveMinibarBounds()
+    mainWindow.setAlwaysOnTop(false)
+    mainWindow.setResizable(true)
+    mainWindow.setMinimumSize(600, 400)
+    if (_preMinibarBounds) mainWindow.setBounds(_preMinibarBounds)
+    _preMinibarBounds = null
+  }
+})
+
+function _saveMinibarBounds() {
+  if (!mainWindow) return
+  // Use intended dimensions — getBounds() can report DPI-drifted sizes that corrupt the restore.
+  const cur = mainWindow.getBounds()
+  _lastMinibarBounds = { x: cur.x, y: cur.y, width: _minibarIntendedW, height: _minibarIntendedH }
+  try {
+    const cfg = readJSON(CONFIG_FILE, {})
+    cfg._minibarBounds = _lastMinibarBounds
+    writeJSON(CONFIG_FILE, cfg)
+  } catch (e) {
+    logger.warn('Failed to save minibar bounds:', e.message)
+  }
+}
+ipcMain.handle('window:save-minibar-bounds', () => _saveMinibarBounds())
+ipcMain.handle('window:set-position', (_, x, y) => {
+  if (!mainWindow) return
+  // Use setBounds with pinned intended dimensions to prevent Windows DPI scaling
+  // from silently growing the window width on each setPosition call.
+  mainWindow.setBounds({ x: Math.round(x), y: Math.round(y), width: _minibarIntendedW, height: _minibarIntendedH })
+})
+
+// Clamp minibar to nearest screen work area after every native drag ends
+function _attachMinibarMovedGuard(win) {
+  win.on('moved', () => {
+    // Only enforce while in minibar mode
+    if (!_preMinibarBounds) return
+    const b = win.getBounds()
+    const display = screen.getDisplayMatching(b)
+    const wa = display.workArea
+    const clampedX = Math.max(wa.x, Math.min(wa.x + wa.width  - _minibarIntendedW,  b.x))
+    const clampedY = Math.max(wa.y, Math.min(wa.y + wa.height - _minibarIntendedH, b.y))
+    if (clampedX !== b.x || clampedY !== b.y) {
+      win.setBounds({ x: clampedX, y: clampedY, width: _minibarIntendedW, height: _minibarIntendedH })
+    }
+  })
+}
 
 // files:open-image-data-uri -- write a base64 data URI to a temp file and open with the OS viewer
 ipcMain.handle('files:open-image-data-uri', async (_, { dataUri, name }) => {

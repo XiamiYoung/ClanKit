@@ -18,6 +18,40 @@
         </button>
       </div>
 
+      <!-- Mode picker (new persona only, before any flow starts) -->
+      <div v-if="!editPersona && !creationMode && !generating && !showPreview" class="wiz-mode-picker">
+        <p class="wiz-mode-hint">How do you want to create this persona?</p>
+        <div class="wiz-mode-cards">
+          <button class="wiz-mode-card" @click="selectMode('guided')">
+            <div class="wiz-mode-icon">
+              <svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+            </div>
+            <span class="wiz-mode-label">Step me through it</span>
+            <span class="wiz-mode-desc">Answer a few questions</span>
+          </button>
+          <button class="wiz-mode-card" @click="selectMode('describe')">
+            <div class="wiz-mode-icon">
+              <svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </div>
+            <span class="wiz-mode-label">Describe it</span>
+            <span class="wiz-mode-desc">You describe, AI builds it</span>
+          </button>
+          <button class="wiz-mode-card" @click="selectMode('random')">
+            <div class="wiz-mode-icon">
+              <svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.5 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.7l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg>
+            </div>
+            <span class="wiz-mode-label">Surprise me</span>
+            <span class="wiz-mode-desc">AI picks something interesting</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Generating spinner -->
+      <div v-if="generating && !showPreview" class="wiz-generating">
+        <div class="wiz-gen-dots"><span></span><span></span><span></span></div>
+        <p class="wiz-gen-label">Generating persona...</p>
+      </div>
+
       <!-- Chat area (hidden in edit mode when no messages) -->
       <div v-if="chatMessages.length > 0" class="wiz-chat" ref="chatEl">
         <div v-for="(msg, i) in chatMessages" :key="i" class="wiz-msg" :class="msg.from">
@@ -159,16 +193,25 @@
             class="wiz-preview-textarea"
           ></textarea>
         </div>
-        <!-- AI Enhance row -->
+        <!-- AI Enhance + Rewrite row -->
         <div class="wiz-enhance-row">
           <AppButton
             size="compact"
-            :disabled="enhancing || !form.generatedPrompt.trim()"
+            :disabled="enhancing || generating || !form.generatedPrompt.trim()"
             :loading="enhancing"
             @click="enhancePrompt"
           >
             <svg v-if="!enhancing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8"/></svg>
             {{ enhancing ? 'Enhancing...' : 'AI Enhance' }}
+          </AppButton>
+          <AppButton
+            size="compact"
+            variant="secondary"
+            :disabled="enhancing || generating"
+            @click="showRewriteInput = !showRewriteInput; rewriteText = ''"
+          >
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            Rewrite from description
           </AppButton>
           <AppButton
             v-if="preEnhancePrompt"
@@ -177,6 +220,35 @@
             @click="revertEnhance"
           >Revert</AppButton>
         </div>
+
+        <!-- Rewrite input (inline, toggled) -->
+        <div v-if="showRewriteInput" class="wiz-rewrite-wrap">
+          <textarea
+            v-model="rewriteText"
+            class="wiz-rewrite-textarea"
+            placeholder='Describe the new persona... e.g. "a grumpy doctor like House MD", "Gordon Ramsay for code reviews", "Yoda but as a DevOps engineer"'
+            rows="3"
+            autofocus
+          ></textarea>
+          <div class="wiz-rewrite-actions">
+            <AppButton
+              size="compact"
+              :loading="generating"
+              :disabled="!rewriteText.trim() || generating"
+              @click="generatePersonaFromAI(rewriteText, true)"
+            >
+              <svg v-if="!generating" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8"/></svg>
+              {{ generating ? 'Generating...' : 'Generate' }}
+            </AppButton>
+            <AppButton
+              size="compact"
+              variant="secondary"
+              :disabled="generating"
+              @click="showRewriteInput = false; rewriteText = ''"
+            >Cancel</AppButton>
+          </div>
+        </div>
+
         <span v-if="aiError" class="wiz-ai-error">{{ aiError }}</span>
       </div>
 
@@ -261,6 +333,12 @@ const inputPlaceholder = ref('')
 // AI Enhance state
 const enhancing = ref(false)
 const preEnhancePrompt = ref(null)
+
+// AI Generation state
+const creationMode = ref(null) // null | 'guided' | 'describe' | 'random'
+const generating = ref(false)
+const showRewriteInput = ref(false)
+const rewriteText = ref('')
 
 
 // Tone options for system personas
@@ -411,6 +489,15 @@ function submitInput(e) {
   const text = inputText.value.trim()
   if (!text) return
 
+  // Describe mode — generate full persona from the user's description
+  if (creationMode.value === 'describe') {
+    pushUser(text)
+    inputText.value = ''
+    awaitingTextInput.value = false
+    generatePersonaFromAI(text, false)
+    return
+  }
+
   const step = conversationStep.value
   const q = flow.value[step]
 
@@ -484,8 +571,13 @@ function onAvatarPicked(avatarId) {
 // ── Finish / Preview ──────────────────────────────────────────────────────
 
 function finishConversation() {
-  form.generatedPrompt = generatePrompt()
-  form.description = form.role || form.name
+  // AI-generated paths set form.generatedPrompt directly — don't overwrite
+  if (!form.generatedPrompt) {
+    form.generatedPrompt = generatePrompt()
+  }
+  if (!form.description) {
+    form.description = form.role || form.name
+  }
   awaitingTextInput.value = false
   showPreview.value = true
 }
@@ -546,6 +638,74 @@ function revertEnhance() {
     form.generatedPrompt = preEnhancePrompt.value
     preEnhancePrompt.value = null
   }
+}
+
+// ── Mode picker ───────────────────────────────────────────────────────────
+
+function selectMode(mode) {
+  creationMode.value = mode
+  if (mode === 'guided') {
+    advanceConversation()
+  } else if (mode === 'describe') {
+    pushAI("What kind of persona do you want? Describe freely — a character, a role, a vibe, a real or fictional person. <strong>The more specific, the better.</strong>")
+    awaitingTextInput.value = true
+    inputPlaceholder.value = 'e.g. "a grumpy doctor like House MD", "Gordon Ramsay for code reviews", "a wise wizard who is secretly terrible at magic"...'
+  } else if (mode === 'random') {
+    generatePersonaFromAI(null, false)
+  }
+}
+
+// ── AI Generation (Describe + Random + Rewrite) ───────────────────────────
+
+function extractJSON(text) {
+  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (match) return match[1].trim()
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start >= 0 && end > start) return text.slice(start, end + 1)
+  return text.trim()
+}
+
+async function generatePersonaFromAI(description, isRewrite) {
+  generating.value = true
+  aiError.value = ''
+  try {
+    const config = JSON.parse(JSON.stringify(configStore.config))
+    const descLine = description
+      ? `The user wants a persona described as: "${description}"\n\n`
+      : 'Generate a completely random, creative, and surprising persona. Be imaginative — pick something unexpected.\n\n'
+
+    const res = await window.electronAPI.enhancePrompt({
+      prompt: `${descLine}Create a detailed AI persona character. Be specific and creative. It can be a fictional character, historical figure, professional archetype, mythological being, movie/TV character, or anything interesting.\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"character name","role":"brief role or identity (5-10 words)","description":"one sentence who they are (max 15 words)","prompt":"300-500 word character prompt — start with 'You are [name]...', include: who they are, how they speak day-to-day, their personality quirks, what they genuinely care about, what annoys them, their background. Make them feel like a real person or character — NOT an AI assistant. No \\"Certainly!\\", no formal helper voice."}\n\nIMPORTANT: the prompt field must make the character feel authentic and human, with real personality.`,
+      config,
+    })
+
+    if (res.success && res.text) {
+      let data
+      try {
+        data = JSON.parse(extractJSON(res.text))
+      } catch {
+        aiError.value = 'AI returned invalid JSON. Try again or use AI Enhance instead.'
+        generating.value = false
+        return
+      }
+      form.name = data.name || form.name || 'Unnamed'
+      form.role = data.role || ''
+      form.description = data.description || ''
+      form.generatedPrompt = data.prompt || ''
+      if (!isRewrite) {
+        form.avatar = `a${Math.floor(Math.random() * 36) + 1}`
+        finishConversation()
+      }
+      showRewriteInput.value = false
+      rewriteText.value = ''
+    } else {
+      aiError.value = res.error || 'Generation failed. Make sure your utility model is configured in Config → AI → Models.'
+    }
+  } catch (err) {
+    aiError.value = err.message || 'Generation failed.'
+  }
+  generating.value = false
 }
 
 // ── AI Description ────────────────────────────────────────────────────────
@@ -614,9 +774,8 @@ onMounted(() => {
     form.modelId = props.editPersona.modelId || ''
     form.voiceId = props.editPersona.voiceId || 'alloy'
     showPreview.value = true
-  } else {
-    advanceConversation()
   }
+  // New persona: show mode picker — advanceConversation() called by selectMode('guided')
 })
 </script>
 
@@ -913,6 +1072,142 @@ onMounted(() => {
   box-sizing: border-box; transition: border-color 0.15s;
 }
 .wiz-preview-textarea:focus { border-color: #4B5563; }
+
+/* -- Mode picker ----------------------------------------------------------- */
+.wiz-mode-picker {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  gap: 1.25rem;
+}
+.wiz-mode-hint {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: #9CA3AF;
+  margin: 0;
+  text-align: center;
+}
+.wiz-mode-cards {
+  display: flex;
+  gap: 0.875rem;
+  width: 100%;
+  max-width: 36rem;
+}
+.wiz-mode-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.25rem 0.875rem;
+  border-radius: 0.875rem;
+  border: 1px solid #2A2A2A;
+  background: #1A1A1A;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.wiz-mode-card:hover {
+  border-color: #4B5563;
+  background: #222222;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.wiz-mode-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.wiz-mode-label {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: #FFFFFF;
+}
+.wiz-mode-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  color: #6B7280;
+  line-height: 1.4;
+}
+
+/* -- Generating spinner ---------------------------------------------------- */
+.wiz-generating {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+.wiz-gen-dots {
+  display: flex;
+  gap: 0.375rem;
+}
+.wiz-gen-dots span {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #4B5563;
+  animation: wiz-bounce 1s ease-in-out infinite;
+}
+.wiz-gen-dots span:nth-child(2) { animation-delay: 0.15s; }
+.wiz-gen-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes wiz-bounce {
+  0%, 80%, 100% { transform: translateY(0); background: #4B5563; }
+  40% { transform: translateY(-6px); background: #9CA3AF; }
+}
+.wiz-gen-label {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  color: #6B7280;
+  margin: 0;
+}
+
+/* -- Rewrite input --------------------------------------------------------- */
+.wiz-rewrite-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: #111111;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.625rem;
+  flex-shrink: 0;
+}
+.wiz-rewrite-textarea {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.5rem;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  color: #FFFFFF;
+  background: #1A1A1A;
+  outline: none;
+  resize: none;
+  line-height: 1.5;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.wiz-rewrite-textarea:focus { border-color: #4B5563; }
+.wiz-rewrite-textarea::placeholder { color: #4B5563; }
+.wiz-rewrite-actions {
+  display: flex;
+  gap: 0.5rem;
+}
 
 /* -- Enhance row ----------------------------------------------------------- */
 .wiz-ai-error {

@@ -70,7 +70,7 @@
       <nav class="personas-nav" :style="{ width: navWidth + 'px' }">
 
         <!-- System section -->
-        <div class="nav-section nav-section--first">
+        <div class="nav-section nav-section--half nav-section--first">
           <div class="nav-section-header">
             <span class="nav-section-label">System</span>
           </div>
@@ -132,11 +132,8 @@
 
         </div>
 
-        <!-- Divider -->
-        <div class="nav-divider"></div>
-
         <!-- User section -->
-        <div class="nav-section">
+        <div class="nav-section nav-section--half nav-section--user">
           <div class="nav-section-header">
             <span class="nav-section-label">User</span>
           </div>
@@ -762,15 +759,27 @@ function getAvatarGradient(persona) {
   flex-shrink: 0;
   background: #FFFFFF;
   border-right: 1px solid #E5E5EA;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+/* Each half section takes exactly 50% of nav height, scrolls independently */
+.nav-section--half {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   scrollbar-width: thin;
 }
 
 .nav-section--first { padding-top: 0.625rem; }
+
+/* Top border for user section acting as divider */
+.nav-section--user {
+  border-top: 1px solid #E5E5EA;
+}
 
 /* ── Nav resize handle ───────────────────────────────────────────────────── */
 .nav-resize-handle {
@@ -829,11 +838,7 @@ function getAvatarGradient(persona) {
 .nav-section-add-btn:active {
   transform: translateY(0);
 }
-.nav-divider {
-  height: 1px;
-  background: #E5E5EA;
-  margin: 0.375rem 0.25rem;
-}
+
 
 /* nav item wrapper — needed for action icon reveal on hover */
 .nav-item-wrap {
