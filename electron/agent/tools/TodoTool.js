@@ -12,7 +12,8 @@ class TodoTool extends BaseTool {
   constructor() {
     super(
       'todo_manager',
-      'Manage a task list for complex, multi-step work. Create, update, and track progress on todos. Use this to plan before executing large tasks.'
+      'Manage a task list for complex, multi-step work. Create, update, and track progress on todos. Use this to plan before executing large tasks.',
+      'todo_manager'
     )
     // In-memory todos per chat — keyed by chatId
     this.todosPerChat = new Map()
@@ -40,8 +41,8 @@ class TodoTool extends BaseTool {
     return this.todosPerChat.get(chatId)
   }
 
-  async execute(input) {
-    const { action, chatId = 'default', id, title, status, details } = input
+  async execute(toolCallId, params, signal, onUpdate) {
+    const { action, chatId = 'default', id, title, status, details } = params
     const todos = this._getTodos(chatId)
 
     switch (action) {
@@ -50,46 +51,46 @@ class TodoTool extends BaseTool {
         const item = { id: newId, title: title || 'Untitled', status: 'pending', details: details || '', createdAt: Date.now() }
         todos.push(item)
         logger.agent('TodoTool: added', { chatId, item })
-        return { success: true, todo: item, totalTodos: todos.length }
+        return this._ok(`Added todo #${item.id}: ${item.title}`, { todo: item, totalTodos: todos.length })
       }
       case 'update': {
         const item = todos.find(t => t.id === id)
-        if (!item) return { error: `Todo #${id} not found` }
+        if (!item) return this._err(`Todo #${id} not found`)
         if (title)   item.title   = title
         if (status)  item.status  = status
         if (details) item.details = details
-        return { success: true, todo: item }
+        return this._ok(`Updated todo #${item.id}: ${item.title} [${item.status}]`, { todo: item })
       }
       case 'complete': {
         const item = todos.find(t => t.id === id)
-        if (!item) return { error: `Todo #${id} not found` }
+        if (!item) return this._err(`Todo #${id} not found`)
         item.status = 'completed'
-        return { success: true, todo: item }
+        return this._ok(`Completed todo #${item.id}: ${item.title}`, { todo: item })
       }
       case 'remove': {
         const idx = todos.findIndex(t => t.id === id)
-        if (idx === -1) return { error: `Todo #${id} not found` }
+        if (idx === -1) return this._err(`Todo #${id} not found`)
         const removed = todos.splice(idx, 1)[0]
-        return { success: true, removed }
+        return this._ok(`Removed todo #${removed.id}: ${removed.title}`, { removed })
       }
       case 'list': {
-        return {
-          todos: todos.map(t => ({ ...t })),
-          summary: {
-            total: todos.length,
-            pending:     todos.filter(t => t.status === 'pending').length,
-            in_progress: todos.filter(t => t.status === 'in_progress').length,
-            completed:   todos.filter(t => t.status === 'completed').length,
-            blocked:     todos.filter(t => t.status === 'blocked').length
-          }
+        const summary = {
+          total:       todos.length,
+          pending:     todos.filter(t => t.status === 'pending').length,
+          in_progress: todos.filter(t => t.status === 'in_progress').length,
+          completed:   todos.filter(t => t.status === 'completed').length,
+          blocked:     todos.filter(t => t.status === 'blocked').length
         }
+        const lines = todos.map(t => `[${t.status}] #${t.id}: ${t.title}${t.details ? ` — ${t.details}` : ''}`)
+        const text = lines.length ? lines.join('\n') : 'No todos.'
+        return this._ok(text, { summary, todos: todos.map(t => ({ ...t })) })
       }
       case 'clear': {
         this.todosPerChat.set(chatId, [])
-        return { success: true, message: 'All todos cleared' }
+        return this._ok('All todos cleared.')
       }
       default:
-        return { error: `Unknown action: ${action}` }
+        return this._err(`Unknown action: ${action}`)
     }
   }
 

@@ -25,6 +25,47 @@ const { PermissionGate }   = require('./tools/PermissionGate')
 
 // No hardcoded skill prompts — they arrive dynamically from the UI store
 
+// ── Tool result helpers ──────────────────────────────────────────────────────
+
+/**
+ * Serialize a tool result for the LLM context.
+ * Tools now return { content: [{type:'text', text}], details } (unified format).
+ * Legacy tools (MCP, HTTP, subagent, etc.) still return plain objects — handle both.
+ * Hard cap at 100 000 chars to protect context window.
+ */
+function serializeToolResult(result, toolName) {
+  if (!result) return '{}'
+
+  // Unified format from BaseTool subclasses
+  if (Array.isArray(result.content) && result.content.length > 0 && result.content[0].type === 'text') {
+    let text = result.content[0].text
+    if (text.length > 100000) {
+      logger.warn(`Tool result too large (${text.length} chars), truncating: ${toolName}`)
+      text = text.slice(0, 100000) + '\n[truncated]'
+    }
+    return text
+  }
+
+  // Legacy plain-object format (MCP, HTTP, subagent, built-ins like load_skill)
+  let serialized = JSON.stringify(result)
+  if (serialized.length > 100000) {
+    logger.warn(`Tool result too large (${serialized.length} chars), truncating: ${toolName}`)
+    serialized = JSON.stringify({ success: result?.success, data: `[Result truncated: ${serialized.length} chars original.]` })
+  }
+  return serialized
+}
+
+/**
+ * Extract the UI-facing result to pass to onChunk.
+ * For unified format, expose details (structured data) alongside text.
+ */
+function uiResult(result) {
+  if (Array.isArray(result?.content) && result.content[0]?.type === 'text') {
+    return { text: result.content[0].text, ...result.details }
+  }
+  return result
+}
+
 // ── Soul Memory Helpers ──────────────────────────────────────────────────────
 const SOUL_KEY_SECTIONS = ['Preferences', 'Communication', 'Technical', 'Projects', 'Personal']
 
@@ -557,15 +598,23 @@ ${participantProfiles}
 ---
 Each participant runs independently and sends their own separate message to the user. YOU ARE ONLY "${personaName}".
 
+## YOUR TASK SCOPE — READ THIS FIRST
+When the user's message uses "@Name: ..." format to assign tasks to multiple participants:
+- Find the section starting with "@${personaName}:" — that is YOUR ONLY task.
+- Every other "@OtherName: ..." section belongs to someone else. TREAT THOSE SECTIONS AS IF THEY DO NOT EXIST.
+- Do NOT read, execute, reference, or act on any section that starts with a different @Name.
+- If no "@${personaName}:" section exists, respond only to parts of the message directed at you.
+
 RULES YOU MUST FOLLOW:
 1. Respond ONLY as yourself — your voice, your perspective, your expertise.
 2. NEVER write dialogue, quotes, or messages for other participants. Never write "${otherNames[0] || 'OtherName'}:" or simulate what others would say.
 3. DO NOT prefix your response with your own name. No "${personaName}:" label. Just speak directly.
 4. You may reference other participants by name (e.g. "Mark could help with that") but never speak AS them.
 5. Keep your response concise and relevant to your role.
-6. Stay in your assigned role. If the user designated you as a developer, only write and fix code — do not review or critique other participants' code. If you are a reviewer, only review — do not write fixes. Respect the division of labor the user set up. NEVER simulate, fabricate, or pre-generate another participant's work. If your role depends on someone else's output (e.g. you are a reviewer but the developer has not submitted code yet), just acknowledge readiness and wait — do NOT invent placeholder content to act on.
-7. When you want another participant to respond next (e.g. to review, continue, or take action), you MUST use the @Name format: ${otherNames.map(n => '@' + n).join(', ')}. Without the @ prefix the system cannot detect the handoff and no one will respond.
-8. Do NOT @mention someone just to confirm, check in, or ask "are you done?". Only @mention when you have a concrete request that requires them to take action (e.g. review code, fix a bug, write something). Idle confirmation @mentions create infinite loops.`
+6. Stay in your assigned role. NEVER execute shell commands, write files, or take actions for tasks that were assigned to OTHER participants — even if you think it would be helpful. Each participant handles ONLY the work explicitly assigned to them. NEVER simulate, fabricate, or pre-generate another participant's work. If your role depends on someone else's output (e.g. you are a reviewer but the developer has not submitted code yet), just acknowledge readiness and wait — do NOT invent placeholder content to act on.
+7. When you want another participant to respond next (e.g. to review, continue, or take action), you MUST use the @Name format: ${otherNames.map(n => '@' + n).join(', ')}. Without the @ prefix the system cannot detect the handoff and no one will respond. STOP IMMEDIATELY after the @mention — do NOT write anything after it, do NOT simulate or predict what the other participant will say or do.
+8. Do NOT @mention someone just to confirm, check in, or ask "are you done?". Only @mention when you have a concrete request that requires them to take action (e.g. review code, fix a bug, write something). Idle confirmation @mentions create infinite loops.
+9. CRITICAL — avoid redundant @mentions: if the user's message already addressed multiple participants each with their own independent task, those participants are ALREADY running in parallel. Do NOT @mention them when you finish — they do not need you to "hand off" or "signal" them. Only @mention someone if YOUR output is a required INPUT for their task (e.g. you wrote code they must now test). If the tasks are independent, just finish and stop.`
     }
 
     // ── RAG Knowledge Injection ──
@@ -746,7 +795,21 @@ RULES:
     }
 
     const systemPrompt = this.buildSystemPrompt(enabledAgents, enabledSkills, personaPrompts, userSoulContent, systemSoulContent, participantSouls)
-    const conversationMessages = this._buildConversationMessages(messages, currentAttachments)
+
+    // If a per-persona assigned task was dispatched, replace the last user message
+    // with just that task so the LLM never sees other personas' task sections.
+    let effectiveMessages = messages
+    if (personaPrompts?.assignedTask) {
+      const lastUserIdx = [...messages].reverse().findIndex(m => m.role === 'user')
+      if (lastUserIdx !== -1) {
+        const realIdx = messages.length - 1 - lastUserIdx
+        effectiveMessages = messages.map((m, i) =>
+          i === realIdx ? { ...m, content: personaPrompts.assignedTask } : m
+        )
+      }
+    }
+
+    const conversationMessages = this._buildConversationMessages(effectiveMessages, currentAttachments)
     let finalText = ''
 
     // Gather all tool definitions: registry + subagent + background tasks
@@ -1218,9 +1281,9 @@ RULES:
                         logger.agent('todo auto-update', { todoId: toolInput.todo_id, chatId: todoChatId, status: todoStatus })
                         const todoInput = { action: 'update', chatId: todoChatId, id: toolInput.todo_id, status: todoStatus }
                         const todoResult = await this.toolRegistry.execute('todo_manager', todoInput)
-                        logger.agent('todo auto-update result', { todoId: toolInput.todo_id, result: JSON.stringify(todoResult).slice(0, 120) })
+                        logger.agent('todo auto-update result', { todoId: toolInput.todo_id, result: JSON.stringify(uiResult(todoResult)).slice(0, 120) })
                         onChunk({ type: 'tool_call', name: 'todo_manager', input: todoInput })
-                        onChunk({ type: 'tool_result', name: 'todo_manager', result: todoResult })
+                        onChunk({ type: 'tool_result', name: 'todo_manager', result: uiResult(todoResult) })
                       } catch (e) { logger.error('todo auto-update failed', e.message) }
                     }
                   } else if (toolName === 'dispatch_subagents') {
@@ -1268,18 +1331,13 @@ RULES:
                     if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
                       result = permCheck.result
                     } else {
-                      result = await this.toolRegistry.execute(toolName, toolInput)
+                      result = await this.toolRegistry.execute(toolName, toolInput, block.id)
                     }
                   }
                   const mcpImages = result?._mcpImages
                   if (mcpImages) delete result._mcpImages
-                  onChunk({ type: 'tool_result', name: toolName, result, ...(mcpImages ? { images: mcpImages } : {}) })
-                  let serialized = JSON.stringify(result)
-                  if (serialized.length > 100000) {
-                    logger.warn(`Tool result too large (${serialized.length} chars), truncating: ${toolName}`)
-                    serialized = JSON.stringify({ success: result?.success, data: `[Result truncated: ${serialized.length} chars original. Check UI for full output.]` })
-                  }
-                  return { tool_call_id: block.id, content: serialized }
+                  onChunk({ type: 'tool_result', name: toolName, result: uiResult(result), ...(mcpImages ? { images: mcpImages } : {}) })
+                  return { tool_call_id: block.id, content: serializeToolResult(result, toolName) }
                 })
               ),
               this._abortPromise()
@@ -1477,9 +1535,9 @@ RULES:
                         logger.agent('todo auto-update', { todoId: toolInput.todo_id, chatId: todoChatId, status: todoStatus })
                         const todoInput = { action: 'update', chatId: todoChatId, id: toolInput.todo_id, status: todoStatus }
                         const todoResult = await this.toolRegistry.execute('todo_manager', todoInput)
-                        logger.agent('todo auto-update result', { todoId: toolInput.todo_id, result: JSON.stringify(todoResult).slice(0, 120) })
+                        logger.agent('todo auto-update result', { todoId: toolInput.todo_id, result: JSON.stringify(uiResult(todoResult)).slice(0, 120) })
                         onChunk({ type: 'tool_call', name: 'todo_manager', input: todoInput })
-                        onChunk({ type: 'tool_result', name: 'todo_manager', result: todoResult })
+                        onChunk({ type: 'tool_result', name: 'todo_manager', result: uiResult(todoResult) })
                       } catch (e) { logger.error('todo auto-update failed', e.message) }
                     }
                   } else if (toolName === 'dispatch_subagents') {
@@ -1527,20 +1585,14 @@ RULES:
                     if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
                       result = permCheck.result
                     } else {
-                      result = await this.toolRegistry.execute(toolName, toolInput)
+                      result = await this.toolRegistry.execute(toolName, toolInput, block.id)
                     }
                   }
 
                   const mcpImages = result?._mcpImages
                   if (mcpImages) delete result._mcpImages
-                  onChunk({ type: 'tool_result', name: toolName, result, ...(mcpImages ? { images: mcpImages } : {}) })
-
-                  let serialized = JSON.stringify(result)
-                  if (serialized.length > 100000) {
-                    logger.warn(`Tool result too large (${serialized.length} chars), truncating: ${toolName}`)
-                    serialized = JSON.stringify({ success: result?.success, data: `[Result truncated: ${serialized.length} chars original. Check UI for full output.]` })
-                  }
-                  return { type: 'tool_result', tool_use_id: block.id, content: serialized }
+                  onChunk({ type: 'tool_result', name: toolName, result: uiResult(result), ...(mcpImages ? { images: mcpImages } : {}) })
+                  return { type: 'tool_result', tool_use_id: block.id, content: serializeToolResult(result, toolName) }
                 })
               ),
               this._abortPromise()

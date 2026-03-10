@@ -7,6 +7,14 @@
  */
 const { logger } = require('../../logger')
 
+/** Serialize a tool result (unified or legacy format) for LLM context. */
+function serializeToolResult(result) {
+  if (Array.isArray(result?.content) && result.content[0]?.type === 'text') {
+    return result.content[0].text
+  }
+  return JSON.stringify(result)
+}
+
 class SubAgentManager {
   constructor(anthropicClient, toolRegistry, isOpenAI = false) {
     this.anthropicClient = anthropicClient
@@ -33,7 +41,8 @@ class SubAgentManager {
                 specialization: { type: 'string', enum: ['researcher', 'coder', 'analyst', 'reviewer'], description: 'Sub-agent specialization' },
                 context:        { type: 'string', description: 'Relevant context the sub-agent needs' },
                 max_turns:      { type: 'number', description: 'Maximum turns (default 5, max 10)' },
-                todo_id:        { type: 'number', description: 'Optional: todo item ID to mark as completed when this agent finishes (auto-updates the default todo list)' }
+                todo_id:        { type: 'number', description: 'Optional: todo item ID to mark as completed when this agent finishes' },
+                todo_chat_id:   { type: 'string', description: 'Optional: chatId scope of the todo item (required when todos were created with a custom chatId)' }
               },
               required: ['task', 'specialization']
             }
@@ -56,7 +65,8 @@ class SubAgentManager {
           specialization: { type: 'string', enum: ['researcher', 'coder', 'analyst', 'reviewer'], description: 'Sub-agent specialization' },
           context:     { type: 'string', description: 'Relevant context the sub-agent needs' },
           max_turns:   { type: 'number', description: 'Maximum turns for the sub-agent (default 5, max 10)' },
-          todo_id:      { type: 'number', description: 'Optional: todo item ID to mark as completed when this sub-agent finishes (auto-updates the default todo list)' }
+          todo_id:      { type: 'number', description: 'Optional: todo item ID to mark as completed when this sub-agent finishes' },
+          todo_chat_id: { type: 'string', description: 'Optional: chatId scope of the todo item (required when todos were created with a custom chatId)' }
         },
         required: ['task', 'specialization']
       }
@@ -81,13 +91,13 @@ class SubAgentManager {
           try {
             const todoStatus = result.success ? 'completed' : 'blocked'
             const todoTool = toolRegistry.getTodoTool()
-            const todoChatId = todoTool.findChatIdForTodo(agentInput.todo_id) || 'default'
+            const todoChatId = agentInput.todo_chat_id || todoTool.findChatIdForTodo(agentInput.todo_id) || 'default'
             logger.agent('todo auto-update (batch)', { todoId: agentInput.todo_id, chatId: todoChatId, status: todoStatus })
             const todoInput = { action: 'update', chatId: todoChatId, id: agentInput.todo_id, status: todoStatus }
             const todoResult = await toolRegistry.execute('todo_manager', todoInput)
-            logger.agent('todo auto-update result (batch)', { todoId: agentInput.todo_id, result: JSON.stringify(todoResult).slice(0, 120) })
+            logger.agent('todo auto-update result (batch)', { todoId: agentInput.todo_id, result: serializeToolResult(todoResult).slice(0, 120) })
             onChunk({ type: 'tool_call', name: 'todo_manager', input: todoInput })
-            onChunk({ type: 'tool_result', name: 'todo_manager', result: todoResult })
+            onChunk({ type: 'tool_result', name: 'todo_manager', result: serializeToolResult(todoResult) })
           } catch (e) { logger.error('todo auto-update failed (batch)', e.message) }
         }
         return { index: idx, task: (agentInput.task || '').slice(0, 80), ...result }
@@ -155,11 +165,11 @@ class SubAgentManager {
             for (const tc of choice.message.tool_calls || []) {
               let parsedArgs = {}
               try { parsedArgs = JSON.parse(tc.function.arguments || '{}') } catch {}
-              const result = await this.toolRegistry.execute(tc.function.name, parsedArgs)
+              const result = await this.toolRegistry.execute(tc.function.name, parsedArgs, tc.id)
               messages.push({
                 role: 'tool',
                 tool_call_id: tc.id,
-                content: JSON.stringify(result)
+                content: serializeToolResult(result)
               })
             }
           } else {
@@ -194,11 +204,11 @@ class SubAgentManager {
             const toolResults = []
             for (const block of response.content) {
               if (block.type === 'tool_use') {
-                const result = await this.toolRegistry.execute(block.name, block.input)
+                const result = await this.toolRegistry.execute(block.name, block.input, block.id)
                 toolResults.push({
                   type: 'tool_result',
                   tool_use_id: block.id,
-                  content: JSON.stringify(result)
+                  content: serializeToolResult(result)
                 })
               }
             }

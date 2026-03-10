@@ -4579,6 +4579,14 @@ function handleChunk(cId, chunk) {
     if (msgId) {
       const msg = targetChat.messages.find(m => m.id === msgId)
       if (msg) {
+        // Final flush: ensure msg.content mirrors segments text before collaboration
+        // scanning. flushSegments syncs during streaming, but do it one last time
+        // to guarantee consistency when persona_end fires.
+        const finalSegs = perChatStreamingSegments.get(personaKey) || []
+        if (finalSegs.length > 0) {
+          msg.segments = finalSegs.map(s => ({ ...s }))
+          msg.content = finalSegs.filter(s => s.type === 'text').map(s => s.content).join('')
+        }
         msg.streaming = false
         if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
         // If content is empty, show indicator
@@ -4621,23 +4629,29 @@ function handleChunk(cId, chunk) {
       targetChat.currentToolCall = null
     }
     const toolSeg = lastToolSeg(routeKey)
+    const outputText = typeof chunk.result === 'string' ? chunk.result : JSON.stringify(chunk.result, null, 2)
     if (toolSeg) {
-      toolSeg.output = typeof chunk.result === 'string' ? chunk.result : JSON.stringify(chunk.result, null, 2)
-      // Images — push a single inline image segment (deduplicated)
-      if (chunk.images && chunk.images.length > 0) {
-        // Deduplicate images by size+type (same base64 length + mimeType = same image)
-        const seen = new Set()
-        const unique = chunk.images.filter(img => {
-          const key = img.url || `${img.mimeType}:${(img.data || '').length}`
-          if (seen.has(key)) return false
-          seen.add(key)
-          return true
-        })
-        if (unique.length > 0) {
-          const imgSegments = perChatStreamingSegments.get(routeKey) || []
-          imgSegments.push({ type: 'image', images: unique, source: chunk.name })
-          perChatStreamingSegments.set(routeKey, imgSegments)
-        }
+      toolSeg.output = outputText
+    } else if (chunk.name) {
+      // No pending tool seg — this result arrived out-of-band (e.g. subagent auto todo update).
+      // Append a fully-formed tool segment so the todo panel and tool list stay up to date.
+      const segments = perChatStreamingSegments.get(routeKey) || []
+      segments.push({ type: 'tool', name: chunk.name, input: chunk.input ?? {}, output: outputText })
+      perChatStreamingSegments.set(routeKey, segments)
+    }
+    // Images — push a single inline image segment (deduplicated)
+    if (chunk.images && chunk.images.length > 0) {
+      const seen = new Set()
+      const unique = chunk.images.filter(img => {
+        const key = img.url || `${img.mimeType}:${(img.data || '').length}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      if (unique.length > 0) {
+        const imgSegments = perChatStreamingSegments.get(routeKey) || []
+        imgSegments.push({ type: 'image', images: unique, source: chunk.name })
+        perChatStreamingSegments.set(routeKey, imgSegments)
       }
     }
     flushSegments(routeKey)
@@ -4883,8 +4897,10 @@ async function triggerPersonaCollaboration(chatId, groupIds, cfg, userPersonaPro
   // For each new message, resolve which @mentioned personas are actually being
   // addressed (vs. merely referenced). Mirrors the user→persona routing logic.
   const nextRespondingSet = new Set()
-  for (const msg of newMessages) {
-    const { mentions } = parseMentions(msg.content || '', groupPersonas)
+  for (let msgIdx = 0; msgIdx < newMessages.length; msgIdx++) {
+    const msg = newMessages[msgIdx]
+    const msgText = msg.content || (msg.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
+    const { mentions } = parseMentions(msgText, groupPersonas)
     // Exclude the sender itself
     const others = mentions.filter(id => id !== msg.personaId)
     if (others.length === 0) continue
@@ -4908,7 +4924,13 @@ async function triggerPersonaCollaboration(chatId, groupIds, cfg, userPersonaPro
       }
     }
 
-    for (const id of addressees) nextRespondingSet.add(id)
+    for (const id of addressees) {
+      // Only trigger this persona if they have NOT already responded after this message.
+      // This prevents double-runs when a persona ran in the initial group round and
+      // a peer @mentioned them as a courtesy — their reply already exists in newMessages.
+      const alreadyRepliedAfter = newMessages.slice(msgIdx + 1).some(m => m.personaId === id)
+      if (!alreadyRepliedAfter) nextRespondingSet.add(id)
+    }
   }
 
   if (nextRespondingSet.size === 0) return  // No more collaboration needed
@@ -4935,16 +4957,31 @@ async function triggerPersonaCollaboration(chatId, groupIds, cfg, userPersonaPro
     const persona = personasStore.getPersonaById(pid)
     if (!persona) continue
 
-    // Rebuild apiMessages before each persona so it sees prior personas' output
+    // Rebuild apiMessages before each persona so it sees prior personas' output.
+    // Use segments text as fallback when content is empty (group chat personas
+    // accumulate text in segments; content is synced by flushSegments but may lag).
     const seqApiMessages = targetChat.messages
-      .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
-      .map(m => ({ role: m.role, content: m.content }))
+      .filter(m => {
+        if (m.streaming) return false
+        if (m.role === 'user') return !!m.content
+        if (m.role === 'assistant') {
+          const text = m.content || (m.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
+          return !!text
+        }
+        return false
+      })
+      .map(m => ({
+        role: m.role,
+        content: m.content || (m.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
+      }))
 
-    // Ensure conversation ends with a user message (API requirement)
+    // Ensure conversation ends with a user message (API requirement).
+    // Include the last assistant message's content so the addressed persona has full context.
     if (seqApiMessages.length > 0 && seqApiMessages[seqApiMessages.length - 1].role === 'assistant') {
+      const lastMsg = seqApiMessages[seqApiMessages.length - 1]
       seqApiMessages.push({
         role: 'user',
-        content: `[${persona.name}, you have been addressed above. Please respond now as ${persona.name}.]`
+        content: `${lastMsg.content}\n\n[${persona.name}, you have been addressed above. Please respond now.]`
       })
     }
 
@@ -5273,6 +5310,34 @@ async function sendMessage() {
 
       // Build personaRuns[]
       const personaRuns = buildPersonaRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPrompt, usrPersona)
+
+      // Dispatch: utility model extracts per-persona task assignments so each agent
+      // only sees its own task, preventing cross-contamination of the full message.
+      const lastUserContent = apiMessages.findLast(m => m.role === 'user')?.content || ''
+      if (lastUserContent && window.electronAPI?.dispatchGroupTasks) {
+        try {
+          const dispatchPersonas = respondingIds.map(id => {
+            const p = personasStore.getPersonaById(id)
+            return p ? { id, name: p.name } : null
+          }).filter(Boolean)
+          const { dispatched } = await window.electronAPI.dispatchGroupTasks({
+            message: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
+            personas: dispatchPersonas,
+            config: JSON.parse(JSON.stringify(cfg)),
+          })
+          if (dispatched?.length > 0) {
+            for (const run of personaRuns) {
+              const d = dispatched.find(x => x.personaId === run.personaId)
+              if (d?.assignedTask) {
+                run.personaPrompts = { ...run.personaPrompts, assignedTask: d.assignedTask }
+                dbg(`Dispatched task for ${run.personaName}: "${d.assignedTask.slice(0, 80)}"`)
+              }
+            }
+          }
+        } catch (err) {
+          dbg(`dispatch-group-tasks failed (non-fatal): ${err.message}`, 'warn')
+        }
+      }
 
       dbg(`Group run: ${personaRuns.length} persona(s) responding: ${personaRuns.map(r => r.personaName).join(', ')}`)
 

@@ -369,14 +369,9 @@ function injectFilePathChips(html) {
       continue
     }
     if (insidePre > 0 || insideA > 0) continue
-    // Replace file paths in this text node — path text + small open-folder button after it
-    parts[i] = p.replace(FILE_PATH_RE, (match) => {
-      const escaped = match.replace(/"/g, '&quot;')
-      return `<span class="file-path-chip">${match}</span><span class="file-path-open-btn" data-path="${escaped}" title="Open in file explorer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>`
-    })
+    // File paths are rendered as plain text (no chip/button decoration)
   }
-  // Unwrap <code> tags that now contain only a file-path chip (from backtick-wrapped paths)
-  return parts.join('').replace(/<code>(<span class="file-path-chip">.*?<\/span>)<\/code>/g, '$1')
+  return parts.join('')
 }
 
 function renderMarkdown(text) {
@@ -412,22 +407,8 @@ function renderMarkdown(text) {
   } catch { return String(text) }
 }
 
-// ── Click handler for code-copy + file-path open (event delegation) ──────────
+// ── Click handler for code-copy (event delegation) ───────────────────────────
 function handleContentClick(e) {
-  // File path open button — directories open directly, files open parent folder
-  const fpBtn = e.target.closest('.file-path-open-btn')
-  if (fpBtn) {
-    const filePath = fpBtn.dataset.path
-    if (filePath) {
-      const isDir = /[/\\]$/.test(filePath)
-      if (isDir && window.electronAPI?.openFile) {
-        window.electronAPI.openFile(filePath)
-      } else if (window.electronAPI?.showInFolder) {
-        window.electronAPI.showInFolder(filePath)
-      }
-    }
-    return
-  }
   // Code block copy button
   const btn = e.target.closest('.code-copy-btn')
   if (!btn) return
@@ -799,52 +780,4 @@ function diffMarker(type) {
   font-weight: 600;
 }
 
-/* ── File path chip (inline styled text) ──────────────────────────────────── */
-:deep(.file-path-chip) {
-  display: inline;
-  padding: 0.125rem 0.375rem;
-  margin: 0 0.0625rem;
-  border-radius: 0.3125rem;
-  background: rgba(0, 0, 0, 0.05);
-  border: 1px solid var(--border, #E5E5EA);
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.85em;
-  color: inherit;
-}
-/* ── File path open button (small icon after the path, macOS blue) ─────────── */
-:deep(.file-path-open-btn) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.375rem;
-  height: 1.375rem;
-  margin-left: 0.1875rem;
-  border-radius: 0.3125rem;
-  background: linear-gradient(135deg, #56CCF2 0%, #2F80ED 100%);
-  color: #FFFFFF;
-  cursor: pointer;
-  vertical-align: middle;
-  transition: all 0.15s ease;
-  box-shadow: 0 1px 4px rgba(47,128,237,0.25);
-}
-:deep(.file-path-open-btn:hover) {
-  background: linear-gradient(135deg, #6DD5F5 0%, #4A9AF5 100%);
-  box-shadow: 0 2px 8px rgba(47,128,237,0.35);
-}
-:deep(.file-path-open-btn svg) {
-  display: block;
-}
-/* User bubble overrides (light text on dark background) */
-.user-content :deep(.file-path-chip) {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #FFFFFF;
-}
-.user-content :deep(.file-path-open-btn) {
-  background: rgba(255, 255, 255, 0.2);
-  box-shadow: none;
-}
-.user-content :deep(.file-path-open-btn:hover) {
-  background: rgba(255, 255, 255, 0.35);
-}
 </style>

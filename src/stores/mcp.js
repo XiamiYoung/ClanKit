@@ -6,7 +6,11 @@ import { v4 as uuidv4 } from 'uuid'
  * MCP Store — manages MCP server configurations.
  *
  * On-disk format (array):
- * [{ id, name, description, command, args, env, enabled, updatedAt }]
+ * [{ id, name, description, command, args, env, url, enabled, updatedAt }]
+ *
+ * Transport type is inferred:
+ *  - url present  → HTTP/SSE remote server
+ *  - url absent   → stdio local subprocess (command required)
  *
  * Legacy dict format (Claude Desktop style) is auto-migrated on load:
  * {"server-name":{"command":"npx","args":["-y","pkg"],"env":{}}}
@@ -28,6 +32,7 @@ export const useMcpStore = defineStore('mcp', () => {
         command: s.command || '',
         args: s.args || [],
         env: s.env || {},
+        url: s.url || '',
         description: s.description || '',
         enabled: s.enabled !== false,
         updatedAt: s.updatedAt || Date.now(),

@@ -86,6 +86,7 @@
           <NavItem to="/mcp"       :icon="IconMcp"       label="MCP Servers" :isCollapsed="isCollapsed" />
           <NavItem to="/knowledge" :icon="IconKnowledge" label="Knowledge"   :isCollapsed="isCollapsed" />
         </div>
+        <NavItem to="/notes" :icon="IconNotes" label="AI Docs"   :isCollapsed="isCollapsed" />
 
       </div>
 
@@ -96,7 +97,6 @@
         </div>
         <NavItem to="/personas"  :icon="IconPersonas"  label="Personas"    :isCollapsed="isCollapsed" />
         <NavItem to="/recipes"   :icon="IconRecipes"   label="Schedulers"  :isCollapsed="isCollapsed" />
-        <NavItem to="/notes" :icon="IconNotes" label="AI Docs"   :isCollapsed="isCollapsed" />
         <NavItem to="/news"  :icon="IconNews"  label="News"      :isCollapsed="isCollapsed" />
       </div>
 

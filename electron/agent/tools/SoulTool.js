@@ -115,7 +115,8 @@ class SoulUpdateTool extends BaseTool {
   constructor(soulsDir) {
     super(
       'update_soul_memory',
-      'Update memory for a user or system persona. For user personas (persona_type: "users"): store user preferences, facts, habits, and personal context. For system personas (persona_type: "system"): store behavioral learnings, tone/format preferences, and domain context that help this AI persona respond better. Always check existing memory with read_soul_memory before adding duplicates.'
+      'Update memory for a user or system persona. For user personas (persona_type: "users"): store user preferences, facts, habits, and personal context. For system personas (persona_type: "system"): store behavioral learnings, tone/format preferences, and domain context that help this AI persona respond better. Always check existing memory with read_soul_memory before adding duplicates.',
+      'update_soul_memory'
     )
     this.soulsDir = soulsDir
   }
@@ -136,11 +137,11 @@ class SoulUpdateTool extends BaseTool {
     }
   }
 
-  async execute(input) {
-    const { persona_id, persona_type, section, action, entry, old_entry, persona_name } = input
+  async execute(toolCallId, params, signal, onUpdate) {
+    const { persona_id, persona_type, section, action, entry, old_entry, persona_name } = params
 
     if (!persona_id || !persona_type || !section || !action || !entry) {
-      return { success: false, error: 'Missing required fields: persona_id, persona_type, section, action, entry' }
+      return this._err('Missing required fields: persona_id, persona_type, section, action, entry')
     }
 
     const dir = path.join(this.soulsDir, persona_type)
@@ -177,7 +178,7 @@ class SoulUpdateTool extends BaseTool {
       }
       case 'update': {
         if (!old_entry) {
-          return { success: false, error: 'update action requires old_entry field' }
+          return this._err('update action requires old_entry field')
         }
         let found = false
         for (let i = 0; i < sectionLines.length; i++) {
@@ -188,7 +189,7 @@ class SoulUpdateTool extends BaseTool {
           }
         }
         if (!found) {
-          return { success: false, error: `Could not find entry matching: "${old_entry}"` }
+          return this._err(`Could not find entry matching: "${old_entry}"`)
         }
         break
       }
@@ -202,12 +203,12 @@ class SoulUpdateTool extends BaseTool {
           }
         }
         if (!found) {
-          return { success: false, error: `Could not find entry matching: "${entry}"` }
+          return this._err(`Could not find entry matching: "${entry}"`)
         }
         break
       }
       default:
-        return { success: false, error: `Unknown action: ${action}` }
+        return this._err(`Unknown action: ${action}`)
     }
 
     // Update timestamp
@@ -227,7 +228,7 @@ class SoulUpdateTool extends BaseTool {
 
     logger.agent('SoulUpdateTool', { persona_id, persona_type, section, action, entry: entry.slice(0, 100) })
 
-    return { success: true, message: `Memory ${action}d in ${section}: ${entry}` }
+    return this._ok(`Memory ${action}d in ${section}: ${entry}`, { persona_id, section, action })
   }
 }
 
@@ -237,7 +238,8 @@ class SoulReadTool extends BaseTool {
   constructor(soulsDir) {
     super(
       'read_soul_memory',
-      'Read the persona memory (soul file). Use this to check existing memories before adding new ones, or to recall what you know about the user.'
+      'Read the persona memory (soul file). Use this to check existing memories before adding new ones, or to recall what you know about the user.',
+      'read_soul_memory'
     )
     this.soulsDir = soulsDir
   }
@@ -254,33 +256,33 @@ class SoulReadTool extends BaseTool {
     }
   }
 
-  async execute(input) {
-    const { persona_id, persona_type, section } = input
+  async execute(toolCallId, params, signal, onUpdate) {
+    const { persona_id, persona_type, section } = params
 
     if (!persona_id || !persona_type) {
-      return { success: false, error: 'Missing required fields: persona_id, persona_type' }
+      return this._err('Missing required fields: persona_id, persona_type')
     }
 
     const filePath = path.join(this.soulsDir, persona_type, `${persona_id}.md`)
 
     if (!fs.existsSync(filePath)) {
-      return { success: true, exists: false, content: null, message: 'No soul file exists for this persona yet.' }
+      return this._ok('No soul file exists for this persona yet.', { exists: false })
     }
 
     const content = fs.readFileSync(filePath, 'utf8')
 
     if (!section) {
-      return { success: true, exists: true, content }
+      return this._ok(content, { exists: true })
     }
 
     // Extract specific section
     const { sections } = parseSoul(content)
     if (sections.has(section)) {
       const lines = sections.get(section).filter(l => l.trim() !== '')
-      return { success: true, exists: true, section, content: lines.join('\n') }
+      return this._ok(lines.join('\n'), { exists: true, section })
     }
 
-    return { success: true, exists: true, section, content: '', message: `Section "${section}" is empty or not found.` }
+    return this._ok(`Section "${section}" is empty or not found.`, { exists: true, section, empty: true })
   }
 }
 

@@ -2065,10 +2065,19 @@ ipcMain.handle('mcp:get-status', () => {
 })
 
 ipcMain.handle('mcp:test-connection', async (event, config) => {
+  const transport = config.url ? `http [${config.url}]` : `stdio [${config.command} ${(config.args || []).join(' ')}]`.trim()
+  logger.info(`[MCP test] ${config.name || '(unnamed)'} — ${transport}`)
   try {
-    return await mcpManager.testConnection(config)
+    const result = await mcpManager.testConnection(config)
+    if (result.success) {
+      const toolNames = (result.tools || []).map(t => t.name).join(', ')
+      logger.info(`[MCP test] ${config.name} OK — ${result.tools.length} tool(s): ${toolNames || '(none)'}`)
+    } else {
+      logger.warn(`[MCP test] ${config.name} FAILED — ${result.error}`)
+    }
+    return result
   } catch (err) {
-    logger.error('mcp:test-connection error', err.message)
+    logger.error(`[MCP test] ${config.name} ERROR — ${err.message}`)
     return { success: false, error: err.message, tools: [] }
   }
 })
@@ -3659,6 +3668,96 @@ If none should respond, reply with [].`
     logger.error('agent:resolve-addressees error', err.message)
     // Fallback: treat all mentioned personas as addressees
     return { addresseeIds: personas.map(p => p.id) }
+  }
+})
+
+/**
+ * Dispatch group tasks: utility model parses the user message and extracts
+ * per-persona task assignments + dependency ordering.
+ * Returns: [{ personaId, personaName, assignedTask, dependsOn: [personaId] }]
+ */
+ipcMain.handle('agent:dispatch-group-tasks', async (event, { message, personas, config }) => {
+  try {
+    const names = personas.map(p => p.name)
+    const systemPrompt = `You are a task dispatcher for a group chat with multiple AI participants.
+Parse the user's message and extract the specific task assigned to each participant.
+
+Participants: ${names.map(n => `"${n}"`).join(', ')}
+
+Rules:
+- Look for "@Name: task description" patterns in the message.
+- Extract ONLY the task text for each participant — do not include other participants' sections.
+- Detect dependencies: if a participant's task says "wait for @X" or "after @X finishes" or "verify @X's work", mark dependsOn: ["X"].
+- If a participant has no explicit task in the message, set assignedTask to null.
+
+Reply with ONLY a JSON array. Example:
+[
+  { "personaName": "Alice", "assignedTask": "write a function add(a,b)", "dependsOn": [] },
+  { "personaName": "Bob", "assignedTask": "test the add function Alice wrote", "dependsOn": ["Alice"] }
+]`
+
+    const userContent = `Message: "${message}"`
+
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) {
+      logger.warn('agent:dispatch-group-tasks: no utilityModel configured, skipping dispatch')
+      return { dispatched: null }
+    }
+    const providerCfg = config[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
+      logger.warn('agent:dispatch-group-tasks: utilityModel missing credentials, skipping dispatch')
+      return { dispatched: null }
+    }
+
+    let raw
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    if (isOpenAI) {
+      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const cfg = {
+        openaiApiKey: providerCfg.apiKey,
+        openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+        _resolvedProvider: 'openai',
+        defaultProvider: 'openai',
+        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+      }
+      const resp = await new OpenAIClient(cfg).getClient().chat.completions.create({
+        model: um.model, max_tokens: 512,
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }],
+      })
+      raw = resp.choices?.[0]?.message?.content || ''
+      accumulateUtilityUsage(um.model, um.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
+    } else {
+      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const cfg = { apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model }
+      const resp = await new AnthropicClient(cfg).getClient().messages.create({
+        model: um.model, max_tokens: 512, system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }],
+      })
+      raw = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
+      accumulateUtilityUsage(um.model, um.provider, resp.usage?.input_tokens || 0, resp.usage?.output_tokens || 0).catch(() => {})
+    }
+
+    const match = raw.match(/\[[\s\S]*\]/m)
+    const parsed = match ? JSON.parse(match[0]) : []
+
+    // Map names → IDs and resolve dependsOn to IDs
+    const nameToId = Object.fromEntries(personas.map(p => [p.name.toLowerCase(), p.id]))
+    const dispatched = parsed
+      .filter(d => d.personaName && d.assignedTask)
+      .map(d => ({
+        personaId:    nameToId[d.personaName.toLowerCase()] || null,
+        personaName:  d.personaName,
+        assignedTask: d.assignedTask,
+        dependsOn:    (d.dependsOn || []).map(n => nameToId[n.toLowerCase()]).filter(Boolean),
+      }))
+      .filter(d => d.personaId)
+
+    logger.agent('dispatch-group-tasks', { personas: dispatched.map(d => ({ name: d.personaName, deps: d.dependsOn.length, taskLen: d.assignedTask.length })) })
+    return { dispatched }
+  } catch (err) {
+    logger.error('agent:dispatch-group-tasks error', err.message)
+    return { dispatched: null }
   }
 })
 

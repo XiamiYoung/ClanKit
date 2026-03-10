@@ -12,7 +12,8 @@
     "dist:win": "npm run build && npx electron-builder --win",
     "dist:mac": "npm run build && npx electron-builder --mac",
     "dist:all": "npm run build && npx electron-builder --win --mac",
-    "dist:linux": "npm run build && npx electron-builder --linux"
+    "dist:linux": "npm run build && npx electron-builder --linux",
+    "bundle:mcporter": "cd ../mcporter && node_modules/.bin/tsc -p tsconfig.build.json && cd ../ClankAI && node_modules/.bin/esbuild ../mcporter/src/index.ts --bundle --format=esm --platform=node --main-fields=module,main \"--banner:js=import { createRequire as __cjsRequire } from 'module'; const require = __cjsRequire(import.meta.url);\" --outfile=electron/agent/mcp/mcporter-bundle.mjs"
   },
   "build": {
     "appId": "com.clankai.app",
@@ -124,13 +125,14 @@
     "cross-env": "^7.0.3",
     "electron": "^31.0.0",
     "electron-builder": "^26.8.1",
+    "esbuild": "^0.27.3",
+    "pinia": "^2.1.7",
     "postcss": "^8.4.38",
     "sharp": "^0.34.5",
     "tailwindcss": "^3.4.3",
     "vite": "^5.2.0",
-    "wait-on": "^7.2.0",
-    "pinia": "^2.1.7",
     "vue": "^3.4.21",
-    "vue-router": "^4.3.0"
+    "vue-router": "^4.3.0",
+    "wait-on": "^7.2.0"
   }
 }

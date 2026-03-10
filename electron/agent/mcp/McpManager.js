@@ -1,201 +1,253 @@
 /**
- * McpManager — singleton managing all MCP server connections.
+ * McpManager — singleton managing all MCP server connections via mcporter.
  *
- * Provides lazy startup, tool discovery, routing, and cleanup.
+ * Uses mcporter's Runtime (createRuntime) which wraps the official
+ * @modelcontextprotocol/sdk client. Supports both stdio and HTTP/SSE servers.
  *
- * ── On-demand startup ────────────────────────────────────────────────────────
- * MCP servers are NOT started eagerly when a chat begins. Instead:
+ * mcporter is ESM-only; loaded once via dynamic import() and cached.
  *
- * 1. getToolSchemas(configs) — returns cached schemas if available (no process
- *    started). On first call for a server, starts it briefly to discover tools,
- *    caches the schemas, then keeps the process running for subsequent calls.
+ * ── Connection lifecycle ─────────────────────────────────────────────────────
+ * mcporter keeps connections alive (keep-alive mode by default).
+ * Servers are registered lazily on first use and connections are reused
+ * across tool calls within the same session.
  *
- * 2. callTool(serverId, config, toolName, args) — lazily starts the server on
- *    first actual tool invocation. If the server is already running, reuses it.
- *    If it crashed, restarts it automatically.
- *
- * Result: no MCP processes are spawned until the user's conversation actually
- * triggers a tool call, or until schemas are needed for the first time.
+ * ── Schema caching ──────────────────────────────────────────────────────────
+ * Tool schemas are discovered on first getToolSchemas() call per server and
+ * cached in _schemaCache. A crash/reconnect clears the cache for that server
+ * so re-discovery happens automatically on the next call.
  */
-const { McpClient } = require('./McpClient')
+'use strict'
+
+const os = require('os')
 const { logger } = require('../../logger')
+
+// mcporter is bundled as a local ESM file to avoid dependency resolution issues.
+// Loaded once via dynamic import() and cached.
+const MCPORTER_BUNDLE = new URL('./mcporter-bundle.mjs', `file://${__filename}`).href
+let _mcporterPromise = null
+function _loadMcporter() {
+  if (!_mcporterPromise) {
+    _mcporterPromise = import(MCPORTER_BUNDLE).catch(err => {
+      _mcporterPromise = null
+      throw err
+    })
+  }
+  return _mcporterPromise
+}
 
 class McpManager {
   constructor() {
-    this._clients = new Map()     // serverId → McpClient
-    this._schemaCache = new Map() // serverId → tool[]
+    this._runtime        = null         // mcporter Runtime instance (created lazily)
+    this._schemaCache    = new Map()    // serverId → ServerToolInfo[]
+    this._registeredIds  = new Set()    // serverIds registered in the runtime
+  }
+
+  // ── Internal helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Convert a ClankAI server config to a mcporter ServerDefinition.
+   * Uses serverId as the mcporter name for a 1:1 mapping.
+   *
+   * Supports two transport kinds:
+   *  - 'http'  — when serverConfig.url is present (HTTP/SSE remote servers)
+   *  - 'stdio' — default, local subprocess via command/args
+   */
+  _toDefinition(serverConfig) {
+    const { id, command, args = [], env = {}, url, headers } = serverConfig
+    if (url) {
+      return {
+        name: id,
+        command: {
+          kind: 'http',
+          url: new URL(url),
+          ...(headers && Object.keys(headers).length > 0 ? { headers } : {}),
+        },
+        ...(Object.keys(env).length > 0 ? { env } : {}),
+      }
+    }
+    return {
+      name: id,
+      command: {
+        kind: 'stdio',
+        command,
+        args,
+        cwd: os.homedir(),
+      },
+      ...(Object.keys(env).length > 0 ? { env } : {}),
+    }
+  }
+
+  /** Lazily create the mcporter Runtime on first use. */
+  async _getRuntime() {
+    if (!this._runtime) {
+      const { createRuntime } = await _loadMcporter()
+      this._runtime = await createRuntime({ servers: [] })
+      logger.info('[McpManager] mcporter Runtime created')
+    }
+    return this._runtime
   }
 
   /**
-   * Lazy-start a client for the given server config. Returns the client.
+   * Ensure a server is registered in the runtime. Idempotent.
+   * Must be called before any listTools / callTool for that server.
+   */
+  async _ensureRegistered(serverConfig) {
+    const runtime = await this._getRuntime()
+    if (!this._registeredIds.has(serverConfig.id)) {
+      const def = this._toDefinition(serverConfig)
+      runtime.registerDefinition(def, { overwrite: false })
+      this._registeredIds.add(serverConfig.id)
+      logger.info(`[McpManager] Registered server: ${serverConfig.name} (${serverConfig.id})`)
+    }
+    return runtime
+  }
+
+  // ── Public API (same surface as the old McpClient-based McpManager) ────────
+
+  /**
+   * Ensure a server is registered and connected (forces an initial listTools
+   * to establish the connection). Kept for backwards-compat callers.
    */
   async ensureStarted(serverConfig) {
-    const { id, name, command, args = [], env = {} } = serverConfig
-
-    if (this._clients.has(id)) {
-      const existing = this._clients.get(id)
-      if (existing.started) return existing
-      // Previous client crashed — clean up and restart
-      await existing.stop().catch(() => {})
-      this._clients.delete(id)
-    }
-
-    const client = new McpClient({ name, command, args, env })
-    this._clients.set(id, client)
-    await client.start()
-    // Cache schemas from freshly-started server
-    this._schemaCache.set(id, client.tools)
-    return client
+    const runtime = await this._ensureRegistered(serverConfig)
+    // Trigger connection by listing tools; result goes to schema cache
+    const tools = await runtime.listTools(serverConfig.id)
+    this._schemaCache.set(serverConfig.id, tools)
+    logger.info(`[McpManager] Connected: ${serverConfig.name} — ${tools.length} tool(s)`)
+    return { started: true, name: serverConfig.name }
   }
 
   /**
-   * Return tool schemas for the given server configs WITHOUT starting servers.
-   * For servers with cached schemas, returns them immediately.
-   * For servers with no cache, starts them to discover tools, caches, then
-   * returns — but only spawns those that haven't been seen before.
-   *
-   * Each entry: { serverId, serverName, tool }
+   * Return tool schemas for the given server configs.
+   * Cached on first discovery; subsequent calls are instant.
+   * Each entry: { serverId, serverName, tool: { name, description, inputSchema } }
    */
   async getToolSchemas(serverConfigs) {
-    const allTools = []
-
-    // Separate known (cached) vs unknown (need discovery)
     const unknown = serverConfigs.filter(c => !this._schemaCache.has(c.id))
 
-    // Discover tools for unknown servers in parallel
     if (unknown.length > 0) {
-      const results = await Promise.allSettled(
+      await Promise.allSettled(
         unknown.map(async (config) => {
-          const client = await this.ensureStarted(config)
-          return { config, tools: client.tools }
+          try {
+            const runtime = await this._ensureRegistered(config)
+            const tools = await runtime.listTools(config.id)
+            this._schemaCache.set(config.id, tools)
+            logger.info(`[McpManager] Schema cached: ${config.name} — ${tools.length} tool(s)`)
+          } catch (err) {
+            logger.error(`[McpManager] Schema discovery failed: ${config.name} —`, err.message)
+            // Mark with empty cache so we don't retry on every turn
+            this._schemaCache.set(config.id, [])
+          }
         })
       )
-
-      for (const result of results) {
-        if (result.status === 'rejected') {
-          logger.error('McpManager: Failed to start server for schema discovery:', result.reason?.message)
-          // Mark as attempted (empty schema) so we don't retry on every chat turn
-          // The server can still be started on-demand via callTool if the user invokes it
-        } else {
-          // ensureStarted already populated _schemaCache; this is a no-op but explicit
-          const { config, tools } = result.value
-          if (!this._schemaCache.has(config.id)) {
-            this._schemaCache.set(config.id, tools)
-          }
-        }
-      }
-
-      // Mark failed servers with empty cache so they're not retried on the next turn
-      for (const config of unknown) {
-        if (!this._schemaCache.has(config.id)) {
-          this._schemaCache.set(config.id, [])
-        }
-      }
     }
 
-    // Return schemas from cache for all requested servers
+    const allTools = []
     for (const config of serverConfigs) {
       const tools = this._schemaCache.get(config.id) || []
       for (const tool of tools) {
-        allTools.push({ serverId: config.id, serverName: config.name, tool })
+        allTools.push({
+          serverId: config.id,
+          serverName: config.name,
+          tool: {
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema,
+          },
+        })
       }
     }
-
     return allTools
   }
 
-  /**
-   * @deprecated Use getToolSchemas — kept for callers that passed serverConfigs directly.
-   */
+  /** @deprecated Use getToolSchemas — kept for callers that passed serverConfigs directly. */
   async getToolsForServers(serverConfigs) {
     return this.getToolSchemas(serverConfigs)
   }
 
   /**
-   * Call a tool on a specific server. Lazily starts the server if needed.
-   * serverConfig is required so we can restart a crashed server.
+   * Call a tool on a specific server.
+   * Returns the raw MCP CallToolResult: { content: [...], isError?: bool }
+   * agentLoop's _executeMcpToolViaManager handles content parsing.
    */
   async callTool(serverId, toolName, args = {}, serverConfig = null) {
-    // Lazy-start: if server isn't running but we have its config, start it
-    if (serverConfig && (!this._clients.has(serverId) || !this._clients.get(serverId)?.started)) {
-      await this.ensureStarted(serverConfig)
+    if (serverConfig) {
+      await this._ensureRegistered(serverConfig)
     }
-    const client = this._clients.get(serverId)
-    if (!client || !client.started) {
-      throw new Error(`MCP server "${serverId}" is not running`)
+    const runtime = await this._getRuntime()
+    try {
+      return await runtime.callTool(serverId, toolName, { args })
+    } catch (err) {
+      // Clear schema cache on connection errors so the next call re-discovers
+      if (this._schemaCache.has(serverId)) {
+        this._schemaCache.delete(serverId)
+        logger.warn(`[McpManager] Cleared schema cache for ${serverId} after error`)
+      }
+      throw err
     }
-    return client.callTool(toolName, args)
   }
 
   /**
-   * Test a server connection temporarily — start, list tools, stop.
+   * Test a server connection: register, list tools, then immediately close.
    * Returns { success, tools, error }.
    */
   async testConnection(serverConfig) {
-    const client = new McpClient({
-      name: serverConfig.name || 'test',
-      command: serverConfig.command,
-      args: serverConfig.args || [],
-      env: serverConfig.env || {},
-    })
-
+    // Use a fresh isolated registration so the test doesn't pollute live state
     try {
-      await client.start()
-      const tools = client.tools
-      await client.stop()
-      return {
-        success: true,
-        tools: tools.map(t => ({
-          name: t.name,
-          description: t.description || '',
-        })),
+      const { createRuntime } = await _loadMcporter()
+      const def = this._toDefinition(serverConfig)
+      const rt = await createRuntime({ servers: [def] })
+      try {
+        const tools = await rt.listTools(serverConfig.id, {
+          autoAuthorize: false,
+          allowCachedAuth: true,
+        })
+        return {
+          success: true,
+          tools: tools.map(t => ({ name: t.name, description: t.description || '' })),
+        }
+      } finally {
+        await rt.close().catch(() => {})
       }
     } catch (err) {
-      await client.stop().catch(() => {})
-      return {
-        success: false,
-        error: err.message,
-        tools: [],
-      }
+      return { success: false, error: err.message, tools: [] }
     }
   }
 
   /**
-   * Stop a specific server by ID.
+   * Stop and unregister a specific server by ID.
+   * The next callTool/getToolSchemas for this server will reconnect.
    */
   async stopServer(serverId) {
-    const client = this._clients.get(serverId)
-    if (client) {
-      await client.stop()
-      this._clients.delete(serverId)
-      // Clear schema cache so re-discovery happens on next use
+    if (this._runtime && this._registeredIds.has(serverId)) {
+      await this._runtime.close(serverId).catch(() => {})
+      this._registeredIds.delete(serverId)
       this._schemaCache.delete(serverId)
+      logger.info(`[McpManager] Stopped server: ${serverId}`)
     }
   }
 
   /**
-   * Return a dict of { serverId: boolean } indicating which servers are running.
+   * Return { serverId: boolean } indicating which servers have active connections.
    */
   getRunningStatus() {
     const status = {}
-    for (const [id, client] of this._clients) {
-      status[id] = client.started === true
+    for (const id of this._registeredIds) {
+      status[id] = true
     }
     return status
   }
 
   /**
-   * Stop all running servers.
+   * Stop all servers and tear down the runtime.
    */
   async stopAll() {
-    const stops = []
-    for (const [id, client] of this._clients) {
-      stops.push(client.stop().catch((err) => {
-        logger.warn(`McpManager: Error stopping ${id}:`, err.message)
-      }))
+    if (this._runtime) {
+      await this._runtime.close().catch(() => {})
+      this._runtime = null
+      logger.info('[McpManager] All servers stopped, runtime disposed')
     }
-    await Promise.all(stops)
-    this._clients.clear()
+    this._registeredIds.clear()
     this._schemaCache.clear()
   }
 }

@@ -548,11 +548,21 @@ function onScroll() {
 
 // Watch message count changes for auto-scroll
 watch(() => chat.value?.messages?.length, () => { scrollToBottom() }, { flush: 'post' })
-// Watch last message content length for streaming auto-scroll
+// Watch last message content/segments for streaming auto-scroll.
+// Group chat personas stream via segments (content stays ''), so we must also
+// track total segment count across recent messages.
 watch(() => {
   const msgs = chat.value?.messages
   if (!msgs?.length) return 0
-  return msgs[msgs.length - 1]?.content?.length ?? 0
+  const last = msgs[msgs.length - 1]
+  const contentLen = last?.content?.length ?? 0
+  // Sum segment counts of the last 10 messages to catch group chat persona streaming
+  let segTotal = 0
+  for (let i = Math.max(0, msgs.length - 10); i < msgs.length; i++) {
+    segTotal += msgs[i]?.segments?.length ?? 0
+    segTotal += msgs[i]?.segments?.reduce((acc, s) => acc + (s.content?.length ?? 0), 0) ?? 0
+  }
+  return contentLen + segTotal
 }, () => { scrollToBottom() }, { flush: 'post' })
 
 // When messages finish lazy-loading (null → array), scroll to bottom

@@ -168,23 +168,59 @@
               <input v-model="form.description" type="text" class="form-input" placeholder="What this MCP server does" />
             </div>
 
+            <!-- Transport type toggle -->
             <div class="form-group">
-              <label class="form-label">Command *</label>
-              <input v-model="form.command" type="text" class="form-input" placeholder="npx" />
-              <p class="form-hint">Executable to run (e.g., npx, node, python, uvx)</p>
+              <label class="form-label">Transport</label>
+              <div class="transport-toggle">
+                <button
+                  class="transport-btn"
+                  :class="{ active: form.transportType === 'stdio' }"
+                  @click="form.transportType = 'stdio'"
+                  type="button"
+                >
+                  <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                  stdio
+                </button>
+                <button
+                  class="transport-btn"
+                  :class="{ active: form.transportType === 'http' }"
+                  @click="form.transportType = 'http'"
+                  type="button"
+                >
+                  <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  HTTP / SSE
+                </button>
+              </div>
+              <p class="form-hint">stdio — local subprocess &nbsp;·&nbsp; HTTP/SSE — remote server (supports OAuth)</p>
             </div>
 
-            <div class="form-group">
-              <label class="form-label">Arguments</label>
-              <textarea
-                v-model="form.argsText"
-                class="form-textarea"
-                rows="3"
-                placeholder="-y
-@modelcontextprotocol/server-everything"
-              ></textarea>
-              <p class="form-hint">One argument per line</p>
+            <!-- HTTP: URL field -->
+            <div v-if="form.transportType === 'http'" class="form-group">
+              <label class="form-label">Server URL *</label>
+              <input v-model="form.url" type="url" class="form-input" placeholder="https://your-mcp-server.example.com/mcp" />
+              <p class="form-hint">Endpoint URL for the remote MCP server</p>
             </div>
+
+            <!-- stdio: Command + Args -->
+            <template v-if="form.transportType === 'stdio'">
+              <div class="form-group">
+                <label class="form-label">Command *</label>
+                <input v-model="form.command" type="text" class="form-input" placeholder="npx" />
+                <p class="form-hint">Executable to run (e.g., npx, node, python, uvx)</p>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Arguments</label>
+                <textarea
+                  v-model="form.argsText"
+                  class="form-textarea"
+                  rows="3"
+                  placeholder="-y
+@modelcontextprotocol/server-everything"
+                ></textarea>
+                <p class="form-hint">One argument per line</p>
+              </div>
+            </template>
 
             <!-- Environment Variables -->
             <div class="env-section">
@@ -213,7 +249,7 @@
             <div ref="testResultEl" class="test-section">
               <AppButton
                 @click="runTestConnection"
-                :disabled="!form.command?.trim() || testStatus === 'testing'"
+                :disabled="(form.transportType === 'http' ? !form.url?.trim() : !form.command?.trim()) || testStatus === 'testing'"
               >
                 <svg v-if="testStatus !== 'testing'" style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
@@ -257,7 +293,7 @@
               </AppButton>
             </div>
             <AppButton variant="secondary" size="modal" @click="closeModal">Cancel</AppButton>
-            <AppButton size="modal" @click="saveForm" :disabled="!form.name?.trim() || !form.command?.trim()">Save</AppButton>
+            <AppButton size="modal" @click="saveForm" :disabled="!form.name?.trim() || (form.transportType === 'http' ? !form.url?.trim() : !form.command?.trim())">Save</AppButton>
           </div>
         </div>
       </div>
@@ -352,8 +388,10 @@ function emptyForm() {
   return {
     name: '',
     description: '',
+    transportType: 'stdio',  // 'stdio' | 'http'
     command: '',
     argsText: '',
+    url: '',
     envVars: [],
   }
 }
@@ -391,8 +429,10 @@ function openEdit(server) {
     id: server.id,
     name: server.name || '',
     description: server.description || '',
+    transportType: server.url ? 'http' : 'stdio',
     command: server.command || '',
     argsText: (server.args || []).join('\n'),
+    url: server.url || '',
     envVars: Object.entries(server.env || {}).map(([key, value]) => ({ key, value })),
   }
   resetTestState()
@@ -432,23 +472,25 @@ function removeEnvVar(idx) {
 }
 
 async function saveForm() {
-  const args = form.value.argsText
-    .split('\n')
-    .map(l => l.trim())
-    .filter(Boolean)
-
   const env = Object.fromEntries(
     form.value.envVars
       .filter(ev => ev.key.trim())
       .map(ev => [ev.key.trim(), ev.value])
   )
 
+  const isHttp = form.value.transportType === 'http'
+  const args = isHttp ? [] : form.value.argsText
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+
   const serverData = {
     id: editingServer.value ? editingServer.value.id : form.value.name.trim(),
     name: form.value.name.trim(),
     description: form.value.description.trim(),
-    command: form.value.command.trim(),
+    command: isHttp ? '' : form.value.command.trim(),
     args,
+    url: isHttp ? form.value.url.trim() : '',
     env,
   }
 
@@ -465,24 +507,24 @@ async function runTestConnection() {
   resetTestState()
   testStatus.value = 'testing'
 
-  const args = form.value.argsText
-    .split('\n')
-    .map(l => l.trim())
-    .filter(Boolean)
-
+  const isHttp = form.value.transportType === 'http'
   const env = Object.fromEntries(
     form.value.envVars
       .filter(ev => ev.key.trim())
       .map(ev => [ev.key.trim(), ev.value])
   )
 
+  const connConfig = isHttp
+    ? { name: form.value.name || 'test', url: form.value.url.trim(), env }
+    : {
+        name: form.value.name || 'test',
+        command: form.value.command.trim(),
+        args: form.value.argsText.split('\n').map(l => l.trim()).filter(Boolean),
+        env,
+      }
+
   try {
-    const result = await mcpStore.testConnection({
-      name: form.value.name || 'test',
-      command: form.value.command.trim(),
-      args,
-      env,
-    })
+    const result = await mcpStore.testConnection(connConfig)
 
     if (result.success) {
       testStatus.value = 'success'
@@ -513,6 +555,7 @@ async function executeDelete() {
 }
 
 function formatCommand(server) {
+  if (server.url) return server.url
   return `${server.command || ''} ${(server.args || []).join(' ')}`.trim()
 }
 
@@ -838,6 +881,39 @@ function cardGradient() {
 .form-hint {
   font-family: 'Inter', sans-serif; font-size: var(--fs-caption);
   color: #4B5563; margin: 0.25rem 0 0;
+}
+
+/* ── Transport toggle ──────────────────────────────────────────────────────── */
+.transport-toggle {
+  display: flex;
+  gap: 0.375rem;
+  background: #111111;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+}
+.transport-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.3125rem;
+  border: none;
+  background: transparent;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: #4B5563;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.transport-btn:hover { color: #9CA3AF; }
+.transport-btn.active {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  color: #FFFFFF;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
 /* ── Environment variables ─────────────────────────────────────────────────── */

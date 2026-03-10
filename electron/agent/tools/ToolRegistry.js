@@ -119,12 +119,16 @@ class ToolRegistry {
     return [...this.tools.values()].map(t => t.definition())
   }
 
-  /** Execute a tool by name */
-  async execute(toolName, toolInput) {
+  /**
+   * Execute a tool by name.
+   * Returns the unified { content, details } result from the tool,
+   * or falls back to a plain error object if the tool is not found.
+   */
+  async execute(toolName, toolInput, toolCallId = '') {
     const tool = this.tools.get(toolName)
     if (!tool) {
       logger.warn('ToolRegistry: unknown tool', toolName)
-      return { error: `Unknown tool: ${toolName}` }
+      return { content: [{ type: 'text', text: `Error: Unknown tool: ${toolName}` }], details: {}, isError: true }
     }
 
     logger.agent('ToolRegistry: execute', {
@@ -133,10 +137,10 @@ class ToolRegistry {
     })
 
     try {
-      return await tool.execute(toolInput)
+      return await tool.execute(toolCallId, toolInput)
     } catch (err) {
       logger.error('ToolRegistry: execution error', toolName, err.message)
-      return { error: err.message }
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }], details: {}, isError: true }
     }
   }
 
