@@ -58,12 +58,7 @@
               title="Agent tools"
             >
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="4" y1="6" x2="20" y2="6"/>
-                <line x1="4" y1="12" x2="20" y2="12"/>
-                <line x1="4" y1="18" x2="20" y2="18"/>
-                <circle cx="8" cy="6" r="2" fill="currentColor" stroke="none"/>
-                <circle cx="16" cy="12" r="2" fill="currentColor" stroke="none"/>
-                <circle cx="10" cy="18" r="2" fill="currentColor" stroke="none"/>
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
               </svg>
             </button>
           </div>
@@ -76,11 +71,11 @@
             :class="($route.path === '/chats' || $route.path.startsWith('/chats/')) ? 'nav-item-active' : 'nav-item-inactive'"
             :style="isCollapsed ? 'justify-content:center;' : ''"
             :aria-current="($route.path === '/chats' || $route.path.startsWith('/chats/')) ? 'page' : undefined"
-            @mouseenter="isCollapsed ? showNavTooltip('Chats', $event) : undefined"
+            @mouseenter="isCollapsed ? showNavTooltip('Agents', $event) : undefined"
             @mouseleave="isCollapsed ? hideNavTooltip() : undefined"
           >
             <IconChats style="width:18px;height:18px;flex-shrink:0;" />
-            <span v-if="!isCollapsed" style="font-size:var(--fs-secondary);font-weight:500;flex:1;">Chats</span>
+            <span v-if="!isCollapsed" style="font-size:var(--fs-secondary);font-weight:500;flex:1;">Agents</span>
           </RouterLink>
         </div>
 
@@ -100,8 +95,9 @@
           <span class="nav-section-label">Workspace</span>
         </div>
         <NavItem to="/personas"  :icon="IconPersonas"  label="Personas"    :isCollapsed="isCollapsed" />
+        <NavItem to="/recipes"   :icon="IconRecipes"   label="Schedulers"  :isCollapsed="isCollapsed" />
+        <NavItem to="/notes" :icon="IconNotes" label="AI Docs"   :isCollapsed="isCollapsed" />
         <NavItem to="/news"  :icon="IconNews"  label="News"      :isCollapsed="isCollapsed" />
-        <NavItem to="/notes" :icon="IconNotes" label="Documents" :isCollapsed="isCollapsed" />
       </div>
 
       <!-- ── System ── -->
@@ -192,13 +188,11 @@ watch(() => route.path, (path) => {
 
 function applyAutoCollapse() {
   if (userOverride.value !== null) return
-  isCollapsed.value = window.innerWidth < 1920
+  isCollapsed.value = false
 }
 
 function onResize() {
-  if (userOverride.value === null) {
-    isCollapsed.value = window.innerWidth < 1920
-  }
+  // no-op: sidebar stays expanded unless user manually collapses
 }
 
 function onKeyDown(e) {
@@ -593,6 +587,13 @@ const IconTools = defineComponent({
   ])
 })
 
+const IconRecipes = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('circle', { cx: '12', cy: '12', r: '10' }),
+    h('polyline', { points: '12 6 12 12 16 14' })
+  ])
+})
+
 const IconConfig = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
     h('circle', { cx: '12', cy: '12', r: '3' }),
@@ -608,12 +609,6 @@ const NavItem = defineComponent({
   setup(props) {
     return () => {
       const isActive = route.path === props.to || route.path.startsWith(props.to + '/')
-      const children = [
-        h(props.icon, { style: 'width:18px;height:18px;flex-shrink:0;' })
-      ]
-      if (!props.isCollapsed) {
-        children.push(h('span', { style: 'font-size:var(--fs-secondary);font-weight:500;' }, props.label))
-      }
       return h(RouterLink, {
         to: props.to,
         class: [
@@ -624,7 +619,15 @@ const NavItem = defineComponent({
         onMouseenter: props.isCollapsed ? (e) => showNavTooltip(props.label, e) : undefined,
         onMouseleave: props.isCollapsed ? () => hideNavTooltip() : undefined,
         'aria-current': isActive ? 'page' : undefined,
-      }, () => children)
+      }, {
+        default: () => {
+          const children = [h(props.icon, { style: 'width:18px;height:18px;flex-shrink:0;' })]
+          if (!props.isCollapsed) {
+            children.push(h('span', { style: 'font-size:var(--fs-secondary);font-weight:500;' }, props.label))
+          }
+          return children
+        }
+      })
     }
   }
 })
@@ -662,7 +665,7 @@ const NavItem = defineComponent({
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #9CA3AF;
-  padding: 0.5rem 0.5rem 0.25rem;
+  padding: 0 0.5rem;
   font-family: 'Inter', sans-serif;
   font-weight: 600;
 }
@@ -728,10 +731,10 @@ const NavItem = defineComponent({
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 1.75rem;
+  height: 1.75rem;
   border: none;
-  border-radius: 0.5rem;
+  border-radius: 0.375rem;
   background: transparent;
   cursor: pointer;
   z-index: 1;
@@ -740,7 +743,7 @@ const NavItem = defineComponent({
   background: transparent;
 }
 .focus-bulb-emoji {
-  font-size: 1.5rem;
+  font-size: 1.125rem;
   line-height: 1;
   filter: grayscale(1);
   transition: filter 0.2s ease;

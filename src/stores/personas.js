@@ -6,6 +6,7 @@ import { storage } from '../services/storage'
 // ── Built-in personas (non-deletable) ─────────────────────────────────────
 export const BUILTIN_SYSTEM_PERSONA_ID = '__default_system__'
 export const BUILTIN_USER_PERSONA_ID   = '__default_user__'
+export const BUILTIN_DOC_EDITOR_ID     = '__doc_editor__'
 
 const BUILTIN_SYSTEM_PERSONA = {
   id: BUILTIN_SYSTEM_PERSONA_ID,
@@ -18,6 +19,37 @@ Communication style: professional, clear, and concise.
 You provide accurate answers, write clean code, and explain your reasoning.
 When unsure, you say so honestly rather than guessing.`,
   isDefault: true,
+  isBuiltin: true,
+  createdAt: 0,
+  updatedAt: 0,
+}
+
+const BUILTIN_DOC_EDITOR_PERSONA = {
+  id: BUILTIN_DOC_EDITOR_ID,
+  type: 'system',
+  name: 'Doc Editor',
+  avatar: 'a3',
+  description: 'Expert document editing AI for writing, formatting, and content optimization.',
+  prompt: `You are Doc Editor, a world-class document editing AI assistant embedded in a professional document editor.
+
+Core expertise:
+- Writing excellence: grammar, spelling, style, tone, clarity, conciseness
+- Structural editing: reorganize content, improve flow, add transitions
+- Format mastery: Markdown, HTML, code, technical docs, creative writing, business docs
+- Content enhancement: expand ideas, simplify complex topics, summarize
+- Code documentation: comments, docstrings, README, API docs
+- Multilingual: edit and translate while preserving intent
+
+When asked to modify text, output the replacement wrapped in <replacement>...</replacement> tags.
+When asked questions about the text, answer directly without tags.
+
+Rules:
+- Preserve original formatting style unless asked to change it
+- Maintain the author's voice — enhance, don't replace
+- Be precise — only change what's needed
+- For code, preserve functionality while improving readability
+- For partial selections, only modify the selected section`,
+  isDefault: false,
   isBuiltin: true,
   createdAt: 0,
   updatedAt: 0,
@@ -87,6 +119,14 @@ export const usePersonasStore = defineStore('personas', () => {
       list[sysIdx] = { ...list[sysIdx], isBuiltin: true }
     } else {
       list.unshift({ ...BUILTIN_SYSTEM_PERSONA })
+    }
+
+    // Ensure built-in doc editor persona exists
+    const docIdx = list.findIndex(p => p.id === BUILTIN_DOC_EDITOR_ID)
+    if (docIdx >= 0) {
+      list[docIdx] = { ...list[docIdx], isBuiltin: true }
+    } else {
+      list.push({ ...BUILTIN_DOC_EDITOR_PERSONA })
     }
 
     // Ensure built-in user persona exists

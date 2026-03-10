@@ -13,6 +13,9 @@ export const useFocusModeStore = defineStore('focusMode', () => {
   const lastDocName = ref(null)
   const lastChatId = ref(null)
 
+  // Pending message to auto-populate chat input (set by "Send to Chat" in AI Edit)
+  const pendingChatMessage = ref('')
+
   let _exitTimer = null
 
   function enter() {
@@ -41,5 +44,5 @@ export const useFocusModeStore = defineStore('focusMode', () => {
     showDocs.value = !showDocs.value
   }
 
-  return { isFocusMode, showChat, showDocs, justExited, lastDocPath, lastDocName, lastChatId, enter, exit, toggleChat, toggleDocs, isMinibarMode, enterMinibar, exitMinibar }
+  return { isFocusMode, showChat, showDocs, justExited, lastDocPath, lastDocName, lastChatId, pendingChatMessage, enter, exit, toggleChat, toggleDocs, isMinibarMode, enterMinibar, exitMinibar }
 })

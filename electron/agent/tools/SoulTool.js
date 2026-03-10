@@ -2,8 +2,8 @@
  * SoulTool — allows the agent to read and update persona memory ("soul") files.
  *
  * Soul files are structured markdown documents stored at:
- *   ~/.clankAI/souls/system/{personaId}.md  (system personas)
- *   ~/.clankAI/souls/users/{personaId}.md   (user personas)
+ *   ~/.clankai/souls/system/{personaId}.md  (system personas)
+ *   ~/.clankai/souls/users/{personaId}.md   (user personas)
  *
  * Two tools are exported:
  *   - SoulUpdateTool: add/update/remove entries in soul memory

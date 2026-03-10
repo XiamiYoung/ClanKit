@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="focusStore.isFocusMode" class="focus-root">
+    <div v-if="focusStore.isFocusMode" class="focus-root" :class="{ 'focus-resizing': isResizing }">
 
       <!-- Chat panel -->
       <div
@@ -15,7 +15,7 @@
       <div
         v-if="showBothPanels"
         class="focus-resize-handle"
-        @mousedown="startResize"
+        @mousedown.prevent="startResize"
       />
 
       <!-- Docs panel -->
@@ -24,8 +24,11 @@
         class="focus-panel focus-docs-panel"
         :style="docsPanelStyle"
       >
-        <DocsView ref="docsViewRef" class="focus-inner" />
+        <DocsView ref="docsViewRef" class="focus-inner" :is-embedded="true" />
       </div>
+
+      <!-- Transparent overlay during resize to prevent webview/iframe stealing mouse events -->
+      <div v-if="isResizing" class="focus-resize-overlay" />
 
       <!-- Both hidden message -->
       <div v-if="!focusStore.showChat && !focusStore.showDocs" class="focus-both-hidden">
@@ -71,6 +74,7 @@ watch(() => focusStore.isFocusMode, async (active) => {
   if (!active) return
   await nextTick()
   if (chatsViewRef.value) chatsViewRef.value.chatSidebarCollapsed = true
+  if (chatsViewRef.value?.chatHeaderRef) chatsViewRef.value.chatHeaderRef.headerExpanded = false
   if (docsViewRef.value)  docsViewRef.value.docTreeCollapsed       = true
 
   // Restore last chat selection
@@ -107,32 +111,38 @@ const showBothPanels = computed(() => focusStore.showChat && focusStore.showDocs
 
 const chatPanelStyle = computed(() => {
   if (!showBothPanels.value) return { flex: '1' }
-  return { width: `calc(${splitRatio.value * 100}% - 2px)`, flexShrink: '0' }
+  return { width: `${splitRatio.value * 100}%`, flex: 'none' }
 })
 
 const docsPanelStyle = computed(() => {
   if (!showBothPanels.value) return { flex: '1' }
-  return { flex: '1' }
+  // Docs panel takes the remaining width (minus 4px for the resize handle)
+  return { width: `calc(${(1 - splitRatio.value) * 100}% - 4px)`, flex: 'none' }
 })
 
 // ── Drag resize ────────────────────────────────────────────────────────────
-let resizing = false
+const isResizing = ref(false)
 
 function startResize(e) {
   if (e.button !== 0) return
-  resizing = true
+  e.stopPropagation()
+  isResizing.value = true
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
   document.addEventListener('mousemove', onResizeMove)
   document.addEventListener('mouseup', stopResize)
 }
 
 function onResizeMove(e) {
-  if (!resizing) return
+  if (!isResizing.value) return
   const ratio = e.clientX / window.innerWidth
   splitRatio.value = Math.max(0.2, Math.min(0.8, ratio))
 }
 
 function stopResize() {
-  resizing = false
+  isResizing.value = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
   document.removeEventListener('mousemove', onResizeMove)
   document.removeEventListener('mouseup', stopResize)
 }
@@ -165,6 +175,7 @@ onUnmounted(() => {
 .focus-inner {
   flex: 1;
   min-height: 0;
+  width: 100%;
   height: 100%;
 }
 
@@ -174,10 +185,24 @@ onUnmounted(() => {
   background: #E5E5EA;
   cursor: col-resize;
   transition: background 0.15s ease;
-  z-index: 1;
+  z-index: 2;
 }
-.focus-resize-handle:hover {
+.focus-resize-handle:hover,
+.focus-resizing .focus-resize-handle {
   background: #007AFF;
+}
+
+/* Covers entire screen during drag to prevent webview/iframe from stealing mouse events */
+.focus-resize-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 101;
+  cursor: col-resize;
+}
+
+/* Disable pointer events on panels during resize so webview can't interfere */
+.focus-resizing .focus-panel {
+  pointer-events: none;
 }
 
 .focus-both-hidden {

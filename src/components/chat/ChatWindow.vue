@@ -203,7 +203,7 @@
     </div>
 
     <!-- Input area: use default slot for custom input, or built-in basic input -->
-    <slot name="input" :isRunning="isRunning" :inputText="defaultInputText" :sendMessage="defaultSend" :stopChat="defaultStop" :pauseChat="defaultPause">
+    <slot name="input" :isRunning="isRunning" :inputText="defaultInputText" :sendMessage="defaultSend" :stopChat="defaultStop">
       <div class="cw-input-area">
         <!-- Quote preview -->
         <div
@@ -273,12 +273,9 @@
             rows="2"
             class="cw-textarea"
           />
-          <!-- Pause / Stop -->
+          <!-- Stop -->
           <template v-if="isRunning">
-            <button @click.stop="defaultPause" class="cw-btn stop" aria-label="Pause" title="Pause (Esc) — interrupt but keep queue">
-              <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-            </button>
-            <button @click.stop="defaultStop" class="cw-btn stop" aria-label="Stop" title="Stop — interrupt and clear queue">
+            <button @click.stop="defaultStop" class="cw-btn stop" aria-label="Stop" title="Stop (Esc) — interrupt and clear queue">
               <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
             </button>
           </template>
@@ -330,7 +327,7 @@ const props = defineProps({
   onRefinePlan:  { type: Function, default: null },
 })
 
-const emit = defineEmits(['send', 'stop', 'pause', 'quote', 'delete-message', 'send-with-attachments'])
+const emit = defineEmits(['send', 'stop', 'quote', 'delete-message', 'send-with-attachments'])
 
 const chatsStore = useChatsStore()
 const personasStore = usePersonasStore()
@@ -655,10 +652,6 @@ function defaultSend() {
 
 function defaultStop() {
   emit('stop')
-}
-
-function defaultPause() {
-  emit('pause')
 }
 
 // Expose scrollToBottom so parents can trigger it

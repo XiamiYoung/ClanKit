@@ -59,36 +59,33 @@
           </svg>
         </button>
       </div>
-      <!-- Extra action buttons slot (grid view inserts maximize + swap here) -->
+      <!-- Right side: call + settings (single view) or grid action buttons -->
       <div class="ch-row-top-actions">
-        <!-- Voice call button with hover tooltip -->
-        <div
-          ref="callBtnEl"
-          class="ch-call-btn-wrap"
-          @mouseenter="showCallTooltip"
-          @mouseleave="hideCallTooltip"
-        >
-          <button
-            class="ch-call-btn"
-            :disabled="!canStartCall"
-            @click.stop="startCall"
+        <template v-if="!isGridView">
+          <!-- Voice call button -->
+          <div
+            ref="callBtnEl"
+            class="ch-call-btn-wrap"
+            @mouseenter="showCallTooltip"
+            @mouseleave="hideCallTooltip"
           >
-            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-            </svg>
-          </button>
-        </div>
-        <!-- Grid view button — only shown in single-chat mode -->
-        <button
-          v-if="!isGridView"
-          class="ch-call-btn"
-          title="Multi-chat grid view"
-          @click.stop="emit('enter-grid')"
-        >
-          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-          </svg>
-        </button>
+            <button
+              class="ch-call-btn"
+              :disabled="!canStartCall"
+              @click.stop="startCall"
+            >
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+              </svg>
+            </button>
+          </div>
+          <!-- Chat Settings button -->
+          <div ref="configBtnEl" class="chat-config-btn-wrap" @mouseenter="showConfigTooltip" @mouseleave="hideConfigTooltip">
+            <button class="chat-config-btn" @click="$emit('open-chat-settings')">
+              <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </template>
         <slot name="actions" />
       </div>
     </div>
@@ -212,12 +209,6 @@
           </div>
         </div>
 
-        <!-- Chat Settings button -->
-        <div ref="configBtnEl" class="chat-config-btn-wrap" @mouseenter="showConfigTooltip" @mouseleave="hideConfigTooltip">
-          <button class="chat-config-btn" @click="$emit('open-chat-settings')">
-            <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
-        </div>
       </div>
     </div>
 
@@ -833,7 +824,7 @@ const ragEnabledCount = computed(() => {
 })
 
 const effectiveWorkingPath = computed(() => {
-  return chat.value?.workingPath || configStore.config.artifactPath || (configStore.config.dataPath ? `${configStore.config.dataPath}/artifact` : '~/.clankAI/artifact')
+  return chat.value?.workingPath || configStore.config.artifactPath || `${configStore.config.dataPath}/artifact`
 })
 
 const effectivePersonaRounds = computed(() => {
@@ -897,14 +888,14 @@ const effectiveMaxOutputTokens = computed(() => {
   gap: 0.5rem;
   padding: 0.25rem 0.375rem 0.25rem 0.625rem;
   border-radius: 9999px;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border: 1px solid transparent;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  background: #FFFFFF;
+  border: 1px solid var(--border, #E5E5EA);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
   transition: none;
 }
 .ch-title-badge:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
+  background: var(--bg-hover, #F5F5F5);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 .ch-title-icon {
   width: 1.625rem;
@@ -913,8 +904,8 @@ const effectiveMaxOutputTokens = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255,255,255,0.12);
-  color: #FFFFFF;
+  background: var(--bg-main, #F2F2F7);
+  color: var(--text-secondary, #6B7280);
   flex-shrink: 0;
 }
 /* ── Running spinner (before title) ── */
@@ -924,8 +915,8 @@ const effectiveMaxOutputTokens = computed(() => {
   height: 0.75rem;
   border-radius: 50%;
   border: 2px solid transparent;
-  border-top-color: #FFFFFF;
-  border-right-color: rgba(255,255,255,0.4);
+  border-top-color: var(--text-primary, #1A1A1A);
+  border-right-color: rgba(26,26,26,0.3);
   animation: ch-title-spin 0.7s linear infinite;
 }
 @keyframes ch-title-spin {
@@ -936,7 +927,7 @@ const effectiveMaxOutputTokens = computed(() => {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary, 0.875rem);
   font-weight: 600;
-  color: #FFFFFF;
+  color: var(--text-primary, #1A1A1A);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -950,7 +941,7 @@ const effectiveMaxOutputTokens = computed(() => {
   border-radius: 50%;
   border: none;
   background: transparent;
-  color: rgba(255,255,255,0.5);
+  color: var(--text-muted, #9CA3AF);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -959,8 +950,8 @@ const effectiveMaxOutputTokens = computed(() => {
   flex-shrink: 0;
 }
 .ch-edit-btn:hover {
-  background: rgba(255,255,255,0.15);
-  color: #FFFFFF;
+  background: var(--bg-main, #F2F2F7);
+  color: var(--text-primary, #1A1A1A);
 }
 
 /* ── Inline edit mode (centered) ── */
@@ -970,39 +961,39 @@ const effectiveMaxOutputTokens = computed(() => {
   gap: 0.5rem;
   padding: 0.25rem 0.375rem 0.25rem 0.625rem;
   border-radius: 9999px;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border: 1.5px solid #4B5563;
-  box-shadow: 0 0 0 3px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.12);
+  background: #FFFFFF;
+  border: 1.5px solid var(--text-primary, #1A1A1A);
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
 }
 .ch-title-input {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary, 0.875rem);
   font-weight: 600;
-  color: #FFFFFF;
+  color: var(--text-primary, #1A1A1A);
   border: none;
   outline: none;
   background: transparent;
   width: 11.25rem;
   letter-spacing: -0.01em;
 }
-.ch-title-input::placeholder { color: rgba(255,255,255,0.3); }
+.ch-title-input::placeholder { color: var(--text-muted, #9CA3AF); }
 .ch-edit-confirm {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
   border: none;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
+  background: var(--bg-main, #F2F2F7);
+  color: var(--text-primary, #1A1A1A);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.15s;
   flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 .ch-edit-confirm:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  background: var(--border, #E5E5EA);
 }
 
 /* ── Status indicator (left-aligned, title row) ── */
@@ -1043,7 +1034,7 @@ const effectiveMaxOutputTokens = computed(() => {
 }
 @keyframes chRunningPulse { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
 
-/* ── Actions (right-aligned over the centered content) ── */
+/* ── Actions (right-aligned, title row) ── */
 .ch-row-top-actions {
   position: absolute;
   right: 1rem;
@@ -1111,8 +1102,8 @@ const effectiveMaxOutputTokens = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 1.875rem;
+  height: 1.875rem;
   padding: 0;
   border-radius: 50%;
   border: none;
@@ -1139,10 +1130,10 @@ const effectiveMaxOutputTokens = computed(() => {
   align-items: center;
   gap: 0.375rem;
   position: relative;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  padding: 0.25rem 0.5rem;
+  background: linear-gradient(135deg, #92400E 0%, #B45309 40%, #D97706 100%);
+  padding: 0.125rem 0.5rem;
   border-radius: 0.625rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 8px rgba(180, 83, 9, 0.35), 0 1px 3px rgba(180, 83, 9, 0.2);
 }
 
 /* ── User persona card ── */
@@ -1242,7 +1233,7 @@ const effectiveMaxOutputTokens = computed(() => {
   width: 1.875rem;
   height: 1.875rem;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.2);
+  border: none;
   margin-left: -0.5rem;
   display: flex;
   align-items: center;
@@ -1250,7 +1241,7 @@ const effectiveMaxOutputTokens = computed(() => {
   cursor: pointer;
   position: relative;
   transition: transform 0.15s, box-shadow 0.15s;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  background: transparent;
   overflow: visible;
   flex-shrink: 0;
 }

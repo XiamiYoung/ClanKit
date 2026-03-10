@@ -9,7 +9,7 @@ const telegram         = require('./adapters/telegram')
 const whatsapp         = require('./adapters/whatsapp')
 const feishu           = require('./adapters/feishu')
 
-const DATA_DIR = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankAI')
+const DATA_DIR = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankai')
 
 let _mainWindow = null
 let _config     = {}  // full config from config.json

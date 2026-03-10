@@ -47,6 +47,17 @@
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
           </button>
+          <!-- Multi-chat grid view button -->
+          <button
+            @click="enterGridMode()"
+            class="chat-sidebar-new-btn"
+            aria-label="Multi-chat grid view"
+            title="Multi-chat grid view"
+          >
+            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -117,9 +128,6 @@
             <div class="chat-root-row-left" @click="rootExpanded = !rootExpanded">
               <svg class="chat-root-chevron" :style="{ transform: rootExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="9 18 15 12 9 6"/>
-              </svg>
-              <svg style="width:16px;height:16px;flex-shrink:0;color:#6B7280;" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
               </svg>
               <span class="chat-root-label">All Chats</span>
             </div>
@@ -265,6 +273,7 @@
       <template v-if="chatsStore.activeChat">
         <!-- Chat Header (shared component) -->
         <ChatHeader
+          ref="chatHeaderRef"
           :chatId="chatsStore.activeChatId"
           @open-chat-settings="showChatConfigModal = true"
           @open-soul-viewer="(id, type, name) => openSoulViewer(id, type, name)"
@@ -788,7 +797,6 @@
           :showQuote="true"
           :showDelete="true"
           @send="handleChatWindowSend"
-          @pause="pauseAgent(chatsStore.activeChatId)"
           @stop="stopAgent(chatsStore.activeChatId)"
           @quote="quoteMessage"
           @delete-message="requestDeleteMessage"
@@ -932,19 +940,8 @@
                   @blur="onInputBlur"
                   @attach="atts => attachments.push(...atts)"
                 />
-                <!-- Pause / Stop buttons (visible while running) -->
+                <!-- Stop button (visible while running) -->
                 <template v-if="activeRunning">
-                  <button
-                    @click="pauseAgent(chatsStore.activeChatId)"
-                    class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
-                    style="background:rgba(255,59,48,0.08); color:#FF3B30; box-shadow:0 1px 3px rgba(0,0,0,0.04);"
-                    @mouseenter="e => e.currentTarget.style.background='rgba(255,59,48,0.12)'"
-                    @mouseleave="e => e.currentTarget.style.background='rgba(255,59,48,0.08)'"
-                    aria-label="Pause agent"
-                    title="Pause (Esc) — interrupt but keep queue"
-                  >
-                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-                  </button>
                   <button
                     @click="stopAgent(chatsStore.activeChatId)"
                     class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
@@ -952,7 +949,7 @@
                     @mouseenter="e => e.currentTarget.style.background='rgba(255,59,48,0.12)'"
                     @mouseleave="e => e.currentTarget.style.background='rgba(255,59,48,0.08)'"
                     aria-label="Stop agent"
-                    title="Stop — interrupt and clear queue"
+                    title="Stop (Esc) — interrupt and clear queue"
                   >
                     <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
                   </button>
@@ -1237,7 +1234,7 @@
                   <input
                     v-model="draftWorkingPath"
                     type="text"
-                    :placeholder="configStore.config.artifactPath || (configStore.config.dataPath ? `${configStore.config.dataPath}/artifact` : '~/.clankAI/artifact')"
+                    :placeholder="configStore.config.artifactPath || `${configStore.config.dataPath}/artifact`"
                     class="ccm-working-path-input"
                   />
                   <button class="ccm-working-path-browse" @click="browseWorkingPath" title="Browse folder">
@@ -1908,6 +1905,7 @@ import { useToolsStore } from '../stores/tools'
 import { useModelsStore } from '../stores/models'
 import { useKnowledgeStore } from '../stores/knowledge'
 import { useVoiceStore } from '../stores/voice'
+import { useFocusModeStore } from '../stores/focusMode'
 import { getAvatarDataUri } from '../components/personas/personaAvatars'
 import SoulViewer from '../components/personas/SoulViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
@@ -2077,7 +2075,7 @@ const ChatTreeNodeView = defineComponent({
 
     return () => {
       const { node, depth, activeChatId, unreadChatIds, completedChatIds, pendingPermissionChatIds, selectedFolderId } = props
-      const indent = 12 + depth * 18
+      const indent = 4 + depth * 8
 
       const dragAttrs = {
         draggable: true,
@@ -2111,12 +2109,12 @@ const ChatTreeNodeView = defineComponent({
           class: 'flex items-center gap-0.5 pr-1 cursor-pointer group relative chat-tree-row',
           style: {
             paddingLeft: indent + 'px',
-            paddingTop: '2px',
-            paddingBottom: '2px',
+            paddingTop: '0px',
+            paddingBottom: '0px',
             background: rowBg,
             color: textColor,
             borderRadius: '4px',
-            margin: '1px 2px',
+            margin: '0px 2px',
             fontFamily: "'Inter',sans-serif",
             fontSize: 'var(--fs-caption)',
             fontWeight: '600',
@@ -2187,13 +2185,13 @@ const ChatTreeNodeView = defineComponent({
           class: 'flex items-center gap-0.5 pr-1 cursor-pointer group relative chat-tree-row',
           style: {
             paddingLeft: indent + 'px',
-            paddingTop: '2px',
-            paddingBottom: '2px',
+            paddingTop: '0px',
+            paddingBottom: '0px',
             background: rowBg,
             color: isDark ? '#fff' : '#1A1A1A',
             boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none',
             borderRadius: '0.625rem',
-            margin: '1px 2px',
+            margin: '0px 2px',
             fontFamily: "'Inter',sans-serif",
             fontSize: 'var(--fs-caption)',
             transition: 'background 0.15s, color 0.15s',
@@ -2268,6 +2266,7 @@ const toolsStore = useToolsStore()
 const modelsStore = useModelsStore()
 const knowledgeStore = useKnowledgeStore()
 const voiceStore = useVoiceStore()
+const focusModeStore = useFocusModeStore()
 
 // ── Voice call ──
 async function handleStartCall(chatId) {
@@ -2897,6 +2896,15 @@ function gridOpenChatSettings(chatId) {
 }
 
 const inputText = ref('')
+
+// Watch for "Send to Chat" from DocsView AI Edit bar
+watch(() => focusModeStore.pendingChatMessage, (msg) => {
+  if (msg) {
+    inputText.value = msg
+    focusModeStore.pendingChatMessage = ''
+  }
+})
+
 const attachments = ref([])
 const isDragOver = ref(false)
 const inputEl = ref(null) // legacy: no longer bound to a DOM element; use mentionInputRef
@@ -3065,6 +3073,7 @@ function getDefaultSidebarWidth() {
   return 260
 }
 const sidebarWidth = ref(getDefaultSidebarWidth())
+const chatHeaderRef = ref(null)
 const chatSidebarCollapsed = ref(false)
 // Tracks the last-clicked tree node: { type: 'folder'|'chat', id }
 const treeLastSelected = ref(null)
@@ -4596,6 +4605,10 @@ function handleChunk(cId, chunk) {
     scrollToBottom(false, cId)
   } else if (chunk.type === 'tool_call') {
     dbg(`tool_call: ${chunk.name} input=${JSON.stringify(chunk.input).slice(0,80)}`, 'warn')
+    if (targetChat) {
+      targetChat.isCallingTool = true
+      targetChat.currentToolCall = chunk.name || null
+    }
     const segments = perChatStreamingSegments.get(routeKey) || []
     segments.push({ type: 'tool', name: chunk.name, input: chunk.input ?? {}, output: undefined })
     perChatStreamingSegments.set(routeKey, segments)
@@ -4603,6 +4616,10 @@ function handleChunk(cId, chunk) {
     scrollToBottom(false, cId)
   } else if (chunk.type === 'tool_result') {
     dbg(`tool_result: ${chunk.name} result=${JSON.stringify(chunk.result).slice(0,80)}`, 'warn')
+    if (targetChat) {
+      targetChat.isCallingTool = false
+      targetChat.currentToolCall = null
+    }
     const toolSeg = lastToolSeg(routeKey)
     if (toolSeg) {
       toolSeg.output = typeof chunk.result === 'string' ? chunk.result : JSON.stringify(chunk.result, null, 2)
@@ -5377,9 +5394,13 @@ async function sendMessage() {
     if (finChat) {
       finChat.isRunning = false
       finChat.isThinking = false
+      finChat.isCallingTool = false
+      finChat.currentToolCall = null
     }
     targetChat.isRunning = false
     targetChat.isThinking = false
+    targetChat.isCallingTool = false
+    targetChat.currentToolCall = null
 
     // If this chat is not active, show a "Completed" chip (and stop the unread pulse)
     if (chatId !== chatsStore.activeChatId) {
@@ -5517,14 +5538,6 @@ function _applyInterrupt(chat, msg, type) {
       streaming: false, timestamp: Date.now(),
     })
   }
-}
-
-// Pause (Esc equivalent): interrupt the agent but preserve the queue so it drains automatically.
-async function pauseAgent(chatId) {
-  if (!chatId) chatId = chatsStore.activeChatId
-  if (window.electronAPI?.stopAgent) await window.electronAPI.stopAgent(chatId)
-  const { chat, msg } = getLastActiveMessage(chatId)
-  _applyInterrupt(chat, msg, 'pause')
 }
 
 // Stop (hard stop): clear the queue first, then interrupt — nothing auto-runs afterwards.
@@ -5800,7 +5813,7 @@ function handleGlobalKeydown(e) {
   }
   if (e.key === 'Escape' && activeRunning.value) {
     e.preventDefault()
-    pauseAgent(chatsStore.activeChatId)
+    stopAgent(chatsStore.activeChatId)
   }
 }
 
@@ -5999,7 +6012,7 @@ onUnmounted(() => {
 
 })
 
-defineExpose({ chatSidebarCollapsed })
+defineExpose({ chatSidebarCollapsed, chatHeaderRef })
 </script>
 
 <style scoped>
@@ -6146,16 +6159,15 @@ defineExpose({ chatSidebarCollapsed })
   height: 1.5rem;
   border: none;
   border-radius: 0.375rem;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #fff;
+  background: transparent;
+  color: rgba(26,26,26,0.4);
   cursor: pointer;
   flex-shrink: 0;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 .chat-root-fold-btn:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  background: rgba(26,26,26,0.08);
+  color: #1A1A1A;
 }
 /* ── Chat filter ────────────────────────────────────────────────────────── */
 .chat-sidebar-filter {
@@ -6495,6 +6507,7 @@ defineExpose({ chatSidebarCollapsed })
 .chat-messages {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;

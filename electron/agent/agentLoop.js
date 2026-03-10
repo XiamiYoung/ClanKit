@@ -88,6 +88,7 @@ class AgentLoop {
   constructor(config) {
     this.config = config
     this.stopped = false
+    this._abortController = new AbortController()
 
     // Core components — choose client based on provider
     const isOpenAIProvider = config.defaultProvider === 'openai' || config._resolvedProvider === 'openai'
@@ -132,11 +133,21 @@ class AgentLoop {
 
   stop() {
     this.stopped = true
+    this._abortController.abort()
     // Unblock any suspended permission prompts so their coroutines can exit cleanly
     for (const [, resolve] of this._pendingPermissions) {
       resolve('reject')
     }
     this._pendingPermissions.clear()
+  }
+
+  _abortPromise() {
+    return new Promise((_, reject) => {
+      if (this._abortController.signal.aborted) return reject(new DOMException('Aborted', 'AbortError'))
+      this._abortController.signal.addEventListener('abort', () =>
+        reject(new DOMException('Aborted', 'AbortError')), { once: true }
+      )
+    })
   }
 
   /**
@@ -369,7 +380,7 @@ Load a skill when the user's request clearly matches its description.`
     }
 
     // ── ClankAI Data Directory ──
-    const dataPath = process.env.CLANKAI_DATA_PATH || path.join(require('os').homedir(), '.clankAI')
+    const dataPath = process.env.CLANKAI_DATA_PATH || path.join(require('os').homedir(), '.clankai')
     const artifactPath = this.config.chatWorkingPath || this.config.artifactPath || path.join(dataPath, 'artifact')
     const skillsPath = this.config.skillsPath || ''
     const utilityModel = this.config.utilityModel || {}
@@ -1084,7 +1095,9 @@ RULES:
 
           let stream
           try {
-            stream = await client.chat.completions.create(openaiParams)
+            stream = await client.chat.completions.create(openaiParams, {
+              signal: this._abortController.signal
+            })
           } catch (streamErr) {
             logger.error(`${this.config._directAuth ? 'DeepSeek' : 'OpenAI'} stream open FAILED`, streamErr.message)
             throw streamErr
@@ -1177,7 +1190,8 @@ RULES:
 
           // ── Handle tool_calls stop reason ──
           if ((stopReason === 'tool_calls' || stopReason === 'stop' && openaiToolCalls.length > 0) && !this.stopped) {
-            const toolResults = await Promise.all(
+            const toolResults = await Promise.race([
+              Promise.all(
               assistantContent
                 .filter(b => b.type === 'tool_use')
                 .map(async (block) => {
@@ -1267,7 +1281,9 @@ RULES:
                   }
                   return { tool_call_id: block.id, content: serialized }
                 })
-            )
+              ),
+              this._abortPromise()
+            ])
 
             // Push tool results in OpenAI format — each as a separate message
             for (const tr of toolResults) {
@@ -1313,9 +1329,13 @@ RULES:
             try {
               if (createParams.betas && createParams.betas.length > 0) {
                 const { betas, ...restParams } = createParams
-                stream = await client.beta.messages.stream({ ...restParams, betas })
+                stream = await client.beta.messages.stream({ ...restParams, betas }, {
+                  signal: this._abortController.signal
+                })
               } else {
-                stream = await client.messages.stream(createParams)
+                stream = await client.messages.stream(createParams, {
+                  signal: this._abortController.signal
+                })
               }
             } catch (streamErr) {
               logger.error('stream open FAILED', streamErr.message, streamErr.status)
@@ -1424,7 +1444,8 @@ RULES:
 
           // ── Handle tool_use stop reason ──
           if (stopReason === 'tool_use' && !this.stopped) {
-            const toolResults = await Promise.all(
+            const toolResults = await Promise.race([
+              Promise.all(
               assistantContent
                 .filter(b => b.type === 'tool_use')
                 .map(async (block) => {
@@ -1521,7 +1542,9 @@ RULES:
                   }
                   return { type: 'tool_result', tool_use_id: block.id, content: serialized }
                 })
-            )
+              ),
+              this._abortPromise()
+            ])
 
             conversationMessages.push({ role: 'user', content: toolResults })
 
@@ -1550,6 +1573,10 @@ RULES:
 
       return finalText
     } catch (err) {
+      if (err.name === 'AbortError' || this.stopped) {
+        logger.agent('AgentLoop stopped by user')
+        return finalText
+      }
       logger.error('AgentLoop.run error', err.message, err.stack?.split('\n').slice(0, 3).join(' | '))
       throw err
     }

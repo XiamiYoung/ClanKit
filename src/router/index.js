@@ -8,6 +8,7 @@ import DocsView from '../views/DocsView.vue'
 import McpView from '../views/McpView.vue'
 import ToolsView from '../views/ToolsView.vue'
 import KnowledgeView from '../views/KnowledgeView.vue'
+import RecipeEngineView from '../views/RecipeEngineView.vue'
 
 export default createRouter({
   history: createWebHashHistory(),
@@ -20,6 +21,7 @@ export default createRouter({
     { path: '/knowledge', component: KnowledgeView },
     { path: '/mcp',       component: McpView },
     { path: '/tools',     component: ToolsView },
+    { path: '/recipes',   component: RecipeEngineView },
     { path: '/notes',     component: DocsView },
     { path: '/config',    component: ConfigView }
   ]

@@ -18,7 +18,7 @@
           Documents
         </h2>
         <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; margin:0 0 24px; line-height:1.6;">
-          Select a folder to use as your vault. Markdown and draw.io diagram files will be available for viewing and editing.
+          Select a folder to use as your vault. All files will be available for viewing, with rich editing for Markdown and draw.io diagrams.
         </p>
         <AppButton size="compact" @click="store.pickVault()">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -43,7 +43,7 @@
                 :title="store.vaultPath"
               >{{ vaultName }}</span>
             </div>
-            <p class="docs-catalog-subtitle">Markdown and draw.io files from your vault folder.</p>
+            <p class="docs-catalog-subtitle">Files from your vault folder.</p>
           </div>
           <div class="flex items-center gap-2">
             <AppButton size="icon" @click="store.loadTree()" title="Refresh">
@@ -110,7 +110,7 @@
         </div>
 
         <!-- ── RIGHT: Editor / Preview Panel ── -->
-        <div class="flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;">
+        <div class="flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;" @mouseup="onEditorMouseUp" @mousedown="onEditorMouseDown">
           <!-- Hamburger toggle tab -->
           <button
             @click="docTreeCollapsed = !docTreeCollapsed"
@@ -125,8 +125,45 @@
           <!-- Resize blocker: covers the panel during sidebar drag so the webview doesn't swallow mousemove events -->
           <div v-if="isResizing" style="position:absolute;inset:0;z-index:50;cursor:col-resize;"></div>
 
+          <!-- Loading file -->
+          <div v-if="store.fileLoading" class="flex-1 flex items-center justify-center">
+            <div class="text-center">
+              <svg class="mx-auto mb-3 animate-spin" style="width:32px;height:32px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21 12a9 9 0 1 1-6.2-8.6"/>
+              </svg>
+              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">Opening file...</p>
+            </div>
+          </div>
+
+          <!-- File open error -->
+          <div v-else-if="store.fileError" class="flex-1 flex items-center justify-center">
+            <div class="text-center" style="max-width:400px;">
+              <div
+                class="mx-auto mb-4 flex items-center justify-center"
+                style="width:56px;height:56px;border-radius:14px;background:#FEF2F2;"
+              >
+                <svg style="width:28px;height:28px;color:#EF4444;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+              </div>
+              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-subtitle); font-weight:600; color:#1A1A1A; margin:0 0 6px;">
+                Unable to open file
+              </p>
+              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#6B7280; margin:0 0 16px; line-height:1.5;">
+                {{ store.fileError }}
+              </p>
+              <button
+                @click="store.fileError = ''"
+                class="px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                style="background:#F5F5F5; border:1px solid #E5E5EA; color:#6B7280; font-family:'Inter',sans-serif;"
+                @mouseenter="e => { e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A' }"
+                @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#6B7280' }"
+              >Dismiss</button>
+            </div>
+          </div>
+
           <!-- No file selected -->
-          <div v-if="!store.activeFile" class="flex-1 flex items-center justify-center">
+          <div v-else-if="!store.activeFile" class="flex-1 flex items-center justify-center">
             <div class="text-center">
               <svg class="mx-auto mb-3" style="width:48px;height:48px;color:#D1D1D6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
@@ -142,127 +179,442 @@
               class="px-4 py-2.5 shrink-0 flex items-center gap-3"
               style="border-bottom:1px solid #E5E5EA; background:#F9F9F9;"
             >
-              <!-- Diagram icon for .drawio files -->
-              <svg v-if="isDrawio" style="width:16px;height:16px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-              </svg>
-              <!-- Document icon for .md files -->
-              <svg v-else style="width:16px;height:16px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-              </svg>
+              <!-- File type icon (dynamic per extension) -->
+              <component :is="fileTypeIcon(store.activeFile.name, '#9CA3AF')" />
               <span style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#1A1A1A;">
                 {{ store.activeFile.name }}
               </span>
-              <div class="ml-auto flex items-center gap-2">
-                <!-- Auto-save indicator (shared) -->
-                <span
-                  v-if="saving"
-                  class="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
-                  style="background:rgba(0,122,255,0.1); color:#007AFF; font-family:'Inter',sans-serif;"
-                >
-                  <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
-                  saving
-                </span>
 
-                <!-- Copy source (markdown only) -->
+              <!-- AI Doc toggle button (in header) -->
+              <button
+                v-if="!isDrawio && !isImage"
+                class="ai-doc-toggle-btn"
+                :class="{ active: aiDocEnabled }"
+                @click="toggleAiDoc"
+                title="Toggle AI Assistant"
+                style="margin-left:0.75rem;"
+              >
+                <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                  <path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z"/>
+                </svg>
+                AI Assistant
+              </button>
+
+              <div class="ml-auto flex items-center gap-2">
+                <!-- Mode toggle (markdown only) — iOS-style switch with state label -->
+                <div v-if="isMarkdown" class="docs-mode-switch" @click="editMode = !editMode" :title="editMode ? 'Switch to Formatted' : 'Switch to Source'">
+                  <span class="docs-mode-state-label">{{ editMode ? 'Source' : 'Formatted' }}</span>
+                  <div class="docs-mode-track" :class="{ on: editMode }">
+                    <span class="docs-mode-thumb"></span>
+                  </div>
+                </div>
+
+                <!-- Open with external app -->
                 <button
-                  v-if="!isDrawio"
-                  @click="copySource"
-                  class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                  style="color:#9CA3AF; background:#F5F5F5; border:1px solid #E5E5EA; font-family:'Inter',sans-serif;"
-                  @mouseenter="e => { e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A' }"
-                  @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#9CA3AF' }"
-                  title="Copy markdown source"
+                  v-if="store.activeFile?.path"
+                  @click="openWithExternalApp"
+                  class="docs-hdr-btn"
+                  title="Open with default app"
                 >
-                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                  {{ copied ? 'Copied' : 'Copy' }}
+                  <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                 </button>
 
-                <!-- Mode toggle (markdown only) -->
-                <div
-                  v-if="!isDrawio"
-                  class="flex rounded-lg overflow-hidden"
-                  style="border:1px solid #E5E5EA;"
-                >
-                  <button
-                    @click="editMode = false"
-                    class="px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
-                    :style="!editMode
-                      ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#fff; border:none; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
-                      : 'background:#fff; color:#9CA3AF; border:none;'"
-                    style="font-family:'Inter',sans-serif;"
-                  >Formatted</button>
-                  <button
-                    @click="editMode = true"
-                    class="px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
-                    :style="editMode
-                      ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#fff; border:none; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
-                      : 'background:#fff; color:#9CA3AF; border:none;'"
-                    style="font-family:'Inter',sans-serif;"
-                  >Source</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Draw.io editor panel -->
-            <DrawioEditor
-              v-if="isDrawio"
-              :xml="store.activeFile.content"
-              :file-path="store.activeFile.path"
-              @save="onDrawioSave"
-              style="flex:1;overflow:hidden;"
-            />
-
-            <!-- Formatted mode (editable rich preview) — markdown only -->
-            <div
-              v-else-if="!editMode"
-              class="flex-1 overflow-y-auto py-6"
-              style="scrollbar-width:thin; display:flex; justify-content:center;"
-              @click="handlePreviewClick"
-            >
-              <div
-                ref="formattedEl"
-                class="prose-obsidian"
-                contenteditable="true"
-                spellcheck="false"
-                v-html="formattedHtml"
-                @input="onFormattedInput"
-                @paste="onFormattedPaste"
-              />
-              <!-- Link error toast -->
-              <div
-                v-if="linkError"
-                class="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg animate-fade-in"
-                style="background:#FEF2F2; border:1px solid #FECACA; color:#991B1B; font-size:var(--fs-secondary); max-width:480px;"
-              >
-                <svg style="width:18px;height:18px;flex-shrink:0;color:#EF4444;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
-                </svg>
-                <span class="flex-1" style="word-break:break-all;">{{ linkError }}</span>
+                <!-- Copy source (all text-based files) -->
                 <button
-                  @click="linkError = ''"
-                  class="shrink-0 cursor-pointer"
-                  style="background:none;border:none;color:#991B1B;font-size:var(--fs-body);padding:0 0 0 8px;"
-                >&times;</button>
+                  v-if="!isDrawio && !isImage && !isPptx && !isDocx && !isXlsx"
+                  @click="copySource"
+                  class="docs-hdr-btn"
+                  title="Copy file contents"
+                >
+                  <svg v-if="copied" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+
+                <!-- Save button -->
+                <button
+                  v-if="!isDrawio && !isImage"
+                  class="docs-hdr-btn"
+                  :class="{ 'docs-hdr-btn--ok': saveStatus === 'ok', 'docs-hdr-btn--err': saveStatus === 'error' }"
+                  @click="saveFile"
+                  title="Save file (Ctrl+S)"
+                >
+                  <!-- saving spinner -->
+                  <svg v-if="saveStatus === 'saving'" class="animate-spin" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
+                  <!-- ok check -->
+                  <svg v-else-if="saveStatus === 'ok'" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <!-- error x -->
+                  <svg v-else-if="saveStatus === 'error'" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  <!-- default floppy -->
+                  <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                </button>
               </div>
             </div>
 
-            <!-- Source mode (raw markdown editor) — markdown only -->
-            <div
-              v-else
-              class="flex-1 overflow-y-auto"
-              style="scrollbar-width:thin; display:flex; justify-content:center;"
-            >
-              <textarea
-                v-model="editorContent"
-                class="notes-source-editor"
-                spellcheck="false"
-              />
+            <!-- Editor + AI Magic Panel flex row -->
+            <div class="flex-1 flex overflow-hidden">
+              <!-- Editor content area -->
+              <div class="flex-1 flex flex-col overflow-hidden" style="position:relative;" @contextmenu="onEditorContextMenu">
+                <!-- Search / Replace bar -->
+                <div
+                  v-if="searchBarOpen && store.activeFile && !isDrawio && !isImage"
+                  style="position:absolute;top:0.625rem;right:0.75rem;z-index:60;"
+                >
+                  <SearchReplaceBar
+                    ref="searchBarRef"
+                    :text-content="isTextFile ? editorContent : null"
+                    :textarea-el="activeTextarea"
+                    :file-type="searchFileType"
+                    @close="searchBarOpen = false"
+                    @count-request="onSearchCountRequest"
+                    @find-next="onSearchFindNext"
+                    @find-prev="onSearchFindPrev"
+                    @replace-text="onSearchReplaceOne"
+                    @replace-all-text="onSearchReplaceAll"
+                  />
+                </div>
+                <!-- Draw.io editor panel -->
+                <DrawioEditor
+                  v-if="isDrawio"
+                  :xml="store.activeFile.content"
+                  :file-path="store.activeFile.path"
+                  @save="onDrawioSave"
+                  style="flex:1;overflow:hidden;"
+                />
+
+                <!-- PPTX editor -->
+                <PptxEditor
+                  v-else-if="isPptx && store.activeFile.binary"
+                  ref="pptxEditorRef"
+                  :base64="store.activeFile.base64"
+                  :file-path="store.activeFile.path"
+                  @save="onPptxSave"
+                  @ai-edit="handleEditorAiEdit"
+                  @slide-selected="handleSlideSelected"
+                  style="flex:1;overflow:hidden;"
+                />
+
+                <!-- DOCX editor -->
+                <DocxEditor
+                  v-else-if="isDocx && store.activeFile.binary"
+                  ref="docxEditorRef"
+                  :base64="store.activeFile.base64"
+                  :file-path="store.activeFile.path"
+                  @save="onDocxSave"
+                  @ai-edit="handleEditorAiEdit"
+                  style="flex:1;overflow:hidden;"
+                />
+
+                <!-- XLSX editor -->
+                <XlsxEditor
+                  v-else-if="isXlsx && store.activeFile.binary"
+                  ref="xlsxEditorRef"
+                  :base64="store.activeFile.base64"
+                  :file-path="store.activeFile.path"
+                  @save="onXlsxSave"
+                  @ai-edit="handleEditorAiEdit"
+                  @sheet-changed="handleSheetChanged"
+                  style="flex:1;overflow:hidden;"
+                />
+
+                <!-- Markdown: Formatted mode (editable rich preview) -->
+                <div
+                  v-else-if="isMarkdown && !editMode"
+                  class="flex-1 overflow-y-auto py-6"
+                  style="scrollbar-width:thin; display:flex; justify-content:center;"
+                  @click="handlePreviewClick"
+                >
+                  <div
+                    ref="formattedEl"
+                    class="prose-obsidian"
+                    contenteditable="true"
+                    spellcheck="false"
+                    v-html="formattedHtml"
+                    @input="onFormattedInput"
+                    @paste="onFormattedPaste"
+                    @contextmenu="onEditorContextMenu"
+                  />
+                  <!-- Link error toast -->
+                  <div
+                    v-if="linkError"
+                    class="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg animate-fade-in"
+                    style="background:#FEF2F2; border:1px solid #FECACA; color:#991B1B; font-size:var(--fs-secondary); max-width:480px;"
+                  >
+                    <svg style="width:18px;height:18px;flex-shrink:0;color:#EF4444;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                    </svg>
+                    <span class="flex-1" style="word-break:break-all;">{{ linkError }}</span>
+                    <button
+                      @click="linkError = ''"
+                      class="shrink-0 cursor-pointer"
+                      style="background:none;border:none;color:#991B1B;font-size:var(--fs-body);padding:0 0 0 8px;"
+                    >&times;</button>
+                  </div>
+                </div>
+
+                <!-- Markdown: Source mode (raw markdown editor) -->
+                <div
+                  v-else-if="isMarkdown && editMode"
+                  class="flex-1 overflow-y-auto"
+                  style="scrollbar-width:thin; display:flex; justify-content:center;"
+                >
+                  <textarea
+                    ref="sourceTextareaRef"
+                    v-model="editorContent"
+                    class="notes-source-editor"
+                    spellcheck="false"
+                    @contextmenu="onEditorContextMenu"
+                  />
+                </div>
+
+                <!-- Image preview -->
+                <div
+                  v-else-if="isImage"
+                  class="flex-1 overflow-y-auto flex items-center justify-center"
+                  style="scrollbar-width:thin; background:#F2F2F7; padding:2rem;"
+                >
+                  <img
+                    :src="imageDataUri"
+                    :alt="store.activeFile.name"
+                    style="max-width:100%; max-height:100%; object-fit:contain; border-radius:var(--radius-md); box-shadow:0 2px 8px rgba(0,0,0,0.08);"
+                  />
+                </div>
+
+                <!-- Code / text files -->
+                <CodeViewer
+                  v-else-if="isTextLike"
+                  ref="codeViewerRef"
+                  :content="store.activeFile.content"
+                  :file-name="store.activeFile.name"
+                  :theme="codeViewerTheme"
+                  @update:theme="codeViewerTheme = $event"
+                  @ai-edit="handleEditorAiEdit"
+                  @content-change="onCodeContentChange"
+                />
+              </div>
+
             </div>
           </template>
         </div>
       </div>
     </template>
+
+    <!-- ── Floating AI Doc Panel (only rendered by the owning instance) ── -->
+    <Teleport to="body">
+      <div
+        v-if="isAiPanelOwner && aiDocEnabled && aiDocOpen"
+        class="ai-doc-float"
+        :style="{ left: aiPanel.x + 'px', top: aiPanel.y + 'px', width: aiPanel.w + 'px', height: aiPanel.h + 'px' }"
+      >
+        <!-- Top bar: fully draggable — buttons use @mousedown.stop individually -->
+        <div class="ai-doc-float-topbar" @mousedown="startPanelDrag">
+          <!-- Left: persona pill -->
+          <div class="ai-doc-float-topbar-left">
+            <button
+              v-if="availablePersonas.length > 0"
+              class="aidoc-persona-pill"
+              @mousedown.stop
+              @click.stop="openDocPersonaModal"
+              @mouseenter="showPersonaPillTooltip"
+              @mouseleave="hidePersonaPillTooltip"
+            >
+              <div class="aidoc-persona-pill-avatar">
+                <img v-if="activeDocPersonaAvatar" :src="activeDocPersonaAvatar" alt="" class="aidoc-persona-pill-img" />
+                <span v-else class="aidoc-persona-pill-initial">{{ (activeDocPersonaName || '?').charAt(0) }}</span>
+              </div>
+            </button>
+          </div>
+          <!-- Center: grip icon -->
+          <div class="ai-doc-float-drag-icon">
+            <svg style="width:16px;height:16px;color:rgba(255,255,255,0.25);" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="9" cy="6"  r="1.5"/><circle cx="15" cy="6"  r="1.5"/>
+              <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+              <circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
+            </svg>
+          </div>
+          <!-- Right: perm + close -->
+          <div class="ai-doc-float-topbar-right">
+            <button class="aidoc-topbar-btn" :class="{ 'aidoc-topbar-btn--warn': aiDocPermissionMode !== 'allow_all' }" @mousedown.stop @click.stop="showDocPermModal = true" title="Permission settings">
+              <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </button>
+            <button class="aidoc-topbar-btn aidoc-topbar-btn--close" @mousedown.stop @click="closeAiDoc" title="Close (Esc)">
+              <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <AiMagicPanel
+          ref="aiMagicPanelRef"
+          :panel-open="aiDocOpen"
+          :streaming="aiDocStreaming"
+          :selection-context="aiDocSelection"
+          :messages="aiDocMessages"
+          :permission-mode="aiDocPermissionMode"
+          @close="closeAiDoc"
+          @send="sendAiDoc"
+          @stop="stopAiDoc"
+          @apply="onAiDocApply"
+          @revert="onAiDocRevert"
+          @permission-respond="onDocPermissionRespond"
+        />
+        <!-- Resize handles — all 8 edges/corners -->
+        <div class="ai-doc-float-resize-r"  @mousedown="startPanelResize('r',  $event)"></div>
+        <div class="ai-doc-float-resize-l"  @mousedown="startPanelResize('l',  $event)"></div>
+        <div class="ai-doc-float-resize-b"  @mousedown="startPanelResize('b',  $event)"></div>
+        <div class="ai-doc-float-resize-t"  @mousedown="startPanelResize('t',  $event)"></div>
+        <div class="ai-doc-float-resize-br" @mousedown="startPanelResize('br', $event)"></div>
+        <div class="ai-doc-float-resize-bl" @mousedown="startPanelResize('bl', $event)"></div>
+        <div class="ai-doc-float-resize-tr" @mousedown="startPanelResize('tr', $event)"></div>
+        <div class="ai-doc-float-resize-tl" @mousedown="startPanelResize('tl', $event)"></div>
+      </div>
+    </Teleport>
+
+    <!-- ── Persona pill tooltip (fixed, escapes overflow:hidden) ── -->
+    <Teleport to="body">
+      <div
+        v-if="isAiPanelOwner && personaPillTooltip.visible"
+        class="aidoc-persona-tooltip-fixed"
+        :style="{ top: personaPillTooltip.y + 'px', left: personaPillTooltip.x + 'px' }"
+      >
+        <span class="aidoc-persona-tooltip-name">{{ activeDocPersonaName }}</span>
+        <span v-if="activeDocPersona?.description" class="aidoc-persona-tooltip-desc">{{ activeDocPersona.description }}</span>
+      </div>
+    </Teleport>
+
+    <!-- ── AI Doc Permission Settings Modal ── -->
+    <Teleport to="body">
+      <div v-if="isAiPanelOwner && showDocPermModal" class="aidoc-modal-backdrop">
+        <div class="aidoc-modal aidoc-perm-modal" role="dialog" aria-modal="true">
+          <div class="aidoc-modal-header">
+            <div class="aidoc-modal-header-icon">
+              <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <span class="aidoc-modal-title">Permission Mode</span>
+            <button class="aidoc-modal-close" @click="showDocPermModal = false">
+              <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          <div class="aidoc-perm-body">
+            <button
+              v-for="m in [
+                { id: 'inherit', label: 'Inherit', desc: 'Uses the global mode from Config → Security.' },
+                { id: 'chat_only', label: 'Ask Permission', desc: 'Agent must ask before running shell commands or writing files.' },
+                { id: 'allow_all', label: 'Allow All', desc: 'Agent can run any tool without asking. Danger blocks still apply.' },
+              ]"
+              :key="m.id"
+              class="aidoc-perm-option"
+              :class="{ active: aiDocPermissionMode === m.id }"
+              @click="aiDocPermissionMode = m.id; showDocPermModal = false"
+            >
+              <span class="aidoc-perm-option-label">{{ m.label }}</span>
+              <span class="aidoc-perm-option-desc">{{ m.desc }}</span>
+              <svg v-if="aiDocPermissionMode === m.id" style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ── AI Doc Persona Selection Modal ── -->
+    <Teleport to="body">
+      <div v-if="isAiPanelOwner && showDocPersonaModal" class="aidoc-modal-backdrop">
+        <div class="aidoc-modal" role="dialog" aria-modal="true">
+          <div class="aidoc-modal-header">
+            <div class="aidoc-modal-header-icon">
+              <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <span class="aidoc-modal-title">Select Persona</span>
+            <button class="aidoc-modal-close" @click="showDocPersonaModal = false">
+              <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          <!-- Search -->
+          <div class="ch-modal-search">
+            <svg style="width:14px;height:14px;flex-shrink:0;color:#6B7280;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input ref="docPersonaSearchEl" v-model="docPersonaSearchQuery" type="text" placeholder="Search personas..." class="ch-modal-search-input" />
+          </div>
+          <div class="aidoc-modal-body">
+            <!-- Flat search results -->
+            <template v-if="docPersonaSearchQuery.trim()">
+              <button
+                v-for="p in filteredDocPersonas" :key="p.id"
+                class="ch-modal-item" :class="{ selected: p.id === selectedPersonaId }"
+                @click="selectDocPersona(p.id)"
+              >
+                <div class="ch-modal-item-avatar">
+                  <img v-if="getDocPersonaAvatar(p)" :src="getDocPersonaAvatar(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                  <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+                </div>
+                <div class="ch-modal-item-text">
+                  <span class="ch-modal-item-name">{{ p.name }}</span>
+                  <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+                </div>
+                <svg v-if="p.id === selectedPersonaId" style="width:16px;height:16px;flex-shrink:0;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <div v-if="filteredDocPersonas.length === 0" class="ch-modal-empty">No personas match</div>
+            </template>
+            <!-- Category tree -->
+            <template v-else>
+              <div v-for="cat in personasStore.systemCategories" :key="cat.id" class="ch-cat-section">
+                <button class="ch-cat-header" @click="toggleDocCat(cat.id)">
+                  <svg class="ch-cat-chevron" :class="{ expanded: expandedDocCatIds.has(cat.id) }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                  <span v-if="cat.emoji" class="ch-cat-emoji">{{ cat.emoji }}</span>
+                  <span class="ch-cat-name">{{ cat.name }}</span>
+                  <span class="ch-cat-count">{{ personasStore.personasInCategory(cat.id).length }}</span>
+                </button>
+                <div v-if="expandedDocCatIds.has(cat.id)" class="ch-cat-items">
+                  <button
+                    v-for="p in personasStore.personasInCategory(cat.id)" :key="p.id"
+                    class="ch-modal-item" :class="{ selected: p.id === selectedPersonaId }"
+                    @click="selectDocPersona(p.id)"
+                  >
+                    <div class="ch-modal-item-avatar">
+                      <img v-if="getDocPersonaAvatar(p)" :src="getDocPersonaAvatar(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                      <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+                    </div>
+                    <div class="ch-modal-item-text">
+                      <span class="ch-modal-item-name">{{ p.name }}</span>
+                      <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+                    </div>
+                    <svg v-if="p.id === selectedPersonaId" style="width:16px;height:16px;flex-shrink:0;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  </button>
+                  <div v-if="personasStore.personasInCategory(cat.id).length === 0" class="ch-cat-empty">No personas</div>
+                </div>
+              </div>
+              <!-- All section -->
+              <div class="ch-cat-section">
+                <button class="ch-cat-header" @click="toggleDocCat('__all__')">
+                  <svg class="ch-cat-chevron" :class="{ expanded: expandedDocCatIds.has('__all__') }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                  <span class="ch-cat-name">All</span>
+                  <span class="ch-cat-count">{{ sortedDocPersonas.length }}</span>
+                </button>
+                <div v-if="expandedDocCatIds.has('__all__')" class="ch-cat-items">
+                  <button
+                    v-for="p in sortedDocPersonas" :key="p.id"
+                    class="ch-modal-item" :class="{ selected: p.id === selectedPersonaId }"
+                    @click="selectDocPersona(p.id)"
+                  >
+                    <div class="ch-modal-item-avatar">
+                      <img v-if="getDocPersonaAvatar(p)" :src="getDocPersonaAvatar(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                      <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+                    </div>
+                    <div class="ch-modal-item-text">
+                      <span class="ch-modal-item-name">{{ p.name }}</span>
+                      <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+                    </div>
+                    <svg v-if="p.id === selectedPersonaId" style="width:16px;height:16px;flex-shrink:0;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  </button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- ── Context Menu ── -->
     <Teleport to="body">
@@ -281,6 +633,14 @@
           <button class="ctx-item" @click="startCtxAction('newFile', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
             New Markdown
+          </button>
+          <button class="ctx-item" @click="startCtxAction('newDocx', ctxMenu.targetPath)">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="#2B5797" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13l1.5 5 2-4 2 4L15 13"/></svg>
+            New Document
+          </button>
+          <button class="ctx-item" @click="startCtxAction('newXlsx', ctxMenu.targetPath)">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="#217346" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h8M8 17h8M8 13v4M12 13v4M16 13v4"/></svg>
+            New Spreadsheet
           </button>
           <button class="ctx-item" @click="startCtxAction('newDiagram', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -341,6 +701,34 @@
       </div>
     </Teleport>
 
+    <!-- ── Editor right-click context menu ── -->
+    <Teleport to="body">
+      <div v-if="editorCtxMenu.visible" class="notes-ctx-overlay" @click="closeEditorCtxMenu" @contextmenu.prevent="closeEditorCtxMenu" />
+      <div
+        v-if="editorCtxMenu.visible"
+        class="notes-ctx-menu"
+        :style="{ top: editorCtxMenu.y + 'px', left: editorCtxMenu.x + 'px' }"
+        @click.stop
+      >
+        <!-- AI Edit — always first -->
+        <button
+          class="ctx-item ctx-item-ai"
+          @click="onEditorCtxAskAi"
+        >
+          <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a5 5 0 0 1 5 5c0 5.25-5 13-5 13S7 12.25 7 7a5 5 0 0 1 5-5z"/>
+            <circle cx="12" cy="7" r="1.5" fill="currentColor" stroke="none"/>
+          </svg>
+          Ask AI Assistant
+        </button>
+        <div class="ctx-divider" />
+        <button class="ctx-item" @click="onEditorCtxCopy">
+          <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy
+        </button>
+      </div>
+    </Teleport>
+
     <!-- Confirm Delete Modal (blocked: folder not empty) -->
     <ConfirmModal
       v-if="confirmDeleteTarget?.blocked"
@@ -371,28 +759,317 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onActivated, onBeforeUnmount, defineComponent, h } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onActivated, onBeforeUnmount, defineComponent, h } from 'vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import DrawioEditor from '../components/notes/DrawioEditor.vue'
+import CodeViewer from '../components/notes/CodeViewer.vue'
+import PptxEditor from '../components/notes/PptxEditor.vue'
+import DocxEditor from '../components/notes/DocxEditor.vue'
+import XlsxEditor from '../components/notes/XlsxEditor.vue'
+import AiMagicPanel from '../components/notes/AiMagicPanel.vue'
+import SearchReplaceBar from '../components/notes/SearchReplaceBar.vue'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import DOMPurify from 'dompurify'
 import TurndownService from 'turndown'
 import { gfm } from 'turndown-plugin-gfm'
 import { useObsidianStore } from '../stores/obsidian'
+import { usePersonasStore, BUILTIN_DOC_EDITOR_ID } from '../stores/personas'
+import { useConfigStore } from '../stores/config'
+import { useSkillsStore } from '../stores/skills'
+import { useMcpStore } from '../stores/mcp'
+import { useToolsStore } from '../stores/tools'
+import { useKnowledgeStore } from '../stores/knowledge'
+import { useAiMagic } from '../composables/useAiMagic'
+import { getAvatarDataUri } from '../components/personas/personaAvatars'
+import { useFocusModeStore } from '../stores/focusMode'
+
+// When true, this instance is embedded inside FocusModeView and owns the AI panel.
+// The router-level instance suppresses its panel to avoid duplicates.
+const props = defineProps({ isEmbedded: { type: Boolean, default: false } })
 
 const store = useObsidianStore()
+const personasStore = usePersonasStore()
+const configStore = useConfigStore()
+const focusModeStore = useFocusModeStore()
+
+// This instance should render the floating AI panel only when:
+// - it IS the embedded focus-mode instance, OR
+// - focus mode is not active (normal standalone use)
+const isAiPanelOwner = computed(() => props.isEmbedded || !focusModeStore.isFocusMode)
+const skillsStore = useSkillsStore()
+const mcpStore = useMcpStore()
+const toolsStore = useToolsStore()
+const knowledgeStore = useKnowledgeStore()
+const {
+  panelOpen: aiDocOpen, streaming: aiDocStreaming, requestId: aiDocRequestId,
+  selectionContext: aiDocSelection, messages: aiDocMessages,
+  selectedPersonaId,
+  open: openAiDoc, close: _closeAiDocRaw, send: _sendAiDocRaw, stop: stopAiDoc,
+  updateSelection: updateAiDocSelection, updateFileContent: updateAiDocFileContent,
+  getReplacementInfo, markApplied: markAiDocApplied, markReverted: markAiDocReverted,
+} = useAiMagic()
+
+/** Close the panel and turn off the AI Doc switch. */
+function closeAiDoc() {
+  _closeAiDocRaw()
+  aiDocEnabled.value = false
+}
+
+// Available personas for the AI Doc persona selector (system type only)
+const availablePersonas = computed(() => personasStore.systemPersonas || [])
+const sortedDocPersonas = computed(() =>
+  [...availablePersonas.value].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
+)
+
+// Persona toolbar computeds
+const activeDocPersona = computed(() => personasStore.getPersonaById(selectedPersonaId.value))
+const activeDocPersonaName = computed(() => activeDocPersona.value?.name || 'Select Persona')
+const activeDocPersonaAvatar = computed(() => {
+  if (!activeDocPersona.value?.avatar) return null
+  return getAvatarDataUri(activeDocPersona.value.avatar)
+})
+function getDocPersonaAvatar(persona) {
+  if (!persona?.avatar) return null
+  return getAvatarDataUri(persona.avatar)
+}
+
+// Persona modal — search + category state
+const docPersonaSearchEl = ref(null)
+const docPersonaSearchQuery = ref('')
+const expandedDocCatIds = ref(new Set())
+const filteredDocPersonas = computed(() => {
+  const q = docPersonaSearchQuery.value.toLowerCase().trim()
+  if (!q) return sortedDocPersonas.value
+  return sortedDocPersonas.value.filter(p =>
+    p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q)
+  )
+})
+function toggleDocCat(id) {
+  const s = new Set(expandedDocCatIds.value)
+  if (s.has(id)) s.delete(id); else s.add(id)
+  expandedDocCatIds.value = s
+}
+function openDocPersonaModal() {
+  showDocPersonaModal.value = true
+  docPersonaSearchQuery.value = ''
+  expandedDocCatIds.value = new Set()
+  nextTick(() => docPersonaSearchEl.value?.focus())
+}
+function selectDocPersona(id) {
+  selectedPersonaId.value = id
+  showDocPersonaModal.value = false
+}
+
+// Persona + permission modals
+const showDocPersonaModal = ref(false)
+const showDocPermModal = ref(false)
+
+// Persona pill tooltip — position: fixed to escape overflow:hidden on the panel
+const personaPillTooltip = reactive({ visible: false, x: 0, y: 0 })
+function showPersonaPillTooltip(e) {
+  const rect = e.currentTarget.getBoundingClientRect()
+  personaPillTooltip.x = rect.left
+  personaPillTooltip.y = rect.bottom + 6
+  personaPillTooltip.visible = true
+}
+function hidePersonaPillTooltip() {
+  personaPillTooltip.visible = false
+}
+
+// Permission mode for AI Doc (default: allow_all for backwards compat)
+const aiDocPermissionMode = ref('allow_all')
+
+/** Wrap sendAiDoc to inject agent config from stores. */
+function sendAiDoc(userText) {
+  const persona = personasStore.getPersonaById(selectedPersonaId.value)
+  const agentConfig = {
+    personaPrompt: persona?.prompt || '',
+    enabledSkills: JSON.parse(JSON.stringify(skillsStore.skills || [])),
+    mcpServers: JSON.parse(JSON.stringify(mcpStore.servers || [])),
+    httpTools: JSON.parse(JSON.stringify(toolsStore.tools || [])),
+    knowledgeConfig: {
+      ragEnabled: knowledgeStore.ragEnabled,
+      pineconeApiKey: knowledgeStore.pineconeApiKey,
+      pineconeIndexName: knowledgeStore.pineconeIndexName,
+      indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs || {})),
+    },
+    permissionMode: aiDocPermissionMode.value,
+  }
+  _sendAiDocRaw(userText, agentConfig)
+}
+
+/** Handle permission response from AiMagicPanel PermissionPrompt buttons. */
+function onDocPermissionRespond({ blockId, decision, command }) {
+  if (!aiDocRequestId.value) return
+  window.electronAPI.docPermissionResponse(aiDocRequestId.value, { blockId, decision, pattern: command })
+}
+
+// AI Doc switch (golden toggle) — controls panel visibility
+const aiDocEnabled = ref(true)
+// Track whether text is currently selected (for wand button)
+const hasSelection = ref(false)
+// Revert snapshots: msgId → previous file content
+const _revertSnapshots = new Map()
+
+// Floating AI Doc panel state (position + size)
+const AI_PANEL_STORAGE_KEY = 'clankai-aidoc-panel'
+const AI_PANEL_MIN_W = 300
+const AI_PANEL_MIN_H = 300
+
+const aiPanel = reactive({
+  x: 0, y: 0, w: 350, h: 420,
+})
+
+// Load persisted size on startup, then clamp position to fit current window
+try {
+  const saved = JSON.parse(localStorage.getItem(AI_PANEL_STORAGE_KEY) || '{}')
+  if (saved.w) aiPanel.w = Math.max(AI_PANEL_MIN_W, Math.min(saved.w, window.innerWidth))
+  if (saved.h) aiPanel.h = Math.max(AI_PANEL_MIN_H, Math.min(saved.h, window.innerHeight))
+} catch {}
+// Default position: bottom-right corner, fully within window
+aiPanel.x = Math.max(0, window.innerWidth  - aiPanel.w - 24)
+aiPanel.y = Math.max(0, window.innerHeight - aiPanel.h - 24)
+
+function _persistPanelSize() {
+  try { localStorage.setItem(AI_PANEL_STORAGE_KEY, JSON.stringify({ w: aiPanel.w, h: aiPanel.h })) } catch {}
+}
+let _panelSizeTimer = null
+function _debouncePersistPanel() {
+  if (_panelSizeTimer) clearTimeout(_panelSizeTimer)
+  _panelSizeTimer = setTimeout(_persistPanelSize, 300)
+}
+
+function _clampPanel() {
+  const maxX = window.innerWidth - aiPanel.w
+  const maxY = window.innerHeight - aiPanel.h
+  aiPanel.x = Math.max(0, Math.min(aiPanel.x, maxX))
+  aiPanel.y = Math.max(0, Math.min(aiPanel.y, maxY))
+}
+
+function _positionNearSelection() {
+  const W = window.innerWidth
+  const H = window.innerHeight
+  const pw = aiPanel.w
+  const ph = aiPanel.h
+  const rect = _cachedSel.rect
+  let x, y
+  if (!rect) {
+    x = W - pw - 24
+    y = H - ph - 24
+  } else {
+    // Prefer right of selection, fall back to left
+    x = rect.right + 16
+    if (x + pw > W) x = rect.left - pw - 16
+    // Prefer aligned to selection top, slide up if needed
+    y = rect.top
+    if (y + ph > H) y = H - ph - 8
+  }
+  // Hard clamp — always fully inside window
+  aiPanel.x = Math.max(0, Math.min(x, W - pw))
+  aiPanel.y = Math.max(0, Math.min(y, H - ph))
+}
+
+function startPanelDrag(e) {
+  e.preventDefault()
+  const startMX = e.clientX
+  const startMY = e.clientY
+  const startX = aiPanel.x
+  const startY = aiPanel.y
+  document.body.style.userSelect = 'none'
+
+  function onMove(ev) {
+    const dx = ev.clientX - startMX
+    const dy = ev.clientY - startMY
+    aiPanel.x = Math.max(0, Math.min(startX + dx, window.innerWidth - aiPanel.w))
+    aiPanel.y = Math.max(0, Math.min(startY + dy, window.innerHeight - aiPanel.h))
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    document.body.style.userSelect = ''
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+function startPanelResize(edge, e) {
+  e.preventDefault()
+  const startMX = e.clientX
+  const startMY = e.clientY
+  const startW = aiPanel.w
+  const startH = aiPanel.h
+  const startX = aiPanel.x
+  const startY = aiPanel.y
+  document.body.style.userSelect = 'none'
+
+  function onMove(ev) {
+    const dx = ev.clientX - startMX
+    const dy = ev.clientY - startMY
+    // Right edge
+    if (edge === 'r' || edge === 'br' || edge === 'tr') {
+      aiPanel.w = Math.max(AI_PANEL_MIN_W, Math.min(startW + dx, window.innerWidth - aiPanel.x))
+    }
+    // Left edge — also moves x
+    if (edge === 'l' || edge === 'bl' || edge === 'tl') {
+      const newW = Math.max(AI_PANEL_MIN_W, startW - dx)
+      aiPanel.x = Math.max(0, startX + startW - newW)
+      aiPanel.w = newW
+    }
+    // Bottom edge
+    if (edge === 'b' || edge === 'br' || edge === 'bl') {
+      aiPanel.h = Math.max(AI_PANEL_MIN_H, Math.min(startH + dy, window.innerHeight - aiPanel.y))
+    }
+    // Top edge — also moves y
+    if (edge === 't' || edge === 'tr' || edge === 'tl') {
+      const newH = Math.max(AI_PANEL_MIN_H, startH - dy)
+      aiPanel.y = Math.max(0, startY + startH - newH)
+      aiPanel.h = newH
+    }
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    document.body.style.userSelect = ''
+    _debouncePersistPanel()
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+// Refs for editor child components (used for ai-edit integration)
+const codeViewerRef = ref(null)
+const codeViewerTheme = ref('dark')
+const aiMagicPanelRef = ref(null)
+const docxEditorRef = ref(null)
+const pptxEditorRef = ref(null)
+const xlsxEditorRef = ref(null)
+const sourceTextareaRef = ref(null)
+const searchBarRef = ref(null)
+
+// ── Search / Replace state ──
+const searchBarOpen = ref(false)
+
+const isTextFile = computed(() => isMarkdown.value || isTextLike.value)
+const searchFileType = computed(() => {
+  if (isPptx.value) return 'pptx'
+  if (isXlsx.value) return 'xlsx'
+  if (isDocx.value) return 'docx'
+  return 'text'
+})
+const activeTextarea = computed(() => sourceTextareaRef.value || null)
 
 const editMode = ref(false)
 const linkError = ref('')
 let linkErrorTimer = null
 const saving = ref(false)
+const saveStatus = ref(null) // null | 'saving' | 'ok' | 'error'
+let _saveStatusTimer = null
 const copied = ref(false)
 let copiedTimer = null
 const formattedEl = ref(null)
 const formattedHtml = ref('')
-let autoSaveTimer = null
 let editingFormatted = false  // flag to prevent circular updates
 
 // Turndown: HTML → Markdown converter (with GFM tables, strikethrough, etc.)
@@ -424,6 +1101,34 @@ turndown.addRule('local-images', {
   }
 })
 const isDrawio = computed(() => store.activeFile?.name?.endsWith('.drawio') ?? false)
+const isMarkdown = computed(() => store.activeFile?.name?.endsWith('.md') ?? false)
+const isPptx = computed(() => /\.pptx?$/i.test(store.activeFile?.name || ''))
+const isDocx = computed(() => /\.docx?$/i.test(store.activeFile?.name || ''))
+const isXlsx = computed(() => /\.xlsx?$/i.test(store.activeFile?.name || ''))
+
+const CODE_EXTS = new Set([
+  'js','ts','py','java','go','rs','c','cpp','h','cs','rb','php','swift','kt',
+  'lua','sh','bash','zsh','ps1','sql','r','dart','scala','ex','vue','svelte',
+  'jsx','tsx','mjs','cjs','css','scss','less','html','xml','json','yaml','yml',
+  'toml','ini','cfg','conf','pl','svg','dockerfile','makefile','env','gitignore',
+])
+const IMAGE_EXTS = new Set(['png','jpg','jpeg','gif','svg','webp','ico','bmp','tiff'])
+
+const activeExt = computed(() => {
+  const name = store.activeFile?.name || ''
+  return (name.split('.').pop() || '').toLowerCase()
+})
+const isCode = computed(() => CODE_EXTS.has(activeExt.value))
+const isImage = computed(() => IMAGE_EXTS.has(activeExt.value))
+const isTextLike = computed(() => !isDrawio.value && !isMarkdown.value && !isImage.value && !isPptx.value && !isDocx.value && !isXlsx.value)
+
+const IMAGE_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', ico: 'image/x-icon', tiff: 'image/tiff', svg: 'image/svg+xml' }
+const imageDataUri = computed(() => {
+  const f = store.activeFile
+  if (!f?.binary || !f.base64) return ''
+  const mime = IMAGE_MIME[activeExt.value] || 'image/png'
+  return `data:${mime};base64,${f.base64}`
+})
 
 // ── Context menu state ──
 const ctxMenu = ref({ visible: false, x: 0, y: 0, targetPath: '', targetType: '' })
@@ -439,6 +1144,8 @@ const ctxActionLabel = computed(() => {
   const t = ctxAction.value.type
   if (t === 'newFile')    return 'New Markdown File'
   if (t === 'newDiagram') return 'New Diagram'
+  if (t === 'newDocx')    return 'New Document'
+  if (t === 'newXlsx')    return 'New Spreadsheet'
   if (t === 'newFolder')  return 'New Folder'
   if (t === 'rename')     return 'Rename'
   return ''
@@ -448,6 +1155,8 @@ const ctxActionPlaceholder = computed(() => {
   const t = ctxAction.value.type
   if (t === 'newFile')    return 'note.md'
   if (t === 'newDiagram') return 'diagram.drawio'
+  if (t === 'newDocx')    return 'document.docx'
+  if (t === 'newXlsx')    return 'spreadsheet.xlsx'
   if (t === 'newFolder')  return 'folder name'
   return ''
 })
@@ -469,30 +1178,485 @@ watch(() => store.activeFile?.content, (val) => {
   }
 }, { immediate: true })
 
-// Sync local → store on every edit (marks dirty) + trigger auto-save
+// Sync local → store on every edit (marks dirty)
 watch(editorContent, (val) => {
   if (store.activeFile && val !== store.activeFile.content) {
     store.updateContent(val)
-    scheduleAutoSave()
   }
 })
 
-// Debounced auto-save (800ms after last keystroke)
-function scheduleAutoSave() {
-  if (autoSaveTimer) clearTimeout(autoSaveTimer)
-  autoSaveTimer = setTimeout(async () => {
-    if (store.activeFile?.dirty) {
-      saving.value = true
-      await store.saveFile()
-      saving.value = false
-    }
-  }, 800)
-}
-
 onBeforeUnmount(() => {
-  if (autoSaveTimer) clearTimeout(autoSaveTimer)
   // Flush any pending save
   if (store.activeFile?.dirty) store.saveFile()
+  document.removeEventListener('keydown', onGlobalKeydown, true)
+  document.removeEventListener('selectionchange', _snapshotSelection)
+  window.removeEventListener('resize', _onWindowResize)
+  clearTimeout(_selectionDebounce)
+  clearTimeout(_panelSizeTimer)
+})
+
+// ── AI Magic (Ctrl+K / wand button) ──
+
+// Cached selection: continuously updated on selectionchange so it survives
+// focus-stealing events like button clicks.
+const _cachedSel = { text: '', range: null, rect: null, taStart: -1, taEnd: -1 }
+let _selectionDebounce = null
+
+/** Snapshot the current browser/textarea/CodeViewer selection into _cachedSel. */
+function _snapshotSelection() {
+  // 1) Cache textarea selection for markdown source mode
+  const ta = sourceTextareaRef.value
+  if (ta && document.activeElement === ta && ta.selectionStart !== ta.selectionEnd) {
+    _cachedSel.taStart = ta.selectionStart
+    _cachedSel.taEnd = ta.selectionEnd
+    _cachedSel.text = ta.value.slice(ta.selectionStart, ta.selectionEnd)
+    _cachedSel.range = null
+    _cachedSel.rect = ta.getBoundingClientRect()
+    return
+  }
+  // 2) Cache CodeViewer's internal line selection (line-number click selection)
+  const cv = codeViewerRef.value
+  if (cv) {
+    const cvData = cv.getSelectedText?.()
+    if (cvData && cvData.text.trim()) {
+      _cachedSel.text = cvData.text
+      _cachedSel.range = null
+      _cachedSel.taStart = -1
+      _cachedSel.taEnd = -1
+      const cvEl = cv.$el || cv
+      _cachedSel.rect = cvEl?.getBoundingClientRect?.() || { top: 200, left: 200, bottom: 400, width: 400, height: 200 }
+      return
+    }
+  }
+  // 3) Cache browser selection (contenteditable, drag-selected text, etc.)
+  const sel = window.getSelection()
+  if (sel && !sel.isCollapsed && sel.toString().trim()) {
+    const range = sel.getRangeAt(0).cloneRange()
+    const rect = range.getBoundingClientRect()
+    _cachedSel.text = sel.toString().trim()
+    _cachedSel.range = range
+    _cachedSel.rect = rect
+    _cachedSel.taStart = -1
+    _cachedSel.taEnd = -1
+    return
+  }
+}
+
+function onEditorMouseUp() {
+  clearTimeout(_selectionDebounce)
+  _selectionDebounce = setTimeout(() => {
+    _snapshotSelection()
+    hasSelection.value = !!_cachedSel.text
+    // Keep AI Doc composable in sync with current selection
+    updateAiDocSelection(_cachedSel.text || '')
+
+    // Auto-show floating panel on text selection when AI Doc is enabled
+    if (aiDocEnabled.value && _cachedSel.text) {
+      if (!aiDocOpen.value) {
+        _ensureAiDocPanel()
+        _positionNearSelection()
+      } else {
+        // Panel already open — just update selection context, don't reposition
+      }
+    }
+  }, 150)
+}
+
+function onEditorMouseDown() {
+  _cachedSel.text = ''
+  _cachedSel.range = null
+  _cachedSel.rect = null
+  _cachedSel.taStart = -1
+  _cachedSel.taEnd = -1
+  hasSelection.value = false
+}
+
+function onAiMagicButtonClick() {
+  _snapshotSelection()
+  _openAiDocFromSelection()
+}
+
+/** Toggle the AI Doc switch on/off. When turning on, auto-open panel. */
+function toggleAiDoc() {
+  aiDocEnabled.value = !aiDocEnabled.value
+  if (aiDocEnabled.value && store.activeFile) {
+    _ensureAiDocPanel()
+  } else if (!aiDocEnabled.value) {
+    closeAiDoc()
+  }
+}
+
+/** Explicit save — clears dirty flag without auto-save timer. */
+async function saveFile() {
+  if (saveStatus.value === 'saving') return
+  if (_saveStatusTimer) clearTimeout(_saveStatusTimer)
+  saveStatus.value = 'saving'
+  saving.value = true
+  try {
+    await store.saveFile()
+    saveStatus.value = 'ok'
+  } catch {
+    saveStatus.value = 'error'
+  } finally {
+    saving.value = false
+    _saveStatusTimer = setTimeout(() => { saveStatus.value = null }, 2000)
+  }
+}
+
+/** Open AI Doc panel for current file, providing full content as context. */
+function _ensureAiDocPanel() {
+  if (!store.activeFile) return
+  if (aiDocOpen.value) return // already open
+
+  const ext = (store.activeFile.name || '').split('.').pop()?.toLowerCase() || ''
+  let fullContent = store.activeFile.content || ''
+
+  // For binary office files, always load the COMPLETE file content so AI has full context
+  if (isPptx.value && pptxEditorRef.value?.getAllSlidesText) {
+    const text = pptxEditorRef.value.getAllSlidesText()
+    if (text) fullContent = `[Presentation: ${store.activeFile.name}]\n\n${text}`
+  } else if (isXlsx.value && xlsxEditorRef.value?.getAllSheetsText) {
+    const text = xlsxEditorRef.value.getAllSheetsText()
+    if (text) fullContent = `[Spreadsheet: ${store.activeFile.name}]\n\n${text}`
+  } else if (isDocx.value && docxEditorRef.value?.getPlainText) {
+    const text = docxEditorRef.value.getPlainText()
+    if (text) fullContent = `[Document: ${store.activeFile.name}]\n\n${text}`
+  }
+  _pendingBinaryContent = null
+
+  const fileCtx = {
+    fileName: store.activeFile.name || '',
+    filePath: store.activeFile.path || '',
+    language: isMarkdown.value ? 'markdown' : ext,
+  }
+  openAiDoc(fullContent, fileCtx)
+}
+
+function _openAiDocFromSelection() {
+  if (!store.activeFile) return
+  // Ensure panel is open
+  _ensureAiDocPanel()
+  // Update selection context
+  updateAiDocSelection(_cachedSel.text || '')
+}
+
+// ── Editor right-click context menu ──
+const editorCtxMenu = ref({ visible: false, x: 0, y: 0, hasSelection: false })
+
+function onEditorContextMenu(e) {
+  // Only intercept for files that support AI Doc (text/markdown/code — not drawio/image/office binary)
+  if (isDrawio.value || isImage.value || isPptx.value || isDocx.value || isXlsx.value || !store.activeFile) return
+  e.preventDefault()
+  e.stopPropagation()
+  // Snapshot selection first
+  _snapshotSelection()
+  const hasSelection = !!_cachedSel.text
+  editorCtxMenu.value = {
+    visible: true,
+    x: Math.min(e.clientX, window.innerWidth - 180),
+    y: Math.min(e.clientY, window.innerHeight - 120),
+    hasSelection,
+  }
+}
+
+function closeEditorCtxMenu() {
+  editorCtxMenu.value.visible = false
+}
+
+function onEditorCtxAskAi() {
+  closeEditorCtxMenu()
+  if (!aiDocEnabled.value) aiDocEnabled.value = true
+  if (!aiDocOpen.value) _ensureAiDocPanel()
+  updateAiDocSelection(_cachedSel.text || '')
+  nextTick(() => aiMagicPanelRef.value?.focusInput())
+}
+
+function onEditorCtxCopy() {
+  closeEditorCtxMenu()
+  if (_cachedSel.text) {
+    navigator.clipboard.writeText(_cachedSel.text)
+  } else {
+    document.execCommand('copy')
+  }
+}
+
+/** Handle @ai-edit from DOCX/PPTX/XLSX/CodeViewer child components. */
+function handleEditorAiEdit({ selectedText, fullFileContent, replaceCallback }) {
+  _editorReplaceCallback = replaceCallback
+  _ensureAiDocPanel()
+  // Always use the complete file content so AI has full context
+  if (isXlsx.value && xlsxEditorRef.value?.getAllSheetsText) {
+    const all = xlsxEditorRef.value.getAllSheetsText()
+    if (all) updateAiDocFileContent(`[Spreadsheet: ${store.activeFile?.name}]\n\n${all}`)
+  } else if (isPptx.value && pptxEditorRef.value?.getAllSlidesText) {
+    const all = pptxEditorRef.value.getAllSlidesText()
+    if (all) updateAiDocFileContent(`[Presentation: ${store.activeFile?.name}]\n\n${all}`)
+  } else if (fullFileContent) {
+    updateAiDocFileContent(fullFileContent)
+  }
+  updateAiDocSelection(selectedText || '')
+}
+let _editorReplaceCallback = null
+
+/** Handle @slide-selected from PptxEditor — fullFileContent = all slides, selectedText = this slide. */
+function handleSlideSelected({ slideNumber, totalSlides, text, fileName }) {
+  // Always refresh full content so AI knows every slide
+  if (pptxEditorRef.value?.getAllSlidesText) {
+    const allText = pptxEditorRef.value.getAllSlidesText()
+    const full = `[Presentation: ${fileName}]\n\n${allText}`
+    if (aiDocOpen.value) {
+      updateAiDocFileContent(full)
+    }
+  }
+  // Focused slide goes into selectedText
+  const focusedLabel = `Slide ${slideNumber} of ${totalSlides}:\n${text}`
+  if (aiDocOpen.value) {
+    updateAiDocSelection(focusedLabel)
+  }
+}
+
+/** Handle @sheet-changed from XlsxEditor — fullFileContent = all sheets, selectedText = this sheet. */
+function handleSheetChanged({ sheetName, sheetIndex, totalSheets, text, fileName }) {
+  if (xlsxEditorRef.value?.getAllSheetsText) {
+    const allText = xlsxEditorRef.value.getAllSheetsText()
+    const full = `[Spreadsheet: ${fileName}]\n\n${allText}`
+    if (aiDocOpen.value) {
+      updateAiDocFileContent(full)
+    }
+  }
+  const focusedLabel = `Sheet "${sheetName}" (${sheetIndex + 1} of ${totalSheets}):\n${text}`
+  if (aiDocOpen.value) {
+    updateAiDocSelection(focusedLabel)
+  }
+}
+
+// No longer needed — always load full content from editor refs directly
+let _pendingBinaryContent = null
+
+/** Apply AI replacement to the document. Stores a revert snapshot. */
+function onAiDocApply(msgId) {
+  const info = getReplacementInfo(msgId)
+  if (!info) return
+
+  const { replacement, targetText } = info
+
+  // Snapshot full file content for revert
+  _revertSnapshots.set(msgId, store.activeFile?.content || editorContent.value)
+
+  // Apply the replacement
+  _applyReplacement(targetText, replacement)
+
+  // Mark as applied in composable
+  markAiDocApplied(msgId)
+
+  // Update the composable's file content to reflect the change
+  updateAiDocFileContent(store.activeFile?.content || editorContent.value)
+}
+
+/** Revert a previously applied AI edit. */
+function onAiDocRevert(msgId) {
+  const snapshot = _revertSnapshots.get(msgId)
+  if (snapshot === undefined) return
+
+  // Restore content
+  store.updateContent(snapshot)
+  editorContent.value = snapshot
+
+  // Clear highlight
+  _clearHighlights()
+
+  // Mark as reverted in composable
+  markAiDocReverted(msgId)
+
+  // Update the composable's file content
+  updateAiDocFileContent(snapshot)
+
+  // Remove snapshot
+  _revertSnapshots.delete(msgId)
+}
+
+/** Apply replacement text into the current editor. */
+function _applyReplacement(targetText, newText) {
+  // 1) If there's an editor-provided callback (DOCX/PPTX/XLSX), use it
+  if (_editorReplaceCallback) {
+    try {
+      _editorReplaceCallback(newText)
+      _editorReplaceCallback = null
+      return
+    } catch { /* fall through */ }
+  }
+
+  // 2) Markdown formatted mode: find and replace via innerHTML
+  if (isMarkdown.value && !editMode.value && formattedEl.value) {
+    const content = editorContent.value
+    const idx = content.indexOf(targetText)
+    if (idx >= 0) {
+      const updated = content.slice(0, idx) + newText + content.slice(idx + targetText.length)
+      editorContent.value = updated
+      store.updateContent(updated)
+      nextTick(() => refreshFormattedHtml())
+    } else {
+      // Whole-file replace
+      editorContent.value = newText
+      store.updateContent(newText)
+      nextTick(() => refreshFormattedHtml())
+    }
+    _addHighlights()
+    return
+  }
+
+  // 3) Markdown source mode: splice in textarea
+  if (isMarkdown.value && editMode.value) {
+    const content = editorContent.value
+    const idx = content.indexOf(targetText)
+    if (idx >= 0) {
+      const before = content.slice(0, idx)
+      const after = content.slice(idx + targetText.length)
+      editorContent.value = before + newText + after
+    } else {
+      editorContent.value = newText
+    }
+    store.updateContent(editorContent.value)
+    return
+  }
+
+  // 4) Code viewer
+  if (isTextLike.value) {
+    const cv = codeViewerRef.value
+    const content = store.activeFile?.content || editorContent.value
+    const idx = content.indexOf(targetText)
+    if (idx >= 0) {
+      const startLine = content.slice(0, idx).split('\n').length - 1
+      const newLineCount = newText.split('\n').length
+      const updated = content.slice(0, idx) + newText + content.slice(idx + targetText.length)
+      store.updateContent(updated)
+      editorContent.value = updated
+      nextTick(() => cv?.setHighlightedLines?.(startLine, startLine + newLineCount - 1))
+    } else {
+      store.updateContent(newText)
+      editorContent.value = newText
+    }
+    return
+  }
+
+  // 5) Whole-file replace fallback
+  if (store.activeFile?.content !== undefined) {
+    const content = store.activeFile.content
+    const idx = content.indexOf(targetText)
+    if (idx >= 0) {
+      const updated = content.slice(0, idx) + newText + content.slice(idx + targetText.length)
+      store.updateContent(updated)
+      editorContent.value = updated
+    } else {
+      store.updateContent(newText)
+      editorContent.value = newText
+    }
+  }
+}
+
+/** Add green highlight spans to formatted view. */
+function _addHighlights() {
+  // For formatted markdown, we add a highlight class via DOM
+  if (formattedEl.value) {
+    nextTick(() => {
+      // Simple approach: highlight the entire formatted content briefly
+      formattedEl.value?.classList.add('ai-edit-highlight')
+    })
+  }
+}
+
+/** Clear all AI edit highlights (called on doc switch / page leave). */
+function _clearHighlights() {
+  document.querySelectorAll('.ai-edit-highlight').forEach(el => {
+    el.classList.remove('ai-edit-highlight')
+    el.classList.add('ai-edit-highlight-fade')
+    setTimeout(() => {
+      el.classList.remove('ai-edit-highlight-fade')
+      // For span wrappers, unwrap them
+      if (el.tagName === 'SPAN' && el.parentNode) {
+        el.parentNode.replaceChild(document.createTextNode(el.textContent), el)
+        el.parentNode.normalize()
+      }
+    }, 600)
+  })
+  codeViewerRef.value?.clearHighlightedLines?.()
+}
+
+
+function onGlobalKeydown(e) {
+  const ctrl = e.ctrlKey || e.metaKey
+  // Ctrl+K / Cmd+K triggers AI Doc
+  if (ctrl && e.key === 'k') {
+    if (!store.activeFile) return
+    e.preventDefault()
+    _snapshotSelection()
+    _openAiDocFromSelection()
+  }
+  // Ctrl+S / Cmd+S manual save
+  if (ctrl && e.key === 's') {
+    if (!store.activeFile) return
+    e.preventDefault()
+    saveFile()
+  }
+  // Ctrl+F — open search bar
+  if (ctrl && e.key === 'f') {
+    if (!store.activeFile || isDrawio.value || isImage.value) return
+    e.preventDefault()
+    openSearchBar()
+  }
+  // Ctrl+H — open search/replace bar
+  if (ctrl && e.key === 'h') {
+    if (!store.activeFile || isDrawio.value || isImage.value) return
+    e.preventDefault()
+    openSearchBar()
+  }
+  // Escape closes search bar
+  if (e.key === 'Escape' && searchBarOpen.value) {
+    searchBarOpen.value = false
+  }
+}
+
+function _onWindowResize() { _clampPanel() }
+
+// Attach Ctrl+K listener + selectionchange cache on mount
+onMounted(() => {
+  document.addEventListener('keydown', onGlobalKeydown, true)
+  document.addEventListener('selectionchange', _snapshotSelection)
+  window.addEventListener('resize', _onWindowResize)
+})
+
+// Auto-open AI Doc panel when a supported file is opened (if switch is on)
+watch(() => store.activeFile?.path, (newPath, oldPath) => {
+  if (newPath !== oldPath) {
+    // Clear highlights from previous file
+    _clearHighlights()
+    // Clear revert snapshots from previous file
+    _revertSnapshots.clear()
+    _editorReplaceCallback = null
+    _pendingBinaryContent = null
+    hasSelection.value = false
+    searchBarOpen.value = false
+  }
+  if (newPath && aiDocEnabled.value && !isDrawio.value && !isImage.value) {
+    // Use nextTick to ensure activeFile.content is loaded
+    nextTick(() => _ensureAiDocPanel())
+  } else {
+    closeAiDoc()
+  }
+})
+
+// Close AI panel when docs pane is hidden in focus mode (toggle or exit)
+watch(() => [focusModeStore.showDocs, focusModeStore.isFocusMode], ([showDocs, isFocusMode]) => {
+  if (!showDocs || !isFocusMode) {
+    closeAiDoc()
+  }
+})
+
+// Keep composable's file content in sync when content changes
+watch(editorContent, (val) => {
+  if (aiDocOpen.value) {
+    updateAiDocFileContent(val)
+  }
 })
 
 
@@ -726,7 +1890,7 @@ watch(editMode, async (val) => {
 // Refresh tree + re-render active md file when navigating to this view
 async function onViewEnter() {
   if (store.vaultPath) store.loadTree()
-  if (store.activeFile && !store.activeFile.name?.endsWith('.drawio')) {
+  if (store.activeFile && store.activeFile.name?.endsWith('.md')) {
     await refreshFormattedHtml()
   }
 }
@@ -737,6 +1901,88 @@ onActivated(onViewEnter)
 watch(() => ctxAction.value.visible, async (v) => {
   if (v) { await nextTick(); ctxInputRef.value?.focus() }
 })
+
+async function openWithExternalApp() {
+  if (!store.activeFile?.path) return
+  await window.electronAPI.openFile(store.activeFile.path)
+}
+
+// ── Search / Replace handlers ──
+function openSearchBar() {
+  searchBarOpen.value = true
+  nextTick(() => searchBarRef.value?.focus())
+}
+
+function _makeOpts({ matchCase, wholeWord }) {
+  return { matchCase: !!matchCase, wholeWord: !!wholeWord }
+}
+
+function _getBinaryEditorRef() {
+  if (isPptx.value) return pptxEditorRef.value
+  if (isXlsx.value) return xlsxEditorRef.value
+  if (isDocx.value) return docxEditorRef.value
+  return null
+}
+
+function onSearchCountRequest({ query, matchCase, wholeWord }) {
+  const ref = _getBinaryEditorRef()
+  if (!ref?.countMatches) return
+  const count = ref.countMatches(query, _makeOpts({ matchCase, wholeWord }))
+  searchBarRef.value?.updateCount(count)
+}
+
+function onSearchFindNext({ query, matchCase, wholeWord }) {
+  // For binary editors, no element-level navigation — just re-count to confirm
+  onSearchCountRequest({ query, matchCase, wholeWord })
+}
+function onSearchFindPrev({ query, matchCase, wholeWord }) {
+  onSearchCountRequest({ query, matchCase, wholeWord })
+}
+
+function onSearchReplaceOne({ search, replacement, matchCase, wholeWord, single, matchStart, matchEnd }) {
+  const opts = _makeOpts({ matchCase, wholeWord })
+  if (isTextFile.value) {
+    // For text: replace the currently highlighted match by position
+    if (matchStart != null && matchEnd != null) {
+      const content = editorContent.value
+      const newContent = content.slice(0, matchStart) + replacement + content.slice(matchEnd)
+      editorContent.value = newContent
+      searchBarRef.value?.recompute()
+      searchBarRef.value?.showFeedback('1 replaced', true)
+    }
+  } else {
+    const ref = _getBinaryEditorRef()
+    if (!ref?.performSearchReplace) return
+    const { replaced } = ref.performSearchReplace(search, replacement, { ...opts, replaceAll: false })
+    onSearchCountRequest({ query: search, ...opts })
+    searchBarRef.value?.showFeedback(replaced ? `${replaced} replaced` : 'Not found', replaced > 0)
+  }
+}
+
+function onSearchReplaceAll({ search, replacement, matchCase, wholeWord }) {
+  const opts = _makeOpts({ matchCase, wholeWord })
+  if (isTextFile.value) {
+    const flags = matchCase ? 'g' : 'gi'
+    const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pattern = wholeWord ? `(?<![\\w])${escaped}(?![\\w])` : escaped
+    try {
+      const re = new RegExp(pattern, flags)
+      const original = editorContent.value
+      const replaced = original.match(re)?.length || 0
+      editorContent.value = original.replace(re, replacement)
+      searchBarRef.value?.recompute()
+      searchBarRef.value?.showFeedback(`${replaced} replaced`, replaced > 0)
+    } catch {
+      searchBarRef.value?.showFeedback('Invalid pattern', false)
+    }
+  } else {
+    const ref = _getBinaryEditorRef()
+    if (!ref?.performSearchReplace) return
+    const { replaced } = ref.performSearchReplace(search, replacement, { ...opts, replaceAll: true })
+    onSearchCountRequest({ query: search, ...opts })
+    searchBarRef.value?.showFeedback(replaced ? `${replaced} replaced` : 'Not found', replaced > 0)
+  }
+}
 
 async function copySource() {
   if (!store.activeFile?.content) return
@@ -821,6 +2067,29 @@ async function onDrawioSave(xml) {
   saving.value = false
 }
 
+async function onPptxSave(base64) {
+  saving.value = true
+  await store.saveBinaryFile(base64)
+  saving.value = false
+}
+
+async function onDocxSave(base64) {
+  saving.value = true
+  await store.saveBinaryFile(base64)
+  saving.value = false
+}
+
+async function onXlsxSave(base64) {
+  saving.value = true
+  await store.saveBinaryFile(base64)
+  saving.value = false
+}
+
+function onCodeContentChange(newContent) {
+  store.updateContent(newContent)
+  editorContent.value = newContent
+}
+
 // ── Context menu handlers ──
 const ctxPathCopied = ref(false)
 
@@ -878,6 +2147,18 @@ async function commitCtxAction() {
     await store.createFile(parent, rawName)
   } else if (type === 'newDiagram') {
     const result = await store.createDrawio(parent, rawName)
+    if (result?.path) {
+      const parts = result.path.split(/[/\\]/)
+      await store.openFile(result.path, parts[parts.length - 1])
+    }
+  } else if (type === 'newDocx') {
+    const result = await store.createDocx(parent, rawName)
+    if (result?.path) {
+      const parts = result.path.split(/[/\\]/)
+      await store.openFile(result.path, parts[parts.length - 1])
+    }
+  } else if (type === 'newXlsx') {
+    const result = await store.createXlsx(parent, rawName)
     if (result?.path) {
       const parts = result.path.split(/[/\\]/)
       await store.openFile(result.path, parts[parts.length - 1])
@@ -1061,6 +2342,33 @@ function fileTypeIcon(name, color, active = false) {
   if (ext === 'drawio') {
     return h('svg', { style: `width:18px;height:18px;flex-shrink:0;`, viewBox: '0 0 24 24', fill: active ? '#fff' : '#F08705' }, [
       h('path', { d: 'M19.69 13.419h-2.527l-2.667-4.555a1.292 1.292 0 001.035-1.28V4.16c0-.725-.576-1.312-1.302-1.312H9.771c-.726 0-1.312.576-1.312 1.301v3.435c0 .619.426 1.152 1.034 1.28l-2.666 4.555H4.309c-.725 0-1.312.576-1.312 1.301v3.435c0 .725.576 1.312 1.302 1.312h4.458c.726 0 1.312-.576 1.312-1.302v-3.434c0-.726-.576-1.312-1.301-1.312h-.437l2.645-4.523h2.059l2.656 4.523h-.438c-.725 0-1.312.576-1.312 1.301v3.435c0 .725.576 1.312 1.302 1.312H19.7c.726 0 1.312-.576 1.312-1.302v-3.434c0-.726-.576-1.312-1.301-1.312zM24 22.976c0 .565-.459 1.024-1.013 1.024H1.024A1.022 1.022 0 010 22.987V1.024C0 .459.459 0 1.013 0h21.963C23.541 0 24 .459 24 1.013z' })
+    ])
+  }
+
+  // Word document (blue #2B5797)
+  if (ext === 'docx' || ext === 'doc') {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: active ? '#fff' : '#2B5797', 'stroke-width': '2' }, [
+      h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
+      h('polyline', { points: '14 2 14 8 20 8' }),
+      h('path', { d: 'M8 13l1.5 5 2-4 2 4L15 13' }),
+    ])
+  }
+
+  // Excel spreadsheet (green #217346)
+  if (ext === 'xlsx' || ext === 'xls') {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: active ? '#fff' : '#217346', 'stroke-width': '2' }, [
+      h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
+      h('polyline', { points: '14 2 14 8 20 8' }),
+      h('path', { d: 'M8 13h8M8 17h8M8 13v4M12 13v4M16 13v4' }),
+    ])
+  }
+
+  // PowerPoint
+  if (ext === 'pptx' || ext === 'ppt') {
+    return h('svg', { style: s, viewBox: '0 0 24 24', fill: 'none', stroke: active ? '#fff' : '#D04423', 'stroke-width': '2' }, [
+      h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
+      h('polyline', { points: '14 2 14 8 20 8' }),
+      h('path', { d: 'M9 13h2a2 2 0 1 0 0-4H9v8' }),
     ])
   }
 
@@ -1383,6 +2691,14 @@ defineExpose({ docTreeCollapsed })
 .ctx-item:hover { background: #1F1F1F; color: #FFFFFF; }
 .ctx-item.ctx-danger { color: #FF453A; }
 .ctx-item.ctx-danger:hover { background: rgba(255,69,58,0.15); }
+.ctx-item.ctx-item-ai {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  font-weight: 600;
+}
+.ctx-item.ctx-item-ai:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+}
 .ctx-divider { height: 1px; background: #2A2A2A; margin: 4px 0; }
 
 /* ── Context action dialog ── */
@@ -1551,5 +2867,310 @@ defineExpose({ docTreeCollapsed })
 .doc-tree-expand-tab:hover {
   width: 1.875rem;
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+}
+
+/* ── AI Doc toggle button ── */
+.ai-doc-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid #F59E0B;
+  background: rgba(245, 158, 11, 0.08);
+  color: #D97706;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.ai-doc-toggle-btn:hover:not(.active) {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #D97706;
+  color: #B45309;
+}
+.ai-doc-toggle-btn.active {
+  background: linear-gradient(135deg, #92400E 0%, #B45309 40%, #D97706 100%);
+  border-color: transparent;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(180, 83, 9, 0.35), 0 1px 3px rgba(180, 83, 9, 0.2);
+}
+.ai-doc-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  transition: background 0.15s, opacity 0.15s;
+}
+.ai-doc-save-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+}
+.ai-doc-save-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Formatted / Source toggle switch */
+.docs-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  cursor: pointer;
+  user-select: none;
+}
+.docs-mode-state-label {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: #6B7280;
+  white-space: nowrap;
+  min-width: 4rem;
+  text-align: right;
+  transition: color 0.15s;
+}
+.docs-mode-switch:hover .docs-mode-state-label { color: #1A1A1A; }
+.docs-mode-track {
+  position: relative;
+  width: 2.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background: #D1D5DB;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.docs-mode-track.on {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+}
+.docs-mode-thumb {
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 9999px;
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+.docs-mode-track.on .docs-mode-thumb {
+  transform: translateX(1rem);
+}
+
+/* Icon-only header action buttons */
+.docs-hdr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.875rem;
+  height: 1.875rem;
+  border: 1px solid #E5E5EA;
+  border-radius: var(--radius-sm);
+  background: #FFFFFF;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.12s;
+  flex-shrink: 0;
+}
+.docs-hdr-btn:hover {
+  background: #1A1A1A;
+  border-color: #1A1A1A;
+  color: #FFFFFF;
+}
+.docs-hdr-btn--ok {
+  background: #10B981;
+  border-color: #10B981;
+  color: #FFFFFF;
+}
+.docs-hdr-btn--ok:hover {
+  background: #059669;
+  border-color: #059669;
+}
+.docs-hdr-btn--err {
+  background: #EF4444;
+  border-color: #EF4444;
+  color: #FFFFFF;
+}
+.docs-hdr-btn--err:hover {
+  background: #DC2626;
+  border-color: #DC2626;
+}
+
+
+/* ── Floating AI Doc Panel ── */
+.ai-doc-float {
+  position: fixed;
+  z-index: 200;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+  display: flex;
+  flex-direction: column;
+  animation: aiDocFloatEnter 0.2s ease-out;
+}
+@keyframes aiDocFloatEnter {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)  translateY(0); }
+}
+/* Top bar: persona-group left + centered drag dots + perm+close right */
+.ai-doc-float-topbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0.5rem 0.5rem;
+  background: linear-gradient(135deg, #1C1F2E 0%, #1A1D2B 50%, #1E2235 100%);
+  border-bottom: 1px solid #2A2F45;
+  flex-shrink: 0;
+  cursor: move;
+  min-height: 3rem;
+}
+.ai-doc-float-topbar-left {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+}
+/* Self-contained persona pill — avatar only, tooltip on hover */
+.aidoc-persona-pill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0.2rem;
+  border-radius: 9999px;
+  border: none;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+.aidoc-persona-pill:hover { opacity: 0.85; }
+.aidoc-persona-pill-avatar {
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.aidoc-persona-pill-img {
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.aidoc-persona-pill-initial {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #fff;
+}
+/* Tooltip — fixed position, escapes overflow:hidden of the panel */
+.aidoc-persona-tooltip-fixed {
+  position: fixed;
+  z-index: 9999;
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  width: max-content;
+  max-width: 200px;
+  animation: aidocTooltipIn 0.12s ease-out;
+}
+@keyframes aidocTooltipIn {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.aidoc-persona-tooltip-name {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #1A1A1A;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.aidoc-persona-tooltip-desc {
+  font-size: 0.5625rem;
+  color: #6B7280;
+  line-height: 1.3;
+  white-space: normal;
+  word-break: break-word;
+}
+.ai-doc-float-drag-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.ai-doc-float-topbar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.15rem;
+}
+/* Top bar icon buttons */
+.aidoc-topbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.aidoc-topbar-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: #D1D5DB;
+}
+.aidoc-topbar-btn--warn {
+  color: #F59E0B;
+}
+.aidoc-topbar-btn--warn:hover {
+  color: #FBBF24;
+}
+.aidoc-topbar-btn--close:hover {
+  background: rgba(255,59,48,0.15);
+  color: #FF6B6B;
+}
+
+.ai-doc-float-resize-r  { position:absolute; top:16px; right:0; width:5px; height:calc(100% - 32px); cursor:ew-resize; z-index:11; }
+.ai-doc-float-resize-l  { position:absolute; top:16px; left:0; width:5px; height:calc(100% - 32px); cursor:ew-resize; z-index:11; }
+.ai-doc-float-resize-b  { position:absolute; bottom:0; left:16px; width:calc(100% - 32px); height:5px; cursor:ns-resize; z-index:11; }
+.ai-doc-float-resize-t  { position:absolute; top:0; left:16px; width:calc(100% - 32px); height:5px; cursor:ns-resize; z-index:11; }
+.ai-doc-float-resize-br { position:absolute; bottom:0; right:0; width:16px; height:16px; cursor:nwse-resize; z-index:12; border-bottom-right-radius:16px; }
+.ai-doc-float-resize-bl { position:absolute; bottom:0; left:0;  width:16px; height:16px; cursor:nesw-resize; z-index:12; border-bottom-left-radius:16px; }
+.ai-doc-float-resize-tr { position:absolute; top:0;    right:0; width:16px; height:16px; cursor:nesw-resize; z-index:12; border-top-right-radius:16px; }
+.ai-doc-float-resize-tl { position:absolute; top:0;    left:0;  width:16px; height:16px; cursor:nwse-resize; z-index:12; border-top-left-radius:16px; }
+
+/* ── AI Edit highlight for updated text (contenteditable) ── */
+.ai-edit-highlight {
+  background: rgba(16, 185, 129, 0.15);
+  border-bottom: 2px solid rgba(16, 185, 129, 0.5);
+  border-radius: 2px;
+  transition: background 0.6s ease, border-color 0.6s ease;
+}
+.ai-edit-highlight-fade {
+  background: transparent;
+  border-color: transparent;
 }
 </style>

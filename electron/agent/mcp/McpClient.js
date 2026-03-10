@@ -10,6 +10,8 @@
  */
 const { spawn } = require('child_process')
 const { EventEmitter } = require('events')
+const path = require('path')
+const os = require('os')
 const { logger } = require('../../logger')
 
 const CALL_TIMEOUT = 30000  // 30s for tool calls
@@ -42,6 +44,18 @@ class McpClient extends EventEmitter {
     if (this.started) return
 
     const spawnEnv = { ...process.env, ...this.env }
+
+    // On Windows, tools like uvx/uv live in ~/.local/bin which may not be on
+    // the PATH inherited by Electron. Prepend common tool directories.
+    if (process.platform === 'win32') {
+      const home = os.homedir()
+      const extra = [
+        path.join(home, '.local', 'bin'),
+        path.join(home, 'AppData', 'Local', 'uv'),
+        path.join(home, 'AppData', 'Roaming', 'Python', 'Scripts'),
+      ].join(';')
+      spawnEnv.PATH = extra + ';' + (spawnEnv.PATH || '')
+    }
 
     logger.info(`[MCP:${this.name}] Spawning: ${this.command} ${this.args.join(' ')}`)
 
@@ -127,7 +141,7 @@ class McpClient extends EventEmitter {
       }
 
       const killTimer = setTimeout(() => {
-        try { proc.kill('SIGKILL') } catch {}
+        this._forceKill(proc)
         resolve()
       }, KILL_TIMEOUT)
 
@@ -136,8 +150,25 @@ class McpClient extends EventEmitter {
         resolve()
       })
 
-      try { proc.kill('SIGTERM') } catch {}
+      // On Windows, SIGTERM doesn't propagate to child process trees.
+      // Use taskkill /T to kill the entire process tree.
+      if (process.platform === 'win32' && proc.pid) {
+        const { exec } = require('child_process')
+        exec(`taskkill /pid ${proc.pid} /T /F`, () => {})
+      } else {
+        try { proc.kill('SIGTERM') } catch {}
+      }
     })
+  }
+
+  /** Force-kill a process (Windows-aware) */
+  _forceKill(proc) {
+    if (process.platform === 'win32' && proc.pid) {
+      const { exec } = require('child_process')
+      exec(`taskkill /pid ${proc.pid} /T /F`, () => {})
+    } else {
+      try { proc.kill('SIGKILL') } catch {}
+    }
   }
 
   // ── Private methods ────────────────────────────────────────────────────────

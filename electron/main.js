@@ -74,7 +74,7 @@ const { logger, LOG_DIR } = require('./logger')
 
   // Pass 1: load the default user env (or project fallback in dev).
   // This is needed to discover CLANKAI_DATA_PATH.
-  const defaultUserEnv = path.join(os.homedir(), '.clankAI', '.env')
+  const defaultUserEnv = path.join(os.homedir(), '.clankai', '.env')
   const projectEnv     = path.join(__dirname, '..', '.env')
   if (fs.existsSync(defaultUserEnv)) parseFile(defaultUserEnv)
   else parseFile(projectEnv)
@@ -95,19 +95,30 @@ logger.info('=== ClankAI starting ===')
 const isDev = process.env.ELECTRON_DEV === 'true'
 
 // --- Storage ----------------------------------------------------------------
-const DEFAULT_DATA_PATH = path.join(os.homedir(), '.clankAI')
-const DATA_DIR = process.env.CLANKAI_DATA_PATH || DEFAULT_DATA_PATH
-const CHATS_FILE = path.join(DATA_DIR, 'chats.json')
-const CHATS_DIR = path.join(DATA_DIR, 'chats')
-const CHATS_INDEX_FILE = path.join(CHATS_DIR, 'index.json')
-const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
-const PERSONAS_FILE = path.join(DATA_DIR, 'personas.json')
-const MCP_SERVERS_FILE = path.join(DATA_DIR, 'mcp-servers.json')
-const TOOLS_FILE = path.join(DATA_DIR, 'tools.json')
-const SOULS_DIR = path.join(DATA_DIR, 'souls')
-const KNOWLEDGE_FILE = path.join(DATA_DIR, 'knowledge.json')
-const ENV_FILE = path.join(DATA_DIR, '.env')
-const UTILITY_USAGE_FILE = path.join(DATA_DIR, 'utility-usage.json')
+const DEFAULT_DATA_PATH = path.join(os.homedir(), '.clankai')
+let DATA_DIR = process.env.CLANKAI_DATA_PATH || DEFAULT_DATA_PATH
+// Derived paths — re-computed by initDataPaths() if DATA_DIR changes at startup
+let CHATS_FILE, CHATS_DIR, CHATS_INDEX_FILE, CONFIG_FILE, PERSONAS_FILE,
+    MCP_SERVERS_FILE, TOOLS_FILE, SOULS_DIR, KNOWLEDGE_FILE, ENV_FILE,
+    UTILITY_USAGE_FILE, RECIPES_FILE, RECIPE_RUNS_DIR, RECIPE_RUNS_INDEX
+
+function initDataPaths() {
+  CHATS_FILE         = path.join(DATA_DIR, 'chats.json')
+  CHATS_DIR          = path.join(DATA_DIR, 'chats')
+  CHATS_INDEX_FILE   = path.join(CHATS_DIR, 'index.json')
+  CONFIG_FILE        = path.join(DATA_DIR, 'config.json')
+  PERSONAS_FILE      = path.join(DATA_DIR, 'personas.json')
+  MCP_SERVERS_FILE   = path.join(DATA_DIR, 'mcp-servers.json')
+  TOOLS_FILE         = path.join(DATA_DIR, 'tools.json')
+  SOULS_DIR          = path.join(DATA_DIR, 'souls')
+  KNOWLEDGE_FILE     = path.join(DATA_DIR, 'knowledge.json')
+  ENV_FILE           = path.join(DATA_DIR, '.env')
+  UTILITY_USAGE_FILE = path.join(DATA_DIR, 'utility-usage.json')
+  RECIPES_FILE       = path.join(DATA_DIR, 'recipes.json')
+  RECIPE_RUNS_DIR    = path.join(DATA_DIR, 'recipe-runs')
+  RECIPE_RUNS_INDEX  = path.join(DATA_DIR, 'recipe-runs', 'index.json')
+}
+initDataPaths()
 
 // --- Env-backed path accessors -----------------------------------------------
 // These three paths are stored in config.json under CLANKAI_DATA_PATH.
@@ -143,8 +154,55 @@ function saveEnvKey(key, value) {
 
 const OLD_DATA_DIR = path.join(os.homedir(), '.maestro-agent')
 
+function findExistingDataDir() {
+  // os.homedir() can return the wrong profile on Windows (e.g. C:\Users\46540
+  // instead of C:\Users\yxue). Check alternative home paths for an existing
+  // .clankai / .clankai data directory before giving up.
+  const candidates = new Set()
+  for (const env of ['USERPROFILE', 'HOMEDRIVE', 'HOME']) {
+    const val = env === 'HOMEDRIVE'
+      ? (process.env.HOMEDRIVE || '') + (process.env.HOMEPATH || '')
+      : process.env[env]
+    if (val) candidates.add(val)
+  }
+  try { candidates.add(app.getPath('home')) } catch {}
+  // APPDATA (C:\Users\yxue\AppData\Roaming) → go up 2 levels → C:\Users\yxue
+  try {
+    const appData = app.getPath('appData')
+    if (appData) candidates.add(path.resolve(appData, '..', '..'))
+  } catch {}
+  candidates.delete(os.homedir()) // already checked as DATA_DIR
+
+  for (const home of candidates) {
+    const dir = path.join(home, '.clankai')
+    if (fs.existsSync(dir)) {
+      logger.info(`Found existing data directory at ${dir}`)
+      return dir
+    }
+  }
+  return null
+}
+
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
+  if (!fs.existsSync(DATA_DIR)) {
+    // Before creating a new directory, look for existing data elsewhere
+    const existing = findExistingDataDir()
+    if (existing) {
+      DATA_DIR = existing
+      initDataPaths()
+    } else {
+      try {
+        fs.mkdirSync(DATA_DIR, { recursive: true })
+      } catch (err) {
+        // EPERM on Windows: fall back to Electron's standard app data directory
+        const fallback = app.getPath('userData')
+        logger.warn(`Cannot create ${DATA_DIR} (${err.code}), falling back to ${fallback}`)
+        DATA_DIR = fallback
+        initDataPaths()
+        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
+      }
+    }
+  }
 
   // Migrate data from old .maestro-agent directory if new directory is empty
   if (fs.existsSync(OLD_DATA_DIR)) {
@@ -154,7 +212,7 @@ function ensureDataDir() {
       if (fs.existsSync(oldFile) && !fs.existsSync(newFile)) {
         try {
           fs.copyFileSync(oldFile, newFile)
-          logger.info(`Migrated ${file} from .maestro-agent to .clankAI`)
+          logger.info(`Migrated ${file} from .maestro-agent to .clankai`)
         } catch (err) {
           logger.error(`Failed to migrate ${file}:`, err.message)
         }
@@ -607,6 +665,10 @@ app.whenReady().then(async () => {
   await migrateEnvDataIfNeeded()
   createWindow()
 
+  // ── Recipe Scheduler ────────────────────────────────────────────────────────
+  const recipeScheduler = require('./recipe-scheduler')
+  recipeScheduler.init(() => DATA_DIR, () => mainWindow)
+
   // ── IM Bridge ──────────────────────────────────────────────────────────────
   // setMainWindow is synchronous and fast — do it immediately so the bridge
   // has the window reference before any IPC arrives.
@@ -657,8 +719,15 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => {
-  mcpManager.stopAll().catch(err => logger.error('MCP cleanup error:', err.message))
+app.on('before-quit', async (e) => {
+  // Stop all active agent loops (in-flight LLM calls)
+  for (const [key, loop] of activeLoops) {
+    try { loop.stop() } catch {}
+    activeLoops.delete(key)
+  }
+
+  // Stop MCP subprocesses and IM bridge
+  try { await mcpManager.stopAll() } catch (err) { logger.error('MCP cleanup error:', err.message) }
   imBridge.stop()
 })
 
@@ -1003,6 +1072,105 @@ ipcMain.handle('store:save-env-path', (_, key, value) => {
 ipcMain.handle('store:get-personas', async () => readJSONAsync(PERSONAS_FILE, { categories: [], personas: [] }))
 ipcMain.handle('store:save-personas', (_, data) => { writeJSON(PERSONAS_FILE, data); return true })
 
+// --- IPC: Recipes -----------------------------------------------------------
+
+ipcMain.handle('recipes:list', async () => readJSONAsync(RECIPES_FILE, []))
+
+ipcMain.handle('recipes:save', async (_, recipe) => {
+  try {
+    let recipes = await readJSONAsync(RECIPES_FILE, [])
+    const idx = recipes.findIndex(r => r.id === recipe.id)
+    if (idx >= 0) recipes[idx] = recipe
+    else recipes.unshift(recipe)
+    await writeJSONAtomic(RECIPES_FILE, recipes)
+    // Update cron schedule
+    const recipeScheduler = require('./recipe-scheduler')
+    recipeScheduler.schedule(recipe)
+    return { success: true, recipe }
+  } catch (err) {
+    logger.error('recipes:save error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('recipes:delete', async (_, id) => {
+  try {
+    let recipes = await readJSONAsync(RECIPES_FILE, [])
+    recipes = recipes.filter(r => r.id !== id)
+    await writeJSONAtomic(RECIPES_FILE, recipes)
+    // Cancel schedule
+    const recipeScheduler = require('./recipe-scheduler')
+    recipeScheduler.unschedule(id)
+    return { success: true }
+  } catch (err) {
+    logger.error('recipes:delete error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('recipes:get-runs', async (_, { recipeId, limit } = {}) => {
+  try {
+    let index = await readJSONAsync(RECIPE_RUNS_INDEX, [])
+    if (recipeId) index = index.filter(r => r.recipeId === recipeId)
+    if (limit) index = index.slice(0, limit)
+    return index
+  } catch {
+    return []
+  }
+})
+
+ipcMain.handle('recipes:get-run', async (_, runId) => {
+  try {
+    const file = path.join(RECIPE_RUNS_DIR, `${runId}.json`)
+    return await readJSONAsync(file, null)
+  } catch {
+    return null
+  }
+})
+
+ipcMain.handle('recipes:delete-run', async (_, runId) => {
+  try {
+    const file = path.join(RECIPE_RUNS_DIR, `${runId}.json`)
+    if (fs.existsSync(file)) fs.unlinkSync(file)
+    let index = await readJSONAsync(RECIPE_RUNS_INDEX, [])
+    index = index.filter(r => r.id !== runId)
+    await writeJSONAtomic(RECIPE_RUNS_INDEX, index)
+    return { success: true }
+  } catch (err) {
+    logger.error('recipes:delete-run error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('recipes:save-run', async (_, runDetail) => {
+  try {
+    if (!fs.existsSync(RECIPE_RUNS_DIR)) fs.mkdirSync(RECIPE_RUNS_DIR, { recursive: true })
+    const file = path.join(RECIPE_RUNS_DIR, `${runDetail.id}.json`)
+    await writeJSONAtomic(file, runDetail)
+    // Update index entry
+    let index = await readJSONAsync(RECIPE_RUNS_INDEX, [])
+    const existing = index.findIndex(r => r.id === runDetail.id)
+    const summary = {
+      id: runDetail.id,
+      recipeId: runDetail.recipeId,
+      recipeName: runDetail.recipeName,
+      triggeredBy: runDetail.triggeredBy,
+      status: runDetail.status,
+      startedAt: runDetail.startedAt,
+      completedAt: runDetail.completedAt,
+      error: runDetail.error || null,
+    }
+    if (existing >= 0) index[existing] = summary
+    else index.unshift(summary)
+    if (index.length > 200) index = index.slice(0, 200)
+    await writeJSONAtomic(RECIPE_RUNS_INDEX, index)
+    return { success: true }
+  } catch (err) {
+    logger.error('recipes:save-run error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
 // --- IPC: Soul Memory Files -------------------------------------------------
 function ensureSoulsDir(type) {
   const dir = path.join(SOULS_DIR, type)
@@ -1087,7 +1255,7 @@ ipcMain.handle('memory:extract-on-chat-switch', async (event, { chatId, messages
   }
 })
 
-// --- IPC: MCP Server Configuration (~/.clankAI/mcp-servers.json) -------------
+// --- IPC: MCP Server Configuration (~/.clankai/mcp-servers.json) -------------
 
 ipcMain.handle('mcp:get-config', async () => readJSONAsync(MCP_SERVERS_FILE, {}))
 
@@ -1101,7 +1269,7 @@ ipcMain.handle('mcp:save-config', async (_, mcpServers) => {
   }
 })
 
-// --- IPC: HTTP Tools Configuration (~/.clankAI/tools.json) -------------------
+// --- IPC: HTTP Tools Configuration (~/.clankai/tools.json) -------------------
 
 ipcMain.handle('tools:get-config', async () => readJSONAsync(TOOLS_FILE, {}))
 
@@ -2978,6 +3146,369 @@ ipcMain.handle('agent:compact-standalone', async (event, { chatId, messages, con
   }
 })
 
+// -- Streaming text-edit LLM call (for inline AI Edit in DocsView) -----------
+// Heavier than enhance-prompt (streaming, higher max_tokens) but lighter than
+// agent:run (no tool loop, no RAG, no persona). Streams token-by-token via
+// 'agent:edit-chunk' so the user sees real-time progress.
+const _activeEditRequests = new Map() // requestId → AbortController
+
+ipcMain.handle('agent:edit-text', async (event, { requestId, selectedText, fullFileContent, instruction, messages, fileContext, config }) => {
+  let abort = null
+  try {
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) {
+      event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: 'Utility model not configured. Set it in Config → AI → Models → Global Model Settings.' })
+      return { success: false }
+    }
+    const providerCfg = config[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
+      event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: `Utility model provider "${um.provider}" is missing apiKey or baseURL.` })
+      return { success: false }
+    }
+
+    const systemPrompt = `You are an AI assistant embedded in a document editor. You receive selected text (or entire file content) and the user's message.
+
+You have two modes:
+1. **Question mode**: If the user asks a question about the text (e.g. "what does this do?", "explain this"), answer normally. Do NOT wrap your answer in <replacement> tags.
+2. **Edit mode**: If the user asks you to modify/edit/rewrite the text (e.g. "make formal", "add error handling", "fix typos"), output the replacement text wrapped in <replacement>...</replacement> tags. You may include a brief explanation before the tags, but the replacement content must be inside the tags. Output ONLY the replacement text inside the tags — no markdown fences inside, no preamble inside the tags.
+
+Examples:
+- User: "what does this function do?" → Answer normally, no tags.
+- User: "make this more concise" → Brief note + <replacement>concise version here</replacement>
+- User: "add error handling" → <replacement>code with error handling</replacement>`
+
+    // Build conversation messages — supports both legacy single-instruction and multi-turn
+    let chatMessages
+    if (messages && Array.isArray(messages) && messages.length > 0) {
+      // Multi-turn: prepend file + selection context to the first user message
+      chatMessages = messages.map((m, i) => {
+        if (i === 0 && m.role === 'user') {
+          let contextPrefix = ''
+          const fName = fileContext?.fileName || 'unknown'
+          const fLang = fileContext?.language ? ` (${fileContext.language})` : ''
+          // Always include full file content when available
+          if (fullFileContent) {
+            contextPrefix += `Full file content of "${fName}"${fLang}:\n\`\`\`\n${fullFileContent}\n\`\`\`\n\n`
+          }
+          // If there's a specific selection different from the full file, show it
+          if (selectedText && selectedText !== fullFileContent) {
+            contextPrefix += `Currently focused section:\n\`\`\`\n${selectedText}\n\`\`\`\n\n`
+          }
+          // Fallback: if no fullFileContent, just use selectedText
+          if (!fullFileContent && selectedText) {
+            contextPrefix = `Text from "${fName}"${fLang}:\n\`\`\`\n${selectedText}\n\`\`\`\n\n`
+          }
+          return { role: 'user', content: contextPrefix + m.content }
+        }
+        return { role: m.role, content: m.content }
+      })
+    } else {
+      // Legacy single-instruction path
+      const userContent = `Selected text from "${fileContext?.fileName || 'unknown'}"${fileContext?.language ? ` (${fileContext.language})` : ''}:\n\`\`\`\n${selectedText}\n\`\`\`\n\nInstruction: ${instruction}`
+      chatMessages = [{ role: 'user', content: userContent }]
+    }
+
+    abort = new AbortController()
+    _activeEditRequests.set(requestId, abort)
+
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    let inputTokens = 0, outputTokens = 0
+
+    if (isOpenAI) {
+      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const cfg = {
+        openaiApiKey: providerCfg.apiKey,
+        openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+        _resolvedProvider: 'openai',
+        defaultProvider: 'openai',
+        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+      }
+      const client = new OpenAIClient(cfg).getClient()
+      const stream = await client.chat.completions.create({
+        model: um.model,
+        max_tokens: 4096,
+        stream: true,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...chatMessages,
+        ],
+      }, { signal: abort.signal })
+
+      for await (const chunk of stream) {
+        if (abort.signal.aborted) break
+        const delta = chunk.choices?.[0]?.delta?.content
+        if (delta && !event.sender.isDestroyed()) {
+          event.sender.send('agent:edit-chunk', { requestId, type: 'delta', text: delta })
+        }
+        if (chunk.usage) {
+          inputTokens = chunk.usage.prompt_tokens || 0
+          outputTokens = chunk.usage.completion_tokens || 0
+        }
+      }
+    } else {
+      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const cfg = {
+        apiKey: providerCfg.apiKey,
+        baseURL: providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+      }
+      const client = new AnthropicClient(cfg).getClient()
+      const stream = client.messages.stream({
+        model: um.model,
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: chatMessages,
+      }, { signal: abort.signal })
+
+      stream.on('text', (text) => {
+        if (!abort.signal.aborted && !event.sender.isDestroyed()) {
+          event.sender.send('agent:edit-chunk', { requestId, type: 'delta', text })
+        }
+      })
+
+      const finalMsg = await stream.finalMessage()
+      inputTokens = finalMsg.usage?.input_tokens || 0
+      outputTokens = finalMsg.usage?.output_tokens || 0
+    }
+
+    _activeEditRequests.delete(requestId)
+    accumulateUtilityUsage(um.model, um.provider, inputTokens, outputTokens).catch(() => {})
+
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('agent:edit-chunk', { requestId, type: 'done' })
+    }
+    return { success: true }
+  } catch (err) {
+    _activeEditRequests.delete(requestId)
+    if (err.name === 'AbortError' || abort?.signal?.aborted) {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('agent:edit-chunk', { requestId, type: 'done' })
+      }
+      return { success: false, cancelled: true }
+    }
+    logger.error('agent:edit-text error', err.message)
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: err.message })
+    }
+    return { success: false }
+  }
+})
+
+ipcMain.handle('agent:edit-stop', async (_event, requestId) => {
+  const abort = _activeEditRequests.get(requestId)
+  if (abort) {
+    abort.abort()
+    _activeEditRequests.delete(requestId)
+  }
+  return { success: true }
+})
+
+// -- AI Doc: full agent loop for document editing ----------------------------
+const _activeDocLoops = new Map() // requestId → AgentLoop
+
+ipcMain.handle('agent:doc-run', async (event, {
+  requestId, messages, config, personaPrompt, fileContext,
+  selectedText, fullFileContent,
+  enabledSkills, mcpServers, httpTools, knowledgeConfig,
+  permissionMode
+}) => {
+  try {
+    // Resolve provider/model: use global default (not utility model)
+    const provider = config.defaultProvider || 'anthropic'
+    const providerCfg = config[provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
+      event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: `Provider "${provider}" is missing apiKey or baseURL. Configure it in Config → AI → Models.` })
+      return { success: false }
+    }
+
+    // Build loop config from global config (same pattern as agent:run in ChatsView)
+    // CRITICAL: promote provider-specific apiKey/baseURL to top-level,
+    // because AnthropicClient/OpenAIClient read config.apiKey / config.baseURL.
+    const fullCfg = readJSON(CONFIG_FILE, {})
+    const loopConfig = { ...config, soulsDir: SOULS_DIR }
+
+    if (provider === 'anthropic') {
+      loopConfig.apiKey  = providerCfg.apiKey
+      loopConfig.baseURL = providerCfg.baseURL
+    } else if (provider === 'openrouter') {
+      loopConfig.apiKey  = providerCfg.apiKey
+      loopConfig.baseURL = providerCfg.baseURL
+    } else if (provider === 'openai' || provider === 'deepseek') {
+      loopConfig.defaultProvider   = 'openai'
+      loopConfig._resolvedProvider = 'openai'
+      loopConfig.openaiApiKey      = providerCfg.apiKey
+      loopConfig.openaiBaseURL     = providerCfg.baseURL
+      loopConfig.apiKey            = providerCfg.apiKey
+      loopConfig.baseURL           = providerCfg.baseURL
+      if (provider === 'deepseek') loopConfig._directAuth = true
+    }
+
+    loopConfig.sandboxConfig = fullCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
+    loopConfig.chatPermissionMode = permissionMode || 'allow_all'
+    loopConfig.chatAllowList = []
+    loopConfig.maxOutputTokens = fullCfg.maxOutputTokens || null
+    loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
+    loopConfig.skillsPath   = fullCfg.skillsPath   || ''
+    loopConfig.DoCPath      = fullCfg.DoCPath      || ''
+
+    const loop = new AgentLoop(loopConfig)
+    _activeDocLoops.set(requestId, loop)
+
+    // Build doc editing system prompt — include file path so agent/tools know what file to operate on
+    const fPath = fileContext?.filePath || ''
+    const fName = fileContext?.fileName || 'unknown'
+    const fLang = fileContext?.language ? ` (${fileContext.language})` : ''
+
+    const docSystemPrompt = `${personaPrompt || ''}
+
+You are embedded in a document editor. The user is currently editing a file and may ask you to modify text or answer questions about it.
+
+Current file:
+- File name: ${fName}
+- File path: ${fPath}
+- Language: ${fileContext?.language || 'plain text'}
+
+When asked to modify text (translate, rewrite, summarize, edit, etc.), output the replacement wrapped in <replacement>...</replacement> tags. The editor will apply it to the current file automatically — never ask the user where to save or which file to update.
+When asked questions about the text, answer directly without tags.
+Output ONLY the replacement text inside the tags — no markdown fences inside, no preamble inside the tags.
+NEVER ask "where would you like to save" or "which file should I update" — always target the current file shown above.
+
+If you use tools to read or write files, use the exact file path above: ${fPath}`
+
+    // Build file context message prefix
+    let contextPrefix = ''
+    if (fullFileContent) {
+      contextPrefix += `Full file content of "${fName}"${fLang}:\n\`\`\`\n${fullFileContent}\n\`\`\`\n\n`
+    }
+    if (selectedText && selectedText !== fullFileContent) {
+      contextPrefix += `Currently focused section:\n\`\`\`\n${selectedText}\n\`\`\`\n\n`
+    }
+    if (!fullFileContent && selectedText) {
+      contextPrefix = `Text from "${fName}"${fLang}:\n\`\`\`\n${selectedText}\n\`\`\`\n\n`
+    }
+
+    // Prepend file context to the first user message
+    const chatMessages = messages.map((m, i) => {
+      if (i === 0 && m.role === 'user') {
+        return { role: 'user', content: contextPrefix + m.content }
+      }
+      return { role: m.role, content: m.content }
+    })
+
+    // RAG retrieval (if enabled)
+    let ragContext = null
+    if (knowledgeConfig) {
+      const filePineconeKey = readJSON(CONFIG_FILE, {}).pineconeApiKey || ''
+      if (!knowledgeConfig.pineconeApiKey && filePineconeKey) knowledgeConfig.pineconeApiKey = filePineconeKey
+      const fileCfg = readJSON(KNOWLEDGE_FILE, {})
+      if (!knowledgeConfig.indexConfigs || Object.keys(knowledgeConfig.indexConfigs).length === 0) {
+        knowledgeConfig.indexConfigs = fileCfg.indexConfigs || {}
+      }
+      if (knowledgeConfig.ragEnabled === undefined) knowledgeConfig.ragEnabled = fileCfg.ragEnabled !== false
+    }
+    if (knowledgeConfig?.ragEnabled && knowledgeConfig.pineconeApiKey) {
+      try {
+        const lastUserMsg = [...chatMessages].reverse().find(m => m.role === 'user')
+        const queryText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : ''
+        if (queryText.trim()) {
+          const idxConfigs = knowledgeConfig.indexConfigs || {}
+          const enabledIndexes = Object.entries(idxConfigs)
+            .filter(([, cfg]) => cfg.enabled)
+            .map(([name, cfg]) => ({ name, embeddingProvider: cfg.embeddingProvider, embeddingModel: cfg.embeddingModel }))
+          if (enabledIndexes.length > 0) {
+            const allMatches = []
+            for (const idx of enabledIndexes) {
+              try {
+                const ragResult = await queryRAG({
+                  query: queryText.slice(0, 500),
+                  pineconeApiKey: knowledgeConfig.pineconeApiKey,
+                  pineconeIndexName: idx.name,
+                  topK: 3,
+                  embeddingProvider: idx.embeddingProvider,
+                  embeddingModel: idx.embeddingModel
+                })
+                if (ragResult.success && ragResult.matches.length > 0) {
+                  allMatches.push(...ragResult.matches)
+                }
+              } catch {}
+            }
+            if (allMatches.length > 0) {
+              allMatches.sort((a, b) => (b.score || 0) - (a.score || 0))
+              ragContext = allMatches.slice(0, 3)
+            }
+          }
+        }
+      } catch {}
+    }
+
+    const personaPrompts = {
+      systemPersonaPrompt: docSystemPrompt,
+    }
+
+    // Run the full agent loop
+    await loop.run(
+      chatMessages,
+      [],  // enabledAgents (none for doc editing)
+      enabledSkills || [],
+      (chunk) => {
+        if (event.sender.isDestroyed()) return
+        // Map agent chunks to edit-chunk format
+        if (chunk.type === 'text' || chunk.type === 'text_delta') {
+          event.sender.send('agent:edit-chunk', { requestId, type: 'delta', text: chunk.text || chunk.content || '' })
+        } else if (chunk.type === 'tool_call') {
+          event.sender.send('agent:edit-chunk', { requestId, type: 'tool_call', name: chunk.name, input: chunk.input, id: chunk.id })
+        } else if (chunk.type === 'tool_result') {
+          event.sender.send('agent:edit-chunk', { requestId, type: 'tool_result', id: chunk.id, result: chunk.result })
+        } else if (chunk.type === 'permission_request') {
+          event.sender.send('agent:edit-chunk', { requestId, type: 'permission_request', blockId: chunk.blockId, toolName: chunk.toolName, command: chunk.command, toolInput: chunk.toolInput })
+        }
+      },
+      [],  // currentAttachments
+      personaPrompts,
+      mcpServers || [],
+      httpTools || [],
+      ragContext
+    )
+
+    _activeDocLoops.delete(requestId)
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('agent:edit-chunk', { requestId, type: 'done' })
+    }
+    return { success: true }
+  } catch (err) {
+    _activeDocLoops.delete(requestId)
+    logger.error('agent:doc-run error', err.message)
+    if (!event.sender.isDestroyed()) {
+      if (err.name === 'AbortError') {
+        event.sender.send('agent:edit-chunk', { requestId, type: 'done' })
+      } else {
+        event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: err.message })
+      }
+    }
+    return { success: false }
+  }
+})
+
+ipcMain.handle('agent:doc-stop', async (_event, requestId) => {
+  const loop = _activeDocLoops.get(requestId)
+  if (loop) {
+    loop.stop()
+    _activeDocLoops.delete(requestId)
+  }
+  return { success: true }
+})
+
+ipcMain.handle('agent:doc-permission-response', (_event, requestId, { blockId, decision, pattern }) => {
+  const loop = _activeDocLoops.get(requestId)
+  if (!loop) {
+    logger.warn('agent:doc-permission-response: no active doc loop for requestId', requestId)
+    return { success: false, error: 'No active doc loop' }
+  }
+  loop.resolvePermission(blockId, decision, pattern)
+  return { success: true }
+})
+
 // -- Lightweight one-shot LLM call (for AI Enhance features) -----------------
 // Uses global config.utilityModel — supports all providers.
 ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
@@ -3503,8 +4034,20 @@ ipcMain.handle('obsidian:read-tree', (_, rawDir) => {
       if (entry.isDirectory()) {
         const children = readDir(fullPath, depth + 1)
         items.push({ name: entry.name, path: fullPath, type: 'dir', children })
-      } else if (entry.name.endsWith('.md') || entry.name.endsWith('.drawio')) {
-        items.push({ name: entry.name, path: fullPath, type: 'file' })
+      } else {
+        // Skip known binary extensions that can't be displayed as text
+        const binaryExts = new Set([
+          'exe','dll','so','dylib','bin','o','a','lib',
+          'zip','gz','tar','bz2','7z','rar','xz','zst',
+          'woff','woff2','ttf','otf','eot',
+          'class','pyc','pyo','wasm',
+          'db','sqlite','sqlite3',
+          'DS_Store',
+        ])
+        const ext = (entry.name.split('.').pop() || '').toLowerCase()
+        if (!binaryExts.has(ext)) {
+          items.push({ name: entry.name, path: fullPath, type: 'file' })
+        }
       }
     }
     return items
@@ -3531,6 +4074,26 @@ ipcMain.handle('obsidian:read-file', (_, rawPath) => {
 ipcMain.handle('obsidian:write-file', (_, rawPath, content) => {
   try {
     fs.writeFileSync(toLinuxPath(rawPath), content, 'utf8')
+    return { success: true }
+  } catch (err) {
+    return { error: err.message }
+  }
+})
+
+// Read a binary file (returns base64)
+ipcMain.handle('obsidian:read-file-binary', (_, rawPath) => {
+  try {
+    const buf = fs.readFileSync(toLinuxPath(rawPath))
+    return { base64: buf.toString('base64') }
+  } catch (err) {
+    return { error: err.message }
+  }
+})
+
+// Write a binary file from base64
+ipcMain.handle('obsidian:write-file-binary', (_, rawPath, base64) => {
+  try {
+    fs.writeFileSync(toLinuxPath(rawPath), Buffer.from(base64, 'base64'))
     return { success: true }
   } catch (err) {
     return { error: err.message }
@@ -3646,6 +4209,41 @@ ipcMain.handle('obsidian:create-drawio', (_, rawDir, name) => {
     if (fs.existsSync(filePath)) return { error: 'File already exists' }
     const blankXml = '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>'
     fs.writeFileSync(filePath, blankXml, 'utf8')
+    return { success: true, path: filePath }
+  } catch (err) {
+    return { error: err.message }
+  }
+})
+
+// Create a new blank Word document (.docx)
+ipcMain.handle('obsidian:create-docx', async (_, rawDir, name) => {
+  try {
+    const safeName = name.endsWith('.docx') ? name : name + '.docx'
+    const filePath = path.join(toLinuxPath(rawDir), safeName)
+    if (fs.existsSync(filePath)) return { error: 'File already exists' }
+    const { Document, Packer, Paragraph } = require('docx')
+    const doc = new Document({
+      sections: [{ children: [new Paragraph('')] }],
+    })
+    const buffer = await Packer.toBuffer(doc)
+    fs.writeFileSync(filePath, buffer)
+    return { success: true, path: filePath }
+  } catch (err) {
+    return { error: err.message }
+  }
+})
+
+// Create a new blank Excel spreadsheet (.xlsx)
+ipcMain.handle('obsidian:create-xlsx', async (_, rawDir, name) => {
+  try {
+    const safeName = name.endsWith('.xlsx') ? name : name + '.xlsx'
+    const filePath = path.join(toLinuxPath(rawDir), safeName)
+    if (fs.existsSync(filePath)) return { error: 'File already exists' }
+    const ExcelJS = require('exceljs')
+    const workbook = new ExcelJS.Workbook()
+    workbook.addWorksheet('Sheet1')
+    const buffer = await workbook.xlsx.writeBuffer()
+    fs.writeFileSync(filePath, Buffer.from(buffer))
     return { success: true, path: filePath }
   } catch (err) {
     return { error: err.message }
@@ -3792,6 +4390,24 @@ ipcMain.handle('window:set-fullscreen', (_, flag) => {
   mainWindow?.setFullScreen(!!flag)
 })
 
+ipcMain.handle('window:get-position', () => mainWindow ? mainWindow.getPosition() : [0, 0])
+// Title-bar drag: size is captured once at drag-start and reused for every
+// move so Windows DPI scaling cannot silently grow the window dimensions.
+let _dragPinnedSize = null
+ipcMain.on('window:drag-start', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const { width, height } = mainWindow.getBounds()
+  _dragPinnedSize = { width, height }
+})
+ipcMain.on('window:drag-end', () => { _dragPinnedSize = null })
+ipcMain.on('window:move-to', (_, x, y) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (_dragPinnedSize) {
+    mainWindow.setBounds({ x: Math.round(x), y: Math.round(y), width: _dragPinnedSize.width, height: _dragPinnedSize.height })
+  } else {
+    mainWindow.setPosition(Math.round(x), Math.round(y))
+  }
+})
 ipcMain.handle('window:minimize', () => { mainWindow?.minimize() })
 ipcMain.handle('window:maximize', () => {
   if (!mainWindow) return false
@@ -3799,7 +4415,11 @@ ipcMain.handle('window:maximize', () => {
   else mainWindow.maximize()
   return mainWindow.isMaximized()
 })
-ipcMain.handle('window:close', () => { app.quit() })
+ipcMain.handle('window:close', () => {
+  // Force exit after a short grace period in case cleanup hangs
+  setTimeout(() => { process.exit(0) }, 3000)
+  app.quit()
+})
 ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false)
 
 const MINIBAR_DEFAULT_W = 230

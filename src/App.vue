@@ -1,6 +1,6 @@
 <template>
   <template v-if="!focusModeStore.isMinibarMode">
-    <div class="flex flex-col h-screen w-screen overflow-hidden" style="background:#F2F2F7; color:#1A1A1A; border-radius:10px;">
+    <div class="flex flex-col h-screen w-screen overflow-hidden" style="background:#F2F2F7; color:#1A1A1A; border-radius:10px; border:1px solid #999;">
 
       <TitleBar @toggle-sidebar="sidebarRef?.toggleCollapse()" />
       <div class="flex flex-1 min-h-0 overflow-hidden">

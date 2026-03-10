@@ -564,6 +564,8 @@ Do NOT write task state to files on disk — it conflicts across concurrent term
 
 - **2026-03-02**: `\b` (word boundary) in regex does NOT work for CJK (Chinese/Japanese/Korean) characters. CJK chars are non-`\w`, so `\b` between a CJK char and a space/punctuation (both non-`\w`) never fires. **Rule: always use `(?=\W|$)` instead of `\b` for name-boundary matching in `parseMentions`, `stripMentions`, and the `MessageRenderer` @mention highlighter.** This applies to any regex that must support non-Latin names.
 
+- **2026-03-10**: Used `npx vite build` after every task to verify compilation. **Rule: NEVER run `npx vite build` (or any build command) after completing a task in this project. The user explicitly forbids it. Trust the code changes are correct; only run a build if the user explicitly asks.**
+
 ## App Icon
 
 ### Icon Design

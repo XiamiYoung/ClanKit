@@ -22,8 +22,10 @@ function normalizePath(p) {
 export const useObsidianStore = defineStore('obsidian', () => {
   const vaultPath = ref('')
   const fileTree = ref([])
-  const activeFile = ref(null)     // { path, name, content, dirty }
+  const activeFile = ref(null)     // { path, name, content, dirty } or { path, name, base64, binary: true, dirty }
   const expandedFolders = ref({})  // { [path]: true }
+  const fileLoading = ref(false)
+  const fileError = ref('')        // non-empty string when open fails
 
   async function loadConfig() {
     const config = await window.electronAPI.obsidian.getConfig()
@@ -57,20 +59,86 @@ export const useObsidianStore = defineStore('obsidian', () => {
     fileTree.value = await window.electronAPI.obsidian.readTree(vaultPath.value)
   }
 
+  const BINARY_EXTS = new Set(['pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'tiff', 'svg'])
+  const OPEN_TIMEOUT = 10000 // 10 seconds
+
+  function _getExt(name) {
+    return (name || '').split('.').pop().toLowerCase()
+  }
+
+  function _withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('File open timed out after ' + (ms / 1000) + 's')), ms)),
+    ])
+  }
+
   async function openFile(filePath, fileName) {
     // Save current file if dirty before switching
     if (activeFile.value && activeFile.value.dirty) {
       await saveFile()
     }
-    const result = await window.electronAPI.obsidian.readFile(filePath)
-    if (result.error) { console.error('Failed to read file:', result.error); return }
+    fileLoading.value = true
+    fileError.value = ''
+    activeFile.value = null
+    try {
+      const ext = _getExt(fileName)
+      if (BINARY_EXTS.has(ext)) {
+        await _openBinary(filePath, fileName)
+      } else {
+        await _openText(filePath, fileName)
+      }
+    } catch (err) {
+      console.error('Failed to open file:', err)
+      fileError.value = err.message || 'Failed to open file'
+      activeFile.value = null
+    } finally {
+      fileLoading.value = false
+    }
+  }
+
+  async function _openText(filePath, fileName) {
+    const result = await _withTimeout(window.electronAPI.obsidian.readFile(filePath), OPEN_TIMEOUT)
+    if (result.error) throw new Error(result.error)
     activeFile.value = { path: filePath, name: fileName, content: result.content, dirty: false }
+  }
+
+  async function _openBinary(filePath, fileName) {
+    const result = await _withTimeout(window.electronAPI.obsidian.readFileBinary(filePath), OPEN_TIMEOUT)
+    if (result.error) throw new Error(result.error)
+    activeFile.value = { path: filePath, name: fileName, base64: result.base64, binary: true, dirty: false }
+  }
+
+  async function openBinaryFile(filePath, fileName) {
+    fileLoading.value = true
+    fileError.value = ''
+    activeFile.value = null
+    try {
+      await _openBinary(filePath, fileName)
+    } catch (err) {
+      console.error('Failed to open binary file:', err)
+      fileError.value = err.message || 'Failed to open file'
+      activeFile.value = null
+    } finally {
+      fileLoading.value = false
+    }
   }
 
   async function saveFile() {
     if (!activeFile.value) return
+    if (activeFile.value.binary) {
+      return saveBinaryFile(activeFile.value.base64)
+    }
     const result = await window.electronAPI.obsidian.writeFile(activeFile.value.path, activeFile.value.content)
     if (result.error) { console.error('Failed to save file:', result.error); return }
+    activeFile.value.dirty = false
+  }
+
+  async function saveBinaryFile(base64) {
+    if (!activeFile.value) return
+    const result = await window.electronAPI.obsidian.writeFileBinary(activeFile.value.path, base64)
+    if (result.error) { console.error('Failed to save binary file:', result.error); return }
+    activeFile.value.base64 = base64
     activeFile.value.dirty = false
   }
 
@@ -90,6 +158,20 @@ export const useObsidianStore = defineStore('obsidian', () => {
   async function createDrawio(dir, name) {
     const result = await window.electronAPI.obsidian.createDrawio(dir, name)
     if (result.error) { console.error('Failed to create drawio:', result.error); return result }
+    await loadTree()
+    return result
+  }
+
+  async function createDocx(dir, name) {
+    const result = await window.electronAPI.obsidian.createDocx(dir, name)
+    if (result.error) { console.error('Failed to create docx:', result.error); return result }
+    await loadTree()
+    return result
+  }
+
+  async function createXlsx(dir, name) {
+    const result = await window.electronAPI.obsidian.createXlsx(dir, name)
+    if (result.error) { console.error('Failed to create xlsx:', result.error); return result }
     await loadTree()
     return result
   }
@@ -134,8 +216,8 @@ export const useObsidianStore = defineStore('obsidian', () => {
   }
 
   return {
-    vaultPath, fileTree, activeFile, expandedFolders,
-    loadConfig, pickVault, setVaultManually, loadTree, openFile, saveFile, updateContent,
-    createFile, createDrawio, createFolder, deleteItem, renameItem, toggleFolder
+    vaultPath, fileTree, activeFile, expandedFolders, fileLoading, fileError,
+    loadConfig, pickVault, setVaultManually, loadTree, openFile, openBinaryFile, saveFile, saveBinaryFile, updateContent,
+    createFile, createDrawio, createDocx, createXlsx, createFolder, deleteItem, renameItem, toggleFolder
   }
 })

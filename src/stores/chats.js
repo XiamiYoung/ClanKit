@@ -18,6 +18,8 @@ export const useChatsStore = defineStore('chats', () => {
 
   // UI chunk callback — set by ChatsView when mounted, cleared on unmount
   let _uiChunkCallback = null
+  // Recipe chunk callback — set by RecipeEngineView when a recipe is running
+  let _recipeChunkCallback = null
 
   // ── Tree helpers ──────────────────────────────────────────────────────────
 
@@ -49,6 +51,8 @@ export const useChatsStore = defineStore('chats', () => {
   function backfillChat(chat) {
     chat.isRunning = false
     chat.isThinking = false
+    chat.isCallingTool = false
+    chat.currentToolCall = null
     chat.isLoadingMessages = false
     chat.contextMetrics = chat.contextMetrics || defaultContextMetrics()
     if (chat.systemPersonaId === undefined) chat.systemPersonaId = null
@@ -272,6 +276,8 @@ export const useChatsStore = defineStore('chats', () => {
       updatedAt: Date.now(),
       isRunning: false,
       isThinking: false,
+      isCallingTool: false,
+      currentToolCall: null,
       contextMetrics: defaultContextMetrics(),
       systemPersonaId: null,
       userPersonaId: null,
@@ -327,6 +333,8 @@ export const useChatsStore = defineStore('chats', () => {
       updatedAt: Date.now(),
       isRunning: false,
       isThinking: false,
+      isCallingTool: false,
+      currentToolCall: null,
       isLoadingMessages: false,
       contextMetrics: defaultContextMetrics(),
       systemPersonaId: source.systemPersonaId,
@@ -801,10 +809,33 @@ export const useChatsStore = defineStore('chats', () => {
   // ── Chunk listener (persistent, lives for the app's lifetime) ────────────
   function setUiChunkCallback(cb) { _uiChunkCallback = cb }
   function clearUiChunkCallback() { _uiChunkCallback = null }
+  function setRecipeChunkCallback(cb) { _recipeChunkCallback = cb }
+  function clearRecipeChunkCallback() { _recipeChunkCallback = null }
 
   function initChunkListener() {
     if (!window.electronAPI?.onAgentChunk) return
     window.electronAPI.onAgentChunk(({ chatId, chunk }) => {
+      // Recipe chunks — route to recipe callback and skip all chat logic
+      if (chatId.startsWith('recipe:') && _recipeChunkCallback) {
+        _recipeChunkCallback(chatId, chunk)
+        return
+      }
+
+      // Always update volatile tool-call state — needed by minibar regardless of
+      // whether ChatsView is mounted and handling the UI callback
+      if (chunk.type === 'tool_call' || chunk.type === 'tool_result') {
+        const _chat = chats.value.find(c => c.id === chatId)
+        if (_chat) {
+          if (chunk.type === 'tool_call') {
+            _chat.isCallingTool = true
+            _chat.currentToolCall = chunk.name || null
+          } else {
+            _chat.isCallingTool = false
+            _chat.currentToolCall = null
+          }
+        }
+      }
+
       // If ChatsView is mounted and has a UI callback, let it handle everything
       // (it manages segments, scroll, timers, AND updates message content)
       if (_uiChunkCallback) {
@@ -875,8 +906,8 @@ export const useChatsStore = defineStore('chats', () => {
         else msg.segments.push({ type: 'text', content: msg.content })
       }
     }
-    // tool_call, tool_result, compaction, subagent_progress handled by UI callback only
-    // (they need the perChatStreamingSegments map which lives in ChatsView)
+    // tool_call/tool_result segment rendering handled by UI callback in ChatsView
+    // (isCallingTool/currentToolCall are updated in initChunkListener unconditionally)
 
     debouncedPersistChat(chatId)
   }
@@ -1075,6 +1106,8 @@ export const useChatsStore = defineStore('chats', () => {
       }
     } finally {
       targetChat.isRunning = false
+      targetChat.isCallingTool = false
+      targetChat.currentToolCall = null
       debouncedPersistChat(chatId)
     }
   }
@@ -1091,7 +1124,7 @@ export const useChatsStore = defineStore('chats', () => {
     getChatFolderPath,
     createFolder, renameFolder, deleteFolder, toggleFolder, expandFolder, setAllFoldersExpanded,
     moveNodeToFolder, reorderNode,
-    initChunkListener, setUiChunkCallback, clearUiChunkCallback, markAsRead, markCompleted,
+    initChunkListener, setUiChunkCallback, clearUiChunkCallback, setRecipeChunkCallback, clearRecipeChunkCallback, markAsRead, markCompleted,
     markPermissionPending, clearPermissionPending,
     setPlanState, storePlanRunParams, getPlanRunParams,
     pendingMinibarSend, triggerMinibarSend, clearMinibarSend, sendMinibarMessage,

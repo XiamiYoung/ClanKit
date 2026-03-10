@@ -11,11 +11,10 @@
       @start-call="cId => $emit('start-call', cId)"
     >
       <template #actions>
-        <!-- Maximize (black gradient style) -->
-        <button class="gp-maximize-btn" @click.stop="$emit('maximize')" title="Open in single view">
-          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
-            <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+        <!-- Call -->
+        <button class="gp-maximize-btn" @click.stop="$emit('start-call', chatId)" title="Voice call">
+          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
           </svg>
         </button>
         <!-- Swap -->
@@ -27,6 +26,13 @@
             </svg>
           </button>
         </div>
+        <!-- Maximize (black gradient style) -->
+        <button class="gp-maximize-btn" @click.stop="$emit('maximize')" title="Open in single view">
+          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+            <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+          </svg>
+        </button>
       </template>
     </ChatHeader>
 
@@ -37,7 +43,6 @@
       :showDelete="true"
       @send="onSend"
       @send-with-attachments="onSendWithAttachments"
-      @pause="pauseChat"
       @stop="stopChat"
       @delete-message="deleteMessage"
     >
@@ -98,16 +103,8 @@
               @attach="atts => gpAttachments.push(...atts)"
             />
 
-            <!-- Pause / Stop buttons -->
+            <!-- Stop button -->
             <template v-if="isRunning">
-              <button
-                @click="pauseChat"
-                class="gp-icon-btn gp-stop-btn"
-                aria-label="Pause agent"
-                title="Pause (Esc) — interrupt but keep queue"
-              >
-                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-              </button>
               <button
                 @click="stopChat"
                 class="gp-icon-btn gp-stop-btn"
@@ -627,14 +624,7 @@ function _applyInterrupt(chat, msg, type) {
   }
 }
 
-// Pause: interrupt the agent, preserve queue (grid panels manage their own send guards)
-async function pauseChat() {
-  if (window.electronAPI?.stopAgent) await window.electronAPI.stopAgent(props.chatId)
-  const { chat, msg } = _getLastActiveMessage()
-  _applyInterrupt(chat, msg, 'pause')
-}
-
-// Stop: same as pause for grid panels (no global queue to clear)
+// Stop: interrupt the agent and clear the queue
 async function stopChat() {
   if (window.electronAPI?.stopAgent) await window.electronAPI.stopAgent(props.chatId)
   const { chat, msg } = _getLastActiveMessage()

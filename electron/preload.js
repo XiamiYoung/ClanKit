@@ -77,6 +77,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   compactContextStandalone: (params) => ipcRenderer.invoke('agent:compact-standalone', params),
   getContextSnapshot: (chatId) => ipcRenderer.invoke('agent:get-context', chatId),
   enhancePrompt: (params) => ipcRenderer.invoke('agent:enhance-prompt', params),
+  editText: (params) => ipcRenderer.invoke('agent:edit-text', params),
+  stopEdit: (requestId) => ipcRenderer.invoke('agent:edit-stop', requestId),
+  runDocAgent: (params) => ipcRenderer.invoke('agent:doc-run', params),
+  stopDocAgent: (requestId) => ipcRenderer.invoke('agent:doc-stop', requestId),
+  docPermissionResponse: (requestId, payload) => ipcRenderer.invoke('agent:doc-permission-response', requestId, payload),
+  onEditChunk: (callback) => {
+    ipcRenderer.removeAllListeners('agent:edit-chunk')
+    ipcRenderer.on('agent:edit-chunk', (_, data) => callback(data))
+    return () => ipcRenderer.removeAllListeners('agent:edit-chunk')
+  },
   resolveAddressees: (params) => ipcRenderer.invoke('agent:resolve-addressees', params),
   testProvider: (params) => ipcRenderer.invoke('agent:test-provider', params),
   onAgentChunk: (callback) => {
@@ -149,11 +159,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readTree:     (dir)                => ipcRenderer.invoke('obsidian:read-tree', dir),
     readFile:     (filePath)           => ipcRenderer.invoke('obsidian:read-file', filePath),
     writeFile:    (filePath, content)  => ipcRenderer.invoke('obsidian:write-file', filePath, content),
+    readFileBinary:  (filePath)           => ipcRenderer.invoke('obsidian:read-file-binary', filePath),
+    writeFileBinary: (filePath, base64)   => ipcRenderer.invoke('obsidian:write-file-binary', filePath, base64),
     saveImage:    (dir, name, base64)  => ipcRenderer.invoke('obsidian:save-image', dir, name, base64),
     readImageBase64: (filePath)        => ipcRenderer.invoke('obsidian:read-image-base64', filePath),
     createFile:   (dir, name)          => ipcRenderer.invoke('obsidian:create-file', dir, name),
     createFolder: (dir, name)          => ipcRenderer.invoke('obsidian:create-folder', dir, name),
     createDrawio: (dir, name)          => ipcRenderer.invoke('obsidian:create-drawio', dir, name),
+    createDocx:  (dir, name)          => ipcRenderer.invoke('obsidian:create-docx', dir, name),
+    createXlsx:  (dir, name)          => ipcRenderer.invoke('obsidian:create-xlsx', dir, name),
     deleteFile:   (filePath)           => ipcRenderer.invoke('obsidian:delete-file', filePath),
     isDirEmpty:   (dirPath)            => ipcRenderer.invoke('obsidian:is-dir-empty', dirPath),
     rename:       (oldPath, newPath)   => ipcRenderer.invoke('obsidian:rename', oldPath, newPath),
@@ -214,6 +228,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   windowMaximize:     () => ipcRenderer.invoke('window:maximize'),
   windowClose:        () => ipcRenderer.invoke('window:close'),
   windowIsMaximized:  () => ipcRenderer.invoke('window:is-maximized'),
+  windowGetPosition:  () => ipcRenderer.invoke('window:get-position'),
+  windowDragStart:    () => ipcRenderer.send('window:drag-start'),
+  windowDragEnd:      () => ipcRenderer.send('window:drag-end'),
+  windowMoveTo:       (x, y) => ipcRenderer.send('window:move-to', x, y),
   onWindowMaximized:  (cb) => {
     const handler = (_e, v) => cb(v)
     ipcRenderer.on('window:maximized', handler)
@@ -227,6 +245,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   drawio: {
     getFramePath:    () => ipcRenderer.invoke('drawio:get-frame-path'),
     getPreloadPath:  () => ipcRenderer.invoke('drawio:get-preload-path'),
+  },
+
+  // ── Recipes ────────────────────────────────────────────────────────────────
+  recipes: {
+    list:       ()          => ipcRenderer.invoke('recipes:list'),
+    save:       (recipe)    => ipcRenderer.invoke('recipes:save', recipe),
+    delete:     (id)        => ipcRenderer.invoke('recipes:delete', id),
+    getRuns:    (params)    => ipcRenderer.invoke('recipes:get-runs', params),
+    getRun:     (runId)     => ipcRenderer.invoke('recipes:get-run', runId),
+    deleteRun:  (runId)     => ipcRenderer.invoke('recipes:delete-run', runId),
+    saveRun:    (runDetail) => ipcRenderer.invoke('recipes:save-run', runDetail),
+    onRunCompleted: (cb) => {
+      ipcRenderer.removeAllListeners('recipes:run-completed')
+      ipcRenderer.on('recipes:run-completed', (_e, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('recipes:run-completed')
+    },
   },
 
   // ── IM Bridge ─────────────────────────────────────────────────────────────

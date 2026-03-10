@@ -1,0 +1,414 @@
+/**
+ * recipe-scheduler.js — node-cron based scheduler for recipes.
+ *
+ * Usage from main.js:
+ *   const recipeScheduler = require('./recipe-scheduler')
+ *   recipeScheduler.init(() => DATA_DIR, () => mainWindow)
+ *
+ * After save: recipeScheduler.schedule(recipe)
+ * After delete: recipeScheduler.unschedule(recipeId)
+ */
+const fs = require('fs')
+const path = require('path')
+const { v4: uuidv4 } = require('uuid')
+const { logger } = require('./logger')
+
+let cron = null
+try {
+  cron = require('node-cron')
+} catch (err) {
+  logger.warn('node-cron not installed — recipe scheduler disabled:', err.message)
+}
+
+const { AgentLoop } = require('./agent/agentLoop')
+
+// Getters set by init()
+let _getDataDir = null
+let _getMainWindow = null
+
+// Map of recipeId → cron task
+const _jobs = new Map()
+
+/**
+ * Resolve file paths from DATA_DIR.
+ */
+function getPaths() {
+  const dir = _getDataDir()
+  return {
+    configFile:        path.join(dir, 'config.json'),
+    personasFile:      path.join(dir, 'personas.json'),
+    recipesFile:       path.join(dir, 'recipes.json'),
+    recipeRunsDir:     path.join(dir, 'recipe-runs'),
+    recipeRunsIndex:   path.join(dir, 'recipe-runs', 'index.json'),
+    soulsDir:          path.join(dir, 'souls'),
+  }
+}
+
+function readJSON(file, fallback) {
+  try {
+    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch {}
+  return fallback
+}
+
+async function writeJSONAtomic(file, data) {
+  const dir = path.dirname(file)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  const tmp = file + `.tmp.${process.pid}.${Date.now()}`
+  try {
+    await fs.promises.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
+    await fs.promises.rename(tmp, file)
+  } catch (err) {
+    try { await fs.promises.unlink(tmp) } catch {}
+    throw err
+  }
+}
+
+/**
+ * Build provider config for a persona (mirrors ChatsView buildPersonaRuns logic).
+ */
+function buildPersonaConfig(persona, globalCfg) {
+  const cfg = { ...globalCfg }
+  // Clean provider-specific keys first
+  delete cfg.apiKey
+  delete cfg.baseURL
+  delete cfg.openaiApiKey
+  delete cfg.openaiBaseURL
+  delete cfg._directAuth
+  delete cfg._resolvedProvider
+
+  const provider = persona.providerId || globalCfg.defaultProvider || 'anthropic'
+
+  if (provider === 'anthropic') {
+    cfg.apiKey  = globalCfg.anthropic?.apiKey  || ''
+    cfg.baseURL = globalCfg.anthropic?.baseURL || ''
+  } else if (provider === 'openrouter') {
+    cfg.apiKey  = globalCfg.openrouter?.apiKey  || ''
+    cfg.baseURL = globalCfg.openrouter?.baseURL || ''
+  } else if (provider === 'openai') {
+    cfg.openaiApiKey  = globalCfg.openai?.apiKey  || ''
+    cfg.openaiBaseURL = globalCfg.openai?.baseURL || ''
+    cfg._resolvedProvider = 'openai'
+    cfg.defaultProvider   = 'openai'
+  } else if (provider === 'deepseek') {
+    cfg.openaiApiKey  = globalCfg.deepseek?.apiKey  || ''
+    cfg.openaiBaseURL = (globalCfg.deepseek?.baseURL || '').replace(/\/+$/, '')
+    cfg._resolvedProvider = 'openai'
+    cfg._directAuth       = true
+    cfg.defaultProvider   = 'openai'
+  }
+
+  // Apply persona model override if set
+  if (persona.modelId) {
+    if (provider === 'anthropic') cfg.anthropic = { ...cfg.anthropic, activeModel: persona.modelId }
+    else if (provider === 'openrouter') cfg.openrouter = { ...cfg.openrouter, defaultModel: persona.modelId }
+    else if (provider === 'openai') cfg.openai = { ...cfg.openai, model: persona.modelId }
+    else if (provider === 'deepseek') cfg.deepseek = { ...cfg.deepseek, model: persona.modelId }
+  }
+
+  return cfg
+}
+
+function renderTemplate(template, inputs) {
+  return (template || '').replace(/\{\{(\w+)\}\}/g, (_, key) =>
+    inputs[key] !== undefined ? String(inputs[key]) : ''
+  )
+}
+
+function resolveOutputTokens(template, nameToOutput) {
+  return (template || '').replace(/\{\{output:([^}]+)\}\}/g, (match, name) => {
+    const trimmed = name.trim()
+    return nameToOutput[trimmed] !== undefined ? String(nameToOutput[trimmed]) : match
+  })
+}
+
+// Build execution waves (topological sort). Each wave = personas whose deps are all resolved.
+function buildExecutionWaves(personas) {
+  const waves = []
+  const resolved = new Set()
+  const remaining = [...personas]
+  while (remaining.length > 0) {
+    const wave = remaining.filter(rp => (rp.dependsOn || []).every(id => resolved.has(id)))
+    if (wave.length === 0) { waves.push(...remaining.map(rp => [rp])); break }
+    waves.push(wave)
+    wave.forEach(rp => { resolved.add(rp.personaId); remaining.splice(remaining.indexOf(rp), 1) })
+  }
+  return waves
+}
+
+function shouldRunPersona(rp, statuses) {
+  const deps = rp.dependsOn || []
+  if (deps.length === 0) return true
+  const cond = rp.runCondition || 'always'
+  if (cond === 'always') return true
+  if (cond === 'on_success') return deps.every(id => statuses[id] === 'done')
+  if (cond === 'on_failure') return deps.some(id => statuses[id] === 'failed' || statuses[id] === 'skipped')
+  return true
+}
+
+/**
+ * Execute a recipe immediately (called by cron job or on-demand test).
+ * Runs all personas concurrently, collects text outputs, writes run record to disk.
+ */
+async function _executeRecipe(recipe, triggeredBy = 'schedule') {
+  const { configFile, personasFile, recipeRunsDir, recipeRunsIndex, soulsDir } = getPaths()
+  const globalCfg = readJSON(configFile, {})
+  const personasData = readJSON(personasFile, { personas: [] })
+  const allPersonas = personasData.personas || personasData || []
+
+  const runId = uuidv4()
+  const startedAt = new Date().toISOString()
+
+  logger.info(`[RecipeScheduler] Executing recipe "${recipe.name}" (${recipe.id}), runId=${runId}, by=${triggeredBy}`)
+
+  // Build inputs: use defaults from recipe.inputs
+  const inputs = {}
+  for (const inp of (recipe.inputs || [])) {
+    inputs[inp.key] = inp.default !== undefined ? inp.default : ''
+  }
+
+  const recipePersonas = (recipe.personas || []).filter(rp => allPersonas.find(p => p.id === rp.personaId))
+  if (recipePersonas.length === 0) {
+    logger.warn(`[RecipeScheduler] No valid personas for recipe ${recipe.id}, aborting run`)
+    return
+  }
+
+  const outputMap = {}   // personaId → accumulated text
+  const statuses  = {}   // personaId → 'waiting'|'done'|'failed'|'skipped'
+  for (const rp of recipePersonas) {
+    outputMap[rp.personaId] = ''
+    statuses[rp.personaId]  = 'waiting'
+  }
+
+  // Write initial run record (status: running)
+  if (!fs.existsSync(recipeRunsDir)) fs.mkdirSync(recipeRunsDir, { recursive: true })
+  const runDetail = {
+    id: runId,
+    recipeId: recipe.id,
+    recipeName: recipe.name,
+    inputs,
+    outputs: {},
+    status: 'running',
+    triggeredBy,
+    startedAt,
+    completedAt: null,
+    error: null,
+  }
+  await writeJSONAtomic(path.join(recipeRunsDir, `${runId}.json`), runDetail)
+
+  // Update index
+  let runIndex = readJSON(recipeRunsIndex, [])
+  runIndex.unshift({
+    id: runId,
+    recipeId: recipe.id,
+    recipeName: recipe.name,
+    triggeredBy,
+    status: 'running',
+    startedAt,
+    completedAt: null,
+    error: null,
+  })
+  if (runIndex.length > 200) runIndex = runIndex.slice(0, 200)
+  await writeJSONAtomic(recipeRunsIndex, runIndex)
+
+  // Execute in topological waves so downstream personas receive upstream outputs
+  let runStatus = 'completed'
+  let runError  = null
+  const waves = buildExecutionWaves(recipePersonas)
+
+  for (const wave of waves) {
+    const wavePromises = wave.map(rp => (async () => {
+      if (!shouldRunPersona(rp, statuses)) {
+        statuses[rp.personaId] = 'skipped'
+        return
+      }
+
+      const persona    = allPersonas.find(p => p.id === rp.personaId)
+      const personaCfg = buildPersonaConfig(persona, globalCfg)
+      personaCfg.soulsDir           = soulsDir
+      personaCfg.artifactPath       = globalCfg.artifactPath || globalCfg.artyfactPath || ''
+      personaCfg.skillsPath         = globalCfg.skillsPath   || ''
+      personaCfg.DoCPath            = globalCfg.DoCPath       || ''
+      personaCfg.chatPermissionMode = 'allow_all'
+      personaCfg.chatAllowList      = []
+      personaCfg.sandboxConfig      = globalCfg.sandboxConfig || { defaultMode: 'allow_all', sandboxAllowList: [], dangerBlockList: [] }
+
+      // Build name→output map for {{output:Name}} token resolution
+      const nameToOutput = {}
+      for (const [pid, text] of Object.entries(outputMap)) {
+        const p = allPersonas.find(x => x.id === pid)
+        if (p) nameToOutput[p.name] = text
+      }
+
+      // Resolve both {{input_var}} and {{output:Name}} in prompts
+      const globalPart  = resolveOutputTokens(renderTemplate(recipe.globalPrompt || '', inputs), nameToOutput)
+      const personaPart = resolveOutputTokens(renderTemplate(rp.prompt || '', inputs), nameToOutput)
+      const systemPersonaPrompt = [globalPart, personaPart].filter(Boolean).join('\n\n')
+
+      // Determine which upstream outputs were NOT inlined via tokens
+      const inlinedNames = new Set(
+        ((recipe.globalPrompt || '') + (rp.prompt || ''))
+          .match(/\{\{output:([^}]+)\}\}/g)?.map(m => m.replace(/^\{\{output:|\}\}$/g, '').trim()) || []
+      )
+      const prevOutputLines = (rp.dependsOn || [])
+        .filter(depId => outputMap[depId])
+        .filter(depId => {
+          const name = allPersonas.find(p => p.id === depId)?.name || ''
+          return !inlinedNames.has(name)
+        })
+        .map(depId => {
+          const depPersona = allPersonas.find(p => p.id === depId)
+          return `[Output from ${depPersona?.name || depId}]:\n${outputMap[depId]}`
+        })
+
+      const userMessage = ['Run this task.', ...prevOutputLines].join('\n\n---\n\n')
+
+      const loop = new AgentLoop({ ...personaCfg })
+      try {
+        await loop.run(
+          [{ role: 'user', content: userMessage }],
+          [],   // enabledAgents
+          [],   // enabledSkills
+          (chunk) => {
+            if (chunk.type === 'text' && chunk.text) {
+              outputMap[rp.personaId] = (outputMap[rp.personaId] || '') + chunk.text
+            }
+          },
+          null,
+          { systemPersonaPrompt, systemPersonaId: rp.personaId, userPersonaId: '__recipe_user__' },
+          [],   // mcpServers
+          [],   // httpTools
+          null  // ragContext
+        )
+        statuses[rp.personaId] = 'done'
+      } catch (err) {
+        logger.error(`[RecipeScheduler] Persona ${rp.personaId} error:`, err.message)
+        statuses[rp.personaId] = 'failed'
+        runStatus = 'error'
+        runError  = err.message
+      }
+    })())
+    await Promise.all(wavePromises)
+  }
+
+  const anyFailed = Object.values(statuses).some(s => s === 'failed')
+  if (anyFailed && runStatus === 'completed') {
+    runStatus = 'error'
+    runError  = 'One or more personas failed'
+  }
+
+  const completedAt = new Date().toISOString()
+
+  // Write final run detail
+  runDetail.outputs = { ...outputMap }
+  runDetail.status = runStatus
+  runDetail.completedAt = completedAt
+  runDetail.error = runError
+  await writeJSONAtomic(path.join(recipeRunsDir, `${runId}.json`), runDetail)
+
+  // Update index entry
+  runIndex = readJSON(recipeRunsIndex, [])
+  const idxEntry = runIndex.find(e => e.id === runId)
+  if (idxEntry) {
+    idxEntry.status = runStatus
+    idxEntry.completedAt = completedAt
+    idxEntry.error = runError
+    await writeJSONAtomic(recipeRunsIndex, runIndex)
+  }
+
+  // Update recipe's lastRunAt
+  try {
+    const { recipesFile } = getPaths()
+    const recipes = readJSON(recipesFile, [])
+    const rec = recipes.find(r => r.id === recipe.id)
+    if (rec?.schedule) {
+      rec.schedule.lastRunAt = completedAt
+      await writeJSONAtomic(recipesFile, recipes)
+    }
+  } catch {}
+
+  logger.info(`[RecipeScheduler] Run ${runId} ${runStatus}`)
+
+  // Push to renderer
+  const win = _getMainWindow?.()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('recipes:run-completed', { runId, recipeId: recipe.id, status: runStatus })
+  }
+}
+
+/**
+ * Schedule (or reschedule) a recipe based on its schedule config.
+ * Cancels any existing job for this recipe first.
+ */
+function schedule(recipe) {
+  // Always cancel existing job first
+  unschedule(recipe.id)
+
+  if (!cron) return
+  if (!recipe?.schedule?.enabled || !recipe?.schedule?.cron) return
+  if (!cron.validate(recipe.schedule.cron)) {
+    logger.warn(`[RecipeScheduler] Invalid cron expression for recipe ${recipe.id}: ${recipe.schedule.cron}`)
+    return
+  }
+
+  const timezone = recipe.schedule.timezone || 'UTC'
+  try {
+    const task = cron.schedule(recipe.schedule.cron, async () => {
+      try {
+        await _executeRecipe(recipe, 'schedule')
+      } catch (err) {
+        logger.error(`[RecipeScheduler] Error executing recipe ${recipe.id}:`, err.message)
+      }
+    }, { timezone, scheduled: true })
+
+    _jobs.set(recipe.id, task)
+    logger.info(`[RecipeScheduler] Scheduled recipe "${recipe.name}" (${recipe.id}): ${recipe.schedule.cron} [${timezone}]`)
+  } catch (err) {
+    logger.error(`[RecipeScheduler] Failed to schedule recipe ${recipe.id}:`, err.message)
+  }
+}
+
+/**
+ * Cancel a scheduled recipe job.
+ */
+function unschedule(recipeId) {
+  const existing = _jobs.get(recipeId)
+  if (existing) {
+    try { existing.stop() } catch {}
+    _jobs.delete(recipeId)
+    logger.info(`[RecipeScheduler] Unscheduled recipe ${recipeId}`)
+  }
+}
+
+/**
+ * Initialize the scheduler. Call once after app.whenReady().
+ * @param {() => string} getDataDir - Getter for DATA_DIR (may not be set until after ensureDataDir)
+ * @param {() => BrowserWindow} getMainWindow - Getter for mainWindow
+ */
+function init(getDataDir, getMainWindow) {
+  _getDataDir = getDataDir
+  _getMainWindow = getMainWindow
+
+  if (!cron) {
+    logger.warn('[RecipeScheduler] node-cron not available — scheduler disabled')
+    return
+  }
+
+  // Load all enabled recipes and schedule them
+  try {
+    const { recipesFile } = getPaths()
+    const recipes = readJSON(recipesFile, [])
+    let scheduled = 0
+    for (const recipe of recipes) {
+      if (recipe?.schedule?.enabled && recipe?.schedule?.cron) {
+        schedule(recipe)
+        scheduled++
+      }
+    }
+    if (scheduled > 0) logger.info(`[RecipeScheduler] Scheduled ${scheduled} recipe(s) on startup`)
+  } catch (err) {
+    logger.error('[RecipeScheduler] init error:', err.message)
+  }
+}
+
+module.exports = { init, schedule, unschedule, executeRecipe: _executeRecipe }

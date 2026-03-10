@@ -4,6 +4,32 @@
       <!-- Logo -->
       <img src="/icon.png" class="minibar-icon" alt="ClankAI" draggable="false" @dragstart.prevent />
 
+      <!-- Voice call panel — shown when a call is active -->
+      <template v-if="voiceStore.isCallActive">
+        <div class="minibar-sep" />
+        <div class="minibar-call-panel">
+          <!-- Animated mic/wave icon -->
+          <div class="minibar-call-icon" :class="'minibar-call-icon--' + voiceStore.status">
+            <svg viewBox="0 0 24 24" fill="none" style="width:11px;height:11px;">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="currentColor"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <line x1="12" y1="19" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <line x1="8" y1="23" x2="16" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <!-- Persona name -->
+          <span class="minibar-call-name">{{ voiceStore.activePersonaName || 'Call' }}</span>
+          <!-- Status label -->
+          <span class="minibar-call-status">{{ voiceStore.status === 'speaking' ? 'speaking' : voiceStore.status === 'processing' ? 'thinking' : 'listening' }}</span>
+          <!-- End call button -->
+          <button class="minibar-call-end" @click.stop="endCall" title="End call">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:10px;height:10px;">
+              <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24 11.47 11.47 0 0 0 3.58.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.47 11.47 0 0 0 .57 3.58 1 1 0 0 1-.25 1.02z"/>
+            </svg>
+          </button>
+        </div>
+      </template>
+
       <div class="minibar-sep" />
 
       <!-- Running count -->
@@ -19,18 +45,29 @@
         <span class="minibar-count">{{ ongoingCount }}</span>
       </div>
 
+      <!-- Chat name — truncated at 10 chars, tooltip shows full name -->
+      <span
+        v-if="activeChatNameShort"
+        class="minibar-chat-name"
+        :title="activeChatNameNeedsTooltip ? activeChatName : undefined"
+      >{{ activeChatNameShort }}</span>
+
       <div class="minibar-sep" />
 
       <!-- Rolling ticker — flex:1, grows/shrinks with window width -->
       <div v-if="!showCompose" class="minibar-ticker-wrap">
         <template v-if="tickerText">
+          <!-- Dot sits outside the clipping scroll area so it never gets covered -->
           <span class="minibar-ticker-dot" :class="'minibar-ticker-dot-' + tickerStatus" />
-          <div
-            class="minibar-ticker-track"
-            :class="tickerStatus === 'running' ? 'minibar-ticker-loop' : 'minibar-ticker-once'"
-            :key="tickerKey"
-          >
-            <span class="minibar-ticker-text">{{ tickerText }}</span>
+          <!-- Overflow-clipped scroll area only wraps the text track -->
+          <div class="minibar-ticker-clip">
+            <div
+              class="minibar-ticker-track"
+              :class="tickerStatus === 'running' ? 'minibar-ticker-loop' : 'minibar-ticker-once'"
+              :key="tickerKey"
+            >
+              <span class="minibar-ticker-text">{{ tickerText }}</span>
+            </div>
           </div>
         </template>
         <span v-else class="minibar-ticker-idle">No recent activity</span>
@@ -87,14 +124,16 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, onUnmounted, nextTick } from 'vue'
+import { computed, ref, watch, watchEffect, onUnmounted, nextTick } from 'vue'
 import { useFocusModeStore } from '../../stores/focusMode'
 import { useChatsStore } from '../../stores/chats'
 import { usePersonasStore } from '../../stores/personas'
+import { useVoiceStore } from '../../stores/voice'
 
 const focusModeStore = useFocusModeStore()
 const chatsStore = useChatsStore()
 const personasStore = usePersonasStore()
+const voiceStore = useVoiceStore()
 
 // Ensure personas are loaded (may already be loaded by ChatsView; no-op if so)
 if (!personasStore.personas.length) personasStore.loadPersonas()
@@ -119,7 +158,36 @@ watch(() => focusModeStore.isMinibarMode, async (val) => {
   }
 }, { immediate: true })
 
-const ongoingCount = computed(() => chatsStore.chats.filter(c => c.isRunning).length)
+// watchEffect auto-tracks every reactive property accessed inside the callback.
+// Accessing c.isRunning / c.isCallingTool on each chat object creates fine-grained
+// dependencies — Vue re-runs this whenever any of those properties change.
+const ongoingCount = ref(0)
+const activeToolCall = ref(null)
+
+watchEffect(() => {
+  const flat = chatsStore.chats
+  let running = 0
+  let toolName = null
+  for (const c of flat) {
+    if (c.isRunning) running++
+    if (!toolName && c.isCallingTool && c.currentToolCall) toolName = c.currentToolCall
+  }
+  ongoingCount.value = running
+  activeToolCall.value = toolName
+})
+
+// Chat name label — follows lastActiveTickerChatId, falls back to activeChatId
+const activeChatName = computed(() => {
+  const id = lastActiveTickerChatId.value || chatsStore.activeChatId
+  if (!id) return null
+  return chatsStore.chats.find(c => c.id === id)?.title || null
+})
+const activeChatNameShort = computed(() => {
+  const name = activeChatName.value
+  if (!name) return null
+  return name.length > 10 ? name.slice(0, 10) + '…' : name
+})
+const activeChatNameNeedsTooltip = computed(() => (activeChatName.value?.length ?? 0) > 10)
 
 // ── Rolling ticker ─────────────────────────────────────────────────────────
 const tickerText = ref('')
@@ -138,30 +206,34 @@ function _lastMsgText(msgs, role) {
   return null
 }
 
+// Getter that reads c.isRunning on every chat — Vue tracks these as fine-grained
+// dependencies, so the watcher fires whenever any chat starts or stops running.
+let _prevRunning = new Map() // chatId → boolean
+
 watch(
-  () => chatsStore.chats.map(c => c.isRunning),
-  async (cur, prev) => {
-    if (!prev) return
-    for (let i = 0; i < chatsStore.chats.length; i++) {
-      if (prev[i] === false && cur[i] === true) {
-        const chat = chatsStore.chats[i]
+  () => chatsStore.chats.map(c => ({ id: c.id, running: c.isRunning })),
+  async (cur) => {
+    for (const { id, running } of cur) {
+      const wasRunning = _prevRunning.get(id) ?? false
+      if (!wasRunning && running) {
+        const chat = chatsStore.chats.find(c => c.id === id)
+        if (!chat) continue
         tickerStatus.value = 'running'
         if (chat.messages === null) await chatsStore.ensureMessages(chat.id)
         tickerText.value = _lastMsgText(chat.messages, 'user') ?? chat.title ?? 'Working…'
         tickerKey.value++
         lastActiveTickerChatId.value = chat.id
-        break
-      } else if (prev[i] === true && cur[i] === false) {
-        const chat = chatsStore.chats[i]
+      } else if (wasRunning && !running) {
+        const chat = chatsStore.chats.find(c => c.id === id)
+        if (!chat) continue
         tickerStatus.value = 'done'
         tickerText.value = _lastMsgText(chat.messages, 'assistant') ?? (chat.title ? `"${chat.title}" completed` : 'Task completed')
         tickerKey.value++
         lastActiveTickerChatId.value = chat.id
-        break
       }
     }
-  },
-  { deep: false }
+    _prevRunning = new Map(cur.map(c => [c.id, !!c.running]))
+  }
 )
 
 // ── Compose ────────────────────────────────────────────────────────────────
@@ -321,6 +393,12 @@ function exit() {
   focusModeStore.exitMinibar()
   window.electronAPI?.window?.setMinibar({ enable: false })
 }
+
+// ── End voice call ─────────────────────────────────────────────────────────
+function endCall() {
+  if (window.electronAPI?.voice?.stop) window.electronAPI.voice.stop()
+  voiceStore.endCall()
+}
 </script>
 
 <style>
@@ -386,6 +464,18 @@ body.minibar-mode #app {
   flex-shrink: 0;
 }
 
+/* ── Chat name label ──────────────────────────────────────────────────────── */
+.minibar-chat-name {
+  font-size: 0.6875rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: default;
+  letter-spacing: 0.01em;
+}
+
 .minibar-spinner {
   width: 0.9375rem;
   height: 0.9375rem;
@@ -416,11 +506,11 @@ body.minibar-mode #app {
 .minibar-ticker-wrap {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  /* No overflow:hidden here — dot and badge must never be clipped */
   height: 100%;
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.3125rem;
 }
 
 .minibar-ticker-dot {
@@ -440,18 +530,98 @@ body.minibar-mode #app {
   50%       { opacity: 0.3; }
 }
 
-.minibar-ticker-track {
+
+/* ── Voice call panel ─────────────────────────────────────────────────────── */
+.minibar-call-panel {
   display: flex;
   align-items: center;
+  gap: 0.3125rem;
+  padding: 0.1875rem 0.375rem 0.1875rem 0.3125rem;
+  border-radius: 9999px;
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  flex-shrink: 0;
+}
+
+.minibar-call-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #34D399;
+  flex-shrink: 0;
+}
+.minibar-call-icon--speaking { color: #60A5FA; animation: minibar-call-pulse 0.8s ease-in-out infinite; }
+.minibar-call-icon--processing { color: #FBBF24; animation: minibar-call-pulse 1s ease-in-out infinite; }
+.minibar-call-icon--listening { color: #34D399; animation: minibar-call-pulse 1.4s ease-in-out infinite; }
+.minibar-call-icon--idle { color: rgba(255,255,255,0.4); }
+
+@keyframes minibar-call-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+.minibar-call-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #FFFFFF;
+  white-space: nowrap;
+  max-width: 5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.minibar-call-status {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.45);
+  white-space: nowrap;
+}
+
+.minibar-call-end {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 59, 48, 0.2);
+  color: #FF6B6B;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.minibar-call-end:hover {
+  background: rgba(255, 59, 48, 0.45);
+  color: #FFFFFF;
+}
+
+/* Clip container: only this div hides overflow, so dot+badge stay visible */
+.minibar-ticker-clip {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.minibar-ticker-track {
+  /* padding-left: 100% resolves to the parent (clip) width, pushing the text
+     to start exactly at the right edge of the clip container.
+     translateX(-100%) then scrolls it fully off to the left. */
+  padding-left: 100%;
   white-space: nowrap;
   will-change: transform;
-  overflow: hidden;
+  flex-shrink: 0;
 }
 .minibar-ticker-loop { animation: minibar-ticker 16s linear infinite; }
 .minibar-ticker-once { animation: minibar-ticker 20s linear 1 forwards; }
 
 @keyframes minibar-ticker {
-  from { transform: translateX(100%); }
+  from { transform: translateX(0); }
   to   { transform: translateX(-100%); }
 }
 
