@@ -1073,6 +1073,7 @@ const effectiveMaxOutputTokens = computed(() => {
 .ch-row-bottom {
   display: flex;
   align-items: center;
+  justify-content: center;
   padding: 0.25rem 1rem 0.5rem;
   overflow: hidden;
   max-height: 4rem;
@@ -1090,7 +1091,6 @@ const effectiveMaxOutputTokens = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.625rem;
-  margin-left: auto;
 }
 
 /* ── Chat config button ── */
@@ -1130,10 +1130,10 @@ const effectiveMaxOutputTokens = computed(() => {
   align-items: center;
   gap: 0.375rem;
   position: relative;
-  background: linear-gradient(135deg, #92400E 0%, #B45309 40%, #D97706 100%);
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   padding: 0.125rem 0.5rem;
   border-radius: 0.625rem;
-  box-shadow: 0 2px 8px rgba(180, 83, 9, 0.35), 0 1px 3px rgba(180, 83, 9, 0.2);
+  box-shadow: 0 2px 8px rgba(75, 85, 99, 0.35), 0 1px 3px rgba(75, 85, 99, 0.2);
 }
 
 /* ── User persona card ── */
