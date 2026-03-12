@@ -85,7 +85,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { getAvatarDataUri } from './personaAvatars'
+import { getAvatarDataUri } from './agentAvatars'
 import { useConfigStore } from '../../stores/config'
 
 const PROVIDER_LABELS = {

@@ -331,7 +331,7 @@ defineOptions({ inheritAttrs: false })
 import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { useAgentsStore } from '../stores/agents'
-import { PERSONA_AVATARS } from '../components/agents/personaAvatars'
+import { PERSONA_AVATARS } from '../components/agents/agentAvatars'
 import AgentCard from '../components/agents/AgentCard.vue'
 import SoulViewer from '../components/agents/SoulViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'

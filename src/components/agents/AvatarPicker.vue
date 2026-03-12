@@ -46,7 +46,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { STYLES, getAvatarDataUri, generateRandomBatch } from './personaAvatars'
+import { STYLES, getAvatarDataUri, generateRandomBatch } from './agentAvatars'
 
 const BATCH_SIZE = 120  // avatars per style tab
 

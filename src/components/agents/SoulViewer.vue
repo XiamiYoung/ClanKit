@@ -370,7 +370,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import { useModelsStore } from '../../stores/models'
 import { useConfigStore } from '../../stores/config'
-import { getAvatarDataUri } from './personaAvatars'
+import { getAvatarDataUri } from './agentAvatars'
 import AvatarPicker from './AvatarPicker.vue'
 
 const props = defineProps({
