@@ -468,34 +468,6 @@ async function migrateEnvDataIfNeeded() {
 
 }
 
-// --- Migration: personas.json -> agents.json ---------------------------------
-function migratePersonasToAgents() {
-  // Migrate personas.json to agents.json if personas.json exists
-  const PERSONAS_FILE_OLD = path.join(DATA_DIR, 'personas.json')
-  if (fs.existsSync(PERSONAS_FILE_OLD)) {
-    try {
-      const personasData = JSON.parse(fs.readFileSync(PERSONAS_FILE_OLD, 'utf8'))
-      // If agents.json is empty or incomplete (only has categories), use personas.json data
-      let agentsData = {}
-      if (fs.existsSync(AGENTS_FILE)) {
-        const existing = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'))
-        // If existing agents.json has no agents (only categories), replace it entirely
-        if (!existing.agents || existing.agents.length === 0) {
-          agentsData = personasData
-        }
-      } else {
-        agentsData = personasData
-      }
-
-      if (Object.keys(agentsData).length > 0) {
-        fs.writeFileSync(AGENTS_FILE, JSON.stringify(agentsData, null, 2))
-        logger.info('Migrated personas.json to agents.json')
-      }
-    } catch (err) {
-      logger.error('Migration from personas.json to agents.json failed:', err.message)
-    }
-  }
-}
 
 // --- Default Data -----------------------------------------------------------
 const DEFAULT_CONFIG = {
@@ -693,7 +665,6 @@ app.whenReady().then(async () => {
   ensureDataDir()
   await migrateChatsIfNeeded()
   await migrateEnvDataIfNeeded()
-  migratePersonasToAgents()
   createWindow()
 
   // ── Clean up stale 'running' run entries from a previous session ────────────
