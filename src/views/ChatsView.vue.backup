@@ -15,7 +15,7 @@
       @maximize-chat="gridMaximizeChat"
       @open-chat-settings="gridOpenChatSettings"
       @open-soul-viewer="(id, type, name) => openSoulViewer(id, type, name)"
-      @remove-group-agent="(cId, pid) => requestRemoveGroupAgent(cId, pid)"
+      @remove-group-persona="(cId, pid) => requestRemoveGroupPersona(cId, pid)"
       @start-call="handleStartCall"
     />
 
@@ -277,7 +277,7 @@
           :chatId="chatsStore.activeChatId"
           @open-chat-settings="showChatConfigModal = true"
           @open-soul-viewer="(id, type, name) => openSoulViewer(id, type, name)"
-          @remove-group-agent="(cId, pid) => requestRemoveGroupAgent(cId, pid)"
+          @remove-group-persona="(cId, pid) => requestRemoveGroupPersona(cId, pid)"
           @start-call="handleStartCall"
           @enter-grid="enterGridMode"
         />
@@ -611,46 +611,46 @@
                 </div>
               </div>
 
-              <!-- Agents section — uses store data before first message, snapshot prompts after -->
-              <div v-if="inspectorAgents" style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
+              <!-- Personas section — uses store data before first message, snapshot prompts after -->
+              <div v-if="inspectorPersonas" style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
                 <button
-                  @click="inspectorSections.agents = !inspectorSections.agents"
+                  @click="inspectorSections.personas = !inspectorSections.personas"
                   class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
                   style="background:#F2F2F7;"
                   @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
                   @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
                   <div class="flex items-center gap-2">
-                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Agents</span>
+                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Personas</span>
                     <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                      {{ (inspectorAgents.systemPersonaPrompt || inspectorAgents.systemPersonaName ? 1 : 0) + (inspectorAgents.userPersonaPrompt || inspectorAgents.userPersonaName ? 1 : 0) }} active
+                      {{ (inspectorPersonas.systemPersonaPrompt || inspectorPersonas.systemPersonaName ? 1 : 0) + (inspectorPersonas.userPersonaPrompt || inspectorPersonas.userPersonaName ? 1 : 0) }} active
                     </span>
                   </div>
-                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.agents ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
+                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.personas ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"/>
                   </svg>
                 </button>
-                <div v-if="inspectorSections.agents" style="border-top:1px solid #E5E5EA;">
-                  <!-- System agent -->
+                <div v-if="inspectorSections.personas" style="border-top:1px solid #E5E5EA;">
+                  <!-- System persona -->
                   <div
-                    v-if="inspectorAgents.systemPersonaPrompt || inspectorAgents.systemPersonaName"
+                    v-if="inspectorPersonas.systemPersonaPrompt || inspectorPersonas.systemPersonaName"
                     class="px-4 py-3"
-                    :style="(inspectorAgents.userPersonaPrompt || inspectorAgents.userPersonaName) ? 'border-bottom:1px solid #F5F5F5;' : ''"
+                    :style="(inspectorPersonas.userPersonaPrompt || inspectorPersonas.userPersonaName) ? 'border-bottom:1px solid #F5F5F5;' : ''"
                   >
                     <div class="flex items-center gap-2 mb-1.5">
-                      <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:rgba(0,122,255,0.1); color:#0056CC;">System Agent</span>
-                      <span v-if="inspectorAgents.systemPersonaName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorAgents.systemPersonaName }}</span>
+                      <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:rgba(0,122,255,0.1); color:#0056CC;">System Persona</span>
+                      <span v-if="inspectorPersonas.systemPersonaName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorPersonas.systemPersonaName }}</span>
                     </div>
-                    <pre v-if="inspectorAgents.systemPersonaPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorAgents.systemPersonaPrompt }}</pre>
+                    <pre v-if="inspectorPersonas.systemPersonaPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorPersonas.systemPersonaPrompt }}</pre>
                     <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">Prompt available after first message.</p>
                   </div>
-                  <!-- User agent -->
-                  <div v-if="inspectorAgents.userPersonaPrompt || inspectorAgents.userPersonaName" class="px-4 py-3">
+                  <!-- User persona -->
+                  <div v-if="inspectorPersonas.userPersonaPrompt || inspectorPersonas.userPersonaName" class="px-4 py-3">
                     <div class="flex items-center gap-2 mb-1.5">
-                      <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#D1FAE5; color:#065F46;">User Agent</span>
-                      <span v-if="inspectorAgents.userPersonaName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorAgents.userPersonaName }}</span>
+                      <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#D1FAE5; color:#065F46;">User Persona</span>
+                      <span v-if="inspectorPersonas.userPersonaName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorPersonas.userPersonaName }}</span>
                     </div>
-                    <pre v-if="inspectorAgents.userPersonaPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorAgents.userPersonaPrompt }}</pre>
+                    <pre v-if="inspectorPersonas.userPersonaPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorPersonas.userPersonaPrompt }}</pre>
                     <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">Prompt available after first message.</p>
                   </div>
                 </div>
@@ -932,7 +932,7 @@
                 <ChatMentionInput
                   ref="mentionInputRef"
                   v-model="inputText"
-                  :agentIds="activeSystemPersonaIds"
+                  :personaIds="activeSystemPersonaIds"
                   :isGroupChat="isGroupChat"
                   :isRunning="activeRunning"
                   @send="sendMessage"
@@ -1302,22 +1302,22 @@
 
               <div class="ccm-dark-section">
                 <div class="ccm-dark-section-label">
-                  Maximum Agent Chat Rounds
+                  Maximum Persona Chat Rounds
                   <span class="ccm-dark-badge">Group Chat</span>
                 </div>
                 <div class="ccm-stepper-row">
-                  <button class="ccm-stepper-btn" @click="draftMaxAgentRounds = Math.max(1, draftMaxAgentRounds - 1)">−</button>
+                  <button class="ccm-stepper-btn" @click="draftMaxPersonaRounds = Math.max(1, draftMaxPersonaRounds - 1)">−</button>
                   <input
-                    v-model.number="draftMaxAgentRounds"
+                    v-model.number="draftMaxPersonaRounds"
                     type="number"
                     min="1"
                     max="100"
                     class="ccm-stepper-input"
-                    @blur="draftMaxAgentRounds = Math.min(100, Math.max(1, Number(draftMaxAgentRounds) || 10))"
+                    @blur="draftMaxPersonaRounds = Math.min(100, Math.max(1, Number(draftMaxPersonaRounds) || 10))"
                   />
-                  <button class="ccm-stepper-btn" @click="draftMaxAgentRounds = Math.min(100, draftMaxAgentRounds + 1)">+</button>
+                  <button class="ccm-stepper-btn" @click="draftMaxPersonaRounds = Math.min(100, draftMaxPersonaRounds + 1)">+</button>
                 </div>
-                <span class="ccm-working-path-hint">How many back-and-forth rounds agents can run in one message. Default: 10. Hard limit: 100.</span>
+                <span class="ccm-working-path-hint">How many back-and-forth rounds personas can run in one message. Default: 10. Hard limit: 100.</span>
               </div>
 
               <div class="ccm-dark-section">
@@ -1629,7 +1629,7 @@
           </button>
         </div>
         <div style="padding:1rem 1.25rem 1.25rem; display:flex; flex-direction:column; gap:0.875rem;">
-          <!-- Row 1: Chat name + agent picker -->
+          <!-- Row 1: Chat name + persona picker -->
           <div class="newchat-name-row-v2">
             <svg style="width:16px;height:16px;flex-shrink:0;color:#6B7280;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -1641,13 +1641,13 @@
               placeholder="Chat name (optional)"
               class="newchat-name-input"
             />
-            <button class="newchat-persona-cfg-btn" @click.stop="showNewChatAgentPopover = true" title="Configure agents">
-              <div class="newchat-persona-cfg-avatars" v-if="newChatAgentIds.length > 0">
-                <template v-for="(pid, i) in newChatAgentIds.slice(0, 3)" :key="pid">
-                  <img v-if="getAvatarDataUriForAgent(agentsStore.getPersonaById(pid))" :src="getAvatarDataUriForAgent(agentsStore.getPersonaById(pid))" alt="" class="newchat-persona-cfg-avatar-img" :style="{ zIndex: 10 - i }" />
-                  <span v-else class="newchat-persona-cfg-avatar-fb" :style="{ zIndex: 10 - i }">{{ (agentsStore.getPersonaById(pid)?.name || '?').charAt(0) }}</span>
+            <button class="newchat-persona-cfg-btn" @click.stop="showNewChatPersonaPopover = true" title="Configure personas">
+              <div class="newchat-persona-cfg-avatars" v-if="newChatPersonaIds.length > 0">
+                <template v-for="(pid, i) in newChatPersonaIds.slice(0, 3)" :key="pid">
+                  <img v-if="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" :src="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" alt="" class="newchat-persona-cfg-avatar-img" :style="{ zIndex: 10 - i }" />
+                  <span v-else class="newchat-persona-cfg-avatar-fb" :style="{ zIndex: 10 - i }">{{ (personasStore.getPersonaById(pid)?.name || '?').charAt(0) }}</span>
                 </template>
-                <span v-if="newChatAgentIds.length > 3" class="newchat-persona-cfg-avatar-fb newchat-persona-cfg-overflow" :style="{ zIndex: 5 }">+{{ newChatAgentIds.length - 3 }}</span>
+                <span v-if="newChatPersonaIds.length > 3" class="newchat-persona-cfg-avatar-fb newchat-persona-cfg-overflow" :style="{ zIndex: 5 }">+{{ newChatPersonaIds.length - 3 }}</span>
               </div>
               <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
@@ -1689,9 +1689,9 @@
       </div>
     </div>
 
-  <!-- New Chat Agent Picker Dialog (dark, CCM-style) -->
+  <!-- New Chat Persona Picker Dialog (dark, CCM-style) -->
   <Teleport to="body">
-    <div v-if="showNewChatAgentPopover" class="ncp-backdrop" @click.self="showNewChatAgentPopover = false">
+    <div v-if="showNewChatPersonaPopover" class="ncp-backdrop" @click.self="showNewChatPersonaPopover = false">
       <div class="ncp-dialog">
         <!-- Header -->
         <div class="ncp-header">
@@ -1701,10 +1701,10 @@
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
               </svg>
             </div>
-            <h2 class="ncp-title">Choose Agents</h2>
-            <span class="ncp-badge">{{ newChatAgentIds.length }} selected</span>
+            <h2 class="ncp-title">Choose Personas</h2>
+            <span class="ncp-badge">{{ newChatPersonaIds.length }} selected</span>
           </div>
-          <button class="ncp-close" @click="showNewChatAgentPopover = false">
+          <button class="ncp-close" @click="showNewChatPersonaPopover = false">
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
@@ -1713,10 +1713,10 @@
         <div class="ncp-search-bar">
           <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input
-            ref="newChatAgentSearchEl"
-            v-model="newChatAgentSearch"
+            ref="newChatPersonaSearchEl"
+            v-model="newChatPersonaSearch"
             type="text"
-            placeholder="Search agents..."
+            placeholder="Search personas..."
             class="ncp-search-input"
             @keydown.stop
           />
@@ -1725,22 +1725,22 @@
           </button>
         </div>
 
-        <!-- Agent list -->
+        <!-- Persona list -->
         <div class="ncp-list">
           <!-- When searching: flat filtered list -->
           <template v-if="newChatPersonaSearch.trim()">
             <label
-              v-for="p in filteredNewChatAgents"
+              v-for="p in filteredNewChatPersonas"
               :key="p.id"
               class="ncp-item"
-              :class="{ selected: newChatAgentIds.includes(p.id) }"
+              :class="{ selected: newChatPersonaIds.includes(p.id) }"
             >
               <div class="ncp-check">
-                <input type="checkbox" :checked="newChatAgentIds.includes(p.id)" @change="toggleNewChatAgent(p.id)" />
-                <svg v-if="newChatAgentIds.includes(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <input type="checkbox" :checked="newChatPersonaIds.includes(p.id)" @change="toggleNewChatPersona(p.id)" />
+                <svg v-if="newChatPersonaIds.includes(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
               </div>
               <div class="ncp-avatar">
-                <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" class="ncp-avatar-img" />
+                <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" class="ncp-avatar-img" />
                 <span v-else class="ncp-avatar-fallback">{{ p.name.charAt(0) }}</span>
               </div>
               <div class="ncp-info">
@@ -1748,31 +1748,31 @@
                 <span v-if="p.description" class="ncp-desc">{{ p.description }}</span>
               </div>
             </label>
-            <div v-if="filteredNewChatAgents.length === 0" class="ncp-empty">No agents match your search</div>
+            <div v-if="filteredNewChatPersonas.length === 0" class="ncp-empty">No personas match your search</div>
           </template>
           <!-- No search: category tree -->
           <template v-else>
             <!-- System categories -->
-            <div v-for="cat in agentsStore.systemCategories" :key="cat.id" class="ncp-cat-section">
+            <div v-for="cat in personasStore.systemCategories" :key="cat.id" class="ncp-cat-section">
               <button class="ncp-cat-header" @click="toggleNcpCat(cat.id)">
                 <svg class="ncp-cat-chevron" :class="{ expanded: ncpExpandedCatIds.has(cat.id) }" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
                 <span v-if="cat.emoji" class="ncp-cat-emoji">{{ cat.emoji }}</span>
                 <span class="ncp-cat-name">{{ cat.name }}</span>
-                <span class="ncp-cat-count">{{ agentsStore.agentsInCategory(cat.id).length }}</span>
+                <span class="ncp-cat-count">{{ personasStore.personasInCategory(cat.id).length }}</span>
               </button>
               <div v-if="ncpExpandedCatIds.has(cat.id)" class="ncp-cat-items">
                 <label
-                  v-for="p in agentsStore.agentsInCategory(cat.id)"
+                  v-for="p in personasStore.personasInCategory(cat.id)"
                   :key="p.id"
                   class="ncp-item"
-                  :class="{ selected: newChatAgentIds.includes(p.id) }"
+                  :class="{ selected: newChatPersonaIds.includes(p.id) }"
                 >
                   <div class="ncp-check">
-                    <input type="checkbox" :checked="newChatAgentIds.includes(p.id)" @change="toggleNewChatAgent(p.id)" />
-                    <svg v-if="newChatAgentIds.includes(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                    <input type="checkbox" :checked="newChatPersonaIds.includes(p.id)" @change="toggleNewChatPersona(p.id)" />
+                    <svg v-if="newChatPersonaIds.includes(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
                   </div>
                   <div class="ncp-avatar">
-                    <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" class="ncp-avatar-img" />
+                    <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" class="ncp-avatar-img" />
                     <span v-else class="ncp-avatar-fallback">{{ p.name.charAt(0) }}</span>
                   </div>
                   <div class="ncp-info">
@@ -1780,7 +1780,7 @@
                     <span v-if="p.description" class="ncp-desc">{{ p.description }}</span>
                   </div>
                 </label>
-                <div v-if="agentsStore.agentsInCategory(cat.id).length === 0" class="ncp-empty" style="padding: 0.375rem 0.5rem; font-size: 0.75rem; font-style: italic;">No agents</div>
+                <div v-if="personasStore.personasInCategory(cat.id).length === 0" class="ncp-empty" style="padding: 0.375rem 0.5rem; font-size: 0.75rem; font-style: italic;">No personas</div>
               </div>
             </div>
             <!-- All (fallback) section — always last -->
@@ -1788,21 +1788,21 @@
               <button class="ncp-cat-header" @click="toggleNcpCat('__all__')">
                 <svg class="ncp-cat-chevron" :class="{ expanded: ncpExpandedCatIds.has('__all__') }" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
                 <span class="ncp-cat-name">All</span>
-                <span class="ncp-cat-count">{{ sortedSystemAgents.length }}</span>
+                <span class="ncp-cat-count">{{ sortedSystemPersonas.length }}</span>
               </button>
               <div v-if="ncpExpandedCatIds.has('__all__')" class="ncp-cat-items">
                 <label
-                  v-for="p in sortedSystemAgents"
+                  v-for="p in sortedSystemPersonas"
                   :key="p.id"
                   class="ncp-item"
-                  :class="{ selected: newChatAgentIds.includes(p.id) }"
+                  :class="{ selected: newChatPersonaIds.includes(p.id) }"
                 >
                   <div class="ncp-check">
-                    <input type="checkbox" :checked="newChatAgentIds.includes(p.id)" @change="toggleNewChatAgent(p.id)" />
-                    <svg v-if="newChatAgentIds.includes(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                    <input type="checkbox" :checked="newChatPersonaIds.includes(p.id)" @change="toggleNewChatPersona(p.id)" />
+                    <svg v-if="newChatPersonaIds.includes(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
                   </div>
                   <div class="ncp-avatar">
-                    <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" class="ncp-avatar-img" />
+                    <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" class="ncp-avatar-img" />
                     <span v-else class="ncp-avatar-fallback">{{ p.name.charAt(0) }}</span>
                   </div>
                   <div class="ncp-info">
@@ -1817,8 +1817,8 @@
 
         <!-- Footer -->
         <div class="ncp-footer">
-          <span class="ncp-footer-hint">{{ newChatAgentIds.length === 0 ? 'Default agent' : newChatAgentIds.length === 1 ? '1 agent (single mode)' : newChatAgentIds.length + ' agents (group mode)' }}</span>
-          <button class="ncp-done-btn" @click="showNewChatAgentPopover = false">Done</button>
+          <span class="ncp-footer-hint">{{ newChatPersonaIds.length === 0 ? 'Default persona' : newChatPersonaIds.length === 1 ? '1 persona (single mode)' : newChatPersonaIds.length + ' personas (group mode)' }}</span>
+          <button class="ncp-done-btn" @click="showNewChatPersonaPopover = false">Done</button>
         </div>
       </div>
     </div>
@@ -1827,7 +1827,7 @@
   <!-- Soul Viewer Modal -->
   <SoulViewer
     v-if="soulViewerTarget"
-    :personaId="soulViewerTarget.agentId"
+    :personaId="soulViewerTarget.personaId"
     :personaType="soulViewerTarget.personaType"
     :personaName="soulViewerTarget.personaName"
     :personaDescription="soulViewerTarget.personaDescription"
@@ -1844,7 +1844,7 @@
   <!-- Confirm Delete Modal -->
   <ConfirmModal
     v-if="confirmDeleteTarget"
-    :title="confirmDeleteTarget.type === 'message' ? 'Delete Message' : confirmDeleteTarget.type === 'chat' ? 'Delete Chat' : confirmDeleteTarget.type === 'folder' ? 'Delete Folder' : 'Remove Agent'"
+    :title="confirmDeleteTarget.type === 'message' ? 'Delete Message' : confirmDeleteTarget.type === 'chat' ? 'Delete Chat' : confirmDeleteTarget.type === 'folder' ? 'Delete Folder' : 'Remove Persona'"
     :message="confirmDeleteTarget.type === 'message'
       ? 'Are you sure you want to delete this message? It will be removed from the chat history and context window.'
       : confirmDeleteTarget.type === 'chat'
@@ -1881,14 +1881,14 @@
 
   <!-- Teleport tooltips to body so they escape all stacking contexts -->
   <Teleport to="body">
-    <!-- Header agent tooltip now handled by ChatHeader component -->
+    <!-- Header persona tooltip now handled by ChatHeader component -->
     <div
       v-if="mentionTooltip.visible && mentionTooltip.source === 'message'"
       :class="['msg-avatar-tooltip-fixed', mentionTooltip.side === 'left' ? 'tooltip-left' : 'tooltip-right']"
       :style="{ top: mentionTooltip.y + 'px', left: mentionTooltip.x + 'px' }"
     >
-      <div class="agent-header-tooltip-name">{{ mentionTooltip.name }}</div>
-      <div v-if="mentionTooltip.text" class="agent-header-tooltip-text">{{ mentionTooltip.text }}</div>
+      <div class="persona-header-tooltip-name">{{ mentionTooltip.name }}</div>
+      <div v-if="mentionTooltip.text" class="persona-header-tooltip-text">{{ mentionTooltip.text }}</div>
     </div>
   </Teleport>
 </template>
@@ -1899,15 +1899,15 @@ defineOptions({ name: 'ChatsView', inheritAttrs: false })
 import { useChatsStore } from '../stores/chats'
 import { useSkillsStore } from '../stores/skills'
 import { useConfigStore } from '../stores/config'
-import { useAgentsStore } from '../stores/agents'
+import { usePersonasStore } from '../stores/personas'
 import { useMcpStore } from '../stores/mcp'
 import { useToolsStore } from '../stores/tools'
 import { useModelsStore } from '../stores/models'
 import { useKnowledgeStore } from '../stores/knowledge'
 import { useVoiceStore } from '../stores/voice'
 import { useFocusModeStore } from '../stores/focusMode'
-import { getAvatarDataUri } from '../components/agents/personaAvatars'
-import SoulViewer from '../components/agents/SoulViewer.vue'
+import { getAvatarDataUri } from '../components/personas/personaAvatars'
+import SoulViewer from '../components/personas/SoulViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import MessageRenderer from '../components/chat/MessageRenderer.vue'
 import ChatWindow from '../components/chat/ChatWindow.vue'
@@ -1916,7 +1916,7 @@ import { parseMentions } from '../utils/mentions'
 import { v4 as uuidv4 } from 'uuid'
 import AppButton from '../components/common/AppButton.vue'
 import ChatGridLayout from '../components/chat/ChatGridLayout.vue'
-import CategoryModal from '../components/agents/CategoryModal.vue'
+import CategoryModal from '../components/personas/CategoryModal.vue'
 import ChatMentionInput from '../components/chat/ChatMentionInput.vue'
 import { estimateToolTokens, estimateMcpTokens, formatTokens, tokenPercentage } from '../utils/tokenEstimate'
 import { resolveModelPrice, calcCostUSD, convertCurrencies, formatCost } from '../utils/pricing.js'
@@ -2260,7 +2260,7 @@ const ChatTreeNodeView = defineComponent({
 const chatsStore = useChatsStore()
 const skillsStore = useSkillsStore()
 const configStore = useConfigStore()
-const agentsStore = useAgentsStore()
+const personasStore = usePersonasStore()
 const mcpStore = useMcpStore()
 const toolsStore = useToolsStore()
 const modelsStore = useModelsStore()
@@ -2272,22 +2272,22 @@ const focusModeStore = useFocusModeStore()
 async function handleStartCall(chatId) {
   const chat = chatsStore.chats.find(c => c.id === chatId)
   if (!chat) return
-  // Use active agent count, not isGroupChat flag (which stays true after removing agents)
+  // Use active persona count, not isGroupChat flag (which stays true after removing personas)
   const activeCount = chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds.length : 1
   if (activeCount > 1) return
   if (voiceStore.isCallActive) return
 
-  // Resolve system agent — use same logic as activeSystemPersonaIds in ChatHeader
-  const agentId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null)
+  // Resolve system persona — use same logic as activeSystemPersonaIds in ChatHeader
+  const personaId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null)
     || chat.systemPersonaId
-    || agentsStore.defaultSystemPersona?.id
-  const persona = agentId ? agentsStore.getPersonaById(agentId) : null
+    || personasStore.defaultSystemPersona?.id
+  const persona = personaId ? personasStore.getPersonaById(personaId) : null
 
-  // Resolve user agent
-  const userPersonaId = chat.userPersonaId || agentsStore.defaultUserPersona?.id
-  const userPersona = userPersonaId ? agentsStore.getPersonaById(userPersonaId) : null
+  // Resolve user persona
+  const userPersonaId = chat.userPersonaId || personasStore.defaultUserPersona?.id
+  const userPersona = userPersonaId ? personasStore.getPersonaById(userPersonaId) : null
 
-  // Resolve provider/model from agent (provider is always on the agent now)
+  // Resolve provider/model from persona (provider is always on the persona now)
   const chatProvider = persona?.providerId || 'anthropic'
   const chatModel = persona?.modelId || ''
 
@@ -2307,17 +2307,17 @@ async function handleStartCall(chatId) {
   }
 
   // Update voice store
-  voiceStore.startCall(chatId, agentId, persona?.name || 'AI', chatModel)
+  voiceStore.startCall(chatId, personaId, persona?.name || 'AI', chatModel)
 
   // Start backend voice session
   if (window.electronAPI?.voice?.start) {
     await window.electronAPI.voice.start({
       chatId,
-      agentId,
+      personaId,
       history,
       voiceConfig: { provider: chatProvider, model: chatModel },
       persona: {
-        id: agentId,
+        id: personaId,
         name: persona?.name,
         description: persona?.description,
         systemPrompt: persona?.systemPrompt,
@@ -2573,7 +2573,7 @@ async function _fetchTTSAudio(text) {
   const useOpenAITTS = (vc.ttsMode === 'openai' || vc.ttsMode === 'openai-hd') && vc.whisperApiKey
   if (!useOpenAITTS || !window.electronAPI?.voice?.tts) return null
   try {
-    const persona = agentsStore.getPersonaById(voiceStore.activePersonaId)
+    const persona = personasStore.getPersonaById(voiceStore.activePersonaId)
     const voiceId = persona?.voiceId || 'alloy'
     const result = await window.electronAPI.voice.tts({
       text,
@@ -2746,7 +2746,7 @@ function addVoiceMessageToChat(role, content) {
 }
 
 // Handle task triggered from voice call.
-// The agent's own agent model runs the task via sendMessage().
+// The persona's own agent model runs the task via sendMessage().
 // Voice only speaks a brief completion/failure notice — never the full agent response.
 async function handleVoiceTask(instruction) {
   const chatId = voiceStore.activeChatId
@@ -2850,16 +2850,16 @@ function triggerMemoryExtractionOnSwitch(leavingChatId) {
   const cfg = configStore.config
   if (!cfg.utilityModel?.provider || !cfg.utilityModel?.model) return
 
-  const sysId = chat.systemPersonaId || agentsStore.defaultSystemPersona?.id
-  const usrId = chat.userPersonaId || agentsStore.defaultUserPersona?.id
+  const sysId = chat.systemPersonaId || personasStore.defaultSystemPersona?.id
+  const usrId = chat.userPersonaId || personasStore.defaultUserPersona?.id
   const participants = chat.groupPersonaIds?.length > 0
     ? chat.groupPersonaIds.map(pid => {
-        const p = agentsStore.getPersonaById(pid)
+        const p = personasStore.getPersonaById(pid)
         return p ? { id: p.id, name: p.name, type: 'system' } : null
       }).filter(Boolean)
-    : (sysId ? [{ id: sysId, name: agentsStore.getPersonaById(sysId)?.name || 'Assistant', type: 'system' }] : null)
+    : (sysId ? [{ id: sysId, name: personasStore.getPersonaById(sysId)?.name || 'Assistant', type: 'system' }] : null)
 
-  const agentPrompts = {
+  const personaPrompts = {
     systemPersonaId: sysId || '__default_system__',
     userPersonaId: usrId || '__default_user__',
   }
@@ -2870,7 +2870,7 @@ function triggerMemoryExtractionOnSwitch(leavingChatId) {
       messages: JSON.parse(JSON.stringify(toRaw(chat.messages))),
       config: JSON.parse(JSON.stringify(toRaw(cfg))),
       participants,
-      agentPrompts,
+      personaPrompts,
     }).catch(() => {})
   } catch {
     // Non-fatal — messages may contain non-serializable attachments
@@ -2988,31 +2988,31 @@ const activeChatUsage = computed(() => {
   }
 })
 
-// Resolved model for the active chat: per-chat override → agent modelId → chat.model → contextSnapshot
+// Resolved model for the active chat: per-chat override → persona modelId → chat.model → contextSnapshot
 const activeChatModel = computed(() => {
   const chat = chatsStore.activeChat
   if (!chat) return ''
-  const agentId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null)
+  const personaId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null)
     || chat.systemPersonaId
-  const override = agentId ? chat.personaModelOverrides?.[agentId] : null
+  const override = personaId ? chat.personaModelOverrides?.[personaId] : null
   const overrideModel = override ? (typeof override === 'object' ? override.model : override) : null
-  const persona = agentId ? agentsStore.getPersonaById(agentId) : null
+  const persona = personaId ? personasStore.getPersonaById(personaId) : null
   return overrideModel || persona?.modelId || chat.model || contextSnapshot.value?.model || ''
 })
 
-// Agent info for the inspector — prefers snapshot data (has prompts), falls back to store (has names)
-const inspectorAgents = computed(() => {
-  // If snapshot has agent prompts, use them (richer data)
+// Persona info for the inspector — prefers snapshot data (has prompts), falls back to store (has names)
+const inspectorPersonas = computed(() => {
+  // If snapshot has persona prompts, use them (richer data)
   if (contextSnapshot.value?.personas?.systemPersonaPrompt || contextSnapshot.value?.personas?.userPersonaPrompt) {
     return contextSnapshot.value.personas
   }
-  // Fall back to store data — return name info so inspector can show the agents even before first message
+  // Fall back to store data — return name info so inspector can show the personas even before first message
   const chat = chatsStore.activeChat
   if (!chat) return null
   const sysId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null) || chat.systemPersonaId
-  const sysPersona = sysId ? agentsStore.getPersonaById(sysId) : agentsStore.defaultSystemPersona
+  const sysPersona = sysId ? personasStore.getPersonaById(sysId) : personasStore.defaultSystemPersona
   const usrId = chat.userPersonaId
-  const usrPersona = usrId ? agentsStore.getPersonaById(usrId) : agentsStore.defaultUserPersona
+  const usrPersona = usrId ? personasStore.getPersonaById(usrId) : personasStore.defaultUserPersona
   if (!sysPersona && !usrPersona) return null
   return {
     systemPersonaName: sysPersona?.name || null,
@@ -3136,12 +3136,12 @@ const showGroupPersonaConfigId = ref(null)
 // Tooltip state for message avatars and user avatar (shared across tooltip handlers)
 const mentionTooltip = reactive({ visible: false, source: '', text: '', name: '', x: 0, y: 0, side: 'right' })
 
-// Agent header tooltip moved to ChatHeader (has its own tooltip state)
+// Persona header tooltip moved to ChatHeader (has its own tooltip state)
 
 // Chat message avatar tooltip
 function showMsgAvatarTooltip(event, msg) {
-  const pid = msg.agentId || activeSystemPersonaIds.value[0]
-  const persona = pid ? agentsStore.getPersonaById(pid) : null
+  const pid = msg.personaId || activeSystemPersonaIds.value[0]
+  const persona = pid ? personasStore.getPersonaById(pid) : null
   const name = persona?.name || msg.personaName || 'Assistant'
   const desc = persona?.description || ''
   if (!name) return
@@ -3159,7 +3159,7 @@ function hideMsgAvatarTooltip() {
   mentionTooltip.visible = false
 }
 
-// User avatar tooltip (shows user agent description — positioned to the left)
+// User avatar tooltip (shows user persona description — positioned to the left)
 function showUserAvatarTooltip(event) {
   const persona = activeUserPersona.value
   const name = persona?.name || 'User'
@@ -3177,15 +3177,15 @@ function showUserAvatarTooltip(event) {
 
 // Get assistant display name for a message
 function getMsgAssistantName(msg) {
-  const pid = msg.agentId || activeSystemPersonaIds.value[0]
-  const persona = pid ? agentsStore.getPersonaById(pid) : null
+  const pid = msg.personaId || activeSystemPersonaIds.value[0]
+  const persona = pid ? personasStore.getPersonaById(pid) : null
   return persona?.name || msg.personaName || 'Assistant'
 }
 
 const isGroupChat = computed(() => chatsStore.activeChat?.isGroupChat ?? false)
 
 // Sticky @mention target: persists across messages until explicitly changed
-// null = all agents, string[] = specific agent IDs
+// null = all personas, string[] = specific persona IDs
 const stickyTarget = ref(null)
 
 function clearStickyTarget() {
@@ -3195,7 +3195,7 @@ function clearStickyTarget() {
 const stickyTargetLabel = computed(() => {
   if (!stickyTarget.value || stickyTarget.value.length === 0) return null
   return stickyTarget.value
-    .map(id => agentsStore.getPersonaById(id)?.name || 'Unknown')
+    .map(id => personasStore.getPersonaById(id)?.name || 'Unknown')
     .join(', ')
 })
 
@@ -3208,7 +3208,7 @@ const ccmToolSearch = ref('')
 const ccmMcpSearch = ref('')
 
 // ── General tab draft state ──
-const draftMaxAgentRounds = ref(10)
+const draftMaxPersonaRounds = ref(10)
 const draftMaxOutputTokens = ref(null)  // null = use global default
 
 // ── Permissions tab draft state ──
@@ -3300,7 +3300,7 @@ watch(showChatConfigModal, (open) => {
     workingPath: draftWorkingPath.value,
     codingMode: draftCodingMode.value,
     codingProvider: draftCodingProvider.value,
-    maxPersonaRounds: draftMaxAgentRounds.value,
+    maxPersonaRounds: draftMaxPersonaRounds.value,
     maxOutputTokens: draftMaxOutputTokens.value,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
@@ -3311,7 +3311,7 @@ watch(showChatConfigModal, (open) => {
 function saveChatSettings() {
   const chatId = chatsStore.activeChatId
   if (!chatId) return
-  const rawRounds = Number(draftMaxAgentRounds.value)
+  const rawRounds = Number(draftMaxPersonaRounds.value)
   const clampedRounds = Number.isFinite(rawRounds) ? Math.min(100, Math.max(1, rawRounds)) : 10
   const rawMaxOutput = Number(draftMaxOutputTokens.value)
   const clampedMaxOutput = draftMaxOutputTokens.value ? Math.min(98304, Math.max(1024, rawMaxOutput)) : null
@@ -3348,7 +3348,7 @@ function cancelChatSettings() {
     draftWorkingPath.value = _draftSnapshot.workingPath
     draftCodingMode.value = _draftSnapshot.codingMode ?? false
     draftCodingProvider.value = _draftSnapshot.codingProvider ?? 'claude-code'
-    draftMaxAgentRounds.value = _draftSnapshot.maxPersonaRounds
+    draftMaxPersonaRounds.value = _draftSnapshot.maxPersonaRounds
     draftMaxOutputTokens.value = _draftSnapshot.maxOutputTokens ?? null
     draftPermissionMode.value = _draftSnapshot.permissionMode
     draftChatAllowList.value = _draftSnapshot.chatAllowList
@@ -3431,8 +3431,8 @@ function _loadDraftFromChat() {
   draftWorkingPath.value = chat.workingPath || ''
   draftCodingMode.value = chat.codingMode ?? false
   draftCodingProvider.value = chat.codingProvider ?? 'claude-code'
-  // Max agent rounds (null in JSON = use default 10)
-  draftMaxAgentRounds.value = chat.maxPersonaRounds ?? 10
+  // Max persona rounds (null in JSON = use default 10)
+  draftMaxPersonaRounds.value = chat.maxPersonaRounds ?? 10
   // Max output tokens (null = use global default)
   draftMaxOutputTokens.value = chat.maxOutputTokens ?? null
   // Permissions
@@ -3823,7 +3823,7 @@ function ctxNewChat() {
   const node = treeCtxMenu.value.node
   const folderId = node?.type === 'folder' ? node.id : null
   closeTreeCtxMenu()
-  // Open the standard new-chat modal (agent selection) with folder context
+  // Open the standard new-chat modal (persona selection) with folder context
   newChat(folderId)
 }
 
@@ -3875,10 +3875,10 @@ const showNewChatModal = ref(false)
 const newChatName = ref('')
 const newChatFolderId = ref(null)
 const newChatNameInputRef = ref(null)
-const newChatAgentIds = ref([])
-const showNewChatAgentPopover = ref(false)
-const newChatAgentSearch = ref('')
-const newChatAgentSearchEl = ref(null)
+const newChatPersonaIds = ref([])
+const showNewChatPersonaPopover = ref(false)
+const newChatPersonaSearch = ref('')
+const newChatPersonaSearchEl = ref(null)
 const newChatFolderTreeExpanded = ref(new Set())
 const ncpExpandedCatIds = ref(new Set())
 
@@ -3896,9 +3896,9 @@ function toggleNewChatFolderExpand(folderId) {
   newChatFolderTreeExpanded.value = new Set(s)
 }
 
-const filteredNewChatAgents = computed(() => {
-  const q = newChatAgentSearch.value.toLowerCase().trim()
-  const list = sortedSystemAgents.value
+const filteredNewChatPersonas = computed(() => {
+  const q = newChatPersonaSearch.value.toLowerCase().trim()
+  const list = sortedSystemPersonas.value
   if (!q) return list
   return list.filter(p =>
     p.name.toLowerCase().includes(q) ||
@@ -3906,20 +3906,20 @@ const filteredNewChatAgents = computed(() => {
   )
 })
 
-watch(showNewChatAgentPopover, (open) => {
+watch(showNewChatPersonaPopover, (open) => {
   if (open) {
-    newChatAgentSearch.value = ''
+    newChatPersonaSearch.value = ''
     ncpExpandedCatIds.value = new Set()
-    nextTick(() => newChatAgentSearchEl.value?.focus())
+    nextTick(() => newChatPersonaSearchEl.value?.focus())
   }
 })
 
-function toggleNewChatAgent(agentId) {
-  const idx = newChatAgentIds.value.indexOf(agentId)
+function toggleNewChatPersona(personaId) {
+  const idx = newChatPersonaIds.value.indexOf(personaId)
   if (idx >= 0) {
-    newChatAgentIds.value.splice(idx, 1)
+    newChatPersonaIds.value.splice(idx, 1)
   } else {
-    newChatAgentIds.value.push(agentId)
+    newChatPersonaIds.value.push(personaId)
   }
 }
 
@@ -3929,9 +3929,9 @@ function newChat(folderId) {
   showNewChatModal.value = true
   newChatName.value = ''
   newChatFolderId.value = resolvedFolder
-  newChatAgentIds.value = []
-  showNewChatAgentPopover.value = false
-  newChatAgentSearch.value = ''
+  newChatPersonaIds.value = []
+  showNewChatPersonaPopover.value = false
+  newChatPersonaSearch.value = ''
   // Pre-expand ancestors of pre-selected folder
   newChatFolderTreeExpanded.value = new Set(getAncestorFolderIds(resolvedFolder, chatsStore.chatTree))
   nextTick(() => newChatNameInputRef.value?.focus())
@@ -3953,14 +3953,14 @@ function getAncestorFolderIds(targetId, nodes, path = []) {
 async function confirmNewChat() {
   showNewChatModal.value = false
   const title = newChatName.value.trim() || 'New Chat'
-  let selectedIds = newChatAgentIds.value
+  let selectedIds = newChatPersonaIds.value
   if (selectedIds.length === 0) {
-    const def = agentsStore.defaultSystemPersona
+    const def = personasStore.defaultSystemPersona
     selectedIds = def ? [def.id] : []
   }
-  const agentCfg = selectedIds.length > 0 ? [...selectedIds] : null
+  const personaCfg = selectedIds.length > 0 ? [...selectedIds] : null
   const folderId = newChatFolderId.value
-  await chatsStore.createChat(title, agentCfg, folderId)
+  await chatsStore.createChat(title, personaCfg, folderId)
   // Expand the target folder and all its ancestors so the new chat is visible
   if (folderId) {
     const ancestors = getAncestorFolderIds(folderId, chatsStore.chatTree) || []
@@ -3974,12 +3974,12 @@ function cancelNewChat() {
   showNewChatModal.value = false
   newChatName.value = ''
   newChatFolderId.value = null
-  newChatAgentIds.value = []
-  showNewChatAgentPopover.value = false
-  newChatAgentSearch.value = ''
+  newChatPersonaIds.value = []
+  showNewChatPersonaPopover.value = false
+  newChatPersonaSearch.value = ''
 }
 
-const confirmDeleteTarget = ref(null) // { type: 'chat'|'groupAgent', id, pid?, label }
+const confirmDeleteTarget = ref(null) // { type: 'chat'|'groupPersona', id, pid?, label }
 
 function requestDeleteChat(id) {
   if (voiceStore.isCallActive && voiceStore.activeChatId === id) return
@@ -3991,13 +3991,13 @@ function requestDeleteChat(id) {
   }
 }
 
-function requestRemoveGroupAgent(chatId, pid) {
-  const persona = agentsStore.getPersonaById(pid)
+function requestRemoveGroupPersona(chatId, pid) {
+  const persona = personasStore.getPersonaById(pid)
   confirmDeleteTarget.value = {
-    type: 'groupAgent',
+    type: 'groupPersona',
     id: chatId,
     pid,
-    label: persona?.name || 'this agent',
+    label: persona?.name || 'this persona',
   }
 }
 
@@ -4008,7 +4008,7 @@ async function executeConfirmedDelete() {
 
   if (target.type === 'chat') {
     await chatsStore.removeChat(target.id)
-  } else if (target.type === 'groupAgent') {
+  } else if (target.type === 'groupPersona') {
     chatsStore.removeGroupPersona(target.id, target.pid)
   } else if (target.type === 'message') {
     await chatsStore.deleteMessage(target.id, target.msgId)
@@ -4018,17 +4018,17 @@ async function executeConfirmedDelete() {
 }
 
 // ── Soul Viewer modal state ──────────────────────────────────────────────
-const soulViewerTarget = ref(null) // { agentId, personaType, personaName, personaDescription, personaPrompt, personaProviderId, personaModelId, personaVoiceId, personaAvatar }
+const soulViewerTarget = ref(null) // { personaId, personaType, personaName }
 
-function openSoulViewer(agentId, personaType, personaName) {
-  const persona = agentsStore.getPersonaById(agentId)
-  // Per-chat override takes priority over global agent model for display
+function openSoulViewer(personaId, personaType, personaName) {
+  const persona = personasStore.getPersonaById(personaId)
+  // Per-chat override takes priority over global persona model for display
   const chat = chatsStore.activeChat
-  const rawOverride = chat?.personaModelOverrides?.[agentId]
+  const rawOverride = chat?.personaModelOverrides?.[personaId]
   const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
   const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model : rawOverride) : null
   soulViewerTarget.value = {
-    agentId,
+    personaId,
     personaType,
     personaName: persona?.name || personaName || 'Persona',
     personaDescription: persona?.description || '',
@@ -4046,8 +4046,8 @@ function closeSoulViewer() {
 
 async function handleSoulViewerUpdatePersona(updates) {
   if (!soulViewerTarget.value) return
-  const pid = soulViewerTarget.value.agentId
-  const persona = agentsStore.getPersonaById(pid)
+  const pid = soulViewerTarget.value.personaId
+  const persona = personasStore.getPersonaById(pid)
   if (!persona) return
   const chatId = chatsStore.activeChatId
 
@@ -4069,7 +4069,7 @@ async function handleSoulViewerUpdatePersona(updates) {
   delete globalUpdates.modelId
   if (Object.keys(globalUpdates).length > 0) {
     const updated = { ...persona, ...globalUpdates }
-    await agentsStore.savePersona(updated)
+    await personasStore.savePersona(updated)
     if (!soulViewerTarget.value) return
     soulViewerTarget.value.personaPrompt = updated.prompt ?? soulViewerTarget.value.personaPrompt
     soulViewerTarget.value.personaDescription = updated.description ?? soulViewerTarget.value.personaDescription
@@ -4081,18 +4081,18 @@ async function handleSoulViewerUpdatePersona(updates) {
 
 // ── Persona chip popovers (moved to ChatHeader) ──
 
-function getAvatarDataUriForAgent(persona) {
+function getAvatarDataUriForPersona(persona) {
   if (!persona?.avatar) return null
   return getAvatarDataUri(persona.avatar)
 }
 
 const activeSystemPersona = computed(() => {
   const id = chatsStore.activeChat?.systemPersonaId
-  return id ? agentsStore.getPersonaById(id) : agentsStore.defaultSystemPersona
+  return id ? personasStore.getPersonaById(id) : personasStore.defaultSystemPersona
 })
 const activeUserPersona = computed(() => {
   const id = chatsStore.activeChat?.userPersonaId
-  return id ? agentsStore.getPersonaById(id) : agentsStore.defaultUserPersona
+  return id ? personasStore.getPersonaById(id) : personasStore.defaultUserPersona
 })
 // Header-only display computed removed (moved to ChatHeader):
 // activeSystemAvatarDataUri, activeUserAvatarDataUri, activeSystemPersonaName, activeUserPersonaName
@@ -4105,7 +4105,7 @@ const activeSystemPersonaIds = computed(() => {
   // If group mode with explicit IDs, use those
   if (chat.groupPersonaIds?.length > 0) return [...chat.groupPersonaIds]
   // Otherwise, single persona mode: use systemPersonaId or default
-  const id = chat.systemPersonaId || agentsStore.defaultSystemPersona?.id
+  const id = chat.systemPersonaId || personasStore.defaultSystemPersona?.id
   return id ? [id] : []
 })
 
@@ -4115,11 +4115,11 @@ const activeSystemPersonaIds = computed(() => {
 
 // getPersonaProviderLabel kept — also used in mention popup
 // Shows per-chat override when active, otherwise falls back to persona global settings.
-function getAgentProviderLabel(agentId) {
-  const persona = agentsStore.getPersonaById(agentId)
+function getPersonaProviderLabel(personaId) {
+  const persona = personasStore.getPersonaById(personaId)
   if (!persona) return 'Default'
   const chat = chatsStore.activeChat
-  const rawOverride = chat?.personaModelOverrides?.[agentId]
+  const rawOverride = chat?.personaModelOverrides?.[personaId]
   const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
   const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
   const provider = overrideProvider || persona.providerId || 'anthropic'
@@ -4133,9 +4133,9 @@ function getAgentProviderLabel(agentId) {
   return provider
 }
 
-// sortedSystemAgents kept — used in new chat agent picker
-const sortedSystemAgents = computed(() =>
-  [...agentsStore.systemAgents].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
+// sortedSystemPersonas kept — used in new chat persona picker
+const sortedSystemPersonas = computed(() =>
+  [...personasStore.systemPersonas].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
 )
 
 // ── RAG chip popover ──────────────────────────────────────────────────────
@@ -4177,36 +4177,36 @@ function toggleGroupMode() {
   chatsStore.toggleGroupMode(chatId, !isGroupChat.value)
 }
 
-function toggleGroupPersona(agentId) {
+function toggleGroupPersona(personaId) {
   const chatId = chatsStore.activeChatId
   if (!chatId) return
   const ids = chatsStore.activeChat?.groupPersonaIds || []
-  if (ids.includes(agentId)) {
-    requestRemoveGroupAgent(chatId, agentId)
+  if (ids.includes(personaId)) {
+    requestRemoveGroupPersona(chatId, personaId)
   } else {
-    chatsStore.addGroupPersona(chatId, agentId)
+    chatsStore.addGroupPersona(chatId, personaId)
   }
 }
 
-function openGroupPersonaConfig(agentId) {
-  showGroupPersonaConfigId.value = showGroupPersonaConfigId.value === agentId ? null : agentId
+function openGroupPersonaConfig(personaId) {
+  showGroupPersonaConfigId.value = showGroupPersonaConfigId.value === personaId ? null : personaId
 }
 
-function getGroupPersonaOverride(agentId, field) {
-  const overrides = chatsStore.activeChat?.groupPersonaOverrides?.[agentId]
+function getGroupPersonaOverride(personaId, field) {
+  const overrides = chatsStore.activeChat?.groupPersonaOverrides?.[personaId]
   if (!overrides) {
     // Fall back to persona defaults
-    const persona = agentsStore.getPersonaById(agentId)
+    const persona = personasStore.getPersonaById(personaId)
     return persona?.[field] || ''
   }
   return overrides[field] || ''
 }
 
-function setGroupPersonaOverrideField(agentId, field, value) {
+function setGroupPersonaOverrideField(personaId, field, value) {
   const chatId = chatsStore.activeChatId
   if (!chatId) return
-  const existing = chatsStore.activeChat?.groupPersonaOverrides?.[agentId] || {}
-  chatsStore.setGroupPersonaOverride(chatId, agentId, { ...existing, [field]: value })
+  const existing = chatsStore.activeChat?.groupPersonaOverrides?.[personaId] || {}
+  chatsStore.setGroupPersonaOverride(chatId, personaId, { ...existing, [field]: value })
 }
 
 function onInputBlur() {
@@ -4434,7 +4434,7 @@ function requestDeleteMessage(msg) {
 
 function quoteMessage(msg) {
   const content = msg.content || ''
-  quotedMessage.value = { role: msg.role, content, agentId: msg.agentId || null }
+  quotedMessage.value = { role: msg.role, content, personaId: msg.personaId || null }
   nextTick(() => mentionInputRef.value?.focus())
 }
 
@@ -4443,19 +4443,19 @@ function getQuotedSenderName(q) {
   const ac = chatsStore.activeChat
   if (q.role === 'user') {
     const uid = ac?.userPersonaId
-    const up = uid ? agentsStore.getPersonaById(uid) : agentsStore.defaultUserPersona
+    const up = uid ? personasStore.getPersonaById(uid) : personasStore.defaultUserPersona
     return up?.name || 'You'
   }
-  if (q.agentId) {
-    const p = agentsStore.getPersonaById(q.agentId)
+  if (q.personaId) {
+    const p = personasStore.getPersonaById(q.personaId)
     if (p?.name) return p.name
   }
   const sysId = ac?.systemPersonaId
   if (sysId) {
-    const p = agentsStore.getPersonaById(sysId)
+    const p = personasStore.getPersonaById(sysId)
     if (p?.name) return p.name
   }
-  return agentsStore.defaultSystemPersona?.name || 'Assistant'
+  return personasStore.defaultSystemPersona?.name || 'Assistant'
 }
 
 function clearQuote() {
@@ -4507,7 +4507,7 @@ function lastToolSeg(chatId) {
 }
 
 // Helper: push segments to the live streaming message for a chat or persona
-// key can be chatId or chatId:agentId
+// key can be chatId or chatId:personaId
 function flushSegments(key) {
   const chatId = key.includes(':') ? key.split(':')[0] : key
   const chat = chatsStore.chats.find(c => c.id === chatId)
@@ -4546,17 +4546,17 @@ function handleChunk(cId, chunk) {
   const targetChat = chatsStore.chats.find(c => c.id === cId)
   if (!targetChat || !targetChat.messages) return
 
-  // ── Group chat: agent_start / agent_end bracket each persona's response ──
-  if (chunk.type === 'agent_start') {
-    const agentKey = `${cId}:${chunk.agentId}`
+  // ── Group chat: persona_start / persona_end bracket each persona's response ──
+  if (chunk.type === 'persona_start') {
+    const personaKey = `${cId}:${chunk.personaId}`
     // Guard: skip if a streaming message already exists for this persona (prevent duplicates)
-    if (perChatStreamingMsgId.has(agentKey)) {
-      dbg(`agent_start DUPLICATE skipped: ${chunk.personaName} (${chunk.agentId})`, 'warn')
+    if (perChatStreamingMsgId.has(personaKey)) {
+      dbg(`persona_start DUPLICATE skipped: ${chunk.personaName} (${chunk.personaId})`, 'warn')
       return
     }
     const msgId = uuidv4()
-    perChatStreamingMsgId.set(agentKey, msgId)
-    perChatStreamingSegments.set(agentKey, [])
+    perChatStreamingMsgId.set(personaKey, msgId)
+    perChatStreamingSegments.set(personaKey, [])
     // Add a streaming placeholder message for this persona
     targetChat.messages.push({
       id: msgId,
@@ -4564,25 +4564,25 @@ function handleChunk(cId, chunk) {
       content: '',
       streaming: true,
       streamingStartedAt: Date.now(),
-      agentId: chunk.agentId,
+      personaId: chunk.personaId,
       personaName: chunk.personaName,
       segments: []
     })
-    dbg(`agent_start: ${chunk.personaName} (${chunk.agentId})`, 'info')
+    dbg(`persona_start: ${chunk.personaName} (${chunk.personaId})`, 'info')
     scrollToBottom(false, cId)
     return
   }
 
-  if (chunk.type === 'agent_end') {
-    const agentKey = `${cId}:${chunk.agentId}`
-    const msgId = perChatStreamingMsgId.get(agentKey)
+  if (chunk.type === 'persona_end') {
+    const personaKey = `${cId}:${chunk.personaId}`
+    const msgId = perChatStreamingMsgId.get(personaKey)
     if (msgId) {
       const msg = targetChat.messages.find(m => m.id === msgId)
       if (msg) {
         // Final flush: ensure msg.content mirrors segments text before collaboration
         // scanning. flushSegments syncs during streaming, but do it one last time
-        // to guarantee consistency when agent_end fires.
-        const finalSegs = perChatStreamingSegments.get(agentKey) || []
+        // to guarantee consistency when persona_end fires.
+        const finalSegs = perChatStreamingSegments.get(personaKey) || []
         if (finalSegs.length > 0) {
           msg.segments = finalSegs.map(s => ({ ...s }))
           msg.content = finalSegs.filter(s => s.type === 'text').map(s => s.content).join('')
@@ -4596,15 +4596,15 @@ function handleChunk(cId, chunk) {
         }
       }
     }
-    perChatStreamingMsgId.delete(agentKey)
-    perChatStreamingSegments.delete(agentKey)
-    dbg(`agent_end: ${chunk.personaName}`, 'info')
+    perChatStreamingMsgId.delete(personaKey)
+    perChatStreamingSegments.delete(personaKey)
+    dbg(`persona_end: ${chunk.personaName}`, 'info')
     scrollToBottom(false, cId)
     return
   }
 
-  // For group chat chunks tagged with agentId, route to the right persona's streaming message
-  const routeKey = chunk.agentId ? `${cId}:${chunk.agentId}` : cId
+  // For group chat chunks tagged with personaId, route to the right persona's streaming message
+  const routeKey = chunk.personaId ? `${cId}:${chunk.personaId}` : cId
 
   if (chunk.type === 'text') {
     targetChat.isThinking = false
@@ -4690,7 +4690,7 @@ function handleChunk(cId, chunk) {
   }
 }
 
-// flushSegments for group chat needs to find message by routeKey (chatId:agentId)
+// flushSegments for group chat needs to find message by routeKey (chatId:personaId)
 // Override flushSegments to handle both single and group keys
 
 // Bridge for ChatWindow's send event (only fires if default input is used)
@@ -4702,91 +4702,91 @@ function handleChatWindowSend(text) {
 // ── Group chat collaboration helpers ──────────────────────────────────────────
 
 /**
- * Build the agentRuns array for a group agent call.
+ * Build the personaRuns array for a group agent call.
  * Extracted so it can be reused by both the initial user-triggered run and
  * subsequent persona-to-persona collaboration rounds.
  */
-function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPrompt, usrPersona) {
+function buildPersonaRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPrompt, usrPersona) {
   return respondingIds.map(pid => {
-    const persona = agentsStore.getPersonaById(pid)
+    const persona = personasStore.getPersonaById(pid)
     if (!persona) return null
 
-    const agentCfg = { ...cfg }
+    const personaCfg = { ...cfg }
     const resolvedProvider = persona.providerId || 'anthropic'
     if (resolvedProvider === 'anthropic') {
-      agentCfg.apiKey = cfg.anthropic?.apiKey || ''
-      agentCfg.baseURL = cfg.anthropic?.baseURL || ''
-      delete agentCfg._directAuth
-      delete agentCfg.openaiApiKey
-      delete agentCfg.openaiBaseURL
-      agentCfg._resolvedProvider = undefined
-      agentCfg.defaultProvider = undefined
+      personaCfg.apiKey = cfg.anthropic?.apiKey || ''
+      personaCfg.baseURL = cfg.anthropic?.baseURL || ''
+      delete personaCfg._directAuth
+      delete personaCfg.openaiApiKey
+      delete personaCfg.openaiBaseURL
+      personaCfg._resolvedProvider = undefined
+      personaCfg.defaultProvider = undefined
     } else if (resolvedProvider === 'openrouter') {
-      agentCfg.apiKey = cfg.openrouter?.apiKey || ''
-      agentCfg.baseURL = cfg.openrouter?.baseURL || ''
-      delete agentCfg._directAuth
-      delete agentCfg.openaiApiKey
-      delete agentCfg.openaiBaseURL
-      agentCfg._resolvedProvider = undefined
-      agentCfg.defaultProvider = undefined
+      personaCfg.apiKey = cfg.openrouter?.apiKey || ''
+      personaCfg.baseURL = cfg.openrouter?.baseURL || ''
+      delete personaCfg._directAuth
+      delete personaCfg.openaiApiKey
+      delete personaCfg.openaiBaseURL
+      personaCfg._resolvedProvider = undefined
+      personaCfg.defaultProvider = undefined
     } else if (resolvedProvider === 'openai') {
-      agentCfg.openaiApiKey = cfg.openai?.apiKey || ''
-      agentCfg.openaiBaseURL = cfg.openai?.baseURL || ''
-      agentCfg._resolvedProvider = 'openai'
-      agentCfg.defaultProvider = 'openai'
-      delete agentCfg._directAuth
+      personaCfg.openaiApiKey = cfg.openai?.apiKey || ''
+      personaCfg.openaiBaseURL = cfg.openai?.baseURL || ''
+      personaCfg._resolvedProvider = 'openai'
+      personaCfg.defaultProvider = 'openai'
+      delete personaCfg._directAuth
     } else if (resolvedProvider === 'deepseek') {
-      agentCfg.openaiApiKey = cfg.deepseek?.apiKey || ''
-      agentCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
-      agentCfg._resolvedProvider = 'openai'
-      agentCfg._directAuth = true
-      agentCfg.defaultProvider = 'openai'
+      personaCfg.openaiApiKey = cfg.deepseek?.apiKey || ''
+      personaCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
+      personaCfg._resolvedProvider = 'openai'
+      personaCfg._directAuth = true
+      personaCfg.defaultProvider = 'openai'
     }
-    // Model+provider override (chat-scoped): takes priority over agent settings
+    // Model+provider override (chat-scoped): takes priority over persona settings
     const rawOverride = targetChat.personaModelOverrides?.[pid]
     const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
     const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
     if (overrideProvider && overrideProvider !== resolvedProvider) {
       if (overrideProvider === 'anthropic') {
-        agentCfg.apiKey = cfg.anthropic?.apiKey || ''
-        agentCfg.baseURL = cfg.anthropic?.baseURL || ''
-        delete agentCfg._directAuth
-        delete agentCfg.openaiApiKey
-        delete agentCfg.openaiBaseURL
-        agentCfg._resolvedProvider = undefined
-        agentCfg.defaultProvider = undefined
+        personaCfg.apiKey = cfg.anthropic?.apiKey || ''
+        personaCfg.baseURL = cfg.anthropic?.baseURL || ''
+        delete personaCfg._directAuth
+        delete personaCfg.openaiApiKey
+        delete personaCfg.openaiBaseURL
+        personaCfg._resolvedProvider = undefined
+        personaCfg.defaultProvider = undefined
       } else if (overrideProvider === 'openrouter') {
-        agentCfg.apiKey = cfg.openrouter?.apiKey || ''
-        agentCfg.baseURL = cfg.openrouter?.baseURL || ''
-        delete agentCfg._directAuth
-        delete agentCfg.openaiApiKey
-        delete agentCfg.openaiBaseURL
-        agentCfg._resolvedProvider = undefined
-        agentCfg.defaultProvider = undefined
+        personaCfg.apiKey = cfg.openrouter?.apiKey || ''
+        personaCfg.baseURL = cfg.openrouter?.baseURL || ''
+        delete personaCfg._directAuth
+        delete personaCfg.openaiApiKey
+        delete personaCfg.openaiBaseURL
+        personaCfg._resolvedProvider = undefined
+        personaCfg.defaultProvider = undefined
       } else if (overrideProvider === 'openai') {
-        agentCfg.openaiApiKey = cfg.openai?.apiKey || ''
-        agentCfg.openaiBaseURL = cfg.openai?.baseURL || ''
-        agentCfg._resolvedProvider = 'openai'
-        agentCfg.defaultProvider = 'openai'
-        delete agentCfg._directAuth
+        personaCfg.openaiApiKey = cfg.openai?.apiKey || ''
+        personaCfg.openaiBaseURL = cfg.openai?.baseURL || ''
+        personaCfg._resolvedProvider = 'openai'
+        personaCfg.defaultProvider = 'openai'
+        delete personaCfg._directAuth
       } else if (overrideProvider === 'deepseek') {
-        agentCfg.openaiApiKey = cfg.deepseek?.apiKey || ''
-        agentCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
-        agentCfg._resolvedProvider = 'openai'
-        agentCfg._directAuth = true
-        agentCfg.defaultProvider = 'openai'
+        personaCfg.openaiApiKey = cfg.deepseek?.apiKey || ''
+        personaCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
+        personaCfg._resolvedProvider = 'openai'
+        personaCfg._directAuth = true
+        personaCfg.defaultProvider = 'openai'
       }
     }
     const resolvedModel = overrideModel || persona.modelId || null
-    if (resolvedModel) agentCfg.customModel = resolvedModel
+    if (resolvedModel) personaCfg.customModel = resolvedModel
 
     const otherParticipants = groupIds
       .filter(id => id !== pid)
       .map(id => {
-        const p = agentsStore.getPersonaById(id)
+        const p = personasStore.getPersonaById(id)
         return { id, name: p?.name || 'Unknown', description: p?.description || '', prompt: p?.prompt || '' }
       })
-    const agentPrompts = {
+    const personaPrompts = {
       systemPersonaPrompt: persona.prompt || '',
       userPersonaPrompt: userPersonaPrompt || '',
       systemPersonaId: pid,
@@ -4795,12 +4795,12 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPro
     }
 
     return {
-      agentId: pid,
+      personaId: pid,
       personaName: persona.name,
-      config: JSON.parse(JSON.stringify(agentCfg)),
+      config: JSON.parse(JSON.stringify(personaCfg)),
       enabledAgents: [],
       enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
-      agentPrompts,
+      personaPrompts,
       mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
       httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
     }
@@ -4811,7 +4811,7 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPro
  * Fire the group runAgent call and finalize any errored streaming messages.
  * Returns the raw result from electronAPI.runAgent.
  */
-async function runGroupPersonas(chatId, targetChat, agentRuns, apiMessages, cfg, pendingAttachments) {
+async function runGroupPersonas(chatId, targetChat, personaRuns, apiMessages, cfg, pendingAttachments) {
   const res = await window.electronAPI.runAgent({
     chatId,
     messages: JSON.parse(JSON.stringify(apiMessages)),
@@ -4821,7 +4821,7 @@ async function runGroupPersonas(chatId, targetChat, agentRuns, apiMessages, cfg,
     ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
     mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
     httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
-    agentRuns,
+    personaRuns,
     chatPermissionMode: targetChat.permissionMode || 'inherit',
     chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
     chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
@@ -4841,7 +4841,7 @@ async function runGroupPersonas(chatId, targetChat, agentRuns, apiMessages, cfg,
   if (res.results) {
     for (const r of res.results) {
       if (!r.success) {
-        const msg = targetChat.messages.findLast(m => m.agentId === r.agentId && m.role === 'assistant')
+        const msg = targetChat.messages.findLast(m => m.personaId === r.personaId && m.role === 'assistant')
         if (msg && !msg.content) {
           msg.content = `Error: ${r.error}`
           msg.segments = [{ type: 'text', content: `Error: ${r.error}` }]
@@ -4880,19 +4880,19 @@ function injectCollaborationSummary(targetChat, iterationCount) {
  * (no global state). prevMessagesLength ensures we never re-scan earlier
  * rounds' messages and accidentally re-trigger personas that were already done.
  */
-async function triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPrompt, usrPersona, iterationCount, prevMessagesLength) {
+async function triggerPersonaCollaboration(chatId, groupIds, cfg, userPersonaPrompt, usrPersona, iterationCount, prevMessagesLength) {
   const targetChat = chatsStore.chats.find(c => c.id === chatId)
   if (!targetChat || !targetChat.messages) return
 
   // Per-chat limit; fall back to 10 if not set. Hard cap at 100.
   const MAX_ITERATIONS = Math.min(100, Math.max(1, targetChat.maxPersonaRounds ?? 10))
 
-  const groupPersonas = groupIds.map(id => agentsStore.getPersonaById(id)).filter(Boolean)
+  const groupPersonas = groupIds.map(id => personasStore.getPersonaById(id)).filter(Boolean)
 
   // Only examine messages added in the most recent runGroupPersonas call
   const newMessages = targetChat.messages
     .slice(prevMessagesLength)
-    .filter(m => m.role === 'assistant' && m.agentId && groupIds.includes(m.agentId) && !m.streaming)
+    .filter(m => m.role === 'assistant' && m.personaId && groupIds.includes(m.personaId) && !m.streaming)
 
   // For each new message, resolve which @mentioned personas are actually being
   // addressed (vs. merely referenced). Mirrors the user→persona routing logic.
@@ -4902,7 +4902,7 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPromp
     const msgText = msg.content || (msg.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
     const { mentions } = parseMentions(msgText, groupPersonas)
     // Exclude the sender itself
-    const others = mentions.filter(id => id !== msg.agentId)
+    const others = mentions.filter(id => id !== msg.personaId)
     if (others.length === 0) continue
 
     let addressees = others
@@ -4910,7 +4910,7 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPromp
       // 2+ mentions — ask the LLM which ones are actually being addressed
       try {
         const mentionedPersonas = others.map(id => {
-          const p = agentsStore.getPersonaById(id)
+          const p = personasStore.getPersonaById(id)
           return p ? { id, name: p.name } : null
         }).filter(Boolean)
         const result = await window.electronAPI.resolveAddressees({
@@ -4928,7 +4928,7 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPromp
       // Only trigger this persona if they have NOT already responded after this message.
       // This prevents double-runs when a persona ran in the initial group round and
       // a peer @mentioned them as a courtesy — their reply already exists in newMessages.
-      const alreadyRepliedAfter = newMessages.slice(msgIdx + 1).some(m => m.agentId === id)
+      const alreadyRepliedAfter = newMessages.slice(msgIdx + 1).some(m => m.personaId === id)
       if (!alreadyRepliedAfter) nextRespondingSet.add(id)
     }
   }
@@ -4948,13 +4948,13 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPromp
   // conversation order (A responds → B sees A's response → B responds).
   // This prevents the visual chaos of concurrent streaming in collaboration rounds.
   const respondingIds = [...nextRespondingSet]
-  dbg(`Collaboration run (sequential): ${respondingIds.length} persona(s): ${respondingIds.map(id => agentsStore.getPersonaById(id)?.name).join(', ')}`)
+  dbg(`Collaboration run (sequential): ${respondingIds.length} persona(s): ${respondingIds.map(id => personasStore.getPersonaById(id)?.name).join(', ')}`)
 
   const nextLength = targetChat.messages.length
 
   for (let i = 0; i < respondingIds.length; i++) {
     const pid = respondingIds[i]
-    const persona = agentsStore.getPersonaById(pid)
+    const persona = personasStore.getPersonaById(pid)
     if (!persona) continue
 
     // Rebuild apiMessages before each persona so it sees prior personas' output.
@@ -4985,15 +4985,15 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPromp
       })
     }
 
-    const agentRuns = buildAgentRuns([pid], groupIds, cfg, targetChat, userPersonaPrompt, usrPersona)
-    await runGroupPersonas(chatId, targetChat, agentRuns, seqApiMessages, cfg, [])
+    const personaRuns = buildPersonaRuns([pid], groupIds, cfg, targetChat, userPersonaPrompt, usrPersona)
+    await runGroupPersonas(chatId, targetChat, personaRuns, seqApiMessages, cfg, [])
     scrollToBottom(false, chatId)
   }
 
   await chatsStore.persist?.()
 
   // Recurse — pass nextLength so the next call only scans THIS round's output
-  await triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPrompt, usrPersona, iterationCount + 1, nextLength)
+  await triggerPersonaCollaboration(chatId, groupIds, cfg, userPersonaPrompt, usrPersona, iterationCount + 1, nextLength)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -5114,7 +5114,7 @@ async function sendMessage() {
       streamingStartedAt: Date.now()
     })
   } else {
-    // Group mode: streaming placeholders are created by handleChunk(agent_start)
+    // Group mode: streaming placeholders are created by handleChunk(persona_start)
     streamingSeconds.value = 0
     streamingTimer = setInterval(() => { streamingSeconds.value++ }, 1000)
   }
@@ -5139,8 +5139,8 @@ async function sendMessage() {
   // Resolve persona for this run
   const sysPersonaId = isGroup
     ? null  // group path resolves per-persona below
-    : (targetChat.systemPersonaId || agentsStore.defaultSystemPersona?.id)
-  const sysPersona = sysPersonaId ? agentsStore.getPersonaById(sysPersonaId) : agentsStore.defaultSystemPersona
+    : (targetChat.systemPersonaId || personasStore.defaultSystemPersona?.id)
+  const sysPersona = sysPersonaId ? personasStore.getPersonaById(sysPersonaId) : personasStore.defaultSystemPersona
 
   const chatProvider = sysPersona?.providerId || 'anthropic'
   const cfg = { ...configStore.config }
@@ -5238,18 +5238,18 @@ async function sendMessage() {
   // Chunks are handled by the persistent handleChunk listener registered in onMounted
 
   try {
-    // Resolve user agent prompt (shared across all agents)
+    // Resolve user persona prompt (shared across all personas)
     const usrPersonaId = targetChat.userPersonaId
     const usrPersona = usrPersonaId
-      ? agentsStore.getPersonaById(usrPersonaId)
-      : agentsStore.defaultUserPersona
+      ? personasStore.getPersonaById(usrPersonaId)
+      : personasStore.defaultUserPersona
     const userPersonaPrompt = usrPersona?.prompt || null
 
     if (isGroup) {
       // ── GROUP CHAT PATH ──
       // Parse @mentions to determine which personas respond
       const groupIds = activeSystemPersonaIds.value
-      const groupPersonas = groupIds.map(id => agentsStore.getPersonaById(id)).filter(Boolean)
+      const groupPersonas = groupIds.map(id => personasStore.getPersonaById(id)).filter(Boolean)
       const { mentions, mentionAll } = parseMentions(text, groupPersonas)
 
       // When 2+ personas are @mentioned, ask the LLM to determine which ones are
@@ -5259,7 +5259,7 @@ async function sendMessage() {
       if (!mentionAll && mentions.length >= 2) {
         try {
           const mentionedPersonas = mentions.map(id => {
-            const p = agentsStore.getPersonaById(id)
+            const p = personasStore.getPersonaById(id)
             return p ? { id, name: p.name } : null
           }).filter(Boolean)
           const result = await window.electronAPI.resolveAddressees({
@@ -5308,8 +5308,8 @@ async function sendMessage() {
         userMsg.mentionAll = mentionAll
       }
 
-      // Build agentRuns[]
-      const agentRuns = buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPrompt, usrPersona)
+      // Build personaRuns[]
+      const personaRuns = buildPersonaRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPrompt, usrPersona)
 
       // Dispatch: utility model extracts per-persona task assignments so each agent
       // only sees its own task, preventing cross-contamination of the full message.
@@ -5317,7 +5317,7 @@ async function sendMessage() {
       if (lastUserContent && window.electronAPI?.dispatchGroupTasks) {
         try {
           const dispatchPersonas = respondingIds.map(id => {
-            const p = agentsStore.getPersonaById(id)
+            const p = personasStore.getPersonaById(id)
             return p ? { id, name: p.name } : null
           }).filter(Boolean)
           const { dispatched } = await window.electronAPI.dispatchGroupTasks({
@@ -5326,10 +5326,10 @@ async function sendMessage() {
             config: JSON.parse(JSON.stringify(cfg)),
           })
           if (dispatched?.length > 0) {
-            for (const run of agentRuns) {
-              const d = dispatched.find(x => x.agentId === run.agentId)
+            for (const run of personaRuns) {
+              const d = dispatched.find(x => x.personaId === run.personaId)
               if (d?.assignedTask) {
-                run.agentPrompts = { ...run.agentPrompts, assignedTask: d.assignedTask }
+                run.personaPrompts = { ...run.personaPrompts, assignedTask: d.assignedTask }
                 dbg(`Dispatched task for ${run.personaName}: "${d.assignedTask.slice(0, 80)}"`)
               }
             }
@@ -5339,22 +5339,22 @@ async function sendMessage() {
         }
       }
 
-      dbg(`Group run: ${agentRuns.length} persona(s) responding: ${agentRuns.map(r => r.personaName).join(', ')}`)
+      dbg(`Group run: ${personaRuns.length} persona(s) responding: ${personaRuns.map(r => r.personaName).join(', ')}`)
 
       const msgCountBeforeRun = targetChat.messages.length
-      await runGroupPersonas(chatId, targetChat, agentRuns, apiMessages, cfg, pendingAttachments)
+      await runGroupPersonas(chatId, targetChat, personaRuns, apiMessages, cfg, pendingAttachments)
 
       // After the initial group run, check for persona→persona @mentions and loop.
       // Pass the pre-run message count so we only scan THIS round's new messages.
-      await triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPrompt, usrPersona, 0, msgCountBeforeRun)
+      await triggerPersonaCollaboration(chatId, groupIds, cfg, userPersonaPrompt, usrPersona, 0, msgCountBeforeRun)
 
     } else {
       // ── SINGLE PERSONA PATH ──
       const resolvedPersonaPrompts = {}
       const sysPersonaId = activeSystemPersonaIds.value[0] || targetChat.systemPersonaId
       const sysPersona = sysPersonaId
-        ? agentsStore.getPersonaById(sysPersonaId)
-        : agentsStore.defaultSystemPersona
+        ? personasStore.getPersonaById(sysPersonaId)
+        : personasStore.defaultSystemPersona
       if (sysPersona?.prompt) resolvedPersonaPrompts.systemPersonaPrompt = sysPersona.prompt
       if (userPersonaPrompt) resolvedPersonaPrompts.userPersonaPrompt = userPersonaPrompt
       // Pass persona identity for system prompt injection
@@ -5374,7 +5374,7 @@ async function sendMessage() {
         enabledAgents: [],
         enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
         ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
-        agentPrompts: resolvedPersonaPrompts,
+        personaPrompts: resolvedPersonaPrompts,
         mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
         httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
         chatPermissionMode: targetChat.permissionMode || 'inherit',
@@ -5722,8 +5722,8 @@ async function compactContext() {
     // Build a flat config the AgentLoop constructor expects (same pattern as sendMessage).
     // AnthropicClient reads config.apiKey / config.baseURL at the top level.
     const raw = configStore.config
-    const sysPersonaId = targetChat.systemPersonaId || agentsStore.defaultSystemPersona?.id
-    const sysPersona = sysPersonaId ? agentsStore.getPersonaById(sysPersonaId) : agentsStore.defaultSystemPersona
+    const sysPersonaId = targetChat.systemPersonaId || personasStore.defaultSystemPersona?.id
+    const sysPersona = sysPersonaId ? personasStore.getPersonaById(sysPersonaId) : personasStore.defaultSystemPersona
     const chatProvider = sysPersona?.providerId || 'anthropic'
     const cfg = { ...raw }
     if (chatProvider === 'anthropic') {
@@ -5962,7 +5962,7 @@ onMounted(async () => {
   // On first mount, also restore PiP (onActivated fires after onMounted on first render)
   // — nothing extra needed here; onActivated handles it.
 
-  agentsStore.loadPersonas()
+  personasStore.loadPersonas()
   await knowledgeStore.loadConfig()
   // Load tools in background — then sync draft from active chat
   toolsStore.loadTools().then(() => {

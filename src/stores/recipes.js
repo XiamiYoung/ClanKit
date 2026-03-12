@@ -3,14 +3,14 @@ import { ref, computed } from 'vue'
 import { v4 as uuid } from 'uuid'
 import { useConfigStore } from './config'
 import { useChatsStore } from './chats'
-import { usePersonasStore } from './personas'
+import { useAgentsStore } from './agents'
 
 // ── Store ────────────────────────────────────────────────────────────────────
 
 export const useRecipesStore = defineStore('recipes', () => {
   const configStore = useConfigStore()
   const chatsStore = useChatsStore()
-  const personasStore = usePersonasStore()
+  const agentsStore = useAgentsStore()
 
   // Persisted recipe list (from IPC)
   const recipes = ref([])
@@ -69,10 +69,10 @@ export const useRecipesStore = defineStore('recipes', () => {
     })
   }
 
-  // ── Provider config for a persona ────────────────────────────────────────
-  // Mirrors ChatsView.buildPersonaRuns() provider resolution logic.
+  // ── Provider config for an agent ────────────────────────────────────────
+  // Mirrors ChatsView.buildAgentRuns() provider resolution logic.
 
-  function buildPersonaConfig(persona) {
+  function buildAgentConfig(agent) {
     const raw = configStore.config
     const cfg = { ...raw }
 
@@ -84,7 +84,7 @@ export const useRecipesStore = defineStore('recipes', () => {
     delete cfg._directAuth
     delete cfg._resolvedProvider
 
-    const provider = persona.providerId || raw.defaultProvider || 'anthropic'
+    const provider = agent.providerId || raw.defaultProvider || 'anthropic'
 
     if (provider === 'anthropic') {
       cfg.apiKey  = raw.anthropic?.apiKey  || ''
@@ -116,27 +116,27 @@ export const useRecipesStore = defineStore('recipes', () => {
       cfg.defaultProvider   = 'openai'
     }
 
-    // Apply persona's model override
-    if (persona.modelId) {
-      if (provider === 'anthropic')   cfg.anthropic   = { ...cfg.anthropic,   activeModel:    persona.modelId }
-      else if (provider === 'openrouter') cfg.openrouter = { ...cfg.openrouter, defaultModel: persona.modelId }
-      else if (provider === 'openai') cfg.openai     = { ...cfg.openai,     model:         persona.modelId }
-      else if (provider === 'deepseek') cfg.deepseek = { ...cfg.deepseek,   model:         persona.modelId }
+    // Apply agent's model override
+    if (agent.modelId) {
+      if (provider === 'anthropic')   cfg.anthropic   = { ...cfg.anthropic,   activeModel:    agent.modelId }
+      else if (provider === 'openrouter') cfg.openrouter = { ...cfg.openrouter, defaultModel: agent.modelId }
+      else if (provider === 'openai') cfg.openai     = { ...cfg.openai,     model:         agent.modelId }
+      else if (provider === 'deepseek') cfg.deepseek = { ...cfg.deepseek,   model:         agent.modelId }
     }
 
     return JSON.parse(JSON.stringify(cfg))
   }
 
-  // ── Chunk handler (used during per-persona single-persona runs) ──────────
+  // ── Chunk handler (used during per-agent single-agent runs) ──────────
 
-  // _currentChunkPersonaId is set by runRecipe before each single-persona runAgent call
-  let _currentChunkPersonaId = null
+  // _currentChunkAgentId is set by runRecipe before each single-agent runAgent call
+  let _currentChunkAgentId = null
 
   function handleRecipeChunk(_chatId, chunk) {
     if (!activeRun.value || activeRun.value.status !== 'running') return
 
     const run = activeRun.value
-    const pid = _currentChunkPersonaId
+    const pid = _currentChunkAgentId
 
     if (chunk.type === 'text') {
       if (pid && pid in run.outputs) {
@@ -154,7 +154,7 @@ export const useRecipesStore = defineStore('recipes', () => {
     const run = activeRun.value
     run.status = status
     run.error = error
-    _currentChunkPersonaId = null
+    _currentChunkAgentId = null
     chatsStore.clearRecipeChunkCallback()
 
     const recipe = recipes.value.find(r => r.id === run.recipeId)
@@ -249,16 +249,16 @@ export const useRecipesStore = defineStore('recipes', () => {
 
   // ── Topological sort helpers ──────────────────────────────────────────────
 
-  // Returns personas in execution order (waves). Each wave is an array of rp
+  // Returns agents in execution order (waves). Each wave is an array of ra
   // entries that can run in parallel (all their deps are in previous waves).
-  function buildExecutionWaves(personas) {
+  function buildExecutionWaves(agents) {
     const order = []
     const resolved = new Set()
-    const remaining = [...personas]
+    const remaining = [...agents]
 
     while (remaining.length > 0) {
-      const wave = remaining.filter(rp => {
-        const deps = rp.dependsOn || []
+      const wave = remaining.filter(ra => {
+        const deps = ra.dependsOn || []
         return deps.every(id => resolved.has(id))
       })
       if (wave.length === 0) {
@@ -267,62 +267,62 @@ export const useRecipesStore = defineStore('recipes', () => {
         break
       }
       order.push(...wave)
-      wave.forEach(rp => resolved.add(rp.personaId))
-      wave.forEach(rp => {
-        const i = remaining.indexOf(rp)
+      wave.forEach(ra => resolved.add(ra.personaId))
+      wave.forEach(ra => {
+        const i = remaining.indexOf(ra)
         if (i !== -1) remaining.splice(i, 1)
       })
     }
     return order
   }
 
-  // Check whether a persona should run given its deps' outcomes
-  function shouldRunPersona(rp, personaStatuses) {
-    const deps = rp.dependsOn || []
+  // Check whether an agent should run given its deps' outcomes
+  function shouldRunAgent(ra, agentStatuses) {
+    const deps = ra.dependsOn || []
     if (deps.length === 0) return true
-    const cond = rp.runCondition || 'always'
+    const cond = ra.runCondition || 'always'
     if (cond === 'always') return true
-    if (cond === 'on_success') return deps.every(id => personaStatuses[id] === 'done')
-    if (cond === 'on_failure') return deps.some(id => personaStatuses[id] === 'failed' || personaStatuses[id] === 'skipped')
+    if (cond === 'on_success') return deps.every(id => agentStatuses[id] === 'done')
+    if (cond === 'on_failure') return deps.some(id => agentStatuses[id] === 'failed' || agentStatuses[id] === 'skipped')
     return true
   }
 
-  // ── Run a single persona ──────────────────────────────────────────────────
+  // ── Run a single agent ──────────────────────────────────────────────────
 
-  async function _runSinglePersona(rp, recipe, inputs, previousOutputs, chatId) {
-    const persona = personasStore.getPersonaById(rp.personaId)
-    if (!persona) return { success: false, error: 'Persona not found' }
+  async function _runSingleAgent(ra, recipe, inputs, previousOutputs, chatId) {
+    const agent = agentsStore.getAgentById(ra.personaId)
+    if (!agent) return { success: false, error: 'Agent not found' }
 
-    const personaCfg = buildPersonaConfig(persona)
+    const agentCfg = buildAgentConfig(agent)
 
     // Build a name→output map for {{output:Name}} token resolution
     const nameToOutput = {}
-    for (const [pid, text] of Object.entries(previousOutputs)) {
-      const p = personasStore.getPersonaById(pid)
-      if (p) nameToOutput[p.name] = text
+    for (const [agentId, text] of Object.entries(previousOutputs)) {
+      const a = agentsStore.getAgentById(agentId)
+      if (a) nameToOutput[a.name] = text
     }
 
     // Resolve both {{input_var}} and {{output:Name}} in prompts
     const globalPart  = resolveOutputTokens(renderTemplate(recipe.globalPrompt || '', inputs), nameToOutput)
-    const personaPart = resolveOutputTokens(renderTemplate(rp.prompt || '', inputs), nameToOutput)
-    const systemPersonaPrompt = [globalPart, personaPart].filter(Boolean).join('\n\n')
+    const agentPart = resolveOutputTokens(renderTemplate(ra.prompt || '', inputs), nameToOutput)
+    const systemPersonaPrompt = [globalPart, agentPart].filter(Boolean).join('\n\n')
 
     // Build user message: only append upstream outputs that were NOT already inlined
     // via {{output:Name}} tokens (to avoid duplication).
     const inlinedNames = new Set(
-      [...(recipe.globalPrompt || ''), ...(rp.prompt || '')].join('')
+      [...(recipe.globalPrompt || ''), ...(ra.prompt || '')].join('')
         .match(/\{\{output:([^}]+)\}\}/g)?.map(m => m.replace(/^\{\{output:|\}\}$/g, '').trim()) || []
     )
 
     const prevOutputLines = Object.entries(previousOutputs)
-      .filter(([pid]) => (rp.dependsOn || []).includes(pid))
-      .filter(([pid]) => {
-        const name = personasStore.getPersonaById(pid)?.name || ''
+      .filter(([agentId]) => (ra.dependsOn || []).includes(agentId))
+      .filter(([agentId]) => {
+        const name = agentsStore.getAgentById(agentId)?.name || ''
         return !inlinedNames.has(name)
       })
-      .map(([pid, text]) => {
-        const prevPersona = personasStore.getPersonaById(pid)
-        return `[Output from ${prevPersona?.name || pid}]:\n${text}`
+      .map(([agentId, text]) => {
+        const prevAgent = agentsStore.getAgentById(agentId)
+        return `[Output from ${prevAgent?.name || agentId}]:\n${text}`
       })
 
     const userContent = [
@@ -330,30 +330,30 @@ export const useRecipesStore = defineStore('recipes', () => {
       ...prevOutputLines,
     ].join('\n\n---\n\n')
 
-    const singlePersonaRun = [{
-      personaId: rp.personaId,
-      personaName: persona.name,
-      config: personaCfg,
+    const singleAgentRun = [{
+      personaId: ra.personaId,
+      personaName: agent.name,
+      config: agentCfg,
       enabledAgents: [],
       enabledSkills: [],
       personaPrompts: {
         systemPersonaPrompt,
-        systemPersonaId: rp.personaId,
+        systemPersonaId: ra.personaId,
         userPersonaId: '__recipe_user__',
       },
       mcpServers: [],
       httpTools: [],
     }]
 
-    _currentChunkPersonaId = rp.personaId
+    _currentChunkAgentId = ra.personaId
 
     return await window.electronAPI.runAgent({
       chatId,
       messages: [{ role: 'user', content: userContent }],
-      config: JSON.parse(JSON.stringify(singlePersonaRun[0].config)),
+      config: JSON.parse(JSON.stringify(singleAgentRun[0].config)),
       enabledAgents: [],
       enabledSkills: [],
-      personaRuns: JSON.parse(JSON.stringify(singlePersonaRun)),
+      personaRuns: JSON.parse(JSON.stringify(singleAgentRun)),
       personaPrompts: {},
       mcpServers: [],
       httpTools: [],
@@ -377,18 +377,18 @@ export const useRecipesStore = defineStore('recipes', () => {
 
     const runId = uuid()
     const chatId = `recipe:${runId}`
-    const recipePersonas = recipe.personas || []
+    const recipeAgents = recipe.personas || []
 
-    if (recipePersonas.length === 0) {
-      throw new Error('No valid personas configured for this recipe.')
+    if (recipeAgents.length === 0) {
+      throw new Error('No valid agents configured for this recipe.')
     }
 
     // Initialize outputs and statuses
     const outputs = {}
-    const personaStatuses = {}
-    for (const rp of recipePersonas) {
-      outputs[rp.personaId] = ''
-      personaStatuses[rp.personaId] = 'waiting'
+    const agentStatuses = {}
+    for (const ra of recipeAgents) {
+      outputs[ra.personaId] = ''
+      agentStatuses[ra.personaId] = 'waiting'
     }
 
     // Initialize active run
@@ -398,7 +398,7 @@ export const useRecipesStore = defineStore('recipes', () => {
       chatId,
       status: 'running',
       outputs,
-      personaStatuses,
+      personaStatuses: agentStatuses,
       error: null,
       personasDone: new Set(),
       inputs: { ...inputs },
@@ -409,47 +409,47 @@ export const useRecipesStore = defineStore('recipes', () => {
     chatsStore.setRecipeChunkCallback(handleRecipeChunk)
 
     // Build execution order using topological sort
-    const execOrder = buildExecutionWaves(recipePersonas)
+    const execOrder = buildExecutionWaves(recipeAgents)
 
     try {
-      for (const rp of execOrder) {
+      for (const ra of execOrder) {
         // Check if run was stopped
         if (activeRun.value?.status !== 'running') break
 
-        // Check whether this persona should run
-        if (!shouldRunPersona(rp, activeRun.value.personaStatuses)) {
-          activeRun.value.personaStatuses[rp.personaId] = 'skipped'
+        // Check whether this agent should run
+        if (!shouldRunAgent(ra, activeRun.value.personaStatuses)) {
+          activeRun.value.personaStatuses[ra.personaId] = 'skipped'
           continue
         }
 
         // Mark as running
-        activeRun.value.personaStatuses[rp.personaId] = 'running'
+        activeRun.value.personaStatuses[ra.personaId] = 'running'
 
-        // Collect outputs from depended-on personas as context
+        // Collect outputs from depended-on agents as context
         const prevOutputs = {}
-        for (const depId of (rp.dependsOn || [])) {
+        for (const depId of (ra.dependsOn || [])) {
           if (activeRun.value.outputs[depId]) {
             prevOutputs[depId] = activeRun.value.outputs[depId]
           }
         }
 
-        const res = await _runSinglePersona(rp, recipe, inputs, prevOutputs, chatId)
-        _currentChunkPersonaId = null
+        const res = await _runSingleAgent(ra, recipe, inputs, prevOutputs, chatId)
+        _currentChunkAgentId = null
 
         if (!activeRun.value || activeRun.value.status !== 'running') break
 
         if (res?.success === false) {
-          activeRun.value.personaStatuses[rp.personaId] = 'failed'
-          // Continue with remaining personas — don't abort the whole run unless stopped
+          activeRun.value.personaStatuses[ra.personaId] = 'failed'
+          // Continue with remaining agents — don't abort the whole run unless stopped
         } else {
-          activeRun.value.personaStatuses[rp.personaId] = 'done'
-          activeRun.value.personasDone.add(rp.personaId)
+          activeRun.value.personaStatuses[ra.personaId] = 'done'
+          activeRun.value.personasDone.add(ra.personaId)
         }
       }
 
       if (activeRun.value?.status === 'running') {
         const anyFailed = Object.values(activeRun.value.personaStatuses).some(s => s === 'failed')
-        _finalizeRun(anyFailed ? 'error' : 'completed', anyFailed ? 'One or more personas failed' : null)
+        _finalizeRun(anyFailed ? 'error' : 'completed', anyFailed ? 'One or more agents failed' : null)
       }
     } catch (err) {
       if (activeRun.value?.status === 'running') {

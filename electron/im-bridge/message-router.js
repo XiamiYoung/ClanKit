@@ -6,11 +6,11 @@ const os      = require('os')
 const { v4: uuidv4 } = require('uuid')
 const { AgentLoop } = require('../agent/agentLoop')
 
-const DATA_DIR      = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankai')
-const CHATS_DIR     = path.join(DATA_DIR, 'chats')
-const CHATS_INDEX   = path.join(CHATS_DIR, 'index.json')
-const CONFIG_FILE   = path.join(DATA_DIR, 'config.json')
-const PERSONAS_FILE = path.join(DATA_DIR, 'personas.json')
+const DATA_DIR    = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankai')
+const CHATS_DIR   = path.join(DATA_DIR, 'chats')
+const CHATS_INDEX = path.join(CHATS_DIR, 'index.json')
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
+const AGENTS_FILE = path.join(DATA_DIR, 'agents.json')
 
 function readJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return fallback }
@@ -54,14 +54,14 @@ function appendMessage(chatId, msg) {
   } catch { /* non-fatal */ }
 }
 
-function readPersonas() {
-  const data = readJSON(PERSONAS_FILE, [])
+function readAgents() {
+  const data = readJSON(AGENTS_FILE, [])
   return Array.isArray(data) ? data : (data.personas || [])
 }
 
-function buildLoopConfig(baseConfig, persona) {
+function buildLoopConfig(baseConfig, agent) {
   const cfg = { ...baseConfig }
-  const resolvedProvider = persona.providerId || baseConfig.defaultProvider || 'anthropic'
+  const resolvedProvider = agent.providerId || baseConfig.defaultProvider || 'anthropic'
 
   delete cfg.apiKey
   delete cfg.baseURL
@@ -89,12 +89,12 @@ function buildLoopConfig(baseConfig, persona) {
     cfg.defaultProvider   = 'openai'
   }
 
-  if (persona.modelId) cfg.customModel = persona.modelId
+  if (agent.modelId) cfg.customModel = agent.modelId
 
   return cfg
 }
 
-function parseIMAtMentions(text, personas) {
+function parseIMAtMentions(text, agents) {
   if (/@all\b/i.test(text)) {
     return { mentionAll: true, matches: [] }
   }
@@ -104,7 +104,7 @@ function parseIMAtMentions(text, personas) {
   let m
   while ((m = mentionRegex.exec(text)) !== null) {
     const name = m[1].toLowerCase()
-    const found = personas.find(p => p.name.toLowerCase() === name)
+    const found = agents.find(a => a.name.toLowerCase() === name)
     if (found && !mentioned.includes(found.id)) {
       mentioned.push(found.id)
     }
@@ -136,10 +136,10 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
 
   const config   = readJSON(CONFIG_FILE, {})
   const chat     = readJSON(chatFile(chatId), { id: chatId, messages: [] })
-  const personas = readPersonas()
+  const agents = readAgents()
 
-  const personaById = {}
-  for (const p of personas) personaById[p.id] = p
+  const agentById = {}
+  for (const a of agents) agentById[a.id] = a
 
   const isGroupChat     = !!(chat.isGroupChat && chat.groupPersonaIds && chat.groupPersonaIds.length > 0)
   const groupPersonaIds = chat.groupPersonaIds || []
@@ -147,7 +147,7 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
   let respondingIds = []
 
   if (isGroupChat) {
-    const { mentionAll, matches } = parseIMAtMentions(userText, personas)
+    const { mentionAll, matches } = parseIMAtMentions(userText, agents)
     if (mentionAll || matches.length === 0) {
       respondingIds = [...groupPersonaIds]
     } else {
@@ -156,11 +156,11 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
     }
   } else {
     const pid = chat.systemPersonaId || null
-    if (pid && personaById[pid]) {
+    if (pid && agentById[pid]) {
       respondingIds = [pid]
     } else {
-      const defSys = personas.find(p => p.type === 'system' && p.isDefault)
-        || personas.find(p => p.type === 'system')
+      const defSys = agents.find(a => a.type === 'system' && a.isDefault)
+        || agents.find(a => a.type === 'system')
       if (defSys) respondingIds = [defSys.id]
     }
   }
@@ -185,13 +185,13 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
   }
 
   for (const pid of respondingIds) {
-    const persona = personaById[pid]
-    if (!persona) continue
+    const agent = agentById[pid]
+    if (!agent) continue
 
-    const loopConfig = buildLoopConfig(baseConfig, persona)
+    const loopConfig = buildLoopConfig(baseConfig, agent)
 
     const personaPrompts = {
-      systemPersonaPrompt: persona.prompt || '',
+      systemPersonaPrompt: agent.prompt || '',
       systemPersonaId:     pid,
       userPersonaId:       '__im_user__',
     }
@@ -200,12 +200,12 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
       const otherParticipants = groupPersonaIds
         .filter(id => id !== pid)
         .map(id => {
-          const p = personaById[id]
-          return { id, name: p?.name || 'Unknown', description: p?.description || '', prompt: p?.prompt || '' }
+          const a = agentById[id]
+          return { id, name: a?.name || 'Unknown', description: a?.description || '', prompt: a?.prompt || '' }
         })
       personaPrompts.groupChatContext = {
-        personaName:        persona.name,
-        personaDescription: persona.description || '',
+        personaName:        agent.name,
+        personaDescription: agent.description || '',
         otherParticipants,
       }
     }
@@ -226,7 +226,7 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
         null
       )
     } catch (err) {
-      console.error(`[im-bridge] agentLoop error (persona ${persona.name}):`, err.message)
+      console.error(`[im-bridge] agentLoop error (agent ${agent.name}):`, err.message)
       await sendToIM(`Error: ${err.message}`)
       continue
     } finally {
@@ -247,7 +247,7 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
       notifyRenderer('im:chat-updated', { chatId })
 
       const replyText = isGroupChat && respondingIds.length > 1
-        ? `**${persona.name}**: ${fullText}`
+        ? `**${agent.name}**: ${fullText}`
         : fullText
       await sendToIM(replyText)
 

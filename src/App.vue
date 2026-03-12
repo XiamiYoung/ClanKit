@@ -57,7 +57,7 @@ import { useChatsStore }  from './stores/chats'
 import { useSkillsStore } from './stores/skills'
 import { useConfigStore }   from './stores/config'
 import { useObsidianStore } from './stores/obsidian'
-import { usePersonasStore } from './stores/personas'
+import { useAgentsStore } from './stores/agents'
 import { useMcpStore } from './stores/mcp'
 import { useModelsStore } from './stores/models'
 import { useToolsStore } from './stores/tools'
@@ -70,7 +70,7 @@ const chatsStore    = useChatsStore()
 const skillsStore   = useSkillsStore()
 const configStore   = useConfigStore()
 const obsidianStore = useObsidianStore()
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 const mcpStore      = useMcpStore()
 const modelsStore   = useModelsStore()
 const toolsStore    = useToolsStore()
@@ -118,7 +118,7 @@ onMounted(async () => {
       // Initialize the persistent agent chunk listener after chats are available
       chatsStore.initChunkListener()
     }),
-    personasStore.loadPersonas(),
+    agentsStore.loadAgents(),
     mcpStore.loadServers(),
     toolsStore.loadTools(),
     skillsStore.loadSkills(configStore.config.skillsPath).then(() =>

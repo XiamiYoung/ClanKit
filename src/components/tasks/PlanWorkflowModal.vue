@@ -207,7 +207,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 import { useTasksStore } from '../../stores/tasks'
 
 const props = defineProps({
@@ -218,7 +218,7 @@ const props = defineProps({
 defineEmits(['close'])
 defineOptions({ inheritAttrs: false })
 
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 const tasksStore    = useTasksStore()
 
 const selectedStepId = ref(null)
@@ -242,7 +242,7 @@ function selectStep(node) {
 }
 
 function getPersona(id) {
-  return personasStore.getPersonaById(id)
+  return agentsStore.getAgentById(id)
 }
 
 function personaEmoji(id) {

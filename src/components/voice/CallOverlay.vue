@@ -134,13 +134,13 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useVoiceStore } from '../../stores/voice'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import { getAvatarDataUri } from '../personas/personaAvatars'
 import { resolveModelPrice, formatCost } from '../../utils/pricing'
 
 const voiceStore = useVoiceStore()
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 
 const emit = defineEmits(['end-call', 'toggle-mute', 'mic-change', 'speaker-change'])
@@ -280,7 +280,7 @@ onMounted(enumerateDevices)
 
 const personaAvatar = computed(() => {
   if (!voiceStore.activePersonaId) return null
-  const persona = personasStore.personas.find(p => p.id === voiceStore.activePersonaId)
+  const persona = agentsStore.agents.find(p => p.id === voiceStore.activePersonaId)
   if (!persona?.avatar) return null
   return getAvatarDataUri(persona.avatar)
 })

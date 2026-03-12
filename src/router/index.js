@@ -2,7 +2,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import NewsView from '../views/NewsView.vue'
 import ChatsView from '../views/ChatsView.vue'
 import SkillsView from '../views/SkillsView.vue'
-import PersonasView from '../views/PersonasView.vue'
+import AgentsView from '../views/AgentsView.vue'
 import ConfigView from '../views/ConfigView.vue'
 import DocsView from '../views/DocsView.vue'
 import McpView from '../views/McpView.vue'
@@ -16,7 +16,7 @@ export default createRouter({
     { path: '/',          redirect: '/chats' },
     { path: '/news',      component: NewsView },
     { path: '/chats',     component: ChatsView },
-    { path: '/personas',  component: PersonasView },
+    { path: '/agents',    component: AgentsView },
     { path: '/skills',    component: SkillsView },
     { path: '/knowledge', component: KnowledgeView },
     { path: '/mcp',       component: McpView },

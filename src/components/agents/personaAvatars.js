@@ -22,7 +22,7 @@ export const STYLES = [
   { key: 'notionists',        label: 'Notionists',          style: collection.notionists },
   { key: 'notionistsNeutral', label: 'Notionists Neutral',  style: collection.notionistsNeutral },
   { key: 'openPeeps',         label: 'Open Peeps',          style: collection.openPeeps },
-  { key: 'personas',          label: 'Personas',            style: collection.personas },
+  { key: 'personas',          label: 'Agents',              style: collection.personas },
   { key: 'micah',             label: 'Micah',               style: collection.micah },
   { key: 'bigEars',           label: 'Big Ears',            style: collection.bigEars },
   { key: 'bigEarsNeutral',    label: 'Big Ears Neutral',    style: collection.bigEarsNeutral },

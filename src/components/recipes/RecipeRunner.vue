@@ -58,9 +58,9 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 
 const props = defineProps({
   // For live runs: pass activeRun from store
@@ -92,7 +92,7 @@ const columns = computed(() => {
   const personas = props.recipe.personas || []
   const outputs = props.run.outputs || {}
   return personas.map(rp => {
-    const persona = personasStore.getPersonaById(rp.personaId)
+    const persona = agentsStore.getAgentById(rp.personaId)
     return {
       personaId: rp.personaId,
       personaName: persona?.name || rp.personaId,

@@ -123,28 +123,28 @@ export const storage = {
     lsSet('clankai:config', config)
   },
 
-  // ── Personas ────────────────────────────────────────────────────────────────
-  async getPersonas() {
-    if (isElectron()) return window.electronAPI.getPersonas()
-    return lsGet('maestro:personas', { categories: [], personas: [] })
+  // ── Agents ──────────────────────────────────────────────────────────────────
+  async getAgents() {
+    if (isElectron()) return window.electronAPI.getAgents()
+    return lsGet('maestro:agents', { categories: [], agents: [] })
   },
-  async savePersonas(personas) {
-    if (isElectron()) return window.electronAPI.savePersonas(personas)
-    lsSet('maestro:personas', personas)
+  async saveAgents(agents) {
+    if (isElectron()) return window.electronAPI.saveAgents(agents)
+    lsSet('maestro:agents', agents)
   },
 
   // ── Soul Memory ────────────────────────────────────────────────────────────
-  async getSoul(personaId, type) {
-    if (isElectron()) return window.electronAPI.souls.read(personaId, type)
-    return lsGet(`clankai:soul:${type}:${personaId}`, null)
+  async getSoul(agentId, type) {
+    if (isElectron()) return window.electronAPI.souls.read(agentId, type)
+    return lsGet(`clankai:soul:${type}:${agentId}`, null)
   },
-  async saveSoul(personaId, type, content) {
-    if (isElectron()) return window.electronAPI.souls.write(personaId, type, content)
-    lsSet(`clankai:soul:${type}:${personaId}`, content)
+  async saveSoul(agentId, type, content) {
+    if (isElectron()) return window.electronAPI.souls.write(agentId, type, content)
+    lsSet(`clankai:soul:${type}:${agentId}`, content)
   },
-  async soulExists(personaId, type) {
-    if (isElectron()) return window.electronAPI.souls.exists(personaId, type)
-    return lsGet(`clankai:soul:${type}:${personaId}`, null) !== null
+  async soulExists(agentId, type) {
+    if (isElectron()) return window.electronAPI.souls.exists(agentId, type)
+    return lsGet(`clankai:soul:${type}:${agentId}`, null) !== null
   },
 
 }

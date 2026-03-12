@@ -572,11 +572,11 @@ export const useChatsStore = defineStore('chats', () => {
     debouncedPersistChat(chatId)
   }
 
-  async function setChatPersona(chatId, type, personaId) {
+  async function setChatPersona(chatId, type, agentId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
-    if (type === 'system') chat.systemPersonaId = personaId
-    else if (type === 'user') chat.userPersonaId = personaId
+    if (type === 'system') chat.systemPersonaId = agentId
+    else if (type === 'user') chat.userPersonaId = agentId
     chat.updatedAt = Date.now()
     await persistChat(chatId)
     await persistIndex()
@@ -600,14 +600,14 @@ export const useChatsStore = defineStore('chats', () => {
     await persistIndex()
   }
 
-  function setChatPersonaModelOverride(chatId, personaId, providerId, modelId) {
+  function setChatPersonaModelOverride(chatId, agentId, providerId, modelId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
     if (!chat.personaModelOverrides) chat.personaModelOverrides = {}
     if (providerId === null && modelId === null) {
-      delete chat.personaModelOverrides[personaId]
+      delete chat.personaModelOverrides[agentId]
     } else {
-      chat.personaModelOverrides[personaId] = { provider: providerId, model: modelId }
+      chat.personaModelOverrides[agentId] = { provider: providerId, model: modelId }
     }
     chat.updatedAt = Date.now()
     debouncedPersistChat(chatId)
@@ -642,31 +642,31 @@ export const useChatsStore = defineStore('chats', () => {
     await persistIndex()
   }
 
-  async function setGroupPersonaOverride(chatId, personaId, overrides) {
+  async function setGroupPersonaOverride(chatId, agentId, overrides) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
     if (!chat.groupPersonaOverrides) chat.groupPersonaOverrides = {}
-    chat.groupPersonaOverrides[personaId] = { ...overrides }
+    chat.groupPersonaOverrides[agentId] = { ...overrides }
     chat.updatedAt = Date.now()
     await persistChat(chatId)
     await persistIndex()
   }
 
-  async function removeGroupPersona(chatId, personaId) {
+  async function removeGroupPersona(chatId, agentId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
-    chat.groupPersonaIds = chat.groupPersonaIds.filter(id => id !== personaId)
-    if (chat.groupPersonaOverrides) delete chat.groupPersonaOverrides[personaId]
+    chat.groupPersonaIds = chat.groupPersonaIds.filter(id => id !== agentId)
+    if (chat.groupPersonaOverrides) delete chat.groupPersonaOverrides[agentId]
     chat.updatedAt = Date.now()
     await persistChat(chatId)
     await persistIndex()
   }
 
-  async function addGroupPersona(chatId, personaId) {
+  async function addGroupPersona(chatId, agentId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
-    if (!chat.groupPersonaIds.includes(personaId)) {
-      chat.groupPersonaIds.push(personaId)
+    if (!chat.groupPersonaIds.includes(agentId)) {
+      chat.groupPersonaIds.push(agentId)
     }
     chat.updatedAt = Date.now()
     await persistChat(chatId)
@@ -986,9 +986,9 @@ export const useChatsStore = defineStore('chats', () => {
 
   async function sendMinibarMessage(text, chatId) {
     const { useConfigStore }   = await import('./config')
-    const { usePersonasStore } = await import('./personas')
+    const { useAgentsStore } = await import('./agents')
     const configStore   = useConfigStore()
-    const personasStore = usePersonasStore()
+    const agentsStore = useAgentsStore()
 
     const targetChat = chats.value.find(c => c.id === chatId)
     if (!targetChat) return
@@ -1011,9 +1011,9 @@ export const useChatsStore = defineStore('chats', () => {
       .map(m => ({ role: m.role, content: m.content }))
 
     // Resolve persona + provider
-    const sysPersonaId = targetChat.systemPersonaId || personasStore.defaultSystemPersona?.id
-    const sysPersona   = sysPersonaId ? personasStore.getPersonaById(sysPersonaId) : personasStore.defaultSystemPersona
-    const chatProvider = sysPersona?.providerId || 'anthropic'
+    const sysAgentId = targetChat.systemPersonaId || agentsStore.defaultSystemPersona?.id
+    const sysAgent   = sysAgentId ? agentsStore.getPersonaById(sysAgentId) : agentsStore.defaultSystemPersona
+    const chatProvider = sysAgent?.providerId || 'anthropic'
     const cfg = { ...configStore.config }
 
     if (chatProvider === 'anthropic') {
@@ -1030,7 +1030,7 @@ export const useChatsStore = defineStore('chats', () => {
     }
 
     // Per-chat model override
-    const rawOverride = targetChat.personaModelOverrides?.[sysPersonaId]
+    const rawOverride = targetChat.personaModelOverrides?.[sysAgentId]
     const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
     const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
     if (overrideProvider && overrideProvider !== chatProvider) {
@@ -1051,21 +1051,21 @@ export const useChatsStore = defineStore('chats', () => {
         cfg._resolvedProvider = 'openai'; cfg._directAuth = true; cfg.defaultProvider = 'openai'
       }
     }
-    const resolvedModel = overrideModel || sysPersona?.modelId || null
+    const resolvedModel = overrideModel || sysAgent?.modelId || null
     if (resolvedModel) cfg.customModel = resolvedModel
     if (targetChat.workingPath) cfg.chatWorkingPath = targetChat.workingPath
 
-    const usrPersonaId = targetChat.userPersonaId
-    const usrPersona   = usrPersonaId ? personasStore.getPersonaById(usrPersonaId) : personasStore.defaultUserPersona
-    const userPersonaPrompt = usrPersona?.prompt || null
+    const usrAgentId = targetChat.userPersonaId
+    const usrAgent   = usrAgentId ? agentsStore.getPersonaById(usrAgentId) : agentsStore.defaultUserPersona
+    const userAgentPrompt = usrAgent?.prompt || null
 
-    const personaPrompts = {
-      systemPersonaPrompt:       sysPersona?.prompt || null,
-      systemPersonaName:         sysPersona?.name || null,
-      systemPersonaDescription:  sysPersona?.description || null,
-      systemPersonaId:           sysPersona?.id || '__default_system__',
-      userPersonaId:             usrPersona?.id || '__default_user__',
-      userPersonaPrompt,
+    const agentPrompts = {
+      systemPersonaPrompt:       sysAgent?.prompt || null,
+      systemPersonaName:         sysAgent?.name || null,
+      systemPersonaDescription:  sysAgent?.description || null,
+      systemPersonaId:           sysAgent?.id || '__default_system__',
+      userPersonaId:             usrAgent?.id || '__default_user__',
+      userAgentPrompt: userAgentPrompt,
     }
 
     try {
@@ -1075,7 +1075,7 @@ export const useChatsStore = defineStore('chats', () => {
         config: JSON.parse(JSON.stringify(cfg)),
         enabledAgents: [],
         enabledSkills: [],
-        personaPrompts,
+        personaPrompts: agentPrompts,
         streamingMsgId,
         mcpServers: [],
         httpTools: [],

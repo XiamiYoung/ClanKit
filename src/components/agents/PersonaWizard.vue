@@ -275,7 +275,7 @@
 
 <script setup>
 import { ref, reactive, nextTick, computed, onMounted } from 'vue'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import { useModelsStore } from '../../stores/models'
 import { getAvatarDataUri } from './personaAvatars'
@@ -289,7 +289,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'saved'])
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 const modelsStore = useModelsStore()
 
@@ -753,7 +753,7 @@ async function save() {
       modelId: form.modelId || null,
       voiceId: form.voiceId || null,
     }
-    await personasStore.savePersona(persona)
+    await agentsStore.saveAgent(persona)
     emit('saved')
     emit('close')
   } finally {

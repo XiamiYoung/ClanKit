@@ -4,8 +4,8 @@ import { ref } from 'vue'
 export const useVoiceStore = defineStore('voice', () => {
   const isCallActive = ref(false)
   const activeChatId = ref(null)
-  const activePersonaId = ref(null)
-  const activePersonaName = ref('')
+  const activeAgentId = ref(null)
+  const activeAgentName = ref('')
   const status = ref('idle')  // 'idle' | 'listening' | 'processing' | 'speaking'
   const isMuted = ref(false)
   const isPip = ref(false)    // true when user navigated away from active call's chat
@@ -23,11 +23,11 @@ export const useVoiceStore = defineStore('voice', () => {
   const callVoiceInputTokens = ref(0)
   const callVoiceOutputTokens = ref(0)
 
-  function startCall(chatId, personaId, personaName, modelId) {
+  function startCall(chatId, agentId, agentName, modelId) {
     isCallActive.value = true
     activeChatId.value = chatId
-    activePersonaId.value = personaId
-    activePersonaName.value = personaName || ''
+    activeAgentId.value = agentId
+    activeAgentName.value = agentName || ''
     status.value = 'idle'
     isMuted.value = false
     isPip.value = false
@@ -43,8 +43,8 @@ export const useVoiceStore = defineStore('voice', () => {
   function endCall() {
     isCallActive.value = false
     activeChatId.value = null
-    activePersonaId.value = null
-    activePersonaName.value = ''
+    activeAgentId.value = null
+    activeAgentName.value = ''
     status.value = 'idle'
     isMuted.value = false
     isPip.value = false
@@ -74,7 +74,7 @@ export const useVoiceStore = defineStore('voice', () => {
   function setSpeakerId(id) { selectedSpeakerId.value = id }
 
   return {
-    isCallActive, activeChatId, activePersonaId, activePersonaName,
+    isCallActive, activeChatId, activeAgentId, activeAgentName,
     status, isMuted, isPip, lastTranscript, lastAiText,
     selectedMicId, selectedSpeakerId,
     callModelId, callWhisperSecs, callWhisperCalls,

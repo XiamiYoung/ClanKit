@@ -398,12 +398,12 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { v4 as uuid } from 'uuid'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import EmojiPicker from '../personas/EmojiPicker.vue'
 import WorkflowPreviewModal from './WorkflowPreviewModal.vue'
 
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 
 const props = defineProps({
@@ -540,7 +540,7 @@ const alreadyAddedIds = computed(() => new Set(draft.value.personas.map(p => p.p
 
 const filteredAvailablePersonas = computed(() => {
   const q = personaSearch.value.toLowerCase()
-  return personasStore.systemPersonas.filter(p =>
+  return agentsStore.systemAgents.filter(p =>
     !alreadyAddedIds.value.has(p.id) &&
     (!q || p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q))
   )
@@ -595,11 +595,11 @@ function removePersona(idx) {
 }
 
 function getPersonaName(personaId) {
-  return personasStore.getPersonaById(personaId)?.name || personaId
+  return agentsStore.getAgentById(personaId)?.name || personaId
 }
 
 function getPersonaEmoji(personaId) {
-  return personasStore.getPersonaById(personaId)?.avatar || '🤖'
+  return agentsStore.getAgentById(personaId)?.avatar || '🤖'
 }
 
 // ── Dependency helpers ───────────────────────────────────────────────────────

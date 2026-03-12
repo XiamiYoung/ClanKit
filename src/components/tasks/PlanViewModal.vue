@@ -216,7 +216,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 import PlanHistoryModal from './PlanHistoryModal.vue'
 
 const props = defineProps({
@@ -227,7 +227,7 @@ const props = defineProps({
 })
 defineEmits(['close'])
 
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 const showHistory   = ref(false)
 
 watch(() => props.visible, (v) => {
@@ -300,7 +300,7 @@ function taskName(taskId) {
 }
 function personaName(pid) {
   if (!pid) return null
-  return personasStore.getPersonaById(pid)?.name || pid
+  return agentsStore.getAgentById(pid)?.name || pid
 }
 function schedTypeLabel(type) {
   if (type === 'once')   return 'One-time'

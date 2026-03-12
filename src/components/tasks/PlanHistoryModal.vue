@@ -292,7 +292,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useTasksStore } from '../../stores/tasks'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 
 const props = defineProps({
   visible:      { type: Boolean, default: false },
@@ -302,7 +302,7 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const tasksStore    = useTasksStore()
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 
 const runs          = ref([])
 const loading       = ref(false)
@@ -499,7 +499,7 @@ const flowWaves = computed(() => {
 function buildNode(step, allSteps) {
   const task = tasksStore.tasks.find(t => t.id === step.taskId)
   const personas = (step.defaultPersonaIds || []).map(pid => {
-    const p = personasStore.getPersonaById(pid)
+    const p = agentsStore.getAgentById(pid)
     return { name: p?.name || '(unknown)' }
   })
   const hasDeps = (step.dependsOn || []).length > 0

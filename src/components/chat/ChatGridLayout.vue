@@ -68,7 +68,7 @@
           @maximize="$emit('maximize-chat', chatId)"
           @open-chat-settings="cId => $emit('open-chat-settings', cId)"
           @open-soul-viewer="(id, type, name) => $emit('open-soul-viewer', id, type, name)"
-          @remove-group-persona="(cId, pid) => $emit('remove-group-persona', cId, pid)"
+          @remove-group-agent="(cId, pid) => $emit('remove-group-agent', cId, pid)"
           @start-call="cId => $emit('start-call', cId)"
         />
       </div>
@@ -106,7 +106,7 @@ const props = defineProps({
   toastMsg: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update:gridCount', 'update:gridChatIds', 'exit-grid', 'new-chat', 'select-chat', 'swap-chat', 'maximize-chat', 'open-chat-settings', 'open-soul-viewer', 'remove-group-persona', 'start-call'])
+const emit = defineEmits(['update:gridCount', 'update:gridChatIds', 'exit-grid', 'new-chat', 'select-chat', 'swap-chat', 'maximize-chat', 'open-chat-settings', 'open-soul-viewer', 'remove-group-agent', 'start-call'])
 
 const gridOptions = [2, 4, 6, 8]
 const containerEl = ref(null)

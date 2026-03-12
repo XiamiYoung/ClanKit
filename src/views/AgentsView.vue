@@ -1,13 +1,13 @@
 <template>
-  <div class="h-full flex flex-col overflow-hidden personas-page">
+  <div class="h-full flex flex-col overflow-hidden agents-page">
 
     <!-- Header -->
-    <div class="personas-header">
-      <div class="personas-title-row">
-        <h1 class="personas-title">Personas</h1>
-        <span class="catalog-count-badge">{{ personasStore.personas.length }}</span>
+    <div class="agents-header">
+      <div class="agents-title-row">
+        <h1 class="agents-title">Agents</h1>
+        <span class="catalog-count-badge">{{ agentsStore.agents.length }}</span>
       </div>
-      <p class="personas-subtitle">Configure AI personalities and user profiles for your chats.</p>
+      <p class="agents-subtitle">Configure AI personalities and user profiles for your chats.</p>
     </div>
 
     <!-- Shared header row spanning full width -->
@@ -25,7 +25,7 @@
         <div class="content-header-left">
           <span v-if="selectedView.type === 'category'" class="content-title-emoji">{{ currentCategoryEmoji }}</span>
           <h2 class="content-title">{{ currentViewTitle }}</h2>
-          <span class="content-count">{{ visiblePersonas.length }}</span>
+          <span class="content-count">{{ visibleAgents.length }}</span>
         </div>
         <div class="content-filter-wrap">
           <svg class="content-filter-icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -35,7 +35,7 @@
             v-model="filterQuery"
             class="content-filter-input"
             type="text"
-            placeholder="Filter personas…"
+            placeholder="Filter agents…"
             @keydown.escape="filterQuery = ''"
           />
           <button v-if="filterQuery" class="content-filter-clear" @click="filterQuery = ''" aria-label="Clear filter">
@@ -43,20 +43,20 @@
           </button>
         </div>
         <div class="content-header-right">
-          <AppButton size="icon" @click="refreshPersonas" :loading="refreshing" title="Refresh">
+          <AppButton size="icon" @click="refreshAgents" :loading="refreshing" title="Refresh">
             <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </AppButton>
           <template v-if="selectedView.type === 'category'">
-            <AppButton v-if="selectMode && selectedPersonaIds.size > 0" size="compact" variant="danger" @click="unassignSelected">
+            <AppButton v-if="selectMode && selectedAgentIds.size > 0" size="compact" variant="danger" @click="unassignSelected">
               Unassign
             </AppButton>
-            <AppButton size="icon" @click="selectMode ? exitSelectMode() : enterSelectMode()" :title="selectMode ? 'Cancel selection' : 'Select personas'">
+            <AppButton size="icon" @click="selectMode ? exitSelectMode() : enterSelectMode()" :title="selectMode ? 'Cancel selection' : 'Select agents'">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
               </svg>
             </AppButton>
           </template>
-          <AppButton v-if="selectedView.type !== 'category'" size="icon" @click="createNew(selectedView.personaType)" title="Add persona">
+          <AppButton v-if="selectedView.type !== 'category'" size="icon" @click="createNew(selectedView.agentType)" title="Add agent">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </AppButton>
         </div>
@@ -64,10 +64,10 @@
     </div>
 
     <!-- Body: left nav + right grid -->
-    <div class="personas-body">
+    <div class="agents-body">
 
       <!-- ── Left Nav ───────────────────────────────────────────────────── -->
-      <nav class="personas-nav" :style="{ width: navWidth + 'px' }">
+      <nav class="agents-nav" :style="{ width: navWidth + 'px' }">
 
         <!-- System section -->
         <div class="nav-section nav-section--half nav-section--first">
@@ -78,8 +78,8 @@
           <!-- All System -->
           <button
             class="nav-item nav-item--all"
-            :class="{ active: selectedView.type === 'all' && selectedView.personaType === 'system' }"
-            @click="selectView({ type: 'all', personaType: 'system' })"
+            :class="{ active: selectedView.type === 'all' && selectedView.agentType === 'system' }"
+            @click="selectView({ type: 'all', agentType: 'system' })"
           >
             <span class="nav-item-icon">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -87,11 +87,11 @@
               </svg>
             </span>
             <span class="nav-item-label">All</span>
-            <span class="nav-item-count">{{ personasStore.systemPersonas.length }}</span>
+            <span class="nav-item-count">{{ agentsStore.systemAgents.length }}</span>
           </button>
 
           <!-- System categories -->
-          <template v-for="cat in personasStore.systemCategories" :key="cat.id">
+          <template v-for="cat in agentsStore.systemCategories" :key="cat.id">
             <div
               class="nav-item-wrap nav-cat-wrap"
               :class="{ 'drag-over': dragOverCategoryId === cat.id, 'drag-reject': dragRejectCategoryId === cat.id, 'cat-drag-over': catDragOverId === cat.id, 'cat-dragging': draggingCatId === cat.id }"
@@ -105,7 +105,7 @@
               <button
                 class="nav-item nav-cat-btn"
                 :class="{ active: selectedView.type === 'category' && selectedView.categoryId === cat.id }"
-                @click="selectView({ type: 'category', categoryId: cat.id, personaType: 'system' })"
+                @click="selectView({ type: 'category', categoryId: cat.id, agentType: 'system' })"
                 @mouseenter="showNavTooltip($event, cat.name)"
                 @mouseleave="hideNavTooltip"
               >
@@ -113,7 +113,7 @@
                 <span class="nav-item-label">{{ cat.name }}</span>
               </button>
               <div class="nav-cat-right">
-                <span class="nav-cat-count nav-item-count">{{ personasStore.personasInCategory(cat.id).length }}</span>
+                <span class="nav-cat-count nav-item-count">{{ agentsStore.agentsInCategory(cat.id).length }}</span>
                 <div class="nav-item-actions nav-cat-actions">
                   <button class="nav-icon-btn" title="Rename" @click.stop="openRenameCategory(cat)">
                     <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -141,8 +141,8 @@
           <!-- All User -->
           <button
             class="nav-item nav-item--all"
-            :class="{ active: selectedView.type === 'all' && selectedView.personaType === 'user' }"
-            @click="selectView({ type: 'all', personaType: 'user' })"
+            :class="{ active: selectedView.type === 'all' && selectedView.agentType === 'user' }"
+            @click="selectView({ type: 'all', agentType: 'user' })"
           >
             <span class="nav-item-icon">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -150,11 +150,11 @@
               </svg>
             </span>
             <span class="nav-item-label">All</span>
-            <span class="nav-item-count">{{ personasStore.userPersonas.length }}</span>
+            <span class="nav-item-count">{{ agentsStore.userAgents.length }}</span>
           </button>
 
           <!-- User categories -->
-          <template v-for="cat in personasStore.userCategories" :key="cat.id">
+          <template v-for="cat in agentsStore.userCategories" :key="cat.id">
             <div
               class="nav-item-wrap nav-cat-wrap"
               :class="{ 'drag-over': dragOverCategoryId === cat.id, 'drag-reject': dragRejectCategoryId === cat.id, 'cat-drag-over': catDragOverId === cat.id, 'cat-dragging': draggingCatId === cat.id }"
@@ -168,13 +168,13 @@
               <button
                 class="nav-item nav-cat-btn"
                 :class="{ active: selectedView.type === 'category' && selectedView.categoryId === cat.id }"
-                @click="selectView({ type: 'category', categoryId: cat.id, personaType: 'user' })"
+                @click="selectView({ type: 'category', categoryId: cat.id, agentType: 'user' })"
               >
                 <span class="nav-item-emoji">{{ cat.emoji }}</span>
                 <span class="nav-item-label">{{ cat.name }}</span>
               </button>
               <div class="nav-cat-right">
-                <span class="nav-cat-count nav-item-count">{{ personasStore.personasInCategory(cat.id).length }}</span>
+                <span class="nav-cat-count nav-item-count">{{ agentsStore.agentsInCategory(cat.id).length }}</span>
                 <div class="nav-item-actions nav-cat-actions">
                   <button class="nav-icon-btn" title="Rename" @click.stop="openRenameCategory(cat)">
                     <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -199,7 +199,7 @@
       <div class="nav-resize-handle" @mousedown.prevent="startNavResize"></div>
 
       <!-- ── Right Grid ──────────────────────────────────────────────────── -->
-      <div class="personas-content">
+      <div class="agents-content">
 
         <!-- Drag hint -->
         <p v-if="isDragging && selectedView.type !== 'all'" class="drag-hint">
@@ -207,45 +207,45 @@
         </p>
 
         <!-- Grid -->
-        <div class="personas-grid-scroll">
-          <div v-if="visiblePersonas.length > 0" class="personas-grid">
+        <div class="agents-grid-scroll">
+          <div v-if="visibleAgents.length > 0" class="agents-grid">
             <div
-              v-for="persona in visiblePersonas"
-              :key="persona.id"
-              class="persona-card-wrap"
-              :class="{ 'select-mode': selectMode, 'is-selected': selectedPersonaIds.has(persona.id) }"
+              v-for="agent in visibleAgents"
+              :key="agent.id"
+              class="agent-card-wrap"
+              :class="{ 'select-mode': selectMode, 'is-selected': selectedAgentIds.has(agent.id) }"
               :draggable="!selectMode"
-              @dragstart="onPersonaDragStart($event, persona)"
-              @dragend="onPersonaDragEnd"
+              @dragstart="onAgentDragStart($event, agent)"
+              @dragend="onAgentDragEnd"
             >
               <!-- Select checkbox overlay -->
-              <div v-if="selectMode" class="select-overlay" @click="toggleSelect(persona.id)">
-                <div class="select-checkbox" :class="{ checked: selectedPersonaIds.has(persona.id) }">
-                  <svg v-if="selectedPersonaIds.has(persona.id)" style="width:10px;height:10px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <div v-if="selectMode" class="select-overlay" @click="toggleSelect(agent.id)">
+                <div class="select-checkbox" :class="{ checked: selectedAgentIds.has(agent.id) }">
+                  <svg v-if="selectedAgentIds.has(agent.id)" style="width:10px;height:10px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
               </div>
-              <PersonaCard
-                :persona="persona"
-                :gradient="getAvatarGradient(persona)"
+              <AgentCard
+                :agent="agent"
+                :gradient="getAvatarGradient(agent)"
                 :hide-delete="selectedView.type === 'category'"
                 :hide-set-default="selectedView.type === 'category'"
                 :show-unassign="selectedView.type === 'category'"
-                @click="selectMode ? toggleSelect(persona.id) : openSoulViewer(persona)"
-                @delete="confirmDelete(persona)"
-                @unassign="personasStore.unassignFromCategory(persona.id, selectedView.categoryId)"
-                @set-default="personasStore.setDefault(persona.id)"
+                @click="selectMode ? toggleSelect(agent.id) : openSoulViewer(agent)"
+                @delete="confirmDelete(agent)"
+                @unassign="agentsStore.unassignFromCategory(agent.id, selectedView.categoryId)"
+                @set-default="agentsStore.setDefault(agent.id)"
               />
             </div>
           </div>
           <div v-else class="section-empty">
             <div class="section-empty-inner">
               <svg style="width:28px;height:28px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path v-if="selectedView.personaType === 'system'" d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1M9 16h0M15 16h0"/>
+                <path v-if="selectedView.agentType === 'system'" d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1M9 16h0M15 16h0"/>
                 <path v-else d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle v-if="selectedView.personaType !== 'system'" cx="12" cy="7" r="4"/>
+                <circle v-if="selectedView.agentType !== 'system'" cx="12" cy="7" r="4"/>
               </svg>
-              <p v-if="selectedView.type === 'category'">No personas assigned — drag cards here from another view.</p>
-              <p v-else>No personas yet.</p>
+              <p v-if="selectedView.type === 'category'">No agents assigned — drag cards here from another view.</p>
+              <p v-else>No agents yet.</p>
             </div>
           </div>
         </div>
@@ -255,25 +255,25 @@
 
     <!-- Soul Viewer Modal -->
     <SoulViewer
-      v-if="soulViewerPersona"
-      :persona-id="soulViewerPersona.id"
-      :persona-type="soulViewerPersona.type === 'system' ? 'system' : 'users'"
-      :persona-name="soulViewerPersona.name"
-      :persona-description="soulViewerPersona.description"
-      :persona-prompt="soulViewerPersona.prompt"
-      :persona-provider-id="soulViewerPersona.providerId || null"
-      :persona-model-id="soulViewerPersona.modelId || null"
-      :persona-voice-id="soulViewerPersona.voiceId || null"
-      :persona-avatar="soulViewerPersona.avatar || null"
-      :is-new="!!soulViewerPersona.isNew"
-      @close="soulViewerPersona = null"
-      @update-persona="onUpdatePersona"
+      v-if="soulViewerAgent"
+      :persona-id="soulViewerAgent.id"
+      :persona-type="soulViewerAgent.type === 'system' ? 'system' : 'users'"
+      :persona-name="soulViewerAgent.name"
+      :persona-description="soulViewerAgent.description"
+      :persona-prompt="soulViewerAgent.prompt"
+      :persona-provider-id="soulViewerAgent.providerId || null"
+      :persona-model-id="soulViewerAgent.modelId || null"
+      :persona-voice-id="soulViewerAgent.voiceId || null"
+      :persona-avatar="soulViewerAgent.avatar || null"
+      :is-new="!!soulViewerAgent.isNew"
+      @close="soulViewerAgent = null"
+      @update-persona="onUpdateAgent"
     />
 
-    <!-- Confirm Delete Persona Modal -->
+    <!-- Confirm Delete Agent Modal -->
     <ConfirmModal
       v-if="confirmDeleteTarget"
-      title="Delete Persona"
+      title="Delete Agent"
       :message="`Are you sure you want to delete &quot;${confirmDeleteTarget.name}&quot;? This action cannot be undone.`"
       confirm-text="Delete"
       confirm-class="danger"
@@ -330,25 +330,25 @@
 defineOptions({ inheritAttrs: false })
 import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
-import { usePersonasStore } from '../stores/personas'
-import { PERSONA_AVATARS } from '../components/personas/personaAvatars'
-import PersonaCard from '../components/personas/PersonaCard.vue'
-import SoulViewer from '../components/personas/SoulViewer.vue'
+import { useAgentsStore } from '../stores/agents'
+import { PERSONA_AVATARS } from '../components/agents/personaAvatars'
+import AgentCard from '../components/agents/AgentCard.vue'
+import SoulViewer from '../components/agents/SoulViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
-import CategoryModal from '../components/personas/CategoryModal.vue'
+import CategoryModal from '../components/agents/CategoryModal.vue'
 
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 const refreshing = ref(false)
 
 onMounted(async () => {
-  await personasStore.loadPersonas()
+  await agentsStore.loadAgents()
 })
 
-async function refreshPersonas() {
+async function refreshAgents() {
   refreshing.value = true
   try {
-    await personasStore.loadPersonas()
+    await agentsStore.loadAgents()
   } finally {
     refreshing.value = false
   }
@@ -393,7 +393,7 @@ function hideNavTooltip() {
 }
 
 // ── View selection ─────────────────────────────────────────────────────────
-const selectedView = reactive({ type: 'all', personaType: 'system', categoryId: null })
+const selectedView = reactive({ type: 'all', agentType: 'system', categoryId: null })
 
 const filterQuery = ref('')
 
@@ -404,25 +404,25 @@ function selectView(view) {
 }
 
 const currentViewTitle = computed(() => {
-  if (selectedView.type === 'all') return 'Personas'
-  const cat = personasStore.getCategoryById(selectedView.categoryId)
+  if (selectedView.type === 'all') return 'Agents'
+  const cat = agentsStore.getCategoryById(selectedView.categoryId)
   return cat?.name || 'Category'
 })
 
 const currentCategoryEmoji = computed(() => {
   if (selectedView.type !== 'category') return ''
-  return personasStore.getCategoryById(selectedView.categoryId)?.emoji || '📁'
+  return agentsStore.getCategoryById(selectedView.categoryId)?.emoji || '📁'
 })
 
-const visiblePersonas = computed(() => {
+const visibleAgents = computed(() => {
   let list
   if (selectedView.type === 'all') {
-    list = selectedView.personaType === 'system'
-      ? personasStore.systemPersonas
-      : personasStore.userPersonas
+    list = selectedView.agentType === 'system'
+      ? agentsStore.systemAgents
+      : agentsStore.userAgents
   } else {
     // category
-    list = personasStore.personasInCategory(selectedView.categoryId)
+    list = agentsStore.agentsInCategory(selectedView.categoryId)
   }
 
   const q = filterQuery.value.trim().toLowerCase()
@@ -440,18 +440,18 @@ const visiblePersonas = computed(() => {
 })
 
 // ── SoulViewer / create ────────────────────────────────────────────────────
-const soulViewerPersona = ref(null)
+const soulViewerAgent = ref(null)
 
-function openSoulViewer(persona) {
+function openSoulViewer(agent) {
   // Shallow-clone so SoulViewer never holds a reference to the store object.
-  soulViewerPersona.value = { ...persona }
+  soulViewerAgent.value = { ...agent }
 }
 
 function createNew(type) {
-  soulViewerPersona.value = {
+  soulViewerAgent.value = {
     id: uuidv4(),
     name: '',
-    type: type || selectedView.personaType,
+    type: type || selectedView.agentType,
     description: '',
     prompt: '',
     avatar: null,
@@ -462,9 +462,9 @@ function createNew(type) {
   }
 }
 
-async function onUpdatePersona(updates) {
-  if (!soulViewerPersona.value) return
-  const updated = { ...soulViewerPersona.value }
+async function onUpdateAgent(updates) {
+  if (!soulViewerAgent.value) return
+  const updated = { ...soulViewerAgent.value }
   delete updated.isNew
   if (updates.name !== undefined) updated.name = updates.name
   if (updates.avatar !== undefined) updated.avatar = updates.avatar
@@ -473,20 +473,20 @@ async function onUpdatePersona(updates) {
   if (updates.providerId !== undefined) updated.providerId = updates.providerId
   if (updates.modelId !== undefined) updated.modelId = updates.modelId
   if (updates.voiceId !== undefined) updated.voiceId = updates.voiceId
-  if (!updated.name) updated.name = 'Untitled Persona'
-  await personasStore.savePersona(updated)
+  if (!updated.name) updated.name = 'Untitled Agent'
+  await agentsStore.saveAgent(updated)
 }
 
-// ── Delete persona ─────────────────────────────────────────────────────────
+// ── Delete agent ────────────────────────────────────────────────────────────
 const confirmDeleteTarget = ref(null)
 
-function confirmDelete(persona) { confirmDeleteTarget.value = persona }
+function confirmDelete(agent) { confirmDeleteTarget.value = agent }
 
 async function executeDelete() {
   if (!confirmDeleteTarget.value) return
   const id = confirmDeleteTarget.value.id
   confirmDeleteTarget.value = null
-  await personasStore.deletePersona(id)
+  await agentsStore.deleteAgent(id)
 }
 
 // ── Category modal ─────────────────────────────────────────────────────────
@@ -504,10 +504,10 @@ async function onCategoryModalConfirm({ name, emoji, type }) {
   categoryModal.open = false
   if (categoryModal.mode === 'create') {
     const catType = type || categoryModal.catType
-    const id = await personasStore.addCategory(name, emoji, catType)
-    selectView({ type: 'category', categoryId: id, personaType: catType })
+    const id = await agentsStore.addCategory(name, emoji, catType)
+    selectView({ type: 'category', categoryId: id, agentType: catType })
   } else {
-    await personasStore.renameCategory(categoryModal.editId, name, emoji)
+    await agentsStore.renameCategory(categoryModal.editId, name, emoji)
   }
 }
 
@@ -515,7 +515,7 @@ const confirmDeleteCategory = ref(null)
 const deleteCategoryError   = ref(null)
 
 function tryDeleteCategory(cat) {
-  if (personasStore.personasInCategory(cat.id).length > 0) {
+  if (agentsStore.agentsInCategory(cat.id).length > 0) {
     deleteCategoryError.value = cat
     return
   }
@@ -526,36 +526,36 @@ async function executeDeleteCategory() {
   const cat = confirmDeleteCategory.value
   if (!cat) return
   confirmDeleteCategory.value = null
-  await personasStore.deleteCategory(cat.id)
+  await agentsStore.deleteCategory(cat.id)
   // If we were viewing this category, fall back to All
   if (selectedView.type === 'category' && selectedView.categoryId === cat.id) {
-    selectView({ type: 'all', personaType: cat.type })
+    selectView({ type: 'all', agentType: cat.type })
   }
 }
 
 // ── Drag & drop assignment ─────────────────────────────────────────────────
-const draggingPersonaId   = ref(null)
-const isDragging          = ref(false)
-const dragOverCategoryId  = ref(null)
+const draggingAgentId    = ref(null)
+const isDragging         = ref(false)
+const dragOverCategoryId = ref(null)
 const dragRejectCategoryId = ref(null)
 
-function onPersonaDragStart(e, persona) {
+function onAgentDragStart(e, agent) {
   e.dataTransfer.effectAllowed = 'copy'
-  e.dataTransfer.setData('text/plain', persona.id)
-  draggingPersonaId.value = persona.id
+  e.dataTransfer.setData('text/plain', agent.id)
+  draggingAgentId.value = agent.id
   isDragging.value = true
 }
 
-function onPersonaDragEnd() {
-  draggingPersonaId.value  = null
+function onAgentDragEnd() {
+  draggingAgentId.value    = null
   isDragging.value         = false
   dragOverCategoryId.value = null
   dragRejectCategoryId.value = null
 }
 
 function onCategoryDragOver(e, category) {
-  const persona = personasStore.getPersonaById(draggingPersonaId.value)
-  if (!persona || persona.type !== category.type) {
+  const agent = agentsStore.getAgentById(draggingAgentId.value)
+  if (!agent || agent.type !== category.type) {
     e.dataTransfer.dropEffect = 'none'
     dragOverCategoryId.value  = null
     dragRejectCategoryId.value = category.id
@@ -577,11 +577,11 @@ async function onCategoryDrop(e, category) {
   dragOverCategoryId.value   = null
   dragRejectCategoryId.value = null
   const id = e.dataTransfer.getData('text/plain')
-  const persona = personasStore.getPersonaById(id)
-  if (!persona || persona.type !== category.type) return
-  await personasStore.assignToCategory(id, category.id)
-  draggingPersonaId.value = null
-  isDragging.value        = false
+  const agent = agentsStore.getAgentById(id)
+  if (!agent || agent.type !== category.type) return
+  await agentsStore.assignToCategory(id, category.id)
+  draggingAgentId.value = null
+  isDragging.value      = false
 }
 
 // ── Category drag-to-reorder ───────────────────────────────────────────────
@@ -596,9 +596,9 @@ function onCatDragStart(e, cat) {
 }
 
 function onCatDragOver(e, cat) {
-  if (!draggingCatId.value) return          // persona drag — let existing handler run
+  if (!draggingCatId.value) return          // agent drag — let existing handler run
   if (cat.id === draggingCatId.value) return
-  const draggedCat = personasStore.getCategoryById(draggingCatId.value)
+  const draggedCat = agentsStore.getCategoryById(draggingCatId.value)
   if (!draggedCat || draggedCat.type !== cat.type) return  // no cross-section reorder
   e.preventDefault()
   e.stopPropagation()
@@ -611,11 +611,11 @@ function onCatDragLeave(cat) {
 }
 
 async function onCatDrop(e, cat) {
-  if (!draggingCatId.value) return          // persona drop — let existing handler run
+  if (!draggingCatId.value) return          // agent drop — let existing handler run
   e.preventDefault()
   e.stopPropagation()
   catDragOverId.value = null
-  await personasStore.reorderCategory(draggingCatId.value, cat.id)
+  await agentsStore.reorderCategory(draggingCatId.value, cat.id)
   draggingCatId.value = null
 }
 
@@ -625,31 +625,31 @@ function onCatDragEnd() {
 }
 
 // ── Multi-select unassign ──────────────────────────────────────────────────
-const selectMode       = ref(false)
-const selectedPersonaIds = ref(new Set())
+const selectMode      = ref(false)
+const selectedAgentIds = ref(new Set())
 
 function enterSelectMode() {
   selectMode.value = true
-  selectedPersonaIds.value = new Set()
+  selectedAgentIds.value = new Set()
 }
 
 function exitSelectMode() {
   selectMode.value = false
-  selectedPersonaIds.value = new Set()
+  selectedAgentIds.value = new Set()
 }
 
 function toggleSelect(id) {
-  const s = new Set(selectedPersonaIds.value)
+  const s = new Set(selectedAgentIds.value)
   if (s.has(id)) s.delete(id)
   else s.add(id)
-  selectedPersonaIds.value = s
+  selectedAgentIds.value = s
 }
 
 async function unassignSelected() {
   if (selectedView.type !== 'category') return
   const catId = selectedView.categoryId
-  for (const id of selectedPersonaIds.value) {
-    await personasStore.unassignFromCategory(id, catId)
+  for (const id of selectedAgentIds.value) {
+    await agentsStore.unassignFromCategory(id, catId)
   }
   exitSelectMode()
 }
@@ -673,23 +673,23 @@ function getAvatarGradient(persona) {
 
 <style scoped>
 /* ── Page shell ──────────────────────────────────────────────────────────── */
-.personas-page {
+.agents-page {
   background: #F2F2F7;
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
-.personas-header {
+.agents-header {
   padding: 1.5rem 2rem 1.25rem;
   background: #FFFFFF;
   border-bottom: 1px solid #E5E5EA;
   flex-shrink: 0;
 }
-.personas-title-row {
+.agents-title-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
-.personas-title {
+.agents-title {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-page-title);
   font-weight: 700;
@@ -707,7 +707,7 @@ function getAvatarGradient(persona) {
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
   line-height: 1.4;
 }
-.personas-subtitle {
+.agents-subtitle {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   color: #6B7280;
@@ -747,7 +747,7 @@ function getAvatarGradient(persona) {
 }
 
 /* ── Body layout ─────────────────────────────────────────────────────────── */
-.personas-body {
+.agents-body {
   display: flex;
   flex: 1;
   min-height: 0;
@@ -755,7 +755,7 @@ function getAvatarGradient(persona) {
 }
 
 /* ── Left nav ────────────────────────────────────────────────────────────── */
-.personas-nav {
+.agents-nav {
   flex-shrink: 0;
   background: #FFFFFF;
   border-right: 1px solid #E5E5EA;
@@ -1061,7 +1061,7 @@ function getAvatarGradient(persona) {
 .nav-icon-btn-danger:hover { background: rgba(255, 59, 48, 0.25); color: #FF6B6B; }
 
 /* ── Right content area ───────────────────────────────────────────────────── */
-.personas-content {
+.agents-content {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -1166,34 +1166,34 @@ function getAvatarGradient(persona) {
 }
 
 /* ── Scrollable grid area ─────────────────────────────────────────────────── */
-.personas-grid-scroll {
+.agents-grid-scroll {
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem;
   scrollbar-width: thin;
 }
-.personas-grid {
+.agents-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.875rem;
 }
 @media (min-width: 1920px) {
-  .personas-grid { grid-template-columns: repeat(3, 1fr); }
+  .agents-grid { grid-template-columns: repeat(3, 1fr); }
 }
 @media (min-width: 2560px) {
-  .personas-grid { grid-template-columns: repeat(4, 1fr); }
+  .agents-grid { grid-template-columns: repeat(4, 1fr); }
 }
 
 /* ── Draggable card wrapper ───────────────────────────────────────────────── */
-.persona-card-wrap {
+.agent-card-wrap {
   position: relative;
   cursor: grab;
   border-radius: 1rem;
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
-.persona-card-wrap:active { cursor: grabbing; }
-.persona-card-wrap.select-mode { cursor: pointer; }
-.persona-card-wrap.is-selected { outline: 2px solid #007AFF; outline-offset: 2px; }
+.agent-card-wrap:active { cursor: grabbing; }
+.agent-card-wrap.select-mode { cursor: pointer; }
+.agent-card-wrap.is-selected { outline: 2px solid #007AFF; outline-offset: 2px; }
 
 .select-overlay {
   position: absolute;

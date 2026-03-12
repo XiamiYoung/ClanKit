@@ -3,14 +3,14 @@ import { ref, computed } from 'vue'
 import { v4 as uuid } from 'uuid'
 import { useConfigStore } from './config'
 import { useChatsStore } from './chats'
-import { usePersonasStore } from './personas'
+import { useAgentsStore } from './agents'
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 export const useTasksStore = defineStore('tasks', () => {
   const configStore  = useConfigStore()
   const chatsStore   = useChatsStore()
-  const personasStore = usePersonasStore()
+  const agentsStore = useAgentsStore()
 
   // Task templates
   const tasks = ref([])
@@ -102,9 +102,9 @@ export const useTasksStore = defineStore('tasks', () => {
     }
   }
 
-  // ── Provider config for a persona (mirrors ChatsView.buildPersonaRuns) ────
+  // ── Provider config for an agent (mirrors ChatsView.buildAgentRuns) ────
 
-  function buildPersonaConfig(persona) {
+  function buildAgentConfig(agent) {
     const raw = configStore.config
     const cfg = { ...raw }
 
@@ -115,7 +115,7 @@ export const useTasksStore = defineStore('tasks', () => {
     delete cfg._directAuth
     delete cfg._resolvedProvider
 
-    const provider = persona.providerId || raw.defaultProvider || 'anthropic'
+    const provider = agent.providerId || raw.defaultProvider || 'anthropic'
 
     if (provider === 'anthropic') {
       cfg.apiKey  = raw.anthropic?.apiKey  || ''
@@ -137,11 +137,11 @@ export const useTasksStore = defineStore('tasks', () => {
       cfg.defaultProvider   = 'openai'
     }
 
-    if (persona.modelId) {
-      if (provider === 'anthropic')       cfg.anthropic   = { ...cfg.anthropic,   activeModel:  persona.modelId }
-      else if (provider === 'openrouter') cfg.openrouter  = { ...cfg.openrouter,  defaultModel: persona.modelId }
-      else if (provider === 'openai')     cfg.openai      = { ...cfg.openai,      model:        persona.modelId }
-      else if (provider === 'deepseek')   cfg.deepseek    = { ...cfg.deepseek,    model:        persona.modelId }
+    if (agent.modelId) {
+      if (provider === 'anthropic')       cfg.anthropic   = { ...cfg.anthropic,   activeModel:  agent.modelId }
+      else if (provider === 'openrouter') cfg.openrouter  = { ...cfg.openrouter,  defaultModel: agent.modelId }
+      else if (provider === 'openai')     cfg.openai      = { ...cfg.openai,      model:        agent.modelId }
+      else if (provider === 'deepseek')   cfg.deepseek    = { ...cfg.deepseek,    model:        agent.modelId }
     }
 
     return JSON.parse(JSON.stringify(cfg))
@@ -149,7 +149,7 @@ export const useTasksStore = defineStore('tasks', () => {
 
   // ── Chunk handler ─────────────────────────────────────────────────────────
 
-  // Maps chatId → step result _key so parallel persona runs don't clobber each other
+  // Maps chatId → step result _key so parallel agent runs don't clobber each other
   const _chatIdToKey = new Map()
 
   function handleTaskChunk(chatId, chunk) {
@@ -244,29 +244,29 @@ export const useTasksStore = defineStore('tasks', () => {
     return true
   }
 
-  // ── Run a single persona for a step ──────────────────────────────────────
+  // ── Run a single agent for a step ──────────────────────────────────────
 
-  async function _runPersonaForStep(persona, promptText, chatId, permissionMode = 'all_permissions', allowList = []) {
-    const personaCfg = buildPersonaConfig(persona)
+  async function _runAgentForStep(agent, promptText, chatId, permissionMode = 'all_permissions', allowList = []) {
+    const agentCfg = buildAgentConfig(agent)
 
-    const personaPrompts = {
-      systemPersonaPrompt: persona.prompt || '',
-      systemPersonaId: persona.id,
+    const agentPrompts = {
+      systemPersonaPrompt: agent.prompt || '',
+      systemPersonaId: agent.id,
       userPersonaId: '__task_user__',
       groupChatContext: {
-        personaName: persona.name,
-        personaDescription: persona.description || '',
+        personaName: agent.name,
+        personaDescription: agent.description || '',
         otherParticipants: [],
       },
     }
 
-    const singlePersonaRun = [{
-      personaId: persona.id,
-      personaName: persona.name,
-      config: personaCfg,
+    const singleAgentRun = [{
+      personaId: agent.id,
+      personaName: agent.name,
+      config: agentCfg,
       enabledAgents: [],
       enabledSkills: [],
-      personaPrompts,
+      personaPrompts: agentPrompts,
       mcpServers: [],
       httpTools: [],
     }]
@@ -274,10 +274,10 @@ export const useTasksStore = defineStore('tasks', () => {
     return await window.electronAPI.runAgent({
       chatId,
       messages: [{ role: 'user', content: promptText }],
-      config: JSON.parse(JSON.stringify(personaCfg)),
+      config: JSON.parse(JSON.stringify(agentCfg)),
       enabledAgents: [],
       enabledSkills: [],
-      personaRuns: JSON.parse(JSON.stringify(singlePersonaRun)),
+      personaRuns: JSON.parse(JSON.stringify(singleAgentRun)),
       personaPrompts: {},
       mcpServers: [],
       httpTools: [],
@@ -406,11 +406,11 @@ export const useTasksStore = defineStore('tasks', () => {
 
           if (planActivity.value?.status === 'running') planActivity.value.currentTaskName = task.name
 
-          const personaIds = [...new Set(step.defaultPersonaIds || [])]
+          const agentIds = [...new Set(step.defaultPersonaIds || [])]
 
-          if (personaIds.length === 0) {
+          if (agentIds.length === 0) {
             const ts = new Date().toISOString()
-            activeRun.value.stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, status: 'skipped', error: 'No personas assigned', output: '', startedAt: ts, completedAt: ts })
+            activeRun.value.stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, status: 'skipped', error: 'No agents assigned', output: '', startedAt: ts, completedAt: ts })
             stepStatuses[step.id] = 'skipped'
             return
           }
@@ -419,28 +419,28 @@ export const useTasksStore = defineStore('tasks', () => {
           const stepOutputs = []
           let stepFailed = false
 
-          // Run all personas for this step in parallel
-          await Promise.all(personaIds.map(async (personaId) => {
+          // Run all agents for this step in parallel
+          await Promise.all(agentIds.map(async (agentId) => {
             if (activeRun.value?.status !== 'running') return
 
-            const persona = personasStore.getPersonaById(personaId)
-            if (!persona) {
+            const agent = agentsStore.getAgentById(agentId)
+            if (!agent) {
               const ts = new Date().toISOString()
-              activeRun.value.stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, personaId, personaName: '(not found)', status: 'skipped', error: 'Persona not found', output: '', startedAt: ts, completedAt: ts })
+              activeRun.value.stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, personaId: agentId, personaName: '(not found)', status: 'skipped', error: 'Agent not found', output: '', startedAt: ts, completedAt: ts })
               return
             }
 
-            const key = `${stepIdx}:${personaId}`
-            const personaChatId = `task:${runId}:${stepIdx}:${personaId}`
-            _chatIdToKey.set(personaChatId, key)
+            const key = `${stepIdx}:${agentId}`
+            const agentChatId = `task:${runId}:${stepIdx}:${agentId}`
+            _chatIdToKey.set(agentChatId, key)
 
             activeRun.value.stepResults.push({
               _key: key,
               stepIndex: stepIdx,
               taskId: task.id,
               taskName: task.name,
-              personaId: persona.id,
-              personaName: persona.name,
+              personaId: agent.id,
+              personaName: agent.name,
               status: 'running',
               output: '',
               error: null,
@@ -448,8 +448,8 @@ export const useTasksStore = defineStore('tasks', () => {
               completedAt: null,
             })
 
-            const res = await _runPersonaForStep(persona, promptText, personaChatId, plan.permissionMode || 'all_permissions', plan.allowList || [])
-            _chatIdToKey.delete(personaChatId)
+            const res = await _runAgentForStep(agent, promptText, agentChatId, plan.permissionMode || 'all_permissions', plan.allowList || [])
+            _chatIdToKey.delete(agentChatId)
 
             if (!activeRun.value || activeRun.value.status !== 'running') return
 

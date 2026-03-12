@@ -1,12 +1,12 @@
-// electron/im-bridge/persona-model-flow.js
-// Manages the multi-step inline keyboard flow for changing a persona's model/provider.
+// electron/im-bridge/agent-model-flow.js
+// Manages the multi-step inline keyboard flow for changing an agent's model/provider.
 'use strict'
 const fs   = require('fs')
 const path = require('path')
 const os   = require('os')
 
-const DATA_DIR      = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankai')
-const PERSONAS_FILE = path.join(DATA_DIR, 'personas.json')
+const DATA_DIR    = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankai')
+const AGENTS_FILE = path.join(DATA_DIR, 'agents.json')
 
 // In-memory flow state per session key (`${platform}:${channelId}`)
 const pendingFlows = new Map()
@@ -32,9 +32,9 @@ const DEFAULT_MODELS = {
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
 }
 
-function readPersonas() {
+function readAgents() {
   try {
-    const data = JSON.parse(fs.readFileSync(PERSONAS_FILE, 'utf8'))
+    const data = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'))
     return Array.isArray(data) ? data : (data.personas || [])
   } catch { return [] }
 }
@@ -58,25 +58,25 @@ function buildProviderRows() {
 }
 
 /**
- * Start a model-selection flow for a persona.
+ * Start a model-selection flow for an agent.
  * @param {string} key - `${platform}:${channelId}`
- * @param {object} persona
+ * @param {object} agent
  * @param {(text: string, rows: Array|null) => void} sendButtons
  */
-function start(key, persona, sendButtons) {
+function start(key, agent, sendButtons) {
   pendingFlows.set(key, {
-    personaId:        persona.id,
-    personaName:      persona.name,
+    agentId:          agent.id,
+    agentName:        agent.name,
     step:             'provider',
     selectedProvider: null,
     modelList:        [],
   })
 
-  const current = (persona.providerId || persona.modelId)
-    ? ` (current: ${persona.modelId || 'default'} / ${persona.providerId || 'anthropic'})`
+  const current = (agent.providerId || agent.modelId)
+    ? ` (current: ${agent.modelId || 'default'} / ${agent.providerId || 'anthropic'})`
     : ''
 
-  sendButtons(`🤖 *${persona.name}* — Select provider${current}:`, buildProviderRows())
+  sendButtons(`🤖 *${agent.name}* — Select provider${current}:`, buildProviderRows())
 }
 
 /**
@@ -98,7 +98,7 @@ function handleCallback(key, cbQueryId, data, sendButtons, answerCallback) {
 
   const flow = pendingFlows.get(key)
   if (!flow) {
-    sendButtons('⚠️ No active selection. Use /persona model <name> to start.', null)
+    sendButtons('⚠️ No active selection. Use /agent model <name> to start.', null)
     return
   }
 
@@ -125,7 +125,7 @@ function handleCallback(key, cbQueryId, data, sendButtons, answerCallback) {
       { text: '❌ Cancel', callback_data: 'pm:cancel' },
     ])
 
-    sendButtons(`🤖 *${flow.personaName}* — Select model (${providerLabel}):`, rows)
+    sendButtons(`🤖 *${flow.agentName}* — Select model (${providerLabel}):`, rows)
     return
   }
 
@@ -135,7 +135,7 @@ function handleCallback(key, cbQueryId, data, sendButtons, answerCallback) {
     flow.selectedProvider = null
     flow.modelList        = []
     pendingFlows.set(key, flow)
-    sendButtons(`🤖 *${flow.personaName}* — Select provider:`, buildProviderRows())
+    sendButtons(`🤖 *${flow.agentName}* — Select provider:`, buildProviderRows())
     return
   }
 
@@ -148,21 +148,21 @@ function handleCallback(key, cbQueryId, data, sendButtons, answerCallback) {
       return
     }
 
-    const personas = readPersonas()
-    const persona  = personas.find(p => p.id === flow.personaId)
-    if (!persona) {
-      sendButtons('⚠️ Persona not found — it may have been deleted.', null)
+    const agents = readAgents()
+    const agent  = agents.find(a => a.id === flow.agentId)
+    if (!agent) {
+      sendButtons('⚠️ Agent not found — it may have been deleted.', null)
       pendingFlows.delete(key)
       return
     }
 
-    persona.providerId = flow.selectedProvider
-    persona.modelId    = model
-    writeAtomic(PERSONAS_FILE, personas)
+    agent.providerId = flow.selectedProvider
+    agent.modelId    = model
+    writeAtomic(AGENTS_FILE, agents)
     pendingFlows.delete(key)
 
     sendButtons(
-      `✅ *${flow.personaName}* updated\nModel: \`${model}\`\nProvider: ${flow.selectedProvider}`,
+      `✅ *${flow.agentName}* updated\nModel: \`${model}\`\nProvider: ${flow.selectedProvider}`,
       null
     )
     return

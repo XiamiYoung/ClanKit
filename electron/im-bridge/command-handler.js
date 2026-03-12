@@ -5,19 +5,19 @@ const path    = require('path')
 const os      = require('os')
 const { v4: uuidv4 } = require('uuid')
 
-const DATA_DIR      = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankai')
-const CHATS_DIR     = path.join(DATA_DIR, 'chats')
-const CHATS_INDEX   = path.join(CHATS_DIR, 'index.json')
-const PERSONAS_FILE = path.join(DATA_DIR, 'personas.json')
-const PAGE_SIZE     = 20
+const DATA_DIR    = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankai')
+const CHATS_DIR   = path.join(DATA_DIR, 'chats')
+const CHATS_INDEX = path.join(CHATS_DIR, 'index.json')
+const AGENTS_FILE = path.join(DATA_DIR, 'agents.json')
+const PAGE_SIZE   = 20
 
 function readIndex() {
   try { return JSON.parse(fs.readFileSync(CHATS_INDEX, 'utf8')) } catch { return [] }
 }
 
-function readPersonas() {
+function readAgents() {
   try {
-    const data = JSON.parse(fs.readFileSync(PERSONAS_FILE, 'utf8'))
+    const data = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'))
     return Array.isArray(data) ? data : (data.personas || [])
   } catch { return [] }
 }
@@ -26,16 +26,16 @@ function readJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return fallback }
 }
 
-function getDefaultSystemPersonaId() {
-  const personas = readPersonas()
-  const def = personas.find(p => p.type === 'system' && p.isDefault)
-    || personas.find(p => p.type === 'system')
+function getDefaultSystemAgentId() {
+  const agents = readAgents()
+  const def = agents.find(a => a.type === 'system' && a.isDefault)
+    || agents.find(a => a.type === 'system')
   return def ? def.id : null
 }
 
-function getDefaultUserPersonaId() {
-  const personas = readPersonas()
-  const def = personas.find(p => p.type === 'user' && p.isDefault)
+function getDefaultUserAgentId() {
+  const agents = readAgents()
+  const def = agents.find(a => a.type === 'user' && a.isDefault)
   return def ? def.id : null
 }
 
@@ -103,19 +103,19 @@ function formatList(page) {
   return { reply: lines.join('\n') }
 }
 
-/** Format paginated /personas list. */
-function formatPersonasList(page) {
-  const personas = readPersonas()
-  if (!personas.length) return { reply: 'No personas configured yet.' }
+/** Format paginated /agents list. */
+function formatAgentsList(page) {
+  const agents = readAgents()
+  if (!agents.length) return { reply: 'No agents configured yet.' }
 
-  const systemPersonas = personas.filter(p => p.type === 'system' || !p.type)
-  const userPersonas   = personas.filter(p => p.type === 'user')
+  const systemAgents = agents.filter(a => a.type === 'system' || !a.type)
+  const userAgents   = agents.filter(a => a.type === 'user')
 
-  // Assign sequential numbers across all personas
+  // Assign sequential numbers across all agents
   let n = 0
   const numbered = []
-  for (const p of [...systemPersonas, ...userPersonas]) {
-    numbered.push({ ...p, n: ++n })
+  for (const a of [...systemAgents, ...userAgents]) {
+    numbered.push({ ...a, n: ++n })
   }
 
   const total      = numbered.length
@@ -124,57 +124,57 @@ function formatPersonasList(page) {
   const start      = (safePage - 1) * PAGE_SIZE
   const pageItems  = numbered.slice(start, start + PAGE_SIZE)
 
-  const lines = [`📋 Personas (${total} total • page ${safePage}/${totalPages})\n`]
+  const lines = [`📋 Agents (${total} total • page ${safePage}/${totalPages})\n`]
 
-  const pageSystem = pageItems.filter(p => p.type !== 'user')
-  const pageUser   = pageItems.filter(p => p.type === 'user')
+  const pageSystem = pageItems.filter(a => a.type !== 'user')
+  const pageUser   = pageItems.filter(a => a.type === 'user')
 
   if (pageSystem.length) {
     lines.push('🤖 System:')
-    for (const p of pageSystem) {
-      const desc = p.description ? ` — ${p.description.slice(0, 60)}` : ''
-      lines.push(`${p.n}. ${p.name}${desc}`)
+    for (const a of pageSystem) {
+      const desc = a.description ? ` — ${a.description.slice(0, 60)}` : ''
+      lines.push(`${a.n}. ${a.name}${desc}`)
     }
   }
 
   if (pageUser.length) {
     lines.push('\n👤 User:')
-    for (const p of pageUser) {
-      const desc = p.description ? ` — ${p.description.slice(0, 60)}` : ''
-      lines.push(`${p.n}. ${p.name}${desc}`)
+    for (const a of pageUser) {
+      const desc = a.description ? ` — ${a.description.slice(0, 60)}` : ''
+      lines.push(`${a.n}. ${a.name}${desc}`)
     }
   }
 
   const nav = []
-  if (safePage < totalPages) nav.push(`/personas ${safePage + 1} → next`)
-  if (safePage > 1)          nav.push(`/personas ${safePage - 1} → prev`)
-  nav.push('/persona <name> for details')
-  nav.push('/persona add <name> | /persona remove <name> to manage chat')
+  if (safePage < totalPages) nav.push(`/agents ${safePage + 1} → next`)
+  if (safePage > 1)          nav.push(`/agents ${safePage - 1} → prev`)
+  nav.push('/agent <name> for details')
+  nav.push('/agent add <name> | /agent remove <name> to manage chat')
   lines.push(`\n${nav.join('  |  ')}`)
 
   return { reply: lines.join('\n') }
 }
 
-/** Find a persona by name (case-insensitive fuzzy match). */
-function findPersonaByName(nameArg) {
-  const personas = readPersonas()
+/** Find an agent by name (case-insensitive fuzzy match). */
+function findAgentByName(nameArg) {
+  const agents = readAgents()
   const lower = nameArg.toLowerCase()
-  return personas.find(p => p.name.toLowerCase() === lower)
-    || personas.find(p => p.name.toLowerCase().startsWith(lower))
+  return agents.find(a => a.name.toLowerCase() === lower)
+    || agents.find(a => a.name.toLowerCase().startsWith(lower))
     || null
 }
 
-/** Format persona detail card. */
-function formatPersonaDetail(persona) {
-  const typeLabel = persona.type === 'user' ? '👤 User' : '🤖 System'
-  const promptPreview = persona.prompt
-    ? '\n\nPrompt:\n' + persona.prompt.slice(0, 300) + (persona.prompt.length > 300 ? '…' : '')
+/** Format agent detail card. */
+function formatAgentDetail(agent) {
+  const typeLabel = agent.type === 'user' ? '👤 User' : '🤖 System'
+  const promptPreview = agent.prompt
+    ? '\n\nPrompt:\n' + agent.prompt.slice(0, 300) + (agent.prompt.length > 300 ? '…' : '')
     : ''
-  const modelLine = persona.modelId
-    ? `\nModel: ${persona.modelId}  |  Provider: ${persona.providerId || 'anthropic'}`
+  const modelLine = agent.modelId
+    ? `\nModel: ${agent.modelId}  |  Provider: ${agent.providerId || 'anthropic'}`
     : ''
-  return `${typeLabel} ${persona.name}` +
-    (persona.description ? `\nDescription: ${persona.description}` : '') +
+  return `${typeLabel} ${agent.name}` +
+    (agent.description ? `\nDescription: ${agent.description}` : '') +
     promptPreview +
     modelLine
 }
@@ -211,8 +211,8 @@ const HELP_TEXT = `🤖 IM Bridge commands:
 /current         Show the currently active chat
 /history [n]     Show last n messages (default 10)
 /status          Show bridge running status
-/personas [page] List all available personas
-/persona <name>  Show persona details
+/agents [page]   List all available agents
+/agent <name>    Show agent details
 /help            Show this help
 
 Any non-command message is sent to the active chat.
@@ -253,8 +253,8 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
     const chatId = uuidv4()
     const now    = Date.now()
 
-    const systemPersonaId = getDefaultSystemPersonaId()
-    const userPersonaId   = getDefaultUserPersonaId()
+    const systemAgentId = getDefaultSystemAgentId()
+    const userAgentId   = getDefaultUserAgentId()
 
     const chat = {
       type: 'chat',
@@ -263,8 +263,8 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
       messages: [],
       createdAt: now,
       updatedAt: now,
-      systemPersonaId: systemPersonaId || null,
-      userPersonaId: userPersonaId || null,
+      systemPersonaId: systemAgentId || null,
+      userPersonaId: userAgentId || null,
       provider: null,
       model: null,
       isGroupChat: false,
@@ -330,19 +330,19 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
     return { reply: 'IM Bridge is running. Send a message to chat, or use /help for commands.' }
   }
 
-  if (cmd === '/personas') {
+  if (cmd === '/agents') {
     const page = parseInt(parts[1], 10) || 1
-    return formatPersonasList(page)
+    return formatAgentsList(page)
   }
 
-  if (cmd === '/persona') {
+  if (cmd === '/agent') {
     const nameArg = parts.slice(1).join(' ')
-    if (!nameArg) return { reply: 'Usage: /persona <name>  (use /personas to list)' }
+    if (!nameArg) return { reply: 'Usage: /agent <name>  (use /agents to list)' }
 
-    const persona = findPersonaByName(nameArg)
-    if (!persona) return { reply: `Persona "${nameArg}" not found. Use /personas to list available personas.` }
+    const agent = findAgentByName(nameArg)
+    if (!agent) return { reply: `Agent "${nameArg}" not found. Use /agents to list available agents.` }
 
-    return { reply: formatPersonaDetail(persona) }
+    return { reply: formatAgentDetail(agent) }
   }
 
   return null  // not a command

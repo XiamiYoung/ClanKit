@@ -6,8 +6,8 @@ const WhisperSTT = require('./WhisperSTT')
 class VoiceSession {
   constructor(opts) {
     this.voiceConfig = opts.voiceConfig
-    this.persona = opts.persona || {}
-    this.userPersona = opts.userPersona || {}
+    this.agent = opts.agent || {}
+    this.userAgent = opts.userAgent || {}
     this.systemSoulContent = opts.systemSoulContent || ''
     this.userSoulContent = opts.userSoulContent || ''
     this.history = opts.history || []
@@ -91,8 +91,8 @@ class VoiceSession {
 
       const sttOpts = {}
       if (this.whisperConfig?.language) sttOpts.language = this.whisperConfig.language
-      const personaName = this.persona?.name
-      if (personaName) sttOpts.prompt = `Conversation with ${personaName}.`
+      const agentName = this.agent?.name
+      if (agentName) sttOpts.prompt = `Conversation with ${agentName}.`
 
       const sttResult = await this.stt.transcribe(audioBuffer, 'audio/webm', sttOpts)
 
@@ -279,34 +279,34 @@ class VoiceSession {
     // ── Identity anchor — always first so the model can never be confused about who it is ──
     // Name and description are explicit so the LLM answers "what's your name?" correctly
     // even if the system prompt doesn't spell it out.
-    if (this.persona.name) {
-      const identityLines = [`## YOUR IDENTITY`, `Your name is: ${this.persona.name}`]
-      if (this.persona.description) identityLines.push(`Character: ${this.persona.description}`)
+    if (this.agent.name) {
+      const identityLines = [`## YOUR IDENTITY`, `Your name is: ${this.agent.name}`]
+      if (this.agent.description) identityLines.push(`Character: ${this.agent.description}`)
       parts.push(identityLines.join('\n'))
     }
 
-    // System persona instructions (tone, behaviour, rules defined by the user)
-    if (this.persona.systemPrompt) {
-      parts.push(this.persona.systemPrompt)
+    // System agent instructions (tone, behaviour, rules defined by the user)
+    if (this.agent.systemPrompt) {
+      parts.push(this.agent.systemPrompt)
     }
 
-    // Persona memory — injected for personality/context awareness only.
+    // Agent memory — injected for personality/context awareness only.
     // Formatting and content-section instructions in the memory (e.g. "add a Native Speaker
     // Moment", "end with a summary", "use bullet points") are CHAT-ONLY and must be ignored
     // in voice mode. Voice format is governed solely by the VOICE CALL RULES below.
     if (this.systemSoulContent) {
-      parts.push(`## PERSONA MEMORY (voice mode: personality & context awareness only)
+      parts.push(`## AGENT MEMORY (voice mode: personality & context awareness only)
 IMPORTANT: Any instructions in this memory about adding sections, formatting responses, appending tips, or structuring output apply ONLY to written chat replies — NOT to voice. Ignore all formatting/content-section instructions here. Speak naturally in 1-3 sentences only.
 
 ${this.systemSoulContent.trim()}`)
     }
 
-    // User persona context — who the user is
-    if (this.userPersona.name || this.userPersona.description || this.userPersona.systemPrompt) {
+    // User agent context — who the user is
+    if (this.userAgent.name || this.userAgent.description || this.userAgent.systemPrompt) {
       const userCtx = [`## USER CONTEXT`]
-      if (this.userPersona.name) userCtx.push(`You are speaking with: ${this.userPersona.name}`)
-      if (this.userPersona.description) userCtx.push(`About them: ${this.userPersona.description}`)
-      if (this.userPersona.systemPrompt) userCtx.push(this.userPersona.systemPrompt.trim())
+      if (this.userAgent.name) userCtx.push(`You are speaking with: ${this.userAgent.name}`)
+      if (this.userAgent.description) userCtx.push(`About them: ${this.userAgent.description}`)
+      if (this.userAgent.systemPrompt) userCtx.push(this.userAgent.systemPrompt.trim())
       parts.push(userCtx.join('\n'))
     }
 

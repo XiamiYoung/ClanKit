@@ -72,10 +72,10 @@ const SOUL_KEY_SECTIONS = ['Preferences', 'Communication', 'Technical', 'Project
 /**
  * Read a soul file from disk. Returns null if not found.
  */
-function readSoulFile(soulsDir, personaId, personaType) {
-  if (!soulsDir || !personaId) return null
+function readSoulFile(soulsDir, agentId, agentType) {
+  if (!soulsDir || !agentId) return null
   try {
-    const filePath = path.join(soulsDir, personaType, `${personaId}.md`)
+    const filePath = path.join(soulsDir, agentType, `${agentId}.md`)
     if (fs.existsSync(filePath)) {
       return fs.readFileSync(filePath, 'utf8')
     }
@@ -130,6 +130,7 @@ class AgentLoop {
     this.config = config
     this.stopped = false
     this._abortController = new AbortController()
+    this._cachedAbortPromise = null // Cache abort promise to avoid listener accumulation
 
     // Core components — choose client based on provider
     const isOpenAIProvider = config.defaultProvider === 'openai' || config._resolvedProvider === 'openai'
@@ -175,6 +176,7 @@ class AgentLoop {
   stop() {
     this.stopped = true
     this._abortController.abort()
+    this._cachedAbortPromise = null // Clear cache after abort
     // Unblock any suspended permission prompts so their coroutines can exit cleanly
     for (const [, resolve] of this._pendingPermissions) {
       resolve('reject')
@@ -183,12 +185,20 @@ class AgentLoop {
   }
 
   _abortPromise() {
-    return new Promise((_, reject) => {
-      if (this._abortController.signal.aborted) return reject(new DOMException('Aborted', 'AbortError'))
-      this._abortController.signal.addEventListener('abort', () =>
-        reject(new DOMException('Aborted', 'AbortError')), { once: true }
-      )
+    // Cache the abort promise to avoid creating new listeners on every call.
+    // This prevents MaxListenersExceeded when _abortPromise() is called multiple times per iteration.
+    if (this._cachedAbortPromise) return this._cachedAbortPromise
+
+    if (this._abortController.signal.aborted) {
+      return Promise.reject(new DOMException('Aborted', 'AbortError'))
+    }
+
+    this._cachedAbortPromise = new Promise((_, reject) => {
+      const handler = () => reject(new DOMException('Aborted', 'AbortError'))
+      this._abortController.signal.addEventListener('abort', handler, { once: true })
     })
+
+    return this._cachedAbortPromise
   }
 
   /**
@@ -304,7 +314,7 @@ class AgentLoop {
    * For Anthropic providers: uses the beta compaction API.
    * For OpenAI-compat providers: falls back to local message trimming.
    */
-  async compactStandalone(messages, enabledAgents, enabledSkills, onChunk, personaPrompts) {
+  async compactStandalone(messages, enabledAgents, enabledSkills, onChunk, agentPrompts) {
     this.toolRegistry.loadForAgents(enabledAgents)
 
     this.skillPrompts = new Map()
@@ -314,7 +324,7 @@ class AgentLoop {
       }
     }
 
-    const systemPrompt = this.buildSystemPrompt(enabledAgents, enabledSkills, personaPrompts)
+    const systemPrompt = this.buildSystemPrompt(enabledAgents, enabledSkills, agentPrompts)
     const conversationMessages = [
       ...messages,
       { role: 'user', content: '[System: Context compaction requested. Summarize our conversation so far in 2-3 sentences, then continue as normal.]' }
@@ -369,22 +379,22 @@ class AgentLoop {
   }
 
   /**
-   * Build the system prompt from base + enabled skills + personas + memory.
+   * Build the system prompt from base + enabled skills + agents + memory.
    *
    * @param {Array} enabledAgents  (unused, kept for signature compat)
    * @param {Array<string|{id:string, name:string, systemPrompt?:string}>} enabledSkills
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
-  buildSystemPrompt(enabledAgents, enabledSkills, { systemPersonaPrompt, userPersonaPrompt, systemPersonaId, userPersonaId, systemPersonaName, systemPersonaDescription, groupChatContext } = {}, userSoulContent, systemSoulContent, participantSouls) {
-    // When a named persona is active, use it as the opening identity (highest priority).
+  buildSystemPrompt(enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, groupChatContext } = {}, userSoulContent, systemSoulContent, participantSouls) {
+    // When a named agent is active, use it as the opening identity (highest priority).
     // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
     let openingIdentity
-    if (!groupChatContext && systemPersonaName) {
-      let line = `You are "${systemPersonaName}"`
-      if (systemPersonaDescription) line += ` — ${systemPersonaDescription}`
+    if (!groupChatContext && systemAgentName) {
+      let line = `You are "${systemAgentName}"`
+      if (systemAgentDescription) line += ` — ${systemAgentDescription}`
       line += '.'
-      if (systemPersonaPrompt) line += `\n\n${systemPersonaPrompt}`
-      line += `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${systemPersonaName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant`
+      if (systemAgentPrompt) line += `\n\n${systemAgentPrompt}`
+      line += `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${systemAgentName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant`
       openingIdentity = line
     } else {
       openingIdentity = (this.config.systemPrompt || '').trim()
@@ -433,7 +443,7 @@ This is the local data folder for the ClankAI desktop application. Its structure
   ├── config.json          — App settings (API keys, models, providers, paths)
   ├── mcp-servers.json     — MCP server definitions
   ├── tools.json           — HTTP tool definitions
-  ├── personas.json        — AI persona definitions
+  ├── agents.json          — AI agent definitions
   ├── knowledge.json       — RAG/Pinecone knowledge config
   ├── chats/               — Per-chat message history
   ├── souls/               — Persistent memory files (system/, users/)
@@ -450,8 +460,8 @@ DATA FILE ROUTING — when the user asks you to create or modify app configurati
   Format: {"categories":{"CategoryName":{"tools":[{"id":"<uuid>","name":"...","method":"GET|POST|...","endpoint":"...","headers":{},"bodyTemplate":"","description":"..."}]}}}
 - "create/add/edit an MCP server"                  → read then write ${dataPath}/mcp-servers.json
   Format: [{"id":"<uuid>","name":"...","command":"...","args":[],"env":{},"description":"..."}]
-- "create/add/edit a persona"                      → read then write ${dataPath}/personas.json
-  Format: {"categories":[...],"personas":[...,{"id":"<uuid>","type":"system","name":"...","avatar":"a1","description":"...","prompt":"...","providerId":${utilityProvider ? `"${utilityProvider}"` : 'null'},"modelId":${utilityModelId ? `"${utilityModelId}"` : 'null'},"enabledSkillIds":null,"mcpServerIds":null,"voiceId":null,"categoryIds":[],"createdAt":<timestamp>,"updatedAt":<timestamp>}]}
+- "create/add/edit an agent"                       → read then write ${dataPath}/agents.json
+  Format: {"categories":[...],"agents":[...,{"id":"<uuid>","type":"system","name":"...","avatar":"a1","description":"...","prompt":"...","providerId":${utilityProvider ? `"${utilityProvider}"` : 'null'},"modelId":${utilityModelId ? `"${utilityModelId}"` : 'null'},"enabledSkillIds":null,"mcpServerIds":null,"voiceId":null,"categoryIds":[],"createdAt":<timestamp>,"updatedAt":<timestamp>}]}
   IMPORTANT: always set "providerId" to ${utilityProvider ? `"${utilityProvider}"` : 'null'} and "modelId" to ${utilityModelId ? `"${utilityModelId}"` : 'null'} (the system utility model) unless the user explicitly asks for a different model.
 - "add/edit knowledge / RAG index"                 → read then write ${dataPath}/knowledge.json
 - "create/add/edit a task"                          → read then write ${dataPath}/tasks.json
@@ -460,7 +470,7 @@ DATA FILE ROUTING — when the user asks you to create or modify app configurati
 - "create/add/edit a plan"                          → read then write ${dataPath}/plans.json
   Format: [{"id":"<uuid>","name":"...","description":"...","steps":[{"id":"<uuid>","taskId":"<task id>","label":"...","personaAssignments":{"slotName":"<persona id>"},"defaultPersonaIds":[],"dependsOn":[],"runCondition":"always"}],"schedule":null,"createdAt":"<iso>","updatedAt":"<iso>"}]
   PLAN RULES: Each step references a task by its id. If the task has personaInputs, fill personaAssignments with {slotName: personaId}. If no inputs, list persona ids in defaultPersonaIds. Set dependsOn:[] for parallel steps; set dependsOn:["<stepId>"] to sequence steps. schedule is null (manual) or a cron string (e.g. "0 8 * * *" = daily 8am). To add a step to the calendar/schedule, set schedule to the appropriate cron expression.
-  PERSONA ID LOOKUP: To assign personas to steps, first read ${dataPath}/personas.json and find the id of the persona the user names.
+  AGENT ID LOOKUP: To assign agents to steps, first read ${dataPath}/agents.json and find the id of the agent the user names.
 - Always read the file first to understand existing content before writing. Preserve all existing entries.
 - After writing, tell the user to click Refresh on the relevant page (MCP / Tools / Personas / Knowledge / Tasks) to reload.`
 
@@ -578,9 +588,9 @@ Always confirm recipient, subject, and content before sending unless the user ex
     }
 
     // Append group chat context if this is a group conversation
-    // This MUST come after the persona prompt to override any conflicting instructions
+    // This MUST come after the agent prompt to override any conflicting instructions
     if (groupChatContext) {
-      const { personaName, personaDescription, otherParticipants } = groupChatContext
+      const { agentName, agentDescription, otherParticipants } = groupChatContext
       const otherNames = (otherParticipants || []).map(p => p.name)
       // Build detailed participant profiles
       const participantProfiles = (otherParticipants || []).map(p => {
@@ -597,25 +607,25 @@ Always confirm recipient, subject, and content before sending unless the user ex
       }).join('\n\n')
 
       system += `\n\n## GROUP CHAT — MANDATORY OVERRIDE (supersedes all prior instructions)
-You are "${personaName}"${personaDescription ? ` (${personaDescription})` : ''} in a group chat.
+You are "${agentName}"${agentDescription ? ` (${agentDescription})` : ''} in a group chat.
 
 ### Other participants in this conversation:
 ${participantProfiles}
 
 ---
-Each participant runs independently and sends their own separate message to the user. YOU ARE ONLY "${personaName}".
+Each participant runs independently and sends their own separate message to the user. YOU ARE ONLY "${agentName}".
 
 ## YOUR TASK SCOPE — READ THIS FIRST
 When the user's message uses "@Name: ..." format to assign tasks to multiple participants:
-- Find the section starting with "@${personaName}:" — that is YOUR ONLY task.
+- Find the section starting with "@${agentName}:" — that is YOUR ONLY task.
 - Every other "@OtherName: ..." section belongs to someone else. TREAT THOSE SECTIONS AS IF THEY DO NOT EXIST.
 - Do NOT read, execute, reference, or act on any section that starts with a different @Name.
-- If no "@${personaName}:" section exists, respond only to parts of the message directed at you.
+- If no "@${agentName}:" section exists, respond only to parts of the message directed at you.
 
 RULES YOU MUST FOLLOW:
 1. Respond ONLY as yourself — your voice, your perspective, your expertise.
 2. NEVER write dialogue, quotes, or messages for other participants. Never write "${otherNames[0] || 'OtherName'}:" or simulate what others would say.
-3. DO NOT prefix your response with your own name. No "${personaName}:" label. Just speak directly.
+3. DO NOT prefix your response with your own name. No "${agentName}:" label. Just speak directly.
 4. You may reference other participants by name (e.g. "Mark could help with that") but never speak AS them.
 5. Keep your response concise and relevant to your role.
 6. Stay in your assigned role. NEVER execute shell commands, write files, or take actions for tasks that were assigned to OTHER participants — even if you think it would be helpful. Each participant handles ONLY the work explicitly assigned to them. NEVER simulate, fabricate, or pre-generate another participant's work. If your role depends on someone else's output (e.g. you are a reviewer but the developer has not submitted code yet), just acknowledge readiness and wait — do NOT invent placeholder content to act on.
@@ -648,27 +658,27 @@ Note: Reference this knowledge naturally in your response. Do not mention "RAG" 
       system += `\n\n## PERSONA MEMORY\n${injectedSystemSoul}`
     }
 
-    // Memory system instructions + persona IDs for targeting
+    // Memory system instructions + agent IDs for targeting
     system += `\n\nMEMORY SYSTEM:
 You have access to update_soul_memory and read_soul_memory tools to persist learnings over time. There are two memory targets:
 
-USER MEMORY (persona_type: "users", persona_id: "${userPersonaId || '__default_user__'}"):
+USER MEMORY (persona_type: "users", persona_id: "${userAgentId || '__default_user__'}"):
 - Store facts about the user: preferences, habits, working style, personal info, projects they work on.
 - When the user states a clear preference or fact about themselves, memorize it automatically.
 - Examples: "I prefer dark mode", "I use Vue 3 + Pinia", "My name is Young", "I work on ClankAI".
 
-PERSONA MEMORY (persona_type: "system", persona_id: "${systemPersonaId || '__default_system__'}"):
-- Store learnings about how YOU (this AI persona) should behave, respond, and adapt.
-- When the user gives you feedback on your behavior, tone, format, or approach, memorize it for this persona.
+AGENT MEMORY (persona_type: "system", persona_id: "${systemAgentId || '__default_system__'}"):
+- Store learnings about how YOU (this AI agent) should behave, respond, and adapt.
+- When the user gives you feedback on your behavior, tone, format, or approach, memorize it for this agent.
 - Examples: "User wants me to always provide code examples", "Keep responses under 3 paragraphs", "Use TypeScript not JavaScript in examples", "Explain concepts step-by-step for this user".
-- Also store domain knowledge or context relevant to this persona's role that should persist across sessions.
+- Also store domain knowledge or context relevant to this agent's role that should persist across sessions.
 
 RULES:
 - For ambiguous or sensitive information: ask the user "Should I remember that?" before saving.
 - Never memorize temporary or session-specific context (e.g. "fix this bug" — that's a task, not a memory).
 - Check existing memory with read_soul_memory before adding duplicates.
 - The user can say "remember that..." or "forget that..." to explicitly control memory.
-- Use the correct persona_type and persona_id when calling the tools — user facts go to user memory, behavioral/persona feedback goes to persona memory.`
+- Use the correct persona_type and persona_id when calling the tools — user facts go to user memory, behavioral/agent feedback goes to agent memory.`
 
     // ── Injected approved plan ──
     if (this.config.injectedPlan) {
@@ -760,10 +770,10 @@ RULES:
    * @param {Array<{id:string, name:string, systemPrompt:string}>} enabledSkills  Skill objects toggled on by user
    * @param {Function} onChunk        Callback for streaming events
    * @param {Array|undefined} currentAttachments  File attachments for current message
-   * @param {{systemPersonaPrompt?:string, userPersonaPrompt?:string}} personaPrompts  Persona prompt texts
+   * @param {{systemAgentPrompt?:string, userAgentPrompt?:string}} agentPrompts  Agent prompt texts
    * @returns {string} Final text output
    */
-  async run(messages, enabledAgents, enabledSkills, onChunk, currentAttachments, personaPrompts, mcpServers, httpTools, ragContext) {
+  async run(messages, enabledAgents, enabledSkills, onChunk, currentAttachments, agentPrompts, mcpServers, httpTools, ragContext) {
     // Store MCP servers for system prompt access
     this.mcpServers = mcpServers || []
     // Store HTTP tools for injection
@@ -785,15 +795,15 @@ RULES:
 
     // ── Load soul memory before building system prompt ──
     const soulsDir = this.config.soulsDir
-    const userPersonaId = personaPrompts?.userPersonaId
-    const systemPersonaId = personaPrompts?.systemPersonaId
-    const userSoulContent = readSoulFile(soulsDir, userPersonaId, 'users')
-    const systemSoulContent = readSoulFile(soulsDir, systemPersonaId, 'system')
+    const userAgentId = agentPrompts?.userAgentId
+    const systemAgentId = agentPrompts?.systemAgentId
+    const userSoulContent = readSoulFile(soulsDir, userAgentId, 'users')
+    const systemSoulContent = readSoulFile(soulsDir, systemAgentId, 'system')
 
     // Load soul content for other group chat participants
     const participantSouls = []
-    if (personaPrompts?.groupChatContext?.otherParticipants) {
-      for (const p of personaPrompts.groupChatContext.otherParticipants) {
+    if (agentPrompts?.groupChatContext?.otherParticipants) {
+      for (const p of agentPrompts.groupChatContext.otherParticipants) {
         if (p.id) {
           const content = readSoulFile(soulsDir, p.id, 'system')
           if (content) participantSouls.push({ name: p.name, content })
@@ -801,17 +811,17 @@ RULES:
       }
     }
 
-    const systemPrompt = this.buildSystemPrompt(enabledAgents, enabledSkills, personaPrompts, userSoulContent, systemSoulContent, participantSouls)
+    const systemPrompt = this.buildSystemPrompt(enabledAgents, enabledSkills, agentPrompts, userSoulContent, systemSoulContent, participantSouls)
 
-    // If a per-persona assigned task was dispatched, replace the last user message
-    // with just that task so the LLM never sees other personas' task sections.
+    // If a per-agent assigned task was dispatched, replace the last user message
+    // with just that task so the LLM never sees other agents' task sections.
     let effectiveMessages = messages
-    if (personaPrompts?.assignedTask) {
+    if (agentPrompts?.assignedTask) {
       const lastUserIdx = [...messages].reverse().findIndex(m => m.role === 'user')
       if (lastUserIdx !== -1) {
         const realIdx = messages.length - 1 - lastUserIdx
         effectiveMessages = messages.map((m, i) =>
-          i === realIdx ? { ...m, content: personaPrompts.assignedTask } : m
+          i === realIdx ? { ...m, content: agentPrompts.assignedTask } : m
         )
       }
     }
@@ -1058,14 +1068,21 @@ RULES:
         // ── Snapshot context for inspector ──
         this.contextSnapshot = {
           systemPrompt,
-          personas: {
-            systemPersonaPrompt: personaPrompts?.systemPersonaPrompt || null,
-            userPersonaPrompt: personaPrompts?.userPersonaPrompt || null,
+          agents: {
+            systemAgentPrompt: agentPrompts?.systemAgentPrompt || null,
+            userAgentPrompt: agentPrompts?.userAgentPrompt || null,
           },
           messages: conversationMessages.map(m => {
-            const raw = Array.isArray(m.content)
-              ? m.content.map(b => b.text || `[${b.type}]`).join(' ')
-              : (typeof m.content === 'string' ? m.content : JSON.stringify(m.content))
+            let raw
+            if (Array.isArray(m.content)) {
+              raw = m.content.map(b => b.text || (b.type ? `[${b.type}]` : '[block]')).join(' ')
+            } else if (typeof m.content === 'string') {
+              raw = m.content
+            } else if (m.content == null) {
+              raw = ''
+            } else {
+              raw = JSON.stringify(m.content) || ''
+            }
             return {
               role: m.role,
               contentPreview: raw.slice(0, 200),
@@ -1175,6 +1192,7 @@ RULES:
 
           // Accumulate streamed tool calls: index → { id, name, arguments }
           const toolCallAccumulators = new Map()
+          let streamedReasoningContent = ''
 
           for await (const chunk of stream) {
             if (this.stopped) break
@@ -1182,6 +1200,11 @@ RULES:
             if (!choice) continue
 
             const delta = choice.delta || {}
+
+            // Capture DeepSeek reasoning_content (thinking mode)
+            if (delta.reasoning_content) {
+              streamedReasoningContent += delta.reasoning_content
+            }
 
             // Text content
             if (delta.content) {
@@ -1247,14 +1270,16 @@ RULES:
           this.contextManager.inputTokens = Math.ceil(estTokens)
           onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
 
-          // Push assistant message in OpenAI conversation format
-          const assistantMsg = { role: 'assistant', content: assistantContent }
-          // Also store OpenAI-native format for subsequent requests
+          // Push assistant message — store in OpenAI-native format so that
+          // reasoning_content (DeepSeek thinking mode) round-trips correctly.
+          // The Anthropic-style assistantContent is kept only for tool dispatch below.
           const nativeAssistant = { role: 'assistant' }
           const textParts = assistantContent.filter(b => b.type === 'text').map(b => b.text).join('')
-          if (textParts) nativeAssistant.content = textParts
+          nativeAssistant.content = textParts || null
           if (openaiToolCalls.length > 0) nativeAssistant.tool_calls = openaiToolCalls
-          conversationMessages.push(assistantMsg)
+          // DeepSeek requires reasoning_content to be echoed back verbatim in history
+          if (streamedReasoningContent) nativeAssistant.reasoning_content = streamedReasoningContent
+          conversationMessages.push(nativeAssistant)
 
           logger.agent('OpenAI stream end', { iteration, stopReason })
 
@@ -1350,15 +1375,12 @@ RULES:
               this._abortPromise()
             ])
 
-            // Push tool results in OpenAI format — each as a separate message
+            // Push tool results in OpenAI-native format — each as a separate `role: 'tool'` message
             for (const tr of toolResults) {
               conversationMessages.push({
-                role: 'user',
-                content: [{
-                  type: 'tool_result',
-                  tool_use_id: tr.tool_call_id,
-                  content: tr.content
-                }]
+                role: 'tool',
+                tool_call_id: tr.tool_call_id,
+                content: tr.content
               })
             }
 
@@ -2014,8 +2036,12 @@ RULES:
         } else {
           out.push({ role: 'user', content: msg.content })
         }
+      } else if (msg.role === 'tool') {
+        // Already OpenAI-native tool result — pass through as-is
+        out.push({ role: 'tool', tool_call_id: msg.tool_call_id, content: msg.content || '' })
       } else if (msg.role === 'assistant') {
         if (Array.isArray(msg.content)) {
+          // Anthropic-style content blocks — convert to OpenAI format
           const textParts = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
           const toolUses = msg.content.filter(b => b.type === 'tool_use')
           const entry = { role: 'assistant' }
@@ -2033,7 +2059,12 @@ RULES:
           if (!entry.content && !entry.tool_calls) entry.content = ''
           out.push(entry)
         } else {
-          out.push({ role: 'assistant', content: msg.content || '' })
+          // Already OpenAI-native format (stored directly after streaming).
+          // Preserve reasoning_content so DeepSeek thinking mode doesn't 400.
+          const entry = { role: 'assistant', content: msg.content || '' }
+          if (msg.tool_calls) entry.tool_calls = msg.tool_calls
+          if (msg.reasoning_content) entry.reasoning_content = msg.reasoning_content
+          out.push(entry)
         }
       }
     }

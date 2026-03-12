@@ -21,7 +21,7 @@ class WhisperSTT {
    * @param {string} [mimeType]
    * @param {object} [opts]
    * @param {string} [opts.language]  BCP-47 language code, e.g. 'en'. Skips auto-detection, improves accuracy.
-   * @param {string} [opts.prompt]    Primes the transcription decoder (persona name, context).
+   * @param {string} [opts.prompt]    Primes the transcription decoder (agent name, context).
    */
   async transcribe(audioBuffer, mimeType = 'audio/webm', opts = {}) {
     const ext = mimeType.includes('wav') ? 'wav' : 'webm'

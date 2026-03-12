@@ -116,7 +116,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useConfigStore } from '../../stores/config'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 import { resolveModelPrice, convertCurrencies, formatCost } from '../../utils/pricing.js'
 
 const props = defineProps({
@@ -124,7 +124,7 @@ const props = defineProps({
 })
 
 const configStore = useConfigStore()
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 const tooltipVisible = ref(false)
@@ -200,7 +200,7 @@ async function loadUsageData(fresh = true) {
       if (!USAGE_KEYS.some(k => (u[k] || 0) > 0)) continue
       const provider   = chat.provider || 'anthropic'
       const personaId  = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null) || chat.systemPersonaId
-      const personaModel = personaId ? personasStore.getPersonaById(personaId)?.modelId : null
+      const personaModel = personaId ? agentsStore.getAgentById(personaId)?.modelId : null
       const model      = chat.model || personaModel
 
       if ((u.whisperSecs || 0) + (u.whisperCalls || 0) > 0) {

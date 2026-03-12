@@ -9,7 +9,7 @@
         @focus="onFocus"
         @blur="onBlur"
         @paste="onPaste"
-        :placeholder="isGroupChat ? 'Type a message… (use @name to target a persona)' : 'Type your message here…'"
+        :placeholder="isGroupChat ? 'Type a message… (use @name to target an agent)' : 'Type your message here…'"
         :rows="compact ? 1 : 3"
         class="cmi-textarea"
         :class="{ 'cmi-textarea-compact': compact }"
@@ -20,7 +20,7 @@
         class="cmi-mention-popup"
       >
         <div class="cmi-mention-popup-header">
-          <span>Personas</span>
+          <span>Agents</span>
           <span class="cmi-mention-popup-hint">↑↓ navigate · ↵ select</span>
         </div>
         <div class="cmi-mention-popup-list">
@@ -34,13 +34,13 @@
             @mouseleave="hideTooltip"
           >
             <div class="cmi-mention-popup-avatar">
-              <img v-if="getAvatarDataUriForPersona(s)" :src="getAvatarDataUriForPersona(s)" alt="" class="cmi-mention-popup-avatar-img" />
+              <img v-if="getAvatarDataUriForAgent(s)" :src="getAvatarDataUriForAgent(s)" alt="" class="cmi-mention-popup-avatar-img" />
               <span v-else class="cmi-mention-popup-initial">{{ s.name.charAt(0) }}</span>
             </div>
             <div class="cmi-mention-popup-body">
               <div class="cmi-mention-popup-name-row">
                 <span class="cmi-mention-popup-name">{{ s.name }}</span>
-                <span v-if="getPersonaProviderLabel(s)" class="cmi-mention-popup-meta">{{ getPersonaProviderLabel(s) }}</span>
+                <span v-if="getAgentProviderLabel(s)" class="cmi-mention-popup-meta">{{ getAgentProviderLabel(s) }}</span>
               </div>
               <span v-if="s.description" class="cmi-mention-popup-desc">{{ s.description }}</span>
             </div>
@@ -55,7 +55,7 @@
             </div>
             <div class="cmi-mention-popup-body">
               <span class="cmi-mention-popup-name">all</span>
-              <span class="cmi-mention-popup-desc">Broadcast to all personas</span>
+              <span class="cmi-mention-popup-desc">Broadcast to all agents</span>
             </div>
           </button>
         </div>
@@ -77,13 +77,13 @@
 
 <script setup>
 import { ref, computed, reactive, nextTick } from 'vue'
-import { usePersonasStore } from '../../stores/personas'
-import { getAvatarDataUri } from '../personas/personaAvatars'
+import { useAgentsStore } from '../../stores/agents'
+import { getAvatarDataUri } from '../agents/agentAvatars'
 import { v4 as uuidv4 } from 'uuid'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
-  personaIds: { type: Array, default: () => [] },
+  agentIds: { type: Array, default: () => [] },
   isGroupChat: { type: Boolean, default: false },
   isRunning: { type: Boolean, default: false },
   compact: { type: Boolean, default: false },
@@ -91,7 +91,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'send', 'stop', 'focus', 'blur', 'attach'])
 
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 
 const inputEl = ref(null)
 const inputFocused = ref(false)
@@ -110,22 +110,22 @@ const mentionStartPos = ref(-1)
 const tooltip = reactive({ visible: false, name: '', text: '', x: 0, y: 0 })
 
 const mentionSuggestions = computed(() => {
-  if (props.personaIds.length < 2) return []
+  if (props.agentIds.length < 2) return []
   const q = mentionQuery.value.toLowerCase()
-  return props.personaIds
-    .map(id => personasStore.getPersonaById(id))
-    .filter(p => p && (!q || p.name.toLowerCase().includes(q)))
+  return props.agentIds
+    .map(id => agentsStore.getAgentById(id))
+    .filter(a => a && (!q || a.name.toLowerCase().includes(q)))
 })
 
-function getAvatarDataUriForPersona(persona) {
-  if (!persona?.avatar) return null
-  return getAvatarDataUri(persona.avatar)
+function getAvatarDataUriForAgent(agent) {
+  if (!agent?.avatar) return null
+  return getAvatarDataUri(agent.avatar)
 }
 
-function getPersonaProviderLabel(persona) {
-  if (!persona) return ''
-  const provider = persona.providerId || 'anthropic'
-  const model = persona.modelId || ''
+function getAgentProviderLabel(agent) {
+  if (!agent) return ''
+  const provider = agent.providerId || 'anthropic'
+  const model = agent.modelId || ''
   if (model) {
     const short = model.split('/').pop().split(':')[0]
     return `${provider} · ${short}`
@@ -134,7 +134,7 @@ function getPersonaProviderLabel(persona) {
 }
 
 function checkMentionTrigger() {
-  if (props.personaIds.length < 2) { showMentionPopup.value = false; return }
+  if (props.agentIds.length < 2) { showMentionPopup.value = false; return }
   const el = inputEl.value
   if (!el) return
   const text = el.value
@@ -213,16 +213,16 @@ function onBlur() {
   setTimeout(() => { showMentionPopup.value = false }, 200)
 }
 
-function insertMention(persona) {
+function insertMention(agent) {
   const el = inputEl.value
   if (!el || mentionStartPos.value < 0) return
   const before = localText.value.slice(0, mentionStartPos.value)
   const after = localText.value.slice(el.selectionStart)
-  localText.value = `${before}@${persona.name} ${after}`
+  localText.value = `${before}@${agent.name} ${after}`
   showMentionPopup.value = false
   tooltip.visible = false
   nextTick(() => {
-    const pos = before.length + 1 + persona.name.length + 1
+    const pos = before.length + 1 + agent.name.length + 1
     el.setSelectionRange(pos, pos)
     el.focus()
   })
@@ -243,11 +243,11 @@ function insertMentionAll() {
   })
 }
 
-function showTooltip(event, persona) {
-  if (!persona.description) { tooltip.visible = false; return }
+function showTooltip(event, agent) {
+  if (!agent.description) { tooltip.visible = false; return }
   const rect = event.currentTarget.getBoundingClientRect()
-  tooltip.name = persona.name
-  tooltip.text = persona.description
+  tooltip.name = agent.name
+  tooltip.text = agent.description
   tooltip.x = rect.right + 12
   tooltip.y = rect.top + rect.height / 2
   tooltip.visible = true

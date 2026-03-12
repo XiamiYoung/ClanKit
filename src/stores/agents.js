@@ -3,13 +3,13 @@ import { ref, computed } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { storage } from '../services/storage'
 
-// ── Built-in personas (non-deletable) ─────────────────────────────────────
-export const BUILTIN_SYSTEM_PERSONA_ID = '__default_system__'
-export const BUILTIN_USER_PERSONA_ID   = '__default_user__'
-export const BUILTIN_DOC_EDITOR_ID     = '__doc_editor__'
+// ── Built-in agents (non-deletable) ─────────────────────────────────────
+export const BUILTIN_SYSTEM_AGENT_ID = '__default_system__'
+export const BUILTIN_USER_AGENT_ID   = '__default_user__'
+export const BUILTIN_DOC_EDITOR_ID   = '__doc_editor__'
 
-const BUILTIN_SYSTEM_PERSONA = {
-  id: BUILTIN_SYSTEM_PERSONA_ID,
+const BUILTIN_SYSTEM_AGENT = {
+  id: BUILTIN_SYSTEM_AGENT_ID,
   type: 'system',
   name: 'ClankAI Assistant',
   avatar: 'a1',
@@ -55,8 +55,8 @@ Rules:
   updatedAt: 0,
 }
 
-const BUILTIN_USER_PERSONA = {
-  id: BUILTIN_USER_PERSONA_ID,
+const BUILTIN_USER_AGENT = {
+  id: BUILTIN_USER_AGENT_ID,
   type: 'user',
   name: 'Default User',
   avatar: 'a8',
@@ -69,59 +69,59 @@ Respond in a clear, helpful manner suitable for a broad audience.`,
   updatedAt: 0,
 }
 
-export const usePersonasStore = defineStore('personas', () => {
-  const personas   = ref([])
+export const useAgentsStore = defineStore('agents', () => {
+  const agents     = ref([])
   const categories = ref([])
 
   const byCreatedDesc = (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
 
-  const systemPersonas = computed(() => personas.value.filter(p => p.type === 'system').sort(byCreatedDesc))
-  const userPersonas   = computed(() => personas.value.filter(p => p.type === 'user').sort(byCreatedDesc))
+  const systemAgents = computed(() => agents.value.filter(p => p.type === 'system').sort(byCreatedDesc))
+  const userAgents   = computed(() => agents.value.filter(p => p.type === 'user').sort(byCreatedDesc))
 
   const systemCategories = computed(() => categories.value.filter(c => c.type === 'system'))
   const userCategories   = computed(() => categories.value.filter(c => c.type === 'user'))
 
-  const defaultSystemPersona = computed(() => personas.value.find(p => p.type === 'system' && p.isDefault) || null)
-  const defaultUserPersona   = computed(() => personas.value.find(p => p.type === 'user'   && p.isDefault) || null)
+  const defaultSystemAgent = computed(() => agents.value.find(p => p.type === 'system' && p.isDefault) || null)
+  const defaultUserAgent   = computed(() => agents.value.find(p => p.type === 'user'   && p.isDefault) || null)
 
-  function getPersonaById(id) {
-    return personas.value.find(p => p.id === id) || null
+  function getAgentById(id) {
+    return agents.value.find(p => p.id === id) || null
   }
 
   function getCategoryById(id) {
     return categories.value.find(c => c.id === id) || null
   }
 
-  function personasInCategory(categoryId) {
-    return personas.value.filter(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(categoryId)).sort(byCreatedDesc)
+  function agentsInCategory(categoryId) {
+    return agents.value.filter(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(categoryId)).sort(byCreatedDesc)
   }
 
-  function uncategorizedPersonas(type) {
-    return personas.value.filter(p => p.type === type && (!Array.isArray(p.categoryIds) || p.categoryIds.length === 0)).sort(byCreatedDesc)
+  function uncategorizedAgents(type) {
+    return agents.value.filter(p => p.type === type && (!Array.isArray(p.categoryIds) || p.categoryIds.length === 0)).sort(byCreatedDesc)
   }
 
-  async function loadPersonas() {
-    const stored = await storage.getPersonas()
+  async function loadAgents() {
+    const stored = await storage.getAgents()
 
-    // Handle both old (plain array) and new ({ categories, personas }) formats
+    // Handle both old (plain array) and new ({ categories, agents }) formats
     let list, cats
     if (Array.isArray(stored)) {
       list = stored || []
       cats = []
     } else {
-      list = stored?.personas || []
+      list = stored?.agents || []
       cats = stored?.categories || []
     }
 
-    // Ensure built-in system persona exists
-    const sysIdx = list.findIndex(p => p.id === BUILTIN_SYSTEM_PERSONA_ID)
+    // Ensure built-in system agent exists
+    const sysIdx = list.findIndex(p => p.id === BUILTIN_SYSTEM_AGENT_ID)
     if (sysIdx >= 0) {
       list[sysIdx] = { ...list[sysIdx], isBuiltin: true }
     } else {
-      list.unshift({ ...BUILTIN_SYSTEM_PERSONA })
+      list.unshift({ ...BUILTIN_SYSTEM_AGENT })
     }
 
-    // Ensure built-in doc editor persona exists
+    // Ensure built-in doc editor agent exists
     const docIdx = list.findIndex(p => p.id === BUILTIN_DOC_EDITOR_ID)
     if (docIdx >= 0) {
       list[docIdx] = { ...list[docIdx], isBuiltin: true }
@@ -129,16 +129,16 @@ export const usePersonasStore = defineStore('personas', () => {
       list.push({ ...BUILTIN_DOC_EDITOR_PERSONA })
     }
 
-    // Ensure built-in user persona exists
-    const usrIdx = list.findIndex(p => p.id === BUILTIN_USER_PERSONA_ID)
+    // Ensure built-in user agent exists
+    const usrIdx = list.findIndex(p => p.id === BUILTIN_USER_AGENT_ID)
     if (usrIdx >= 0) {
       list[usrIdx] = { ...list[usrIdx], isBuiltin: true }
     } else {
       const lastSysIdx = list.reduce((acc, p, i) => p.type === 'system' ? i : acc, -1)
-      list.splice(lastSysIdx + 1, 0, { ...BUILTIN_USER_PERSONA })
+      list.splice(lastSysIdx + 1, 0, { ...BUILTIN_USER_AGENT })
     }
 
-    // Backfill optional persona fields
+    // Backfill optional agent fields
     for (const p of list) {
       if (p.providerId === undefined) p.providerId = null
       if (p.modelId === undefined) p.modelId = null
@@ -150,53 +150,53 @@ export const usePersonasStore = defineStore('personas', () => {
 
     // Ensure at least one default per type
     if (!list.some(p => p.type === 'system' && p.isDefault)) {
-      const sys = list.find(p => p.id === BUILTIN_SYSTEM_PERSONA_ID)
+      const sys = list.find(p => p.id === BUILTIN_SYSTEM_AGENT_ID)
       if (sys) sys.isDefault = true
     }
     if (!list.some(p => p.type === 'user' && p.isDefault)) {
-      const usr = list.find(p => p.id === BUILTIN_USER_PERSONA_ID)
+      const usr = list.find(p => p.id === BUILTIN_USER_AGENT_ID)
       if (usr) usr.isDefault = true
     }
 
-    personas.value   = list
+    agents.value     = list
     categories.value = cats
     await persist()
   }
 
-  async function savePersona(persona) {
-    const idx = personas.value.findIndex(p => p.id === persona.id)
+  async function saveAgent(agent) {
+    const idx = agents.value.findIndex(p => p.id === agent.id)
     if (idx >= 0) {
-      const existing = personas.value[idx]
-      personas.value[idx] = {
-        ...persona,
+      const existing = agents.value[idx]
+      agents.value[idx] = {
+        ...agent,
         isBuiltin: existing.isBuiltin || false,
         categoryIds: existing.categoryIds || [],
         updatedAt: Date.now(),
       }
     } else {
-      personas.value.push({
+      agents.value.push({
         id: uuidv4(),
         createdAt: Date.now(),
         updatedAt: Date.now(),
         isBuiltin: false,
         categoryIds: [],
-        ...persona,
+        ...agent,
       })
     }
     await persist()
   }
 
-  async function deletePersona(id) {
-    const persona = personas.value.find(p => p.id === id)
-    if (persona?.isBuiltin) return
-    personas.value = personas.value.filter(p => p.id !== id)
+  async function deleteAgent(id) {
+    const agent = agents.value.find(p => p.id === id)
+    if (agent?.isBuiltin) return
+    agents.value = agents.value.filter(p => p.id !== id)
     await persist()
   }
 
   async function setDefault(id) {
-    const target = personas.value.find(p => p.id === id)
+    const target = agents.value.find(p => p.id === id)
     if (!target) return
-    for (const p of personas.value) {
+    for (const p of agents.value) {
       if (p.type === target.type) p.isDefault = false
     }
     target.isDefault = true
@@ -222,8 +222,8 @@ export const usePersonasStore = defineStore('personas', () => {
   }
 
   async function deleteCategory(id) {
-    // Only allowed when no personas are assigned
-    const assigned = personas.value.some(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(id))
+    // Only allowed when no agents are assigned
+    const assigned = agents.value.some(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(id))
     if (assigned) return false
     categories.value = categories.value.filter(c => c.id !== id)
     await persist()
@@ -242,40 +242,40 @@ export const usePersonasStore = defineStore('personas', () => {
 
   // ── Assignment ────────────────────────────────────────────────────────────
 
-  async function assignToCategory(personaId, categoryId) {
-    const persona  = personas.value.find(p => p.id === personaId)
+  async function assignToCategory(agentId, categoryId) {
+    const agent    = agents.value.find(p => p.id === agentId)
     const category = categories.value.find(c => c.id === categoryId)
-    if (!persona || !category) return
-    if (persona.type !== category.type) return
-    if (!Array.isArray(persona.categoryIds)) persona.categoryIds = []
-    if (!persona.categoryIds.includes(categoryId)) {
-      persona.categoryIds.push(categoryId)
+    if (!agent || !category) return
+    if (agent.type !== category.type) return
+    if (!Array.isArray(agent.categoryIds)) agent.categoryIds = []
+    if (!agent.categoryIds.includes(categoryId)) {
+      agent.categoryIds.push(categoryId)
       await persist()
     }
   }
 
-  async function unassignFromCategory(personaId, categoryId) {
-    const persona = personas.value.find(p => p.id === personaId)
-    if (!persona || !Array.isArray(persona.categoryIds)) return
-    persona.categoryIds = persona.categoryIds.filter(id => id !== categoryId)
+  async function unassignFromCategory(agentId, categoryId) {
+    const agent = agents.value.find(p => p.id === agentId)
+    if (!agent || !Array.isArray(agent.categoryIds)) return
+    agent.categoryIds = agent.categoryIds.filter(id => id !== categoryId)
     await persist()
   }
 
   async function persist() {
-    await storage.savePersonas({
+    await storage.saveAgents({
       categories: JSON.parse(JSON.stringify(categories.value)),
-      personas:   JSON.parse(JSON.stringify(personas.value)),
+      agents:     JSON.parse(JSON.stringify(agents.value)),
     })
   }
 
   return {
-    personas, categories,
-    systemPersonas, userPersonas,
+    agents, categories,
+    systemAgents, userAgents,
     systemCategories, userCategories,
-    defaultSystemPersona, defaultUserPersona,
-    getPersonaById, getCategoryById,
-    personasInCategory, uncategorizedPersonas,
-    loadPersonas, savePersona, deletePersona, setDefault,
+    defaultSystemAgent, defaultUserAgent,
+    getAgentById, getCategoryById,
+    agentsInCategory, uncategorizedAgents,
+    loadAgents, saveAgent, deleteAgent, setDefault,
     addCategory, renameCategory, deleteCategory, reorderCategory,
     assignToCategory, unassignFromCategory,
   }

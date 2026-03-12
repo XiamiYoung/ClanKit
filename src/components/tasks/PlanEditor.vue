@@ -457,7 +457,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { v4 as uuid } from 'uuid'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import PlanHistoryModal from './PlanHistoryModal.vue'
 import EmojiPicker from '../personas/EmojiPicker.vue'
@@ -469,9 +469,9 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'saved'])
 
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
-const allPersonas = computed(() => personasStore.personas)
+const allPersonas = computed(() => agentsStore.agents)
 const showIconPicker = ref(false)
 
 // ── AI cron description ────────────────────────────────────────────────────────
@@ -689,11 +689,11 @@ function taskName(taskId) {
 }
 
 function personaName(pid) {
-  return personasStore.getPersonaById(pid)?.name || pid
+  return agentsStore.getAgentById(pid)?.name || pid
 }
 
 function personaEmoji(pid) {
-  const p = personasStore.getPersonaById(pid)
+  const p = agentsStore.getAgentById(pid)
   return p?.avatar || p?.emoji || '🤖'
 }
 

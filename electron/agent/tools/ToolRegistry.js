@@ -24,7 +24,7 @@ const ALWAYS_ON_AGENTS = ['code-executor', 'file-manager']
 // TodoTool is always available (for task planning)
 const todoTool = new TodoTool()
 
-// Soul tools are always available (for persona memory)
+// Soul tools are always available (for agent memory)
 let soulUpdateTool = null
 let soulReadTool = null
 

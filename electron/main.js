@@ -98,7 +98,7 @@ const isDev = process.env.ELECTRON_DEV === 'true'
 const DEFAULT_DATA_PATH = path.join(os.homedir(), '.clankai')
 let DATA_DIR = process.env.CLANKAI_DATA_PATH || DEFAULT_DATA_PATH
 // Derived paths — re-computed by initDataPaths() if DATA_DIR changes at startup
-let CHATS_FILE, CHATS_DIR, CHATS_INDEX_FILE, CONFIG_FILE, PERSONAS_FILE,
+let CHATS_FILE, CHATS_DIR, CHATS_INDEX_FILE, CONFIG_FILE, AGENTS_FILE,
     MCP_SERVERS_FILE, TOOLS_FILE, SOULS_DIR, KNOWLEDGE_FILE, ENV_FILE,
     UTILITY_USAGE_FILE, TASKS_FILE, PLANS_FILE, TASK_RUNS_DIR, TASK_RUNS_INDEX
 
@@ -107,7 +107,7 @@ function initDataPaths() {
   CHATS_DIR          = path.join(DATA_DIR, 'chats')
   CHATS_INDEX_FILE   = path.join(CHATS_DIR, 'index.json')
   CONFIG_FILE        = path.join(DATA_DIR, 'config.json')
-  PERSONAS_FILE      = path.join(DATA_DIR, 'personas.json')
+  AGENTS_FILE        = path.join(DATA_DIR, 'agents.json')
   MCP_SERVERS_FILE   = path.join(DATA_DIR, 'mcp-servers.json')
   TOOLS_FILE         = path.join(DATA_DIR, 'tools.json')
   SOULS_DIR          = path.join(DATA_DIR, 'souls')
@@ -468,6 +468,16 @@ async function migrateEnvDataIfNeeded() {
 
 }
 
+// --- Migration: personas.json -> agents.json ---------------------------------
+function migratePersonasToAgents() {
+  // Rename personas.json to agents.json if old file exists and new doesn't
+  const PERSONAS_FILE_OLD = path.join(DATA_DIR, 'personas.json')
+  if (fs.existsSync(PERSONAS_FILE_OLD) && !fs.existsSync(AGENTS_FILE)) {
+    fs.copyFileSync(PERSONAS_FILE_OLD, AGENTS_FILE)
+    logger.info('Migrated personas.json to agents.json')
+  }
+}
+
 // --- Default Data -----------------------------------------------------------
 const DEFAULT_CONFIG = {
   anthropic: {
@@ -664,6 +674,7 @@ app.whenReady().then(async () => {
   ensureDataDir()
   await migrateChatsIfNeeded()
   await migrateEnvDataIfNeeded()
+  migratePersonasToAgents()
   createWindow()
 
   // ── Clean up stale 'running' run entries from a previous session ────────────
@@ -1103,8 +1114,8 @@ ipcMain.handle('store:save-env-path', (_, key, value) => {
   }
 })
 
-ipcMain.handle('store:get-personas', async () => readJSONAsync(PERSONAS_FILE, { categories: [], personas: [] }))
-ipcMain.handle('store:save-personas', (_, data) => { writeJSON(PERSONAS_FILE, data); return true })
+ipcMain.handle('store:get-agents', async () => readJSONAsync(AGENTS_FILE, { categories: [], agents: [] }))
+ipcMain.handle('store:save-agents', (_, data) => { writeJSON(AGENTS_FILE, data); return true })
 
 // --- IPC: Tasks -------------------------------------------------------------
 

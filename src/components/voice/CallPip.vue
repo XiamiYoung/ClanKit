@@ -52,18 +52,18 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useVoiceStore } from '../../stores/voice'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 import { getAvatarDataUri } from '../personas/personaAvatars'
 
 const voiceStore = useVoiceStore()
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 const router = useRouter()
 
 const emit = defineEmits(['end-call', 'toggle-mute'])
 
 const personaAvatar = computed(() => {
   if (!voiceStore.activePersonaId) return null
-  const persona = personasStore.personas.find(p => p.id === voiceStore.activePersonaId)
+  const persona = agentsStore.agents.find(p => p.id === voiceStore.activePersonaId)
   if (!persona?.avatar) return null
   return getAvatarDataUri(persona.avatar)
 })

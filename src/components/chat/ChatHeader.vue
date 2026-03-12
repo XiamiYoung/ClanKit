@@ -101,28 +101,28 @@
       </svg>
     </button>
 
-    <!-- Row 2: Personas (right-aligned, left of Chat Settings) + Chat Settings button -->
+    <!-- Row 2: Agents (right-aligned, left of Chat Settings) + Chat Settings button -->
     <div class="ch-row-bottom" :class="{ 'ch-row-bottom--collapsed': !headerExpanded }">
       <slot name="row-bottom-left" />
       <div class="ch-row-bottom-right">
-        <!-- Persona selectors -->
-        <div class="persona-section">
-          <!-- ── User persona ── -->
-          <div class="persona-group">
-            <div class="persona-card-wrap" ref="usrChipWrap">
-              <div class="persona-card user" @mouseenter="showPersonaTooltip($event, resolvedUserPersonaId)" @mouseleave="hidePersonaTooltip">
-                <div class="persona-card-avatar">
-                  <img v-if="activeUserAvatarDataUri" :src="activeUserAvatarDataUri" alt="" class="persona-card-avatar-img" />
-                  <div v-else class="persona-card-avatar-default user">
+        <!-- Agent selectors -->
+        <div class="agent-section">
+          <!-- ── User agent ── -->
+          <div class="agent-group">
+            <div class="agent-card-wrap" ref="usrChipWrap">
+              <div class="agent-card user" @mouseenter="showAgentTooltip($event, resolvedUserAgentId)" @mouseleave="hideAgentTooltip">
+                <div class="agent-card-avatar">
+                  <img v-if="activeUserAvatarDataUri" :src="activeUserAvatarDataUri" alt="" class="agent-card-avatar-img" />
+                  <div v-else class="agent-card-avatar-default user">
                     <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                   </div>
                 </div>
-                <div v-if="!compactPersonas" class="persona-card-info">
-                  <span class="persona-card-name">{{ activeUserPersonaName }}</span>
+                <div v-if="!compactAgents" class="agent-card-info">
+                  <span class="agent-card-name">{{ activeUserAgentName }}</span>
                 </div>
                 <button
-                  class="persona-card-summary-btn"
-                  @click.stop="$emit('open-soul-viewer', activeUserPersona?.id || '__default_user__', 'users', activeUserPersona?.name || 'User')"
+                  class="agent-card-summary-btn"
+                  @click.stop="$emit('open-soul-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
                   title="View summary"
                 >
                   <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -131,32 +131,32 @@
                   </svg>
                 </button>
               </div>
-              <!-- User persona select button -->
-              <button class="sys-add-btn" @click.stop="togglePopover('user')" title="Switch user persona">
+              <!-- User agent select button -->
+              <button class="sys-add-btn" @click.stop="togglePopover('user')" title="Switch user agent">
                 <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="8" r="4"/><path d="M3 21v-2a6 6 0 0 1 9.29-5"/><path d="M19 14v6m-3-3 3 3 3-3"/></svg>
               </button>
               </div>
           </div>
 
-          <!-- ── System personas ── -->
-          <div class="persona-group system-group">
+          <!-- ── System agents ── -->
+          <div class="agent-group system-group">
             <!-- Overlapping avatar stack -->
             <div class="sys-avatar-stack">
               <div
-                v-for="(pid, idx) in visibleSystemPersonaIds"
+                v-for="(pid, idx) in visibleSystemAgentIds"
                 :key="pid"
                 class="sys-avatar-item"
-                :style="{ zIndex: activeSystemPersonaIds.length - idx }"
+                :style="{ zIndex: activeSystemAgentIds.length - idx }"
                 @click.stop="onSysAvatarClick(pid)"
-                @mouseenter="showPersonaTooltip($event, pid)"
-                @mouseleave="hidePersonaTooltip"
+                @mouseenter="showAgentTooltip($event, pid)"
+                @mouseleave="hideAgentTooltip"
               >
-                <img v-if="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" :src="getAvatarDataUriForPersona(personasStore.getPersonaById(pid))" alt="" class="sys-avatar-img" />
-                <span v-else class="sys-avatar-fallback">{{ (personasStore.getPersonaById(pid)?.name || '?').charAt(0) }}</span>
+                <img v-if="getAvatarDataUriForAgent(agentsStore.getAgentById(pid))" :src="getAvatarDataUriForAgent(agentsStore.getAgentById(pid))" alt="" class="sys-avatar-img" />
+                <span v-else class="sys-avatar-fallback">{{ (agentsStore.getAgentById(pid)?.name || '?').charAt(0) }}</span>
                 <button
-                  v-if="activeSystemPersonaIds.length > 1"
+                  v-if="activeSystemAgentIds.length > 1"
                   class="sys-avatar-remove"
-                  @click.stop="$emit('remove-group-persona', resolvedChatId, pid)"
+                  @click.stop="$emit('remove-group-agent', resolvedChatId, pid)"
                 >
                   <svg style="width:8px;height:8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
@@ -172,26 +172,26 @@
               </div>
             </div>
 
-            <!-- Active persona name label (no click) -->
-            <template v-if="!compactPersonas">
+            <!-- Active agent name label (no click) -->
+            <template v-if="!compactAgents">
               <div
-                v-if="activeSystemPersonaIds.length === 1"
-                class="sys-persona-label"
-                @mouseenter="showPersonaTooltip($event, activeSystemPersonaIds[0])"
-                @mouseleave="hidePersonaTooltip"
+                v-if="activeSystemAgentIds.length === 1"
+                class="sys-agent-label"
+                @mouseenter="showAgentTooltip($event, activeSystemAgentIds[0])"
+                @mouseleave="hideAgentTooltip"
               >
-                <span class="sys-persona-name">{{ personasStore.getPersonaById(activeSystemPersonaIds[0])?.name || 'Unknown' }}</span>
+                <span class="sys-agent-name">{{ agentsStore.getAgentById(activeSystemAgentIds[0])?.name || 'Unknown' }}</span>
               </div>
-              <div v-else-if="activeSystemPersonaIds.length > 1" class="sys-persona-label">
-                <span class="sys-persona-name">{{ activeSystemPersonaIds.length }} personas</span>
+              <div v-else-if="activeSystemAgentIds.length > 1" class="sys-agent-label">
+                <span class="sys-agent-name">{{ activeSystemAgentIds.length }} agents</span>
               </div>
             </template>
 
-            <!-- Summary button (single persona) — opens SoulViewer -->
+            <!-- Summary button (single agent) — opens SoulViewer -->
             <button
-              v-if="activeSystemPersonaIds.length === 1"
-              class="persona-card-summary-btn"
-              @click.stop="$emit('open-soul-viewer', activeSystemPersonaIds[0], 'system', personasStore.getPersonaById(activeSystemPersonaIds[0])?.name || 'System')"
+              v-if="activeSystemAgentIds.length === 1"
+              class="agent-card-summary-btn"
+              @click.stop="$emit('open-soul-viewer', activeSystemAgentIds[0], 'system', agentsStore.getAgentById(activeSystemAgentIds[0])?.name || 'System')"
               title="View summary"
             >
               <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -200,9 +200,9 @@
               </svg>
             </button>
 
-            <!-- Configure persona button -->
-            <div class="persona-chip-wrap" ref="groupAddChipWrap">
-              <button class="sys-add-btn" @click.stop="openPersonaCombobox" title="Configure personas">
+            <!-- Configure agent button -->
+            <div class="agent-chip-wrap" ref="groupAddChipWrap">
+              <button class="sys-add-btn" @click.stop="openAgentCombobox" title="Configure agents">
                 <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </button>
             </div>
@@ -223,19 +223,19 @@
     >{{ pathTooltip.text }}</div>
   </Teleport>
 
-  <!-- Floating persona tooltip (Teleport to body so it escapes overflow:hidden) -->
+  <!-- Floating agent tooltip (Teleport to body so it escapes overflow:hidden) -->
   <Teleport to="body">
     <div
       v-if="tooltipState.visible"
-      class="ch-persona-tooltip-fixed"
+      class="ch-agent-tooltip-fixed"
       :style="{ top: tooltipState.y + 'px', left: tooltipState.x + 'px' }"
     >
-      <div class="ch-persona-tooltip-name">{{ tooltipState.name }}</div>
-      <div class="ch-persona-tooltip-text">{{ tooltipState.text }}</div>
+      <div class="ch-agent-tooltip-name">{{ tooltipState.name }}</div>
+      <div class="ch-agent-tooltip-text">{{ tooltipState.text }}</div>
     </div>
   </Teleport>
 
-  <!-- ── User Persona Modal ── -->
+  <!-- ── User Agent Modal ── -->
   <Teleport to="body">
     <div v-if="showUsrPopover" class="ch-modal-backdrop">
       <div class="ch-modal" role="dialog" aria-modal="true">
@@ -243,39 +243,39 @@
           <div class="ch-modal-header-icon">
             <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
-          <span class="ch-modal-title">User Persona</span>
+          <span class="ch-modal-title">User Agent</span>
           <button class="ch-modal-close" @click="showUsrPopover = false">
             <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
         <div class="ch-modal-body">
           <!-- User categories -->
-          <div v-for="cat in personasStore.userCategories" :key="cat.id" class="ch-cat-section">
+          <div v-for="cat in agentsStore.userCategories" :key="cat.id" class="ch-cat-section">
             <button class="ch-cat-header" @click="toggleUserCat(cat.id)">
               <svg class="ch-cat-chevron" :class="{ expanded: expandedUserCatIds.has(cat.id) }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
               <span v-if="cat.emoji" class="ch-cat-emoji">{{ cat.emoji }}</span>
               <span class="ch-cat-name">{{ cat.name }}</span>
-              <span class="ch-cat-count">{{ personasStore.personasInCategory(cat.id).length }}</span>
+              <span class="ch-cat-count">{{ agentsStore.agentsInCategory(cat.id).length }}</span>
             </button>
             <div v-if="expandedUserCatIds.has(cat.id)" class="ch-cat-items">
               <button
-                v-for="p in personasStore.personasInCategory(cat.id)"
+                v-for="p in agentsStore.agentsInCategory(cat.id)"
                 :key="p.id"
                 class="ch-modal-item"
-                :class="{ selected: resolvedUserPersonaId === p.id }"
-                @click="selectPersona('user', p.isDefault ? null : p.id)"
+                :class="{ selected: resolvedUserAgentId === p.id }"
+                @click="selectAgent('user', p.isDefault ? null : p.id)"
               >
                 <div class="ch-modal-item-avatar">
-                  <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                  <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
                   <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
                 </div>
                 <div class="ch-modal-item-text">
                   <span class="ch-modal-item-name">{{ p.name }}</span>
                   <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
                 </div>
-                <svg v-if="resolvedUserPersonaId === p.id" class="ch-modal-check" style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-if="resolvedUserAgentId === p.id" class="ch-modal-check" style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
-              <div v-if="personasStore.personasInCategory(cat.id).length === 0" class="ch-cat-empty">No personas</div>
+              <div v-if="agentsStore.agentsInCategory(cat.id).length === 0" class="ch-cat-empty">No agents</div>
             </div>
           </div>
           <!-- All (fallback) section — always last -->
@@ -283,25 +283,25 @@
             <button class="ch-cat-header" @click="toggleUserCat('__all__')">
               <svg class="ch-cat-chevron" :class="{ expanded: expandedUserCatIds.has('__all__') }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
               <span class="ch-cat-name">All</span>
-              <span class="ch-cat-count">{{ sortedUserPersonas.length }}</span>
+              <span class="ch-cat-count">{{ sortedUserAgents.length }}</span>
             </button>
             <div v-if="expandedUserCatIds.has('__all__')" class="ch-cat-items">
               <button
-                v-for="p in sortedUserPersonas"
+                v-for="p in sortedUserAgents"
                 :key="p.id"
                 class="ch-modal-item"
-                :class="{ selected: resolvedUserPersonaId === p.id }"
-                @click="selectPersona('user', p.isDefault ? null : p.id)"
+                :class="{ selected: resolvedUserAgentId === p.id }"
+                @click="selectAgent('user', p.isDefault ? null : p.id)"
               >
                 <div class="ch-modal-item-avatar">
-                  <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                  <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
                   <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
                 </div>
                 <div class="ch-modal-item-text">
                   <span class="ch-modal-item-name">{{ p.name }}</span>
                   <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
                 </div>
-                <svg v-if="resolvedUserPersonaId === p.id" class="ch-modal-check" style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-if="resolvedUserAgentId === p.id" class="ch-modal-check" style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
             </div>
           </div>
@@ -310,7 +310,7 @@
     </div>
   </Teleport>
 
-  <!-- ── System Persona Picker Modal ── -->
+  <!-- ── System Agent Picker Modal ── -->
   <Teleport to="body">
     <div v-if="showGroupAddPopover" class="ch-modal-backdrop">
       <div class="ch-modal" role="dialog" aria-modal="true">
@@ -318,7 +318,7 @@
           <div class="ch-modal-header-icon">
             <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><path d="M4 12h16"/><path d="M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1"/><path d="M9 16h0"/><path d="M15 16h0"/></svg>
           </div>
-          <span class="ch-modal-title">System Personas</span>
+          <span class="ch-modal-title">System Agents</span>
           <button class="ch-modal-close" @click="showGroupAddPopover = false">
             <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
@@ -326,28 +326,28 @@
         <div class="ch-modal-search">
           <svg style="width:14px;height:14px;flex-shrink:0;color:#6B7280;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input
-            ref="personaSearchEl"
-            v-model="personaSearchQuery"
+            ref="agentSearchEl"
+            v-model="agentSearchQuery"
             type="text"
-            placeholder="Search personas..."
+            placeholder="Search agents..."
             class="ch-modal-search-input"
           />
         </div>
         <div class="ch-modal-body">
           <!-- When searching: flat filtered list -->
-          <template v-if="personaSearchQuery.trim()">
+          <template v-if="agentSearchQuery.trim()">
             <label
-              v-for="p in filteredSystemPersonas"
+              v-for="p in filteredSystemAgents"
               :key="p.id"
               class="ch-modal-item ch-modal-item-check"
-              :class="{ selected: activeSystemPersonaIds.includes(p.id) }"
+              :class="{ selected: activeSystemAgentIds.includes(p.id) }"
             >
-              <div class="ch-modal-check-box" :class="{ checked: activeSystemPersonaIds.includes(p.id) }">
-                <input type="checkbox" :checked="activeSystemPersonaIds.includes(p.id)" @change="toggleSystemPersona(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
-                <svg v-if="activeSystemPersonaIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+              <div class="ch-modal-check-box" :class="{ checked: activeSystemAgentIds.includes(p.id) }">
+                <input type="checkbox" :checked="activeSystemAgentIds.includes(p.id)" @change="toggleSystemAgent(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
+                <svg v-if="activeSystemAgentIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
               </div>
               <div class="ch-modal-item-avatar">
-                <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
                 <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
               </div>
               <div class="ch-modal-item-text">
@@ -355,31 +355,31 @@
                 <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
               </div>
             </label>
-            <div v-if="filteredSystemPersonas.length === 0" class="ch-modal-empty">No personas match</div>
+            <div v-if="filteredSystemAgents.length === 0" class="ch-modal-empty">No agents match</div>
           </template>
           <!-- No search: category tree -->
           <template v-else>
             <!-- System categories -->
-            <div v-for="cat in personasStore.systemCategories" :key="cat.id" class="ch-cat-section">
+            <div v-for="cat in agentsStore.systemCategories" :key="cat.id" class="ch-cat-section">
               <button class="ch-cat-header" @click="toggleSysCat(cat.id)">
                 <svg class="ch-cat-chevron" :class="{ expanded: expandedSysCatIds.has(cat.id) }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
                 <span v-if="cat.emoji" class="ch-cat-emoji">{{ cat.emoji }}</span>
                 <span class="ch-cat-name">{{ cat.name }}</span>
-                <span class="ch-cat-count">{{ personasStore.personasInCategory(cat.id).length }}</span>
+                <span class="ch-cat-count">{{ agentsStore.agentsInCategory(cat.id).length }}</span>
               </button>
               <div v-if="expandedSysCatIds.has(cat.id)" class="ch-cat-items">
                 <label
-                  v-for="p in personasStore.personasInCategory(cat.id)"
+                  v-for="p in agentsStore.agentsInCategory(cat.id)"
                   :key="p.id"
                   class="ch-modal-item ch-modal-item-check"
-                  :class="{ selected: activeSystemPersonaIds.includes(p.id) }"
+                  :class="{ selected: activeSystemAgentIds.includes(p.id) }"
                 >
-                  <div class="ch-modal-check-box" :class="{ checked: activeSystemPersonaIds.includes(p.id) }">
-                    <input type="checkbox" :checked="activeSystemPersonaIds.includes(p.id)" @change="toggleSystemPersona(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
-                    <svg v-if="activeSystemPersonaIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  <div class="ch-modal-check-box" :class="{ checked: activeSystemAgentIds.includes(p.id) }">
+                    <input type="checkbox" :checked="activeSystemAgentIds.includes(p.id)" @change="toggleSystemAgent(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
+                    <svg v-if="activeSystemAgentIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
                   </div>
                   <div class="ch-modal-item-avatar">
-                    <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                    <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
                     <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
                   </div>
                   <div class="ch-modal-item-text">
@@ -387,7 +387,7 @@
                     <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
                   </div>
                 </label>
-                <div v-if="personasStore.personasInCategory(cat.id).length === 0" class="ch-cat-empty">No personas</div>
+                <div v-if="agentsStore.agentsInCategory(cat.id).length === 0" class="ch-cat-empty">No agents</div>
               </div>
             </div>
             <!-- All (fallback) section — always last -->
@@ -395,21 +395,21 @@
               <button class="ch-cat-header" @click="toggleSysCat('__all__')">
                 <svg class="ch-cat-chevron" :class="{ expanded: expandedSysCatIds.has('__all__') }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
                 <span class="ch-cat-name">All</span>
-                <span class="ch-cat-count">{{ sortedSystemPersonas.length }}</span>
+                <span class="ch-cat-count">{{ sortedSystemAgents.length }}</span>
               </button>
               <div v-if="expandedSysCatIds.has('__all__')" class="ch-cat-items">
                 <label
-                  v-for="p in sortedSystemPersonas"
+                  v-for="p in sortedSystemAgents"
                   :key="p.id"
                   class="ch-modal-item ch-modal-item-check"
-                  :class="{ selected: activeSystemPersonaIds.includes(p.id) }"
+                  :class="{ selected: activeSystemAgentIds.includes(p.id) }"
                 >
-                  <div class="ch-modal-check-box" :class="{ checked: activeSystemPersonaIds.includes(p.id) }">
-                    <input type="checkbox" :checked="activeSystemPersonaIds.includes(p.id)" @change="toggleSystemPersona(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
-                    <svg v-if="activeSystemPersonaIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  <div class="ch-modal-check-box" :class="{ checked: activeSystemAgentIds.includes(p.id) }">
+                    <input type="checkbox" :checked="activeSystemAgentIds.includes(p.id)" @change="toggleSystemAgent(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
+                    <svg v-if="activeSystemAgentIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
                   </div>
                   <div class="ch-modal-item-avatar">
-                    <img v-if="getAvatarDataUriForPersona(p)" :src="getAvatarDataUriForPersona(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                    <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
                     <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
                   </div>
                   <div class="ch-modal-item-text">
@@ -438,7 +438,7 @@
       <div class="ch-config-tooltip-row"><span class="cct-key">MCP</span><span class="cct-val">{{ enabledMcpServers.length }}/{{ mcpStore.servers.length }} ({{ formatTokens(mcpTokenEstimate) }})</span></div>
       <div class="ch-config-tooltip-row"><span class="cct-key">RAG</span><span class="cct-val">{{ ragEnabledCount }} index{{ ragEnabledCount !== 1 ? 'es' : '' }}</span></div>
       <div class="ch-config-tooltip-row"><span class="cct-key">Path</span><span class="cct-val">{{ effectiveWorkingPath }}</span></div>
-      <div class="ch-config-tooltip-row"><span class="cct-key">Rounds</span><span class="cct-val">{{ effectivePersonaRounds }}</span></div>
+      <div class="ch-config-tooltip-row"><span class="cct-key">Rounds</span><span class="cct-val">{{ effectiveAgentRounds }}</span></div>
       <div class="ch-config-tooltip-row"><span class="cct-key">Max Tokens</span><span class="cct-val">{{ effectiveMaxOutputTokens.toLocaleString() }}</span></div>
     </div>
   </Teleport>
@@ -452,8 +452,8 @@
     >
       <template v-if="canStartCall">
         <div class="ch-call-tooltip-row">
-          <span class="cct-key">Persona</span>
-          <span class="cct-val">{{ personasStore.getPersonaById(activeSystemPersonaIds[0])?.name || '—' }}</span>
+          <span class="cct-key">Agent</span>
+          <span class="cct-val">{{ agentsStore.getAgentById(activeSystemAgentIds[0])?.name || '—' }}</span>
         </div>
         <div class="ch-call-tooltip-row">
           <span class="cct-key">STT</span>
@@ -476,25 +476,25 @@
 import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useChatsStore } from '../../stores/chats'
 import { useConfigStore } from '../../stores/config'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 import { useModelsStore } from '../../stores/models'
 import { useToolsStore } from '../../stores/tools'
 import { useMcpStore } from '../../stores/mcp'
 import { useKnowledgeStore } from '../../stores/knowledge'
-import { getAvatarDataUri } from '../personas/personaAvatars'
+import { getAvatarDataUri } from '../agents/agentAvatars'
 import { estimateToolTokens, estimateMcpTokens, formatTokens } from '../../utils/tokenEstimate'
 import { useVoiceStore } from '../../stores/voice'
 
 const props = defineProps({
   chatId: { type: String, required: true },
   isGridView: { type: Boolean, default: false },
-  compactPersonas: { type: Boolean, default: false },
+  compactAgents: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
   'open-chat-settings',
   'open-soul-viewer',
-  'remove-group-persona',
+  'remove-group-agent',
   'start-call',
   'enter-grid',
 ])
@@ -505,7 +505,7 @@ defineExpose({ headerExpanded })
 
 const chatsStore = useChatsStore()
 const configStore = useConfigStore()
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 const voiceStore = useVoiceStore()
 
 // ── Voice call ──
@@ -562,8 +562,8 @@ const canStartCall = computed(() => {
 const callButtonTooltip = computed(() => {
   if (voiceStore.isCallActive) return 'Call already in progress'
   const count = activeSystemPersonaIds.value.length
-  if (count === 0) return 'Select a persona to start a call'
-  if (count > 1) return 'Voice call requires exactly one persona'
+  if (count === 0) return 'Select an agent to start a call'
+  if (count > 1) return 'Voice call requires exactly one agent'
   if (!configStore.config.voiceCall?.whisperApiKey) return 'Whisper API key not configured — go to Configuration → Voice Call'
   return 'Start voice call'
 })
@@ -637,7 +637,7 @@ function cancelEdit() {
   isEditing.value = false
 }
 
-// ── User persona popover ──
+// ── User agent popover ──
 const showUsrPopover = ref(false)
 const usrChipWrap = ref(null)
 const expandedUserCatIds = ref(new Set())
@@ -645,54 +645,54 @@ const expandedUserCatIds = ref(new Set())
 // ── Group add popover ──
 const showGroupAddPopover = ref(false)
 const groupAddChipWrap = ref(null)
-const personaSearchEl = ref(null)
-const personaSearchQuery = ref('')
+const agentSearchEl = ref(null)
+const agentSearchQuery = ref('')
 const expandedSysCatIds = ref(new Set())
 
 // ── Own tooltip state (not shared with parent) ──
 const tooltipState = reactive({ visible: false, name: '', text: '', x: 0, y: 0 })
 
-// ── Persona computed ──
-function getAvatarDataUriForPersona(persona) {
-  if (!persona?.avatar) return null
-  return getAvatarDataUri(persona.avatar)
+// ── Agent computed ──
+function getAvatarDataUriForAgent(agent) {
+  if (!agent?.avatar) return null
+  return getAvatarDataUri(agent.avatar)
 }
 
-const activeUserPersona = computed(() => {
+const activeUserAgent = computed(() => {
   const id = chat.value?.userPersonaId
-  return id ? personasStore.getPersonaById(id) : personasStore.defaultUserPersona
+  return id ? agentsStore.getAgentById(id) : agentsStore.defaultUserAgent
 })
-const activeUserAvatarDataUri = computed(() => getAvatarDataUriForPersona(activeUserPersona.value))
-const activeUserPersonaName = computed(() => activeUserPersona.value?.name || 'Default')
+const activeUserAvatarDataUri = computed(() => getAvatarDataUriForAgent(activeUserAgent.value))
+const activeUserAgentName = computed(() => activeUserAgent.value?.name || 'Default')
 
-const resolvedUserPersonaId = computed(() => {
+const resolvedUserAgentId = computed(() => {
   const id = chat.value?.userPersonaId
-  return id || personasStore.defaultUserPersona?.id || null
+  return id || agentsStore.defaultUserAgent?.id || null
 })
 
-const sortedUserPersonas = computed(() =>
-  [...personasStore.userPersonas].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
+const sortedUserAgents = computed(() =>
+  [...agentsStore.userAgents].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
 )
 
-const sortedSystemPersonas = computed(() =>
-  [...personasStore.systemPersonas].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
+const sortedSystemAgents = computed(() =>
+  [...agentsStore.systemAgents].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
 )
 
-const activeSystemPersonaIds = computed(() => {
+const activeSystemAgentIds = computed(() => {
   const c = chat.value
   if (!c) return []
   if (c.groupPersonaIds?.length > 0) return [...c.groupPersonaIds]
-  const id = c.systemPersonaId || personasStore.defaultSystemPersona?.id
+  const id = c.systemPersonaId || agentsStore.defaultSystemAgent?.id
   return id ? [id] : []
 })
 
 const MAX_VISIBLE_AVATARS = 4
-const visibleSystemPersonaIds = computed(() => activeSystemPersonaIds.value.slice(0, MAX_VISIBLE_AVATARS))
-const overflowSystemCount = computed(() => Math.max(0, activeSystemPersonaIds.value.length - MAX_VISIBLE_AVATARS))
+const visibleSystemAgentIds = computed(() => activeSystemAgentIds.value.slice(0, MAX_VISIBLE_AVATARS))
+const overflowSystemCount = computed(() => Math.max(0, activeSystemAgentIds.value.length - MAX_VISIBLE_AVATARS))
 
-const filteredSystemPersonas = computed(() => {
-  const q = personaSearchQuery.value.toLowerCase().trim()
-  const list = sortedSystemPersonas.value
+const filteredSystemAgents = computed(() => {
+  const q = agentSearchQuery.value.toLowerCase().trim()
+  const list = sortedSystemAgents.value
   if (!q) return list
   return list.filter(p =>
     p.name.toLowerCase().includes(q) ||
@@ -720,53 +720,53 @@ function togglePopover(type) {
   }
 }
 
-function selectPersona(type, id) {
-  if (props.chatId) chatsStore.setChatPersona(props.chatId, type, id)
+function selectAgent(type, id) {
+  if (props.chatId) chatsStore.setChatAgent(props.chatId, type, id)
   showUsrPopover.value = false
 }
 
-function openPersonaCombobox() {
+function openAgentCombobox() {
   showGroupAddPopover.value = !showGroupAddPopover.value
   if (showGroupAddPopover.value) {
-    personaSearchQuery.value = ''
+    agentSearchQuery.value = ''
     expandedSysCatIds.value = new Set()
-    nextTick(() => personaSearchEl.value?.focus())
+    nextTick(() => agentSearchEl.value?.focus())
   }
 }
 
-function toggleSystemPersona(personaId) {
+function toggleSystemAgent(agentId) {
   const chatId = props.chatId
   if (!chatId) return
   const c = chat.value
-  const currentIds = activeSystemPersonaIds.value
+  const currentIds = activeSystemAgentIds.value
 
-  if (currentIds.includes(personaId)) {
+  if (currentIds.includes(agentId)) {
     if (currentIds.length <= 1) return
-    chatsStore.removeGroupPersona(chatId, personaId)
+    chatsStore.removeGroupAgent(chatId, agentId)
   } else {
     if (!c.isGroupChat) {
       chatsStore.toggleGroupMode(chatId, true)
     }
-    chatsStore.addGroupPersona(chatId, personaId)
+    chatsStore.addGroupAgent(chatId, agentId)
   }
 }
 
 // ── System avatar click: grid/group → soul viewer; normal → nothing ──
 function onSysAvatarClick(pid) {
-  if (props.compactPersonas || activeSystemPersonaIds.value.length > 1) {
+  if (props.compactAgents || activeSystemAgentIds.value.length > 1) {
     // Grid view or group chat: icon click opens soul viewer
-    emit('open-soul-viewer', pid, 'system', personasStore.getPersonaById(pid)?.name || 'System')
+    emit('open-soul-viewer', pid, 'system', agentsStore.getAgentById(pid)?.name || 'System')
   }
-  // Normal single-persona view: no action on avatar click (use View Summary btn instead)
+  // Normal single-agent view: no action on avatar click (use View Summary btn instead)
 }
 
-// ── Persona tooltip (header-only) ──
-function showPersonaTooltip(event, pid) {
-  const persona = personasStore.getPersonaById(pid)
-  if (!persona?.description) { tooltipState.visible = false; return }
+// ── Agent tooltip (header-only) ──
+function showAgentTooltip(event, pid) {
+  const agent = agentsStore.getAgentById(pid)
+  if (!agent?.description) { tooltipState.visible = false; return }
   const rect = event.currentTarget.getBoundingClientRect()
-  tooltipState.name = persona.name
-  tooltipState.text = persona.description
+  tooltipState.name = agent.name
+  tooltipState.text = agent.description
   const tooltipWidth = 280
   let left = rect.left + rect.width / 2
   left = Math.max(tooltipWidth / 2 + 8, Math.min(left, window.innerWidth - tooltipWidth / 2 - 8))
@@ -775,7 +775,7 @@ function showPersonaTooltip(event, pid) {
   tooltipState.visible = true
 }
 
-function hidePersonaTooltip() {
+function hideAgentTooltip() {
   tooltipState.visible = false
 }
 
@@ -783,24 +783,24 @@ function hidePersonaTooltip() {
 const effectiveProviderLabel = computed(() => {
   const c = chat.value
   if (!c) return '—'
-  const personaId = activeSystemPersonaIds.value[0]
-  if (!personaId) return '—'
-  const persona = personasStore.getPersonaById(personaId)
+  const agentId = activeSystemAgentIds.value[0]
+  if (!agentId) return '—'
+  const agent = agentsStore.getAgentById(agentId)
   const labels = { anthropic: 'Anthropic', openrouter: 'OpenRouter', openai: 'OpenAI', deepseek: 'DeepSeek' }
-  return labels[persona?.providerId] || '—'
+  return labels[agent?.providerId] || '—'
 })
 
 const effectiveModelLabel = computed(() => {
   const c = chat.value
   if (!c) return '—'
-  const personaId = activeSystemPersonaIds.value[0]
-  if (!personaId) return '—'
-  const override = c.personaModelOverrides?.[personaId]
+  const agentId = activeSystemAgentIds.value[0]
+  if (!agentId) return '—'
+  const override = c.personaModelOverrides?.[agentId]
   if (override) {
     const m = typeof override === 'object' ? override.model : override
     return `${m} (override)`
   }
-  return personasStore.getPersonaById(personaId)?.modelId || '—'
+  return agentsStore.getAgentById(agentId)?.modelId || '—'
 })
 
 // Chat-level tool/MCP/RAG counts for the tooltip
@@ -827,8 +827,8 @@ const effectiveWorkingPath = computed(() => {
   return chat.value?.workingPath || configStore.config.artifactPath || `${configStore.config.dataPath}/artifact`
 })
 
-const effectivePersonaRounds = computed(() => {
-  return chat.value?.maxPersonaRounds ?? 10
+const effectiveAgentRounds = computed(() => {
+  return chat.value?.maxAgentRounds ?? 10
 })
 
 const effectiveMaxOutputTokens = computed(() => {
@@ -1069,7 +1069,7 @@ const effectiveMaxOutputTokens = computed(() => {
   cursor: not-allowed;
   opacity: 0.6;
 }
-/* ── Row 2: Personas + Chat Settings ── */
+/* ── Row 2: Agents + Chat Settings ── */
 .ch-row-bottom {
   display: flex;
   align-items: center;
@@ -1119,13 +1119,13 @@ const effectiveMaxOutputTokens = computed(() => {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
 }
-/* ── Persona section layout ── */
-.persona-section {
+/* ── Agent section layout ── */
+.agent-section {
   display: flex;
   align-items: center;
   gap: 0.625rem;
 }
-.persona-group {
+.agent-group {
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -1136,14 +1136,14 @@ const effectiveMaxOutputTokens = computed(() => {
   box-shadow: 0 2px 8px rgba(75, 85, 99, 0.35), 0 1px 3px rgba(75, 85, 99, 0.2);
 }
 
-/* ── User persona card ── */
-.persona-card-wrap {
+/* ── User agent card ── */
+.agent-card-wrap {
   position: relative;
   display: flex;
   align-items: center;
   gap: 0.375rem;
 }
-.persona-card {
+.agent-card {
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -1155,7 +1155,7 @@ const effectiveMaxOutputTokens = computed(() => {
   font-family: 'Inter', sans-serif;
   position: relative;
 }
-.persona-card-avatar {
+.agent-card-avatar {
   width: 1.875rem;
   height: 1.875rem;
   border-radius: 50%;
@@ -1165,13 +1165,13 @@ const effectiveMaxOutputTokens = computed(() => {
   overflow: hidden;
   flex-shrink: 0;
 }
-.persona-card-avatar-img {
+.agent-card-avatar-img {
   width: 1.875rem;
   height: 1.875rem;
   border-radius: 50%;
   object-fit: cover;
 }
-.persona-card-avatar-default {
+.agent-card-avatar-default {
   width: 1.875rem;
   height: 1.875rem;
   border-radius: 50%;
@@ -1179,23 +1179,23 @@ const effectiveMaxOutputTokens = computed(() => {
   align-items: center;
   justify-content: center;
 }
-.persona-card-avatar-default.user {
+.agent-card-avatar-default.user {
   background: rgba(255,255,255,0.15);
 }
-.persona-card-info {
+.agent-card-info {
   display: flex;
   align-items: baseline;
   gap: 0.25rem;
   min-width: 0;
 }
-.persona-card-name {
+.agent-card-name {
   font-size: 0.6875rem;
   font-weight: 600;
   color: #FFFFFF;
   white-space: nowrap;
   flex-shrink: 0;
 }
-.persona-card-desc {
+.agent-card-desc {
   font-size: 0.625rem;
   font-weight: 500;
   color: rgba(255,255,255,0.6);
@@ -1204,7 +1204,7 @@ const effectiveMaxOutputTokens = computed(() => {
   text-overflow: ellipsis;
   max-width: 5rem;
 }
-.persona-card-summary-btn {
+.agent-card-summary-btn {
   width: 1.25rem;
   height: 1.25rem;
   border-radius: 50%;
@@ -1218,13 +1218,13 @@ const effectiveMaxOutputTokens = computed(() => {
   transition: all 0.15s;
   flex-shrink: 0;
 }
-.persona-card-summary-btn:hover {
+.agent-card-summary-btn:hover {
   background: rgba(255,255,255,0.25);
   color: #FFFFFF;
   transform: scale(1.1);
 }
 
-/* ── System personas: Teams-style avatar stack ── */
+/* ── System agents: Teams-style avatar stack ── */
 .sys-avatar-stack {
   display: flex;
   align-items: center;
@@ -1296,15 +1296,15 @@ const effectiveMaxOutputTokens = computed(() => {
   opacity: 1;
 }
 
-/* System persona name label */
-.sys-persona-label {
+/* System agent name label */
+.sys-agent-label {
   display: flex;
   align-items: baseline;
   gap: 0.25rem;
   margin-left: 0.25rem;
   flex-shrink: 0;
 }
-.sys-persona-name {
+.sys-agent-name {
   font-family: 'Inter', sans-serif;
   font-size: 0.6875rem;
   font-weight: 600;
@@ -1312,7 +1312,7 @@ const effectiveMaxOutputTokens = computed(() => {
   white-space: nowrap;
   flex-shrink: 0;
 }
-.sys-persona-desc {
+.sys-agent-desc {
   font-family: 'Inter', sans-serif;
   font-size: 0.625rem;
   font-weight: 500;
@@ -1323,7 +1323,7 @@ const effectiveMaxOutputTokens = computed(() => {
   max-width: 6.25rem;
 }
 
-/* Add persona button */
+/* Add agent button */
 .sys-add-btn {
   width: 1.75rem;
   height: 1.75rem;
@@ -1344,8 +1344,8 @@ const effectiveMaxOutputTokens = computed(() => {
   background: rgba(255,255,255,0.1);
 }
 
-/* ── Persona chip wrap ── */
-.persona-chip-wrap {
+/* ── Agent chip wrap ── */
+.agent-chip-wrap {
   position: relative;
 }
 </style>
@@ -1369,7 +1369,7 @@ const effectiveMaxOutputTokens = computed(() => {
   box-shadow: 0 4px 12px rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.12);
 }
 
-/* ── Persona modals (teleported) ── */
+/* ── Agent modals (teleported) ── */
 .ch-modal-backdrop {
   position: fixed; inset: 0; z-index: 200;
   background: rgba(0,0,0,0.55);
@@ -1499,7 +1499,7 @@ const effectiveMaxOutputTokens = computed(() => {
   font-family: 'Inter', sans-serif; font-size: 0.8125rem; color: #4B5563;
 }
 
-/* Category tree inside persona modals */
+/* Category tree inside agent modals */
 .ch-cat-section { display: flex; flex-direction: column; }
 .ch-cat-header {
   display: flex; align-items: center; gap: 0.375rem;
@@ -1609,7 +1609,7 @@ const effectiveMaxOutputTokens = computed(() => {
   max-width: 10rem;
 }
 
-.ch-persona-tooltip-fixed {
+.ch-agent-tooltip-fixed {
   position: fixed;
   z-index: 9999;
   pointer-events: none;
@@ -1621,14 +1621,14 @@ const effectiveMaxOutputTokens = computed(() => {
   border-radius: 0.625rem;
   box-shadow: 0 4px 12px rgba(0,0,0,0.12);
 }
-.ch-persona-tooltip-name {
+.ch-agent-tooltip-name {
   font-family: 'Inter', sans-serif;
   font-size: 0.75rem;
   font-weight: 700;
   color: #F5F5F5;
   margin-bottom: 0.25rem;
 }
-.ch-persona-tooltip-text {
+.ch-agent-tooltip-text {
   font-family: 'Inter', sans-serif;
   font-size: 0.75rem;
   font-weight: 400;

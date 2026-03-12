@@ -187,20 +187,20 @@
 import { ref, computed, watch, watchEffect, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChatsStore } from '../../stores/chats'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 import { useVoiceStore } from '../../stores/voice'
 import { useTasksStore } from '../../stores/tasks'
 import { useFocusModeStore } from '../../stores/focusMode'
 
 const router = useRouter()
 const chatsStore = useChatsStore()
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 const voiceStore = useVoiceStore()
 const tasksStore = useTasksStore()
 const focusModeStore = useFocusModeStore()
 const isMinibarMode = computed(() => focusModeStore.isMinibarMode)
 
-if (!personasStore.personas.length) personasStore.loadPersonas()
+if (!agentsStore.agents.length) agentsStore.loadAgents()
 
 // ── Chat section ──────────────────────────────────────────────────────────
 const ongoingCount = ref(0)
@@ -337,7 +337,7 @@ async function resolveTargetChatId() {
   if (chatsStore.activeChatId) return chatsStore.activeChatId
   const first = chatsStore.chats[0]
   if (first) return first.id
-  const defaultPersonaId = personasStore.defaultSystemPersona?.id ?? null
+  const defaultPersonaId = agentsStore.defaultSystemAgent?.id ?? null
   const newChat = await chatsStore.createChat('New Chat', defaultPersonaId ? [defaultPersonaId] : null, null)
   return newChat.id
 }

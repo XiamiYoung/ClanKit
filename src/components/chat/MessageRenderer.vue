@@ -247,11 +247,11 @@ import BabylonViewer from './BabylonViewer.vue'
 import PermissionPrompt from './PermissionPrompt.vue'
 import { useChatsStore } from '../../stores/chats'
 import { useConfigStore } from '../../stores/config'
-import { usePersonasStore } from '../../stores/personas'
+import { useAgentsStore } from '../../stores/agents'
 
 const chatsStore = useChatsStore()
 const configStore = useConfigStore()
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 
 const props = defineProps({
   message: { type: Object, required: true }
@@ -380,11 +380,11 @@ function renderMarkdown(text) {
     const clean = stripBase64(String(text))
     const raw = marked.parse(clean, { breaks: true, gfm: true })
     const sanitized = DOMPurify.sanitize(raw)
-    // Highlight @mentions using exact persona names from the store.
+    // Highlight @mentions using exact agent names from the store.
     // Sorted longest-first so "Yeo Bo Jun" matches before "Bo Jun" if both exist.
-    const allPersonas = personasStore.personas || []
-    const sortedNames = allPersonas
-      .map(p => p.name)
+    const allAgents = agentsStore.agents || []
+    const sortedNames = allAgents
+      .map(a => a.name)
       .filter(Boolean)
       .sort((a, b) => b.length - a.length)
     let withMentions = sanitized

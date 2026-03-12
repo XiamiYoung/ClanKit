@@ -410,16 +410,16 @@
           <!-- Left: persona pill -->
           <div class="ai-doc-float-topbar-left">
             <button
-              v-if="availablePersonas.length > 0"
-              class="aidoc-persona-pill"
+              v-if="availableAgents.length > 0"
+              class="aidoc-agent-pill"
               @mousedown.stop
-              @click.stop="openDocPersonaModal"
+              @click.stop="openDocAgentModal"
               @mouseenter="showPersonaPillTooltip"
               @mouseleave="hidePersonaPillTooltip"
             >
-              <div class="aidoc-persona-pill-avatar">
-                <img v-if="activeDocPersonaAvatar" :src="activeDocPersonaAvatar" alt="" class="aidoc-persona-pill-img" />
-                <span v-else class="aidoc-persona-pill-initial">{{ (activeDocPersonaName || '?').charAt(0) }}</span>
+              <div class="aidoc-agent-pill-avatar">
+                <img v-if="activeDocAgentAvatar" :src="activeDocAgentAvatar" alt="" class="aidoc-agent-pill-img" />
+                <span v-else class="aidoc-agent-pill-initial">{{ (activeDocAgentName || '?').charAt(0) }}</span>
               </div>
             </button>
           </div>
@@ -474,12 +474,12 @@
     <!-- ── Persona pill tooltip (fixed, escapes overflow:hidden) ── -->
     <Teleport to="body">
       <div
-        v-if="isAiPanelOwner && personaPillTooltip.visible"
-        class="aidoc-persona-tooltip-fixed"
-        :style="{ top: personaPillTooltip.y + 'px', left: personaPillTooltip.x + 'px' }"
+        v-if="isAiPanelOwner && agentPillTooltip.visible"
+        class="aidoc-agent-tooltip-fixed"
+        :style="{ top: agentPillTooltip.y + 'px', left: agentPillTooltip.x + 'px' }"
       >
-        <span class="aidoc-persona-tooltip-name">{{ activeDocPersonaName }}</span>
-        <span v-if="activeDocPersona?.description" class="aidoc-persona-tooltip-desc">{{ activeDocPersona.description }}</span>
+        <span class="aidoc-agent-tooltip-name">{{ activeDocAgentName }}</span>
+        <span v-if="activeDocAgent?.description" class="aidoc-agent-tooltip-desc">{{ activeDocAgent.description }}</span>
       </div>
     </Teleport>
 
@@ -521,32 +521,32 @@
 
     <!-- ── AI Doc Persona Selection Modal ── -->
     <Teleport to="body">
-      <div v-if="isAiPanelOwner && showDocPersonaModal" class="aidoc-modal-backdrop">
+      <div v-if="isAiPanelOwner && showDocAgentModal" class="aidoc-modal-backdrop">
         <div class="aidoc-modal" role="dialog" aria-modal="true">
           <div class="aidoc-modal-header">
             <div class="aidoc-modal-header-icon">
               <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             </div>
             <span class="aidoc-modal-title">Select Persona</span>
-            <button class="aidoc-modal-close" @click="showDocPersonaModal = false">
+            <button class="aidoc-modal-close" @click="showDocAgentModal = false">
               <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
           <!-- Search -->
           <div class="ch-modal-search">
             <svg style="width:14px;height:14px;flex-shrink:0;color:#6B7280;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input ref="docPersonaSearchEl" v-model="docPersonaSearchQuery" type="text" placeholder="Search personas..." class="ch-modal-search-input" />
+            <input ref="docAgentSearchEl" v-model="docAgentSearchQuery" type="text" placeholder="Search personas..." class="ch-modal-search-input" />
           </div>
           <div class="aidoc-modal-body">
             <!-- Flat search results -->
-            <template v-if="docPersonaSearchQuery.trim()">
+            <template v-if="docAgentSearchQuery.trim()">
               <button
-                v-for="p in filteredDocPersonas" :key="p.id"
+                v-for="p in filteredDocAgents" :key="p.id"
                 class="ch-modal-item" :class="{ selected: p.id === selectedPersonaId }"
-                @click="selectDocPersona(p.id)"
+                @click="selectDocAgent(p.id)"
               >
                 <div class="ch-modal-item-avatar">
-                  <img v-if="getDocPersonaAvatar(p)" :src="getDocPersonaAvatar(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                  <img v-if="getDocAgentAvatar(p)" :src="getDocAgentAvatar(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
                   <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
                 </div>
                 <div class="ch-modal-item-text">
@@ -555,25 +555,25 @@
                 </div>
                 <svg v-if="p.id === selectedPersonaId" style="width:16px;height:16px;flex-shrink:0;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
-              <div v-if="filteredDocPersonas.length === 0" class="ch-modal-empty">No personas match</div>
+              <div v-if="filteredDocAgents.length === 0" class="ch-modal-empty">No agents match</div>
             </template>
             <!-- Category tree -->
             <template v-else>
-              <div v-for="cat in personasStore.systemCategories" :key="cat.id" class="ch-cat-section">
+              <div v-for="cat in agentsStore.systemCategories" :key="cat.id" class="ch-cat-section">
                 <button class="ch-cat-header" @click="toggleDocCat(cat.id)">
                   <svg class="ch-cat-chevron" :class="{ expanded: expandedDocCatIds.has(cat.id) }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
                   <span v-if="cat.emoji" class="ch-cat-emoji">{{ cat.emoji }}</span>
                   <span class="ch-cat-name">{{ cat.name }}</span>
-                  <span class="ch-cat-count">{{ personasStore.personasInCategory(cat.id).length }}</span>
+                  <span class="ch-cat-count">{{ agentsStore.agentsInCategory(cat.id).length }}</span>
                 </button>
                 <div v-if="expandedDocCatIds.has(cat.id)" class="ch-cat-items">
                   <button
-                    v-for="p in personasStore.personasInCategory(cat.id)" :key="p.id"
+                    v-for="p in agentsStore.agentsInCategory(cat.id)" :key="p.id"
                     class="ch-modal-item" :class="{ selected: p.id === selectedPersonaId }"
-                    @click="selectDocPersona(p.id)"
+                    @click="selectDocAgent(p.id)"
                   >
                     <div class="ch-modal-item-avatar">
-                      <img v-if="getDocPersonaAvatar(p)" :src="getDocPersonaAvatar(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                      <img v-if="getDocAgentAvatar(p)" :src="getDocAgentAvatar(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
                       <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
                     </div>
                     <div class="ch-modal-item-text">
@@ -582,7 +582,7 @@
                     </div>
                     <svg v-if="p.id === selectedPersonaId" style="width:16px;height:16px;flex-shrink:0;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                   </button>
-                  <div v-if="personasStore.personasInCategory(cat.id).length === 0" class="ch-cat-empty">No personas</div>
+                  <div v-if="agentsStore.agentsInCategory(cat.id).length === 0" class="ch-cat-empty">No agents</div>
                 </div>
               </div>
               <!-- All section -->
@@ -590,16 +590,16 @@
                 <button class="ch-cat-header" @click="toggleDocCat('__all__')">
                   <svg class="ch-cat-chevron" :class="{ expanded: expandedDocCatIds.has('__all__') }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
                   <span class="ch-cat-name">All</span>
-                  <span class="ch-cat-count">{{ sortedDocPersonas.length }}</span>
+                  <span class="ch-cat-count">{{ sortedDocAgents.length }}</span>
                 </button>
                 <div v-if="expandedDocCatIds.has('__all__')" class="ch-cat-items">
                   <button
-                    v-for="p in sortedDocPersonas" :key="p.id"
+                    v-for="p in sortedDocAgents" :key="p.id"
                     class="ch-modal-item" :class="{ selected: p.id === selectedPersonaId }"
-                    @click="selectDocPersona(p.id)"
+                    @click="selectDocAgent(p.id)"
                   >
                     <div class="ch-modal-item-avatar">
-                      <img v-if="getDocPersonaAvatar(p)" :src="getDocPersonaAvatar(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
+                      <img v-if="getDocAgentAvatar(p)" :src="getDocAgentAvatar(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
                       <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
                     </div>
                     <div class="ch-modal-item-text">
@@ -775,14 +775,14 @@ import DOMPurify from 'dompurify'
 import TurndownService from 'turndown'
 import { gfm } from 'turndown-plugin-gfm'
 import { useObsidianStore } from '../stores/obsidian'
-import { usePersonasStore, BUILTIN_DOC_EDITOR_ID } from '../stores/personas'
+import { useAgentsStore, BUILTIN_DOC_EDITOR_ID } from '../stores/agents'
 import { useConfigStore } from '../stores/config'
 import { useSkillsStore } from '../stores/skills'
 import { useMcpStore } from '../stores/mcp'
 import { useToolsStore } from '../stores/tools'
 import { useKnowledgeStore } from '../stores/knowledge'
 import { useAiMagic } from '../composables/useAiMagic'
-import { getAvatarDataUri } from '../components/personas/personaAvatars'
+import { getAvatarDataUri } from '../components/agents/agentAvatars'
 import { useFocusModeStore } from '../stores/focusMode'
 
 // When true, this instance is embedded inside FocusModeView and owns the AI panel.
@@ -790,7 +790,7 @@ import { useFocusModeStore } from '../stores/focusMode'
 const props = defineProps({ isEmbedded: { type: Boolean, default: false } })
 
 const store = useObsidianStore()
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 const focusModeStore = useFocusModeStore()
 
@@ -817,33 +817,33 @@ function closeAiDoc() {
   aiDocEnabled.value = false
 }
 
-// Available personas for the AI Doc persona selector (system type only)
-const availablePersonas = computed(() => personasStore.systemPersonas || [])
-const sortedDocPersonas = computed(() =>
-  [...availablePersonas.value].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
+// Available agents for the AI Doc agent selector (system type only)
+const availableAgents = computed(() => agentsStore.systemAgents || [])
+const sortedDocAgents = computed(() =>
+  [...availableAgents.value].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
 )
 
-// Persona toolbar computeds
-const activeDocPersona = computed(() => personasStore.getPersonaById(selectedPersonaId.value))
-const activeDocPersonaName = computed(() => activeDocPersona.value?.name || 'Select Persona')
-const activeDocPersonaAvatar = computed(() => {
-  if (!activeDocPersona.value?.avatar) return null
-  return getAvatarDataUri(activeDocPersona.value.avatar)
+// Agent toolbar computeds
+const activeDocAgent = computed(() => agentsStore.getAgentById(selectedPersonaId.value))
+const activeDocAgentName = computed(() => activeDocAgent.value?.name || 'Select Agent')
+const activeDocAgentAvatar = computed(() => {
+  if (!activeDocAgent.value?.avatar) return null
+  return getAvatarDataUri(activeDocAgent.value.avatar)
 })
-function getDocPersonaAvatar(persona) {
-  if (!persona?.avatar) return null
-  return getAvatarDataUri(persona.avatar)
+function getDocAgentAvatar(agent) {
+  if (!agent?.avatar) return null
+  return getAvatarDataUri(agent.avatar)
 }
 
-// Persona modal — search + category state
-const docPersonaSearchEl = ref(null)
-const docPersonaSearchQuery = ref('')
+// Agent modal — search + category state
+const docAgentSearchEl = ref(null)
+const docAgentSearchQuery = ref('')
 const expandedDocCatIds = ref(new Set())
-const filteredDocPersonas = computed(() => {
-  const q = docPersonaSearchQuery.value.toLowerCase().trim()
-  if (!q) return sortedDocPersonas.value
-  return sortedDocPersonas.value.filter(p =>
-    p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q)
+const filteredDocAgents = computed(() => {
+  const q = docAgentSearchQuery.value.toLowerCase().trim()
+  if (!q) return sortedDocAgents.value
+  return sortedDocAgents.value.filter(a =>
+    a.name.toLowerCase().includes(q) || (a.description || '').toLowerCase().includes(q)
   )
 })
 function toggleDocCat(id) {
@@ -851,31 +851,31 @@ function toggleDocCat(id) {
   if (s.has(id)) s.delete(id); else s.add(id)
   expandedDocCatIds.value = s
 }
-function openDocPersonaModal() {
-  showDocPersonaModal.value = true
-  docPersonaSearchQuery.value = ''
+function openDocAgentModal() {
+  showDocAgentModal.value = true
+  docAgentSearchQuery.value = ''
   expandedDocCatIds.value = new Set()
-  nextTick(() => docPersonaSearchEl.value?.focus())
+  nextTick(() => docAgentSearchEl.value?.focus())
 }
-function selectDocPersona(id) {
+function selectDocAgent(id) {
   selectedPersonaId.value = id
-  showDocPersonaModal.value = false
+  showDocAgentModal.value = false
 }
 
-// Persona + permission modals
-const showDocPersonaModal = ref(false)
+// Agent + permission modals
+const showDocAgentModal = ref(false)
 const showDocPermModal = ref(false)
 
-// Persona pill tooltip — position: fixed to escape overflow:hidden on the panel
-const personaPillTooltip = reactive({ visible: false, x: 0, y: 0 })
-function showPersonaPillTooltip(e) {
+// Agent pill tooltip — position: fixed to escape overflow:hidden on the panel
+const agentPillTooltip = reactive({ visible: false, x: 0, y: 0 })
+function showAgentPillTooltip(e) {
   const rect = e.currentTarget.getBoundingClientRect()
-  personaPillTooltip.x = rect.left
-  personaPillTooltip.y = rect.bottom + 6
-  personaPillTooltip.visible = true
+  agentPillTooltip.x = rect.left
+  agentPillTooltip.y = rect.bottom + 6
+  agentPillTooltip.visible = true
 }
-function hidePersonaPillTooltip() {
-  personaPillTooltip.visible = false
+function hideAgentPillTooltip() {
+  agentPillTooltip.visible = false
 }
 
 // Permission mode for AI Doc (default: allow_all for backwards compat)
@@ -883,9 +883,9 @@ const aiDocPermissionMode = ref('allow_all')
 
 /** Wrap sendAiDoc to inject agent config from stores. */
 function sendAiDoc(userText) {
-  const persona = personasStore.getPersonaById(selectedPersonaId.value)
+  const agent = agentsStore.getAgentById(selectedPersonaId.value)
   const agentConfig = {
-    personaPrompt: persona?.prompt || '',
+    personaPrompt: agent?.prompt || '',
     enabledSkills: JSON.parse(JSON.stringify(skillsStore.skills || [])),
     mcpServers: JSON.parse(JSON.stringify(mcpStore.servers || [])),
     httpTools: JSON.parse(JSON.stringify(toolsStore.tools || [])),
@@ -1613,7 +1613,7 @@ function onGlobalKeydown(e) {
   // Escape closes search bar or modals
   if (e.key === 'Escape') {
     if (showDocPermModal.value) { showDocPermModal.value = false; return }
-    if (showDocPersonaModal.value) { showDocPersonaModal.value = false; return }
+    if (showDocAgentModal.value) { showDocAgentModal.value = false; return }
     if (searchBarOpen.value) { searchBarOpen.value = false }
   }
 }
@@ -3045,7 +3045,7 @@ defineExpose({ docTreeCollapsed })
   min-width: 0;
 }
 /* Self-contained persona pill — avatar only, tooltip on hover */
-.aidoc-persona-pill {
+.aidoc-agent-pill {
   position: relative;
   display: flex;
   align-items: center;
@@ -3056,8 +3056,8 @@ defineExpose({ docTreeCollapsed })
   cursor: pointer;
   transition: opacity 0.12s ease;
 }
-.aidoc-persona-pill:hover { opacity: 0.85; }
-.aidoc-persona-pill-avatar {
+.aidoc-agent-pill:hover { opacity: 0.85; }
+.aidoc-agent-pill-avatar {
   width: 1.625rem;
   height: 1.625rem;
   border-radius: 50%;
@@ -3068,19 +3068,19 @@ defineExpose({ docTreeCollapsed })
   align-items: center;
   justify-content: center;
 }
-.aidoc-persona-pill-img {
+.aidoc-agent-pill-img {
   width: 1.625rem;
   height: 1.625rem;
   border-radius: 50%;
   object-fit: cover;
 }
-.aidoc-persona-pill-initial {
+.aidoc-agent-pill-initial {
   font-size: 0.625rem;
   font-weight: 700;
   color: #fff;
 }
 /* Tooltip — fixed position, escapes overflow:hidden of the panel */
-.aidoc-persona-tooltip-fixed {
+.aidoc-agent-tooltip-fixed {
   position: fixed;
   z-index: 9999;
   background: #FFFFFF;
@@ -3100,14 +3100,14 @@ defineExpose({ docTreeCollapsed })
   from { opacity: 0; transform: translateY(-3px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.aidoc-persona-tooltip-name {
+.aidoc-agent-tooltip-name {
   font-size: 0.6875rem;
   font-weight: 600;
   color: #1A1A1A;
   line-height: 1.2;
   white-space: nowrap;
 }
-.aidoc-persona-tooltip-desc {
+.aidoc-agent-tooltip-desc {
   font-size: 0.5625rem;
   color: #6B7280;
   line-height: 1.3;

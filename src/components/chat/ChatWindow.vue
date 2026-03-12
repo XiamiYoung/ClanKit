@@ -196,7 +196,7 @@
                 </svg>
               </div>
             </div>
-            <span class="cw-msg-name-chip cw-msg-name-chip--user">{{ userPersonaName }}</span>
+            <span class="cw-msg-name-chip cw-msg-name-chip--user">{{ userAgentName }}</span>
           </div>
         </div>
       </template>
@@ -313,8 +313,8 @@
 <script setup>
 import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useChatsStore } from '../../stores/chats'
-import { usePersonasStore } from '../../stores/personas'
-import { getAvatarDataUri } from '../personas/personaAvatars'
+import { useAgentsStore } from '../../stores/agents'
+import { getAvatarDataUri } from '../agents/agentAvatars'
 import MessageRenderer from './MessageRenderer.vue'
 import PlanCard from './PlanCard.vue'
 
@@ -330,7 +330,7 @@ const props = defineProps({
 const emit = defineEmits(['send', 'stop', 'quote', 'delete-message', 'send-with-attachments'])
 
 const chatsStore = useChatsStore()
-const personasStore = usePersonasStore()
+const agentsStore = useAgentsStore()
 
 const messagesEl = ref(null)
 const inputEl = ref(null)
@@ -355,36 +355,36 @@ function triggerShake(id) {
   }, 600)
 }
 
-// ── Persona helpers ──
-function getAvatarUri(persona) {
-  if (!persona?.avatar) return null
-  return getAvatarDataUri(persona.avatar)
+// ── Agent helpers ──
+function getAvatarUri(agent) {
+  if (!agent?.avatar) return null
+  return getAvatarDataUri(agent.avatar)
 }
 
 function getSystemAvatar(msg) {
   const pid = msg.personaId || chat.value?.systemPersonaId
-  const persona = pid ? personasStore.getPersonaById(pid) : personasStore.defaultSystemPersona
-  return getAvatarUri(persona)
+  const agent = pid ? agentsStore.getAgentById(pid) : agentsStore.defaultSystemAgent
+  return getAvatarUri(agent)
 }
 
 function getMsgAssistantName(msg) {
   const pid = msg.personaId || systemPersonaIds.value[0]
-  const persona = pid ? personasStore.getPersonaById(pid) : null
-  return persona?.name || msg.personaName || 'Assistant'
+  const agent = pid ? agentsStore.getAgentById(pid) : null
+  return agent?.name || msg.personaName || 'Assistant'
 }
 
-const userPersona = computed(() => {
+const userAgent = computed(() => {
   const id = chat.value?.userPersonaId
-  return id ? personasStore.getPersonaById(id) : personasStore.defaultUserPersona
+  return id ? agentsStore.getAgentById(id) : agentsStore.defaultUserAgent
 })
-const userPersonaName = computed(() => userPersona.value?.name || 'User')
-const userAvatarUri = computed(() => getAvatarUri(userPersona.value))
+const userAgentName = computed(() => userAgent.value?.name || 'User')
+const userAvatarUri = computed(() => getAvatarUri(userAgent.value))
 
-const systemPersonaIds = computed(() => {
+const systemAgentIds = computed(() => {
   const c = chat.value
   if (!c) return []
   if (c.groupPersonaIds?.length) return c.groupPersonaIds
-  const id = c.systemPersonaId || personasStore.defaultSystemPersona?.id
+  const id = c.systemPersonaId || agentsStore.defaultSystemAgent?.id
   return id ? [id] : []
 })
 
@@ -392,17 +392,17 @@ const systemPersonaIds = computed(() => {
 const avatarTooltip = reactive({ visible: false, name: '', desc: '', x: 0, y: 0 })
 
 function showAvatarTooltip(event, msg) {
-  let persona
+  let agent
   if (msg.role === 'user') {
-    persona = userPersona.value
+    agent = userAgent.value
   } else {
-    const pid = msg.personaId || systemPersonaIds.value[0]
-    persona = pid ? personasStore.getPersonaById(pid) : null
+    const pid = msg.personaId || systemAgentIds.value[0]
+    agent = pid ? agentsStore.getAgentById(pid) : null
   }
-  if (!persona) { avatarTooltip.visible = false; return }
+  if (!agent) { avatarTooltip.visible = false; return }
   const rect = event.currentTarget.getBoundingClientRect()
-  avatarTooltip.name = persona.name || (msg.role === 'user' ? 'User' : 'Assistant')
-  avatarTooltip.desc = persona.description || ''
+  avatarTooltip.name = agent.name || (msg.role === 'user' ? 'User' : 'Assistant')
+  avatarTooltip.desc = agent.description || ''
   const tooltipWidth = 280
   let left = rect.left + rect.width / 2
   left = Math.max(tooltipWidth / 2 + 8, Math.min(left, window.innerWidth - tooltipWidth / 2 - 8))
@@ -504,18 +504,18 @@ function quoteMessage(msg) {
 
 function getQuotedSenderName(q) {
   if (!q) return 'Assistant'
-  if (q.role === 'user') return userPersonaName.value
+  if (q.role === 'user') return userAgentName.value
   if (q.personaId) {
-    const p = personasStore.getPersonaById(q.personaId)
-    if (p) return p.name
+    const a = agentsStore.getAgentById(q.personaId)
+    if (a) return a.name
   }
-  // Fall back to the chat's system persona
+  // Fall back to the chat's system agent
   const sysId = chat.value?.systemPersonaId
   if (sysId) {
-    const p = personasStore.getPersonaById(sysId)
-    if (p) return p.name
+    const a = agentsStore.getAgentById(sysId)
+    if (a) return a.name
   }
-  return personasStore.defaultSystemPersona?.name || 'Assistant'
+  return agentsStore.defaultSystemAgent?.name || 'Assistant'
 }
 
 function clearQuote() {

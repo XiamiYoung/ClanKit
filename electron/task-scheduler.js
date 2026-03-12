@@ -136,7 +136,7 @@ function getPaths() {
   const dir = _getDataDir()
   return {
     configFile:       path.join(dir, 'config.json'),
-    personasFile:     path.join(dir, 'personas.json'),
+    agentsFile:       path.join(dir, 'agents.json'),
     tasksFile:        path.join(dir, 'tasks.json'),
     plansFile:        path.join(dir, 'plans.json'),
     taskRunsDir:      path.join(dir, 'task-runs'),
@@ -165,9 +165,9 @@ async function writeJSONAtomic(file, data) {
   }
 }
 
-// ── Provider config for a persona (mirrors ChatsView buildPersonaRuns logic) ──
+// ── Provider config for an agent (mirrors ChatsView buildPersonaRuns logic) ──
 
-function buildPersonaConfig(persona, globalCfg) {
+function buildAgentConfig(agent, globalCfg) {
   const cfg = { ...globalCfg }
   delete cfg.apiKey
   delete cfg.baseURL
@@ -176,7 +176,7 @@ function buildPersonaConfig(persona, globalCfg) {
   delete cfg._directAuth
   delete cfg._resolvedProvider
 
-  const provider = persona.providerId || globalCfg.defaultProvider || 'anthropic'
+  const provider = agent.providerId || globalCfg.defaultProvider || 'anthropic'
 
   if (provider === 'anthropic') {
     cfg.apiKey  = globalCfg.anthropic?.apiKey  || ''
@@ -197,30 +197,30 @@ function buildPersonaConfig(persona, globalCfg) {
     cfg.defaultProvider   = 'openai'
   }
 
-  if (persona.modelId) {
-    if (provider === 'anthropic')   cfg.anthropic   = { ...cfg.anthropic,   activeModel:  persona.modelId }
-    else if (provider === 'openrouter') cfg.openrouter = { ...cfg.openrouter, defaultModel: persona.modelId }
-    else if (provider === 'openai') cfg.openai     = { ...cfg.openai,       model:        persona.modelId }
-    else if (provider === 'deepseek') cfg.deepseek = { ...cfg.deepseek,     model:        persona.modelId }
+  if (agent.modelId) {
+    if (provider === 'anthropic')   cfg.anthropic   = { ...cfg.anthropic,   activeModel:  agent.modelId }
+    else if (provider === 'openrouter') cfg.openrouter = { ...cfg.openrouter, defaultModel: agent.modelId }
+    else if (provider === 'openai') cfg.openai     = { ...cfg.openai,       model:        agent.modelId }
+    else if (provider === 'deepseek') cfg.deepseek = { ...cfg.deepseek,     model:        agent.modelId }
   }
 
   return cfg
 }
 
-// ── Execute a single step with a single persona ───────────────────────────────
+// ── Execute a single step with a single agent ───────────────────────────────
 
-async function _runPersonaStep(persona, promptText, globalCfg, soulsDir, artifactPath, skillsPath, DoCPath, sandboxConfig) {
-  const personaCfg = buildPersonaConfig(persona, globalCfg)
-  personaCfg.soulsDir           = soulsDir
-  personaCfg.artifactPath       = artifactPath || ''
-  personaCfg.skillsPath         = skillsPath   || ''
-  personaCfg.DoCPath            = DoCPath       || ''
-  personaCfg.chatPermissionMode = 'allow_all'
-  personaCfg.chatAllowList      = []
-  personaCfg.sandboxConfig      = sandboxConfig || { defaultMode: 'allow_all', sandboxAllowList: [], dangerBlockList: [] }
+async function _runAgentStep(agent, promptText, globalCfg, soulsDir, artifactPath, skillsPath, DoCPath, sandboxConfig) {
+  const agentCfg = buildAgentConfig(agent, globalCfg)
+  agentCfg.soulsDir           = soulsDir
+  agentCfg.artifactPath       = artifactPath || ''
+  agentCfg.skillsPath         = skillsPath   || ''
+  agentCfg.DoCPath            = DoCPath       || ''
+  agentCfg.chatPermissionMode = 'allow_all'
+  agentCfg.chatAllowList      = []
+  agentCfg.sandboxConfig      = sandboxConfig || { defaultMode: 'allow_all', sandboxAllowList: [], dangerBlockList: [] }
 
   let output = ''
-  const loop = new AgentLoop({ ...personaCfg })
+  const loop = new AgentLoop({ ...agentCfg })
   await loop.run(
     [{ role: 'user', content: promptText }],
     [],   // enabledAgents
@@ -231,7 +231,7 @@ async function _runPersonaStep(persona, promptText, globalCfg, soulsDir, artifac
       }
     },
     null,
-    { systemPersonaPrompt: persona.prompt || '', systemPersonaId: persona.id, userPersonaId: '__task_user__', groupChatContext: { personaName: persona.name, personaDescription: persona.description || '', otherParticipants: [] } },
+    { systemPersonaPrompt: agent.prompt || '', systemPersonaId: agent.id, userPersonaId: '__task_user__', groupChatContext: { personaName: agent.name, personaDescription: agent.description || '', otherParticipants: [] } },
     [],   // mcpServers
     [],   // httpTools
     null  // ragContext
@@ -242,15 +242,15 @@ async function _runPersonaStep(persona, promptText, globalCfg, soulsDir, artifac
 // ── Build the prompt for a step ───────────────────────────────────────────────
 // Resolves @inputName tokens, {{output:StepName}} tokens, and promptOverride.
 
-function buildStepPrompt(task, step, allPersonas, stepOutputMap) {
+function buildStepPrompt(task, step, allAgents, stepOutputMap) {
   // Use step-level override if provided, else task prompt
   let prompt = (step.promptOverride || '').trim() || task.prompt || ''
 
-  // Replace @inputName placeholders with the assigned persona's actual name
+  // Replace @inputName placeholders with the assigned agent's actual name
   for (const input of (task.personaInputs || [])) {
     const assignedId = step.personaAssignments?.[input.name]
-    const assignedPersona = assignedId ? allPersonas.find(p => p.id === assignedId) : null
-    const replaceName = assignedPersona ? assignedPersona.name : input.name
+    const assignedAgent = assignedId ? allAgents.find(p => p.id === assignedId) : null
+    const replaceName = assignedAgent ? assignedAgent.name : input.name
     const regex = new RegExp(`@${input.name}(?=\\W|$)`, 'g')
     prompt = prompt.replace(regex, `@${replaceName}`)
   }
@@ -304,10 +304,10 @@ function shouldRunStep(step, stepStatuses) {
 // ── Execute a full plan (all steps sequentially) ──────────────────────────────
 
 async function _executePlan(plan, triggeredBy = 'schedule') {
-  const { configFile, personasFile, tasksFile, taskRunsDir, taskRunsIndex, soulsDir } = getPaths()
+  const { configFile, agentsFile, tasksFile, taskRunsDir, taskRunsIndex, soulsDir } = getPaths()
   const globalCfg   = readJSON(configFile,   {})
-  const personasData = readJSON(personasFile, { personas: [] })
-  const allPersonas  = personasData.personas || personasData || []
+  const agentsData = readJSON(agentsFile, { agents: [] })
+  const allAgents  = agentsData.agents || agentsData || []
   const allTasks     = readJSON(tasksFile, [])
 
   const runId      = uuidv4()
@@ -412,29 +412,29 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
         return
       }
 
-      const promptText = buildStepPrompt(task, step, allPersonas, stepOutputMap)
+      const promptText = buildStepPrompt(task, step, allAgents, stepOutputMap)
       const stepOutputs = []
       let stepFailed = false
 
-      // Run all personas for this step in parallel
+      // Run all agents for this step in parallel
       await Promise.all(personaIds.map(async (personaId) => {
-        const persona = allPersonas.find(p => p.id === personaId)
-        if (!persona) {
-          logger.warn(`[TaskScheduler] Step ${stepIdx}: persona ${personaId} not found, skipping`)
+        const agent = allAgents.find(p => p.id === personaId)
+        if (!agent) {
+          logger.warn(`[TaskScheduler] Step ${stepIdx}: agent ${personaId} not found, skipping`)
           const ts = new Date().toISOString()
-          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, personaId, personaName: '(not found)', status: 'skipped', error: 'Persona not found', startedAt: ts, completedAt: ts })
+          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, personaId, personaName: '(not found)', status: 'skipped', error: 'Agent not found', startedAt: ts, completedAt: ts })
           return
         }
 
         const stepStartedAt = new Date().toISOString()
         try {
-          const output = await _runPersonaStep(persona, promptText, globalCfg, soulsDir, artifactPath, skillsPath, DoCPath, sandboxConfig)
+          const output = await _runAgentStep(agent, promptText, globalCfg, soulsDir, artifactPath, skillsPath, DoCPath, sandboxConfig)
           stepOutputs.push(output)
-          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, personaId: persona.id, personaName: persona.name, output, status: 'done', startedAt: stepStartedAt, completedAt: new Date().toISOString() })
-          logger.info(`[TaskScheduler] Step ${stepIdx} persona ${persona.name}: done`)
+          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, personaId: agent.id, personaName: agent.name, output, status: 'done', startedAt: stepStartedAt, completedAt: new Date().toISOString() })
+          logger.info(`[TaskScheduler] Step ${stepIdx} agent ${agent.name}: done`)
         } catch (err) {
-          logger.error(`[TaskScheduler] Step ${stepIdx} persona ${persona.name} error:`, err.message)
-          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, personaId: persona.id, personaName: persona.name, output: '', status: 'failed', error: err.message, startedAt: stepStartedAt, completedAt: new Date().toISOString() })
+          logger.error(`[TaskScheduler] Step ${stepIdx} agent ${agent.name} error:`, err.message)
+          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, personaId: agent.id, personaName: agent.name, output: '', status: 'failed', error: err.message, startedAt: stepStartedAt, completedAt: new Date().toISOString() })
           stepFailed = true
           runStatus = 'error'
           runError  = err.message

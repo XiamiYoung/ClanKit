@@ -36,7 +36,7 @@ function getPaths() {
   const dir = _getDataDir()
   return {
     configFile:        path.join(dir, 'config.json'),
-    personasFile:      path.join(dir, 'personas.json'),
+    agentsFile:        path.join(dir, 'agents.json'),
     recipesFile:       path.join(dir, 'recipes.json'),
     recipeRunsDir:     path.join(dir, 'recipe-runs'),
     recipeRunsIndex:   path.join(dir, 'recipe-runs', 'index.json'),
@@ -65,9 +65,9 @@ async function writeJSONAtomic(file, data) {
 }
 
 /**
- * Build provider config for a persona (mirrors ChatsView buildPersonaRuns logic).
+ * Build provider config for an agent (mirrors ChatsView buildPersonaRuns logic).
  */
-function buildPersonaConfig(persona, globalCfg) {
+function buildAgentConfig(agent, globalCfg) {
   const cfg = { ...globalCfg }
   // Clean provider-specific keys first
   delete cfg.apiKey
@@ -77,7 +77,7 @@ function buildPersonaConfig(persona, globalCfg) {
   delete cfg._directAuth
   delete cfg._resolvedProvider
 
-  const provider = persona.providerId || globalCfg.defaultProvider || 'anthropic'
+  const provider = agent.providerId || globalCfg.defaultProvider || 'anthropic'
 
   if (provider === 'anthropic') {
     cfg.apiKey  = globalCfg.anthropic?.apiKey  || ''
@@ -98,12 +98,12 @@ function buildPersonaConfig(persona, globalCfg) {
     cfg.defaultProvider   = 'openai'
   }
 
-  // Apply persona model override if set
-  if (persona.modelId) {
-    if (provider === 'anthropic') cfg.anthropic = { ...cfg.anthropic, activeModel: persona.modelId }
-    else if (provider === 'openrouter') cfg.openrouter = { ...cfg.openrouter, defaultModel: persona.modelId }
-    else if (provider === 'openai') cfg.openai = { ...cfg.openai, model: persona.modelId }
-    else if (provider === 'deepseek') cfg.deepseek = { ...cfg.deepseek, model: persona.modelId }
+  // Apply agent model override if set
+  if (agent.modelId) {
+    if (provider === 'anthropic') cfg.anthropic = { ...cfg.anthropic, activeModel: agent.modelId }
+    else if (provider === 'openrouter') cfg.openrouter = { ...cfg.openrouter, defaultModel: agent.modelId }
+    else if (provider === 'openai') cfg.openai = { ...cfg.openai, model: agent.modelId }
+    else if (provider === 'deepseek') cfg.deepseek = { ...cfg.deepseek, model: agent.modelId }
   }
 
   return cfg
@@ -148,13 +148,13 @@ function shouldRunPersona(rp, statuses) {
 
 /**
  * Execute a recipe immediately (called by cron job or on-demand test).
- * Runs all personas concurrently, collects text outputs, writes run record to disk.
+ * Runs all agents concurrently, collects text outputs, writes run record to disk.
  */
 async function _executeRecipe(recipe, triggeredBy = 'schedule') {
-  const { configFile, personasFile, recipeRunsDir, recipeRunsIndex, soulsDir } = getPaths()
+  const { configFile, agentsFile, recipeRunsDir, recipeRunsIndex, soulsDir } = getPaths()
   const globalCfg = readJSON(configFile, {})
-  const personasData = readJSON(personasFile, { personas: [] })
-  const allPersonas = personasData.personas || personasData || []
+  const agentsData = readJSON(agentsFile, { agents: [] })
+  const allAgents = agentsData.agents || agentsData || []
 
   const runId = uuidv4()
   const startedAt = new Date().toISOString()
@@ -167,15 +167,15 @@ async function _executeRecipe(recipe, triggeredBy = 'schedule') {
     inputs[inp.key] = inp.default !== undefined ? inp.default : ''
   }
 
-  const recipePersonas = (recipe.personas || []).filter(rp => allPersonas.find(p => p.id === rp.personaId))
-  if (recipePersonas.length === 0) {
-    logger.warn(`[RecipeScheduler] No valid personas for recipe ${recipe.id}, aborting run`)
+  const recipeAgents = (recipe.personas || []).filter(rp => allAgents.find(p => p.id === rp.personaId))
+  if (recipeAgents.length === 0) {
+    logger.warn(`[RecipeScheduler] No valid agents for recipe ${recipe.id}, aborting run`)
     return
   }
 
   const outputMap = {}   // personaId → accumulated text
   const statuses  = {}   // personaId → 'waiting'|'done'|'failed'|'skipped'
-  for (const rp of recipePersonas) {
+  for (const rp of recipeAgents) {
     outputMap[rp.personaId] = ''
     statuses[rp.personaId]  = 'waiting'
   }
@@ -211,10 +211,10 @@ async function _executeRecipe(recipe, triggeredBy = 'schedule') {
   if (runIndex.length > 200) runIndex = runIndex.slice(0, 200)
   await writeJSONAtomic(recipeRunsIndex, runIndex)
 
-  // Execute in topological waves so downstream personas receive upstream outputs
+  // Execute in topological waves so downstream agents receive upstream outputs
   let runStatus = 'completed'
   let runError  = null
-  const waves = buildExecutionWaves(recipePersonas)
+  const waves = buildExecutionWaves(recipeAgents)
 
   for (const wave of waves) {
     const wavePromises = wave.map(rp => (async () => {
@@ -223,20 +223,20 @@ async function _executeRecipe(recipe, triggeredBy = 'schedule') {
         return
       }
 
-      const persona    = allPersonas.find(p => p.id === rp.personaId)
-      const personaCfg = buildPersonaConfig(persona, globalCfg)
-      personaCfg.soulsDir           = soulsDir
-      personaCfg.artifactPath       = globalCfg.artifactPath || globalCfg.artyfactPath || ''
-      personaCfg.skillsPath         = globalCfg.skillsPath   || ''
-      personaCfg.DoCPath            = globalCfg.DoCPath       || ''
-      personaCfg.chatPermissionMode = 'allow_all'
-      personaCfg.chatAllowList      = []
-      personaCfg.sandboxConfig      = globalCfg.sandboxConfig || { defaultMode: 'allow_all', sandboxAllowList: [], dangerBlockList: [] }
+      const agent    = allAgents.find(p => p.id === rp.personaId)
+      const agentCfg = buildAgentConfig(agent, globalCfg)
+      agentCfg.soulsDir           = soulsDir
+      agentCfg.artifactPath       = globalCfg.artifactPath || globalCfg.artyfactPath || ''
+      agentCfg.skillsPath         = globalCfg.skillsPath   || ''
+      agentCfg.DoCPath            = globalCfg.DoCPath       || ''
+      agentCfg.chatPermissionMode = 'allow_all'
+      agentCfg.chatAllowList      = []
+      agentCfg.sandboxConfig      = globalCfg.sandboxConfig || { defaultMode: 'allow_all', sandboxAllowList: [], dangerBlockList: [] }
 
       // Build name→output map for {{output:Name}} token resolution
       const nameToOutput = {}
       for (const [pid, text] of Object.entries(outputMap)) {
-        const p = allPersonas.find(x => x.id === pid)
+        const p = allAgents.find(x => x.id === pid)
         if (p) nameToOutput[p.name] = text
       }
 
@@ -253,17 +253,17 @@ async function _executeRecipe(recipe, triggeredBy = 'schedule') {
       const prevOutputLines = (rp.dependsOn || [])
         .filter(depId => outputMap[depId])
         .filter(depId => {
-          const name = allPersonas.find(p => p.id === depId)?.name || ''
+          const name = allAgents.find(p => p.id === depId)?.name || ''
           return !inlinedNames.has(name)
         })
         .map(depId => {
-          const depPersona = allPersonas.find(p => p.id === depId)
-          return `[Output from ${depPersona?.name || depId}]:\n${outputMap[depId]}`
+          const depAgent = allAgents.find(p => p.id === depId)
+          return `[Output from ${depAgent?.name || depId}]:\n${outputMap[depId]}`
         })
 
       const userMessage = ['Run this task.', ...prevOutputLines].join('\n\n---\n\n')
 
-      const loop = new AgentLoop({ ...personaCfg })
+      const loop = new AgentLoop({ ...agentCfg })
       try {
         await loop.run(
           [{ role: 'user', content: userMessage }],
@@ -282,7 +282,7 @@ async function _executeRecipe(recipe, triggeredBy = 'schedule') {
         )
         statuses[rp.personaId] = 'done'
       } catch (err) {
-        logger.error(`[RecipeScheduler] Persona ${rp.personaId} error:`, err.message)
+        logger.error(`[RecipeScheduler] Agent ${rp.personaId} error:`, err.message)
         statuses[rp.personaId] = 'failed'
         runStatus = 'error'
         runError  = err.message

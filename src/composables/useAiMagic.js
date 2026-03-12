@@ -1,7 +1,7 @@
 import { reactive, ref, onBeforeUnmount } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { useConfigStore } from '../stores/config'
-import { BUILTIN_DOC_EDITOR_ID } from '../stores/personas'
+import { BUILTIN_DOC_EDITOR_ID } from '../stores/agents'
 
 /**
  * Composable for the AI Doc side panel in DocsView.

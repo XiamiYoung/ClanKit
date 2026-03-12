@@ -95,7 +95,7 @@
         <div class="nav-section-header" v-show="!isCollapsed">
           <span class="nav-section-label">Workspace</span>
         </div>
-        <NavItem to="/personas"  :icon="IconPersonas"  label="Personas"    :isCollapsed="isCollapsed" />
+        <NavItem to="/agents"  :icon="IconAgents"  label="Agents"    :isCollapsed="isCollapsed" />
         <NavItem to="/tasks"     :icon="IconTaskEngine" label="Task Engine" :isCollapsed="isCollapsed" />
         <NavItem to="/news"  :icon="IconNews"  label="AI News"   :isCollapsed="isCollapsed" />
       </div>
@@ -547,7 +547,7 @@ const IconChats = defineComponent({
   ])
 })
 
-const IconPersonas = defineComponent({
+const IconAgents = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
     h('path', { d: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' }),
     h('circle', { cx: '12', cy: '7', r: '4' })

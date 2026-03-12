@@ -154,7 +154,7 @@
               <svg style="width:32px;height:32px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
             </div>
             <h3 class="re-empty-title">No schedulers yet</h3>
-            <p class="re-empty-desc">Create your first multi-persona scheduler pipeline.</p>
+            <p class="re-empty-desc">Create your first multi-agent scheduler pipeline.</p>
             <AppButton size="compact" @click="openNewEditor">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </AppButton>
@@ -179,8 +179,8 @@
                     <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     {{ scheduleLabel(recipe) }}
                   </span>
-                  <span class="re-persona-count">
-                    {{ (recipe.personas || []).length }} persona{{ (recipe.personas || []).length !== 1 ? 's' : '' }}
+                  <span class="re-agent-count">
+                    {{ (recipe.personas || []).length }} agent{{ (recipe.personas || []).length !== 1 ? 's' : '' }}
                   </span>
                   <span v-if="lastRunForRecipe(recipe.id)" class="re-last-run" :class="lastRunStatusClass(recipe.id)">
                     {{ lastRunRelative(recipe.id) }}
@@ -906,7 +906,7 @@ onBeforeUnmount(() => {
   padding: 0.125rem 0.375rem;
   border-radius: 9999px;
 }
-.re-persona-count {
+.re-agent-count {
   font-size: var(--fs-small);
   color: #9CA3AF;
 }

@@ -1,9 +1,9 @@
 /**
- * SoulTool — allows the agent to read and update persona memory ("soul") files.
+ * SoulTool — allows the agent to read and update agent memory ("soul") files.
  *
  * Soul files are structured markdown documents stored at:
- *   ~/.clankai/souls/system/{personaId}.md  (system personas)
- *   ~/.clankai/souls/users/{personaId}.md   (user personas)
+ *   ~/.clankai/souls/system/{agentId}.md  (system agents)
+ *   ~/.clankai/souls/users/{agentId}.md   (user agents)
  *
  * Two tools are exported:
  *   - SoulUpdateTool: add/update/remove entries in soul memory
@@ -39,13 +39,13 @@ function dateStamp() {
 /**
  * Create a blank soul file template.
  */
-function createTemplate(personaName, personaType) {
+function createTemplate(agentName, agentType) {
   const lines = [
-    `# Soul: ${personaName}`,
+    `# Soul: ${agentName}`,
     `> Last updated: ${isoNow()}`,
     '',
     '## Identity',
-    `- Type: ${personaType === 'system' ? 'system' : 'user'}`,
+    `- Type: ${agentType === 'system' ? 'system' : 'user'}`,
     `- Created: ${dateStamp()}`,
     '',
   ]
@@ -115,7 +115,7 @@ class SoulUpdateTool extends BaseTool {
   constructor(soulsDir) {
     super(
       'update_soul_memory',
-      'Update memory for a user or system persona. For user personas (persona_type: "users"): store user preferences, facts, habits, and personal context. For system personas (persona_type: "system"): store behavioral learnings, tone/format preferences, and domain context that help this AI persona respond better. Always check existing memory with read_soul_memory before adding duplicates.',
+      'Update memory for a user or system agent. For user agents (persona_type: "users"): store user preferences, facts, habits, and personal context. For system agents (persona_type: "system"): store behavioral learnings, tone/format preferences, and domain context that help this AI agent respond better. Always check existing memory with read_soul_memory before adding duplicates.',
       'update_soul_memory'
     )
     this.soulsDir = soulsDir
@@ -125,13 +125,13 @@ class SoulUpdateTool extends BaseTool {
     return {
       type: 'object',
       properties: {
-        persona_id:   { type: 'string', description: 'ID of the persona whose memory to update' },
-        persona_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user persona' },
+        persona_id:   { type: 'string', description: 'ID of the agent whose memory to update' },
+        persona_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user agent' },
         section:      { type: 'string', description: 'Section name: Preferences, Communication, Technical, Projects, Personal, Interaction Notes' },
         action:       { type: 'string', enum: ['add', 'update', 'remove'], description: 'What to do' },
         entry:        { type: 'string', description: 'The memory entry to add/update/remove' },
         old_entry:    { type: 'string', description: 'For update action: the existing entry text to replace' },
-        persona_name: { type: 'string', description: 'Display name of the persona (used when creating a new soul file)' },
+        persona_name: { type: 'string', description: 'Display name of the agent (used when creating a new soul file)' },
       },
       required: ['persona_id', 'persona_type', 'section', 'action', 'entry']
     }
@@ -238,7 +238,7 @@ class SoulReadTool extends BaseTool {
   constructor(soulsDir) {
     super(
       'read_soul_memory',
-      'Read the persona memory (soul file). Use this to check existing memories before adding new ones, or to recall what you know about the user.',
+      'Read the agent memory (soul file). Use this to check existing memories before adding new ones, or to recall what you know about the user.',
       'read_soul_memory'
     )
     this.soulsDir = soulsDir
@@ -248,8 +248,8 @@ class SoulReadTool extends BaseTool {
     return {
       type: 'object',
       properties: {
-        persona_id:   { type: 'string', description: 'ID of the persona whose memory to read' },
-        persona_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user persona' },
+        persona_id:   { type: 'string', description: 'ID of the agent whose memory to read' },
+        persona_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user agent' },
         section:      { type: 'string', description: 'Optional: specific section to read (e.g. Preferences). Omit to read all.' },
       },
       required: ['persona_id', 'persona_type']
@@ -266,7 +266,7 @@ class SoulReadTool extends BaseTool {
     const filePath = path.join(this.soulsDir, persona_type, `${persona_id}.md`)
 
     if (!fs.existsSync(filePath)) {
-      return this._ok('No soul file exists for this persona yet.', { exists: false })
+      return this._ok('No soul file exists for this agent yet.', { exists: false })
     }
 
     const content = fs.readFileSync(filePath, 'utf8')

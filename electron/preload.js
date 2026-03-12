@@ -35,8 +35,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveEnvPath: (key, value) => ipcRenderer.invoke('store:save-env-path', key, value),
   getUtilityUsage: () => ipcRenderer.invoke('store:get-utility-usage'),
 
-  getPersonas: () => ipcRenderer.invoke('store:get-personas'),
-  savePersonas: (personas) => ipcRenderer.invoke('store:save-personas', personas),
+  getAgents: () => ipcRenderer.invoke('store:get-agents'),
+  saveAgents: (agents) => ipcRenderer.invoke('store:save-agents', agents),
 
   // ── MCP Server Management ────────────────────────────────────────────────
   mcp: {
@@ -116,11 +116,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ── Soul Memory ────────────────────────────────────────────────────────
   souls: {
-    read:   (personaId, type) => ipcRenderer.invoke('souls:read', personaId, type),
-    write:  (personaId, type, content) => ipcRenderer.invoke('souls:write', personaId, type, content),
-    exists: (personaId, type) => ipcRenderer.invoke('souls:exists', personaId, type),
+    read:   (agentId, type) => ipcRenderer.invoke('souls:read', agentId, type),
+    write:  (agentId, type, content) => ipcRenderer.invoke('souls:write', agentId, type, content),
+    exists: (agentId, type) => ipcRenderer.invoke('souls:exists', agentId, type),
     list:   (type) => ipcRenderer.invoke('souls:list', type),
-    delete: (personaId, type) => ipcRenderer.invoke('souls:delete', personaId, type),
+    delete: (agentId, type) => ipcRenderer.invoke('souls:delete', agentId, type),
   },
 
   // ── Memory Extraction ─────────────────────────────────────────────────

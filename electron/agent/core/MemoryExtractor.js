@@ -103,12 +103,12 @@ class MemoryExtractor {
    * @param {string} params.lastAssistantMessage — text of the last assistant response
    * @param {string|null} params.userSoulContent — existing user soul file content
    * @param {string|null} params.systemSoulContent — existing system soul file content
-   * @param {string} params.userPersonaId
-   * @param {string} params.systemPersonaId
-   * @param {Array<{id: string, name: string, type: string}>} [params.participants] — all AI personas in the conversation
-   * @returns {Promise<Array<{target: string, section: string, entry: string, confidence: number, personaId: string, personaType: string}>>}
+   * @param {string} params.userAgentId
+   * @param {string} params.systemAgentId
+   * @param {Array<{id: string, name: string, type: string}>} [params.participants] — all AI agents in the conversation
+   * @returns {Promise<Array<{target: string, section: string, entry: string, confidence: number, agentId: string, agentType: string}>>}
    */
-  async extract({ lastUserMessage, lastAssistantMessage, userSoulContent, systemSoulContent, userPersonaId, systemPersonaId, participants }) {
+  async extract({ lastUserMessage, lastAssistantMessage, userSoulContent, systemSoulContent, userAgentId, systemAgentId, participants }) {
     if (!lastUserMessage || !lastAssistantMessage) return []
 
     const userContent = this._buildUserContent(lastUserMessage, lastAssistantMessage, userSoulContent, systemSoulContent, participants)
@@ -133,7 +133,7 @@ class MemoryExtractor {
         }
       }
 
-      // Map each memory to include persona IDs with participant-aware routing
+      // Map each memory to include agent IDs with participant-aware routing
       return parsed.memories
         .filter(m => m.target && m.section && m.entry)
         .filter(m => (m.confidence ?? 1) >= 0.5)   // drop low-confidence before returning
@@ -142,23 +142,23 @@ class MemoryExtractor {
 
           // "user" target → user soul file
           if (m.target === 'user') {
-            return { target: m.target, section: m.section, entry: m.entry, confidence, personaId: userPersonaId, personaType: 'users' }
+            return { target: m.target, section: m.section, entry: m.entry, confidence, agentId: userAgentId, agentType: 'users' }
           }
 
-          // Legacy "system" target (no participants) → active persona
+          // Legacy "system" target (no participants) → active agent
           if (m.target === 'system') {
-            return { target: m.target, section: m.section, entry: m.entry, confidence, personaId: systemPersonaId, personaType: 'system' }
+            return { target: m.target, section: m.section, entry: m.entry, confidence, agentId: systemAgentId, agentType: 'system' }
           }
 
-          // Participant name target → route to that persona's soul file
+          // Participant name target → route to that agent's soul file
           const matched = participantByName.get(m.target.toLowerCase())
           if (matched) {
-            return { target: m.target, section: m.section, entry: m.entry, confidence, personaId: matched.id, personaType: matched.type || 'system' }
+            return { target: m.target, section: m.section, entry: m.entry, confidence, agentId: matched.id, agentType: matched.type || 'system' }
           }
 
-          // Fallback: unrecognized name → route to active persona
-          logger.warn('MemoryExtractor: unrecognized target name, falling back to active persona', { target: m.target })
-          return { target: m.target, section: m.section, entry: m.entry, confidence, personaId: systemPersonaId, personaType: 'system' }
+          // Fallback: unrecognized name → route to active agent
+          logger.warn('MemoryExtractor: unrecognized target name, falling back to active agent', { target: m.target })
+          return { target: m.target, section: m.section, entry: m.entry, confidence, agentId: systemAgentId, agentType: 'system' }
         })
     } catch (err) {
       logger.error('MemoryExtractor.extract failed', err.message)
