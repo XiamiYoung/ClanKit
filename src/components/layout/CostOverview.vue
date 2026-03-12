@@ -199,9 +199,9 @@ async function loadUsageData(fresh = true) {
       const u = chat.usage
       if (!USAGE_KEYS.some(k => (u[k] || 0) > 0)) continue
       const provider   = chat.provider || 'anthropic'
-      const personaId  = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null) || chat.systemPersonaId
-      const personaModel = personaId ? agentsStore.getAgentById(personaId)?.modelId : null
-      const model      = chat.model || personaModel
+      const agentId  = (chat.groupAgentIds?.length > 0 ? chat.groupAgentIds[0] : null) || chat.systemAgentId
+      const agentModel = agentId ? agentsStore.getAgentById(agentId)?.modelId : null
+      const model      = chat.model || agentModel
 
       if ((u.whisperSecs || 0) + (u.whisperCalls || 0) > 0) {
         const vp = _ensureProv(provMap, 'voice')

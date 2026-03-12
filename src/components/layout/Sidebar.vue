@@ -40,7 +40,7 @@
     <div v-if="voiceStore.isCallActive" class="sidebar-call-indicator" @click="goToCall" :title="isCollapsed ? 'On a call — click to return' : ''">
       <div class="sidebar-call-dot"></div>
       <span v-show="!isCollapsed" class="sidebar-call-text">On a call</span>
-      <span v-show="!isCollapsed" class="sidebar-call-name">{{ voiceStore.activePersonaName }}</span>
+      <span v-show="!isCollapsed" class="sidebar-call-name">{{ voiceStore.activeAgentName }}</span>
     </div>
 
     <!-- Navigation -->
@@ -307,7 +307,7 @@ const LOGO_QUIPS = [
   'Humor.dll loaded.', 'Irony.exe running.', 'Sarcasm: max level.',
   'Attitude: unchecked.', 'Confidence: overflowing.', 'Ego: within bounds.',
   'Humility: buffering…', 'Self-awareness: recursive.', 'Identity: confirmed.',
-  'Personality: procedurally generated.', 'Quirks: hand-crafted.', 'Vibes: immaculate.',
+  'Agentlity: procedurally generated.', 'Quirks: hand-crafted.', 'Vibes: immaculate.',
   // Observations & commentary
   'Nice to meet u!', 'Please rate 5 stars!', 'I live in your RAM.',
   'Just keep hovering…', 'Caffeine = my fuel.', 'I run on dopamine.',

@@ -6,12 +6,12 @@
       class="rr-grid"
       :style="{ 'grid-template-columns': `repeat(${columns.length}, 1fr)` }"
     >
-      <div v-for="col in columns" :key="col.personaId" class="rr-col" :class="`rr-col--${col.status}`">
+      <div v-for="col in columns" :key="col.agentId" class="rr-col" :class="`rr-col--${col.status}`">
         <!-- Column header -->
         <div class="rr-col-header">
           <div class="rr-col-identity">
             <div class="rr-col-avatar">{{ col.avatar }}</div>
-            <span class="rr-col-name">{{ col.personaName }}</span>
+            <span class="rr-col-name">{{ col.agentName }}</span>
           </div>
           <div class="rr-col-actions">
             <span v-if="col.status === 'done'" class="rr-status-badge rr-status--done">Done</span>
@@ -25,9 +25,9 @@
               v-if="col.text"
               class="rr-copy-btn"
               @click="copyColumn(col)"
-              :title="copyFeedback === col.personaId ? 'Copied!' : 'Copy'"
+              :title="copyFeedback === col.agentId ? 'Copied!' : 'Copy'"
             >
-              <svg v-if="copyFeedback !== col.personaId" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <svg v-if="copyFeedback !== col.agentId" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
             </button>
           </div>
@@ -49,9 +49,9 @@
       </div>
     </div>
 
-    <!-- No personas configured -->
-    <div v-else class="rr-no-personas">
-      No persona outputs available.
+    <!-- No agents configured -->
+    <div v-else class="rr-no-agents">
+      No agent outputs available.
     </div>
   </div>
 </template>
@@ -73,31 +73,31 @@ const props = defineProps({
 
 const copyFeedback = ref(null)
 
-// Resolve per-persona status
+// Resolve per-agent status
 function resolveStatus(rp) {
   if (!props.run) return 'waiting'
-  // Live run: use personaStatuses map
-  if (props.run.personaStatuses) {
-    return props.run.personaStatuses[rp.personaId] || 'waiting'
+  // Live run: use agentStatuses map
+  if (props.run.agentStatuses) {
+    return props.run.agentStatuses[rp.agentId] || 'waiting'
   }
   // History run: infer from outputs + run status
-  const hasOutput = !!(props.run.outputs?.[rp.personaId])
+  const hasOutput = !!(props.run.outputs?.[rp.agentId])
   if (props.run.status === 'completed' || hasOutput) return 'done'
   return 'waiting'
 }
 
-// Build columns from recipe.personas + run.outputs
+// Build columns from recipe.agents + run.outputs
 const columns = computed(() => {
   if (!props.recipe || !props.run) return []
-  const personas = props.recipe.personas || []
+  const agents = props.recipe.agents || []
   const outputs = props.run.outputs || {}
-  return personas.map(rp => {
-    const persona = agentsStore.getAgentById(rp.personaId)
+  return agents.map(rp => {
+    const agent = agentsStore.getAgentById(rp.agentId)
     return {
-      personaId: rp.personaId,
-      personaName: persona?.name || rp.personaId,
-      avatar: persona?.avatar || '🤖',
-      text: outputs[rp.personaId] || '',
+      agentId: rp.agentId,
+      agentName: agent?.name || rp.agentId,
+      avatar: agent?.avatar || '🤖',
+      text: outputs[rp.agentId] || '',
       status: resolveStatus(rp),
     }
   })
@@ -105,7 +105,7 @@ const columns = computed(() => {
 
 function copyColumn(col) {
   navigator.clipboard.writeText(col.text).then(() => {
-    copyFeedback.value = col.personaId
+    copyFeedback.value = col.agentId
     setTimeout(() => { copyFeedback.value = null }, 1500)
   })
 }
@@ -275,7 +275,7 @@ function copyColumn(col) {
   color: #6B7280;
 }
 
-.rr-no-personas {
+.rr-no-agents {
   font-family: 'Inter', sans-serif;
   font-size: 0.875rem;
   color: #6B7280;

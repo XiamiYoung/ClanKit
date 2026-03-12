@@ -25,10 +25,10 @@ export const useRecipesStore = defineStore('recipes', () => {
   // {
   //   recipeId, runId, chatId,
   //   status: 'running'|'completed'|'error',
-  //   outputs: { [personaId]: string },
-  //   personaStatuses: { [personaId]: 'waiting'|'running'|'done'|'skipped'|'failed' }
+  //   outputs: { [agentId]: string },
+  //   agentStatuses: { [agentId]: 'waiting'|'running'|'done'|'skipped'|'failed' }
   //   error: null|string,
-  //   personasDone: Set,
+  //   agentsDone: Set,
   // }
   const activeRun = ref(null)
 
@@ -61,7 +61,7 @@ export const useRecipesStore = defineStore('recipes', () => {
     )
   }
 
-  // Resolve {{output:PersonaName}} tokens using a name→output map.
+  // Resolve {{output:AgentName}} tokens using a name→output map.
   function resolveOutputTokens(template, nameToOutput) {
     return (template || '').replace(/\{\{output:([^}]+)\}\}/g, (match, name) => {
       const trimmed = name.trim()
@@ -142,8 +142,8 @@ export const useRecipesStore = defineStore('recipes', () => {
       if (pid && pid in run.outputs) {
         run.outputs[pid] = (run.outputs[pid] || '') + (chunk.text || '')
       }
-    } else if (chunk.type === 'persona_end' || chunk.type === 'done') {
-      // Signal that current persona finished streaming — resolve handled by caller
+    } else if (chunk.type === 'agent_end' || chunk.type === 'done') {
+      // Signal that current agent finished streaming — resolve handled by caller
     } else if (chunk.type === 'error') {
       // Handled by caller via runAgent return value
     }
@@ -166,7 +166,7 @@ export const useRecipesStore = defineStore('recipes', () => {
       recipeName: recipe?.name || '',
       inputs: run.inputs || {},
       outputs: { ...run.outputs },
-      personaStatuses: { ...run.personaStatuses },
+      agentStatuses: { ...run.agentStatuses },
       status,
       triggeredBy: 'manual',
       startedAt: run.startedAt,
@@ -267,7 +267,7 @@ export const useRecipesStore = defineStore('recipes', () => {
         break
       }
       order.push(...wave)
-      wave.forEach(ra => resolved.add(ra.personaId))
+      wave.forEach(ra => resolved.add(ra.agentId))
       wave.forEach(ra => {
         const i = remaining.indexOf(ra)
         if (i !== -1) remaining.splice(i, 1)
@@ -290,7 +290,7 @@ export const useRecipesStore = defineStore('recipes', () => {
   // ── Run a single agent ──────────────────────────────────────────────────
 
   async function _runSingleAgent(ra, recipe, inputs, previousOutputs, chatId) {
-    const agent = agentsStore.getAgentById(ra.personaId)
+    const agent = agentsStore.getAgentById(ra.agentId)
     if (!agent) return { success: false, error: 'Agent not found' }
 
     const agentCfg = buildAgentConfig(agent)
@@ -305,7 +305,7 @@ export const useRecipesStore = defineStore('recipes', () => {
     // Resolve both {{input_var}} and {{output:Name}} in prompts
     const globalPart  = resolveOutputTokens(renderTemplate(recipe.globalPrompt || '', inputs), nameToOutput)
     const agentPart = resolveOutputTokens(renderTemplate(ra.prompt || '', inputs), nameToOutput)
-    const systemPersonaPrompt = [globalPart, agentPart].filter(Boolean).join('\n\n')
+    const systemAgentPrompt = [globalPart, agentPart].filter(Boolean).join('\n\n')
 
     // Build user message: only append upstream outputs that were NOT already inlined
     // via {{output:Name}} tokens (to avoid duplication).
@@ -331,21 +331,21 @@ export const useRecipesStore = defineStore('recipes', () => {
     ].join('\n\n---\n\n')
 
     const singleAgentRun = [{
-      personaId: ra.personaId,
-      personaName: agent.name,
+      agentId: ra.agentId,
+      agentName: agent.name,
       config: agentCfg,
       enabledAgents: [],
       enabledSkills: [],
-      personaPrompts: {
-        systemPersonaPrompt,
-        systemPersonaId: ra.personaId,
-        userPersonaId: '__recipe_user__',
+      agentPrompts: {
+        systemAgentPrompt,
+        systemAgentId: ra.agentId,
+        userAgentId: '__recipe_user__',
       },
       mcpServers: [],
       httpTools: [],
     }]
 
-    _currentChunkAgentId = ra.personaId
+    _currentChunkAgentId = ra.agentId
 
     return await window.electronAPI.runAgent({
       chatId,
@@ -353,8 +353,8 @@ export const useRecipesStore = defineStore('recipes', () => {
       config: JSON.parse(JSON.stringify(singleAgentRun[0].config)),
       enabledAgents: [],
       enabledSkills: [],
-      personaRuns: JSON.parse(JSON.stringify(singleAgentRun)),
-      personaPrompts: {},
+      agentRuns: JSON.parse(JSON.stringify(singleAgentRun)),
+      agentPrompts: {},
       mcpServers: [],
       httpTools: [],
       chatPermissionMode: recipe.permission || 'all_permissions',
@@ -377,7 +377,7 @@ export const useRecipesStore = defineStore('recipes', () => {
 
     const runId = uuid()
     const chatId = `recipe:${runId}`
-    const recipeAgents = recipe.personas || []
+    const recipeAgents = recipe.agents || []
 
     if (recipeAgents.length === 0) {
       throw new Error('No valid agents configured for this recipe.')
@@ -387,8 +387,8 @@ export const useRecipesStore = defineStore('recipes', () => {
     const outputs = {}
     const agentStatuses = {}
     for (const ra of recipeAgents) {
-      outputs[ra.personaId] = ''
-      agentStatuses[ra.personaId] = 'waiting'
+      outputs[ra.agentId] = ''
+      agentStatuses[ra.agentId] = 'waiting'
     }
 
     // Initialize active run
@@ -398,9 +398,9 @@ export const useRecipesStore = defineStore('recipes', () => {
       chatId,
       status: 'running',
       outputs,
-      personaStatuses: agentStatuses,
+      agentStatuses: agentStatuses,
       error: null,
-      personasDone: new Set(),
+      agentsDone: new Set(),
       inputs: { ...inputs },
       startedAt: new Date().toISOString(),
     }
@@ -417,13 +417,13 @@ export const useRecipesStore = defineStore('recipes', () => {
         if (activeRun.value?.status !== 'running') break
 
         // Check whether this agent should run
-        if (!shouldRunAgent(ra, activeRun.value.personaStatuses)) {
-          activeRun.value.personaStatuses[ra.personaId] = 'skipped'
+        if (!shouldRunAgent(ra, activeRun.value.agentStatuses)) {
+          activeRun.value.agentStatuses[ra.agentId] = 'skipped'
           continue
         }
 
         // Mark as running
-        activeRun.value.personaStatuses[ra.personaId] = 'running'
+        activeRun.value.agentStatuses[ra.agentId] = 'running'
 
         // Collect outputs from depended-on agents as context
         const prevOutputs = {}
@@ -439,16 +439,16 @@ export const useRecipesStore = defineStore('recipes', () => {
         if (!activeRun.value || activeRun.value.status !== 'running') break
 
         if (res?.success === false) {
-          activeRun.value.personaStatuses[ra.personaId] = 'failed'
+          activeRun.value.agentStatuses[ra.agentId] = 'failed'
           // Continue with remaining agents — don't abort the whole run unless stopped
         } else {
-          activeRun.value.personaStatuses[ra.personaId] = 'done'
-          activeRun.value.personasDone.add(ra.personaId)
+          activeRun.value.agentStatuses[ra.agentId] = 'done'
+          activeRun.value.agentsDone.add(ra.agentId)
         }
       }
 
       if (activeRun.value?.status === 'running') {
-        const anyFailed = Object.values(activeRun.value.personaStatuses).some(s => s === 'failed')
+        const anyFailed = Object.values(activeRun.value.agentStatuses).some(s => s === 'failed')
         _finalizeRun(anyFailed ? 'error' : 'completed', anyFailed ? 'One or more agents failed' : null)
       }
     } catch (err) {

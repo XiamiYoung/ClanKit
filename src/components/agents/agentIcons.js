@@ -1,10 +1,10 @@
 /**
- * SVG icon definitions for persona avatars.
+ * SVG icon definitions for agent avatars.
  * Each icon uses Lucide-style paths (24x24 viewBox, stroke-based).
  * `paths` is an array of SVG <path> `d` attributes.
  */
-export const PERSONA_ICONS = [
-  // ── System / AI personas ────────────────────────────────────────────────
+export const AGENT_ICONS = [
+  // ── System / AI agents ────────────────────────────────────────────────
   { id: 'cpu',          label: 'CPU',           category: 'system', paths: ['M4 4h16v16H4z', 'M9 1v3', 'M15 1v3', 'M9 20v3', 'M15 20v3', 'M1 9h3', 'M1 15h3', 'M20 9h3', 'M20 15h3'] },
   { id: 'bot',          label: 'Bot',           category: 'system', paths: ['M12 8V4H8', 'M4 12h16', 'M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1', 'M9 16h0', 'M15 16h0'] },
   { id: 'brain',        label: 'Brain',         category: 'system', paths: ['M12 2a6 6 0 0 0-6 6c0 3 2 5 3 7h6c1-2 3-4 3-7a6 6 0 0 0-6-6z', 'M9 15v4a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-4'] },
@@ -18,7 +18,7 @@ export const PERSONA_ICONS = [
   { id: 'rocket',       label: 'Rocket',        category: 'system', paths: ['M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z', 'M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z', 'M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0', 'M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5'] },
   { id: 'microscope',   label: 'Microscope',    category: 'system', paths: ['M6 18h8', 'M3 22h18', 'M14 22a7 7 0 1 0 0-14h-1', 'M9 14h2', 'M9 12a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2z'] },
 
-  // ── User / People personas ──────────────────────────────────────────────
+  // ── User / People agents ──────────────────────────────────────────────
   { id: 'user',         label: 'User',          category: 'user', paths: ['M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', 'M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'] },
   { id: 'user-cog',     label: 'User Cog',      category: 'user', paths: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M19.7 14.3a1.1 1.1 0 0 0-.1-1.5l-.5-.4a1 1 0 0 1 0-1.6l.5-.4a1.1 1.1 0 0 0 .1-1.5l-.7-.7a1.1 1.1 0 0 0-1.5-.1l-.4.5a1 1 0 0 1-1.6 0l-.4-.5a1.1 1.1 0 0 0-1.5.1l-.7.7'] },
   { id: 'users',        label: 'Team',          category: 'user', paths: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'] },
@@ -36,6 +36,6 @@ export const PERSONA_ICONS = [
 ]
 
 /** Lookup by id. Returns null if not found. */
-export function getPersonaIcon(id) {
-  return PERSONA_ICONS.find(i => i.id === id) || null
+export function getAgentIcon(id) {
+  return AGENT_ICONS.find(i => i.id === id) || null
 }

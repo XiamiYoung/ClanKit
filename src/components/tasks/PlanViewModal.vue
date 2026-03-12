@@ -52,13 +52,13 @@
                     <span class="pv-step-task-label">{{ taskName(step.taskId) || '(no task)' }}</span>
                   </div>
 
-                  <!-- Personas -->
-                  <template v-if="step.taskId && step.defaultPersonaIds?.length">
+                  <!-- Agents -->
+                  <template v-if="step.taskId && step.defaultAgentIds?.length">
                     <div class="pv-step-field">
-                      <label class="pv-step-label">Persona(s)</label>
-                      <div class="pv-persona-chips">
-                        <span v-for="pid in step.defaultPersonaIds" :key="pid" class="pv-persona-chip">
-                          {{ personaName(pid) }}
+                      <label class="pv-step-label">Agent(s)</label>
+                      <div class="pv-agent-chips">
+                        <span v-for="pid in step.defaultAgentIds" :key="pid" class="pv-agent-chip">
+                          {{ agentName(pid) }}
                         </span>
                       </div>
                     </div>
@@ -171,9 +171,9 @@
                       <div v-if="node.dependsOnLabels.length > 0" class="pf-depends-on">
                         after: {{ node.dependsOnLabels.join(', ') }}
                       </div>
-                      <div class="pf-personas-line">
-                        <span class="pf-personas-label">Persona:</span>
-                        <span class="pf-personas-names">{{ node.personas.length ? node.personas.map(p => p.name).join(', ') : '—' }}</span>
+                      <div class="pf-agents-line">
+                        <span class="pf-agents-label">Agent:</span>
+                        <span class="pf-agents-names">{{ node.agents.length ? node.agents.map(p => p.name).join(', ') : '—' }}</span>
                       </div>
                     </div>
                   </div>
@@ -298,7 +298,7 @@ function taskName(taskId) {
   const t = props.tasks.find(t => t.id === taskId)
   return t ? `${t.icon} ${t.name}` : ''
 }
-function personaName(pid) {
+function agentName(pid) {
   if (!pid) return null
   return agentsStore.getAgentById(pid)?.name || pid
 }
@@ -334,7 +334,7 @@ const flowWaves = computed(() => {
 
 function buildNode(step, allSteps) {
   const task = props.tasks.find(t => t.id === step.taskId)
-  const personas = (step.defaultPersonaIds || []).map(pid => ({ name: personaName(pid) || '(unknown)' }))
+  const agents = (step.defaultAgentIds || []).map(pid => ({ name: agentName(pid) || '(unknown)' }))
   const hasDeps = (step.dependsOn || []).length > 0
   const cond = step.runCondition || 'always'
   return {
@@ -342,7 +342,7 @@ function buildNode(step, allSteps) {
     stepIndex: allSteps.indexOf(step),
     taskName: task?.name || (step.taskId ? '(unknown)' : 'No task'),
     taskIcon: task?.icon || '✍️',
-    personas, runCondition: cond,
+    agents, runCondition: cond,
     conditionBadge: hasDeps && cond !== 'always' ? (cond === 'on_success' ? 'on success' : 'on failure') : null,
     condClass: hasDeps ? (cond === 'on_success' ? 'pf-step-block--success' : cond === 'on_failure' ? 'pf-step-block--failure' : '') : '',
     dependsOnLabels: (step.dependsOn || []).map(id => {
@@ -475,8 +475,8 @@ function buildNode(step, allSteps) {
 .pv-assign-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .pv-assign-slot { font-family: 'JetBrains Mono', monospace; font-size: var(--fs-secondary); font-weight: 700; color: rgba(255,255,255,0.5); flex-shrink: 0; min-width: 6rem; }
 .pv-assign-val { font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); color: rgba(255,255,255,0.7); }
-.pv-persona-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 0.375rem; }
-.pv-persona-chip {
+.pv-agent-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 0.375rem; }
+.pv-agent-chip {
   display: inline-flex; align-items: center; padding: 0.25rem 0.625rem;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   border-radius: 9999px; font-family: 'Inter', sans-serif; font-size: var(--fs-small); font-weight: 600; color: #FFFFFF;

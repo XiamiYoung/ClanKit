@@ -714,9 +714,9 @@ defineExpose({ focusInput })
 }
 </style>
 
-<!-- Unscoped styles for the Teleported persona modal (escapes component DOM) -->
+<!-- Unscoped styles for the Teleported agent modal (escapes component DOM) -->
 <style>
-/* ── AI Doc Persona Modal ── */
+/* ── AI Doc Agent Modal ── */
 .aidoc-modal-backdrop {
   position: fixed; inset: 0; z-index: 200;
   background: rgba(0,0,0,0.55);
@@ -771,7 +771,7 @@ defineExpose({ focusInput })
   display: flex; flex-direction: column; gap: 0.1875rem;
   scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
-/* ── Search bar inside persona modal ── */
+/* ── Search bar inside agent modal ── */
 .ch-modal-search {
   display: flex; align-items: center; gap: 0.5rem;
   padding: 0.5rem 0.75rem;
@@ -807,7 +807,7 @@ defineExpose({ focusInput })
 .ch-cat-items { padding-left: 0.75rem; }
 .ch-cat-empty { padding: 0.375rem 0.5rem; font-size: 0.75rem; color: #6B7280; }
 
-/* ── Persona list items (shared by search results + category items) ── */
+/* ── Agent list items (shared by search results + category items) ── */
 .ch-modal-item {
   display: flex; align-items: center; gap: 0.75rem;
   width: 100%; padding: 0.5rem 0.625rem;

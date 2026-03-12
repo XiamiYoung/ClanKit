@@ -470,11 +470,30 @@ async function migrateEnvDataIfNeeded() {
 
 // --- Migration: personas.json -> agents.json ---------------------------------
 function migratePersonasToAgents() {
-  // Rename personas.json to agents.json if old file exists and new doesn't
+  // Migrate personas.json to agents.json if personas.json exists
   const PERSONAS_FILE_OLD = path.join(DATA_DIR, 'personas.json')
-  if (fs.existsSync(PERSONAS_FILE_OLD) && !fs.existsSync(AGENTS_FILE)) {
-    fs.copyFileSync(PERSONAS_FILE_OLD, AGENTS_FILE)
-    logger.info('Migrated personas.json to agents.json')
+  if (fs.existsSync(PERSONAS_FILE_OLD)) {
+    try {
+      const personasData = JSON.parse(fs.readFileSync(PERSONAS_FILE_OLD, 'utf8'))
+      // If agents.json is empty or incomplete (only has categories), use personas.json data
+      let agentsData = {}
+      if (fs.existsSync(AGENTS_FILE)) {
+        const existing = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'))
+        // If existing agents.json has no agents (only categories), replace it entirely
+        if (!existing.agents || existing.agents.length === 0) {
+          agentsData = personasData
+        }
+      } else {
+        agentsData = personasData
+      }
+
+      if (Object.keys(agentsData).length > 0) {
+        fs.writeFileSync(AGENTS_FILE, JSON.stringify(agentsData, null, 2))
+        logger.info('Migrated personas.json to agents.json')
+      }
+    } catch (err) {
+      logger.error('Migration from personas.json to agents.json failed:', err.message)
+    }
   }
 }
 
@@ -674,7 +693,7 @@ app.whenReady().then(async () => {
   ensureDataDir()
   await migrateChatsIfNeeded()
   await migrateEnvDataIfNeeded()
-  migratePersonasToAgents()
+  migrateAgentsToAgents()
   createWindow()
 
   // ── Clean up stale 'running' run entries from a previous session ────────────
@@ -1253,9 +1272,9 @@ function ensureSoulsDir(type) {
   return dir
 }
 
-ipcMain.handle('souls:read', (_, personaId, type) => {
+ipcMain.handle('souls:read', (_, agentId, type) => {
   try {
-    const filePath = path.join(ensureSoulsDir(type), `${personaId}.md`)
+    const filePath = path.join(ensureSoulsDir(type), `${agentId}.md`)
     if (!fs.existsSync(filePath)) return null
     return fs.readFileSync(filePath, 'utf8')
   } catch (err) {
@@ -1264,9 +1283,9 @@ ipcMain.handle('souls:read', (_, personaId, type) => {
   }
 })
 
-ipcMain.handle('souls:write', (_, personaId, type, content) => {
+ipcMain.handle('souls:write', (_, agentId, type, content) => {
   try {
-    const filePath = path.join(ensureSoulsDir(type), `${personaId}.md`)
+    const filePath = path.join(ensureSoulsDir(type), `${agentId}.md`)
     fs.writeFileSync(filePath, content, 'utf8')
     return { success: true }
   } catch (err) {
@@ -1275,9 +1294,9 @@ ipcMain.handle('souls:write', (_, personaId, type, content) => {
   }
 })
 
-ipcMain.handle('souls:exists', (_, personaId, type) => {
+ipcMain.handle('souls:exists', (_, agentId, type) => {
   try {
-    const filePath = path.join(ensureSoulsDir(type), `${personaId}.md`)
+    const filePath = path.join(ensureSoulsDir(type), `${agentId}.md`)
     return fs.existsSync(filePath)
   } catch { return false }
 })
@@ -1294,9 +1313,9 @@ ipcMain.handle('souls:list', (_, type) => {
   }
 })
 
-ipcMain.handle('souls:delete', (_, personaId, type) => {
+ipcMain.handle('souls:delete', (_, agentId, type) => {
   try {
-    const filePath = path.join(ensureSoulsDir(type), `${personaId}.md`)
+    const filePath = path.join(ensureSoulsDir(type), `${agentId}.md`)
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
     return { success: true }
   } catch (err) {
@@ -1307,10 +1326,10 @@ ipcMain.handle('souls:delete', (_, personaId, type) => {
 
 // --- IPC: Memory Accept (post-turn extraction) -----------------------------
 const { SoulUpdateTool: SoulUpdateToolForMemory } = require('./agent/tools/SoulTool')
-ipcMain.handle('memory:accept', async (_, { personaId, personaType, section, entry }) => {
+ipcMain.handle('memory:accept', async (_, { agentId, agentType, section, entry }) => {
   try {
     const tool = new SoulUpdateToolForMemory(SOULS_DIR)
-    return await tool.execute({ persona_id: personaId, persona_type: personaType, section, action: 'add', entry })
+    return await tool.execute({ agent_id: agentId, agent_type: agentType, section, action: 'add', entry })
   } catch (err) {
     logger.error('memory:accept error', err.message)
     return { success: false, error: err.message }
@@ -1319,10 +1338,10 @@ ipcMain.handle('memory:accept', async (_, { personaId, personaType, section, ent
 
 // --- IPC: Memory extraction on chat switch / window close ------------------
 // Force extraction for any remaining unprocessed messages, bypassing the N=10 threshold.
-ipcMain.handle('memory:extract-on-chat-switch', async (event, { chatId, messages, config, participants, personaPrompts }) => {
+ipcMain.handle('memory:extract-on-chat-switch', async (event, { chatId, messages, config, participants, agentPrompts }) => {
   try {
     lastExtractedMsgCount.set(chatId, messages.length)
-    await runMemoryExtraction(event, chatId, messages, config, personaPrompts, participants)
+    await runMemoryExtraction(event, chatId, messages, config, agentPrompts, participants)
     return { success: true }
   } catch (err) {
     logger.error('memory:extract-on-chat-switch error', err.message)
@@ -2700,10 +2719,10 @@ const lastExtractedMsgCount = new Map() // chatId -> message count at last extra
 const pendingMemoryFacts = new Map()    // chatId -> Array of pending fact objects (medium-confidence)
 
 /** Read a soul file from disk. Returns null if not found. */
-function readSoulFileSync(personaId, personaType) {
-  if (!personaId) return null
+function readSoulFileSync(agentId, agentType) {
+  if (!agentId) return null
   try {
-    const filePath = path.join(SOULS_DIR, personaType, `${personaId}.md`)
+    const filePath = path.join(SOULS_DIR, agentType, `${agentId}.md`)
     if (fs.existsSync(filePath)) return fs.readFileSync(filePath, 'utf8')
   } catch (err) {
     logger.error('readSoulFileSync error', err.message)
@@ -2719,7 +2738,7 @@ function readSoulFileSync(personaId, personaType) {
  * Medium-confidence (0.5–0.8): stored as pending facts for conversational confirmation.
  * Low-confidence (<0.5): discarded (filtered out in MemoryExtractor).
  */
-async function runMemoryExtraction(event, chatId, messages, config, personaPrompts, participants) {
+async function runMemoryExtraction(event, chatId, messages, config, agentPrompts, participants) {
   try {
     // Use the globally configured utility model — supports all providers.
     const um = config.utilityModel
@@ -2750,19 +2769,19 @@ async function runMemoryExtraction(event, chatId, messages, config, personaPromp
 
     if (!lastUserText.trim() || !lastAssistantText.trim()) return
 
-    const userPersonaId = personaPrompts?.userPersonaId || '__default_user__'
-    const systemPersonaId = personaPrompts?.systemPersonaId || '__default_system__'
+    const userAgentId = agentPrompts?.userAgentId || '__default_user__'
+    const systemAgentId = agentPrompts?.systemAgentId || '__default_system__'
 
-    const userSoulContent = readSoulFileSync(userPersonaId, 'users')
-    const systemSoulContent = readSoulFileSync(systemPersonaId, 'system')
+    const userSoulContent = readSoulFileSync(userAgentId, 'users')
+    const systemSoulContent = readSoulFileSync(systemAgentId, 'system')
 
     const suggestions = await extractor.extract({
       lastUserMessage: lastUserText,
       lastAssistantMessage: lastAssistantText,
       userSoulContent,
       systemSoulContent,
-      userPersonaId,
-      systemPersonaId,
+      userAgentId,
+      systemAgentId,
       participants: participants || null,
     })
 
@@ -2779,8 +2798,8 @@ async function runMemoryExtraction(event, chatId, messages, config, personaPromp
       const soulTool = new SoulUpdateToolForMemory(SOULS_DIR)
       for (const item of autoSave) {
         await soulTool.execute({
-          persona_id: item.personaId,
-          persona_type: item.personaType,
+          agent_id: item.agentId,
+          agent_type: item.agentType,
           section: item.section,
           action: 'add',
           entry: item.entry,
@@ -2802,8 +2821,8 @@ async function runMemoryExtraction(event, chatId, messages, config, personaPromp
 
 logger.info('IPC handlers registered: agent:run, agent:stop')
 
-ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, personaPrompts, mcpServers, httpTools, personaRuns, knowledgeConfig, injectedPlan, chatPermissionMode, chatAllowList, chatDangerOverrides, maxOutputTokens }) => {
-  logger.agent('IPC agent:run received', { chatId, model: config?.anthropic?.activeModel || config?.activeModel, msgCount: messages?.length, personaRuns: personaRuns?.length || 0 })
+ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, agentPrompts, mcpServers, httpTools, agentRuns, knowledgeConfig, injectedPlan, chatPermissionMode, chatAllowList, chatDangerOverrides, maxOutputTokens }) => {
+  logger.agent('IPC agent:run received', { chatId, model: config?.anthropic?.activeModel || config?.activeModel, msgCount: messages?.length, agentRuns: agentRuns?.length || 0 })
   logger.agent('config', { provider: config?.defaultProvider || 'anthropic', model: config?.anthropic?.activeModel, hasKey: !!(config?.apiKey) })
 
   // If this chat already has a running loop, stop it first
@@ -2885,25 +2904,25 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       // Non-fatal -- continue without RAG context
     }
   }
-  // -- Group chat: one or more persona runs (concurrent) --
-  if (personaRuns && personaRuns.length >= 1) {
-    logger.agent('Group chat mode (concurrent)', { chatId, personaCount: personaRuns.length })
+  // -- Group chat: one or more agent runs (concurrent) --
+  if (agentRuns && agentRuns.length >= 1) {
+    logger.agent('Group chat mode (concurrent)', { chatId, agentCount: agentRuns.length })
     const baseMessages = [...messages]
 
-    // Emit all persona_start events upfront so UI creates all message bubbles immediately
-    for (const run of personaRuns) {
+    // Emit all agent_start events upfront so UI creates all message bubbles immediately
+    for (const run of agentRuns) {
       if (!event.sender.isDestroyed()) {
         event.sender.send('agent:chunk', {
           chatId,
-          chunk: { type: 'persona_start', personaId: run.personaId, personaName: run.personaName }
+          chunk: { type: 'agent_start', agentId: run.agentId, agentName: run.agentName }
         })
       }
     }
 
-    // Launch all persona loops concurrently
+    // Launch all agent loops concurrently
     const groupCfg = readJSON(CONFIG_FILE, {})
-    const promises = personaRuns.map(run => {
-      const loopKey = `${chatId}:${run.personaId}`
+    const promises = agentRuns.map(run => {
+      const loopKey = `${chatId}:${run.agentId}`
       const loopConfig = { ...(run.config || config), soulsDir: SOULS_DIR }
       if (injectedPlan) loopConfig.injectedPlan = injectedPlan
       loopConfig.sandboxConfig = groupCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
@@ -2912,7 +2931,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       // Per-chat value takes precedence; fall back to global config default
       loopConfig.maxOutputTokens = maxOutputTokens || groupCfg.maxOutputTokens || null
       loopConfig.smtpConfig = groupCfg.smtp || null
-      // Inject config-backed paths — all personas share the same global paths
+      // Inject config-backed paths — all agents share the same global paths
       loopConfig.artifactPath = groupCfg.artifactPath || groupCfg.artyfactPath || ''
       loopConfig.skillsPath   = groupCfg.skillsPath   || ''
       loopConfig.DoCPath      = groupCfg.DoCPath      || ''
@@ -2922,7 +2941,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       return (async () => {
         try {
           // Inject pending memory facts for conversational confirmation (one-shot per run)
-          const runPersonaPrompts = run.personaPrompts || personaPrompts
+          const runAgentPrompts = run.agentPrompts || agentPrompts
           const groupPending = pendingMemoryFacts.get(chatId)
           if (groupPending?.length > 0) {
             pendingMemoryFacts.delete(chatId)
@@ -2934,8 +2953,8 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
               ...groupPending.map(p => `- [${p.section}] ${p.entry} (for ${p.target})`),
               '[/MEMORY PENDING CONFIRMATION]',
             ].join('\n')
-            if (runPersonaPrompts) {
-              runPersonaPrompts.systemPersonaPrompt = (runPersonaPrompts.systemPersonaPrompt || '') + block
+            if (runAgentPrompts) {
+              runAgentPrompts.systemAgentPrompt = (runAgentPrompts.systemAgentPrompt || '') + block
             }
           }
           const result = await loop.run(
@@ -2946,26 +2965,26 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
               if (!event.sender.isDestroyed()) {
                 event.sender.send('agent:chunk', {
                   chatId,
-                  chunk: { ...chunk, personaId: run.personaId, personaName: run.personaName }
+                  chunk: { ...chunk, agentId: run.agentId, agentName: run.agentName }
                 })
               }
             },
             currentAttachments,
-            runPersonaPrompts,
+            runAgentPrompts,
             run.mcpServers || mcpServers,
             run.httpTools || httpTools,
             ragContext
           )
-          return { personaId: run.personaId, personaName: run.personaName, success: true, result }
+          return { agentId: run.agentId, agentName: run.agentName, success: true, result }
         } catch (err) {
-          logger.error('agent:run persona error', { chatId, personaId: run.personaId, error: err.message })
-          return { personaId: run.personaId, personaName: run.personaName, success: false, error: err.message }
+          logger.error('agent:run agent error', { chatId, agentId: run.agentId, error: err.message })
+          return { agentId: run.agentId, agentName: run.agentName, success: false, error: err.message }
         } finally {
-          // Emit persona_end
+          // Emit agent_end
           if (!event.sender.isDestroyed()) {
             event.sender.send('agent:chunk', {
               chatId,
-              chunk: { type: 'persona_end', personaId: run.personaId, personaName: run.personaName }
+              chunk: { type: 'agent_end', agentId: run.agentId, agentName: run.agentName }
             })
           }
           if (activeLoops.has(loopKey)) {
@@ -2988,33 +3007,33 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
 
     const results = await Promise.all(promises)
 
-    // Build a combined context snapshot for the inspector (uses first persona's snapshot as base)
-    const personaSnapshots = personaRuns.map(run => {
-      const key = `${chatId}:${run.personaId}`
+    // Build a combined context snapshot for the inspector (uses first agent's snapshot as base)
+    const agentSnapshots = agentRuns.map(run => {
+      const key = `${chatId}:${run.agentId}`
       const snap = lastContextSnapshots.get(key)
-      return snap ? { personaName: run.personaName, ...snap } : null
+      return snap ? { agentName: run.agentName, ...snap } : null
     }).filter(Boolean)
-    if (personaSnapshots.length > 0) {
-      const base = { ...personaSnapshots[0] }
-      base.model = personaSnapshots.map(s => `${s.personaName}: ${s.model || 'default'}`).join(' | ')
+    if (agentSnapshots.length > 0) {
+      const base = { ...agentSnapshots[0] }
+      base.model = agentSnapshots.map(s => `${s.agentName}: ${s.model || 'default'}`).join(' | ')
       lastContextSnapshots.set(chatId, base)
     }
 
     // Fire-and-forget memory extraction for group chat -- pass all participants for routing
     // N=10 trigger: only extract when at least 10 new messages since last extraction
-    if (personaRuns.length > 0) {
+    if (agentRuns.length > 0) {
       const prevCount = lastExtractedMsgCount.get(chatId) || 0
       if (messages.length - prevCount >= 10) {
         lastExtractedMsgCount.set(chatId, messages.length)
-        const groupParticipants = personaRuns.map(r => ({ id: r.personaId, name: r.personaName, type: 'system' }))
-        runMemoryExtraction(event, chatId, messages, config, personaRuns[0].personaPrompts || personaPrompts, groupParticipants)
+        const groupParticipants = agentRuns.map(r => ({ id: r.agentId, name: r.agentName, type: 'system' }))
+        runMemoryExtraction(event, chatId, messages, config, agentRuns[0].agentPrompts || agentPrompts, groupParticipants)
       }
     }
 
     return { success: true, results }
   }
 
-  // -- Single persona (backward compat) --
+  // -- Single agent (backward compat) --
   const fullCfg = readJSON(CONFIG_FILE, {})
   const loopConfig = { ...config, soulsDir: SOULS_DIR }
   if (injectedPlan) loopConfig.injectedPlan = injectedPlan
@@ -3046,8 +3065,8 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       ...singlePending.map(p => `- [${p.section}] ${p.entry} (for ${p.target})`),
       '[/MEMORY PENDING CONFIRMATION]',
     ].join('\n')
-    if (!personaPrompts) personaPrompts = {}
-    personaPrompts.systemPersonaPrompt = (personaPrompts.systemPersonaPrompt || '') + block
+    if (!agentPrompts) agentPrompts = {}
+    agentPrompts.systemAgentPrompt = (agentPrompts.systemAgentPrompt || '') + block
   }
 
   try {
@@ -3061,7 +3080,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
         }
       },
       currentAttachments,
-      personaPrompts,
+      agentPrompts,
       mcpServers,
       httpTools,
       ragContext
@@ -3081,10 +3100,10 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     const prevCount = lastExtractedMsgCount.get(chatId) || 0
     if (messages.length - prevCount >= 10) {
       lastExtractedMsgCount.set(chatId, messages.length)
-      const singleParticipants = personaPrompts?.systemPersonaId
-        ? [{ id: personaPrompts.systemPersonaId, name: personaPrompts.groupChatContext?.personaName || 'Assistant', type: 'system' }]
+      const singleParticipants = agentPrompts?.systemAgentId
+        ? [{ id: agentPrompts.systemAgentId, name: agentPrompts.groupChatContext?.agentName || 'Assistant', type: 'system' }]
         : null
-      runMemoryExtraction(event, chatId, messages, config, personaPrompts, singleParticipants)
+      runMemoryExtraction(event, chatId, messages, config, agentPrompts, singleParticipants)
     }
     return { success: true, result }
   } catch (err) {
@@ -3107,7 +3126,7 @@ ipcMain.handle('agent:accumulate-voice-usage', async (_, { chatId, usage }) => {
 ipcMain.handle('agent:stop', (event, chatId) => {
   if (chatId) {
     let stopped = false
-    // Stop exact match and all group persona loops (chatId:personaId)
+    // Stop exact match and all group agent loops (chatId:agentId)
     for (const [key, loop] of activeLoops) {
       if (key === chatId || key.startsWith(chatId + ':')) {
         loop.stop()
@@ -3129,10 +3148,10 @@ ipcMain.handle('agent:stop', (event, chatId) => {
 })
 
 ipcMain.handle('agent:permission-response', (event, chatId, { blockId, decision, pattern }) => {
-  // Try exact chatId match first, then chatId:personaId prefix
+  // Try exact chatId match first, then chatId:agentId prefix
   let loop = activeLoops.get(chatId)
   if (!loop) {
-    // Check group persona loops
+    // Check group agent loops
     for (const [key, l] of activeLoops) {
       if (key.startsWith(chatId + ':')) { loop = l; break }
     }
@@ -3186,7 +3205,7 @@ ipcMain.handle('agent:permission-response', (event, chatId, { blockId, decision,
 })
 
 ipcMain.handle('agent:update-permission-mode', (event, chatId, { chatMode, chatAllowList }) => {
-  // Update all active loops for this chat (exact + group persona loops)
+  // Update all active loops for this chat (exact + group agent loops)
   let updated = false
   for (const [key, loop] of activeLoops) {
     if (key === chatId || key.startsWith(chatId + ':')) {
@@ -3232,7 +3251,7 @@ ipcMain.handle('agent:compact-standalone', async (event, { chatId, messages, con
 
 // -- Streaming text-edit LLM call (for inline AI Edit in DocsView) -----------
 // Heavier than enhance-prompt (streaming, higher max_tokens) but lighter than
-// agent:run (no tool loop, no RAG, no persona). Streams token-by-token via
+// agent:run (no tool loop, no RAG, no agent). Streams token-by-token via
 // 'agent:edit-chunk' so the user sees real-time progress.
 const _activeEditRequests = new Map() // requestId → AbortController
 
@@ -3392,7 +3411,7 @@ ipcMain.handle('agent:edit-stop', async (_event, requestId) => {
 const _activeDocLoops = new Map() // requestId → AgentLoop
 
 ipcMain.handle('agent:doc-run', async (event, {
-  requestId, messages, config, personaPrompt, fileContext,
+  requestId, messages, config, agentPrompt, fileContext,
   selectedText, fullFileContent,
   enabledSkills, mcpServers, httpTools, knowledgeConfig,
   permissionMode
@@ -3444,7 +3463,7 @@ ipcMain.handle('agent:doc-run', async (event, {
     const fName = fileContext?.fileName || 'unknown'
     const fLang = fileContext?.language ? ` (${fileContext.language})` : ''
 
-    const docSystemPrompt = `${personaPrompt || ''}
+    const docSystemPrompt = `${agentPrompt || ''}
 
 You are embedded in a document editor. The user is currently editing a file and may ask you to modify text or answer questions about it.
 
@@ -3526,8 +3545,8 @@ If you use tools to read or write files, use the exact file path above: ${fPath}
       } catch {}
     }
 
-    const personaPrompts = {
-      systemPersonaPrompt: docSystemPrompt,
+    const agentPrompts = {
+      systemAgentPrompt: docSystemPrompt,
     }
 
     // Run the full agent loop
@@ -3549,7 +3568,7 @@ If you use tools to read or write files, use the exact file path above: ${fPath}
         }
       },
       [],  // currentAttachments
-      personaPrompts,
+      agentPrompts,
       mcpServers || [],
       httpTools || [],
       ragContext
@@ -3650,15 +3669,15 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
 })
 
 /**
- * Resolve which @mentioned personas are directly addressed (should respond)
+ * Resolve which @mentioned agents are directly addressed (should respond)
  * vs. passively referenced. Uses a fast single-turn LLM call.
  *
- * Input:  { message, personas: [{id, name}], config }
- * Output: { addresseeIds: string[] }  — subset of the provided persona IDs
+ * Input:  { message, agents: [{id, name}], config }
+ * Output: { addresseeIds: string[] }  — subset of the provided agent IDs
  */
-ipcMain.handle('agent:resolve-addressees', async (event, { message, personas, config }) => {
+ipcMain.handle('agent:resolve-addressees', async (event, { message, agents, config }) => {
   try {
-    const names = personas.map(p => p.name)
+    const names = agents.map(p => p.name)
     const systemPrompt = `You are a routing assistant for a group chat. Your job is to identify which participants are being directly spoken TO in a message — meaning they are expected to respond.
 
 A participant is directly addressed if:
@@ -3680,12 +3699,12 @@ If none should respond, reply with [].`
     const um = config.utilityModel
     if (!um?.provider || !um?.model) {
       logger.warn('agent:resolve-addressees: no global utilityModel configured, treating all mentions as addressees')
-      return { addresseeIds: personas.map(p => p.id) }
+      return { addresseeIds: agents.map(p => p.id) }
     }
     const providerCfg = config[um.provider]
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       logger.warn(`agent:resolve-addressees: utilityModel provider "${um.provider}" missing apiKey/baseURL, treating all mentions as addressees`)
-      return { addresseeIds: personas.map(p => p.id) }
+      return { addresseeIds: agents.map(p => p.id) }
     }
 
     let raw
@@ -3733,7 +3752,7 @@ If none should respond, reply with [].`
     const addresseeNames = match ? JSON.parse(match[0]) : []
 
     // Map names back to IDs (case-insensitive)
-    const addresseeIds = personas
+    const addresseeIds = agents
       .filter(p => addresseeNames.some(n => n.toLowerCase() === p.name.toLowerCase()))
       .map(p => p.id)
 
@@ -3741,19 +3760,19 @@ If none should respond, reply with [].`
     return { addresseeIds }
   } catch (err) {
     logger.error('agent:resolve-addressees error', err.message)
-    // Fallback: treat all mentioned personas as addressees
-    return { addresseeIds: personas.map(p => p.id) }
+    // Fallback: treat all mentioned agents as addressees
+    return { addresseeIds: agents.map(p => p.id) }
   }
 })
 
 /**
  * Dispatch group tasks: utility model parses the user message and extracts
- * per-persona task assignments + dependency ordering.
- * Returns: [{ personaId, personaName, assignedTask, dependsOn: [personaId] }]
+ * per-agent task assignments + dependency ordering.
+ * Returns: [{ agentId, agentName, assignedTask, dependsOn: [agentId] }]
  */
-ipcMain.handle('agent:dispatch-group-tasks', async (event, { message, personas, config }) => {
+ipcMain.handle('agent:dispatch-group-tasks', async (event, { message, agents, config }) => {
   try {
-    const names = personas.map(p => p.name)
+    const names = agents.map(p => p.name)
     const systemPrompt = `You are a task dispatcher for a group chat with multiple AI participants.
 Parse the user's message and extract the specific task assigned to each participant.
 
@@ -3767,8 +3786,8 @@ Rules:
 
 Reply with ONLY a JSON array. Example:
 [
-  { "personaName": "Alice", "assignedTask": "write a function add(a,b)", "dependsOn": [] },
-  { "personaName": "Bob", "assignedTask": "test the add function Alice wrote", "dependsOn": ["Alice"] }
+  { "agentName": "Alice", "assignedTask": "write a function add(a,b)", "dependsOn": [] },
+  { "agentName": "Bob", "assignedTask": "test the add function Alice wrote", "dependsOn": ["Alice"] }
 ]`
 
     const userContent = `Message: "${message}"`
@@ -3817,18 +3836,18 @@ Reply with ONLY a JSON array. Example:
     const parsed = match ? JSON.parse(match[0]) : []
 
     // Map names → IDs and resolve dependsOn to IDs
-    const nameToId = Object.fromEntries(personas.map(p => [p.name.toLowerCase(), p.id]))
+    const nameToId = Object.fromEntries(agents.map(p => [p.name.toLowerCase(), p.id]))
     const dispatched = parsed
-      .filter(d => d.personaName && d.assignedTask)
+      .filter(d => d.agentName && d.assignedTask)
       .map(d => ({
-        personaId:    nameToId[d.personaName.toLowerCase()] || null,
-        personaName:  d.personaName,
+        agentId:    nameToId[d.agentName.toLowerCase()] || null,
+        agentName:  d.agentName,
         assignedTask: d.assignedTask,
         dependsOn:    (d.dependsOn || []).map(n => nameToId[n.toLowerCase()]).filter(Boolean),
       }))
-      .filter(d => d.personaId)
+      .filter(d => d.agentId)
 
-    logger.agent('dispatch-group-tasks', { personas: dispatched.map(d => ({ name: d.personaName, deps: d.dependsOn.length, taskLen: d.assignedTask.length })) })
+    logger.agent('dispatch-group-tasks', { agents: dispatched.map(d => ({ name: d.agentName, deps: d.dependsOn.length, taskLen: d.assignedTask.length })) })
     return { dispatched }
   } catch (err) {
     logger.error('agent:dispatch-group-tasks error', err.message)
@@ -4742,16 +4761,16 @@ ipcMain.handle('shell:show-in-folder', (_, filePath) => {
 const VoiceSession = require('./agent/voice/VoiceSession')
 let activeVoiceSession = null
 
-ipcMain.handle('voice:start', async (event, { chatId, personaId, history, voiceConfig, persona, userPersona, whisperConfig }) => {
+ipcMain.handle('voice:start', async (event, { chatId, agentId, history, voiceConfig, agent, userAgent, whisperConfig }) => {
   try {
     if (activeVoiceSession) {
       activeVoiceSession.stop()
       activeVoiceSession = null
     }
 
-    // Load soul memory for both personas so the voice LLM has full context
-    const systemSoulContent = readSoulFileSync(persona?.id || personaId, 'system')
-    const userSoulContent = readSoulFileSync(userPersona?.id, 'users')
+    // Load soul memory for both agents so the voice LLM has full context
+    const systemSoulContent = readSoulFileSync(agent?.id || agentId, 'system')
+    const userSoulContent = readSoulFileSync(userAgent?.id, 'users')
 
     // Build llmCall function that routes to the correct provider.
     // Returns { text, inputTokens, outputTokens } for usage tracking.
@@ -4846,8 +4865,8 @@ ipcMain.handle('voice:start', async (event, { chatId, personaId, history, voiceC
     activeVoiceSession = new VoiceSession({
       voiceConfig,
       whisperConfig,
-      persona,
-      userPersona: userPersona || {},
+      agent,
+      userAgent: userAgent || {},
       systemSoulContent: systemSoulContent || '',
       userSoulContent: userSoulContent || '',
       history: history || [],

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-ClankAI is a multi-LLM desktop chat application built with **Electron + Vue 3 + Vite**. It supports Anthropic (Claude), OpenRouter, and OpenAI-compatible backends. Features include persona management, MCP server integration, HTTP tools, knowledge base (RAG via Pinecone), skills, and an agentic tool-use loop.
+ClankAI is a multi-LLM desktop chat application built with **Electron + Vue 3 + Vite**. It supports Anthropic (Claude), OpenRouter, and OpenAI-compatible backends. Features include agent management, MCP server integration, HTTP tools, knowledge base (RAG via Pinecone), skills, and an agentic tool-use loop.
 
 ## Tech Stack
 
@@ -23,12 +23,12 @@ ClankAI is a multi-LLM desktop chat application built with **Electron + Vue 3 + 
 - `src/` — Vue renderer (ES modules)
   - `src/main.js`, `src/App.vue`, `src/style.css`, `src/router/index.js`
   - `src/services/storage.js` — storage abstraction (Electron IPC / localStorage)
-  - `src/stores/` — `chats.js`, `config.js`, `personas.js`, `mcp.js`, `tools.js`, `models.js`, `knowledge.js`, `news.js`, `obsidian.js`, `skills.js`, `voice.js`
+  - `src/stores/` — `chats.js`, `config.js`, `agents.js`, `mcp.js`, `tools.js`, `models.js`, `knowledge.js`, `news.js`, `obsidian.js`, `skills.js`, `voice.js`
   - `src/components/layout/` — Sidebar, TitleBar
   - `src/components/common/` — AppButton, ComboBox, ConfirmModal, CategoryModal, EmojiPicker
   - `src/components/chat/` — MessageRenderer, RichTextEditor, BabylonViewer
-  - `src/components/personas/` — PersonaCard, PersonaWizard, AvatarPicker, SoulViewer
-  - `src/views/` — ChatsView, ConfigView, PersonasView, McpView, ToolsView, KnowledgeView, NotesView, SkillsView, DocsView, NewsView
+  - `src/components/agents/` — AgentCard, AgentWizard, AvatarPicker, SoulViewer
+  - `src/views/` — ChatsView, ConfigView, AgentsView, McpView, ToolsView, KnowledgeView, NotesView, SkillsView, DocsView, NewsView
   - `src/utils/mentions.js`
 - `tailwind.config.js`, `vite.config.js`, `postcss.config.js`, `package.json`
 
@@ -75,10 +75,10 @@ npm run electron
 ### Routing
 
 - Hash-based routing (`createWebHashHistory`) for Electron compatibility
-- Routes: `/chats`, `/personas`, `/skills`, `/knowledge`, `/mcp`, `/tools`, `/notes`, `/config`
+- Routes: `/chats`, `/agents`, `/skills`, `/knowledge`, `/mcp`, `/tools`, `/notes`, `/config`
 - Default redirect: `/` → `/chats`
 
-### Persona Model Architecture — Global Default vs Per-Chat Override
+### Agent Model Architecture — Global Default vs Per-Chat Override
 
 **This logic is intentional and must not be changed without explicit developer confirmation.**
 
@@ -86,47 +86,47 @@ npm run electron
 
 | Layer | Storage location | Scope | Write path |
 |-------|-----------------|-------|------------|
-| **Global default** | `personas.json` → `persona.providerId` / `persona.modelId` | All chats that use this persona | Personas page → `PersonaWizard.vue` → `personasStore.savePersona()` |
-| **Per-chat override** | `chats/{id}.json` → `chat.personaModelOverrides[personaId]` = `{ provider, model }` | This chat only | Chat header persona modal → `ChatHeader.vue` → `chatsStore.setChatPersonaModelOverride()` |
+| **Global default** | `agents.json` → `agent.providerId` / `agent.modelId` | All chats that use this agent | Agents page → `AgentWizard.vue` → `agentsStore.saveAgent()` |
+| **Per-chat override** | `chats/{id}.json` → `chat.agentModelOverrides[agentId]` = `{ provider, model }` | This chat only | Chat header agent modal → `ChatHeader.vue` → `chatsStore.setChatAgentModelOverride()` |
 
 #### Priority at runtime (both desktop and IM bridge)
 
 ```
-chat.personaModelOverrides[personaId]   ← highest priority (this chat only)
-  → persona.providerId / persona.modelId ← persona global default
+chat.agentModelOverrides[agentId]   ← highest priority (this chat only)
+  → agent.providerId / agent.modelId ← agent global default
     → config.defaultProvider             ← global fallback
 ```
 
 #### Key invariants — never break these
 
-1. **`PersonaWizard.vue` is the only place that writes `persona.providerId` / `persona.modelId`** to `personas.json`. The chat persona modal (`ChatHeader.vue`) must never call `personasStore.savePersona()` with model fields.
+1. **`AgentWizard.vue` is the only place that writes `agent.providerId` / `agent.modelId`** to `agents.json`. The chat agent modal (`ChatHeader.vue`) must never call `agentsStore.saveAgent()` with model fields.
 
-2. **`setChatPersonaModelOverride(chatId, personaId, providerId, modelId)` in `chats.js`** is the only path for per-chat overrides. It writes `chat.personaModelOverrides[personaId] = { provider, model }`. Passing `null, null` clears the override and restores the persona default.
+2. **`setChatAgentModelOverride(chatId, agentId, providerId, modelId)` in `chats.js`** is the only path for per-chat overrides. It writes `chat.agentModelOverrides[agentId] = { provider, model }`. Passing `null, null` clears the override and restores the agent default.
 
-3. **Never write a partial override** (`{ provider: x, model: null }`). The `ChatHeader` modal uses a local `draftOverrideProvider` ref to hold the in-flight provider selection, and only calls `setChatPersonaModelOverride` once both provider **and** model are confirmed. See `ChatHeader.vue → openSysPersonaConfig / draftOverrideProvider`.
+3. **Never write a partial override** (`{ provider: x, model: null }`). The `ChatHeader` modal uses a local `draftOverrideProvider` ref to hold the in-flight provider selection, and only calls `setChatAgentModelOverride` once both provider **and** model are confirmed. See `ChatHeader.vue → openSysAgentConfig / draftOverrideProvider`.
 
-4. **Group chat: each persona has its own independent override.** `buildPersonaRuns()` in `ChatsView.vue` iterates each `pid` and reads `targetChat.personaModelOverrides?.[pid]` separately, producing an independent `config` per persona.
+4. **Group chat: each agent has its own independent override.** `buildAgentRuns()` in `ChatsView.vue` iterates each `pid` and reads `targetChat.agentModelOverrides?.[pid]` separately, producing an independent `config` per agent.
 
-5. **Overrides are per-chat, never copied.** `createChatFromHistory()` in `chats.js` intentionally sets `personaModelOverrides: {}` — overrides must not propagate to new chats.
+5. **Overrides are per-chat, never copied.** `createChatFromHistory()` in `chats.js` intentionally sets `agentModelOverrides: {}` — overrides must not propagate to new chats.
 
-6. **Display must reflect the active override.** `activeChatModel` computed in `ChatsView.vue` and `getPersonaProviderLabel()` both read `personaModelOverrides` first, before falling back to `persona.modelId`. Do not simplify these to read only the persona global fields.
+6. **Display must reflect the active override.** `activeChatModel` computed in `ChatsView.vue` and `getAgentProviderLabel()` both read `agentModelOverrides` first, before falling back to `agent.modelId`. Do not simplify these to read only the agent global fields.
 
 #### Files involved
 
-- `src/components/personas/PersonaWizard.vue` — global model edit (Personas page)
+- `src/components/agents/AgentWizard.vue` — global model edit (Agents page)
 - `src/components/chat/ChatHeader.vue` — per-chat override modal (`draftOverrideProvider`, `setChatModelOverride`)
-- `src/stores/chats.js:setChatPersonaModelOverride` — write per-chat override
-- `src/views/ChatsView.vue:buildPersonaRuns` — group chat, per-persona config build (reads override per pid)
+- `src/stores/chats.js:setChatAgentModelOverride` — write per-chat override
+- `src/views/ChatsView.vue:buildAgentRuns` — group chat, per-agent config build (reads override per pid)
 - `src/views/ChatsView.vue:sendMessage` (single path, ~line 5152) — single chat config build (reads override)
-- `src/views/ChatsView.vue:activeChatModel` — display: override → persona global → fallback
-- `src/views/ChatsView.vue:getPersonaProviderLabel` — mention popup display, shows override when active
+- `src/views/ChatsView.vue:activeChatModel` — display: override → agent global → fallback
+- `src/views/ChatsView.vue:getAgentProviderLabel` — mention popup display, shows override when active
 
 ### Data Storage
 
 - All data stored in `~/.clankAI/` (configurable via `CLANKAI_DATA_PATH`)
-- Files: `config.json`, `personas.json`, `mcp-servers.json`, `tools.json`, `knowledge.json`
+- Files: `config.json`, `agents.json`, `mcp-servers.json`, `tools.json`, `knowledge.json`
 - Chats: `chats/index.json` (metadata) + `chats/{id}.json` (per-chat with messages)
-- Souls: `souls/{personaId}/{type}.md`
+- Souls: `souls/{agentId}/{type}.md`
 
 ### `.env` vs `config.json` — What Lives Where
 
@@ -182,7 +182,7 @@ This gradient appears on:
 - **Sidebar active nav item** — currently selected navigation link
 - **ConfirmModal** primary action button
 - **Empty state icons** — large icon containers on empty pages
-- **Section icons** — persona type section headers
+- **Section icons** — agent type section headers
 - **Dark dialogs/dropdowns** — floating panels (header icons, hover states, search focus)
 
 Text on gradient surfaces is always `#FFFFFF`. Secondary text on gradients uses `rgba(255,255,255,0.6)`.
@@ -264,7 +264,7 @@ Text on gradient surfaces is always `#FFFFFF`. Secondary text on gradients uses 
 - Active item: black gradient background with white text
 - Inactive item: `#6B7280` text, hover `#F5F5F5` bg transitioning to `#1A1A1A` text
 - Section labels: uppercase, `letter-spacing: 0.06em`, `#9CA3AF`
-- Grouped sections: "AI Agent" (Chats, Skills, Knowledge, MCP, Tools, Personas), "Workspace" (Notes), "System" (Configuration)
+- Grouped sections: "AI Agent" (Chats, Skills, Knowledge, MCP, Tools, Agents), "Workspace" (Notes), "System" (Configuration)
 
 #### Cards
 - White background, `1px solid var(--border)`, `border-radius: var(--radius-lg)` (16px)
@@ -320,7 +320,7 @@ All page-level action buttons (Refresh, Add, New, etc.) in view headers **must u
 - Loading state: use `:loading` prop (built-in spinner), not custom `.btn-spinner`
 - Disabled state: use `:disabled` prop (built-in 0.5 opacity)
 
-Pages using this standard: ToolsView, McpView, PersonasView, KnowledgeView, SkillsView, NewsView.
+Pages using this standard: ToolsView, McpView, AgentsView, KnowledgeView, SkillsView, NewsView.
 
 **Exception — NotesView tree toolbar**: Uses raw `<button class="action-btn">` because that toolbar is inside the notes file tree sidebar, not a page header. This is acceptable for that specific dense/icon-only context.
 
@@ -368,7 +368,7 @@ Views like MCP, Tools use a consistent search bar:
 
 ### Count Badges
 
-- Small pill showing item count: `{N} tool(s)`, `{N} server(s)`, `{N} persona(s)`
+- Small pill showing item count: `{N} tool(s)`, `{N} server(s)`, `{N} agent(s)`
 - Typically styled as a subtle rounded badge near the page header
 
 ### Page Layout Pattern
@@ -458,7 +458,7 @@ Conversion: divide `px` by 16 (e.g. 8px = 0.5rem, 16px = 1rem, 24px = 1.5rem).
 
 ### Card Grid Columns
 
-Card grids (MCP, Tools, Skills, Knowledge, Personas) use `min-width` breakpoints — never `max-width`: 2 cols base → 3 cols at 1920px → 4 cols at 2560px.
+Card grids (MCP, Tools, Skills, Knowledge, Agents) use `min-width` breakpoints — never `max-width`: 2 cols base → 3 cols at 1920px → 4 cols at 2560px.
 
 ### Sidebar Behavior
 
@@ -558,9 +558,9 @@ Do NOT write task state to files on disk — it conflicts across concurrent term
 
 - **2026-03-01**: Added a one-time migration block to `main.js` to move path keys from `.env` → `config.json`. Wrong approach — migration code in source is dead weight after first run, requires a restart to execute, and pollutes the codebase with logic that will never run again. **Rule: one-time data migrations must be done by directly editing the data files on disk (e.g. `config.json`, `.env`), not by adding migration logic to source code.**
 
-- **2026-03-02**: Group chat persona collaboration loop collected ALL @mentions from a persona's response and triggered all mentioned personas immediately. This caused a persona that was only *referenced* (e.g. "then we'll hand to @Reviewer") to respond in the same round as the persona that was *addressed*. **Rule: in the persona→persona collaboration loop (`triggerPersonaCollaboration`), apply `resolveAddressees` per source message — the same AI-based disambiguation used in the user→persona path — so only the truly addressed personas respond in each round, not every mentioned name.**
+- **2026-03-02**: Group chat agent collaboration loop collected ALL @mentions from a agent's response and triggered all mentioned agents immediately. This caused a agent that was only *referenced* (e.g. "then we'll hand to @Reviewer") to respond in the same round as the agent that was *addressed*. **Rule: in the agent→agent collaboration loop (`triggerAgentCollaboration`), apply `resolveAddressees` per source message — the same AI-based disambiguation used in the user→agent path — so only the truly addressed agents respond in each round, not every mentioned name.**
 
-- **2026-03-02**: Multiple personas in a group chat must never share a single message bubble. **Rule: `_applyChunk` in `chats.js` must NOT touch ANY chunk tagged with `personaId` (text, persona_start, persona_end, tool_call, tool_result). All group persona chunk processing — placeholder creation, text routing, streaming flag management — is owned exclusively by `ChatsView.handleChunk` via the `perChatStreamingMsgId` keying system.** The store only handles non-persona chunks (single persona / non-group path) and state flags (isThinking, contextMetrics). Violating this causes: (a) duplicate placeholders, (b) double content writes, (c) `streaming=false` race conditions that reroute text to the wrong persona's bubble.
+- **2026-03-02**: Multiple agents in a group chat must never share a single message bubble. **Rule: `_applyChunk` in `chats.js` must NOT touch ANY chunk tagged with `agentId` (text, agent_start, agent_end, tool_call, tool_result). All group agent chunk processing — placeholder creation, text routing, streaming flag management — is owned exclusively by `ChatsView.handleChunk` via the `perChatStreamingMsgId` keying system.** The store only handles non-agent chunks (single agent / non-group path) and state flags (isThinking, contextMetrics). Violating this causes: (a) duplicate placeholders, (b) double content writes, (c) `streaming=false` race conditions that reroute text to the wrong agent's bubble.
 
 - **2026-03-02**: `\b` (word boundary) in regex does NOT work for CJK (Chinese/Japanese/Korean) characters. CJK chars are non-`\w`, so `\b` between a CJK char and a space/punctuation (both non-`\w`) never fires. **Rule: always use `(?=\W|$)` instead of `\b` for name-boundary matching in `parseMentions`, `stripMentions`, and the `MessageRenderer` @mention highlighter.** This applies to any regex that must support non-Latin names.
 

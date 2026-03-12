@@ -11,16 +11,16 @@
               <path v-else d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
             </svg>
           </div>
-          <h2 class="wiz-title">{{ editPersona ? 'Edit' : 'New' }} {{ type === 'system' ? 'System' : 'User' }} Persona</h2>
+          <h2 class="wiz-title">{{ editAgent ? 'Edit' : 'New' }} {{ type === 'system' ? 'System' : 'User' }} Agent</h2>
         </div>
         <button class="wiz-close-btn" @click="$emit('close')" aria-label="Close">
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
 
-      <!-- Mode picker (new persona only, before any flow starts) -->
-      <div v-if="!editPersona && !creationMode && !generating && !showPreview" class="wiz-mode-picker">
-        <p class="wiz-mode-hint">How do you want to create this persona?</p>
+      <!-- Mode picker (new agent only, before any flow starts) -->
+      <div v-if="!editAgent && !creationMode && !generating && !showPreview" class="wiz-mode-picker">
+        <p class="wiz-mode-hint">How do you want to create this agent?</p>
         <div class="wiz-mode-cards">
           <button class="wiz-mode-card" @click="selectMode('guided')">
             <div class="wiz-mode-icon">
@@ -49,7 +49,7 @@
       <!-- Generating spinner -->
       <div v-if="generating && !showPreview" class="wiz-generating">
         <div class="wiz-gen-dots"><span></span><span></span><span></span></div>
-        <p class="wiz-gen-label">Generating persona...</p>
+        <p class="wiz-gen-label">Generating agent...</p>
       </div>
 
       <!-- Chat area (hidden in edit mode when no messages) -->
@@ -87,7 +87,7 @@
                   <span class="wiz-avatar-selected-label">Selected</span>
                 </span>
               </div>
-              <!-- Provider combo (system personas only) -->
+              <!-- Provider combo (system agents only) -->
               <div v-if="msg.providerPicker && msg.active" class="wiz-model-provider">
                 <ProviderModelPicker
                   :provider="form.providerId"
@@ -147,12 +147,12 @@
             <input
               v-model="form.name"
               class="wiz-name-input"
-              :placeholder="type === 'system' ? 'Persona name...' : 'Your name or alias...'"
+              :placeholder="type === 'system' ? 'Agent name...' : 'Your name or alias...'"
             />
             <button class="wiz-change-avatar-btn" @click="showAvatarPicker = true">Change Avatar</button>
           </div>
         </div>
-        <!-- Provider / Model config (system personas) — above prompt -->
+        <!-- Provider / Model config (system agents) — above prompt -->
         <div v-if="type === 'system'" class="wiz-preview-config">
           <div class="wpc-section">
             <div class="wpc-label">Provider & Model <span style="color:#EF4444">*</span></div>
@@ -166,7 +166,7 @@
             <span v-if="showValidation && form.providerId && !form.modelId" class="wiz-error">Model is required</span>
           </div>
         </div>
-        <!-- Voice selector (system personas) -->
+        <!-- Voice selector (system agents) -->
         <div v-if="type === 'system'" class="wiz-preview-config" style="margin-bottom:0.75rem;">
           <div class="wpc-section" style="margin-bottom:0;">
             <div class="wpc-label">
@@ -226,7 +226,7 @@
           <textarea
             v-model="rewriteText"
             class="wiz-rewrite-textarea"
-            placeholder='Describe the new persona... e.g. "a grumpy doctor like House MD", "Gordon Ramsay for code reviews", "Yoda but as a DevOps engineer"'
+            placeholder='Describe the new agent... e.g. "a grumpy doctor like House MD", "Gordon Ramsay for code reviews", "Yoda but as a DevOps engineer"'
             rows="3"
             autofocus
           ></textarea>
@@ -235,7 +235,7 @@
               size="compact"
               :loading="generating"
               :disabled="!rewriteText.trim() || generating"
-              @click="generatePersonaFromAI(rewriteText, true)"
+              @click="generateAgentFromAI(rewriteText, true)"
             >
               <svg v-if="!generating" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8"/></svg>
               {{ generating ? 'Generating...' : 'Generate' }}
@@ -259,7 +259,7 @@
           class="wiz-done-btn"
           :disabled="!form.generatedPrompt.trim() || saving"
           @click="save"
-        >{{ saving ? 'Saving...' : editPersona ? 'Save Changes' : 'Create Persona' }}</button>
+        >{{ saving ? 'Saving...' : editAgent ? 'Save Changes' : 'Create Agent' }}</button>
       </div>
     </div>
 
@@ -285,7 +285,7 @@ import ProviderModelPicker from '../common/ProviderModelPicker.vue'
 
 const props = defineProps({
   type: { type: String, required: true },
-  editPersona: { type: Object, default: null },
+  editAgent: { type: Object, default: null },
 })
 
 const emit = defineEmits(['close', 'saved'])
@@ -341,7 +341,7 @@ const showRewriteInput = ref(false)
 const rewriteText = ref('')
 
 
-// Tone options for system personas
+// Tone options for system agents
 const toneOptions = [
   { value: 'professional', label: 'Professional' },
   { value: 'casual',       label: 'Casual' },
@@ -361,13 +361,13 @@ function isOptionSelected(value) {
 
 const systemFlow = [
   {
-    ai: "Let's create a new AI personality. <strong>What should this AI be called?</strong>",
+    ai: "Let's create a new AI agentlity. <strong>What should this AI be called?</strong>",
     field: 'name',
     placeholder: 'e.g. CodeMentor, Aria, DevBot...',
     type: 'text',
   },
   {
-    ai: "Now pick an <strong>avatar</strong> for this persona.",
+    ai: "Now pick an <strong>avatar</strong> for this agent.",
     field: 'avatar',
     type: 'avatar',
   },
@@ -390,7 +390,7 @@ const systemFlow = [
     type: 'text',
   },
   {
-    ai: "Select the <strong>AI provider and model</strong> for this persona.",
+    ai: "Select the <strong>AI provider and model</strong> for this agent.",
     field: 'providerModel',
     type: 'provider_picker',
   },
@@ -489,12 +489,12 @@ function submitInput(e) {
   const text = inputText.value.trim()
   if (!text) return
 
-  // Describe mode — generate full persona from the user's description
+  // Describe mode — generate full agent from the user's description
   if (creationMode.value === 'describe') {
     pushUser(text)
     inputText.value = ''
     awaitingTextInput.value = false
-    generatePersonaFromAI(text, false)
+    generateAgentFromAI(text, false)
     return
   }
 
@@ -619,7 +619,7 @@ async function enhancePrompt() {
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `Enhance this ${props.type === 'system' ? 'AI system' : 'user'} persona prompt. Make it more specific, effective, and well-structured while keeping the same intent. Return ONLY the enhanced prompt text, nothing else.\n\nOriginal prompt:\n${form.generatedPrompt}`,
+      prompt: `Enhance this ${props.type === 'system' ? 'AI system' : 'user'} agent prompt. Make it more specific, effective, and well-structured while keeping the same intent. Return ONLY the enhanced prompt text, nothing else.\n\nOriginal prompt:\n${form.generatedPrompt}`,
       config,
     })
     if (res.success && res.text) {
@@ -647,11 +647,11 @@ function selectMode(mode) {
   if (mode === 'guided') {
     advanceConversation()
   } else if (mode === 'describe') {
-    pushAI("What kind of persona do you want? Describe freely — a character, a role, a vibe, a real or fictional person. <strong>The more specific, the better.</strong>")
+    pushAI("What kind of agent do you want? Describe freely — a character, a role, a vibe, a real or fictional person. <strong>The more specific, the better.</strong>")
     awaitingTextInput.value = true
     inputPlaceholder.value = 'e.g. "a grumpy doctor like House MD", "Gordon Ramsay for code reviews", "a wise wizard who is secretly terrible at magic"...'
   } else if (mode === 'random') {
-    generatePersonaFromAI(null, false)
+    generateAgentFromAI(null, false)
   }
 }
 
@@ -666,17 +666,17 @@ function extractJSON(text) {
   return text.trim()
 }
 
-async function generatePersonaFromAI(description, isRewrite) {
+async function generateAgentFromAI(description, isRewrite) {
   generating.value = true
   aiError.value = ''
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const descLine = description
-      ? `The user wants a persona described as: "${description}"\n\n`
-      : 'Generate a completely random, creative, and surprising persona. Be imaginative — pick something unexpected.\n\n'
+      ? `The user wants a agent described as: "${description}"\n\n`
+      : 'Generate a completely random, creative, and surprising agent. Be imaginative — pick something unexpected.\n\n'
 
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `${descLine}Create a detailed AI persona character. Be specific and creative. It can be a fictional character, historical figure, professional archetype, mythological being, movie/TV character, or anything interesting.\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"character name","role":"brief role or identity (5-10 words)","description":"one sentence who they are (max 15 words)","prompt":"300-500 word character prompt — start with 'You are [name]...', include: who they are, how they speak day-to-day, their personality quirks, what they genuinely care about, what annoys them, their background. Make them feel like a real person or character — NOT an AI assistant. No \\"Certainly!\\", no formal helper voice."}\n\nIMPORTANT: the prompt field must make the character feel authentic and human, with real personality.`,
+      prompt: `${descLine}Create a detailed AI agent character. Be specific and creative. It can be a fictional character, historical figure, professional archetype, mythological being, movie/TV character, or anything interesting.\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"character name","role":"brief role or identity (5-10 words)","description":"one sentence who they are (max 15 words)","prompt":"300-500 word character prompt — start with 'You are [name]...', include: who they are, how they speak day-to-day, their agentlity quirks, what they genuinely care about, what annoys them, their background. Make them feel like a real person or character — NOT an AI assistant. No \\"Certainly!\\", no formal helper voice."}\n\nIMPORTANT: the prompt field must make the character feel authentic and human, with real agentlity.`,
       config,
     })
 
@@ -718,7 +718,7 @@ async function generateDescription(prompt) {
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `Read this persona prompt and write a SHORT description (max 10 words) that tells the user who this persona is. Focus on: role, expertise, key character traits. Use clean, simple words. No punctuation at the end. Return ONLY the description, nothing else.\n\nPrompt:\n${prompt}`,
+      prompt: `Read this agent prompt and write a SHORT description (max 10 words) that tells the user who this agent is. Focus on: role, expertise, key character traits. Use clean, simple words. No punctuation at the end. Return ONLY the description, nothing else.\n\nPrompt:\n${prompt}`,
       config,
     })
     if (res.success && res.text) {
@@ -734,7 +734,7 @@ async function generateDescription(prompt) {
 // ── Save ──────────────────────────────────────────────────────────────────
 
 async function save() {
-  // System personas require provider + model
+  // System agents require provider + model
   if (props.type === 'system' && (!form.providerId || !form.modelId)) {
     showValidation.value = true
     return
@@ -742,8 +742,8 @@ async function save() {
   saving.value = true
   try {
     const description = await generateDescription(form.generatedPrompt)
-    const persona = {
-      ...(props.editPersona || {}),
+    const agent = {
+      ...(props.editAgent || {}),
       type: props.type,
       name: form.name || 'Untitled',
       avatar: form.avatar || 'a1',
@@ -753,7 +753,7 @@ async function save() {
       modelId: form.modelId || null,
       voiceId: form.voiceId || null,
     }
-    await agentsStore.saveAgent(persona)
+    await agentsStore.saveAgent(agent)
     emit('saved')
     emit('close')
   } finally {
@@ -764,18 +764,18 @@ async function save() {
 // ── Init / Edit mode ──────────────────────────────────────────────────────
 
 onMounted(() => {
-  if (props.editPersona) {
-    form.name = props.editPersona.name || ''
-    form.avatar = props.editPersona.avatar || ''
-    form.role = props.editPersona.role || ''
-    form.description = props.editPersona.description || ''
-    form.generatedPrompt = props.editPersona.prompt || ''
-    form.providerId = props.editPersona.providerId || 'anthropic'
-    form.modelId = props.editPersona.modelId || ''
-    form.voiceId = props.editPersona.voiceId || 'alloy'
+  if (props.editAgent) {
+    form.name = props.editAgent.name || ''
+    form.avatar = props.editAgent.avatar || ''
+    form.role = props.editAgent.role || ''
+    form.description = props.editAgent.description || ''
+    form.generatedPrompt = props.editAgent.prompt || ''
+    form.providerId = props.editAgent.providerId || 'anthropic'
+    form.modelId = props.editAgent.modelId || ''
+    form.voiceId = props.editAgent.voiceId || 'alloy'
     showPreview.value = true
   }
-  // New persona: show mode picker — advanceConversation() called by selectMode('guided')
+  // New agent: show mode picker — advanceConversation() called by selectMode('guided')
 })
 </script>
 

@@ -11,7 +11,7 @@
       <div class="call-panel-header">
         <div class="call-panel-avatar" :class="statusClass">
           <div class="call-panel-ring"></div>
-          <img v-if="personaAvatar" :src="personaAvatar" alt="" class="call-panel-avatar-img" />
+          <img v-if="agentAvatar" :src="agentAvatar" alt="" class="call-panel-avatar-img" />
           <div v-else class="call-panel-avatar-fallback">
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
@@ -19,7 +19,7 @@
           </div>
         </div>
         <div class="call-panel-info">
-          <span class="call-panel-name">{{ voiceStore.activePersonaName || 'AI' }}</span>
+          <span class="call-panel-name">{{ voiceStore.activeAgentName || 'AI' }}</span>
           <span class="call-panel-status">{{ statusLabel }}</span>
         </div>
 
@@ -278,11 +278,11 @@ async function enumerateDevices() {
 
 onMounted(enumerateDevices)
 
-const personaAvatar = computed(() => {
-  if (!voiceStore.activePersonaId) return null
-  const persona = agentsStore.agents.find(p => p.id === voiceStore.activePersonaId)
-  if (!persona?.avatar) return null
-  return getAvatarDataUri(persona.avatar)
+const agentAvatar = computed(() => {
+  if (!voiceStore.activeAgentId) return null
+  const agent = agentsStore.agents.find(p => p.id === voiceStore.activeAgentId)
+  if (!agent?.avatar) return null
+  return getAvatarDataUri(agent.avatar)
 })
 
 const statusClass = computed(() => {

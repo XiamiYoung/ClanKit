@@ -297,7 +297,7 @@
     </slot>
   </div>
 
-  <!-- Floating persona tooltip (Teleport to body so it escapes overflow) -->
+  <!-- Floating agent tooltip (Teleport to body so it escapes overflow) -->
   <Teleport to="body">
     <div
       v-if="avatarTooltip.visible"
@@ -362,19 +362,19 @@ function getAvatarUri(agent) {
 }
 
 function getSystemAvatar(msg) {
-  const pid = msg.personaId || chat.value?.systemPersonaId
+  const pid = msg.agentId || chat.value?.systemAgentId
   const agent = pid ? agentsStore.getAgentById(pid) : agentsStore.defaultSystemAgent
   return getAvatarUri(agent)
 }
 
 function getMsgAssistantName(msg) {
-  const pid = msg.personaId || systemPersonaIds.value[0]
+  const pid = msg.agentId || systemAgentIds.value[0]
   const agent = pid ? agentsStore.getAgentById(pid) : null
-  return agent?.name || msg.personaName || 'Assistant'
+  return agent?.name || msg.agentName || 'Assistant'
 }
 
 const userAgent = computed(() => {
-  const id = chat.value?.userPersonaId
+  const id = chat.value?.userAgentId
   return id ? agentsStore.getAgentById(id) : agentsStore.defaultUserAgent
 })
 const userAgentName = computed(() => userAgent.value?.name || 'User')
@@ -383,8 +383,8 @@ const userAvatarUri = computed(() => getAvatarUri(userAgent.value))
 const systemAgentIds = computed(() => {
   const c = chat.value
   if (!c) return []
-  if (c.groupPersonaIds?.length) return c.groupPersonaIds
-  const id = c.systemPersonaId || agentsStore.defaultSystemAgent?.id
+  if (c.groupAgentIds?.length) return c.groupAgentIds
+  const id = c.systemAgentId || agentsStore.defaultSystemAgent?.id
   return id ? [id] : []
 })
 
@@ -396,7 +396,7 @@ function showAvatarTooltip(event, msg) {
   if (msg.role === 'user') {
     agent = userAgent.value
   } else {
-    const pid = msg.personaId || systemAgentIds.value[0]
+    const pid = msg.agentId || systemAgentIds.value[0]
     agent = pid ? agentsStore.getAgentById(pid) : null
   }
   if (!agent) { avatarTooltip.visible = false; return }
@@ -497,7 +497,7 @@ async function copyMessage(msg) {
 // ── Quote ──
 function quoteMessage(msg) {
   const content = msg.content || ''
-  quotedMessage.value = { role: msg.role, content, personaId: msg.personaId || null }
+  quotedMessage.value = { role: msg.role, content, agentId: msg.agentId || null }
   emit('quote', msg)
   nextTick(() => inputEl.value?.focus())
 }
@@ -505,12 +505,12 @@ function quoteMessage(msg) {
 function getQuotedSenderName(q) {
   if (!q) return 'Assistant'
   if (q.role === 'user') return userAgentName.value
-  if (q.personaId) {
-    const a = agentsStore.getAgentById(q.personaId)
+  if (q.agentId) {
+    const a = agentsStore.getAgentById(q.agentId)
     if (a) return a.name
   }
   // Fall back to the chat's system agent
-  const sysId = chat.value?.systemPersonaId
+  const sysId = chat.value?.systemAgentId
   if (sysId) {
     const a = agentsStore.getAgentById(sysId)
     if (a) return a.name
@@ -549,14 +549,14 @@ function onScroll() {
 // Watch message count changes for auto-scroll
 watch(() => chat.value?.messages?.length, () => { scrollToBottom() }, { flush: 'post' })
 // Watch last message content/segments for streaming auto-scroll.
-// Group chat personas stream via segments (content stays ''), so we must also
+// Group chat agents stream via segments (content stays ''), so we must also
 // track total segment count across recent messages.
 watch(() => {
   const msgs = chat.value?.messages
   if (!msgs?.length) return 0
   const last = msgs[msgs.length - 1]
   const contentLen = last?.content?.length ?? 0
-  // Sum segment counts of the last 10 messages to catch group chat persona streaming
+  // Sum segment counts of the last 10 messages to catch group chat agent streaming
   let segTotal = 0
   for (let i = Math.max(0, msgs.length - 10); i < msgs.length; i++) {
     segTotal += msgs[i]?.segments?.length ?? 0

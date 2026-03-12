@@ -2,9 +2,9 @@
  * task-scheduler.js — node-cron based scheduler for Plans (Task Engine).
  *
  * Concepts:
- *   Task  — a reusable prompt template with optional persona inputs (slots).
+ *   Task  — a reusable prompt template with optional agent inputs (slots).
  *   Plan  — a scheduled execution with ordered steps; each step references a Task
- *           and assigns real personas to the task's persona input slots.
+ *           and assigns real agents to the task's agent input slots.
  *
  * Usage from main.js:
  *   const taskScheduler = require('./task-scheduler')
@@ -165,7 +165,7 @@ async function writeJSONAtomic(file, data) {
   }
 }
 
-// ── Provider config for an agent (mirrors ChatsView buildPersonaRuns logic) ──
+// ── Provider config for an agent (mirrors ChatsView buildAgentRuns logic) ──
 
 function buildAgentConfig(agent, globalCfg) {
   const cfg = { ...globalCfg }
@@ -231,7 +231,7 @@ async function _runAgentStep(agent, promptText, globalCfg, soulsDir, artifactPat
       }
     },
     null,
-    { systemPersonaPrompt: agent.prompt || '', systemPersonaId: agent.id, userPersonaId: '__task_user__', groupChatContext: { personaName: agent.name, personaDescription: agent.description || '', otherParticipants: [] } },
+    { systemAgentPrompt: agent.prompt || '', systemAgentId: agent.id, userAgentId: '__task_user__', groupChatContext: { agentName: agent.name, agentDescription: agent.description || '', otherParticipants: [] } },
     [],   // mcpServers
     [],   // httpTools
     null  // ragContext
@@ -247,8 +247,8 @@ function buildStepPrompt(task, step, allAgents, stepOutputMap) {
   let prompt = (step.promptOverride || '').trim() || task.prompt || ''
 
   // Replace @inputName placeholders with the assigned agent's actual name
-  for (const input of (task.personaInputs || [])) {
-    const assignedId = step.personaAssignments?.[input.name]
+  for (const input of (task.agentInputs || [])) {
+    const assignedId = step.agentAssignments?.[input.name]
     const assignedAgent = assignedId ? allAgents.find(p => p.id === assignedId) : null
     const replaceName = assignedAgent ? assignedAgent.name : input.name
     const regex = new RegExp(`@${input.name}(?=\\W|$)`, 'g')
@@ -323,7 +323,7 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
   // Initialize run record
   if (!fs.existsSync(taskRunsDir)) fs.mkdirSync(taskRunsDir, { recursive: true })
 
-  const stepResults = [] // { stepIndex, taskId, taskName, personaId, personaName, output, status, error }
+  const stepResults = [] // { stepIndex, taskId, taskName, agentId, agentName, output, status, error }
   let runStatus = 'completed'
   let runError  = null
 
@@ -392,22 +392,22 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
         return
       }
 
-      const personaInputs = task.personaInputs || []
-      let personaIds = []
-      if (personaInputs.length > 0) {
-        for (const input of personaInputs) {
-          const pid = step.personaAssignments?.[input.name]
-          if (pid) personaIds.push(pid)
+      const agentInputs = task.agentInputs || []
+      let agentIds = []
+      if (agentInputs.length > 0) {
+        for (const input of agentInputs) {
+          const pid = step.agentAssignments?.[input.name]
+          if (pid) agentIds.push(pid)
         }
       } else {
-        personaIds = step.defaultPersonaIds || []
+        agentIds = step.defaultAgentIds || []
       }
-      personaIds = [...new Set(personaIds)]
+      agentIds = [...new Set(agentIds)]
 
-      if (personaIds.length === 0) {
-        logger.warn(`[TaskScheduler] Step ${stepIdx} (${task.name}): no personas assigned, skipping`)
+      if (agentIds.length === 0) {
+        logger.warn(`[TaskScheduler] Step ${stepIdx} (${task.name}): no agents assigned, skipping`)
         const ts = new Date().toISOString()
-        stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, status: 'skipped', error: 'No personas assigned', startedAt: ts, completedAt: ts })
+        stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, status: 'skipped', error: 'No agents assigned', startedAt: ts, completedAt: ts })
         stepStatuses[step.id] = 'skipped'
         return
       }
@@ -417,12 +417,12 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
       let stepFailed = false
 
       // Run all agents for this step in parallel
-      await Promise.all(personaIds.map(async (personaId) => {
-        const agent = allAgents.find(p => p.id === personaId)
+      await Promise.all(agentIds.map(async (agentId) => {
+        const agent = allAgents.find(p => p.id === agentId)
         if (!agent) {
-          logger.warn(`[TaskScheduler] Step ${stepIdx}: agent ${personaId} not found, skipping`)
+          logger.warn(`[TaskScheduler] Step ${stepIdx}: agent ${agentId} not found, skipping`)
           const ts = new Date().toISOString()
-          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, personaId, personaName: '(not found)', status: 'skipped', error: 'Agent not found', startedAt: ts, completedAt: ts })
+          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, agentId, agentName: '(not found)', status: 'skipped', error: 'Agent not found', startedAt: ts, completedAt: ts })
           return
         }
 
@@ -430,11 +430,11 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
         try {
           const output = await _runAgentStep(agent, promptText, globalCfg, soulsDir, artifactPath, skillsPath, DoCPath, sandboxConfig)
           stepOutputs.push(output)
-          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, personaId: agent.id, personaName: agent.name, output, status: 'done', startedAt: stepStartedAt, completedAt: new Date().toISOString() })
+          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, agentId: agent.id, agentName: agent.name, output, status: 'done', startedAt: stepStartedAt, completedAt: new Date().toISOString() })
           logger.info(`[TaskScheduler] Step ${stepIdx} agent ${agent.name}: done`)
         } catch (err) {
           logger.error(`[TaskScheduler] Step ${stepIdx} agent ${agent.name} error:`, err.message)
-          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, personaId: agent.id, personaName: agent.name, output: '', status: 'failed', error: err.message, startedAt: stepStartedAt, completedAt: new Date().toISOString() })
+          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, agentId: agent.id, agentName: agent.name, output: '', status: 'failed', error: err.message, startedAt: stepStartedAt, completedAt: new Date().toISOString() })
           stepFailed = true
           runStatus = 'error'
           runError  = err.message

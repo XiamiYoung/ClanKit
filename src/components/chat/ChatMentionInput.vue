@@ -60,7 +60,7 @@
           </button>
         </div>
       </div>
-      <!-- Fixed-position tooltip for @mention persona description -->
+      <!-- Fixed-position tooltip for @mention agent description -->
       <Teleport to="body">
         <div
           v-if="tooltip.visible"

@@ -16,8 +16,8 @@ export function useAiMagic() {
   const streaming = ref(false)
   const requestId = ref(null)
 
-  // Persona selection — defaults to built-in Doc Editor
-  const selectedPersonaId = ref(BUILTIN_DOC_EDITOR_ID)
+  // Agent selection — defaults to built-in Doc Editor
+  const selectedAgentId = ref(BUILTIN_DOC_EDITOR_ID)
 
   // Context — always has the full file, optionally a selection
   const selectionContext = reactive({
@@ -79,7 +79,7 @@ export function useAiMagic() {
    * Send a user message through the full agent loop.
    * @param {string} userText
    * @param {Object} agentConfig — extra config gathered by DocsView:
-   *   { personaPrompt, enabledSkills, mcpServers, httpTools, knowledgeConfig }
+   *   { agentPrompt, enabledSkills, mcpServers, httpTools, knowledgeConfig }
    */
   async function send(userText, agentConfig = {}) {
     if (!userText.trim()) return
@@ -149,7 +149,7 @@ export function useAiMagic() {
           language: selectionContext.language,
         },
         config,
-        personaPrompt: agentConfig.personaPrompt || '',
+        agentPrompt: agentConfig.agentPrompt || '',
         enabledSkills: agentConfig.enabledSkills || [],
         mcpServers: agentConfig.mcpServers || [],
         httpTools: agentConfig.httpTools || [],
@@ -236,7 +236,7 @@ export function useAiMagic() {
     requestId,
     selectionContext,
     messages,
-    selectedPersonaId,
+    selectedAgentId,
     open,
     close,
     send,

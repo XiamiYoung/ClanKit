@@ -7,7 +7,7 @@
         <h1 class="agents-title">Agents</h1>
         <span class="catalog-count-badge">{{ agentsStore.agents.length }}</span>
       </div>
-      <p class="agents-subtitle">Configure AI personalities and user profiles for your chats.</p>
+      <p class="agents-subtitle">Configure AI agentlities and user profiles for your chats.</p>
     </div>
 
     <!-- Shared header row spanning full width -->
@@ -256,18 +256,18 @@
     <!-- Soul Viewer Modal -->
     <SoulViewer
       v-if="soulViewerAgent"
-      :persona-id="soulViewerAgent.id"
-      :persona-type="soulViewerAgent.type === 'system' ? 'system' : 'users'"
-      :persona-name="soulViewerAgent.name"
-      :persona-description="soulViewerAgent.description"
-      :persona-prompt="soulViewerAgent.prompt"
-      :persona-provider-id="soulViewerAgent.providerId || null"
-      :persona-model-id="soulViewerAgent.modelId || null"
-      :persona-voice-id="soulViewerAgent.voiceId || null"
-      :persona-avatar="soulViewerAgent.avatar || null"
+      :agent-id="soulViewerAgent.id"
+      :agent-type="soulViewerAgent.type === 'system' ? 'system' : 'users'"
+      :agent-name="soulViewerAgent.name"
+      :agent-description="soulViewerAgent.description"
+      :agent-prompt="soulViewerAgent.prompt"
+      :agent-provider-id="soulViewerAgent.providerId || null"
+      :agent-model-id="soulViewerAgent.modelId || null"
+      :agent-voice-id="soulViewerAgent.voiceId || null"
+      :agent-avatar="soulViewerAgent.avatar || null"
       :is-new="!!soulViewerAgent.isNew"
       @close="soulViewerAgent = null"
-      @update-persona="onUpdateAgent"
+      @update-agent="onUpdateAgent"
     />
 
     <!-- Confirm Delete Agent Modal -->
@@ -296,7 +296,7 @@
     <ConfirmModal
       v-if="deleteCategoryError"
       title="Cannot Delete Category"
-      :message="`&quot;${deleteCategoryError.name}&quot; still has personas assigned. Unassign all personas from this category before deleting it.`"
+      :message="`&quot;${deleteCategoryError.name}&quot; still has agents assigned. Unassign all agents from this category before deleting it.`"
       confirm-text="OK"
       confirm-class="primary"
       cancel-text=""
@@ -331,7 +331,7 @@ defineOptions({ inheritAttrs: false })
 import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { useAgentsStore } from '../stores/agents'
-import { PERSONA_AVATARS } from '../components/agents/agentAvatars'
+import { AGENT_AVATARS } from '../components/agents/agentAvatars'
 import AgentCard from '../components/agents/AgentCard.vue'
 import SoulViewer from '../components/agents/SoulViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
@@ -661,8 +661,8 @@ const CIRCLE_COLORS = [
   '#18181B', '#292524', '#1C1917', '#1E1B4B', '#172554',
 ]
 
-function getAvatarGradient(persona) {
-  const idx = PERSONA_AVATARS.findIndex(a => a.id === persona.avatar)
+function getAvatarGradient(agent) {
+  const idx = AGENT_AVATARS.findIndex(a => a.id === agent.avatar)
   if (idx >= 0) {
     const c = CIRCLE_COLORS[idx % CIRCLE_COLORS.length]
     return `linear-gradient(135deg, ${c}, ${c}dd)`

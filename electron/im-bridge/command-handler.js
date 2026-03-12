@@ -18,7 +18,7 @@ function readIndex() {
 function readAgents() {
   try {
     const data = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'))
-    return Array.isArray(data) ? data : (data.personas || [])
+    return Array.isArray(data) ? data : (data.agents || [])
   } catch { return [] }
 }
 
@@ -263,24 +263,24 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
       messages: [],
       createdAt: now,
       updatedAt: now,
-      systemPersonaId: systemAgentId || null,
-      userPersonaId: userAgentId || null,
+      systemAgentId: systemAgentId || null,
+      userAgentId: userAgentId || null,
       provider: null,
       model: null,
       isGroupChat: false,
-      groupPersonaIds: [],
-      groupPersonaOverrides: {},
+      groupAgentIds: [],
+      groupAgentOverrides: {},
       workingPath: null,
       enabledToolIds: null,
       enabledMcpIds: null,
       permissionMode: 'inherit',
       chatAllowList: [],
       chatDangerOverrides: [],
-      maxPersonaRounds: null,
+      maxAgentRounds: null,
       codingMode: false,
       codingProvider: 'claude-code',
       maxOutputTokens: null,
-      personaModelOverrides: {},
+      agentModelOverrides: {},
     }
 
     // Index entry mirrors persisted metadata (no messages/runtime fields)
@@ -290,24 +290,24 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
       title,
       createdAt: now,
       updatedAt: now,
-      systemPersonaId: chat.systemPersonaId,
-      userPersonaId: chat.userPersonaId,
+      systemAgentId: chat.systemAgentId,
+      userAgentId: chat.userAgentId,
       provider: null,
       model: null,
       isGroupChat: false,
-      groupPersonaIds: [],
-      groupPersonaOverrides: {},
+      groupAgentIds: [],
+      groupAgentOverrides: {},
       workingPath: null,
       enabledToolIds: null,
       enabledMcpIds: null,
       permissionMode: 'inherit',
       chatAllowList: [],
       chatDangerOverrides: [],
-      maxPersonaRounds: null,
+      maxAgentRounds: null,
       codingMode: false,
       codingProvider: 'claude-code',
       maxOutputTokens: null,
-      personaModelOverrides: {},
+      agentModelOverrides: {},
     }
 
     writeAtomic(path.join(CHATS_DIR, `${chatId}.json`), chat)

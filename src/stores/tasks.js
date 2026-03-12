@@ -250,23 +250,23 @@ export const useTasksStore = defineStore('tasks', () => {
     const agentCfg = buildAgentConfig(agent)
 
     const agentPrompts = {
-      systemPersonaPrompt: agent.prompt || '',
-      systemPersonaId: agent.id,
-      userPersonaId: '__task_user__',
+      systemAgentPrompt: agent.prompt || '',
+      systemAgentId: agent.id,
+      userAgentId: '__task_user__',
       groupChatContext: {
-        personaName: agent.name,
-        personaDescription: agent.description || '',
+        agentName: agent.name,
+        agentDescription: agent.description || '',
         otherParticipants: [],
       },
     }
 
     const singleAgentRun = [{
-      personaId: agent.id,
-      personaName: agent.name,
+      agentId: agent.id,
+      agentName: agent.name,
       config: agentCfg,
       enabledAgents: [],
       enabledSkills: [],
-      personaPrompts: agentPrompts,
+      agentPrompts: agentPrompts,
       mcpServers: [],
       httpTools: [],
     }]
@@ -277,8 +277,8 @@ export const useTasksStore = defineStore('tasks', () => {
       config: JSON.parse(JSON.stringify(agentCfg)),
       enabledAgents: [],
       enabledSkills: [],
-      personaRuns: JSON.parse(JSON.stringify(singleAgentRun)),
-      personaPrompts: {},
+      agentRuns: JSON.parse(JSON.stringify(singleAgentRun)),
+      agentPrompts: {},
       mcpServers: [],
       httpTools: [],
       chatPermissionMode: permissionMode,
@@ -406,7 +406,7 @@ export const useTasksStore = defineStore('tasks', () => {
 
           if (planActivity.value?.status === 'running') planActivity.value.currentTaskName = task.name
 
-          const agentIds = [...new Set(step.defaultPersonaIds || [])]
+          const agentIds = [...new Set(step.defaultAgentIds || [])]
 
           if (agentIds.length === 0) {
             const ts = new Date().toISOString()
@@ -426,7 +426,7 @@ export const useTasksStore = defineStore('tasks', () => {
             const agent = agentsStore.getAgentById(agentId)
             if (!agent) {
               const ts = new Date().toISOString()
-              activeRun.value.stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, personaId: agentId, personaName: '(not found)', status: 'skipped', error: 'Agent not found', output: '', startedAt: ts, completedAt: ts })
+              activeRun.value.stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, agentId: agentId, agentName: '(not found)', status: 'skipped', error: 'Agent not found', output: '', startedAt: ts, completedAt: ts })
               return
             }
 
@@ -439,8 +439,8 @@ export const useTasksStore = defineStore('tasks', () => {
               stepIndex: stepIdx,
               taskId: task.id,
               taskName: task.name,
-              personaId: agent.id,
-              personaName: agent.name,
+              agentId: agent.id,
+              agentName: agent.name,
               status: 'running',
               output: '',
               error: null,

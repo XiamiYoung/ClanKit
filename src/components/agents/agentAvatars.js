@@ -1,5 +1,5 @@
 /**
- * Multi-style DiceBear avatar support for persona selection.
+ * Multi-style DiceBear avatar support for agent selection.
  *
  * ID formats:
  *   "style:seed"   — new format, e.g. "bottts:abc123"
@@ -22,7 +22,7 @@ export const STYLES = [
   { key: 'notionists',        label: 'Notionists',          style: collection.notionists },
   { key: 'notionistsNeutral', label: 'Notionists Neutral',  style: collection.notionistsNeutral },
   { key: 'openPeeps',         label: 'Open Peeps',          style: collection.openPeeps },
-  { key: 'personas',          label: 'Agents',              style: collection.personas },
+  { key: 'agents',          label: 'Agents',              style: collection.agents },
   { key: 'micah',             label: 'Micah',               style: collection.micah },
   { key: 'bigEars',           label: 'Big Ears',            style: collection.bigEars },
   { key: 'bigEarsNeutral',    label: 'Big Ears Neutral',    style: collection.bigEarsNeutral },
@@ -90,7 +90,7 @@ const AVATAR_PRESETS = [
   { id: 'a36', top: ['frida'],        hairColor: ['4a312c'], skinColor: ['d08b5b'], eyes: ['default'],        eyebrows: ['unibrowNatural'],       mouth: ['smile'],   facialHair: [],                clothing: ['collarAndSweater'],clothesColor: ['ff5c5c'],  accessories: [] },
 ]
 
-export const PERSONA_AVATARS = AVATAR_PRESETS
+export const AGENT_AVATARS = AVATAR_PRESETS
 
 // ── SVG cache ──────────────────────────────────────────────────────────────
 

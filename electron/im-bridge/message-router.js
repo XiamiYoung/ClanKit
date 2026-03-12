@@ -56,7 +56,7 @@ function appendMessage(chatId, msg) {
 
 function readAgents() {
   const data = readJSON(AGENTS_FILE, [])
-  return Array.isArray(data) ? data : (data.personas || [])
+  return Array.isArray(data) ? data : (data.agents || [])
 }
 
 function buildLoopConfig(baseConfig, agent) {
@@ -141,21 +141,21 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
   const agentById = {}
   for (const a of agents) agentById[a.id] = a
 
-  const isGroupChat     = !!(chat.isGroupChat && chat.groupPersonaIds && chat.groupPersonaIds.length > 0)
-  const groupPersonaIds = chat.groupPersonaIds || []
+  const isGroupChat     = !!(chat.isGroupChat && chat.groupAgentIds && chat.groupAgentIds.length > 0)
+  const groupAgentIds = chat.groupAgentIds || []
 
   let respondingIds = []
 
   if (isGroupChat) {
     const { mentionAll, matches } = parseIMAtMentions(userText, agents)
     if (mentionAll || matches.length === 0) {
-      respondingIds = [...groupPersonaIds]
+      respondingIds = [...groupAgentIds]
     } else {
-      respondingIds = matches.filter(id => groupPersonaIds.includes(id))
-      if (respondingIds.length === 0) respondingIds = [...groupPersonaIds]
+      respondingIds = matches.filter(id => groupAgentIds.includes(id))
+      if (respondingIds.length === 0) respondingIds = [...groupAgentIds]
     }
   } else {
-    const pid = chat.systemPersonaId || null
+    const pid = chat.systemAgentId || null
     if (pid && agentById[pid]) {
       respondingIds = [pid]
     } else {
@@ -190,22 +190,22 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
 
     const loopConfig = buildLoopConfig(baseConfig, agent)
 
-    const personaPrompts = {
-      systemPersonaPrompt: agent.prompt || '',
-      systemPersonaId:     pid,
-      userPersonaId:       '__im_user__',
+    const agentPrompts = {
+      systemAgentPrompt: agent.prompt || '',
+      systemAgentId:     pid,
+      userAgentId:       '__im_user__',
     }
 
     if (isGroupChat) {
-      const otherParticipants = groupPersonaIds
+      const otherParticipants = groupAgentIds
         .filter(id => id !== pid)
         .map(id => {
           const a = agentById[id]
           return { id, name: a?.name || 'Unknown', description: a?.description || '', prompt: a?.prompt || '' }
         })
-      personaPrompts.groupChatContext = {
-        personaName:        agent.name,
-        personaDescription: agent.description || '',
+      agentPrompts.groupChatContext = {
+        agentName:        agent.name,
+        agentDescription: agent.description || '',
         otherParticipants,
       }
     }
@@ -220,7 +220,7 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
         [],
         (chunk) => { if (chunk.type === 'text') fullText += chunk.text || '' },
         imageAttachment ? [imageAttachment] : [],
-        personaPrompts,
+        agentPrompts,
         [],
         [],
         null
@@ -238,7 +238,7 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
         id:        uuidv4(),
         role:      'assistant',
         content:   fullText,
-        personaId: pid,
+        agentId: pid,
         segments:  [{ type: 'text', content: fullText }],
         timestamp: Date.now(),
         createdAt: Date.now(),
@@ -251,9 +251,9 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
         : fullText
       await sendToIM(replyText)
 
-      // Only accumulate history in single-persona mode; in group mode each
-      // persona responds independently to the same snapshot — appending an
-      // assistant message here would cause the next persona's call to end
+      // Only accumulate history in single-agent mode; in group mode each
+      // agent responds independently to the same snapshot — appending an
+      // assistant message here would cause the next agent's call to end
       // with an assistant turn, which some models reject (no prefill support).
       if (respondingIds.length === 1) {
         messages.push({ role: 'assistant', content: fullText })

@@ -83,7 +83,7 @@ async function _createSocket() {
     for (const msg of upsert.messages ?? []) {
       const remoteJid = msg.key?.remoteJid
       if (!remoteJid) continue
-      // Only accept personal 1:1 chats — skip groups, channels, status, broadcasts
+      // Only accept agentl 1:1 chats — skip groups, channels, status, broadcasts
       if (!remoteJid.endsWith('@s.whatsapp.net') && !remoteJid.endsWith('@lid')) continue
 
       const username = msg.pushName || remoteJid.split('@')[0]

@@ -203,7 +203,7 @@ class VoiceSession {
     }
 
     // Ask the voice LLM to turn the full chat-agent result into a natural spoken reply.
-    // This avoids truncation and keeps the response in the persona's voice.
+    // This avoids truncation and keeps the response in the agent's voice.
     try {
       const systemMsg = this._buildSystemMessage()
       const messages = [
@@ -290,12 +290,12 @@ class VoiceSession {
       parts.push(this.agent.systemPrompt)
     }
 
-    // Agent memory — injected for personality/context awareness only.
+    // Agent memory — injected for agentlity/context awareness only.
     // Formatting and content-section instructions in the memory (e.g. "add a Native Speaker
     // Moment", "end with a summary", "use bullet points") are CHAT-ONLY and must be ignored
     // in voice mode. Voice format is governed solely by the VOICE CALL RULES below.
     if (this.systemSoulContent) {
-      parts.push(`## AGENT MEMORY (voice mode: personality & context awareness only)
+      parts.push(`## AGENT MEMORY (voice mode: agentlity & context awareness only)
 IMPORTANT: Any instructions in this memory about adding sections, formatting responses, appending tips, or structuring output apply ONLY to written chat replies — NOT to voice. Ignore all formatting/content-section instructions here. Speak naturally in 1-3 sentences only.
 
 ${this.systemSoulContent.trim()}`)

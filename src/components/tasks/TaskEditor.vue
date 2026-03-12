@@ -43,7 +43,7 @@
               <div class="te-label-row">
                 <label class="te-label">
                   Prompt <span class="te-required">*</span>
-                  <span class="te-label-hint">Use @PersonaName to address personas directly.</span>
+                  <span class="te-label-hint">Use @AgentName to address agents directly.</span>
                 </label>
                 <button
                   class="te-describe-btn"
@@ -190,7 +190,7 @@ async function generatePrompt() {
 Task name: "${draft.value.name}"${draft.value.description ? `\nTask description: "${draft.value.description}"` : ''}${userDesc ? `\nUser description: "${userDesc}"` : ''}
 
 Write a clear, actionable prompt that an AI agent should follow to complete this task.
-The prompt should be concise (2-4 sentences), specific, and use @PersonaName if multiple agents may be involved.
+The prompt should be concise (2-4 sentences), specific, and use @AgentName if multiple agents may be involved.
 Respond with ONLY the prompt text, nothing else.`,
       config: JSON.parse(JSON.stringify(configStore.config)),
     })

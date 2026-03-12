@@ -11,7 +11,7 @@ Multi-LLM desktop chat application with agentic tool use, built with Electron an
 - **Todo/task planning** for complex multi-step work
 - **File attachments** — drag-drop or pick files, images, and folders
 - **Obsidian vault integration** — browse and edit markdown files
-- **Persona system** — configurable system and user personas per chat
+- **Agent system** — configurable system and user agents per chat
 - **Skills system** — extend the AI with filesystem-based markdown skill files
 - **Context management** — automatic compaction when the context window fills up
 - **WSL2-native** — Windows file picker, path conversion, emoji font support
@@ -90,9 +90,9 @@ electron/              Electron main process
     tools/             FileTool, ShellTool, GitTool, WebTool, DataTool, TodoTool
 
 src/                   Vue renderer
-  views/               ChatsView, ConfigView, PersonasView, SkillsView, ObsidianView
-  components/          MessageRenderer, RichTextEditor, Sidebar, TitleBar, Persona components
-  stores/              Pinia stores (chats, config, personas, skills, obsidian)
+  views/               ChatsView, ConfigView, AgentsView, SkillsView, ObsidianView
+  components/          MessageRenderer, RichTextEditor, Sidebar, TitleBar, Agent components
+  stores/              Pinia stores (chats, config, agents, skills, obsidian)
   services/storage.js  Storage abstraction (Electron IPC / localStorage fallback)
 ```
 

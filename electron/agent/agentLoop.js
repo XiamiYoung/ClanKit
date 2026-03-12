@@ -67,7 +67,7 @@ function uiResult(result) {
 }
 
 // ── Soul Memory Helpers ──────────────────────────────────────────────────────
-const SOUL_KEY_SECTIONS = ['Preferences', 'Communication', 'Technical', 'Projects', 'Personal']
+const SOUL_KEY_SECTIONS = ['Preferences', 'Communication', 'Technical', 'Projects', 'Agentl']
 
 /**
  * Read a soul file from disk. Returns null if not found.
@@ -465,14 +465,14 @@ DATA FILE ROUTING — when the user asks you to create or modify app configurati
   IMPORTANT: always set "providerId" to ${utilityProvider ? `"${utilityProvider}"` : 'null'} and "modelId" to ${utilityModelId ? `"${utilityModelId}"` : 'null'} (the system utility model) unless the user explicitly asks for a different model.
 - "add/edit knowledge / RAG index"                 → read then write ${dataPath}/knowledge.json
 - "create/add/edit a task"                          → read then write ${dataPath}/tasks.json
-  Format: [{"id":"<uuid>","name":"...","description":"...","icon":"📋","prompt":"...","personaInputs":[{"name":"slotName","description":"Role description"}]}]
-  TASK PROMPT RULES: Use @slotName tokens in the prompt to reference persona input slots (e.g. "@analyst review this data"). Slot names must be alphanumeric/underscore only (no spaces). Add personaInputs entries for each @slotName used. If no persona slot is needed, set personaInputs to [].
+  Format: [{"id":"<uuid>","name":"...","description":"...","icon":"📋","prompt":"...","agentInputs":[{"name":"slotName","description":"Role description"}]}]
+  TASK PROMPT RULES: Use @slotName tokens in the prompt to reference agent input slots (e.g. "@analyst review this data"). Slot names must be alphanumeric/underscore only (no spaces). Add agentInputs entries for each @slotName used. If no agent slot is needed, set agentInputs to [].
 - "create/add/edit a plan"                          → read then write ${dataPath}/plans.json
-  Format: [{"id":"<uuid>","name":"...","description":"...","steps":[{"id":"<uuid>","taskId":"<task id>","label":"...","personaAssignments":{"slotName":"<persona id>"},"defaultPersonaIds":[],"dependsOn":[],"runCondition":"always"}],"schedule":null,"createdAt":"<iso>","updatedAt":"<iso>"}]
-  PLAN RULES: Each step references a task by its id. If the task has personaInputs, fill personaAssignments with {slotName: personaId}. If no inputs, list persona ids in defaultPersonaIds. Set dependsOn:[] for parallel steps; set dependsOn:["<stepId>"] to sequence steps. schedule is null (manual) or a cron string (e.g. "0 8 * * *" = daily 8am). To add a step to the calendar/schedule, set schedule to the appropriate cron expression.
+  Format: [{"id":"<uuid>","name":"...","description":"...","steps":[{"id":"<uuid>","taskId":"<task id>","label":"...","agentAssignments":{"slotName":"<agent id>"},"defaultAgentIds":[],"dependsOn":[],"runCondition":"always"}],"schedule":null,"createdAt":"<iso>","updatedAt":"<iso>"}]
+  PLAN RULES: Each step references a task by its id. If the task has agentInputs, fill agentAssignments with {slotName: agentId}. If no inputs, list agent ids in defaultAgentIds. Set dependsOn:[] for parallel steps; set dependsOn:["<stepId>"] to sequence steps. schedule is null (manual) or a cron string (e.g. "0 8 * * *" = daily 8am). To add a step to the calendar/schedule, set schedule to the appropriate cron expression.
   AGENT ID LOOKUP: To assign agents to steps, first read ${dataPath}/agents.json and find the id of the agent the user names.
 - Always read the file first to understand existing content before writing. Preserve all existing entries.
-- After writing, tell the user to click Refresh on the relevant page (MCP / Tools / Personas / Knowledge / Tasks) to reload.`
+- After writing, tell the user to click Refresh on the relevant page (MCP / Tools / Agents / Knowledge / Tasks) to reload.`
 
     // ── Notes Vault Path + Markdown Placement ──
     const vaultPath = process.env.DOC_PATH || this.config.obsidianVaultPath || this.config.DoCPath
@@ -490,7 +490,7 @@ DATA FILE ROUTING — when the user asks you to create or modify app configurati
         : '  (no subfolders)'
 
       system += `\n\nNOTES VAULT PATH: ${vaultPath}
-This is the user's personal notes folder (markdown files). Subfolders:
+This is the user's agentl notes folder (markdown files). Subfolders:
 ${subfolderList}
 
 MARKDOWN FILE PLACEMENT:
@@ -500,7 +500,7 @@ When generating .md markdown files (documents, reports, notes, summaries, analys
 Then write the file to the chosen location. For non-.md files, continue using the artifact path as default.`
     }
 
-    if (systemPersonaName && !groupChatContext) {
+    if (systemAgentName && !groupChatContext) {
       system += `\n\nOPERATIONAL NOTES (secondary to your character — use these naturally, not robotically):
 - For complex multi-step tasks, use a todo list to stay organized.
 - Delegate independent subtasks to sub-agents when it makes sense.
@@ -573,7 +573,7 @@ Always confirm recipient, subject, and content before sending unless the user ex
     }
 
     // -- Coding Mode: CLAUDE.md project context --
-    // Injected after tool listings but before persona prompts so persona identity
+    // Injected after tool listings but before agent prompts so agent identity
     // takes precedence. claudeContext is loaded by the renderer via claude:load-context IPC
     // and passed through config.claudeContext when codingMode is enabled on the chat.
     // v1 simplification: context is re-read on every send (no caching).
@@ -583,8 +583,8 @@ Always confirm recipient, subject, and content before sending unless the user ex
       system += `\n\n## PROJECT CONTEXT (CLAUDE.md)\n${claudeContext}`
     }
 
-    if (userPersonaPrompt) {
-      system += `\n\n## USER CONTEXT\n${userPersonaPrompt}`
+    if (userAgentPrompt) {
+      system += `\n\n## USER CONTEXT\n${userAgentPrompt}`
     }
 
     // Append group chat context if this is a group conversation
@@ -655,19 +655,19 @@ Note: Reference this knowledge naturally in your response. Do not mention "RAG" 
 
     const injectedSystemSoul = prepareSoulContent(systemSoulContent)
     if (injectedSystemSoul) {
-      system += `\n\n## PERSONA MEMORY\n${injectedSystemSoul}`
+      system += `\n\n## AGENT MEMORY\n${injectedSystemSoul}`
     }
 
     // Memory system instructions + agent IDs for targeting
     system += `\n\nMEMORY SYSTEM:
 You have access to update_soul_memory and read_soul_memory tools to persist learnings over time. There are two memory targets:
 
-USER MEMORY (persona_type: "users", persona_id: "${userAgentId || '__default_user__'}"):
-- Store facts about the user: preferences, habits, working style, personal info, projects they work on.
+USER MEMORY (agent_type: "users", agent_id: "${userAgentId || '__default_user__'}"):
+- Store facts about the user: preferences, habits, working style, agentl info, projects they work on.
 - When the user states a clear preference or fact about themselves, memorize it automatically.
 - Examples: "I prefer dark mode", "I use Vue 3 + Pinia", "My name is Young", "I work on ClankAI".
 
-AGENT MEMORY (persona_type: "system", persona_id: "${systemAgentId || '__default_system__'}"):
+AGENT MEMORY (agent_type: "system", agent_id: "${systemAgentId || '__default_system__'}"):
 - Store learnings about how YOU (this AI agent) should behave, respond, and adapt.
 - When the user gives you feedback on your behavior, tone, format, or approach, memorize it for this agent.
 - Examples: "User wants me to always provide code examples", "Keep responses under 3 paragraphs", "Use TypeScript not JavaScript in examples", "Explain concepts step-by-step for this user".
@@ -678,7 +678,7 @@ RULES:
 - Never memorize temporary or session-specific context (e.g. "fix this bug" — that's a task, not a memory).
 - Check existing memory with read_soul_memory before adding duplicates.
 - The user can say "remember that..." or "forget that..." to explicitly control memory.
-- Use the correct persona_type and persona_id when calling the tools — user facts go to user memory, behavioral/agent feedback goes to agent memory.`
+- Use the correct agent_type and agent_id when calling the tools — user facts go to user memory, behavioral/agent feedback goes to agent memory.`
 
     // ── Injected approved plan ──
     if (this.config.injectedPlan) {

@@ -18,7 +18,7 @@
 
         <!-- Body -->
         <div class="cat-modal-body">
-          <!-- Type selector (create mode only, persona categories) -->
+          <!-- Type selector (create mode only, agent categories) -->
           <template v-if="showTypeSelector">
             <div v-if="mode === 'create'" class="cat-type-row">
               <button

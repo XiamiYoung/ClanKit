@@ -35,7 +35,7 @@ const DEFAULT_MODELS = {
 function readAgents() {
   try {
     const data = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'))
-    return Array.isArray(data) ? data : (data.personas || [])
+    return Array.isArray(data) ? data : (data.agents || [])
   } catch { return [] }
 }
 

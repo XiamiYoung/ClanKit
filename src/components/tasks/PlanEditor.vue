@@ -89,20 +89,20 @@
                     </select>
                   </div>
 
-                  <!-- Personas -->
+                  <!-- Agents -->
                   <template v-if="step.taskId">
                     <div class="pe-step-field">
-                      <label class="pe-step-label">Persona(s) <span class="pe-required">*</span></label>
-                      <div class="pe-persona-chips">
-                        <div v-for="pid in step.defaultPersonaIds" :key="pid" class="pe-persona-chip">
-                          {{ personaName(pid) }}
-                          <button class="pe-chip-remove" @click="removeDefaultPersona(step, pid)">
+                      <label class="pe-step-label">Agent(s) <span class="pe-required">*</span></label>
+                      <div class="pe-agent-chips">
+                        <div v-for="pid in step.defaultAgentIds" :key="pid" class="pe-agent-chip">
+                          {{ agentName(pid) }}
+                          <button class="pe-chip-remove" @click="removeDefaultAgent(step, pid)">
                             <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                           </button>
                         </div>
-                        <select class="pe-select pe-select-add-persona" @change="addDefaultPersona(step, $event)">
-                          <option value="">+ Add persona</option>
-                          <option v-for="p in availablePersonasForStep(step)" :key="p.id" :value="p.id">{{ p.name }}</option>
+                        <select class="pe-select pe-select-add-agent" @change="addDefaultAgent(step, $event)">
+                          <option value="">+ Add agent</option>
+                          <option v-for="p in availableAgentsForStep(step)" :key="p.id" :value="p.id">{{ p.name }}</option>
                         </select>
                       </div>
                     </div>
@@ -395,10 +395,10 @@
                         after: {{ node.dependsOnLabels.join(', ') }}
                       </div>
 
-                      <!-- Personas -->
-                      <div class="pf-personas-line">
-                        <span class="pf-personas-label">Persona:</span>
-                        <span class="pf-personas-names">{{ node.personas.length ? node.personas.map(p => p.name).join(', ') : '—' }}</span>
+                      <!-- Agents -->
+                      <div class="pf-agents-line">
+                        <span class="pf-agents-label">Agent:</span>
+                        <span class="pf-agents-names">{{ node.agents.length ? node.agents.map(p => p.name).join(', ') : '—' }}</span>
                       </div>
                     </div>
                   </div>
@@ -471,7 +471,7 @@ const emit = defineEmits(['close', 'saved'])
 
 const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
-const allPersonas = computed(() => agentsStore.agents)
+const allAgents = computed(() => agentsStore.agents)
 const showIconPicker = ref(false)
 
 // ── AI cron description ────────────────────────────────────────────────────────
@@ -595,7 +595,7 @@ function makeStep(s) {
   return {
     id:               s?.id || uuid(),
     taskId:           s?.taskId || '',
-    defaultPersonaIds: [...(s?.defaultPersonaIds || [])],
+    defaultAgentIds: [...(s?.defaultAgentIds || [])],
     promptOverride:   s?.promptOverride || '',
     dependsOn:        [...(s?.dependsOn || [])],
     runCondition:     s?.runCondition || 'always',
@@ -688,17 +688,17 @@ function taskName(taskId) {
   return t ? `${t.icon} ${t.name}` : ''
 }
 
-function personaName(pid) {
+function agentName(pid) {
   return agentsStore.getAgentById(pid)?.name || pid
 }
 
-function personaEmoji(pid) {
+function agentEmoji(pid) {
   const p = agentsStore.getAgentById(pid)
   return p?.avatar || p?.emoji || '🤖'
 }
 
-function availablePersonasForStep(step) {
-  return allPersonas.value.filter(p => !(step.defaultPersonaIds || []).includes(p.id))
+function availableAgentsForStep(step) {
+  return allAgents.value.filter(p => !(step.defaultAgentIds || []).includes(p.id))
 }
 
 function schedTypeLabel(type) {
@@ -816,19 +816,19 @@ function moveStep(idx, delta) {
 }
 
 function onTaskChange(step) {
-  step.defaultPersonaIds = []
+  step.defaultAgentIds = []
   step.promptOverride    = ''
 }
 
-function addDefaultPersona(step, event) {
+function addDefaultAgent(step, event) {
   const pid = event.target.value
   if (!pid) return
-  if (!step.defaultPersonaIds.includes(pid)) step.defaultPersonaIds.push(pid)
+  if (!step.defaultAgentIds.includes(pid)) step.defaultAgentIds.push(pid)
   event.target.value = ''
 }
 
-function removeDefaultPersona(step, pid) {
-  step.defaultPersonaIds = step.defaultPersonaIds.filter(id => id !== pid)
+function removeDefaultAgent(step, pid) {
+  step.defaultAgentIds = step.defaultAgentIds.filter(id => id !== pid)
 }
 
 // ── Dependency management ──────────────────────────────────────────────────────
@@ -887,10 +887,10 @@ const flowWaves = computed(() => {
 
 function buildFlowNode(step, allSteps) {
   const task = props.tasks.find(t => t.id === step.taskId)
-  const personas = (step.defaultPersonaIds || []).map(pid => ({
+  const agents = (step.defaultAgentIds || []).map(pid => ({
     key:   `fixed-${pid}`,
-    name:  personaName(pid),
-    emoji: personaEmoji(pid),
+    name:  agentName(pid),
+    emoji: agentEmoji(pid),
   }))
 
   const hasDeps = (step.dependsOn || []).length > 0
@@ -907,7 +907,7 @@ function buildFlowNode(step, allSteps) {
     stepIndex:       allSteps.indexOf(step),
     taskName:        task?.name || (step.taskId ? '(unknown)' : 'No task'),
     taskIcon:        task?.icon || '✍️',
-    personas,
+    agents,
     runCondition:    cond,
     conditionBadge,
     condClass,
@@ -1255,16 +1255,16 @@ function cancel() {
   color: rgba(255,255,255,0.45); text-align: center;
 }
 
-.pf-personas-line {
+.pf-agents-line {
   display: flex; align-items: baseline; justify-content: center; gap: 0.3rem;
   padding-top: 0.25rem; border-top: 1px solid #1E1E1E; margin-top: 0.125rem;
   min-width: 0;
 }
-.pf-personas-label {
+.pf-agents-label {
   font-family: 'Inter', sans-serif; font-size: 0.625rem; font-weight: 700;
   color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0;
 }
-.pf-personas-names {
+.pf-agents-names {
   font-family: 'Inter', sans-serif; font-size: var(--fs-small); font-weight: 600;
   color: #E5E7EB; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -1368,16 +1368,16 @@ function cancel() {
   color: rgba(255,255,255,0.25); font-style: italic;
 }
 
-/* Persona assignments */
+/* Agent assignments */
 .pe-assignments { display: flex; flex-direction: column; gap: 0.5rem; }
 .pe-assign-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .pe-assign-slot { font-family: 'JetBrains Mono', monospace; font-size: var(--fs-secondary); font-weight: 700; color: rgba(255,255,255,0.6); flex-shrink: 0; min-width: 6rem; }
 .pe-assign-desc { font-family: 'Inter', sans-serif; font-size: var(--fs-small); color: rgba(255,255,255,0.3); font-style: italic; flex: 1; min-width: 6rem; }
-.pe-select-persona { flex: 1; min-width: 10rem; }
+.pe-select-agent { flex: 1; min-width: 10rem; }
 
-/* Persona chips */
-.pe-persona-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 0.375rem; }
-.pe-persona-chip {
+/* Agent chips */
+.pe-agent-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 0.375rem; }
+.pe-agent-chip {
   display: inline-flex; align-items: center; gap: 0.25rem;
   padding: 0.25rem 0.5rem;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -1391,7 +1391,7 @@ function cancel() {
   color: rgba(255,255,255,0.7); cursor: pointer; flex-shrink: 0; transition: all 0.15s ease;
 }
 .pe-chip-remove:hover { background: rgba(239,68,68,0.4); color: #FFFFFF; }
-.pe-select-add-persona { width: auto; min-width: 9rem; flex-shrink: 0; }
+.pe-select-add-agent { width: auto; min-width: 9rem; flex-shrink: 0; }
 
 /* Dependencies section */
 .pe-dep-section {

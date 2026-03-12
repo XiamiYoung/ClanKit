@@ -21,7 +21,7 @@ const SECTIONS = [
   'Communication',
   'Technical',
   'Projects',
-  'Personal',
+  'Agentl',
   'Interaction Notes',
   'Memory Updates Log',
 ]
@@ -115,7 +115,7 @@ class SoulUpdateTool extends BaseTool {
   constructor(soulsDir) {
     super(
       'update_soul_memory',
-      'Update memory for a user or system agent. For user agents (persona_type: "users"): store user preferences, facts, habits, and personal context. For system agents (persona_type: "system"): store behavioral learnings, tone/format preferences, and domain context that help this AI agent respond better. Always check existing memory with read_soul_memory before adding duplicates.',
+      'Update memory for a user or system agent. For user agents (agent_type: "users"): store user preferences, facts, habits, and agentl context. For system agents (agent_type: "system"): store behavioral learnings, tone/format preferences, and domain context that help this AI agent respond better. Always check existing memory with read_soul_memory before adding duplicates.',
       'update_soul_memory'
     )
     this.soulsDir = soulsDir
@@ -125,36 +125,36 @@ class SoulUpdateTool extends BaseTool {
     return {
       type: 'object',
       properties: {
-        persona_id:   { type: 'string', description: 'ID of the agent whose memory to update' },
-        persona_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user agent' },
-        section:      { type: 'string', description: 'Section name: Preferences, Communication, Technical, Projects, Personal, Interaction Notes' },
+        agent_id:   { type: 'string', description: 'ID of the agent whose memory to update' },
+        agent_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user agent' },
+        section:      { type: 'string', description: 'Section name: Preferences, Communication, Technical, Projects, Agentl, Interaction Notes' },
         action:       { type: 'string', enum: ['add', 'update', 'remove'], description: 'What to do' },
         entry:        { type: 'string', description: 'The memory entry to add/update/remove' },
         old_entry:    { type: 'string', description: 'For update action: the existing entry text to replace' },
-        persona_name: { type: 'string', description: 'Display name of the agent (used when creating a new soul file)' },
+        agent_name: { type: 'string', description: 'Display name of the agent (used when creating a new soul file)' },
       },
-      required: ['persona_id', 'persona_type', 'section', 'action', 'entry']
+      required: ['agent_id', 'agent_type', 'section', 'action', 'entry']
     }
   }
 
   async execute(toolCallId, params, signal, onUpdate) {
-    const { persona_id, persona_type, section, action, entry, old_entry, persona_name } = params
+    const { agent_id, agent_type, section, action, entry, old_entry, agent_name } = params
 
-    if (!persona_id || !persona_type || !section || !action || !entry) {
-      return this._err('Missing required fields: persona_id, persona_type, section, action, entry')
+    if (!agent_id || !agent_type || !section || !action || !entry) {
+      return this._err('Missing required fields: agent_id, agent_type, section, action, entry')
     }
 
-    const dir = path.join(this.soulsDir, persona_type)
+    const dir = path.join(this.soulsDir, agent_type)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
-    const filePath = path.join(dir, `${persona_id}.md`)
+    const filePath = path.join(dir, `${agent_id}.md`)
 
     // Read or create
     let content
     if (fs.existsSync(filePath)) {
       content = fs.readFileSync(filePath, 'utf8')
     } else {
-      content = createTemplate(persona_name || persona_id, persona_type)
+      content = createTemplate(agent_name || agent_id, agent_type)
     }
 
     const { headerLines, sections } = parseSoul(content)
@@ -226,9 +226,9 @@ class SoulUpdateTool extends BaseTool {
     const newContent = serializeSoul(headerLines, sections)
     fs.writeFileSync(filePath, newContent, 'utf8')
 
-    logger.agent('SoulUpdateTool', { persona_id, persona_type, section, action, entry: entry.slice(0, 100) })
+    logger.agent('SoulUpdateTool', { agent_id, agent_type, section, action, entry: entry.slice(0, 100) })
 
-    return this._ok(`Memory ${action}d in ${section}: ${entry}`, { persona_id, section, action })
+    return this._ok(`Memory ${action}d in ${section}: ${entry}`, { agent_id, section, action })
   }
 }
 
@@ -248,22 +248,22 @@ class SoulReadTool extends BaseTool {
     return {
       type: 'object',
       properties: {
-        persona_id:   { type: 'string', description: 'ID of the agent whose memory to read' },
-        persona_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user agent' },
+        agent_id:   { type: 'string', description: 'ID of the agent whose memory to read' },
+        agent_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user agent' },
         section:      { type: 'string', description: 'Optional: specific section to read (e.g. Preferences). Omit to read all.' },
       },
-      required: ['persona_id', 'persona_type']
+      required: ['agent_id', 'agent_type']
     }
   }
 
   async execute(toolCallId, params, signal, onUpdate) {
-    const { persona_id, persona_type, section } = params
+    const { agent_id, agent_type, section } = params
 
-    if (!persona_id || !persona_type) {
-      return this._err('Missing required fields: persona_id, persona_type')
+    if (!agent_id || !agent_type) {
+      return this._err('Missing required fields: agent_id, agent_type')
     }
 
-    const filePath = path.join(this.soulsDir, persona_type, `${persona_id}.md`)
+    const filePath = path.join(this.soulsDir, agent_type, `${agent_id}.md`)
 
     if (!fs.existsSync(filePath)) {
       return this._ok('No soul file exists for this agent yet.', { exists: false })

@@ -15,7 +15,7 @@
             </div>
             <div>
               <div class="wfp-title">Workflow Preview</div>
-              <div class="wfp-subtitle">{{ personas.length }} persona{{ personas.length !== 1 ? 's' : '' }} · {{ stages.length }} stage{{ stages.length !== 1 ? 's' : '' }}</div>
+              <div class="wfp-subtitle">{{ agents.length }} agent{{ agents.length !== 1 ? 's' : '' }} · {{ stages.length }} stage{{ stages.length !== 1 ? 's' : '' }}</div>
             </div>
           </div>
           <button class="wfp-close" @click="$emit('close')" title="Close">
@@ -82,15 +82,15 @@
 
                   <div
                     v-for="rp in stage"
-                    :key="rp.personaId"
+                    :key="rp.agentId"
                     class="wfp-node"
                     :class="nodeClass(rp, stage)"
                   >
                     <!-- Avatar + name row -->
                     <div class="wfp-node-head">
-                      <div class="wfp-node-avatar">{{ getPersonaEmoji(rp.personaId) }}</div>
+                      <div class="wfp-node-avatar">{{ getAgentEmoji(rp.agentId) }}</div>
                       <div class="wfp-node-identity">
-                        <span class="wfp-node-name">{{ getPersonaName(rp.personaId) }}</span>
+                        <span class="wfp-node-name">{{ getAgentName(rp.agentId) }}</span>
                         <!-- Condition badge (only if has deps) -->
                         <span
                           v-if="(rp.dependsOn || []).length > 0"
@@ -122,7 +122,7 @@
                         v-for="depId in rp.dependsOn"
                         :key="depId"
                         class="wfp-dep-pill"
-                      >{{ getPersonaEmoji(depId) }} {{ getPersonaName(depId) }}</span>
+                      >{{ getAgentEmoji(depId) }} {{ getAgentName(depId) }}</span>
                     </div>
 
                     <!-- Output tokens used -->
@@ -168,21 +168,21 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  personas:        { type: Array,    required: true },
-  getPersonaName:  { type: Function, required: true },
-  getPersonaEmoji: { type: Function, required: true },
+  agents:        { type: Array,    required: true },
+  getAgentName:  { type: Function, required: true },
+  getAgentEmoji: { type: Function, required: true },
 })
 defineEmits(['close'])
 
 // ── Stage computation ─────────────────────────────────────────────────────────
 
 const stages = computed(() => {
-  if (!props.personas.length) return []
+  if (!props.agents.length) return []
   const idxOf = {}
-  props.personas.forEach((rp, i) => { idxOf[rp.personaId] = i })
-  const stageOf = new Array(props.personas.length).fill(0)
-  for (let i = 0; i < props.personas.length; i++) {
-    for (const depId of (props.personas[i].dependsOn || [])) {
+  props.agents.forEach((rp, i) => { idxOf[rp.agentId] = i })
+  const stageOf = new Array(props.agents.length).fill(0)
+  for (let i = 0; i < props.agents.length; i++) {
+    for (const depId of (props.agents[i].dependsOn || [])) {
       const di = idxOf[depId]
       if (di !== undefined && stageOf[di] >= stageOf[i]) {
         stageOf[i] = stageOf[di] + 1
@@ -191,7 +191,7 @@ const stages = computed(() => {
   }
   const maxStage = Math.max(...stageOf)
   return Array.from({ length: maxStage + 1 }, (_, s) =>
-    props.personas.filter((_, i) => stageOf[i] === s)
+    props.agents.filter((_, i) => stageOf[i] === s)
   )
 })
 
@@ -208,7 +208,7 @@ function truncate(str, len) {
   return str.length > len ? str.slice(0, len).trimEnd() + '…' : str
 }
 
-// Extract {{output:Name}} tokens referenced in a persona's prompt
+// Extract {{output:Name}} tokens referenced in a agent's prompt
 function outputTokensIn(rp) {
   const matches = (rp.prompt || '').match(/\{\{output:([^}]+)\}\}/g) || []
   return [...new Set(matches.map(m => m.replace(/^\{\{output:|\}\}$/g, '').trim()))]

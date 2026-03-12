@@ -172,9 +172,9 @@
                         <span :class="['phm-cond-badge', `phm-cond-badge--${node.runCondition}`]">{{ node.conditionBadge }}</span>
                       </div>
                       <div v-if="node.dependsOnLabels.length" class="phm-node-after">after: {{ node.dependsOnLabels.join(', ') }}</div>
-                      <div class="phm-personas-line">
-                        <span class="phm-personas-label">Persona:</span>
-                        <span class="phm-personas-names">{{ node.personas.length ? node.personas.map(p=>p.name).join(', ') : '—' }}</span>
+                      <div class="phm-agents-line">
+                        <span class="phm-agents-label">Agent:</span>
+                        <span class="phm-agents-names">{{ node.agents.length ? node.agents.map(p=>p.name).join(', ') : '—' }}</span>
                       </div>
                     </div>
                   </div>
@@ -237,7 +237,7 @@
                 {{ selectedStep.runDuration }}
               </span>
               <span v-if="selectedStep.runResults && selectedStep.runResults.length > 1" class="phm-output-meta-chip">
-                {{ selectedStep.runResults.length }} personas
+                {{ selectedStep.runResults.length }} agents
               </span>
             </div>
 
@@ -245,11 +245,11 @@
             <div class="phm-output-scroll">
               <template v-if="selectedStep.runResults && selectedStep.runResults.length > 0">
                 <template v-for="(res, ri) in selectedStep.runResults" :key="ri">
-                  <!-- Persona header (only if more than one result) -->
-                  <div v-if="selectedStep.runResults.length > 1" class="phm-output-persona-row">
-                    <span class="phm-output-persona-chip">
+                  <!-- Agent header (only if more than one result) -->
+                  <div v-if="selectedStep.runResults.length > 1" class="phm-output-agent-row">
+                    <span class="phm-output-agent-chip">
                       <svg style="width:9px;height:9px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                      {{ res.personaName || '(unknown)' }}
+                      {{ res.agentName || '(unknown)' }}
                     </span>
                     <span :class="['phm-output-res-badge', `phm-run-badge--${res.status}`]">{{ res.status }}</span>
                     <span v-if="fmtDuration(res.startedAt, res.completedAt)" class="phm-output-res-dur">{{ fmtDuration(res.startedAt, res.completedAt) }}</span>
@@ -498,7 +498,7 @@ const flowWaves = computed(() => {
 
 function buildNode(step, allSteps) {
   const task = tasksStore.tasks.find(t => t.id === step.taskId)
-  const personas = (step.defaultPersonaIds || []).map(pid => {
+  const agents = (step.defaultAgentIds || []).map(pid => {
     const p = agentsStore.getAgentById(pid)
     return { name: p?.name || '(unknown)' }
   })
@@ -506,7 +506,7 @@ function buildNode(step, allSteps) {
   const cond = step.runCondition || 'always'
   const stepIndex = allSteps.indexOf(step)
 
-  // Collect ALL results for this step (one per persona)
+  // Collect ALL results for this step (one per agent)
   const allResults = (activeRun.value?.stepResults || []).filter(r => r.stepIndex === stepIndex)
   // Aggregate status: failed > running > done > skipped > null
   const statusPriority = { failed: 4, running: 3, done: 2, skipped: 1 }
@@ -532,17 +532,17 @@ function buildNode(step, allSteps) {
     stepId: step.id, stepIndex,
     taskName:  task?.name || (step.taskId ? '(unknown)' : 'No task'),
     taskIcon:  task?.icon || '✍️',
-    personas, runCondition: cond,
+    agents, runCondition: cond,
     conditionBadge: hasDeps && cond !== 'always' ? (cond === 'on_success' ? 'on success' : 'on failure') : null,
     condClass: hasDeps ? (cond === 'on_success' ? 'phm-node--cond-success' : cond === 'on_failure' ? 'phm-node--cond-failure' : '') : '',
     dependsOnLabels: (step.dependsOn || []).map(id => { const di = allSteps.findIndex(s => s.id === id); return di === -1 ? '?' : `Step ${di + 1}` }),
     runStatus, runStatusLabel: runStatus ? (statusLabels[runStatus] || runStatus) : null, runClass,
-    // All per-persona results for the output panel
+    // All per-agent results for the output panel
     runResults: allResults,
     // Legacy single-result fields (first non-empty result) for backward compat
     runOutput: allResults.find(r => r.output)?.output || null,
     runError:  allResults.find(r => r.error)?.error   || null,
-    runPersonaName: allResults[0]?.personaName || null,
+    runAgentName: allResults[0]?.agentName || null,
     runStartedAt, runCompletedAt,
     runDuration: fmtDuration(runStartedAt, runCompletedAt),
   }
@@ -551,7 +551,7 @@ function buildNode(step, allSteps) {
 const runSummary = computed(() => {
   const r = activeRun.value?.stepResults
   if (!r) return null
-  // Count unique step indices (not individual persona results)
+  // Count unique step indices (not individual agent results)
   const stepPriority = { failed: 4, running: 3, done: 2, skipped: 1 }
   const byStep = {}
   for (const x of r) {
@@ -911,9 +911,9 @@ onBeforeUnmount(() => {
   background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); border-radius:0.375rem;
   padding:0.3rem 0.5rem; color:#F87171; font-family:'Inter',sans-serif; font-size:0.625rem; line-height:1.4;
 }
-.phm-personas-line { display:flex; align-items:baseline; justify-content:center; gap:0.3rem; padding-top:0.3rem; border-top:1px solid #1E1E1E; min-width:0; }
-.phm-personas-label { font-family:'Inter',sans-serif; font-size:0.625rem; font-weight:700; color:rgba(255,255,255,0.3); text-transform:uppercase; letter-spacing:0.05em; flex-shrink:0; }
-.phm-personas-names { font-family:'Inter',sans-serif; font-size:var(--fs-small); font-weight:600; color:#E5E7EB; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.phm-agents-line { display:flex; align-items:baseline; justify-content:center; gap:0.3rem; padding-top:0.3rem; border-top:1px solid #1E1E1E; min-width:0; }
+.phm-agents-label { font-family:'Inter',sans-serif; font-size:0.625rem; font-weight:700; color:rgba(255,255,255,0.3); text-transform:uppercase; letter-spacing:0.05em; flex-shrink:0; }
+.phm-agents-names { font-family:'Inter',sans-serif; font-size:var(--fs-small); font-weight:600; color:#E5E7EB; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 /* ── Resizable divider ───────────────────────────────────────────────────── */
 .phm-output-divider {
@@ -1045,7 +1045,7 @@ onBeforeUnmount(() => {
   font-size: 0.6rem;
   color: #6B7280;
 }
-.phm-output-meta-chip--persona {
+.phm-output-meta-chip--agent {
   background: rgba(96,165,250,0.08);
   border-color: rgba(96,165,250,0.15);
   color: #93C5FD;
@@ -1103,7 +1103,7 @@ onBeforeUnmount(() => {
   border-color: rgba(239,68,68,0.15);
 }
 
-.phm-output-persona-row {
+.phm-output-agent-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1112,8 +1112,8 @@ onBeforeUnmount(() => {
   border-top: 1px solid #1A1A1A;
   margin-top: 0.25rem;
 }
-.phm-output-persona-row:first-child { border-top: none; margin-top: 0; }
-.phm-output-persona-chip {
+.phm-output-agent-row:first-child { border-top: none; margin-top: 0; }
+.phm-output-agent-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;

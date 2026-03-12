@@ -180,7 +180,7 @@
                     {{ scheduleLabel(recipe) }}
                   </span>
                   <span class="re-agent-count">
-                    {{ (recipe.personas || []).length }} agent{{ (recipe.personas || []).length !== 1 ? 's' : '' }}
+                    {{ (recipe.agents || []).length }} agent{{ (recipe.agents || []).length !== 1 ? 's' : '' }}
                   </span>
                   <span v-if="lastRunForRecipe(recipe.id)" class="re-last-run" :class="lastRunStatusClass(recipe.id)">
                     {{ lastRunRelative(recipe.id) }}

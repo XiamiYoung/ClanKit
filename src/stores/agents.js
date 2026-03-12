@@ -24,7 +24,7 @@ When unsure, you say so honestly rather than guessing.`,
   updatedAt: 0,
 }
 
-const BUILTIN_DOC_EDITOR_PERSONA = {
+const BUILTIN_DOC_EDITOR_AGENT = {
   id: BUILTIN_DOC_EDITOR_ID,
   type: 'system',
   name: 'Doc Editor',
@@ -126,7 +126,7 @@ export const useAgentsStore = defineStore('agents', () => {
     if (docIdx >= 0) {
       list[docIdx] = { ...list[docIdx], isBuiltin: true }
     } else {
-      list.push({ ...BUILTIN_DOC_EDITOR_PERSONA })
+      list.push({ ...BUILTIN_DOC_EDITOR_AGENT })
     }
 
     // Ensure built-in user agent exists

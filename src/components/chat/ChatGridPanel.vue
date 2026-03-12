@@ -7,7 +7,7 @@
       :compactAgents="true"
       @open-chat-settings="$emit('open-chat-settings', chatId)"
       @open-soul-viewer="(id, type, name) => $emit('open-soul-viewer', id, type, name)"
-      @remove-group-persona="(cId, pid) => $emit('remove-group-persona', cId, pid)"
+      @remove-group-agent="(cId, pid) => $emit('remove-group-agent', cId, pid)"
       @start-call="cId => $emit('start-call', cId)"
     >
       <template #actions>
@@ -219,7 +219,7 @@ const props = defineProps({
   gridChatIds: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['select', 'swap-chat', 'maximize', 'open-chat-settings', 'open-soul-viewer', 'remove-group-persona', 'start-call'])
+const emit = defineEmits(['select', 'swap-chat', 'maximize', 'open-chat-settings', 'open-soul-viewer', 'remove-group-agent', 'start-call'])
 
 const chatsStore = useChatsStore()
 const configStore = useConfigStore()
@@ -248,8 +248,8 @@ const stickyTargetLabel = computed(() => {
 const chatAgentIds = computed(() => {
   const c = chatsStore.chats.find(c => c.id === props.chatId)
   if (!c) return []
-  if (c.groupPersonaIds?.length > 0) return [...c.groupPersonaIds]
-  const id = c.systemPersonaId || agentsStore.defaultSystemAgent?.id
+  if (c.groupAgentIds?.length > 0) return [...c.groupAgentIds]
+  const id = c.systemAgentId || agentsStore.defaultSystemAgent?.id
   return id ? [id] : []
 })
 
@@ -370,7 +370,7 @@ async function onMentionSend(text) {
   gpAttachments.value = []
   mentionInputRef.value?.resetHeight()
 
-  const groupIds = chatPersonaIds.value
+  const groupIds = chatAgentIds.value
   if (isGroupChat.value && groupIds.length > 1) {
     // GROUP CHAT: resolve @mention routing
     const groupAgents = groupIds.map(id => agentsStore.getAgentById(id)).filter(Boolean)
@@ -386,7 +386,7 @@ async function onMentionSend(text) {
         }).filter(Boolean)
         const result = await window.electronAPI.resolveAddressees({
           message: text,
-          personas: mentionedAgents,
+          agents: mentionedAgents,
           config: JSON.parse(JSON.stringify(cfg)),
         })
         if (result?.addresseeIds?.length > 0) addressees = result.addresseeIds
@@ -412,7 +412,7 @@ async function onMentionSend(text) {
     await chatsStore.addMessage(chatId, { role: 'user', content: text, mentions, mentionAll, ...(attachmentMeta.length > 0 ? { attachments: attachmentMeta } : {}) })
     if (targetChat.messages) for (const m of targetChat.messages) if (m.streaming) m.streaming = false
 
-    // Run each responding persona sequentially
+    // Run each responding agent sequentially
     const chatProvider = targetChat.provider || 'anthropic'
     const apiMessages = targetChat.messages
       .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content))
@@ -420,16 +420,16 @@ async function onMentionSend(text) {
 
     targetChat.isRunning = true
     try {
-      for (const personaId of respondingIds) {
-        const agent = agentsStore.getAgentById(personaId)
+      for (const agentId of respondingIds) {
+        const agent = agentsStore.getAgentById(agentId)
         if (!agent) continue
         const streamingMsgId = uuidv4()
         await chatsStore.addMessage(chatId, {
           id: streamingMsgId, role: 'assistant', content: '', streaming: true,
-          streamingStartedAt: Date.now(), segments: [], personaId, personaName: agent.name,
+          streamingStartedAt: Date.now(), segments: [], agentId, agentName: agent.name,
         })
         const singleCfg = { ...cfg }
-        const rawPOverride = targetChat.personaModelOverrides?.[personaId]
+        const rawPOverride = targetChat.agentModelOverrides?.[agentId]
         const pOverrideModel    = rawPOverride ? (typeof rawPOverride === 'object' ? rawPOverride.model    : rawPOverride) : null
         const pOverrideProvider = rawPOverride && typeof rawPOverride === 'object' ? rawPOverride.provider : null
         const pProvider = pOverrideProvider || agent.providerId || chatProvider
@@ -437,21 +437,21 @@ async function onMentionSend(text) {
         else if (pProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
         else if (pProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai'; delete singleCfg._directAuth }
         else if (pProvider === 'deepseek') { singleCfg.openaiApiKey = cfg.deepseek?.apiKey || ''; singleCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, ''); singleCfg._resolvedProvider = 'openai'; singleCfg._directAuth = true; singleCfg.defaultProvider = 'openai' }
-        const pModel = pOverrideModel || persona.modelId || targetChat.model || null
+        const pModel = pOverrideModel || agent.modelId || targetChat.model || null
         if (pModel) singleCfg.customModel = pModel
         if (targetChat.workingPath) singleCfg.chatWorkingPath = targetChat.workingPath
 
-        const usrAgent = targetChat.userPersonaId ? agentsStore.getAgentById(targetChat.userPersonaId) : agentsStore.defaultUserAgent
-        const personaPrompts = { systemPersonaId: personaId, userPersonaId: usrAgent?.id || '__default_user__' }
-        if (agent.prompt) personaPrompts.systemPersonaPrompt = agent.prompt
-        if (usrAgent?.prompt) personaPrompts.userPersonaPrompt = usrAgent.prompt
+        const usrAgent = targetChat.userAgentId ? agentsStore.getAgentById(targetChat.userAgentId) : agentsStore.defaultUserAgent
+        const agentPrompts = { systemAgentId: agentId, userAgentId: usrAgent?.id || '__default_user__' }
+        if (agent.prompt) agentPrompts.systemAgentPrompt = agent.prompt
+        if (usrAgent?.prompt) agentPrompts.userAgentPrompt = usrAgent.prompt
 
         try {
           const res = await window.electronAPI.runAgent({
             chatId, messages: JSON.parse(JSON.stringify(apiMessages)),
             config: JSON.parse(JSON.stringify(singleCfg)),
             enabledAgents: [], enabledSkills: JSON.parse(JSON.stringify(skillsStore.allSkillObjects)),
-            personaPrompts,
+            agentPrompts,
             mcpServers: (targetChat.enabledMcpIds ? mcpStore.servers.filter(s => targetChat.enabledMcpIds.includes(s.id)) : mcpStore.servers).map(s => JSON.parse(JSON.stringify(s))),
             httpTools: (targetChat.enabledToolIds ? toolsStore.tools.filter(t => targetChat.enabledToolIds.includes(t.id)) : toolsStore.tools).map(t => JSON.parse(JSON.stringify(t))),
             knowledgeConfig: { ragEnabled: knowledgeStore.ragEnabled, pineconeApiKey: knowledgeStore.pineconeApiKey, pineconeIndexName: knowledgeStore.pineconeIndexName, embeddingProvider: knowledgeStore.embeddingProvider, embeddingModel: knowledgeStore.embeddingModel, indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs)) },
@@ -466,7 +466,7 @@ async function onMentionSend(text) {
               if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
             }
           }
-          // Append this persona's reply to apiMessages for next persona's context
+          // Append this agent's reply to apiMessages for next agent's context
           const replyContent = res.success ? (res.result || '') : `Error: ${res.error}`
           apiMessages.push({ role: 'assistant', content: replyContent })
         } catch (err) {
@@ -484,7 +484,7 @@ async function onMentionSend(text) {
       await chatsStore.persist?.()
     }
   } else {
-    // SINGLE PERSONA: delegate to existing onSend
+    // SINGLE AGENT: delegate to existing onSend
     await onSend(text, pendingAttachments)
   }
 }
@@ -528,33 +528,33 @@ async function onSend(text, pendingAttachments = []) {
   else if (chatProvider === 'openai') { cfg.openaiApiKey = cfg.openai?.apiKey || ''; cfg.openaiBaseURL = cfg.openai?.baseURL || ''; cfg._resolvedProvider = 'openai'; cfg.defaultProvider = 'openai' }
   if (targetChat.model) cfg.customModel = targetChat.model
   if (targetChat.workingPath) cfg.chatWorkingPath = targetChat.workingPath
-  const sysAgent = targetChat.systemPersonaId ? agentsStore.getAgentById(targetChat.systemPersonaId) : agentsStore.defaultSystemAgent
-  const usrAgent = targetChat.userPersonaId ? agentsStore.getAgentById(targetChat.userPersonaId) : agentsStore.defaultUserAgent
-  const personaPrompts = {}
-  if (sysAgent?.prompt) personaPrompts.systemPersonaPrompt = sysAgent.prompt
-  if (usrAgent?.prompt) personaPrompts.userPersonaPrompt = usrAgent.prompt
-  personaPrompts.systemPersonaId = sysAgent?.id || '__default_system__'
-  personaPrompts.userPersonaId = usrAgent?.id || '__default_user__'
+  const sysAgent = targetChat.systemAgentId ? agentsStore.getAgentById(targetChat.systemAgentId) : agentsStore.defaultSystemAgent
+  const usrAgent = targetChat.userAgentId ? agentsStore.getAgentById(targetChat.userAgentId) : agentsStore.defaultUserAgent
+  const agentPrompts = {}
+  if (sysAgent?.prompt) agentPrompts.systemAgentPrompt = sysAgent.prompt
+  if (usrAgent?.prompt) agentPrompts.userAgentPrompt = usrAgent.prompt
+  agentPrompts.systemAgentId = sysAgent?.id || '__default_system__'
+  agentPrompts.userAgentId = usrAgent?.id || '__default_user__'
   const singleCfg = { ...cfg }
-  const personaProvider = sysAgent?.providerId || chatProvider
-  if (personaProvider === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || '' }
-  else if (personaProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || '' }
-  else if (personaProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai' }
-  const rawOverrideSingle = targetChat.personaModelOverrides?.[sysAgent?.id]
+  const agentProvider = sysAgent?.providerId || chatProvider
+  if (agentProvider === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || '' }
+  else if (agentProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || '' }
+  else if (agentProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai' }
+  const rawOverrideSingle = targetChat.agentModelOverrides?.[sysAgent?.id]
   const overrideModelSingle    = rawOverrideSingle ? (typeof rawOverrideSingle === 'object' ? rawOverrideSingle.model    : rawOverrideSingle) : null
   const overrideProviderSingle = rawOverrideSingle && typeof rawOverrideSingle === 'object' ? rawOverrideSingle.provider : null
-  if (overrideProviderSingle && overrideProviderSingle !== personaProvider) {
+  if (overrideProviderSingle && overrideProviderSingle !== agentProvider) {
     if (overrideProviderSingle === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
     else if (overrideProviderSingle === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
     else if (overrideProviderSingle === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai'; delete singleCfg._directAuth }
     else if (overrideProviderSingle === 'deepseek') { singleCfg.openaiApiKey = cfg.deepseek?.apiKey || ''; singleCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, ''); singleCfg._resolvedProvider = 'openai'; singleCfg._directAuth = true; singleCfg.defaultProvider = 'openai' }
   }
-  const personaModel = overrideModelSingle || sysAgent?.modelId || targetChat.model || null
-  if (personaModel) singleCfg.customModel = personaModel
+  const agentModel = overrideModelSingle || sysAgent?.modelId || targetChat.model || null
+  if (agentModel) singleCfg.customModel = agentModel
   try {
     const res = await window.electronAPI.runAgent({
       chatId, messages: JSON.parse(JSON.stringify(apiMessages)), config: JSON.parse(JSON.stringify(singleCfg)),
-      enabledAgents: [], enabledSkills: JSON.parse(JSON.stringify(skillsStore.allSkillObjects)), personaPrompts,
+      enabledAgents: [], enabledSkills: JSON.parse(JSON.stringify(skillsStore.allSkillObjects)), agentPrompts,
       ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
       mcpServers: (targetChat.enabledMcpIds
         ? mcpStore.servers.filter(s => targetChat.enabledMcpIds.includes(s.id))

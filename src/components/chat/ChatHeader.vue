@@ -555,13 +555,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 const isGroupChat = computed(() => chat.value?.isGroupChat ?? false)
 const canStartCall = computed(() => {
   if (voiceStore.isCallActive) return false
-  if (activeSystemPersonaIds.value.length !== 1) return false
+  if (activeSystemAgentIds.value.length !== 1) return false
   if (!configStore.config.voiceCall?.whisperApiKey) return false
   return true
 })
 const callButtonTooltip = computed(() => {
   if (voiceStore.isCallActive) return 'Call already in progress'
-  const count = activeSystemPersonaIds.value.length
+  const count = activeSystemAgentIds.value.length
   if (count === 0) return 'Select an agent to start a call'
   if (count > 1) return 'Voice call requires exactly one agent'
   if (!configStore.config.voiceCall?.whisperApiKey) return 'Whisper API key not configured — go to Configuration → Voice Call'
@@ -659,14 +659,14 @@ function getAvatarDataUriForAgent(agent) {
 }
 
 const activeUserAgent = computed(() => {
-  const id = chat.value?.userPersonaId
+  const id = chat.value?.userAgentId
   return id ? agentsStore.getAgentById(id) : agentsStore.defaultUserAgent
 })
 const activeUserAvatarDataUri = computed(() => getAvatarDataUriForAgent(activeUserAgent.value))
 const activeUserAgentName = computed(() => activeUserAgent.value?.name || 'Default')
 
 const resolvedUserAgentId = computed(() => {
-  const id = chat.value?.userPersonaId
+  const id = chat.value?.userAgentId
   return id || agentsStore.defaultUserAgent?.id || null
 })
 
@@ -681,8 +681,8 @@ const sortedSystemAgents = computed(() =>
 const activeSystemAgentIds = computed(() => {
   const c = chat.value
   if (!c) return []
-  if (c.groupPersonaIds?.length > 0) return [...c.groupPersonaIds]
-  const id = c.systemPersonaId || agentsStore.defaultSystemAgent?.id
+  if (c.groupAgentIds?.length > 0) return [...c.groupAgentIds]
+  const id = c.systemAgentId || agentsStore.defaultSystemAgent?.id
   return id ? [id] : []
 })
 
@@ -795,7 +795,7 @@ const effectiveModelLabel = computed(() => {
   if (!c) return '—'
   const agentId = activeSystemAgentIds.value[0]
   if (!agentId) return '—'
-  const override = c.personaModelOverrides?.[agentId]
+  const override = c.agentModelOverrides?.[agentId]
   if (override) {
     const m = typeof override === 'object' ? override.model : override
     return `${m} (override)`

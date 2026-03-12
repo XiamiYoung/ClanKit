@@ -623,7 +623,7 @@
                   <div class="flex items-center gap-2">
                     <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Agents</span>
                     <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                      {{ (inspectorAgents.systemPersonaPrompt || inspectorAgents.systemPersonaName ? 1 : 0) + (inspectorAgents.userPersonaPrompt || inspectorAgents.userPersonaName ? 1 : 0) }} active
+                      {{ (inspectorAgents.systemAgentPrompt || inspectorAgents.systemAgentName ? 1 : 0) + (inspectorAgents.userAgentPrompt || inspectorAgents.userAgentName ? 1 : 0) }} active
                     </span>
                   </div>
                   <svg class="w-4 h-4 transition-transform" :style="inspectorSections.agents ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
@@ -633,24 +633,24 @@
                 <div v-if="inspectorSections.agents" style="border-top:1px solid #E5E5EA;">
                   <!-- System agent -->
                   <div
-                    v-if="inspectorAgents.systemPersonaPrompt || inspectorAgents.systemPersonaName"
+                    v-if="inspectorAgents.systemAgentPrompt || inspectorAgents.systemAgentName"
                     class="px-4 py-3"
-                    :style="(inspectorAgents.userPersonaPrompt || inspectorAgents.userPersonaName) ? 'border-bottom:1px solid #F5F5F5;' : ''"
+                    :style="(inspectorAgents.userAgentPrompt || inspectorAgents.userAgentName) ? 'border-bottom:1px solid #F5F5F5;' : ''"
                   >
                     <div class="flex items-center gap-2 mb-1.5">
                       <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:rgba(0,122,255,0.1); color:#0056CC;">System Agent</span>
-                      <span v-if="inspectorAgents.systemPersonaName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorAgents.systemPersonaName }}</span>
+                      <span v-if="inspectorAgents.systemAgentName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorAgents.systemAgentName }}</span>
                     </div>
-                    <pre v-if="inspectorAgents.systemPersonaPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorAgents.systemPersonaPrompt }}</pre>
+                    <pre v-if="inspectorAgents.systemAgentPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorAgents.systemAgentPrompt }}</pre>
                     <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">Prompt available after first message.</p>
                   </div>
                   <!-- User agent -->
-                  <div v-if="inspectorAgents.userPersonaPrompt || inspectorAgents.userPersonaName" class="px-4 py-3">
+                  <div v-if="inspectorAgents.userAgentPrompt || inspectorAgents.userAgentName" class="px-4 py-3">
                     <div class="flex items-center gap-2 mb-1.5">
                       <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#D1FAE5; color:#065F46;">User Agent</span>
-                      <span v-if="inspectorAgents.userPersonaName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorAgents.userPersonaName }}</span>
+                      <span v-if="inspectorAgents.userAgentName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorAgents.userAgentName }}</span>
                     </div>
-                    <pre v-if="inspectorAgents.userPersonaPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorAgents.userPersonaPrompt }}</pre>
+                    <pre v-if="inspectorAgents.userAgentPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorAgents.userAgentPrompt }}</pre>
                     <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">Prompt available after first message.</p>
                   </div>
                 </div>
@@ -932,7 +932,7 @@
                 <ChatMentionInput
                   ref="mentionInputRef"
                   v-model="inputText"
-                  :agentIds="activeSystemPersonaIds"
+                  :agentIds="activeSystemAgentIds"
                   :isGroupChat="isGroupChat"
                   :isRunning="activeRunning"
                   @send="sendMessage"
@@ -1641,13 +1641,13 @@
               placeholder="Chat name (optional)"
               class="newchat-name-input"
             />
-            <button class="newchat-persona-cfg-btn" @click.stop="showNewChatAgentPopover = true" title="Configure agents">
-              <div class="newchat-persona-cfg-avatars" v-if="newChatAgentIds.length > 0">
+            <button class="newchat-agent-cfg-btn" @click.stop="showNewChatAgentPopover = true" title="Configure agents">
+              <div class="newchat-agent-cfg-avatars" v-if="newChatAgentIds.length > 0">
                 <template v-for="(pid, i) in newChatAgentIds.slice(0, 3)" :key="pid">
-                  <img v-if="getAvatarDataUriForAgent(agentsStore.getPersonaById(pid))" :src="getAvatarDataUriForAgent(agentsStore.getPersonaById(pid))" alt="" class="newchat-persona-cfg-avatar-img" :style="{ zIndex: 10 - i }" />
-                  <span v-else class="newchat-persona-cfg-avatar-fb" :style="{ zIndex: 10 - i }">{{ (agentsStore.getPersonaById(pid)?.name || '?').charAt(0) }}</span>
+                  <img v-if="getAvatarDataUriForAgent(agentsStore.getAgentById(pid))" :src="getAvatarDataUriForAgent(agentsStore.getAgentById(pid))" alt="" class="newchat-agent-cfg-avatar-img" :style="{ zIndex: 10 - i }" />
+                  <span v-else class="newchat-agent-cfg-avatar-fb" :style="{ zIndex: 10 - i }">{{ (agentsStore.getAgentById(pid)?.name || '?').charAt(0) }}</span>
                 </template>
-                <span v-if="newChatAgentIds.length > 3" class="newchat-persona-cfg-avatar-fb newchat-persona-cfg-overflow" :style="{ zIndex: 5 }">+{{ newChatAgentIds.length - 3 }}</span>
+                <span v-if="newChatAgentIds.length > 3" class="newchat-agent-cfg-avatar-fb newchat-agent-cfg-overflow" :style="{ zIndex: 5 }">+{{ newChatAgentIds.length - 3 }}</span>
               </div>
               <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
@@ -1720,7 +1720,7 @@
             class="ncp-search-input"
             @keydown.stop
           />
-          <button v-if="newChatPersonaSearch" class="ncp-search-clear" @click="newChatPersonaSearch = ''">
+          <button v-if="newChatAgentSearch" class="ncp-search-clear" @click="newChatAgentSearch = ''">
             <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
@@ -1728,7 +1728,7 @@
         <!-- Agent list -->
         <div class="ncp-list">
           <!-- When searching: flat filtered list -->
-          <template v-if="newChatPersonaSearch.trim()">
+          <template v-if="newChatAgentSearch.trim()">
             <label
               v-for="p in filteredNewChatAgents"
               :key="p.id"
@@ -1827,18 +1827,18 @@
   <!-- Soul Viewer Modal -->
   <SoulViewer
     v-if="soulViewerTarget"
-    :personaId="soulViewerTarget.agentId"
-    :personaType="soulViewerTarget.personaType"
-    :personaName="soulViewerTarget.personaName"
-    :personaDescription="soulViewerTarget.personaDescription"
-    :personaPrompt="soulViewerTarget.personaPrompt"
-    :personaProviderId="soulViewerTarget.personaProviderId"
-    :personaModelId="soulViewerTarget.personaModelId"
-    :personaVoiceId="soulViewerTarget.personaVoiceId"
-    :personaAvatar="soulViewerTarget.personaAvatar"
+    :agentId="soulViewerTarget.agentId"
+    :agentType="soulViewerTarget.agentType"
+    :agentName="soulViewerTarget.agentName"
+    :agentDescription="soulViewerTarget.agentDescription"
+    :agentPrompt="soulViewerTarget.agentPrompt"
+    :agentProviderId="soulViewerTarget.agentProviderId"
+    :agentModelId="soulViewerTarget.agentModelId"
+    :agentVoiceId="soulViewerTarget.agentVoiceId"
+    :agentAvatar="soulViewerTarget.agentAvatar"
     :readOnly="true"
     @close="closeSoulViewer"
-    @update-persona="handleSoulViewerUpdatePersona"
+    @update-agent="handleSoulViewerUpdateAgent"
   />
 
   <!-- Confirm Delete Modal -->
@@ -2273,23 +2273,23 @@ async function handleStartCall(chatId) {
   const chat = chatsStore.chats.find(c => c.id === chatId)
   if (!chat) return
   // Use active agent count, not isGroupChat flag (which stays true after removing agents)
-  const activeCount = chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds.length : 1
+  const activeCount = chat.groupAgentIds?.length > 0 ? chat.groupAgentIds.length : 1
   if (activeCount > 1) return
   if (voiceStore.isCallActive) return
 
-  // Resolve system agent — use same logic as activeSystemPersonaIds in ChatHeader
-  const agentId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null)
-    || chat.systemPersonaId
-    || agentsStore.defaultSystemPersona?.id
-  const persona = agentId ? agentsStore.getPersonaById(agentId) : null
+  // Resolve system agent — use same logic as activeSystemAgentIds in ChatHeader
+  const agentId = (chat.groupAgentIds?.length > 0 ? chat.groupAgentIds[0] : null)
+    || chat.systemAgentId
+    || agentsStore.defaultSystemAgent?.id
+  const agent = agentId ? agentsStore.getAgentById(agentId) : null
 
   // Resolve user agent
-  const userPersonaId = chat.userPersonaId || agentsStore.defaultUserPersona?.id
-  const userPersona = userPersonaId ? agentsStore.getPersonaById(userPersonaId) : null
+  const userAgentId = chat.userAgentId || agentsStore.defaultUserAgent?.id
+  const userAgent = userAgentId ? agentsStore.getAgentById(userAgentId) : null
 
   // Resolve provider/model from agent (provider is always on the agent now)
-  const chatProvider = persona?.providerId || 'anthropic'
-  const chatModel = persona?.modelId || ''
+  const chatProvider = agent?.providerId || 'anthropic'
+  const chatModel = agent?.modelId || ''
 
   // Ensure messages loaded
   await chatsStore.ensureMessages(chatId)
@@ -2307,7 +2307,7 @@ async function handleStartCall(chatId) {
   }
 
   // Update voice store
-  voiceStore.startCall(chatId, agentId, persona?.name || 'AI', chatModel)
+  voiceStore.startCall(chatId, agentId, agent?.name || 'AI', chatModel)
 
   // Start backend voice session
   if (window.electronAPI?.voice?.start) {
@@ -2316,17 +2316,17 @@ async function handleStartCall(chatId) {
       agentId,
       history,
       voiceConfig: { provider: chatProvider, model: chatModel },
-      persona: {
+      agent: {
         id: agentId,
-        name: persona?.name,
-        description: persona?.description,
-        systemPrompt: persona?.systemPrompt,
+        name: agent?.name,
+        description: agent?.description,
+        systemPrompt: agent?.systemPrompt,
       },
-      userPersona: {
-        id: userPersonaId || '__default_user__',
-        name: userPersona?.name,
-        description: userPersona?.description,
-        systemPrompt: userPersona?.systemPrompt,
+      userAgent: {
+        id: userAgentId || '__default_user__',
+        name: userAgent?.name,
+        description: userAgent?.description,
+        systemPrompt: userAgent?.systemPrompt,
       },
       whisperConfig,
     })
@@ -2573,8 +2573,8 @@ async function _fetchTTSAudio(text) {
   const useOpenAITTS = (vc.ttsMode === 'openai' || vc.ttsMode === 'openai-hd') && vc.whisperApiKey
   if (!useOpenAITTS || !window.electronAPI?.voice?.tts) return null
   try {
-    const persona = agentsStore.getPersonaById(voiceStore.activePersonaId)
-    const voiceId = persona?.voiceId || 'alloy'
+    const agent = agentsStore.getAgentById(voiceStore.activeAgentId)
+    const voiceId = agent?.voiceId || 'alloy'
     const result = await window.electronAPI.voice.tts({
       text,
       apiKey: vc.whisperApiKey,
@@ -2850,18 +2850,18 @@ function triggerMemoryExtractionOnSwitch(leavingChatId) {
   const cfg = configStore.config
   if (!cfg.utilityModel?.provider || !cfg.utilityModel?.model) return
 
-  const sysId = chat.systemPersonaId || agentsStore.defaultSystemPersona?.id
-  const usrId = chat.userPersonaId || agentsStore.defaultUserPersona?.id
-  const participants = chat.groupPersonaIds?.length > 0
-    ? chat.groupPersonaIds.map(pid => {
-        const p = agentsStore.getPersonaById(pid)
+  const sysId = chat.systemAgentId || agentsStore.defaultSystemAgent?.id
+  const usrId = chat.userAgentId || agentsStore.defaultUserAgent?.id
+  const participants = chat.groupAgentIds?.length > 0
+    ? chat.groupAgentIds.map(pid => {
+        const p = agentsStore.getAgentById(pid)
         return p ? { id: p.id, name: p.name, type: 'system' } : null
       }).filter(Boolean)
-    : (sysId ? [{ id: sysId, name: agentsStore.getPersonaById(sysId)?.name || 'Assistant', type: 'system' }] : null)
+    : (sysId ? [{ id: sysId, name: agentsStore.getAgentById(sysId)?.name || 'Assistant', type: 'system' }] : null)
 
   const agentPrompts = {
-    systemPersonaId: sysId || '__default_system__',
-    userPersonaId: usrId || '__default_user__',
+    systemAgentId: sysId || '__default_system__',
+    userAgentId: usrId || '__default_user__',
   }
 
   try {
@@ -2992,33 +2992,33 @@ const activeChatUsage = computed(() => {
 const activeChatModel = computed(() => {
   const chat = chatsStore.activeChat
   if (!chat) return ''
-  const agentId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null)
-    || chat.systemPersonaId
-  const override = agentId ? chat.personaModelOverrides?.[agentId] : null
+  const agentId = (chat.groupAgentIds?.length > 0 ? chat.groupAgentIds[0] : null)
+    || chat.systemAgentId
+  const override = agentId ? chat.agentModelOverrides?.[agentId] : null
   const overrideModel = override ? (typeof override === 'object' ? override.model : override) : null
-  const persona = agentId ? agentsStore.getPersonaById(agentId) : null
-  return overrideModel || persona?.modelId || chat.model || contextSnapshot.value?.model || ''
+  const agent = agentId ? agentsStore.getAgentById(agentId) : null
+  return overrideModel || agent?.modelId || chat.model || contextSnapshot.value?.model || ''
 })
 
 // Agent info for the inspector — prefers snapshot data (has prompts), falls back to store (has names)
 const inspectorAgents = computed(() => {
   // If snapshot has agent prompts, use them (richer data)
-  if (contextSnapshot.value?.personas?.systemPersonaPrompt || contextSnapshot.value?.personas?.userPersonaPrompt) {
-    return contextSnapshot.value.personas
+  if (contextSnapshot.value?.agents?.systemAgentPrompt || contextSnapshot.value?.agents?.userAgentPrompt) {
+    return contextSnapshot.value.agents
   }
   // Fall back to store data — return name info so inspector can show the agents even before first message
   const chat = chatsStore.activeChat
   if (!chat) return null
-  const sysId = (chat.groupPersonaIds?.length > 0 ? chat.groupPersonaIds[0] : null) || chat.systemPersonaId
-  const sysPersona = sysId ? agentsStore.getPersonaById(sysId) : agentsStore.defaultSystemPersona
-  const usrId = chat.userPersonaId
-  const usrPersona = usrId ? agentsStore.getPersonaById(usrId) : agentsStore.defaultUserPersona
-  if (!sysPersona && !usrPersona) return null
+  const sysId = (chat.groupAgentIds?.length > 0 ? chat.groupAgentIds[0] : null) || chat.systemAgentId
+  const sysAgent = sysId ? agentsStore.getAgentById(sysId) : agentsStore.defaultSystemAgent
+  const usrId = chat.userAgentId
+  const usrAgent = usrId ? agentsStore.getAgentById(usrId) : agentsStore.defaultUserAgent
+  if (!sysAgent && !usrAgent) return null
   return {
-    systemPersonaName: sysPersona?.name || null,
-    systemPersonaPrompt: null, // not yet available until first message
-    userPersonaName: usrPersona?.name || null,
-    userPersonaPrompt: null,
+    systemAgentName: sysAgent?.name || null,
+    systemAgentPrompt: null, // not yet available until first message
+    userAgentName: usrAgent?.name || null,
+    userAgentPrompt: null,
   }
 })
 
@@ -3046,7 +3046,7 @@ const activeChatCost = computed(() => {
 })
 
 const expandedMessages = reactive({})
-const inspectorSections = reactive({ metrics: true, system: false, personas: false, messages: false, tools: false, debugLog: false, cost: true })
+const inspectorSections = reactive({ metrics: true, system: false, agents: false, messages: false, tools: false, debugLog: false, cost: true })
 const debugLogEl = ref(null)
 
 function scrollDebugToBottom() {
@@ -3131,7 +3131,7 @@ function startResize(e) {
 }
 
 // Group chat popover state moved to ChatHeader
-const showGroupPersonaConfigId = ref(null)
+const showGroupAgentConfigId = ref(null)
 
 // Tooltip state for message avatars and user avatar (shared across tooltip handlers)
 const mentionTooltip = reactive({ visible: false, source: '', text: '', name: '', x: 0, y: 0, side: 'right' })
@@ -3140,10 +3140,10 @@ const mentionTooltip = reactive({ visible: false, source: '', text: '', name: ''
 
 // Chat message avatar tooltip
 function showMsgAvatarTooltip(event, msg) {
-  const pid = msg.agentId || activeSystemPersonaIds.value[0]
-  const persona = pid ? agentsStore.getPersonaById(pid) : null
-  const name = persona?.name || msg.personaName || 'Assistant'
-  const desc = persona?.description || ''
+  const pid = msg.agentId || activeSystemAgentIds.value[0]
+  const agent = pid ? agentsStore.getAgentById(pid) : null
+  const name = agent?.name || msg.agentName || 'Assistant'
+  const desc = agent?.description || ''
   if (!name) return
   const rect = event.currentTarget.getBoundingClientRect()
   mentionTooltip.source = 'message'
@@ -3161,9 +3161,9 @@ function hideMsgAvatarTooltip() {
 
 // User avatar tooltip (shows user agent description — positioned to the left)
 function showUserAvatarTooltip(event) {
-  const persona = activeUserPersona.value
-  const name = persona?.name || 'User'
-  const desc = persona?.description || ''
+  const agent = activeUserAgent.value
+  const name = agent?.name || 'User'
+  const desc = agent?.description || ''
   if (!name) return
   const rect = event.currentTarget.getBoundingClientRect()
   mentionTooltip.source = 'message'
@@ -3177,9 +3177,9 @@ function showUserAvatarTooltip(event) {
 
 // Get assistant display name for a message
 function getMsgAssistantName(msg) {
-  const pid = msg.agentId || activeSystemPersonaIds.value[0]
-  const persona = pid ? agentsStore.getPersonaById(pid) : null
-  return persona?.name || msg.personaName || 'Assistant'
+  const pid = msg.agentId || activeSystemAgentIds.value[0]
+  const agent = pid ? agentsStore.getAgentById(pid) : null
+  return agent?.name || msg.agentName || 'Assistant'
 }
 
 const isGroupChat = computed(() => chatsStore.activeChat?.isGroupChat ?? false)
@@ -3195,7 +3195,7 @@ function clearStickyTarget() {
 const stickyTargetLabel = computed(() => {
   if (!stickyTarget.value || stickyTarget.value.length === 0) return null
   return stickyTarget.value
-    .map(id => agentsStore.getPersonaById(id)?.name || 'Unknown')
+    .map(id => agentsStore.getAgentById(id)?.name || 'Unknown')
     .join(', ')
 })
 
@@ -3300,7 +3300,7 @@ watch(showChatConfigModal, (open) => {
     workingPath: draftWorkingPath.value,
     codingMode: draftCodingMode.value,
     codingProvider: draftCodingProvider.value,
-    maxPersonaRounds: draftMaxAgentRounds.value,
+    maxAgentRounds: draftMaxAgentRounds.value,
     maxOutputTokens: draftMaxOutputTokens.value,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
@@ -3321,7 +3321,7 @@ function saveChatSettings() {
     workingPath: draftWorkingPath.value || null,
     codingMode: draftCodingMode.value,
     codingProvider: draftCodingProvider.value,
-    maxPersonaRounds: clampedRounds,
+    maxAgentRounds: clampedRounds,
     maxOutputTokens: clampedMaxOutput,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
@@ -3348,7 +3348,7 @@ function cancelChatSettings() {
     draftWorkingPath.value = _draftSnapshot.workingPath
     draftCodingMode.value = _draftSnapshot.codingMode ?? false
     draftCodingProvider.value = _draftSnapshot.codingProvider ?? 'claude-code'
-    draftMaxAgentRounds.value = _draftSnapshot.maxPersonaRounds
+    draftMaxAgentRounds.value = _draftSnapshot.maxAgentRounds
     draftMaxOutputTokens.value = _draftSnapshot.maxOutputTokens ?? null
     draftPermissionMode.value = _draftSnapshot.permissionMode
     draftChatAllowList.value = _draftSnapshot.chatAllowList
@@ -3432,7 +3432,7 @@ function _loadDraftFromChat() {
   draftCodingMode.value = chat.codingMode ?? false
   draftCodingProvider.value = chat.codingProvider ?? 'claude-code'
   // Max agent rounds (null in JSON = use default 10)
-  draftMaxAgentRounds.value = chat.maxPersonaRounds ?? 10
+  draftMaxAgentRounds.value = chat.maxAgentRounds ?? 10
   // Max output tokens (null = use global default)
   draftMaxOutputTokens.value = chat.maxOutputTokens ?? null
   // Permissions
@@ -3955,7 +3955,7 @@ async function confirmNewChat() {
   const title = newChatName.value.trim() || 'New Chat'
   let selectedIds = newChatAgentIds.value
   if (selectedIds.length === 0) {
-    const def = agentsStore.defaultSystemPersona
+    const def = agentsStore.defaultSystemAgent
     selectedIds = def ? [def.id] : []
   }
   const agentCfg = selectedIds.length > 0 ? [...selectedIds] : null
@@ -3992,12 +3992,12 @@ function requestDeleteChat(id) {
 }
 
 function requestRemoveGroupAgent(chatId, pid) {
-  const persona = agentsStore.getPersonaById(pid)
+  const agent = agentsStore.getAgentById(pid)
   confirmDeleteTarget.value = {
     type: 'groupAgent',
     id: chatId,
     pid,
-    label: persona?.name || 'this agent',
+    label: agent?.name || 'this agent',
   }
 }
 
@@ -4009,7 +4009,7 @@ async function executeConfirmedDelete() {
   if (target.type === 'chat') {
     await chatsStore.removeChat(target.id)
   } else if (target.type === 'groupAgent') {
-    chatsStore.removeGroupPersona(target.id, target.pid)
+    chatsStore.removeGroupAgent(target.id, target.pid)
   } else if (target.type === 'message') {
     await chatsStore.deleteMessage(target.id, target.msgId)
   } else if (target.type === 'folder') {
@@ -4018,25 +4018,25 @@ async function executeConfirmedDelete() {
 }
 
 // ── Soul Viewer modal state ──────────────────────────────────────────────
-const soulViewerTarget = ref(null) // { agentId, personaType, personaName, personaDescription, personaPrompt, personaProviderId, personaModelId, personaVoiceId, personaAvatar }
+const soulViewerTarget = ref(null) // { agentId, agentType, agentName, agentDescription, agentPrompt, agentProviderId, agentModelId, agentVoiceId, agentAvatar }
 
-function openSoulViewer(agentId, personaType, personaName) {
-  const persona = agentsStore.getPersonaById(agentId)
+function openSoulViewer(agentId, agentType, agentName) {
+  const agent = agentsStore.getAgentById(agentId)
   // Per-chat override takes priority over global agent model for display
   const chat = chatsStore.activeChat
-  const rawOverride = chat?.personaModelOverrides?.[agentId]
+  const rawOverride = chat?.agentModelOverrides?.[agentId]
   const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
   const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model : rawOverride) : null
   soulViewerTarget.value = {
     agentId,
-    personaType,
-    personaName: persona?.name || personaName || 'Persona',
-    personaDescription: persona?.description || '',
-    personaPrompt: persona?.prompt || '',
-    personaProviderId: overrideProvider || persona?.providerId || null,
-    personaModelId: overrideModel || persona?.modelId || null,
-    personaVoiceId: persona?.voiceId || null,
-    personaAvatar: persona?.avatar || null,
+    agentType,
+    agentName: agent?.name || agentName || 'Agent',
+    agentDescription: agent?.description || '',
+    agentPrompt: agent?.prompt || '',
+    agentProviderId: overrideProvider || agent?.providerId || null,
+    agentModelId: overrideModel || agent?.modelId || null,
+    agentVoiceId: agent?.voiceId || null,
+    agentAvatar: agent?.avatar || null,
   }
 }
 
@@ -4044,86 +4044,86 @@ function closeSoulViewer() {
   soulViewerTarget.value = null
 }
 
-async function handleSoulViewerUpdatePersona(updates) {
+async function handleSoulViewerUpdateAgent(updates) {
   if (!soulViewerTarget.value) return
   const pid = soulViewerTarget.value.agentId
-  const persona = agentsStore.getPersonaById(pid)
-  if (!persona) return
+  const agent = agentsStore.getAgentById(pid)
+  if (!agent) return
   const chatId = chatsStore.activeChatId
 
   // ── Model/provider changes → per-chat override (not global) ──
   if (chatId && (updates.providerId !== undefined || updates.modelId !== undefined)) {
-    const newProvider = updates.providerId ?? persona.providerId ?? null
-    const newModel    = updates.modelId ?? persona.modelId ?? null
-    chatsStore.setChatPersonaModelOverride(chatId, pid, newProvider, newModel)
+    const newProvider = updates.providerId ?? agent.providerId ?? null
+    const newModel    = updates.modelId ?? agent.modelId ?? null
+    chatsStore.setChatAgentModelOverride(chatId, pid, newProvider, newModel)
     // Update the soul viewer target so it shows the new override
     if (soulViewerTarget.value) {
-      if (updates.providerId !== undefined) soulViewerTarget.value.personaProviderId = newProvider
-      if (updates.modelId !== undefined) soulViewerTarget.value.personaModelId = newModel
+      if (updates.providerId !== undefined) soulViewerTarget.value.agentProviderId = newProvider
+      if (updates.modelId !== undefined) soulViewerTarget.value.agentModelId = newModel
     }
   }
 
-  // ── Other fields (name, avatar, description, prompt, voice) → global persona ──
+  // ── Other fields (name, avatar, description, prompt, voice) → global agent ──
   const globalUpdates = { ...updates }
   delete globalUpdates.providerId
   delete globalUpdates.modelId
   if (Object.keys(globalUpdates).length > 0) {
-    const updated = { ...persona, ...globalUpdates }
-    await agentsStore.savePersona(updated)
+    const updated = { ...agent, ...globalUpdates }
+    await agentsStore.saveAgent(updated)
     if (!soulViewerTarget.value) return
-    soulViewerTarget.value.personaPrompt = updated.prompt ?? soulViewerTarget.value.personaPrompt
-    soulViewerTarget.value.personaDescription = updated.description ?? soulViewerTarget.value.personaDescription
-    if (globalUpdates.voiceId !== undefined) soulViewerTarget.value.personaVoiceId = updated.voiceId ?? null
+    soulViewerTarget.value.agentPrompt = updated.prompt ?? soulViewerTarget.value.agentPrompt
+    soulViewerTarget.value.agentDescription = updated.description ?? soulViewerTarget.value.agentDescription
+    if (globalUpdates.voiceId !== undefined) soulViewerTarget.value.agentVoiceId = updated.voiceId ?? null
   }
 }
 
-// System persona config popover state moved to ChatHeader
+// System agent config popover state moved to ChatHeader
 
-// ── Persona chip popovers (moved to ChatHeader) ──
+// ── Agent chip popovers (moved to ChatHeader) ──
 
-function getAvatarDataUriForAgent(persona) {
-  if (!persona?.avatar) return null
-  return getAvatarDataUri(persona.avatar)
+function getAvatarDataUriForAgent(agent) {
+  if (!agent?.avatar) return null
+  return getAvatarDataUri(agent.avatar)
 }
 
-const activeSystemPersona = computed(() => {
-  const id = chatsStore.activeChat?.systemPersonaId
-  return id ? agentsStore.getPersonaById(id) : agentsStore.defaultSystemPersona
+const activeSystemAgent = computed(() => {
+  const id = chatsStore.activeChat?.systemAgentId
+  return id ? agentsStore.getAgentById(id) : agentsStore.defaultSystemAgent
 })
-const activeUserPersona = computed(() => {
-  const id = chatsStore.activeChat?.userPersonaId
-  return id ? agentsStore.getPersonaById(id) : agentsStore.defaultUserPersona
+const activeUserAgent = computed(() => {
+  const id = chatsStore.activeChat?.userAgentId
+  return id ? agentsStore.getAgentById(id) : agentsStore.defaultUserAgent
 })
 // Header-only display computed removed (moved to ChatHeader):
-// activeSystemAvatarDataUri, activeUserAvatarDataUri, activeSystemPersonaName, activeUserPersonaName
-// resolvedSystemPersonaId, resolvedUserPersonaId, sortedSystemPersonas, sortedUserPersonas
+// activeSystemAvatarDataUri, activeUserAvatarDataUri, activeSystemAgentName, activeUserAgentName
+// resolvedSystemAgentId, resolvedUserAgentId, sortedSystemAgents, sortedUserAgents
 
-// ── Active system persona IDs (unified — single or multi) ────────────────
-const activeSystemPersonaIds = computed(() => {
+// ── Active system agent IDs (unified — single or multi) ────────────────
+const activeSystemAgentIds = computed(() => {
   const chat = chatsStore.activeChat
   if (!chat) return []
   // If group mode with explicit IDs, use those
-  if (chat.groupPersonaIds?.length > 0) return [...chat.groupPersonaIds]
-  // Otherwise, single persona mode: use systemPersonaId or default
-  const id = chat.systemPersonaId || agentsStore.defaultSystemPersona?.id
+  if (chat.groupAgentIds?.length > 0) return [...chat.groupAgentIds]
+  // Otherwise, single agent mode: use systemAgentId or default
+  const id = chat.systemAgentId || agentsStore.defaultSystemAgent?.id
   return id ? [id] : []
 })
 
-// MAX_VISIBLE_AVATARS, visibleSystemPersonaIds, overflowSystemCount moved to ChatHeader
+// MAX_VISIBLE_AVATARS, visibleSystemAgentIds, overflowSystemCount moved to ChatHeader
 
-// toggleSystemPersona moved to ChatHeader
+// toggleSystemAgent moved to ChatHeader
 
-// getPersonaProviderLabel kept — also used in mention popup
-// Shows per-chat override when active, otherwise falls back to persona global settings.
+// getAgentProviderLabel kept — also used in mention popup
+// Shows per-chat override when active, otherwise falls back to agent global settings.
 function getAgentProviderLabel(agentId) {
-  const persona = agentsStore.getPersonaById(agentId)
-  if (!persona) return 'Default'
+  const agent = agentsStore.getAgentById(agentId)
+  if (!agent) return 'Default'
   const chat = chatsStore.activeChat
-  const rawOverride = chat?.personaModelOverrides?.[agentId]
+  const rawOverride = chat?.agentModelOverrides?.[agentId]
   const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
   const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
-  const provider = overrideProvider || persona.providerId || 'anthropic'
-  const model    = overrideModel    || persona.modelId    || ''
+  const provider = overrideProvider || agent.providerId || 'anthropic'
+  const model    = overrideModel    || agent.modelId    || ''
   if (model) {
     const short = model.split('/').pop().split(':')[0]
     return overrideProvider || overrideModel
@@ -4159,12 +4159,12 @@ const ragEnabledIndexes = computed(() => {
 })
 
 
-// Close popovers on outside click (persona header popovers now handled by ChatHeader)
+// Close popovers on outside click (agent header popovers now handled by ChatHeader)
 function handlePopoverOutsideClick(e) {
   if (ragChipWrap.value && !ragChipWrap.value.contains(e.target)) showRagPopover.value = false
-  if (showGroupPersonaConfigId.value) {
-    const configPopover = document.querySelector('.group-persona-config-popover')
-    if (configPopover && !configPopover.contains(e.target)) showGroupPersonaConfigId.value = null
+  if (showGroupAgentConfigId.value) {
+    const configPopover = document.querySelector('.group-agent-config-popover')
+    if (configPopover && !configPopover.contains(e.target)) showGroupAgentConfigId.value = null
   }
 }
 
@@ -4177,36 +4177,36 @@ function toggleGroupMode() {
   chatsStore.toggleGroupMode(chatId, !isGroupChat.value)
 }
 
-function toggleGroupPersona(agentId) {
+function toggleGroupAgent(agentId) {
   const chatId = chatsStore.activeChatId
   if (!chatId) return
-  const ids = chatsStore.activeChat?.groupPersonaIds || []
+  const ids = chatsStore.activeChat?.groupAgentIds || []
   if (ids.includes(agentId)) {
     requestRemoveGroupAgent(chatId, agentId)
   } else {
-    chatsStore.addGroupPersona(chatId, agentId)
+    chatsStore.addGroupAgent(chatId, agentId)
   }
 }
 
-function openGroupPersonaConfig(agentId) {
-  showGroupPersonaConfigId.value = showGroupPersonaConfigId.value === agentId ? null : agentId
+function openGroupAgentConfig(agentId) {
+  showGroupAgentConfigId.value = showGroupAgentConfigId.value === agentId ? null : agentId
 }
 
-function getGroupPersonaOverride(agentId, field) {
-  const overrides = chatsStore.activeChat?.groupPersonaOverrides?.[agentId]
+function getGroupAgentOverride(agentId, field) {
+  const overrides = chatsStore.activeChat?.groupAgentOverrides?.[agentId]
   if (!overrides) {
-    // Fall back to persona defaults
-    const persona = agentsStore.getPersonaById(agentId)
-    return persona?.[field] || ''
+    // Fall back to agent defaults
+    const agent = agentsStore.getAgentById(agentId)
+    return agent?.[field] || ''
   }
   return overrides[field] || ''
 }
 
-function setGroupPersonaOverrideField(agentId, field, value) {
+function setGroupAgentOverrideField(agentId, field, value) {
   const chatId = chatsStore.activeChatId
   if (!chatId) return
-  const existing = chatsStore.activeChat?.groupPersonaOverrides?.[agentId] || {}
-  chatsStore.setGroupPersonaOverride(chatId, agentId, { ...existing, [field]: value })
+  const existing = chatsStore.activeChat?.groupAgentOverrides?.[agentId] || {}
+  chatsStore.setGroupAgentOverride(chatId, agentId, { ...existing, [field]: value })
 }
 
 function onInputBlur() {
@@ -4442,20 +4442,20 @@ function getQuotedSenderName(q) {
   if (!q) return 'Assistant'
   const ac = chatsStore.activeChat
   if (q.role === 'user') {
-    const uid = ac?.userPersonaId
-    const up = uid ? agentsStore.getPersonaById(uid) : agentsStore.defaultUserPersona
+    const uid = ac?.userAgentId
+    const up = uid ? agentsStore.getAgentById(uid) : agentsStore.defaultUserAgent
     return up?.name || 'You'
   }
   if (q.agentId) {
-    const p = agentsStore.getPersonaById(q.agentId)
+    const p = agentsStore.getAgentById(q.agentId)
     if (p?.name) return p.name
   }
-  const sysId = ac?.systemPersonaId
+  const sysId = ac?.systemAgentId
   if (sysId) {
-    const p = agentsStore.getPersonaById(sysId)
+    const p = agentsStore.getAgentById(sysId)
     if (p?.name) return p.name
   }
-  return agentsStore.defaultSystemPersona?.name || 'Assistant'
+  return agentsStore.defaultSystemAgent?.name || 'Assistant'
 }
 
 function clearQuote() {
@@ -4506,7 +4506,7 @@ function lastToolSeg(chatId) {
   return null
 }
 
-// Helper: push segments to the live streaming message for a chat or persona
+// Helper: push segments to the live streaming message for a chat or agent
 // key can be chatId or chatId:agentId
 function flushSegments(key) {
   const chatId = key.includes(':') ? key.split(':')[0] : key
@@ -4546,18 +4546,18 @@ function handleChunk(cId, chunk) {
   const targetChat = chatsStore.chats.find(c => c.id === cId)
   if (!targetChat || !targetChat.messages) return
 
-  // ── Group chat: agent_start / agent_end bracket each persona's response ──
+  // ── Group chat: agent_start / agent_end bracket each agent's response ──
   if (chunk.type === 'agent_start') {
     const agentKey = `${cId}:${chunk.agentId}`
-    // Guard: skip if a streaming message already exists for this persona (prevent duplicates)
+    // Guard: skip if a streaming message already exists for this agent (prevent duplicates)
     if (perChatStreamingMsgId.has(agentKey)) {
-      dbg(`agent_start DUPLICATE skipped: ${chunk.personaName} (${chunk.agentId})`, 'warn')
+      dbg(`agent_start DUPLICATE skipped: ${chunk.agentName} (${chunk.agentId})`, 'warn')
       return
     }
     const msgId = uuidv4()
     perChatStreamingMsgId.set(agentKey, msgId)
     perChatStreamingSegments.set(agentKey, [])
-    // Add a streaming placeholder message for this persona
+    // Add a streaming placeholder message for this agent
     targetChat.messages.push({
       id: msgId,
       role: 'assistant',
@@ -4565,10 +4565,10 @@ function handleChunk(cId, chunk) {
       streaming: true,
       streamingStartedAt: Date.now(),
       agentId: chunk.agentId,
-      personaName: chunk.personaName,
+      agentName: chunk.agentName,
       segments: []
     })
-    dbg(`agent_start: ${chunk.personaName} (${chunk.agentId})`, 'info')
+    dbg(`agent_start: ${chunk.agentName} (${chunk.agentId})`, 'info')
     scrollToBottom(false, cId)
     return
   }
@@ -4598,12 +4598,12 @@ function handleChunk(cId, chunk) {
     }
     perChatStreamingMsgId.delete(agentKey)
     perChatStreamingSegments.delete(agentKey)
-    dbg(`agent_end: ${chunk.personaName}`, 'info')
+    dbg(`agent_end: ${chunk.agentName}`, 'info')
     scrollToBottom(false, cId)
     return
   }
 
-  // For group chat chunks tagged with agentId, route to the right persona's streaming message
+  // For group chat chunks tagged with agentId, route to the right agent's streaming message
   const routeKey = chunk.agentId ? `${cId}:${chunk.agentId}` : cId
 
   if (chunk.type === 'text') {
@@ -4704,15 +4704,15 @@ function handleChatWindowSend(text) {
 /**
  * Build the agentRuns array for a group agent call.
  * Extracted so it can be reused by both the initial user-triggered run and
- * subsequent persona-to-persona collaboration rounds.
+ * subsequent agent-to-agent collaboration rounds.
  */
-function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPrompt, usrPersona) {
+function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPrompt, usrAgent) {
   return respondingIds.map(pid => {
-    const persona = agentsStore.getPersonaById(pid)
-    if (!persona) return null
+    const agent = agentsStore.getAgentById(pid)
+    if (!agent) return null
 
     const agentCfg = { ...cfg }
-    const resolvedProvider = persona.providerId || 'anthropic'
+    const resolvedProvider = agent.providerId || 'anthropic'
     if (resolvedProvider === 'anthropic') {
       agentCfg.apiKey = cfg.anthropic?.apiKey || ''
       agentCfg.baseURL = cfg.anthropic?.baseURL || ''
@@ -4743,7 +4743,7 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPro
       agentCfg.defaultProvider = 'openai'
     }
     // Model+provider override (chat-scoped): takes priority over agent settings
-    const rawOverride = targetChat.personaModelOverrides?.[pid]
+    const rawOverride = targetChat.agentModelOverrides?.[pid]
     const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
     const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
     if (overrideProvider && overrideProvider !== resolvedProvider) {
@@ -4777,26 +4777,26 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPro
         agentCfg.defaultProvider = 'openai'
       }
     }
-    const resolvedModel = overrideModel || persona.modelId || null
+    const resolvedModel = overrideModel || agent.modelId || null
     if (resolvedModel) agentCfg.customModel = resolvedModel
 
     const otherParticipants = groupIds
       .filter(id => id !== pid)
       .map(id => {
-        const p = agentsStore.getPersonaById(id)
+        const p = agentsStore.getAgentById(id)
         return { id, name: p?.name || 'Unknown', description: p?.description || '', prompt: p?.prompt || '' }
       })
     const agentPrompts = {
-      systemPersonaPrompt: persona.prompt || '',
-      userPersonaPrompt: userPersonaPrompt || '',
-      systemPersonaId: pid,
-      userPersonaId: usrPersona?.id || '__default_user__',
-      groupChatContext: { personaName: persona.name, personaDescription: persona.description || '', otherParticipants }
+      systemAgentPrompt: agent.prompt || '',
+      userAgentPrompt: userAgentPrompt || '',
+      systemAgentId: pid,
+      userAgentId: usrAgent?.id || '__default_user__',
+      groupChatContext: { agentName: agent.name, agentDescription: agent.description || '', otherParticipants }
     }
 
     return {
       agentId: pid,
-      personaName: persona.name,
+      agentName: agent.name,
       config: JSON.parse(JSON.stringify(agentCfg)),
       enabledAgents: [],
       enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
@@ -4811,7 +4811,7 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPro
  * Fire the group runAgent call and finalize any errored streaming messages.
  * Returns the raw result from electronAPI.runAgent.
  */
-async function runGroupPersonas(chatId, targetChat, agentRuns, apiMessages, cfg, pendingAttachments) {
+async function runGroupAgents(chatId, targetChat, agentRuns, apiMessages, cfg, pendingAttachments) {
   const res = await window.electronAPI.runAgent({
     chatId,
     messages: JSON.parse(JSON.stringify(apiMessages)),
@@ -4862,8 +4862,8 @@ function injectCollaborationSummary(targetChat, iterationCount) {
   const summaryMsg = {
     id: uuidv4(),
     role: 'assistant',
-    content: `**Collaboration reached the maximum of ${iterationCount} iterations.** The personas were unable to reach a final resolution within the limit. Please review the conversation and decide how to proceed.`,
-    segments: [{ type: 'text', content: `**Collaboration reached the maximum of ${iterationCount} iterations.** The personas were unable to reach a final resolution within the limit. Please review the conversation and decide how to proceed.` }],
+    content: `**Collaboration reached the maximum of ${iterationCount} iterations.** The agents were unable to reach a final resolution within the limit. Please review the conversation and decide how to proceed.`,
+    segments: [{ type: 'text', content: `**Collaboration reached the maximum of ${iterationCount} iterations.** The agents were unable to reach a final resolution within the limit. Please review the conversation and decide how to proceed.` }],
     isCollaborationSummary: true,
     streaming: false,
   }
@@ -4872,35 +4872,35 @@ function injectCollaborationSummary(targetChat, iterationCount) {
 
 /**
  * After each group-chat round, scan ONLY the messages added in that round
- * (slice from prevMessagesLength) for @mentions of other personas, and trigger
- * those personas to respond — creating a persona-to-persona collaboration loop.
+ * (slice from prevMessagesLength) for @mentions of other agents, and trigger
+ * those agents to respond — creating a agent-to-agent collaboration loop.
  *
  * Runs recursively until no new @mentions are found or MAX_ITERATIONS is hit.
  * The iteration counter and prevMessagesLength are passed through recursion
  * (no global state). prevMessagesLength ensures we never re-scan earlier
- * rounds' messages and accidentally re-trigger personas that were already done.
+ * rounds' messages and accidentally re-trigger agents that were already done.
  */
-async function triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPrompt, usrPersona, iterationCount, prevMessagesLength) {
+async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt, usrAgent, iterationCount, prevMessagesLength) {
   const targetChat = chatsStore.chats.find(c => c.id === chatId)
   if (!targetChat || !targetChat.messages) return
 
   // Per-chat limit; fall back to 10 if not set. Hard cap at 100.
-  const MAX_ITERATIONS = Math.min(100, Math.max(1, targetChat.maxPersonaRounds ?? 10))
+  const MAX_ITERATIONS = Math.min(100, Math.max(1, targetChat.maxAgentRounds ?? 10))
 
-  const groupPersonas = groupIds.map(id => agentsStore.getPersonaById(id)).filter(Boolean)
+  const groupAgents = groupIds.map(id => agentsStore.getAgentById(id)).filter(Boolean)
 
-  // Only examine messages added in the most recent runGroupPersonas call
+  // Only examine messages added in the most recent runGroupAgents call
   const newMessages = targetChat.messages
     .slice(prevMessagesLength)
     .filter(m => m.role === 'assistant' && m.agentId && groupIds.includes(m.agentId) && !m.streaming)
 
-  // For each new message, resolve which @mentioned personas are actually being
-  // addressed (vs. merely referenced). Mirrors the user→persona routing logic.
+  // For each new message, resolve which @mentioned agents are actually being
+  // addressed (vs. merely referenced). Mirrors the user→agent routing logic.
   const nextRespondingSet = new Set()
   for (let msgIdx = 0; msgIdx < newMessages.length; msgIdx++) {
     const msg = newMessages[msgIdx]
     const msgText = msg.content || (msg.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
-    const { mentions } = parseMentions(msgText, groupPersonas)
+    const { mentions } = parseMentions(msgText, groupAgents)
     // Exclude the sender itself
     const others = mentions.filter(id => id !== msg.agentId)
     if (others.length === 0) continue
@@ -4909,13 +4909,13 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPromp
     if (others.length >= 2) {
       // 2+ mentions — ask the LLM which ones are actually being addressed
       try {
-        const mentionedPersonas = others.map(id => {
-          const p = agentsStore.getPersonaById(id)
+        const mentionedAgents = others.map(id => {
+          const p = agentsStore.getAgentById(id)
           return p ? { id, name: p.name } : null
         }).filter(Boolean)
         const result = await window.electronAPI.resolveAddressees({
           message: msg.content,
-          personas: mentionedPersonas,
+          agents: mentionedAgents,
           config: JSON.parse(JSON.stringify(cfg)),
         })
         if (result?.addresseeIds?.length > 0) addressees = result.addresseeIds
@@ -4925,8 +4925,8 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPromp
     }
 
     for (const id of addressees) {
-      // Only trigger this persona if they have NOT already responded after this message.
-      // This prevents double-runs when a persona ran in the initial group round and
+      // Only trigger this agent if they have NOT already responded after this message.
+      // This prevents double-runs when a agent ran in the initial group round and
       // a peer @mentioned them as a courtesy — their reply already exists in newMessages.
       const alreadyRepliedAfter = newMessages.slice(msgIdx + 1).some(m => m.agentId === id)
       if (!alreadyRepliedAfter) nextRespondingSet.add(id)
@@ -4935,7 +4935,7 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPromp
 
   if (nextRespondingSet.size === 0) return  // No more collaboration needed
 
-  dbg(`Persona collaboration round ${iterationCount + 1}: [${[...nextRespondingSet].join(', ')}] are the addressees`)
+  dbg(`Agent collaboration round ${iterationCount + 1}: [${[...nextRespondingSet].join(', ')}] are the addressees`)
 
   if (iterationCount >= MAX_ITERATIONS) {
     injectCollaborationSummary(targetChat, iterationCount)
@@ -4944,21 +4944,21 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPromp
     return
   }
 
-  // Run each addressed persona SEQUENTIALLY so messages appear in logical
+  // Run each addressed agent SEQUENTIALLY so messages appear in logical
   // conversation order (A responds → B sees A's response → B responds).
   // This prevents the visual chaos of concurrent streaming in collaboration rounds.
   const respondingIds = [...nextRespondingSet]
-  dbg(`Collaboration run (sequential): ${respondingIds.length} persona(s): ${respondingIds.map(id => agentsStore.getPersonaById(id)?.name).join(', ')}`)
+  dbg(`Collaboration run (sequential): ${respondingIds.length} agent(s): ${respondingIds.map(id => agentsStore.getAgentById(id)?.name).join(', ')}`)
 
   const nextLength = targetChat.messages.length
 
   for (let i = 0; i < respondingIds.length; i++) {
     const pid = respondingIds[i]
-    const persona = agentsStore.getPersonaById(pid)
-    if (!persona) continue
+    const agent = agentsStore.getAgentById(pid)
+    if (!agent) continue
 
-    // Rebuild apiMessages before each persona so it sees prior personas' output.
-    // Use segments text as fallback when content is empty (group chat personas
+    // Rebuild apiMessages before each agent so it sees prior agents' output.
+    // Use segments text as fallback when content is empty (group chat agents
     // accumulate text in segments; content is synced by flushSegments but may lag).
     const seqApiMessages = targetChat.messages
       .filter(m => {
@@ -4976,24 +4976,24 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPromp
       }))
 
     // Ensure conversation ends with a user message (API requirement).
-    // Include the last assistant message's content so the addressed persona has full context.
+    // Include the last assistant message's content so the addressed agent has full context.
     if (seqApiMessages.length > 0 && seqApiMessages[seqApiMessages.length - 1].role === 'assistant') {
       const lastMsg = seqApiMessages[seqApiMessages.length - 1]
       seqApiMessages.push({
         role: 'user',
-        content: `${lastMsg.content}\n\n[${persona.name}, you have been addressed above. Please respond now.]`
+        content: `${lastMsg.content}\n\n[${agent.name}, you have been addressed above. Please respond now.]`
       })
     }
 
-    const agentRuns = buildAgentRuns([pid], groupIds, cfg, targetChat, userPersonaPrompt, usrPersona)
-    await runGroupPersonas(chatId, targetChat, agentRuns, seqApiMessages, cfg, [])
+    const agentRuns = buildAgentRuns([pid], groupIds, cfg, targetChat, userAgentPrompt, usrAgent)
+    await runGroupAgents(chatId, targetChat, agentRuns, seqApiMessages, cfg, [])
     scrollToBottom(false, chatId)
   }
 
   await chatsStore.persist?.()
 
   // Recurse — pass nextLength so the next call only scans THIS round's output
-  await triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPrompt, usrPersona, iterationCount + 1, nextLength)
+  await triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt, usrAgent, iterationCount + 1, nextLength)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -5094,10 +5094,10 @@ async function sendMessage() {
   const targetChat = chatsStore.chats.find(c => c.id === chatId)
   if (!targetChat) throw new Error('targetChat is null after addMessage')
 
-  // Detect group chat mode — unified: multiple system personas = group
-  const isGroup = activeSystemPersonaIds.value.length > 1
+  // Detect group chat mode — unified: multiple system agents = group
+  const isGroup = activeSystemAgentIds.value.length > 1
 
-  // ── Single-persona mode: add streaming placeholder as before ──
+  // ── Single-agent mode: add streaming placeholder as before ──
   let streamingMsgId = null
   if (!isGroup) {
     streamingMsgId = uuidv4()
@@ -5136,13 +5136,13 @@ async function sendMessage() {
     .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
     .map(m => ({ role: m.role, content: m.content }))
 
-  // Resolve persona for this run
-  const sysPersonaId = isGroup
-    ? null  // group path resolves per-persona below
-    : (targetChat.systemPersonaId || agentsStore.defaultSystemPersona?.id)
-  const sysPersona = sysPersonaId ? agentsStore.getPersonaById(sysPersonaId) : agentsStore.defaultSystemPersona
+  // Resolve agent for this run
+  const sysAgentId = isGroup
+    ? null  // group path resolves per-agent below
+    : (targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id)
+  const sysAgent = sysAgentId ? agentsStore.getAgentById(sysAgentId) : agentsStore.defaultSystemAgent
 
-  const chatProvider = sysPersona?.providerId || 'anthropic'
+  const chatProvider = sysAgent?.providerId || 'anthropic'
   const cfg = { ...configStore.config }
 
   if (chatProvider === 'anthropic') {
@@ -5164,8 +5164,8 @@ async function sendMessage() {
     cfg.defaultProvider = 'openai'
   }
 
-  // Model+provider override (chat-scoped): takes priority over persona settings
-  const rawOverride = targetChat.personaModelOverrides?.[sysPersonaId]
+  // Model+provider override (chat-scoped): takes priority over agent settings
+  const rawOverride = targetChat.agentModelOverrides?.[sysAgentId]
   const chatOverrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
   const chatOverrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
   if (chatOverrideProvider && chatOverrideProvider !== chatProvider) {
@@ -5199,7 +5199,7 @@ async function sendMessage() {
       cfg.defaultProvider = 'openai'
     }
   }
-  const resolvedModel = chatOverrideModel || sysPersona?.modelId || null
+  const resolvedModel = chatOverrideModel || sysAgent?.modelId || null
   if (resolvedModel) cfg.customModel = resolvedModel
 
   // isActive guard
@@ -5239,32 +5239,32 @@ async function sendMessage() {
 
   try {
     // Resolve user agent prompt (shared across all agents)
-    const usrPersonaId = targetChat.userPersonaId
-    const usrPersona = usrPersonaId
-      ? agentsStore.getPersonaById(usrPersonaId)
-      : agentsStore.defaultUserPersona
-    const userPersonaPrompt = usrPersona?.prompt || null
+    const usrAgentId = targetChat.userAgentId
+    const usrAgent = usrAgentId
+      ? agentsStore.getAgentById(usrAgentId)
+      : agentsStore.defaultUserAgent
+    const userAgentPrompt = usrAgent?.prompt || null
 
     if (isGroup) {
       // ── GROUP CHAT PATH ──
-      // Parse @mentions to determine which personas respond
-      const groupIds = activeSystemPersonaIds.value
-      const groupPersonas = groupIds.map(id => agentsStore.getPersonaById(id)).filter(Boolean)
-      const { mentions, mentionAll } = parseMentions(text, groupPersonas)
+      // Parse @mentions to determine which agents respond
+      const groupIds = activeSystemAgentIds.value
+      const groupAgents = groupIds.map(id => agentsStore.getAgentById(id)).filter(Boolean)
+      const { mentions, mentionAll } = parseMentions(text, groupAgents)
 
-      // When 2+ personas are @mentioned, ask the LLM to determine which ones are
+      // When 2+ agents are @mentioned, ask the LLM to determine which ones are
       // actually being spoken TO vs. merely referenced (e.g. "say hi to @Bob").
       // For 0 or 1 mentions, skip the extra call — no ambiguity.
       let addressees = mentions
       if (!mentionAll && mentions.length >= 2) {
         try {
-          const mentionedPersonas = mentions.map(id => {
-            const p = agentsStore.getPersonaById(id)
+          const mentionedAgents = mentions.map(id => {
+            const p = agentsStore.getAgentById(id)
             return p ? { id, name: p.name } : null
           }).filter(Boolean)
           const result = await window.electronAPI.resolveAddressees({
             message: text,
-            personas: mentionedPersonas,
+            agents: mentionedAgents,
             config: JSON.parse(JSON.stringify(cfg)),
           })
           // Only use AI result if it returned at least one addressee; otherwise
@@ -5277,7 +5277,7 @@ async function sendMessage() {
         }
       }
 
-      // Determine responding personas with sticky targeting:
+      // Determine responding agents with sticky targeting:
       // 1. Explicit @all → target all, clear sticky
       // 2. Addressees resolved above → target those, update sticky
       // 3. No mentions → use sticky target if set, otherwise all
@@ -5289,7 +5289,7 @@ async function sendMessage() {
         respondingIds = [...new Set(addressees)]
         stickyTarget.value = [...respondingIds]
       } else if (stickyTarget.value && stickyTarget.value.length > 0) {
-        // Use sticky target, but only personas still in the group
+        // Use sticky target, but only agents still in the group
         respondingIds = stickyTarget.value.filter(id => groupIds.includes(id))
         if (respondingIds.length === 0) {
           respondingIds = [...groupIds]
@@ -5309,20 +5309,20 @@ async function sendMessage() {
       }
 
       // Build agentRuns[]
-      const agentRuns = buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userPersonaPrompt, usrPersona)
+      const agentRuns = buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPrompt, usrAgent)
 
-      // Dispatch: utility model extracts per-persona task assignments so each agent
+      // Dispatch: utility model extracts per-agent task assignments so each agent
       // only sees its own task, preventing cross-contamination of the full message.
       const lastUserContent = apiMessages.findLast(m => m.role === 'user')?.content || ''
       if (lastUserContent && window.electronAPI?.dispatchGroupTasks) {
         try {
-          const dispatchPersonas = respondingIds.map(id => {
-            const p = agentsStore.getPersonaById(id)
+          const dispatchAgents = respondingIds.map(id => {
+            const p = agentsStore.getAgentById(id)
             return p ? { id, name: p.name } : null
           }).filter(Boolean)
           const { dispatched } = await window.electronAPI.dispatchGroupTasks({
             message: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
-            personas: dispatchPersonas,
+            agents: dispatchAgents,
             config: JSON.parse(JSON.stringify(cfg)),
           })
           if (dispatched?.length > 0) {
@@ -5330,7 +5330,7 @@ async function sendMessage() {
               const d = dispatched.find(x => x.agentId === run.agentId)
               if (d?.assignedTask) {
                 run.agentPrompts = { ...run.agentPrompts, assignedTask: d.assignedTask }
-                dbg(`Dispatched task for ${run.personaName}: "${d.assignedTask.slice(0, 80)}"`)
+                dbg(`Dispatched task for ${run.agentName}: "${d.assignedTask.slice(0, 80)}"`)
               }
             }
           }
@@ -5339,30 +5339,30 @@ async function sendMessage() {
         }
       }
 
-      dbg(`Group run: ${agentRuns.length} persona(s) responding: ${agentRuns.map(r => r.personaName).join(', ')}`)
+      dbg(`Group run: ${agentRuns.length} agent(s) responding: ${agentRuns.map(r => r.agentName).join(', ')}`)
 
       const msgCountBeforeRun = targetChat.messages.length
-      await runGroupPersonas(chatId, targetChat, agentRuns, apiMessages, cfg, pendingAttachments)
+      await runGroupAgents(chatId, targetChat, agentRuns, apiMessages, cfg, pendingAttachments)
 
-      // After the initial group run, check for persona→persona @mentions and loop.
+      // After the initial group run, check for agent→agent @mentions and loop.
       // Pass the pre-run message count so we only scan THIS round's new messages.
-      await triggerAgentCollaboration(chatId, groupIds, cfg, userPersonaPrompt, usrPersona, 0, msgCountBeforeRun)
+      await triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt, usrAgent, 0, msgCountBeforeRun)
 
     } else {
-      // ── SINGLE PERSONA PATH ──
-      const resolvedPersonaPrompts = {}
-      const sysPersonaId = activeSystemPersonaIds.value[0] || targetChat.systemPersonaId
-      const sysPersona = sysPersonaId
-        ? agentsStore.getPersonaById(sysPersonaId)
-        : agentsStore.defaultSystemPersona
-      if (sysPersona?.prompt) resolvedPersonaPrompts.systemPersonaPrompt = sysPersona.prompt
-      if (userPersonaPrompt) resolvedPersonaPrompts.userPersonaPrompt = userPersonaPrompt
-      // Pass persona identity for system prompt injection
-      resolvedPersonaPrompts.systemPersonaName = sysPersona?.name || null
-      resolvedPersonaPrompts.systemPersonaDescription = sysPersona?.description || null
-      // Pass persona IDs for soul memory system
-      resolvedPersonaPrompts.systemPersonaId = sysPersona?.id || '__default_system__'
-      resolvedPersonaPrompts.userPersonaId = usrPersona?.id || '__default_user__'
+      // ── SINGLE AGENT PATH ──
+      const resolvedAgentPrompts = {}
+      const sysAgentId = activeSystemAgentIds.value[0] || targetChat.systemAgentId
+      const sysAgent = sysAgentId
+        ? agentsStore.getAgentById(sysAgentId)
+        : agentsStore.defaultSystemAgent
+      if (sysAgent?.prompt) resolvedAgentPrompts.systemAgentPrompt = sysAgent.prompt
+      if (userAgentPrompt) resolvedAgentPrompts.userAgentPrompt = userAgentPrompt
+      // Pass agent identity for system prompt injection
+      resolvedAgentPrompts.systemAgentName = sysAgent?.name || null
+      resolvedAgentPrompts.systemAgentDescription = sysAgent?.description || null
+      // Pass agent IDs for soul memory system
+      resolvedAgentPrompts.systemAgentId = sysAgent?.id || '__default_system__'
+      resolvedAgentPrompts.userAgentId = usrAgent?.id || '__default_user__'
 
       // cfg already has provider creds + customModel resolved above
 
@@ -5374,7 +5374,7 @@ async function sendMessage() {
         enabledAgents: [],
         enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
         ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
-        agentPrompts: resolvedPersonaPrompts,
+        agentPrompts: resolvedAgentPrompts,
         mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
         httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
         chatPermissionMode: targetChat.permissionMode || 'inherit',
@@ -5474,7 +5474,7 @@ async function sendMessage() {
 
     perChatStreamingMsgId.delete(chatId)
     perChatStreamingSegments.delete(chatId)
-    // Clean up any group persona keys
+    // Clean up any group agent keys
     for (const key of [...perChatStreamingMsgId.keys()]) {
       if (key.startsWith(chatId + ':')) {
         perChatStreamingMsgId.delete(key)
@@ -5722,9 +5722,9 @@ async function compactContext() {
     // Build a flat config the AgentLoop constructor expects (same pattern as sendMessage).
     // AnthropicClient reads config.apiKey / config.baseURL at the top level.
     const raw = configStore.config
-    const sysPersonaId = targetChat.systemPersonaId || agentsStore.defaultSystemPersona?.id
-    const sysPersona = sysPersonaId ? agentsStore.getPersonaById(sysPersonaId) : agentsStore.defaultSystemPersona
-    const chatProvider = sysPersona?.providerId || 'anthropic'
+    const sysAgentId = targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id
+    const sysAgent = sysAgentId ? agentsStore.getAgentById(sysAgentId) : agentsStore.defaultSystemAgent
+    const chatProvider = sysAgent?.providerId || 'anthropic'
     const cfg = { ...raw }
     if (chatProvider === 'anthropic') {
       cfg.apiKey = raw.anthropic?.apiKey || ''
@@ -5744,8 +5744,8 @@ async function compactContext() {
       cfg._directAuth = true
       cfg.defaultProvider = 'openai'
     }
-    const rawOvr = targetChat.personaModelOverrides?.[sysPersonaId]
-    const resolvedModel = (rawOvr ? (typeof rawOvr === 'object' ? rawOvr.model : rawOvr) : null) || sysPersona?.modelId || null
+    const rawOvr = targetChat.agentModelOverrides?.[sysAgentId]
+    const resolvedModel = (rawOvr ? (typeof rawOvr === 'object' ? rawOvr.model : rawOvr) : null) || sysAgent?.modelId || null
     if (resolvedModel) cfg.customModel = resolvedModel
 
     const res = await window.electronAPI.compactContextStandalone({
@@ -5962,7 +5962,7 @@ onMounted(async () => {
   // On first mount, also restore PiP (onActivated fires after onMounted on first render)
   // — nothing extra needed here; onActivated handles it.
 
-  agentsStore.loadPersonas()
+  agentsStore.loadAgents()
   await knowledgeStore.loadConfig()
   // Load tools in background — then sync draft from active chat
   toolsStore.loadTools().then(() => {
@@ -5996,14 +5996,14 @@ onMounted(async () => {
         await chatsStore.loadChats()
         return
       }
-      // Reload full chat from disk to pick up metadata changes (persona, group settings)
+      // Reload full chat from disk to pick up metadata changes (agent, group settings)
       // as well as new messages
       const full = await window.electronAPI.getChat(chatId)
       if (full) {
-        chat.systemPersonaId    = full.systemPersonaId ?? chat.systemPersonaId
+        chat.systemAgentId    = full.systemAgentId ?? chat.systemAgentId
         chat.isGroupChat        = full.isGroupChat ?? chat.isGroupChat
-        chat.groupPersonaIds    = full.groupPersonaIds ?? chat.groupPersonaIds
-        chat.groupPersonaOverrides = full.groupPersonaOverrides ?? chat.groupPersonaOverrides
+        chat.groupAgentIds    = full.groupAgentIds ?? chat.groupAgentIds
+        chat.groupAgentOverrides = full.groupAgentOverrides ?? chat.groupAgentOverrides
       }
       // Force-reload messages from disk
       chat.messages = null
@@ -6781,7 +6781,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
 }
 
-/* ── Header persona CSS moved to ChatHeader.vue ── */
+/* ── Header agent CSS moved to ChatHeader.vue ── */
 /* Keeping only .chat-header-btn which may be reused */
 /* ── Model chip ────────────────────────────────────────────────────────── */
 .model-chip {
@@ -6917,7 +6917,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   50%       { opacity: 0.5; box-shadow: 0 0 10px #3fb950, 0 0 20px #3fb95055; }
 }
 
-/* ── Tools chip (matches persona/model chip style) ─────────────────────── */
+/* ── Tools chip (matches agent/model chip style) ─────────────────────── */
 .tools-chip {
   padding: 0.25rem 0.625rem 0.25rem 0.25rem;
   gap: 0.375rem;
@@ -7807,8 +7807,8 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   display: flex; flex-direction: column; gap: 1px;
 }
 
-/* ── Persona config button ────────────────────────────────────────────── */
-.newchat-persona-cfg-btn {
+/* ── Agent config button ────────────────────────────────────────────── */
+.newchat-agent-cfg-btn {
   width: 1.875rem;
   height: 1.875rem;
   border-radius: 0.5rem;
@@ -7823,29 +7823,29 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   flex-shrink: 0;
   padding: 0;
 }
-.newchat-persona-cfg-btn:hover {
+.newchat-agent-cfg-btn:hover {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   border-color: #374151;
   color: #FFFFFF;
 }
-.newchat-persona-cfg-avatars {
+.newchat-agent-cfg-avatars {
   display: flex;
   align-items: center;
 }
-.newchat-persona-cfg-avatar-img {
+.newchat-agent-cfg-avatar-img {
   width: 1.125rem;
   height: 1.125rem;
   border-radius: 50%;
   object-fit: cover;
   border: 1.5px solid #1A1A1A;
 }
-.newchat-persona-cfg-avatar-img + .newchat-persona-cfg-avatar-img,
-.newchat-persona-cfg-avatar-img + .newchat-persona-cfg-avatar-fb,
-.newchat-persona-cfg-avatar-fb + .newchat-persona-cfg-avatar-img,
-.newchat-persona-cfg-avatar-fb + .newchat-persona-cfg-avatar-fb {
+.newchat-agent-cfg-avatar-img + .newchat-agent-cfg-avatar-img,
+.newchat-agent-cfg-avatar-img + .newchat-agent-cfg-avatar-fb,
+.newchat-agent-cfg-avatar-fb + .newchat-agent-cfg-avatar-img,
+.newchat-agent-cfg-avatar-fb + .newchat-agent-cfg-avatar-fb {
   margin-left: -0.375rem;
 }
-.newchat-persona-cfg-avatar-fb {
+.newchat-agent-cfg-avatar-fb {
   width: 1.125rem;
   height: 1.125rem;
   border-radius: 50%;
@@ -7859,12 +7859,12 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   font-weight: 600;
   color: #9CA3AF;
 }
-.newchat-persona-cfg-overflow {
+.newchat-agent-cfg-overflow {
   background: #333;
   font-size: 7px;
 }
 
-/* ── New Chat Persona Picker Dialog (dark, CCM-style) ────────────────── */
+/* ── New Chat Agent Picker Dialog (dark, CCM-style) ────────────────── */
 .ncp-backdrop {
   position: fixed; inset: 0; z-index: 200;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
@@ -8069,8 +8069,8 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   .chat-sidebar-new-btn,
   .chat-sidebar-item,
   .chat-sidebar-action-btn,
-  .persona-chip,
-  .persona-popover-item,
+  .agent-chip,
+  .agent-popover-item,
   .chat-header-btn,
   .chat-input-box,
   .rename-close-btn {
@@ -8082,7 +8082,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   GROUP CHAT — Multi-persona chips, toggle, config popover, @mentions
+   GROUP CHAT — Multi-agent chips, toggle, config popover, @mentions
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Group toggle button ────────────────────────────────────────────────── */
@@ -8112,14 +8112,14 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
-/* ── Group persona chip row ─────────────────────────────────────────────── */
-.group-persona-row {
+/* ── Group agent chip row ─────────────────────────────────────────────── */
+.group-agent-row {
   display: flex;
   align-items: center;
   gap: 0.375rem;
   flex-wrap: wrap;
 }
-.group-persona-chip {
+.group-agent-chip {
   display: flex;
   align-items: center;
   gap: 0.3125rem;
@@ -8132,17 +8132,17 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   font-size: var(--fs-secondary);
   position: relative;
 }
-.group-persona-chip:hover {
+.group-agent-chip:hover {
   background: #E5E5EA;
   border-color: #D1D1D6;
 }
-.group-persona-chip-avatar {
+.group-agent-chip-avatar {
   width: 1.375rem;
   height: 1.375rem;
   border-radius: 50%;
   object-fit: cover;
 }
-.group-persona-chip-initial {
+.group-agent-chip-initial {
   width: 1.375rem;
   height: 1.375rem;
   border-radius: 50%;
@@ -8155,7 +8155,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   justify-content: center;
   flex-shrink: 0;
 }
-.group-persona-chip-name {
+.group-agent-chip-name {
   font-weight: 500;
   color: #1A1A1A;
   max-width: 5rem;
@@ -8163,14 +8163,14 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.group-persona-override-dot {
+.group-agent-override-dot {
   width: 0.375rem;
   height: 0.375rem;
   border-radius: 50%;
   background: #6366F1;
   flex-shrink: 0;
 }
-.group-persona-chip-remove {
+.group-agent-chip-remove {
   width: 1.125rem;
   height: 1.125rem;
   border-radius: 50%;
@@ -8184,7 +8184,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   transition: all 0.15s;
   padding: 0;
 }
-.group-persona-chip-remove:hover {
+.group-agent-chip-remove:hover {
   background: rgba(255, 59, 48, 0.1);
   color: #FF3B30;
 }
@@ -8400,8 +8400,8 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   line-height: 1.5;
   white-space: normal;
 }
-/* Fixed-position tooltip for persona header (teleported to body) */
-:global(.persona-header-tooltip-fixed) {
+/* Fixed-position tooltip for agent header (teleported to body) */
+:global(.agent-header-tooltip-fixed) {
   position: fixed;
   transform: translateX(-50%);
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -8415,7 +8415,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   z-index: 9999;
   pointer-events: none;
 }
-:global(.persona-header-tooltip-fixed::before) {
+:global(.agent-header-tooltip-fixed::before) {
   content: '';
   position: absolute;
   bottom: 100%;
@@ -8424,7 +8424,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   border: 6px solid transparent;
   border-bottom-color: #0F0F0F;
 }
-:global(.persona-header-tooltip-name) {
+:global(.agent-header-tooltip-name) {
   font-size: 12px;
   font-weight: 700;
   margin-bottom: 0.25rem;
@@ -8432,7 +8432,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   overflow: hidden;
   text-overflow: ellipsis;
 }
-:global(.persona-header-tooltip-text) {
+:global(.agent-header-tooltip-text) {
   font-size: 12px;
   font-weight: 400;
   line-height: 1.5;

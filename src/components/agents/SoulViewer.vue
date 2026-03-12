@@ -11,8 +11,8 @@
             </svg>
           </div>
           <div>
-            <h2 class="soul-title">{{ isNew ? (personaType === 'system' ? 'New System Persona' : 'New User Persona') : `${draftName || personaName} — ${tabLabel}` }}</h2>
-            <span class="soul-meta">{{ personaType === 'system' ? 'System Persona' : 'User Persona' }}</span>
+            <h2 class="soul-title">{{ isNew ? (agentType === 'system' ? 'New System Agent' : 'New User Agent') : `${draftName || agentName} — ${tabLabel}` }}</h2>
+            <span class="soul-meta">{{ agentType === 'system' ? 'System Agent' : 'User Agent' }}</span>
           </div>
         </div>
         <button class="soul-close-btn" @click="$emit('close')" aria-label="Close">
@@ -37,7 +37,7 @@
           </svg>
           Memory
         </button>
-        <button v-if="personaType === 'system'" class="soul-tab" :class="{ active: activeTab === 'model' }" @click="activeTab = 'model'">
+        <button v-if="agentType === 'system'" class="soul-tab" :class="{ active: activeTab === 'model' }" @click="activeTab = 'model'">
           <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
@@ -45,7 +45,7 @@
           AI Model
           <span v-if="hasModelErrors" class="soul-tab-error-dot"></span>
         </button>
-        <button v-if="personaType === 'system'" class="soul-tab" :class="{ active: activeTab === 'voice' }" @click="activeTab = 'voice'">
+        <button v-if="agentType === 'system'" class="soul-tab" :class="{ active: activeTab === 'voice' }" @click="activeTab = 'voice'">
           <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
@@ -59,14 +59,14 @@
       <!-- ═══ SUMMARY TAB ═══ -->
       <div v-if="activeTab === 'summary'" class="soul-body soul-summary-body">
 
-        <!-- AI creation bar (new persona only) -->
+        <!-- AI creation bar (new agent only) -->
         <div v-if="isNew && !readOnly" class="soul-ai-create-bar">
           <span class="soul-ai-create-label">Start with AI:</span>
           <button class="soul-btn-inline soul-btn-enhance" :disabled="generating" @click="toggleDescribeInput">
             <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             Describe it
           </button>
-          <button class="soul-btn-inline soul-btn-enhance" :disabled="generating" @click="generatePersonaFromAI(null, false)">
+          <button class="soul-btn-inline soul-btn-enhance" :disabled="generating" @click="generateAgentFromAI(null, false)">
             <svg v-if="!generating" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.5 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.7l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg>
             <span v-if="generating" class="soul-spinner"></span>
             {{ generating ? 'Generating...' : 'Surprise me' }}
@@ -82,7 +82,7 @@
             autofocus
           ></textarea>
           <div class="soul-describe-actions">
-            <button class="soul-btn-inline soul-btn-enhance" :disabled="!describeText.trim() || generating" @click="generatePersonaFromAI(describeText, false)">
+            <button class="soul-btn-inline soul-btn-enhance" :disabled="!describeText.trim() || generating" @click="generateAgentFromAI(describeText, false)">
               <svg v-if="!generating" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
               <span v-if="generating" class="soul-spinner"></span>
               {{ generating ? 'Generating...' : 'Generate' }}
@@ -91,7 +91,7 @@
           </div>
         </div>
 
-        <div class="soul-persona-card">
+        <div class="soul-agent-card">
           <!-- Avatar + Name row -->
           <div class="soul-identity-row">
             <button v-if="!readOnly" class="soul-avatar-btn" :class="{ 'soul-avatar-error': errors.avatar }" @click="showAvatarPicker = true" title="Change avatar">
@@ -106,30 +106,30 @@
               <div v-else class="soul-avatar-fallback">{{ fallbackInitial }}</div>
             </div>
             <div class="soul-identity-fields">
-              <span class="soul-persona-label">Name</span>
+              <span class="soul-agent-label">Name</span>
               <input
                 v-if="!readOnly"
                 v-model="draftName"
                 type="text"
                 class="soul-name-input"
                 :class="{ 'soul-input-error': errors.name }"
-                placeholder="Persona name"
+                placeholder="Agent name"
                 spellcheck="false"
                 @input="clearError('name')"
               />
-              <span v-else class="soul-persona-value">{{ draftName || '—' }}</span>
+              <span v-else class="soul-agent-value">{{ draftName || '—' }}</span>
               <span v-if="errors.name || errors.avatar" class="soul-validation-error">{{ errors.name || errors.avatar }}</span>
             </div>
           </div>
 
-          <div class="soul-persona-field">
-            <span class="soul-persona-label">Description</span>
+          <div class="soul-agent-field">
+            <span class="soul-agent-label">Description</span>
             <template v-if="!readOnly">
               <textarea
                 v-model="draftDescription"
                 class="soul-desc-textarea"
                 :class="{ 'soul-input-error': errors.description }"
-                placeholder="Short description of this persona"
+                placeholder="Short description of this agent"
                 spellcheck="false"
                 rows="3"
                 @input="clearError('description')"
@@ -139,7 +139,7 @@
                 <button
                   class="soul-btn-inline soul-btn-enhance soul-desc-ai-btn"
                   :disabled="summarizing || !draftPrompt.trim() || !isProviderActive"
-                  :title="!isProviderActive ? providerInactiveTooltip : 'Generate description from persona prompt'"
+                  :title="!isProviderActive ? providerInactiveTooltip : 'Generate description from agent prompt'"
                   @click="summarizeDescription"
                 >
                   <svg v-if="!summarizing" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
@@ -155,10 +155,10 @@
             </template>
             <textarea v-else class="soul-desc-textarea soul-desc-readonly" :value="draftDescription || '—'" readonly rows="2"></textarea>
           </div>
-          <div class="soul-persona-field soul-prompt-field">
-            <span class="soul-persona-label">Persona</span>
+          <div class="soul-agent-field soul-prompt-field">
+            <span class="soul-agent-label">Agent</span>
             <template v-if="!readOnly">
-              <textarea v-model="draftPrompt" class="soul-editor soul-editor-prompt" :class="{ 'soul-input-error': errors.prompt }" spellcheck="false" :placeholder="personaType === 'system' ? 'Enter the persona system prompt...' : 'Describe yourself, your role, and context for the AI...'" @input="clearError('prompt')"></textarea>
+              <textarea v-model="draftPrompt" class="soul-editor soul-editor-prompt" :class="{ 'soul-input-error': errors.prompt }" spellcheck="false" :placeholder="agentType === 'system' ? 'Enter the agent system prompt...' : 'Describe yourself, your role, and context for the AI...'" @input="clearError('prompt')"></textarea>
               <span v-if="errors.prompt" class="soul-validation-error">{{ errors.prompt }}</span>
               <div class="soul-enhance-row">
                 <button class="soul-btn-inline soul-btn-enhance" :disabled="enhancing || generating || !draftPrompt.trim() || !isProviderActive" :title="!isProviderActive ? providerInactiveTooltip : 'Enhance prompt with AI'" @click="enhancePrompt">
@@ -180,7 +180,7 @@
                 <textarea
                   v-model="rewriteText"
                   class="soul-describe-textarea"
-                  placeholder='Give an instruction to update this persona... e.g. "translate to Chinese", "make this a female character", "make the tone more aggressive"'
+                  placeholder='Give an instruction to update this agent... e.g. "translate to Chinese", "make this a female character", "make the tone more aggressive"'
                   rows="3"
                 ></textarea>
                 <div class="soul-describe-actions">
@@ -194,7 +194,7 @@
               </div>
               <span v-if="aiError" class="soul-ai-error">{{ aiError }}</span>
             </template>
-            <pre v-else class="soul-persona-prompt">{{ personaPrompt || '—' }}</pre>
+            <pre v-else class="soul-agent-prompt">{{ agentPrompt || '—' }}</pre>
           </div>
         </div>
       </div>
@@ -209,7 +209,7 @@
         <template v-if="loading">
           <div class="soul-empty">Loading...</div>
         </template>
-        <!-- PersonaView: directly editable textarea -->
+        <!-- AgentView: directly editable textarea -->
         <template v-else-if="!readOnly">
           <textarea
             v-model="draftMemory"
@@ -230,10 +230,10 @@
         </template>
       </div>
 
-      <!-- ═══ VOICE TAB (system personas only) ═══ -->
+      <!-- ═══ VOICE TAB (system agents only) ═══ -->
       <div v-else-if="activeTab === 'voice'" class="soul-body soul-voice-body">
         <div class="soul-voice-heading">
-          <span class="soul-voice-heading-label">Select a TTS voice for this persona</span>
+          <span class="soul-voice-heading-label">Select a TTS voice for this agent</span>
           <span class="soul-voice-status" :class="isVoiceCallActive ? 'active' : 'inactive'">
             <span class="soul-voice-status-dot"></span>
             {{ isVoiceCallActive ? 'Active' : 'Inactive' }}
@@ -268,7 +268,7 @@
         </div>
       </div>
 
-      <!-- ═══ AI MODEL TAB (system personas only) ═══ -->
+      <!-- ═══ AI MODEL TAB (system agents only) ═══ -->
       <div v-else-if="activeTab === 'model'" class="soul-body soul-model-body">
         <!-- Provider -->
         <div class="soul-model-section">
@@ -374,20 +374,20 @@ import { getAvatarDataUri } from './agentAvatars'
 import AvatarPicker from './AvatarPicker.vue'
 
 const props = defineProps({
-  personaId:          { type: String, required: true },
-  personaType:        { type: String, required: true }, // 'system' or 'users'
-  personaName:        { type: String, default: 'Persona' },
-  personaDescription: { type: String, default: '' },
-  personaPrompt:      { type: String, default: '' },
-  personaProviderId:  { type: String, default: null },
-  personaModelId:     { type: String, default: null },
-  personaVoiceId:     { type: String, default: null },
-  personaAvatar:      { type: String, default: null },
+  agentId:          { type: String, required: true },
+  agentType:        { type: String, required: true }, // 'system' or 'users'
+  agentName:        { type: String, default: 'Agent' },
+  agentDescription: { type: String, default: '' },
+  agentPrompt:      { type: String, default: '' },
+  agentProviderId:  { type: String, default: null },
+  agentModelId:     { type: String, default: null },
+  agentVoiceId:     { type: String, default: null },
+  agentAvatar:      { type: String, default: null },
   readOnly:           { type: Boolean, default: false },
   isNew:              { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['close', 'update-persona'])
+const emit = defineEmits(['close', 'update-agent'])
 
 const modelsStore = useModelsStore()
 const configStore = useConfigStore()
@@ -401,9 +401,9 @@ const tabLabel = computed(() => {
 })
 
 // ── Name, avatar, description draft ──
-const draftName = ref(props.personaName || '')
-const draftAvatar = ref(props.personaAvatar || null)
-const draftDescription = ref(props.personaDescription || '')
+const draftName = ref(props.agentName || '')
+const draftAvatar = ref(props.agentAvatar || null)
+const draftDescription = ref(props.agentDescription || '')
 const showAvatarPicker = ref(false)
 const summarizing = ref(false)
 
@@ -425,7 +425,7 @@ const voiceOptions = [
   { value: 'nova',    label: 'Nova',     desc: 'Friendly, upbeat' },
   { value: 'shimmer', label: 'Shimmer',  desc: 'Clear, gentle' },
 ]
-const draftVoiceId = ref(props.personaVoiceId || 'alloy')
+const draftVoiceId = ref(props.agentVoiceId || 'alloy')
 
 // ── Voice demo ──
 const isVoiceCallActive = computed(() => configStore.config.voiceCall?.isActive === true)
@@ -474,9 +474,9 @@ const activeProviderOptions = computed(() => {
   return configStore.activeProviders.map(id => ({ id, label: labels[id] }))
 })
 
-const initProvider = props.personaProviderId || (configStore.activeProviders[0] || 'anthropic')
+const initProvider = props.agentProviderId || (configStore.activeProviders[0] || 'anthropic')
 const draftProvider = ref(initProvider)
-const draftModelId = ref(props.personaModelId || null)
+const draftModelId = ref(props.agentModelId || null)
 const modelFilter = ref('')
 const providerDropdownOpen = ref(false)
 
@@ -525,8 +525,8 @@ const content = ref(null)
 
 const draftMemory = ref('')
 
-// ── Prompt draft (always editable in PersonaView) ──
-const draftPrompt = ref(props.personaPrompt || '')
+// ── Prompt draft (always editable in AgentView) ──
+const draftPrompt = ref(props.agentPrompt || '')
 
 // ── Provider active check for AI buttons ──
 const PROVIDER_LABELS = { anthropic: 'Anthropic', openrouter: 'OpenRouter', openai: 'OpenAI', deepseek: 'DeepSeek' }
@@ -550,7 +550,7 @@ async function enhancePrompt() {
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `Enhance this AI system persona prompt. Make it more specific, effective, and well-structured while keeping the same intent. IMPORTANT: Respond in the SAME language as the original prompt. If the prompt is in Chinese, respond in Chinese. If in English, respond in English. Return ONLY the enhanced prompt text, nothing else.\n\nOriginal prompt:\n${draftPrompt.value}`,
+      prompt: `Enhance this AI system agent prompt. Make it more specific, effective, and well-structured while keeping the same intent. IMPORTANT: Respond in the SAME language as the original prompt. If the prompt is in Chinese, respond in Chinese. If in English, respond in English. Return ONLY the enhanced prompt text, nothing else.\n\nOriginal prompt:\n${draftPrompt.value}`,
       config,
     })
     if (res.success && res.text) {
@@ -565,14 +565,14 @@ async function enhancePrompt() {
 }
 
 async function summarizeDescription() {
-  const prompt = draftPrompt.value || props.personaPrompt
+  const prompt = draftPrompt.value || props.agentPrompt
   if (summarizing.value || !prompt?.trim()) return
   summarizing.value = true
   aiError.value = ''
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `Read this persona prompt and write a SHORT description (max 10 words) that tells the user who this persona is. Focus on: role, expertise, key character traits. Use clean, simple words. No punctuation at the end. IMPORTANT: Respond in the SAME language as the prompt. If the prompt is in Chinese, write the description in Chinese. If in English, write in English. Return ONLY the description, nothing else.\n\nPrompt:\n${prompt}`,
+      prompt: `Read this agent prompt and write a SHORT description (max 10 words) that tells the user who this agent is. Focus on: role, expertise, key character traits. Use clean, simple words. No punctuation at the end. IMPORTANT: Respond in the SAME language as the prompt. If the prompt is in Chinese, write the description in Chinese. If in English, write in English. Return ONLY the description, nothing else.\n\nPrompt:\n${prompt}`,
       config,
     })
     if (res.success && res.text) {
@@ -620,19 +620,19 @@ function extractJSON(text) {
   return text.trim()
 }
 
-async function generatePersonaFromAI(description, isRewrite) {
+async function generateAgentFromAI(description, isRewrite) {
   generating.value = true
   aiError.value = ''
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const descLine = description
-      ? `The user wants a persona described as: "${description}"\n\n`
-      : 'Generate a completely random, creative, and surprising persona. Be imaginative — pick something unexpected.\n\n'
+      ? `The user wants a agent described as: "${description}"\n\n`
+      : 'Generate a completely random, creative, and surprising agent. Be imaginative — pick something unexpected.\n\n'
 
     const lang = detectLanguage()
     const langInstruction = lang ? `\n\nIMPORTANT: Generate ALL fields (name, description, prompt) entirely in ${lang}.` : ''
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `${descLine}Create a detailed AI persona character. Be specific and creative. It can be a fictional character, historical figure, professional archetype, mythological being, movie/TV character, or anything interesting.\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"character name","role":"brief role or identity (5-10 words)","description":"one sentence who they are (max 15 words)","prompt":"300-500 word character prompt — start with 'You are [name]...', include: who they are, how they speak day-to-day, their personality quirks, what they genuinely care about, what annoys them, their background. Make them feel like a real person or character — NOT an AI assistant. No \\"Certainly!\\", no formal helper voice."}${langInstruction}`,
+      prompt: `${descLine}Create a detailed AI agent character. Be specific and creative. It can be a fictional character, historical figure, professional archetype, mythological being, movie/TV character, or anything interesting.\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"character name","role":"brief role or identity (5-10 words)","description":"one sentence who they are (max 15 words)","prompt":"300-500 word character prompt — start with 'You are [name]...', include: who they are, how they speak day-to-day, their agentlity quirks, what they genuinely care about, what annoys them, their background. Make them feel like a real person or character — NOT an AI assistant. No \\"Certainly!\\", no formal helper voice."}${langInstruction}`,
       config,
     })
 
@@ -670,7 +670,7 @@ async function applyRewriteInstruction() {
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `You are updating an existing AI persona based on the user's instruction. Apply the instruction to the name, description, and prompt — only change what the instruction requires, keep everything else intact.\n\nCurrent persona:\n- Name: ${draftName.value}\n- Description: ${draftDescription.value}\n- Prompt: ${draftPrompt.value}\n\nUser instruction: "${instruction}"\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"updated name","description":"updated description","prompt":"updated full prompt"}`,
+      prompt: `You are updating an existing AI agent based on the user's instruction. Apply the instruction to the name, description, and prompt — only change what the instruction requires, keep everything else intact.\n\nCurrent agent:\n- Name: ${draftName.value}\n- Description: ${draftDescription.value}\n- Prompt: ${draftPrompt.value}\n\nUser instruction: "${instruction}"\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"updated name","description":"updated description","prompt":"updated full prompt"}`,
       config,
     })
 
@@ -713,8 +713,8 @@ const lastUpdated = computed(() => {
 const renderedHtml = computed(() => {
   if (!content.value) return ''
   let text = content.value
-  if (props.personaId && props.personaId !== '__default_user__') {
-    text = text.replace(new RegExp(props.personaId, 'g'), props.personaName)
+  if (props.agentId && props.agentId !== '__default_user__') {
+    text = text.replace(new RegExp(props.agentId, 'g'), props.agentName)
   }
   return marked(text, { breaks: true })
 })
@@ -722,7 +722,7 @@ const renderedHtml = computed(() => {
 async function loadContent() {
   loading.value = true
   try {
-    const data = await window.electronAPI.souls.read(props.personaId, props.personaType)
+    const data = await window.electronAPI.souls.read(props.agentId, props.agentType)
     content.value = data || null
     draftMemory.value = data || ''
   } catch (err) {
@@ -754,8 +754,8 @@ function saveAll() {
   if (!draftName.value.trim()) e.name = 'Name is required'
   if (!draftAvatar.value) e.avatar = 'Avatar is required'
   if (!draftDescription.value.trim()) e.description = 'Description is required'
-  if (!draftPrompt.value.trim()) e.prompt = 'Persona prompt is required'
-  if (props.personaType === 'system') {
+  if (!draftPrompt.value.trim()) e.prompt = 'Agent prompt is required'
+  if (props.agentType === 'system') {
     if (!draftProvider.value) e.provider = 'Provider is required'
     if (!draftModelId.value) e.model = 'Model is required'
     if (!draftVoiceId.value) e.voice = 'Voice is required'
@@ -772,7 +772,7 @@ function saveAll() {
   errors.value = {}
 
   // Emit all current drafts so parent can persist
-  emit('update-persona', {
+  emit('update-agent', {
     name: draftName.value,
     avatar: draftAvatar.value,
     description: draftDescription.value,
@@ -784,7 +784,7 @@ function saveAll() {
 
   // Memory: save if changed
   if (draftMemory.value !== (content.value || '')) {
-    window.electronAPI.souls.write(props.personaId, props.personaType, draftMemory.value)
+    window.electronAPI.souls.write(props.agentId, props.agentType, draftMemory.value)
       .then(() => { content.value = draftMemory.value })
       .catch(err => console.error('Memory save failed:', err))
   }
@@ -889,7 +889,7 @@ onUnmounted(() => {
 .soul-summary-body {
   display: block;
 }
-.soul-persona-card {
+.soul-agent-card {
   background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 0.75rem;
   padding: 0.875rem 1rem; display: flex; flex-direction: column; gap: 0.75rem;
 }
@@ -966,17 +966,17 @@ onUnmounted(() => {
   cursor: help;
 }
 
-.soul-persona-field { display: flex; flex-direction: column; gap: 0.25rem; }
+.soul-agent-field { display: flex; flex-direction: column; gap: 0.25rem; }
 .soul-prompt-field { display: flex; flex-direction: column; }
-.soul-persona-label {
+.soul-agent-label {
   font-family: 'Inter', sans-serif; font-size: 0.625rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.06em; color: #4B5563; flex-shrink: 0;
 }
-.soul-persona-value {
+.soul-agent-value {
   font-family: 'Inter', sans-serif; font-size: var(--fs-body, 0.875rem);
   color: #9CA3AF; line-height: 1.5;
 }
-.soul-persona-prompt {
+.soul-agent-prompt {
   font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-secondary, 0.8rem);
   color: #9CA3AF; background: #111111; border: 1px solid #2A2A2A; border-radius: 0.5rem;
   padding: 0.625rem 0.75rem; margin: 0; white-space: pre-wrap; word-break: break-word;
@@ -1276,7 +1276,7 @@ onUnmounted(() => {
   100% { height: 0.625rem; }
 }
 
-/* -- AI creation bar (new persona) --------------------------------------- */
+/* -- AI creation bar (new agent) --------------------------------------- */
 .soul-ai-create-bar {
   display: flex;
   align-items: center;

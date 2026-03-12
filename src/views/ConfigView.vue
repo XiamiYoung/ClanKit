@@ -70,7 +70,7 @@
                 </button>
               </div>
               <p class="hint">
-                Directory where ClankAI stores all data (config, chats, personas, MCP servers, tools, souls).
+                Directory where ClankAI stores all data (config, chats, agents, MCP servers, tools, souls).
                 Stored in .env — requires restart to take effect.
                 Default: <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultDataPath }}</code>
               </p>
@@ -1786,22 +1786,22 @@
 
           <div class="im-guide-divider" />
 
-          <!-- Personas -->
+          <!-- Agents -->
           <div class="im-guide-section">
             <div class="im-guide-section-title">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-              Personas
+              Agents
             </div>
             <p class="im-guide-note" style="border-color:#10B981;">
-              Each chat automatically uses the persona assigned to it. In a group chat, all assigned personas respond in turn.
+              Each chat automatically uses the agent assigned to it. In a group chat, all assigned agents respond in turn.
             </p>
             <table class="im-guide-table">
               <tbody>
-                <tr><td><code>/personas</code></td><td>List all available personas</td></tr>
-                <tr><td><code>/persona &lt;name&gt;</code></td><td>Show persona details (prompt, model, provider)</td></tr>
-                <tr><td><code>/persona add &lt;name&gt;</code></td><td>Add a persona to the current chat</td></tr>
-                <tr><td><code>/persona remove &lt;name&gt;</code></td><td>Remove a persona from the current chat</td></tr>
-                <tr><td><code>/persona model &lt;name&gt;</code></td><td>Change persona's provider &amp; model via inline buttons</td></tr>
+                <tr><td><code>/agents</code></td><td>List all available agents</td></tr>
+                <tr><td><code>/agent &lt;name&gt;</code></td><td>Show agent details (prompt, model, provider)</td></tr>
+                <tr><td><code>/agent add &lt;name&gt;</code></td><td>Add a agent to the current chat</td></tr>
+                <tr><td><code>/agent remove &lt;name&gt;</code></td><td>Remove a agent from the current chat</td></tr>
+                <tr><td><code>/agent model &lt;name&gt;</code></td><td>Change agent's provider &amp; model via inline buttons</td></tr>
               </tbody>
             </table>
           </div>
@@ -1816,9 +1816,9 @@
             </div>
             <table class="im-guide-table">
               <tbody>
-                <tr><td><code>@all</code></td><td>All personas in the chat respond</td></tr>
+                <tr><td><code>@all</code></td><td>All agents in the chat respond</td></tr>
                 <tr><td><code>@Mark</code></td><td>Only Mark responds (case-insensitive)</td></tr>
-                <tr><td><em>no mention</em></td><td>All personas respond (same as @all)</td></tr>
+                <tr><td><em>no mention</em></td><td>All agents respond (same as @all)</td></tr>
               </tbody>
             </table>
           </div>
@@ -2896,7 +2896,7 @@ async function savePricing() {
 
 <style scoped>
 /* ══════════════════════════════════════════════════════════════════════════
-   CONFIG PAGE — Matches Sidebar / ChatsView / PersonasView design language
+   CONFIG PAGE — Matches Sidebar / ChatsView / AgentsView design language
    ══════════════════════════════════════════════════════════════════════════ */
 
 .config-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-main); }

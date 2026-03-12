@@ -77,10 +77,10 @@
                   <div v-if="node.dependsOnLabels.length > 0" class="wf-node-after">
                     after: {{ node.dependsOnLabels.join(', ') }}
                   </div>
-                  <!-- personas -->
-                  <div class="wf-personas-line">
-                    <span class="wf-personas-label">Persona:</span>
-                    <span class="wf-personas-names">{{ node.personas.length ? node.personas.map(p => p.name).join(', ') : '—' }}</span>
+                  <!-- agents -->
+                  <div class="wf-agents-line">
+                    <span class="wf-agents-label">Agent:</span>
+                    <span class="wf-agents-names">{{ node.agents.length ? node.agents.map(p => p.name).join(', ') : '—' }}</span>
                   </div>
                 </div>
               </div>
@@ -121,7 +121,7 @@
               <svg v-else-if="selectedStep.runStatus === 'running'" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
               <svg v-else style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
               {{ selectedStep.runStatusLabel }}
-              <span v-if="selectedStep.runPersonaName" class="wf-detail-persona-tag">{{ selectedStep.runPersonaName }}</span>
+              <span v-if="selectedStep.runAgentName" class="wf-detail-agent-tag">{{ selectedStep.runAgentName }}</span>
               <span v-if="selectedStep.runDuration" class="wf-detail-dur-tag">{{ selectedStep.runDuration }}</span>
             </div>
             <div v-else class="wf-detail-status wf-detail-status--pending">
@@ -241,17 +241,17 @@ function selectStep(node) {
   selectedStepId.value = selectedStepId.value === node.stepId ? null : node.stepId
 }
 
-function getPersona(id) {
+function getAgent(id) {
   return agentsStore.getAgentById(id)
 }
 
-function personaEmoji(id) {
-  const p = getPersona(id)
+function agentEmoji(id) {
+  const p = getAgent(id)
   return p?.avatar || p?.emoji || '🤖'
 }
 
-function personaName(id) {
-  return getPersona(id)?.name || '(unknown)'
+function agentName(id) {
+  return getAgent(id)?.name || '(unknown)'
 }
 
 // Build enriched wave nodes for vertical DAG rendering
@@ -278,10 +278,10 @@ const flowWaves = computed(() => {
 })
 
 function buildNode(step, allSteps) {
-  const personas = (step.defaultPersonaIds || []).map(pid => ({
+  const agents = (step.defaultAgentIds || []).map(pid => ({
     key:   `fixed-${pid}`,
-    name:  personaName(pid),
-    emoji: personaEmoji(pid),
+    name:  agentName(pid),
+    emoji: agentEmoji(pid),
   }))
 
   const hasDeps = (step.dependsOn || []).length > 0
@@ -303,7 +303,7 @@ function buildNode(step, allSteps) {
     stepIndex,
     taskName: task?.name || (step.taskId ? '(unknown)' : 'No task'),
     taskIcon: task?.icon || '✍️',
-    personas,
+    agents,
     runCondition: cond,
     conditionBadge: hasDeps && cond !== 'always' ? (cond === 'on_success' ? 'on success' : 'on failure') : null,
     condClass: hasDeps ? (cond === 'on_success' ? 'wf-node--success' : cond === 'on_failure' ? 'wf-node--failure' : '') : '',
@@ -317,7 +317,7 @@ function buildNode(step, allSteps) {
     runClass,
     runOutput: runResult?.output || null,
     runError:  runResult?.error  || null,
-    runPersonaName: runResult?.personaName || null,
+    runAgentName: runResult?.agentName || null,
     runStartedAt:   runResult?.startedAt   || null,
     runCompletedAt: runResult?.completedAt || null,
     runDuration:    fmtDuration(runResult?.startedAt, runResult?.completedAt),
@@ -697,8 +697,8 @@ const runStatusSummary = computed(() => {
   text-align: center;
 }
 
-/* ── Personas ────────────────────────────────────────────────────────────── */
-.wf-personas-line {
+/* ── Agents ────────────────────────────────────────────────────────────── */
+.wf-agents-line {
   display: flex;
   align-items: baseline;
   justify-content: center;
@@ -708,7 +708,7 @@ const runStatusSummary = computed(() => {
   margin-top: 0.125rem;
   min-width: 0;
 }
-.wf-personas-label {
+.wf-agents-label {
   font-family: 'Inter', sans-serif;
   font-size: 0.625rem;
   font-weight: 700;
@@ -717,7 +717,7 @@ const runStatusSummary = computed(() => {
   letter-spacing: 0.05em;
   flex-shrink: 0;
 }
-.wf-personas-names {
+.wf-agents-names {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-small);
   font-weight: 600;
@@ -811,7 +811,7 @@ const runStatusSummary = computed(() => {
 .wf-detail-status--skipped { color: #9CA3AF; background: rgba(107,114,128,0.06); }
 .wf-detail-status--running { color: #FBBF24; background: rgba(245,158,11,0.06); }
 .wf-detail-status--pending { color: #6B7280; background: transparent; }
-.wf-detail-persona-tag {
+.wf-detail-agent-tag {
   margin-left: auto;
   font-size: 0.625rem;
   font-weight: 600;

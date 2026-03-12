@@ -65,7 +65,7 @@ async function writeJSONAtomic(file, data) {
 }
 
 /**
- * Build provider config for an agent (mirrors ChatsView buildPersonaRuns logic).
+ * Build provider config for an agent (mirrors ChatsView buildAgentRuns logic).
  */
 function buildAgentConfig(agent, globalCfg) {
   const cfg = { ...globalCfg }
@@ -122,21 +122,21 @@ function resolveOutputTokens(template, nameToOutput) {
   })
 }
 
-// Build execution waves (topological sort). Each wave = personas whose deps are all resolved.
-function buildExecutionWaves(personas) {
+// Build execution waves (topological sort). Each wave = agents whose deps are all resolved.
+function buildExecutionWaves(agents) {
   const waves = []
   const resolved = new Set()
-  const remaining = [...personas]
+  const remaining = [...agents]
   while (remaining.length > 0) {
     const wave = remaining.filter(rp => (rp.dependsOn || []).every(id => resolved.has(id)))
     if (wave.length === 0) { waves.push(...remaining.map(rp => [rp])); break }
     waves.push(wave)
-    wave.forEach(rp => { resolved.add(rp.personaId); remaining.splice(remaining.indexOf(rp), 1) })
+    wave.forEach(rp => { resolved.add(rp.agentId); remaining.splice(remaining.indexOf(rp), 1) })
   }
   return waves
 }
 
-function shouldRunPersona(rp, statuses) {
+function shouldRunAgent(rp, statuses) {
   const deps = rp.dependsOn || []
   if (deps.length === 0) return true
   const cond = rp.runCondition || 'always'
@@ -167,17 +167,17 @@ async function _executeRecipe(recipe, triggeredBy = 'schedule') {
     inputs[inp.key] = inp.default !== undefined ? inp.default : ''
   }
 
-  const recipeAgents = (recipe.personas || []).filter(rp => allAgents.find(p => p.id === rp.personaId))
+  const recipeAgents = (recipe.agents || []).filter(rp => allAgents.find(p => p.id === rp.agentId))
   if (recipeAgents.length === 0) {
     logger.warn(`[RecipeScheduler] No valid agents for recipe ${recipe.id}, aborting run`)
     return
   }
 
-  const outputMap = {}   // personaId → accumulated text
-  const statuses  = {}   // personaId → 'waiting'|'done'|'failed'|'skipped'
+  const outputMap = {}   // agentId → accumulated text
+  const statuses  = {}   // agentId → 'waiting'|'done'|'failed'|'skipped'
   for (const rp of recipeAgents) {
-    outputMap[rp.personaId] = ''
-    statuses[rp.personaId]  = 'waiting'
+    outputMap[rp.agentId] = ''
+    statuses[rp.agentId]  = 'waiting'
   }
 
   // Write initial run record (status: running)
@@ -218,12 +218,12 @@ async function _executeRecipe(recipe, triggeredBy = 'schedule') {
 
   for (const wave of waves) {
     const wavePromises = wave.map(rp => (async () => {
-      if (!shouldRunPersona(rp, statuses)) {
-        statuses[rp.personaId] = 'skipped'
+      if (!shouldRunAgent(rp, statuses)) {
+        statuses[rp.agentId] = 'skipped'
         return
       }
 
-      const agent    = allAgents.find(p => p.id === rp.personaId)
+      const agent    = allAgents.find(p => p.id === rp.agentId)
       const agentCfg = buildAgentConfig(agent, globalCfg)
       agentCfg.soulsDir           = soulsDir
       agentCfg.artifactPath       = globalCfg.artifactPath || globalCfg.artyfactPath || ''
@@ -242,8 +242,8 @@ async function _executeRecipe(recipe, triggeredBy = 'schedule') {
 
       // Resolve both {{input_var}} and {{output:Name}} in prompts
       const globalPart  = resolveOutputTokens(renderTemplate(recipe.globalPrompt || '', inputs), nameToOutput)
-      const personaPart = resolveOutputTokens(renderTemplate(rp.prompt || '', inputs), nameToOutput)
-      const systemPersonaPrompt = [globalPart, personaPart].filter(Boolean).join('\n\n')
+      const agentPart = resolveOutputTokens(renderTemplate(rp.prompt || '', inputs), nameToOutput)
+      const systemAgentPrompt = [globalPart, agentPart].filter(Boolean).join('\n\n')
 
       // Determine which upstream outputs were NOT inlined via tokens
       const inlinedNames = new Set(
@@ -271,19 +271,19 @@ async function _executeRecipe(recipe, triggeredBy = 'schedule') {
           [],   // enabledSkills
           (chunk) => {
             if (chunk.type === 'text' && chunk.text) {
-              outputMap[rp.personaId] = (outputMap[rp.personaId] || '') + chunk.text
+              outputMap[rp.agentId] = (outputMap[rp.agentId] || '') + chunk.text
             }
           },
           null,
-          { systemPersonaPrompt, systemPersonaId: rp.personaId, userPersonaId: '__recipe_user__' },
+          { systemAgentPrompt, systemAgentId: rp.agentId, userAgentId: '__recipe_user__' },
           [],   // mcpServers
           [],   // httpTools
           null  // ragContext
         )
-        statuses[rp.personaId] = 'done'
+        statuses[rp.agentId] = 'done'
       } catch (err) {
-        logger.error(`[RecipeScheduler] Agent ${rp.personaId} error:`, err.message)
-        statuses[rp.personaId] = 'failed'
+        logger.error(`[RecipeScheduler] Agent ${rp.agentId} error:`, err.message)
+        statuses[rp.agentId] = 'failed'
         runStatus = 'error'
         runError  = err.message
       }
@@ -294,7 +294,7 @@ async function _executeRecipe(recipe, triggeredBy = 'schedule') {
   const anyFailed = Object.values(statuses).some(s => s === 'failed')
   if (anyFailed && runStatus === 'completed') {
     runStatus = 'error'
-    runError  = 'One or more personas failed'
+    runError  = 'One or more agents failed'
   }
 
   const completedAt = new Date().toISOString()

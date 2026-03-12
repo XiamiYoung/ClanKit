@@ -4,7 +4,7 @@
       <!-- Avatar -->
       <div class="call-pip-avatar" :class="statusClass">
         <div class="call-pip-ring"></div>
-        <img v-if="personaAvatar" :src="personaAvatar" alt="" class="call-pip-img" />
+        <img v-if="agentAvatar" :src="agentAvatar" alt="" class="call-pip-img" />
         <div v-else class="call-pip-fallback">
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -15,7 +15,7 @@
 
       <!-- Info -->
       <div class="call-pip-info">
-        <span class="call-pip-name">{{ voiceStore.activePersonaName || 'AI' }}</span>
+        <span class="call-pip-name">{{ voiceStore.activeAgentName || 'AI' }}</span>
         <span class="call-pip-status">{{ statusLabel }}</span>
       </div>
 
@@ -61,11 +61,11 @@ const router = useRouter()
 
 const emit = defineEmits(['end-call', 'toggle-mute'])
 
-const personaAvatar = computed(() => {
-  if (!voiceStore.activePersonaId) return null
-  const persona = agentsStore.agents.find(p => p.id === voiceStore.activePersonaId)
-  if (!persona?.avatar) return null
-  return getAvatarDataUri(persona.avatar)
+const agentAvatar = computed(() => {
+  if (!voiceStore.activeAgentId) return null
+  const agent = agentsStore.agents.find(p => p.id === voiceStore.activeAgentId)
+  if (!agent?.avatar) return null
+  return getAvatarDataUri(agent.avatar)
 })
 
 const statusClass = computed(() => {

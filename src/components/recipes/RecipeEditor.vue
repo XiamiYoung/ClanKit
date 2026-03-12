@@ -75,13 +75,13 @@
               <div class="re-field">
                 <label class="re-label">
                   Global Prompt
-                  <span class="re-label-hint">— shared context injected into every persona</span>
+                  <span class="re-label-hint">— shared context injected into every agent</span>
                 </label>
                 <textarea
                   v-model="draft.globalPrompt"
                   class="re-textarea"
                   rows="5"
-                  placeholder="Optional. Write shared instructions that apply to all personas. Use {{variable}} for input substitution."
+                  placeholder="Optional. Write shared instructions that apply to all agents. Use {{variable}} for input substitution."
                 />
                 <div class="re-enhance-row">
                   <button class="re-enhance-btn" @click="enhanceGlobalPrompt" :disabled="enhancingGlobal || !draft.globalPrompt">
@@ -102,10 +102,10 @@
               </div>
               <div style="flex:1;">
                 <div class="re-step-title-text">Workflow <span class="re-req">*</span></div>
-                <div class="re-step-title-hint">Add personas and define their run order.</div>
+                <div class="re-step-title-hint">Add agents and define their run order.</div>
               </div>
               <button
-                v-if="draft.personas.length > 0"
+                v-if="draft.agents.length > 0"
                 class="re-view-flow-btn"
                 @click="showFlowPreview = true"
                 type="button"
@@ -115,40 +115,40 @@
               </button>
             </div>
 
-            <!-- Added persona cards -->
-            <div v-for="(rp, idx) in draft.personas" :key="rp.personaId" class="re-persona-card">
-              <div class="re-persona-card-header">
-                <div class="re-persona-identity">
-                  <div class="re-persona-avatar">{{ getPersonaEmoji(rp.personaId) }}</div>
-                  <span class="re-persona-name">{{ getPersonaName(rp.personaId) }}</span>
-                  <span class="re-persona-number">#{{ idx + 1 }}</span>
+            <!-- Added agent cards -->
+            <div v-for="(rp, idx) in draft.agents" :key="rp.agentId" class="re-agent-card">
+              <div class="re-agent-card-header">
+                <div class="re-agent-identity">
+                  <div class="re-agent-avatar">{{ getAgentEmoji(rp.agentId) }}</div>
+                  <span class="re-agent-name">{{ getAgentName(rp.agentId) }}</span>
+                  <span class="re-agent-number">#{{ idx + 1 }}</span>
                 </div>
-                <button class="re-persona-remove" @click="removePersona(idx)" title="Remove">
+                <button class="re-agent-remove" @click="removeAgent(idx)" title="Remove">
                   <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
               </div>
               <div class="re-field">
-                <label class="re-label">Persona Prompt <span class="re-req">*</span></label>
+                <label class="re-label">Agent Prompt <span class="re-req">*</span></label>
                 <textarea
                   v-model="rp.prompt"
                   class="re-textarea re-textarea-sm"
                   rows="4"
-                  :placeholder="`Instructions specific to ${getPersonaName(rp.personaId)}.`"
+                  :placeholder="`Instructions specific to ${getAgentName(rp.agentId)}.`"
                 />
-                <!-- Output token hints for dependent personas -->
+                <!-- Output token hints for dependent agents -->
                 <div v-if="(rp.dependsOn || []).length > 0" class="re-output-tokens">
                   <span class="re-output-tokens-label">Available output tokens:</span>
                   <code
                     v-for="depId in rp.dependsOn"
                     :key="depId"
                     class="re-output-token"
-                    :title="`Inserts the full output of ${getPersonaName(depId)}`"
+                    :title="`Inserts the full output of ${getAgentName(depId)}`"
                     @click="insertOutputToken(rp, depId)"
-                  >&#123;&#123;output:{{ getPersonaName(depId) }}&rcub;&rcub;</code>
+                  >&#123;&#123;output:{{ getAgentName(depId) }}&rcub;&rcub;</code>
                 </div>
                 <div class="re-enhance-row">
-                  <button class="re-enhance-btn" @click="enhancePersonaPrompt(idx)" :disabled="enhancingPersona === idx || !rp.prompt">
-                    <svg v-if="enhancingPersona !== idx" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  <button class="re-enhance-btn" @click="enhanceAgentPrompt(idx)" :disabled="enhancingAgent === idx || !rp.prompt">
+                    <svg v-if="enhancingAgent !== idx" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                     <svg v-else style="width:11px;height:11px;" class="re-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                     AI Enhance
                   </button>
@@ -166,23 +166,23 @@
 
                 <div v-if="depOpen[idx]" class="re-dep-body">
                   <div class="re-dep-hint">
-                    By default personas run in parallel. Set dependencies to create a sequence.
+                    By default agents run in parallel. Set dependencies to create a sequence.
                   </div>
 
                   <div class="re-dep-field">
                     <label class="re-dep-label">Runs after</label>
                     <div class="re-dep-chips">
                       <button
-                        v-for="prev in draft.personas.slice(0, idx)"
-                        :key="prev.personaId"
+                        v-for="prev in draft.agents.slice(0, idx)"
+                        :key="prev.agentId"
                         type="button"
                         class="re-dep-chip"
-                        :class="{ 'is-selected': (rp.dependsOn || []).includes(prev.personaId) }"
-                        @click="toggleDepPersona(rp, prev.personaId)"
+                        :class="{ 'is-selected': (rp.dependsOn || []).includes(prev.agentId) }"
+                        @click="toggleDepAgent(rp, prev.agentId)"
                       >
-                        <span>{{ getPersonaEmoji(prev.personaId) }}</span>
-                        {{ getPersonaName(prev.personaId) }}
-                        <svg v-if="(rp.dependsOn || []).includes(prev.personaId)" style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span>{{ getAgentEmoji(prev.agentId) }}</span>
+                        {{ getAgentName(prev.agentId) }}
+                        <svg v-if="(rp.dependsOn || []).includes(prev.agentId)" style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
                       </button>
                     </div>
                   </div>
@@ -208,14 +208,14 @@
               </div>
             </div>
 
-            <!-- Add persona button -->
-            <button class="re-add-persona-btn" @click="openPersonaPicker" ref="addPersonaBtnRef">
+            <!-- Add agent button -->
+            <button class="re-add-agent-btn" @click="openAgentPicker" ref="addAgentBtnRef">
               <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add Persona
+              Add Agent
             </button>
 
-            <p v-if="draft.personas.length === 0" class="re-step-hint-msg">
-              Click "Add Persona" to choose from your existing personas.
+            <p v-if="draft.agents.length === 0" class="re-step-hint-msg">
+              Click "Add Agent" to choose from your existing agents.
             </p>
           </template>
 
@@ -348,26 +348,26 @@
       @close="showIconPicker = false"
     />
 
-    <!-- ── Persona picker — teleported to body so it's never clipped ── -->
-    <div v-if="showPersonaPicker" class="re-picker-overlay" @click.self="showPersonaPicker = false">
+    <!-- ── Agent picker — teleported to body so it's never clipped ── -->
+    <div v-if="showAgentPicker" class="re-picker-overlay" @click.self="showAgentPicker = false">
       <div class="re-picker-panel" :style="pickerStyle">
         <div class="re-picker-header">
           <svg style="width:13px;height:13px;color:#9CA3AF;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input
-            v-model="personaSearch"
-            ref="personaSearchRef"
+            v-model="agentSearch"
+            ref="agentSearchRef"
             type="text"
             class="re-picker-search"
-            placeholder="Search personas…"
-            @keydown.escape="showPersonaPicker = false"
+            placeholder="Search agents…"
+            @keydown.escape="showAgentPicker = false"
           />
         </div>
         <div class="re-picker-list">
           <div
-            v-for="p in filteredAvailablePersonas"
+            v-for="p in filteredAvailableAgents"
             :key="p.id"
             class="re-picker-item"
-            @click="addPersona(p)"
+            @click="addAgent(p)"
           >
             <div class="re-picker-avatar">{{ p.avatar || '🤖' }}</div>
             <div class="re-picker-info">
@@ -376,9 +376,9 @@
             </div>
             <svg style="width:13px;height:13px;color:rgba(255,255,255,0.2);flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </div>
-          <div v-if="filteredAvailablePersonas.length === 0" class="re-picker-empty">
+          <div v-if="filteredAvailableAgents.length === 0" class="re-picker-empty">
             <svg style="width:20px;height:20px;color:#4B5563;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-            <span>{{ personaSearch ? 'No personas match your search' : 'All personas already added' }}</span>
+            <span>{{ agentSearch ? 'No agents match your search' : 'All agents already added' }}</span>
           </div>
         </div>
       </div>
@@ -388,9 +388,9 @@
   <!-- ── Workflow preview modal (separate teleport so it layers above the editor) ── -->
   <WorkflowPreviewModal
     v-if="showFlowPreview"
-    :personas="draft.personas"
-    :get-persona-name="getPersonaName"
-    :get-persona-emoji="getPersonaEmoji"
+    :agents="draft.agents"
+    :get-agent-name="getAgentName"
+    :get-agent-emoji="getAgentEmoji"
     @close="showFlowPreview = false"
   />
 </template>
@@ -456,8 +456,8 @@ function nextStep() {
 const stepValid = computed(() => {
   if (currentStep.value === 0) return draft.value.name.trim().length > 0
   if (currentStep.value === 1) {
-    if (draft.value.personas.length === 0) return false
-    return draft.value.personas.every(p => p.prompt.trim().length > 0)
+    if (draft.value.agents.length === 0) return false
+    return draft.value.agents.every(p => p.prompt.trim().length > 0)
   }
   return true
 })
@@ -465,8 +465,8 @@ const stepValid = computed(() => {
 const stepError = computed(() => {
   if (currentStep.value === 0) return 'Name is required'
   if (currentStep.value === 1) {
-    if (draft.value.personas.length === 0) return 'Add at least one persona'
-    if (draft.value.personas.some(p => !p.prompt.trim())) return 'Each persona needs a prompt'
+    if (draft.value.agents.length === 0) return 'Add at least one agent'
+    if (draft.value.agents.some(p => !p.prompt.trim())) return 'Each agent needs a prompt'
   }
   return ''
 })
@@ -483,7 +483,7 @@ function makeBlankDraft() {
     icon:         '✍️',
     description:  '',
     globalPrompt: '',
-    personas:     [],
+    agents:     [],
     inputs:       [],
     schedule: {
       enabled:   false,
@@ -507,52 +507,52 @@ watch([() => props.visible, () => props.recipe], ([vis]) => {
   draft.value = props.recipe
     ? JSON.parse(JSON.stringify(props.recipe))
     : makeBlankDraft()
-  if (!draft.value.personas)   draft.value.personas   = []
+  if (!draft.value.agents)   draft.value.agents   = []
   if (!draft.value.inputs)     draft.value.inputs     = []
   if (!draft.value.schedule)   draft.value.schedule   = makeBlankDraft().schedule
-  // Ensure legacy personas have dependency fields
-  for (const rp of draft.value.personas) {
+  // Ensure legacy agents have dependency fields
+  for (const rp of draft.value.agents) {
     if (!rp.dependsOn)    rp.dependsOn    = []
     if (!rp.runCondition) rp.runCondition = 'always'
   }
   currentStep.value    = 0
   maxReachedStep.value = 0
   depOpen.value        = {}
-  showPersonaPicker.value = false
-  personaSearch.value  = ''
+  showAgentPicker.value = false
+  agentSearch.value  = ''
 }, { immediate: true })
 
 const canSave = computed(() => {
   if (!draft.value.name.trim()) return false
-  if (draft.value.personas.length === 0) return false
-  return draft.value.personas.every(p => p.prompt.trim().length > 0)
+  if (draft.value.agents.length === 0) return false
+  return draft.value.agents.every(p => p.prompt.trim().length > 0)
 })
 
-// ── Persona picker ───────────────────────────────────────────────────────────
+// ── Agent picker ───────────────────────────────────────────────────────────
 
-const showPersonaPicker  = ref(false)
-const personaSearch      = ref('')
-const personaSearchRef   = ref(null)
-const addPersonaBtnRef   = ref(null)
+const showAgentPicker  = ref(false)
+const agentSearch      = ref('')
+const agentSearchRef   = ref(null)
+const addAgentBtnRef   = ref(null)
 const pickerStyle        = ref({})
 
-const alreadyAddedIds = computed(() => new Set(draft.value.personas.map(p => p.personaId)))
+const alreadyAddedIds = computed(() => new Set(draft.value.agents.map(p => p.agentId)))
 
-const filteredAvailablePersonas = computed(() => {
-  const q = personaSearch.value.toLowerCase()
+const filteredAvailableAgents = computed(() => {
+  const q = agentSearch.value.toLowerCase()
   return agentsStore.systemAgents.filter(p =>
     !alreadyAddedIds.value.has(p.id) &&
     (!q || p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q))
   )
 })
 
-async function openPersonaPicker() {
-  personaSearch.value = ''
-  showPersonaPicker.value = true
+async function openAgentPicker() {
+  agentSearch.value = ''
+  showAgentPicker.value = true
   await nextTick()
 
   // Position the picker below the button
-  const btn = addPersonaBtnRef.value
+  const btn = addAgentBtnRef.value
   if (btn) {
     const r = btn.getBoundingClientRect()
     const panelH = 320
@@ -569,19 +569,19 @@ async function openPersonaPicker() {
   }
 
   await nextTick()
-  personaSearchRef.value?.focus()
+  agentSearchRef.value?.focus()
 }
 
-function addPersona(persona) {
-  draft.value.personas.push({ personaId: persona.id, prompt: '', dependsOn: [], runCondition: 'always' })
-  showPersonaPicker.value = false
+function addAgent(agent) {
+  draft.value.agents.push({ agentId: agent.id, prompt: '', dependsOn: [], runCondition: 'always' })
+  showAgentPicker.value = false
 }
 
-function removePersona(idx) {
-  const removedId = draft.value.personas[idx].personaId
-  draft.value.personas.splice(idx, 1)
-  // Clean up any dependencies pointing to the removed persona
-  for (const rp of draft.value.personas) {
+function removeAgent(idx) {
+  const removedId = draft.value.agents[idx].agentId
+  draft.value.agents.splice(idx, 1)
+  // Clean up any dependencies pointing to the removed agent
+  for (const rp of draft.value.agents) {
     if (rp.dependsOn) rp.dependsOn = rp.dependsOn.filter(id => id !== removedId)
   }
   // Clean up depOpen
@@ -594,12 +594,12 @@ function removePersona(idx) {
   depOpen.value = newDepOpen
 }
 
-function getPersonaName(personaId) {
-  return agentsStore.getAgentById(personaId)?.name || personaId
+function getAgentName(agentId) {
+  return agentsStore.getAgentById(agentId)?.name || agentId
 }
 
-function getPersonaEmoji(personaId) {
-  return agentsStore.getAgentById(personaId)?.avatar || '🤖'
+function getAgentEmoji(agentId) {
+  return agentsStore.getAgentById(agentId)?.avatar || '🤖'
 }
 
 // ── Dependency helpers ───────────────────────────────────────────────────────
@@ -616,17 +616,17 @@ function toggleDep(idx) {
   depOpen.value = { ...depOpen.value, [idx]: !depOpen.value[idx] }
 }
 
-function toggleDepPersona(rp, personaId) {
+function toggleDepAgent(rp, agentId) {
   if (!rp.dependsOn) rp.dependsOn = []
-  const i = rp.dependsOn.indexOf(personaId)
-  if (i === -1) rp.dependsOn.push(personaId)
+  const i = rp.dependsOn.indexOf(agentId)
+  if (i === -1) rp.dependsOn.push(agentId)
   else rp.dependsOn.splice(i, 1)
   if (rp.dependsOn.length === 0) rp.runCondition = 'always'
 }
 
 function conditionDesc(rp) {
   const cond = rp.runCondition || 'always'
-  const names = (rp.dependsOn || []).map(id => getPersonaName(id)).join(', ')
+  const names = (rp.dependsOn || []).map(id => getAgentName(id)).join(', ')
   if (cond === 'on_success') return `Runs only if ${names} succeeded`
   if (cond === 'on_failure') return `Runs only if ${names} failed`
   return `Runs after ${names} (regardless of outcome)`
@@ -635,7 +635,7 @@ function conditionDesc(rp) {
 // ── Output token insertion ────────────────────────────────────────────────────
 
 function insertOutputToken(rp, depId) {
-  const name = getPersonaName(depId)
+  const name = getAgentName(depId)
   rp.prompt = (rp.prompt || '') + `{{output:${name}}}`
 }
 
@@ -659,7 +659,7 @@ function selectPreset(id) {
 // ── AI Enhance ───────────────────────────────────────────────────────────────
 
 const enhancingGlobal  = ref(false)
-const enhancingPersona = ref(null)
+const enhancingAgent = ref(null)
 
 async function enhanceGlobalPrompt() {
   if (!draft.value.globalPrompt || enhancingGlobal.value) return
@@ -674,18 +674,18 @@ async function enhanceGlobalPrompt() {
   }
 }
 
-async function enhancePersonaPrompt(idx) {
-  const rp = draft.value.personas[idx]
-  if (!rp?.prompt || enhancingPersona.value === idx) return
-  enhancingPersona.value = idx
+async function enhanceAgentPrompt(idx) {
+  const rp = draft.value.agents[idx]
+  if (!rp?.prompt || enhancingAgent.value === idx) return
+  enhancingAgent.value = idx
   try {
-    const name = getPersonaName(rp.personaId)
+    const name = getAgentName(rp.agentId)
     const result = await callEnhance(
-      `Improve this prompt for the persona '${name}'. Keep intent and {{variable}} placeholders. Return only the improved prompt.\n\nOriginal:\n${rp.prompt}`
+      `Improve this prompt for the agent '${name}'. Keep intent and {{variable}} placeholders. Return only the improved prompt.\n\nOriginal:\n${rp.prompt}`
     )
     if (result) rp.prompt = result
   } finally {
-    enhancingPersona.value = null
+    enhancingAgent.value = null
   }
 }
 
@@ -737,13 +737,13 @@ async function save() {
 }
 
 function cancel() {
-  showPersonaPicker.value = false
+  showAgentPicker.value = false
   emit('close')
 }
 
 function onKeydown(e) {
   if (e.key === 'Escape') {
-    if (showPersonaPicker.value) { showPersonaPicker.value = false; return }
+    if (showAgentPicker.value) { showAgentPicker.value = false; return }
     cancel()
   }
 }
@@ -1082,8 +1082,8 @@ const TIMEZONES = [
 .re-enhance-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); color: #FFF; }
 .re-enhance-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-/* ── Persona cards ───────────────────────────────────────────────────────────── */
-.re-persona-card {
+/* ── Agent cards ───────────────────────────────────────────────────────────── */
+.re-agent-card {
   background: #171717;
   border: 1px solid #2A2A2A;
   border-radius: 0.75rem;
@@ -1092,29 +1092,29 @@ const TIMEZONES = [
   flex-direction: column;
   gap: 0.75rem;
 }
-.re-persona-card-header {
+.re-agent-card-header {
   display: flex; align-items: center; justify-content: space-between;
 }
-.re-persona-identity { display: flex; align-items: center; gap: 0.5rem; }
-.re-persona-avatar {
+.re-agent-identity { display: flex; align-items: center; gap: 0.5rem; }
+.re-agent-avatar {
   width: 2rem; height: 2rem;
   display: flex; align-items: center; justify-content: center;
   background: linear-gradient(135deg, #1A1A1A 0%, #374151 100%);
   border-radius: 50%; font-size: 0.9375rem; flex-shrink: 0;
 }
-.re-persona-name {
+.re-agent-name {
   font-family: 'Inter', sans-serif; font-size: 0.875rem; font-weight: 700; color: #FFFFFF;
 }
-.re-persona-number {
+.re-agent-number {
   font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #4B5563;
 }
-.re-persona-remove {
+.re-agent-remove {
   width: 1.625rem; height: 1.625rem;
   display: flex; align-items: center; justify-content: center;
   background: rgba(239,68,68,0.1); border: none; border-radius: 0.3125rem;
   color: #EF4444; cursor: pointer; transition: all 0.15s ease;
 }
-.re-persona-remove:hover { background: rgba(239,68,68,0.22); }
+.re-agent-remove:hover { background: rgba(239,68,68,0.22); }
 
 /* ── Dependency section ───────────────────────────────────────────────────── */
 .re-dep-section {
@@ -1258,7 +1258,7 @@ const TIMEZONES = [
   font-style: italic;
 }
 
-.re-add-persona-btn {
+.re-add-agent-btn {
   display: inline-flex; align-items: center; gap: 0.375rem;
   padding: 0.5rem 0.875rem;
   background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2);
@@ -1267,7 +1267,7 @@ const TIMEZONES = [
   color: rgba(255,255,255,0.6); cursor: pointer; transition: all 0.15s ease;
   align-self: flex-start;
 }
-.re-add-persona-btn:hover { background: rgba(255,255,255,0.09); color: #FFF; border-color: rgba(255,255,255,0.35); }
+.re-add-agent-btn:hover { background: rgba(255,255,255,0.09); color: #FFF; border-color: rgba(255,255,255,0.35); }
 
 .re-step-hint-msg {
   font-family: 'Inter', sans-serif; font-size: 0.8125rem; color: #4B5563;
@@ -1502,7 +1502,7 @@ const TIMEZONES = [
 }
 .re-save-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-/* ── Persona picker (teleported, fixed position) ─────────────────────────────── */
+/* ── Agent picker (teleported, fixed position) ─────────────────────────────── */
 .re-picker-overlay {
   position: fixed; inset: 0; z-index: 500;
 }

@@ -15,8 +15,8 @@ const MAX_TOKENS = 1024
 
 /**
  * Build the extraction prompt dynamically based on whether participants are provided.
- * When participants are present (group chat or named persona), the LLM can route
- * memories to specific personas by name instead of the generic "system" target.
+ * When participants are present (group chat or named agent), the LLM can route
+ * memories to specific agents by name instead of the generic "system" target.
  */
 function buildExtractionPrompt(participants) {
   const hasParticipants = participants && participants.length > 0
@@ -25,32 +25,32 @@ function buildExtractionPrompt(participants) {
   if (hasParticipants) {
     const nameList = participants.map(p => `"${p.name}"`).join(', ')
     targetInstructions = `For each memory, specify the target:
-- "user" for facts about the human user (their preferences, habits, personal info)
-- The exact persona name (one of: ${nameList}) for facts about or relevant to a specific AI persona
-  Examples: behavioral feedback for that persona, facts the persona should remember, domain knowledge for their role
-- If unsure which persona a fact belongs to, use the persona name that is most relevant to the topic`
+- "user" for facts about the human user (their preferences, habits, agentl info)
+- The exact agent name (one of: ${nameList}) for facts about or relevant to a specific AI agent
+  Examples: behavioral feedback for that agent, facts the agent should remember, domain knowledge for their role
+- If unsure which agent a fact belongs to, use the agent name that is most relevant to the topic`
   } else {
     targetInstructions = `For each memory, specify the target:
-- "user" for facts about the human user (their preferences, habits, personal info)
-- "system" for facts about how the AI persona should behave (tone, format, approach preferences)`
+- "user" for facts about the human user (their preferences, habits, agentl info)
+- "system" for facts about how the AI agent should behave (tone, format, approach preferences)`
   }
 
   return `You are a memory extraction assistant. Your job is to identify ONLY significant, identity-level facts worth persisting long-term from a conversation exchange.
 
 You will be given:
 1. The last user message and assistant response
-2. Existing soul/memory content for the user and system persona (if any)
-${hasParticipants ? '3. A list of AI personas participating in this conversation' : ''}
+2. Existing soul/memory content for the user and system agent (if any)
+${hasParticipants ? '3. A list of AI agents participating in this conversation' : ''}
 
 WHAT TO EXTRACT (only these categories):
-- Key personal facts: name, title, role, employer, location, age
-- Personality traits, character, core values, communication style
+- Key agentl facts: name, title, role, employer, location, age
+- Agentlity traits, character, core values, communication style
 - Hobbies, interests, passions
 - Strong preferences: tools, languages, frameworks, workflows, editors, OS
 - Behavioral feedback: how the AI should adjust tone, format, verbosity, approach
 - Significant relationships: key people mentioned by name and their roles
 - Long-term projects or goals the user is working on
-- Soul-defining information: things that shape who this person/persona IS
+- Soul-defining information: things that shape who this person/agent IS
 
 WHAT TO IGNORE (never extract these):
 - General questions and their answers (e.g. "how do I sort an array" — that's a task, not a memory)
@@ -59,11 +59,11 @@ WHAT TO IGNORE (never extract these):
 - Greetings, small talk, filler, pleasantries ("Hey", "What's up", "How are you")
 - Information already present in the existing soul files
 - Vague or obvious observations ("user is interested in coding")
-- AI persona descriptions, roles, or capabilities that come from the system prompt — these are CONFIGURATION, not learned memories
+- AI agent descriptions, roles, or capabilities that come from the system prompt — these are CONFIGURATION, not learned memories
 - Inferred or assumed context — only extract facts EXPLICITLY stated by the user in their message
 - Anything the user did NOT actually say — do not fabricate or infer projects, intentions, or goals from thin air
 
-CRITICAL: Only extract from what the USER explicitly said. If the user message is a greeting or contains no substantive personal information, return an EMPTY array. Do not infer, assume, or fabricate. When in doubt, return empty.
+CRITICAL: Only extract from what the USER explicitly said. If the user message is a greeting or contains no substantive agentl information, return an EMPTY array. Do not infer, assume, or fabricate. When in doubt, return empty.
 
 CONFIDENCE SCORING:
 - 0.9–1.0: Very certain explicit fact directly stated by the user (e.g. "I work at Google", "I prefer TypeScript")
@@ -72,12 +72,12 @@ CONFIDENCE SCORING:
 
 Rules:
 - ${targetInstructions}
-- Choose the most appropriate section: Preferences, Communication, Technical, Projects, Personal, Interaction Notes
+- Choose the most appropriate section: Preferences, Communication, Technical, Projects, Agentl, Interaction Notes
 - Keep entries concise — one line each, written as bullet-point facts
 - If there is nothing worth remembering, return an empty array
 
 Respond with ONLY valid JSON (no markdown fences, no explanation):
-{"memories": [{"target": "${hasParticipants ? 'user|<persona_name>' : 'user|system'}", "section": "<section name>", "entry": "<the memory entry>", "confidence": 0.85}]}`
+{"memories": [{"target": "${hasParticipants ? 'user|<agent_name>' : 'user|system'}", "section": "<section name>", "entry": "<the memory entry>", "confidence": 0.85}]}`
 }
 
 class MemoryExtractor {
@@ -209,7 +209,7 @@ class MemoryExtractor {
     if (participants && participants.length > 0) {
       parts.push('\n## Conversation Participants')
       for (const p of participants) {
-        parts.push(`- ${p.name} (AI persona)`)
+        parts.push(`- ${p.name} (AI agent)`)
       }
     }
     if (userSoul) {
@@ -217,7 +217,7 @@ class MemoryExtractor {
       parts.push(userSoul)
     }
     if (systemSoul) {
-      parts.push('\n## Existing System Persona Memory')
+      parts.push('\n## Existing System Agent Memory')
       parts.push(systemSoul)
     }
     return parts.join('\n')

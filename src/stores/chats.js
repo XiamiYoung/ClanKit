@@ -55,13 +55,13 @@ export const useChatsStore = defineStore('chats', () => {
     chat.currentToolCall = null
     chat.isLoadingMessages = false
     chat.contextMetrics = chat.contextMetrics || defaultContextMetrics()
-    if (chat.systemPersonaId === undefined) chat.systemPersonaId = null
-    if (chat.userPersonaId === undefined) chat.userPersonaId = null
+    if (chat.systemAgentId === undefined) chat.systemAgentId = null
+    if (chat.userAgentId === undefined) chat.userAgentId = null
     if (chat.provider === undefined) chat.provider = null
     if (chat.model === undefined) chat.model = null
-    if (chat.groupPersonaIds === undefined) chat.groupPersonaIds = []
+    if (chat.groupAgentIds === undefined) chat.groupAgentIds = []
     if (chat.isGroupChat === undefined) chat.isGroupChat = false
-    if (chat.groupPersonaOverrides === undefined) chat.groupPersonaOverrides = {}
+    if (chat.groupAgentOverrides === undefined) chat.groupAgentOverrides = {}
     if (chat.workingPath === undefined) chat.workingPath = null
     if (chat.enabledToolIds === undefined) chat.enabledToolIds = null    // null = "use defaults"
     if (chat.enabledMcpIds === undefined) chat.enabledMcpIds = null      // null = "use defaults"
@@ -70,9 +70,9 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.chatAllowList === undefined) chat.chatAllowList = []
     if (chat.chatDangerOverrides === undefined) chat.chatDangerOverrides = []
     if (chat.codingMode === undefined) chat.codingMode = false
-    if (chat.maxPersonaRounds === undefined) chat.maxPersonaRounds = null  // null = use default (10)
+    if (chat.maxAgentRounds === undefined) chat.maxAgentRounds = null  // null = use default (10)
     if (chat.codingProvider === undefined) chat.codingProvider = 'claude-code'
-    if (chat.personaModelOverrides === undefined) chat.personaModelOverrides = {}
+    if (chat.agentModelOverrides === undefined) chat.agentModelOverrides = {}
     if (chat.usage === undefined) chat.usage = null  // null = no usage data yet
     // messages === null means "not loaded yet" (lazy)
     if (chat.messages) {
@@ -266,7 +266,7 @@ export const useChatsStore = defineStore('chats', () => {
     return parts.join('/')
   }
 
-  async function createChat(title = 'New Chat', personaConfig = null, folderId = null) {
+  async function createChat(title = 'New Chat', agentConfig = null, folderId = null) {
     const chat = {
       type: 'chat',
       id: uuidv4(),
@@ -279,26 +279,26 @@ export const useChatsStore = defineStore('chats', () => {
       isCallingTool: false,
       currentToolCall: null,
       contextMetrics: defaultContextMetrics(),
-      systemPersonaId: null,
-      userPersonaId: null,
+      systemAgentId: null,
+      userAgentId: null,
       provider: null,
       model: null,
       isGroupChat: false,
-      groupPersonaIds: [],
-      groupPersonaOverrides: {},
+      groupAgentIds: [],
+      groupAgentOverrides: {},
       workingPath: null,
       enabledToolIds: null,
       enabledMcpIds: null,
       codingMode: false,
       codingProvider: 'claude-code',
       maxOutputTokens: null,    // null = use global default from config
-      personaModelOverrides: {},
+      agentModelOverrides: {},
     }
-    if (personaConfig && personaConfig.length === 1) {
-      chat.systemPersonaId = personaConfig[0]
-    } else if (personaConfig && personaConfig.length >= 2) {
+    if (agentConfig && agentConfig.length === 1) {
+      chat.systemAgentId = agentConfig[0]
+    } else if (agentConfig && agentConfig.length >= 2) {
       chat.isGroupChat = true
-      chat.groupPersonaIds = [...personaConfig]
+      chat.groupAgentIds = [...agentConfig]
     }
     // Insert at top of target folder (or active folder if no explicit folderId)
     const targetFolderId = folderId !== undefined ? folderId : activeFolderId.value
@@ -310,7 +310,7 @@ export const useChatsStore = defineStore('chats', () => {
     return chat
   }
 
-  async function createChatFromHistory(sourceChatId, title = 'New Chat', personaOverride = null) {
+  async function createChatFromHistory(sourceChatId, title = 'New Chat', agentOverride = null) {
     const source = chats.value.find(c => c.id === sourceChatId)
     if (!source) return createChat(title)
     // Ensure messages are loaded
@@ -337,32 +337,32 @@ export const useChatsStore = defineStore('chats', () => {
       currentToolCall: null,
       isLoadingMessages: false,
       contextMetrics: defaultContextMetrics(),
-      systemPersonaId: source.systemPersonaId,
-      userPersonaId: source.userPersonaId,
+      systemAgentId: source.systemAgentId,
+      userAgentId: source.userAgentId,
       provider: source.provider,
       model: source.model,
       isGroupChat: source.isGroupChat,
-      groupPersonaIds: [...(source.groupPersonaIds || [])],
-      groupPersonaOverrides: JSON.parse(JSON.stringify(source.groupPersonaOverrides || {})),
+      groupAgentIds: [...(source.groupAgentIds || [])],
+      groupAgentOverrides: JSON.parse(JSON.stringify(source.groupAgentOverrides || {})),
       workingPath: source.workingPath || null,
       enabledToolIds: source.enabledToolIds ? [...source.enabledToolIds] : null,
       enabledMcpIds: source.enabledMcpIds ? [...source.enabledMcpIds] : null,
       codingMode: source.codingMode || false,
       codingProvider: source.codingProvider || 'claude-code',
-      personaModelOverrides: {},  // overrides are not copied — intentional
+      agentModelOverrides: {},  // overrides are not copied — intentional
     }
-    // Override personas if provided
-    if (personaOverride && personaOverride.length > 0) {
-      if (personaOverride.length === 1) {
-        chat.systemPersonaId = personaOverride[0]
+    // Override agents if provided
+    if (agentOverride && agentOverride.length > 0) {
+      if (agentOverride.length === 1) {
+        chat.systemAgentId = agentOverride[0]
         chat.isGroupChat = false
-        chat.groupPersonaIds = []
-        chat.groupPersonaOverrides = {}
+        chat.groupAgentIds = []
+        chat.groupAgentOverrides = {}
       } else {
         chat.isGroupChat = true
-        chat.groupPersonaIds = [...personaOverride]
-        chat.systemPersonaId = null
-        chat.groupPersonaOverrides = {}
+        chat.groupAgentIds = [...agentOverride]
+        chat.systemAgentId = null
+        chat.groupAgentOverrides = {}
       }
     }
     // Insert at root (copy from history goes to root)
@@ -572,11 +572,11 @@ export const useChatsStore = defineStore('chats', () => {
     debouncedPersistChat(chatId)
   }
 
-  async function setChatPersona(chatId, type, agentId) {
+  async function setChatAgent(chatId, type, agentId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
-    if (type === 'system') chat.systemPersonaId = agentId
-    else if (type === 'user') chat.userPersonaId = agentId
+    if (type === 'system') chat.systemAgentId = agentId
+    else if (type === 'user') chat.userAgentId = agentId
     chat.updatedAt = Date.now()
     await persistChat(chatId)
     await persistIndex()
@@ -600,23 +600,23 @@ export const useChatsStore = defineStore('chats', () => {
     await persistIndex()
   }
 
-  function setChatPersonaModelOverride(chatId, agentId, providerId, modelId) {
+  function setChatAgentModelOverride(chatId, agentId, providerId, modelId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
-    if (!chat.personaModelOverrides) chat.personaModelOverrides = {}
+    if (!chat.agentModelOverrides) chat.agentModelOverrides = {}
     if (providerId === null && modelId === null) {
-      delete chat.personaModelOverrides[agentId]
+      delete chat.agentModelOverrides[agentId]
     } else {
-      chat.personaModelOverrides[agentId] = { provider: providerId, model: modelId }
+      chat.agentModelOverrides[agentId] = { provider: providerId, model: modelId }
     }
     chat.updatedAt = Date.now()
     debouncedPersistChat(chatId)
   }
 
-  async function setGroupPersonas(chatId, personaIds) {
+  async function setGroupAgents(chatId, agentIds) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
-    chat.groupPersonaIds = personaIds
+    chat.groupAgentIds = agentIds
     chat.updatedAt = Date.now()
     await persistChat(chatId)
     await persistIndex()
@@ -627,46 +627,46 @@ export const useChatsStore = defineStore('chats', () => {
     if (!chat) return
     chat.isGroupChat = enabled
     if (enabled) {
-      if (chat.systemPersonaId && !chat.groupPersonaIds.includes(chat.systemPersonaId)) {
-        chat.groupPersonaIds.unshift(chat.systemPersonaId)
+      if (chat.systemAgentId && !chat.groupAgentIds.includes(chat.systemAgentId)) {
+        chat.groupAgentIds.unshift(chat.systemAgentId)
       }
     } else {
-      if (chat.groupPersonaIds.length > 0) {
-        chat.systemPersonaId = chat.groupPersonaIds[0]
+      if (chat.groupAgentIds.length > 0) {
+        chat.systemAgentId = chat.groupAgentIds[0]
       }
-      chat.groupPersonaIds = []
-      chat.groupPersonaOverrides = {}
+      chat.groupAgentIds = []
+      chat.groupAgentOverrides = {}
     }
     chat.updatedAt = Date.now()
     await persistChat(chatId)
     await persistIndex()
   }
 
-  async function setGroupPersonaOverride(chatId, agentId, overrides) {
+  async function setGroupAgentOverride(chatId, agentId, overrides) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
-    if (!chat.groupPersonaOverrides) chat.groupPersonaOverrides = {}
-    chat.groupPersonaOverrides[agentId] = { ...overrides }
+    if (!chat.groupAgentOverrides) chat.groupAgentOverrides = {}
+    chat.groupAgentOverrides[agentId] = { ...overrides }
     chat.updatedAt = Date.now()
     await persistChat(chatId)
     await persistIndex()
   }
 
-  async function removeGroupPersona(chatId, agentId) {
+  async function removeGroupAgent(chatId, agentId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
-    chat.groupPersonaIds = chat.groupPersonaIds.filter(id => id !== agentId)
-    if (chat.groupPersonaOverrides) delete chat.groupPersonaOverrides[agentId]
+    chat.groupAgentIds = chat.groupAgentIds.filter(id => id !== agentId)
+    if (chat.groupAgentOverrides) delete chat.groupAgentOverrides[agentId]
     chat.updatedAt = Date.now()
     await persistChat(chatId)
     await persistIndex()
   }
 
-  async function addGroupPersona(chatId, agentId) {
+  async function addGroupAgent(chatId, agentId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
-    if (!chat.groupPersonaIds.includes(agentId)) {
-      chat.groupPersonaIds.push(agentId)
+    if (!chat.groupAgentIds.includes(agentId)) {
+      chat.groupAgentIds.push(agentId)
     }
     chat.updatedAt = Date.now()
     await persistChat(chatId)
@@ -684,7 +684,7 @@ export const useChatsStore = defineStore('chats', () => {
     if ('permissionMode' in settings) chat.permissionMode = settings.permissionMode
     if ('chatAllowList' in settings) chat.chatAllowList = settings.chatAllowList
     if ('chatDangerOverrides' in settings) chat.chatDangerOverrides = settings.chatDangerOverrides
-    if ('maxPersonaRounds' in settings) chat.maxPersonaRounds = settings.maxPersonaRounds
+    if ('maxAgentRounds' in settings) chat.maxAgentRounds = settings.maxAgentRounds
     chat.updatedAt = Date.now()
     // persistChat → store:save-chat already updates the index, no separate persistIndex needed
     await persistChat(chatId)
@@ -858,11 +858,11 @@ export const useChatsStore = defineStore('chats', () => {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat || chat.messages === null) return
 
-    // Group persona chunks (tagged with personaId) are handled exclusively by
+    // Group agent chunks (tagged with agentId) are handled exclusively by
     // ChatsView.handleChunk via the perChatStreamingMsgId keying system.
     // The store must NOT touch them — doing so causes duplicate content writes,
     // race conditions with the streaming flag, and merged/shared bubbles.
-    if (chunk.personaId) {
+    if (chunk.agentId) {
       // Only propagate state flags that don't mutate messages
       if (chunk.type === 'thinking_start') chat.isThinking = true
       else if (chunk.type === 'text') chat.isThinking = false
@@ -1010,9 +1010,9 @@ export const useChatsStore = defineStore('chats', () => {
       .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
       .map(m => ({ role: m.role, content: m.content }))
 
-    // Resolve persona + provider
-    const sysAgentId = targetChat.systemPersonaId || agentsStore.defaultSystemPersona?.id
-    const sysAgent   = sysAgentId ? agentsStore.getPersonaById(sysAgentId) : agentsStore.defaultSystemPersona
+    // Resolve agent + provider
+    const sysAgentId = targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id
+    const sysAgent   = sysAgentId ? agentsStore.getAgentById(sysAgentId) : agentsStore.defaultSystemAgent
     const chatProvider = sysAgent?.providerId || 'anthropic'
     const cfg = { ...configStore.config }
 
@@ -1030,7 +1030,7 @@ export const useChatsStore = defineStore('chats', () => {
     }
 
     // Per-chat model override
-    const rawOverride = targetChat.personaModelOverrides?.[sysAgentId]
+    const rawOverride = targetChat.agentModelOverrides?.[sysAgentId]
     const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
     const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
     if (overrideProvider && overrideProvider !== chatProvider) {
@@ -1055,16 +1055,16 @@ export const useChatsStore = defineStore('chats', () => {
     if (resolvedModel) cfg.customModel = resolvedModel
     if (targetChat.workingPath) cfg.chatWorkingPath = targetChat.workingPath
 
-    const usrAgentId = targetChat.userPersonaId
-    const usrAgent   = usrAgentId ? agentsStore.getPersonaById(usrAgentId) : agentsStore.defaultUserPersona
+    const usrAgentId = targetChat.userAgentId
+    const usrAgent   = usrAgentId ? agentsStore.getAgentById(usrAgentId) : agentsStore.defaultUserAgent
     const userAgentPrompt = usrAgent?.prompt || null
 
     const agentPrompts = {
-      systemPersonaPrompt:       sysAgent?.prompt || null,
-      systemPersonaName:         sysAgent?.name || null,
-      systemPersonaDescription:  sysAgent?.description || null,
-      systemPersonaId:           sysAgent?.id || '__default_system__',
-      userPersonaId:             usrAgent?.id || '__default_user__',
+      systemAgentPrompt:       sysAgent?.prompt || null,
+      systemAgentName:         sysAgent?.name || null,
+      systemAgentDescription:  sysAgent?.description || null,
+      systemAgentId:           sysAgent?.id || '__default_system__',
+      userAgentId:             usrAgent?.id || '__default_user__',
       userAgentPrompt: userAgentPrompt,
     }
 
@@ -1075,7 +1075,7 @@ export const useChatsStore = defineStore('chats', () => {
         config: JSON.parse(JSON.stringify(cfg)),
         enabledAgents: [],
         enabledSkills: [],
-        personaPrompts: agentPrompts,
+        agentPrompts: agentPrompts,
         streamingMsgId,
         mcpServers: [],
         httpTools: [],
@@ -1116,11 +1116,11 @@ export const useChatsStore = defineStore('chats', () => {
     chatTree, chats, activeChatId, activeFolderId, activeChat, isLoading,
     unreadChatIds, completedChatIds, pendingPermissionChatIds,
     loadChats, createChat, createChatFromHistory, removeChat, renameChat,
-    setActiveChat, clearActiveChat, addMessage, updateLastAssistantMessage, setChatPersona,
-    setChatProvider, setChatModel, setChatPersonaModelOverride, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
+    setActiveChat, clearActiveChat, addMessage, updateLastAssistantMessage, setChatAgent,
+    setChatProvider, setChatModel, setChatAgentModelOverride, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
     loadOlderSegments, hasOlderSegments,
-    setGroupPersonas, toggleGroupMode, setGroupPersonaOverride,
-    removeGroupPersona, addGroupPersona, reorderChats,
+    setGroupAgents, toggleGroupMode, setGroupAgentOverride,
+    removeGroupAgent, addGroupAgent, reorderChats,
     getChatFolderPath,
     createFolder, renameFolder, deleteFolder, toggleFolder, expandFolder, setAllFoldersExpanded,
     moveNodeToFolder, reorderNode,

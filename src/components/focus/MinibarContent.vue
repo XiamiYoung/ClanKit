@@ -12,7 +12,7 @@
             <line x1="8" y1="23" x2="16" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
         </div>
-        <span class="mbc-call-name">{{ voiceStore.activePersonaName || 'Call' }}</span>
+        <span class="mbc-call-name">{{ voiceStore.activeAgentName || 'Call' }}</span>
         <span class="mbc-call-status">
           {{ voiceStore.status === 'speaking' ? 'speaking' : voiceStore.status === 'processing' ? 'thinking' : 'listening' }}
         </span>
@@ -337,8 +337,8 @@ async function resolveTargetChatId() {
   if (chatsStore.activeChatId) return chatsStore.activeChatId
   const first = chatsStore.chats[0]
   if (first) return first.id
-  const defaultPersonaId = agentsStore.defaultSystemAgent?.id ?? null
-  const newChat = await chatsStore.createChat('New Chat', defaultPersonaId ? [defaultPersonaId] : null, null)
+  const defaultAgentId = agentsStore.defaultSystemAgent?.id ?? null
+  const newChat = await chatsStore.createChat('New Chat', defaultAgentId ? [defaultAgentId] : null, null)
   return newChat.id
 }
 
