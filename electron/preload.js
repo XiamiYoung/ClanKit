@@ -248,20 +248,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getPreloadPath:  () => ipcRenderer.invoke('drawio:get-preload-path'),
   },
 
-  // ── Recipes ────────────────────────────────────────────────────────────────
-  recipes: {
-    list:       ()          => ipcRenderer.invoke('recipes:list'),
-    save:       (recipe)    => ipcRenderer.invoke('recipes:save', recipe),
-    delete:     (id)        => ipcRenderer.invoke('recipes:delete', id),
-    getRuns:    (params)    => ipcRenderer.invoke('recipes:get-runs', params),
-    getRun:     (runId)     => ipcRenderer.invoke('recipes:get-run', runId),
-    deleteRun:  (runId)     => ipcRenderer.invoke('recipes:delete-run', runId),
-    saveRun:    (runDetail) => ipcRenderer.invoke('recipes:save-run', runDetail),
+  // ── Tasks ─────────────────────────────────────────────────────────────────
+  tasks: {
+    list:       ()          => ipcRenderer.invoke('tasks:list'),
+    save:       (task)      => ipcRenderer.invoke('tasks:save', task),
+    delete:     (id)        => ipcRenderer.invoke('tasks:delete', id),
+    getRuns:    (params)    => ipcRenderer.invoke('tasks:get-runs', params),
+    getRun:     (runId)     => ipcRenderer.invoke('tasks:get-run', runId),
+    deleteRun:  (runId)     => ipcRenderer.invoke('tasks:delete-run', runId),
+    saveRun:    (runDetail) => ipcRenderer.invoke('tasks:save-run', runDetail),
     onRunCompleted: (cb) => {
-      ipcRenderer.removeAllListeners('recipes:run-completed')
-      ipcRenderer.on('recipes:run-completed', (_e, data) => cb(data))
-      return () => ipcRenderer.removeAllListeners('recipes:run-completed')
+      ipcRenderer.removeAllListeners('tasks:run-completed')
+      ipcRenderer.on('tasks:run-completed', (_e, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('tasks:run-completed')
     },
+    onRunStarted: (cb) => {
+      ipcRenderer.removeAllListeners('tasks:run-started')
+      ipcRenderer.on('tasks:run-started', (_e, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('tasks:run-started')
+    },
+    onRunUpdated: (cb) => {
+      ipcRenderer.removeAllListeners('tasks:run-updated')
+      ipcRenderer.on('tasks:run-updated', (_e, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('tasks:run-updated')
+    },
+  },
+
+  // ── Plans ─────────────────────────────────────────────────────────────────
+  plans: {
+    list:   ()     => ipcRenderer.invoke('plans:list'),
+    save:   (plan) => ipcRenderer.invoke('plans:save', plan),
+    delete: (id)   => ipcRenderer.invoke('plans:delete', id),
   },
 
   // ── IM Bridge ─────────────────────────────────────────────────────────────

@@ -548,7 +548,12 @@ onMounted(async () => {
   recipesStore.subscribeToScheduledRuns()
 })
 
+function onKeydown(e) {
+  if (e.key === 'Escape' && deleteTarget.value) deleteTarget.value = null
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
   recipesStore.unsubscribeFromScheduledRuns()
   if (!recipesStore.isRunning) {
     recipesStore.resetActiveRun()

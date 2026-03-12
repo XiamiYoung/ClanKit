@@ -3,149 +3,34 @@
     <div v-if="focusModeStore.isMinibarMode" class="minibar-bar minibar-bar--enter" ref="barEl" @mousedown="onBarDragStart">
       <!-- Logo -->
       <img src="/icon.png" class="minibar-icon" alt="ClankAI" draggable="false" @dragstart.prevent />
-
-      <!-- Voice call panel — shown when a call is active -->
-      <template v-if="voiceStore.isCallActive">
-        <div class="minibar-sep" />
-        <div class="minibar-call-panel">
-          <!-- Animated mic/wave icon -->
-          <div class="minibar-call-icon" :class="'minibar-call-icon--' + voiceStore.status">
-            <svg viewBox="0 0 24 24" fill="none" style="width:11px;height:11px;">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="currentColor"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <line x1="12" y1="19" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <line x1="8" y1="23" x2="16" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <!-- Persona name -->
-          <span class="minibar-call-name">{{ voiceStore.activePersonaName || 'Call' }}</span>
-          <!-- Status label -->
-          <span class="minibar-call-status">{{ voiceStore.status === 'speaking' ? 'speaking' : voiceStore.status === 'processing' ? 'thinking' : 'listening' }}</span>
-          <!-- End call button -->
-          <button class="minibar-call-end" @click.stop="endCall" title="End call">
-            <svg viewBox="0 0 24 24" fill="currentColor" style="width:10px;height:10px;">
-              <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24 11.47 11.47 0 0 0 3.58.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.47 11.47 0 0 0 .57 3.58 1 1 0 0 1-.25 1.02z"/>
-            </svg>
-          </button>
-        </div>
-      </template>
-
       <div class="minibar-sep" />
 
-      <!-- Running count -->
-      <div class="minibar-stat">
-        <svg v-if="ongoingCount > 0" class="minibar-spinner" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.2)" stroke-width="2.5"/>
-          <path d="M12 3a9 9 0 0 1 9 9" stroke="#60A5FA" stroke-width="2.5" stroke-linecap="round"/>
-        </svg>
-        <svg v-else class="minibar-icon-sm" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>
-          <path d="M8 12l3 3 5-5" stroke="#34D399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span class="minibar-count">{{ ongoingCount }}</span>
-      </div>
-
-      <!-- Chat name — truncated at 10 chars, tooltip shows full name -->
-      <span
-        v-if="activeChatNameShort"
-        class="minibar-chat-name"
-        :title="activeChatNameNeedsTooltip ? activeChatName : undefined"
-      >{{ activeChatNameShort }}</span>
-
-      <div class="minibar-sep" />
-
-      <!-- Rolling ticker — flex:1, grows/shrinks with window width -->
-      <div v-if="!showCompose" class="minibar-ticker-wrap">
-        <template v-if="tickerText">
-          <!-- Dot sits outside the clipping scroll area so it never gets covered -->
-          <span class="minibar-ticker-dot" :class="'minibar-ticker-dot-' + tickerStatus" />
-          <!-- Overflow-clipped scroll area only wraps the text track -->
-          <div class="minibar-ticker-clip">
-            <div
-              class="minibar-ticker-track"
-              :class="tickerStatus === 'running' ? 'minibar-ticker-loop' : 'minibar-ticker-once'"
-              :key="tickerKey"
-            >
-              <span class="minibar-ticker-text">{{ tickerText }}</span>
-            </div>
-          </div>
-        </template>
-        <span v-else class="minibar-ticker-idle">No recent activity</span>
-      </div>
-
-      <!-- Compose input (shown when compose is open) -->
-      <div v-if="showCompose" class="minibar-compose-wrap">
-        <input
-          ref="composeInputRef"
-          v-model="composeText"
-          class="minibar-compose-input"
-          placeholder="Send a message…"
-          @keydown.enter.exact.prevent="submitCompose"
-          @keydown.escape="closeCompose"
-        />
-        <button
-          class="minibar-compose-send"
-          :disabled="!composeText.trim()"
-          @click="submitCompose"
-          title="Send (Enter)"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
-            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-          </svg>
-        </button>
-      </div>
-
-      <div class="minibar-sep" />
-
-      <!-- Compose toggle button -->
-      <button
-        class="minibar-compose-btn"
-        :class="{ active: showCompose }"
-        @click="toggleCompose"
-        title="Quick message"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-        </svg>
-      </button>
+      <!-- Shared content (count, plan, ticker, compose) -->
+      <MinibarContent />
 
       <!-- Exit -->
-      <button class="minibar-exit" @click="exit" title="Exit minibar">
+      <button class="minibar-exit" @click.stop="exit" title="Exit minibar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
 
-      <!-- Right-edge resize handle — only resize source -->
+      <!-- Right-edge resize handle -->
       <div class="minibar-right-handle" @pointerdown.stop.prevent="startResize" />
     </div>
   </Teleport>
 </template>
 
 <script setup>
-import { computed, ref, watch, watchEffect, onUnmounted, nextTick } from 'vue'
+import { ref, watch, nextTick, onUnmounted } from 'vue'
 import { useFocusModeStore } from '../../stores/focusMode'
-import { useChatsStore } from '../../stores/chats'
-import { usePersonasStore } from '../../stores/personas'
-import { useVoiceStore } from '../../stores/voice'
+import MinibarContent from './MinibarContent.vue'
 
 const focusModeStore = useFocusModeStore()
-const chatsStore = useChatsStore()
-const personasStore = usePersonasStore()
-const voiceStore = useVoiceStore()
-
-// Ensure personas are loaded (may already be loaded by ChatsView; no-op if so)
-if (!personasStore.personas.length) personasStore.loadPersonas()
-
-// ── Bar element ref + dynamic window height ────────────────────────────────
 const barEl = ref(null)
 const MIN_BAR_W = 200
-let WINDOW_H = 48 // updated to actual px height after first render
-
-// Sync body class and window height to match the actual bar pixel height
-// The bar has 4px inset on all sides, so window = bar + 8px each axis
-const INSET = 4 // px inset on each side so rounded corners are transparent within window
+let WINDOW_H = 48
+const INSET = 4
 
 watch(() => focusModeStore.isMinibarMode, async (val) => {
   document.body.classList.toggle('minibar-mode', val)
@@ -158,129 +43,6 @@ watch(() => focusModeStore.isMinibarMode, async (val) => {
   }
 }, { immediate: true })
 
-// watchEffect auto-tracks every reactive property accessed inside the callback.
-// Accessing c.isRunning / c.isCallingTool on each chat object creates fine-grained
-// dependencies — Vue re-runs this whenever any of those properties change.
-const ongoingCount = ref(0)
-const activeToolCall = ref(null)
-
-watchEffect(() => {
-  const flat = chatsStore.chats
-  let running = 0
-  let toolName = null
-  for (const c of flat) {
-    if (c.isRunning) running++
-    if (!toolName && c.isCallingTool && c.currentToolCall) toolName = c.currentToolCall
-  }
-  ongoingCount.value = running
-  activeToolCall.value = toolName
-})
-
-// Chat name label — follows lastActiveTickerChatId, falls back to activeChatId
-const activeChatName = computed(() => {
-  const id = lastActiveTickerChatId.value || chatsStore.activeChatId
-  if (!id) return null
-  return chatsStore.chats.find(c => c.id === id)?.title || null
-})
-const activeChatNameShort = computed(() => {
-  const name = activeChatName.value
-  if (!name) return null
-  return name.length > 10 ? name.slice(0, 10) + '…' : name
-})
-const activeChatNameNeedsTooltip = computed(() => (activeChatName.value?.length ?? 0) > 10)
-
-// ── Rolling ticker ─────────────────────────────────────────────────────────
-const tickerText = ref('')
-const tickerKey = ref(0)
-const tickerStatus = ref('idle') // 'idle' | 'running' | 'done'
-const lastActiveTickerChatId = ref(null) // chat that produced the last ticker update
-
-function _lastMsgText(msgs, role) {
-  if (!msgs?.length) return null
-  for (let j = msgs.length - 1; j >= 0; j--) {
-    const m = msgs[j]
-    const text = typeof m.content === 'string' ? m.content
-      : (Array.isArray(m.content) ? m.content.find(b => b.type === 'text')?.text : null)
-    if (m.role === role && text?.trim()) return text.replace(/\n+/g, ' ').trim().slice(0, 220)
-  }
-  return null
-}
-
-// Getter that reads c.isRunning on every chat — Vue tracks these as fine-grained
-// dependencies, so the watcher fires whenever any chat starts or stops running.
-let _prevRunning = new Map() // chatId → boolean
-
-watch(
-  () => chatsStore.chats.map(c => ({ id: c.id, running: c.isRunning })),
-  async (cur) => {
-    for (const { id, running } of cur) {
-      const wasRunning = _prevRunning.get(id) ?? false
-      if (!wasRunning && running) {
-        const chat = chatsStore.chats.find(c => c.id === id)
-        if (!chat) continue
-        tickerStatus.value = 'running'
-        if (chat.messages === null) await chatsStore.ensureMessages(chat.id)
-        tickerText.value = _lastMsgText(chat.messages, 'user') ?? chat.title ?? 'Working…'
-        tickerKey.value++
-        lastActiveTickerChatId.value = chat.id
-      } else if (wasRunning && !running) {
-        const chat = chatsStore.chats.find(c => c.id === id)
-        if (!chat) continue
-        tickerStatus.value = 'done'
-        tickerText.value = _lastMsgText(chat.messages, 'assistant') ?? (chat.title ? `"${chat.title}" completed` : 'Task completed')
-        tickerKey.value++
-        lastActiveTickerChatId.value = chat.id
-      }
-    }
-    _prevRunning = new Map(cur.map(c => [c.id, !!c.running]))
-  }
-)
-
-// ── Compose ────────────────────────────────────────────────────────────────
-const showCompose = ref(false)
-const composeText = ref('')
-const composeInputRef = ref(null)
-
-function toggleCompose() {
-  showCompose.value = !showCompose.value
-  if (showCompose.value) {
-    nextTick(() => composeInputRef.value?.focus())
-  } else {
-    composeText.value = ''
-  }
-}
-
-function closeCompose() {
-  showCompose.value = false
-  composeText.value = ''
-}
-
-async function resolveTargetChatId() {
-  // 1. Chat that had last ticker activity
-  if (lastActiveTickerChatId.value) {
-    const found = chatsStore.chats.find(c => c.id === lastActiveTickerChatId.value)
-    if (found) return found.id
-  }
-  // 2. Currently active chat
-  if (chatsStore.activeChatId) return chatsStore.activeChatId
-  // 3. First chat in the list
-  const first = chatsStore.chats[0]
-  if (first) return first.id
-  // 4. Create a new chat with the default persona
-  const defaultPersonaId = personasStore.defaultSystemPersona?.id ?? null
-  const newChat = await chatsStore.createChat('New Chat', defaultPersonaId ? [defaultPersonaId] : null, null)
-  return newChat.id
-}
-
-async function submitCompose() {
-  const text = composeText.value.trim()
-  if (!text) return
-  const chatId = await resolveTargetChatId()
-  composeText.value = ''
-  showCompose.value = false
-  chatsStore.triggerMinibarSend(text, chatId)
-}
-
 // ── Right-edge resize ──────────────────────────────────────────────────────
 let _resizeStart = null
 let _latestScreenX = 0
@@ -289,11 +51,7 @@ let _resizeRafPending = false
 function startResize(e) {
   const el = e.currentTarget
   el.setPointerCapture(e.pointerId)
-  _resizeStart = {
-    el,
-    screenX: e.screenX,
-    barW: barEl.value?.getBoundingClientRect().width ?? 230,
-  }
+  _resizeStart = { el, screenX: e.screenX, barW: barEl.value?.getBoundingClientRect().width ?? 230 }
   _latestScreenX = e.screenX
   el.addEventListener('pointermove', onResizeMove)
   el.addEventListener('pointerup', onResizeEnd)
@@ -325,36 +83,26 @@ function onResizeEnd() {
   window.electronAPI?.window?.saveMinibarBounds()
 }
 
-// ── Bar drag (JS-based so all areas including buttons can drag) ────────────
+// ── Bar drag ───────────────────────────────────────────────────────────────
 let _drag = null
-let _latestDragX = 0
-let _latestDragY = 0
+let _latestDragX = 0, _latestDragY = 0
 let _dragRafPending = false
-let _lastSentX = null
-let _lastSentY = null
+let _lastSentX = null, _lastSentY = null
 
 function onBarDragStart(e) {
   if (e.button !== 0) return
   if (e.target.closest('.minibar-right-handle')) return
-  if (e.target.closest('.minibar-compose-wrap')) return
-  _drag = {
-    startWinX: window.screenX,
-    startWinY: window.screenY,
-    startMouseX: e.screenX,
-    startMouseY: e.screenY,
-  }
-  _latestDragX = e.screenX
-  _latestDragY = e.screenY
-  _lastSentX = null
-  _lastSentY = null
+  if (e.target.closest('.mbc-compose-wrap')) return
+  _drag = { startWinX: window.screenX, startWinY: window.screenY, startMouseX: e.screenX, startMouseY: e.screenY }
+  _latestDragX = e.screenX; _latestDragY = e.screenY
+  _lastSentX = null; _lastSentY = null
   document.addEventListener('mousemove', onDragMove)
   document.addEventListener('mouseup', onDragEnd)
 }
 
 function onDragMove(e) {
   if (!_drag) return
-  _latestDragX = e.screenX
-  _latestDragY = e.screenY
+  _latestDragX = e.screenX; _latestDragY = e.screenY
   if (!_dragRafPending) {
     _dragRafPending = true
     requestAnimationFrame(() => {
@@ -363,8 +111,7 @@ function onDragMove(e) {
       const x = Math.round(_drag.startWinX + (_latestDragX - _drag.startMouseX))
       const y = Math.round(_drag.startWinY + (_latestDragY - _drag.startMouseY))
       if (x === _lastSentX && y === _lastSentY) return
-      _lastSentX = x
-      _lastSentY = y
+      _lastSentX = x; _lastSentY = y
       window.electronAPI?.window?.setPosition(x, y)
     })
   }
@@ -388,21 +135,13 @@ onUnmounted(() => {
   _resizeStart = null
 })
 
-// ── Exit ──────────────────────────────────────────────────────────────────
 function exit() {
   focusModeStore.exitMinibar()
   window.electronAPI?.window?.setMinibar({ enable: false })
 }
-
-// ── End voice call ─────────────────────────────────────────────────────────
-function endCall() {
-  if (window.electronAPI?.voice?.stop) window.electronAPI.voice.stop()
-  voiceStore.endCall()
-}
 </script>
 
 <style>
-/* Constrain #app to the bar height so it never extends beyond the visible bar */
 body.minibar-mode,
 body.minibar-mode #app {
   height: 3rem !important;
@@ -412,9 +151,7 @@ body.minibar-mode #app {
 
 .minibar-bar {
   position: fixed;
-  top: 4px;
-  left: 4px;
-  right: 4px;
+  top: 4px; left: 4px; right: 4px;
   height: calc(3rem - 8px);
   z-index: 9999;
   pointer-events: auto;
@@ -438,319 +175,31 @@ body.minibar-mode #app {
   90%  { transform: translateX(3px); }
   100% { transform: translateX(0); }
 }
-.minibar-bar--enter {
-  animation: minibar-enter-shake 0.5s ease-out;
-}
+.minibar-bar--enter { animation: minibar-enter-shake 0.5s ease-out; }
 
 .minibar-icon {
-  width: 1.375rem;
-  height: 1.375rem;
-  border-radius: 0.3125rem;
-  flex-shrink: 0;
+  width: 1.375rem; height: 1.375rem;
+  border-radius: 0.3125rem; flex-shrink: 0;
 }
 
 .minibar-sep {
-  width: 1px;
-  height: 1.25rem;
+  width: 1px; height: 1.25rem;
   background: rgba(255,255,255,0.1);
-  margin: 0 0.5rem;
-  flex-shrink: 0;
+  margin: 0 0.5rem; flex-shrink: 0;
 }
 
-.minibar-stat {
-  display: flex;
-  align-items: center;
-  gap: 0.3125rem;
-  flex-shrink: 0;
-}
-
-/* ── Chat name label ──────────────────────────────────────────────────────── */
-.minibar-chat-name {
-  font-size: 0.6875rem;
-  font-family: 'Inter', sans-serif;
-  font-weight: 500;
-  color: rgba(255,255,255,0.55);
-  white-space: nowrap;
-  flex-shrink: 0;
-  cursor: default;
-  letter-spacing: 0.01em;
-}
-
-.minibar-spinner {
-  width: 0.9375rem;
-  height: 0.9375rem;
-  animation: minibar-spin 0.85s linear infinite;
-  flex-shrink: 0;
-}
-
-@keyframes minibar-spin {
-  to { transform: rotate(360deg); }
-}
-
-.minibar-icon-sm {
-  width: 0.9375rem;
-  height: 0.9375rem;
-  flex-shrink: 0;
-}
-
-.minibar-count {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: rgba(255,255,255,0.75);
-  min-width: 0.875rem;
-  text-align: center;
-}
-
-/* ── Ticker — fills all remaining space ───────────────────────────────────── */
-.minibar-ticker-wrap {
-  flex: 1;
-  min-width: 0;
-  /* No overflow:hidden here — dot and badge must never be clipped */
-  height: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.3125rem;
-}
-
-.minibar-ticker-dot {
-  width: 0.375rem;
-  height: 0.375rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.minibar-ticker-dot-running {
-  background: #60A5FA;
-  animation: minibar-dot-pulse 1.2s ease-in-out infinite;
-}
-.minibar-ticker-dot-done { background: #34D399; }
-
-@keyframes minibar-dot-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
-}
-
-
-/* ── Voice call panel ─────────────────────────────────────────────────────── */
-.minibar-call-panel {
-  display: flex;
-  align-items: center;
-  gap: 0.3125rem;
-  padding: 0.1875rem 0.375rem 0.1875rem 0.3125rem;
-  border-radius: 9999px;
-  background: rgba(52, 211, 153, 0.12);
-  border: 1px solid rgba(52, 211, 153, 0.25);
-  flex-shrink: 0;
-}
-
-.minibar-call-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #34D399;
-  flex-shrink: 0;
-}
-.minibar-call-icon--speaking { color: #60A5FA; animation: minibar-call-pulse 0.8s ease-in-out infinite; }
-.minibar-call-icon--processing { color: #FBBF24; animation: minibar-call-pulse 1s ease-in-out infinite; }
-.minibar-call-icon--listening { color: #34D399; animation: minibar-call-pulse 1.4s ease-in-out infinite; }
-.minibar-call-icon--idle { color: rgba(255,255,255,0.4); }
-
-@keyframes minibar-call-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.35; }
-}
-
-.minibar-call-name {
-  font-family: 'Inter', sans-serif;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: #FFFFFF;
-  white-space: nowrap;
-  max-width: 5rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.minibar-call-status {
-  font-family: 'Inter', sans-serif;
-  font-size: 0.625rem;
-  font-weight: 500;
-  color: rgba(255,255,255,0.45);
-  white-space: nowrap;
-}
-
-.minibar-call-end {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.125rem;
-  height: 1.125rem;
-  border: none;
-  border-radius: 50%;
-  background: rgba(255, 59, 48, 0.2);
-  color: #FF6B6B;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.minibar-call-end:hover {
-  background: rgba(255, 59, 48, 0.45);
-  color: #FFFFFF;
-}
-
-/* Clip container: only this div hides overflow, so dot+badge stay visible */
-.minibar-ticker-clip {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  height: 100%;
-  display: flex;
-  align-items: center;
-}
-
-.minibar-ticker-track {
-  /* padding-left: 100% resolves to the parent (clip) width, pushing the text
-     to start exactly at the right edge of the clip container.
-     translateX(-100%) then scrolls it fully off to the left. */
-  padding-left: 100%;
-  white-space: nowrap;
-  will-change: transform;
-  flex-shrink: 0;
-}
-.minibar-ticker-loop { animation: minibar-ticker 16s linear infinite; }
-.minibar-ticker-once { animation: minibar-ticker 20s linear 1 forwards; }
-
-@keyframes minibar-ticker {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-100%); }
-}
-
-.minibar-ticker-text {
-  font-size: 0.75rem;
-  color: rgba(255,255,255,0.6);
-  font-weight: 400;
-  white-space: nowrap;
-  font-family: 'Inter', sans-serif;
-}
-
-.minibar-ticker-idle {
-  font-size: 0.75rem;
-  color: rgba(255,255,255,0.2);
-  font-style: italic;
-  font-family: 'Inter', sans-serif;
-  white-space: nowrap;
-}
-
-/* ── Compose row ──────────────────────────────────────────────────────────── */
-.minibar-compose-wrap {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
-.minibar-compose-input {
-  flex: 1;
-  min-width: 0;
-  height: 1.75rem;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 0.375rem;
-  padding: 0 0.5rem;
-  color: #FFFFFF;
-  font-size: 0.75rem;
-  font-family: 'Inter', sans-serif;
-  outline: none;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-.minibar-compose-input::placeholder {
-  color: rgba(255,255,255,0.3);
-}
-.minibar-compose-input:focus {
-  border-color: rgba(255,255,255,0.3);
-  background: rgba(255,255,255,0.12);
-}
-
-.minibar-compose-send {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border: none;
-  border-radius: 0.375rem;
-  background: rgba(255,255,255,0.12);
-  color: rgba(255,255,255,0.7);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.minibar-compose-send:hover:not(:disabled) {
-  background: rgba(255,255,255,0.2);
-  color: #FFFFFF;
-}
-.minibar-compose-send:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-/* ── Compose toggle button ────────────────────────────────────────────────── */
-.minibar-compose-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: none;
-  background: transparent;
-  color: rgba(255,255,255,0.35);
-  cursor: pointer;
-  border-radius: 0.3125rem;
-  transition: background 0.15s ease, color 0.15s ease;
-  flex-shrink: 0;
-}
-.minibar-compose-btn:hover {
-  background: rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.8);
-}
-.minibar-compose-btn.active {
-  color: #60A5FA;
-  background: rgba(96,165,250,0.12);
-}
-
-/* ── Exit ─────────────────────────────────────────────────────────────────── */
 .minibar-exit {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: none;
-  background: transparent;
-  color: rgba(255,255,255,0.3);
-  cursor: pointer;
-  border-radius: 0.3125rem;
-  transition: background 0.15s ease, color 0.15s ease;
-  flex-shrink: 0;
+  display:flex; align-items:center; justify-content:center;
+  width:1.5rem; height:1.5rem; border:none; background:transparent;
+  color:rgba(255,255,255,0.3); cursor:pointer; border-radius:0.3125rem;
+  transition:background 0.15s ease,color 0.15s ease; flex-shrink:0;
 }
-.minibar-exit:hover {
-  background: rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.8);
-}
+.minibar-exit:hover { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.8); }
 
-/* ── Right-edge resize handle ─────────────────────────────────────────────── */
 .minibar-right-handle {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 0.5rem;
-  cursor: ew-resize;
-  border-radius: 0 0.875rem 0.875rem 0;
-  transition: background 0.15s ease;
+  position:absolute; right:0; top:0; bottom:0; width:0.5rem;
+  cursor:ew-resize; border-radius:0 0.875rem 0.875rem 0;
+  transition:background 0.15s ease;
 }
-.minibar-right-handle:hover {
-  background: rgba(255,255,255,0.08);
-}
+.minibar-right-handle:hover { background:rgba(255,255,255,0.08); }
 </style>

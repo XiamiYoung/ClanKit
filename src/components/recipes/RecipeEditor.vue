@@ -396,7 +396,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { v4 as uuid } from 'uuid'
 import { usePersonasStore } from '../../stores/personas'
 import { useConfigStore } from '../../stores/config'
@@ -740,6 +740,15 @@ function cancel() {
   showPersonaPicker.value = false
   emit('close')
 }
+
+function onKeydown(e) {
+  if (e.key === 'Escape') {
+    if (showPersonaPicker.value) { showPersonaPicker.value = false; return }
+    cancel()
+  }
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

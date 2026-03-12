@@ -907,7 +907,7 @@ function onDocPermissionRespond({ blockId, decision, command }) {
 }
 
 // AI Doc switch (golden toggle) — controls panel visibility
-const aiDocEnabled = ref(true)
+const aiDocEnabled = ref(false)
 // Track whether text is currently selected (for wand button)
 const hasSelection = ref(false)
 // Revert snapshots: msgId → previous file content
@@ -1610,9 +1610,11 @@ function onGlobalKeydown(e) {
     e.preventDefault()
     openSearchBar()
   }
-  // Escape closes search bar
-  if (e.key === 'Escape' && searchBarOpen.value) {
-    searchBarOpen.value = false
+  // Escape closes search bar or modals
+  if (e.key === 'Escape') {
+    if (showDocPermModal.value) { showDocPermModal.value = false; return }
+    if (showDocPersonaModal.value) { showDocPersonaModal.value = false; return }
+    if (searchBarOpen.value) { searchBarOpen.value = false }
   }
 }
 

@@ -4,11 +4,10 @@
     <div v-if="embeddedUrl" class="embedded-overlay">
       <!-- Header: back button + page title -->
       <div class="embedded-header">
-        <button class="back-btn" @click="closeEmbedded">
-          <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <button class="back-btn" @click="closeEmbedded" title="Back">
+          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
-          <span>Back</span>
         </button>
         <span v-if="wvPageTitle" class="embedded-page-title">{{ wvPageTitle }}</span>
       </div>
@@ -67,9 +66,9 @@
     <template v-if="!embeddedUrl">
       <!-- Header -->
       <div class="catalog-header">
-        <div style="display:flex; align-items:center; justify-content:space-between;">
-          <div>
-            <h1 class="catalog-title">News Feeds</h1>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+          <div style="display:flex; flex-direction:column; justify-content:center;">
+            <h1 class="catalog-title">AI News</h1>
             <p class="catalog-subtitle">Live RSS feeds from your configured sources.</p>
           </div>
           <div class="news-header-actions">
@@ -267,6 +266,25 @@
       <!-- Scrollable content: top stories + feed grid -->
       <div class="news-scroll">
 
+      <!-- AI Summary Tooltip (teleported to body) -->
+      <Teleport to="body">
+        <div
+          v-if="tooltip.visible"
+          ref="tooltipEl"
+          class="news-summary-tooltip"
+          :style="[tooltip.style, { background: tooltip.bg }]"
+        >
+          <div class="news-summary-tooltip-title">{{ tooltip.title }}</div>
+          <div v-if="tooltip.loading" class="news-summary-tooltip-loading">
+            <div class="news-summary-dot"></div>
+            <div class="news-summary-dot"></div>
+            <div class="news-summary-dot"></div>
+          </div>
+          <div v-else-if="tooltip.error" class="news-summary-tooltip-error">{{ tooltip.error }}</div>
+          <div v-else class="news-summary-tooltip-text">{{ tooltip.text }}</div>
+        </div>
+      </Teleport>
+
       <!-- Top Stories -->
       <div v-if="newsStore.topArticles.length || newsStore.topLoading || newsStore.hasFetchedOnce" class="top-news-section">
         <div class="top-news-label">
@@ -286,6 +304,8 @@
             class="top-news-card"
             :class="`top-news--${i}`"
             @click="openEmbedded(article.link)"
+            @mouseenter="onArticleHover(article, $event, i)"
+            @mouseleave="onArticleLeave"
           >
             <div class="top-news-rank">{{ i + 1 }}</div>
             <div class="top-news-body">
@@ -352,7 +372,7 @@
 
             <!-- Article List -->
             <div v-else-if="!card.loading && card.articles.length" class="feed-articles" @scroll="onCardScroll(idx, $event)">
-              <div v-for="(article, i) in visibleArticles(idx)" :key="i" class="article-item" :class="`article--${idx}`" @click="openEmbedded(article.link)">
+              <div v-for="(article, i) in visibleArticles(idx)" :key="i" class="article-item" :class="`article--${idx}`" @click="openEmbedded(article.link)" @mouseenter="onArticleHover(article, $event, idx)" @mouseleave="onArticleLeave">
                 <div class="article-number" :class="`num--${idx}`">{{ i + 1 }}</div>
                 <div class="article-content">
                   <span class="article-title">{{ article.title }}</span>
@@ -688,6 +708,115 @@ Return format: {"highKeywords": "...", "medKeywords": "...", "breakingKeywords":
   }
 }
 
+// ── Article hover AI summary tooltip ────────────────────────────────────
+const CARD_GRADIENTS = [
+  'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)',
+  'linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%)',
+  'linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%)',
+  'linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%)',
+  'linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%)',
+  'linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%)',
+  'linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%)',
+  'linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%)',
+]
+
+const summaryCache = new Map()   // title → summary text
+const tooltipEl = ref(null)
+
+const tooltip = reactive({
+  visible: false,
+  title: '',
+  text: '',
+  loading: false,
+  error: '',
+  style: 'left:-9999px;top:-9999px;width:320px;',
+  bg: CARD_GRADIENTS[0],
+})
+
+let _hoverTimer = null
+let _lastHoverPos = { x: 0, y: 0 }
+
+function onArticleHover(article, event, colorIdx = 0) {
+  _lastHoverPos = { x: event.clientX, y: event.clientY }
+  clearTimeout(_hoverTimer)
+  _hoverTimer = setTimeout(() => {
+    showTooltip(article, colorIdx)
+  }, 400)
+}
+
+function onArticleLeave() {
+  clearTimeout(_hoverTimer)
+  tooltip.visible = false
+}
+
+async function clampTooltip() {
+  await nextTick()
+  const el = tooltipEl.value
+  if (!el || !tooltip.visible) return
+  const PAD = 14
+  const { x, y } = _lastHoverPos
+  const tw = el.offsetWidth
+  const th = el.offsetHeight
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+
+  let left = x + PAD
+  if (left + tw > vw - PAD) left = x - tw - PAD
+  if (left < PAD) left = PAD
+
+  let top = y + PAD
+  if (top + th > vh - PAD) top = y - th - PAD
+  if (top < PAD) top = PAD
+
+  tooltip.style = `left:${left}px;top:${top}px;width:320px;`
+}
+
+async function showTooltip(article, colorIdx = 0) {
+  tooltip.visible = true
+  tooltip.title = article.title
+  tooltip.text = ''
+  tooltip.error = ''
+  tooltip.bg = CARD_GRADIENTS[colorIdx % CARD_GRADIENTS.length]
+  tooltip.style = 'left:-9999px;top:-9999px;width:320px;'  // park off-screen until measured
+
+  await clampTooltip()  // position after initial render (loading dots state)
+
+  const cacheKey = article.title
+  if (summaryCache.has(cacheKey)) {
+    tooltip.loading = false
+    tooltip.text = summaryCache.get(cacheKey)
+    await clampTooltip()  // reposition after text renders (different height)
+    return
+  }
+
+  tooltip.loading = true
+
+  const content = [article.title, article.summary || ''].filter(Boolean).join('\n\n')
+  const prompt = `Summarize this news article in 2-3 concise sentences. Focus on the key facts and why it matters. Do not include any preamble or meta-text — just the summary.\n\nArticle:\n${content}`
+
+  try {
+    const config = JSON.parse(JSON.stringify(configStore.config))
+    const result = await window.electronAPI.enhancePrompt({ prompt, config })
+    if (!tooltip.visible) return   // user already left
+    if (!result.success) {
+      tooltip.loading = false
+      tooltip.error = result.error || 'Could not summarize'
+      await clampTooltip()
+      return
+    }
+    const summary = result.text.trim()
+    summaryCache.set(cacheKey, summary)
+    tooltip.loading = false
+    tooltip.text = summary
+    await clampTooltip()  // reposition after summary text renders
+  } catch (err) {
+    if (!tooltip.visible) return
+    tooltip.loading = false
+    tooltip.error = err.message || 'Failed to summarize'
+    await clampTooltip()
+  }
+}
+
 // Attach listeners when webview appears, clean up when it disappears
 watch(embeddedUrl, async (newUrl) => {
   if (newUrl) {
@@ -703,7 +832,11 @@ watch(embeddedUrl, async (newUrl) => {
   }
 })
 
-onBeforeUnmount(() => cleanupWebviewListeners())
+onBeforeUnmount(() => {
+  cleanupWebviewListeners()
+  clearTimeout(_hoverTimer)
+  tooltip.visible = false
+})
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
@@ -842,18 +975,18 @@ onMounted(async () => {
 .back-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px 4px 7px;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
   border-radius: var(--radius-sm, 8px);
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-caption);
-  font-weight: 600;
   color: #FFFFFF;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   border: none;
   cursor: pointer;
   transition: all 0.15s ease;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  flex-shrink: 0;
 }
 .back-btn:hover {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
@@ -1293,8 +1426,9 @@ onMounted(async () => {
 .embedded-header {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 0.75rem;
   flex-shrink: 0;
+  padding: 0.75rem 1rem;
 }
 
 .embedded-page-title {
@@ -1423,6 +1557,72 @@ onMounted(async () => {
 
 <!-- Unscoped styles for teleported modals -->
 <style>
+/* ── Article AI Summary Tooltip ─────────────────────────────────────── */
+.news-summary-tooltip {
+  position: fixed;
+  z-index: 9999;
+  /* background set dynamically via inline style to match card gradient */
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 12px 14px;
+  pointer-events: none;
+  animation: summaryTooltipIn 0.15s ease-out;
+}
+
+@keyframes summaryTooltipIn {
+  from { opacity: 0; transform: scale(0.96) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.news-summary-tooltip-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.35;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.news-summary-tooltip-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8125rem;
+  color: #FFFFFF;
+  line-height: 1.55;
+}
+
+.news-summary-tooltip-error {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.news-summary-tooltip-loading {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 0;
+}
+
+.news-summary-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  animation: summaryDotPulse 1s ease-in-out infinite;
+}
+.news-summary-dot:nth-child(2) { animation-delay: 0.15s; }
+.news-summary-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes summaryDotPulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50%       { opacity: 1;   transform: scale(1); }
+}
+
 /* ── Top Stories Criteria Modal ──────────────────────────────────────── */
 .top-criteria-backdrop {
   position: fixed;

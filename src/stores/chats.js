@@ -18,8 +18,8 @@ export const useChatsStore = defineStore('chats', () => {
 
   // UI chunk callback — set by ChatsView when mounted, cleared on unmount
   let _uiChunkCallback = null
-  // Recipe chunk callback — set by RecipeEngineView when a recipe is running
-  let _recipeChunkCallback = null
+  // Task chunk callback — set by TaskEngineView when a plan is running manually
+  let _taskChunkCallback = null
 
   // ── Tree helpers ──────────────────────────────────────────────────────────
 
@@ -809,15 +809,15 @@ export const useChatsStore = defineStore('chats', () => {
   // ── Chunk listener (persistent, lives for the app's lifetime) ────────────
   function setUiChunkCallback(cb) { _uiChunkCallback = cb }
   function clearUiChunkCallback() { _uiChunkCallback = null }
-  function setRecipeChunkCallback(cb) { _recipeChunkCallback = cb }
-  function clearRecipeChunkCallback() { _recipeChunkCallback = null }
+  function setTaskChunkCallback(cb) { _taskChunkCallback = cb }
+  function clearTaskChunkCallback() { _taskChunkCallback = null }
 
   function initChunkListener() {
     if (!window.electronAPI?.onAgentChunk) return
     window.electronAPI.onAgentChunk(({ chatId, chunk }) => {
-      // Recipe chunks — route to recipe callback and skip all chat logic
-      if (chatId.startsWith('recipe:') && _recipeChunkCallback) {
-        _recipeChunkCallback(chatId, chunk)
+      // Task chunks — route to task callback and skip all chat logic
+      if (chatId.startsWith('task:') && _taskChunkCallback) {
+        _taskChunkCallback(chatId, chunk)
         return
       }
 
@@ -1124,7 +1124,7 @@ export const useChatsStore = defineStore('chats', () => {
     getChatFolderPath,
     createFolder, renameFolder, deleteFolder, toggleFolder, expandFolder, setAllFoldersExpanded,
     moveNodeToFolder, reorderNode,
-    initChunkListener, setUiChunkCallback, clearUiChunkCallback, setRecipeChunkCallback, clearRecipeChunkCallback, markAsRead, markCompleted,
+    initChunkListener, setUiChunkCallback, clearUiChunkCallback, setTaskChunkCallback, clearTaskChunkCallback, markAsRead, markCompleted,
     markPermissionPending, clearPermissionPending,
     setPlanState, storePlanRunParams, getPlanRunParams,
     pendingMinibarSend, triggerMinibarSend, clearMinibarSend, sendMinibarMessage,

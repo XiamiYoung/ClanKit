@@ -402,7 +402,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useKnowledgeStore } from '../stores/knowledge'
 import { useModelsStore } from '../stores/models'
 import { useConfigStore } from '../stores/config'
@@ -690,6 +690,12 @@ function formatDate(ts) {
   if (!ts) return ''
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
+
+function onKeydown(e) {
+  if (e.key === 'Escape' && inspectDoc.value) inspectDoc.value = null
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <style scoped>

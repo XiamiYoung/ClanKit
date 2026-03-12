@@ -71,11 +71,11 @@
             :class="($route.path === '/chats' || $route.path.startsWith('/chats/')) ? 'nav-item-active' : 'nav-item-inactive'"
             :style="isCollapsed ? 'justify-content:center;' : ''"
             :aria-current="($route.path === '/chats' || $route.path.startsWith('/chats/')) ? 'page' : undefined"
-            @mouseenter="isCollapsed ? showNavTooltip('Agents', $event) : undefined"
+            @mouseenter="isCollapsed ? showNavTooltip('Chats', $event) : undefined"
             @mouseleave="isCollapsed ? hideNavTooltip() : undefined"
           >
             <IconChats style="width:18px;height:18px;flex-shrink:0;" />
-            <span v-if="!isCollapsed" style="font-size:var(--fs-secondary);font-weight:500;flex:1;">Agents</span>
+            <span v-if="!isCollapsed" style="font-size:var(--fs-secondary);font-weight:500;flex:1;">Chats</span>
           </RouterLink>
         </div>
 
@@ -96,8 +96,8 @@
           <span class="nav-section-label">Workspace</span>
         </div>
         <NavItem to="/personas"  :icon="IconPersonas"  label="Personas"    :isCollapsed="isCollapsed" />
-        <NavItem to="/recipes"   :icon="IconRecipes"   label="Schedulers"  :isCollapsed="isCollapsed" />
-        <NavItem to="/news"  :icon="IconNews"  label="News"      :isCollapsed="isCollapsed" />
+        <NavItem to="/tasks"     :icon="IconTaskEngine" label="Task Engine" :isCollapsed="isCollapsed" />
+        <NavItem to="/news"  :icon="IconNews"  label="AI News"   :isCollapsed="isCollapsed" />
       </div>
 
       <!-- ── System ── -->
@@ -576,8 +576,11 @@ const IconMcp = defineComponent({
 
 const IconNotes = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
-    h('path', { d: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20' }),
-    h('path', { d: 'M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z' })
+    h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
+    h('polyline', { points: '14 2 14 8 20 8' }),
+    h('line', { x1: '16', y1: '13', x2: '8', y2: '13' }),
+    h('line', { x1: '16', y1: '17', x2: '8', y2: '17' }),
+    h('polyline', { points: '10 9 9 9 8 9' })
   ])
 })
 
@@ -587,10 +590,10 @@ const IconTools = defineComponent({
   ])
 })
 
-const IconRecipes = defineComponent({
+const IconTaskEngine = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
-    h('circle', { cx: '12', cy: '12', r: '10' }),
-    h('polyline', { points: '12 6 12 12 16 14' })
+    h('rect', { x: '7', y: '7', width: '10', height: '10', rx: '1' }),
+    h('path', { d: 'M9 2v3M12 2v3M15 2v3M9 19v3M12 19v3M15 19v3M2 9h3M2 12h3M2 15h3M19 9h3M19 12h3M19 15h3' })
   ])
 })
 

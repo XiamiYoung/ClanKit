@@ -89,7 +89,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import EmojiPicker from './EmojiPicker.vue'
 
 const props = defineProps({
@@ -113,7 +113,16 @@ onMounted(async () => {
   await nextTick()
   nameRef.value?.focus()
   nameRef.value?.select()
+  window.addEventListener('keydown', onKeydown)
 })
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+
+function onKeydown(e) {
+  if (e.key === 'Escape') {
+    if (showEmojiPicker.value) { showEmojiPicker.value = false; return }
+    emit('close')
+  }
+}
 
 function onEmojiSelect(emoji) {
   localEmoji.value   = emoji

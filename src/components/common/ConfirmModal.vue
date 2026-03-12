@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div class="confirm-backdrop" @click.self="!loading && $emit('close')" @keydown.escape="!loading && $emit('close')">
+    <div v-if="visible" class="confirm-backdrop" @click.self="!loading && $emit('close')" @keydown.escape="!loading && $emit('close')">
       <div class="confirm-modal" role="alertdialog" aria-modal="true">
         <!-- Header -->
         <div class="confirm-header">
@@ -36,8 +36,13 @@
 
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
+defineOptions({ inheritAttrs: false })
 
 const props = defineProps({
+  visible: {
+    type: Boolean,
+    default: false,
+  },
   title: {
     type: String,
     required: true,

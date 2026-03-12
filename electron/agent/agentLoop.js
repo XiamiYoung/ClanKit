@@ -454,8 +454,15 @@ DATA FILE ROUTING — when the user asks you to create or modify app configurati
   Format: {"categories":[...],"personas":[...,{"id":"<uuid>","type":"system","name":"...","avatar":"a1","description":"...","prompt":"...","providerId":${utilityProvider ? `"${utilityProvider}"` : 'null'},"modelId":${utilityModelId ? `"${utilityModelId}"` : 'null'},"enabledSkillIds":null,"mcpServerIds":null,"voiceId":null,"categoryIds":[],"createdAt":<timestamp>,"updatedAt":<timestamp>}]}
   IMPORTANT: always set "providerId" to ${utilityProvider ? `"${utilityProvider}"` : 'null'} and "modelId" to ${utilityModelId ? `"${utilityModelId}"` : 'null'} (the system utility model) unless the user explicitly asks for a different model.
 - "add/edit knowledge / RAG index"                 → read then write ${dataPath}/knowledge.json
+- "create/add/edit a task"                          → read then write ${dataPath}/tasks.json
+  Format: [{"id":"<uuid>","name":"...","description":"...","icon":"📋","prompt":"...","personaInputs":[{"name":"slotName","description":"Role description"}]}]
+  TASK PROMPT RULES: Use @slotName tokens in the prompt to reference persona input slots (e.g. "@analyst review this data"). Slot names must be alphanumeric/underscore only (no spaces). Add personaInputs entries for each @slotName used. If no persona slot is needed, set personaInputs to [].
+- "create/add/edit a plan"                          → read then write ${dataPath}/plans.json
+  Format: [{"id":"<uuid>","name":"...","description":"...","steps":[{"id":"<uuid>","taskId":"<task id>","label":"...","personaAssignments":{"slotName":"<persona id>"},"defaultPersonaIds":[],"dependsOn":[],"runCondition":"always"}],"schedule":null,"createdAt":"<iso>","updatedAt":"<iso>"}]
+  PLAN RULES: Each step references a task by its id. If the task has personaInputs, fill personaAssignments with {slotName: personaId}. If no inputs, list persona ids in defaultPersonaIds. Set dependsOn:[] for parallel steps; set dependsOn:["<stepId>"] to sequence steps. schedule is null (manual) or a cron string (e.g. "0 8 * * *" = daily 8am). To add a step to the calendar/schedule, set schedule to the appropriate cron expression.
+  PERSONA ID LOOKUP: To assign personas to steps, first read ${dataPath}/personas.json and find the id of the persona the user names.
 - Always read the file first to understand existing content before writing. Preserve all existing entries.
-- After writing, tell the user to click Refresh on the relevant page (MCP / Tools / Personas / Knowledge) to reload.`
+- After writing, tell the user to click Refresh on the relevant page (MCP / Tools / Personas / Knowledge / Tasks) to reload.`
 
     // ── Notes Vault Path + Markdown Placement ──
     const vaultPath = process.env.DOC_PATH || this.config.obsidianVaultPath || this.config.DoCPath

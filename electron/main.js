@@ -100,7 +100,7 @@ let DATA_DIR = process.env.CLANKAI_DATA_PATH || DEFAULT_DATA_PATH
 // Derived paths — re-computed by initDataPaths() if DATA_DIR changes at startup
 let CHATS_FILE, CHATS_DIR, CHATS_INDEX_FILE, CONFIG_FILE, PERSONAS_FILE,
     MCP_SERVERS_FILE, TOOLS_FILE, SOULS_DIR, KNOWLEDGE_FILE, ENV_FILE,
-    UTILITY_USAGE_FILE, RECIPES_FILE, RECIPE_RUNS_DIR, RECIPE_RUNS_INDEX
+    UTILITY_USAGE_FILE, TASKS_FILE, PLANS_FILE, TASK_RUNS_DIR, TASK_RUNS_INDEX
 
 function initDataPaths() {
   CHATS_FILE         = path.join(DATA_DIR, 'chats.json')
@@ -114,9 +114,10 @@ function initDataPaths() {
   KNOWLEDGE_FILE     = path.join(DATA_DIR, 'knowledge.json')
   ENV_FILE           = path.join(DATA_DIR, '.env')
   UTILITY_USAGE_FILE = path.join(DATA_DIR, 'utility-usage.json')
-  RECIPES_FILE       = path.join(DATA_DIR, 'recipes.json')
-  RECIPE_RUNS_DIR    = path.join(DATA_DIR, 'recipe-runs')
-  RECIPE_RUNS_INDEX  = path.join(DATA_DIR, 'recipe-runs', 'index.json')
+  TASKS_FILE         = path.join(DATA_DIR, 'tasks.json')
+  PLANS_FILE         = path.join(DATA_DIR, 'plans.json')
+  TASK_RUNS_DIR      = path.join(DATA_DIR, 'task-runs')
+  TASK_RUNS_INDEX    = path.join(DATA_DIR, 'task-runs', 'index.json')
 }
 initDataPaths()
 
@@ -665,9 +666,42 @@ app.whenReady().then(async () => {
   await migrateEnvDataIfNeeded()
   createWindow()
 
-  // ── Recipe Scheduler ────────────────────────────────────────────────────────
-  const recipeScheduler = require('./recipe-scheduler')
-  recipeScheduler.init(() => DATA_DIR, () => mainWindow)
+  // ── Clean up stale 'running' run entries from a previous session ────────────
+  try {
+    if (fs.existsSync(TASK_RUNS_INDEX)) {
+      const runIndex = JSON.parse(fs.readFileSync(TASK_RUNS_INDEX, 'utf8'))
+      const stoppedAt = new Date().toISOString()
+      let dirty = false
+      for (const entry of runIndex) {
+        if (entry.status === 'running') {
+          entry.status      = 'error'
+          entry.completedAt = stoppedAt
+          entry.error       = 'Interrupted by app restart'
+          dirty = true
+          // Also patch the run detail file if it exists
+          const detailFile = path.join(TASK_RUNS_DIR, `${entry.id}.json`)
+          if (fs.existsSync(detailFile)) {
+            try {
+              const detail = JSON.parse(fs.readFileSync(detailFile, 'utf8'))
+              if (detail.status === 'running') {
+                detail.status      = 'error'
+                detail.completedAt = stoppedAt
+                detail.error       = 'Interrupted by app restart'
+                fs.writeFileSync(detailFile, JSON.stringify(detail, null, 2), 'utf8')
+              }
+            } catch {}
+          }
+        }
+      }
+      if (dirty) fs.writeFileSync(TASK_RUNS_INDEX, JSON.stringify(runIndex, null, 2), 'utf8')
+    }
+  } catch (err) {
+    logger.warn('Failed to clean up stale run entries:', err.message)
+  }
+
+  // ── Task Scheduler ──────────────────────────────────────────────────────────
+  const taskScheduler = require('./task-scheduler')
+  taskScheduler.init(() => DATA_DIR, () => mainWindow)
 
   // ── IM Bridge ──────────────────────────────────────────────────────────────
   // setMainWindow is synchronous and fast — do it immediately so the bridge
@@ -1072,46 +1106,77 @@ ipcMain.handle('store:save-env-path', (_, key, value) => {
 ipcMain.handle('store:get-personas', async () => readJSONAsync(PERSONAS_FILE, { categories: [], personas: [] }))
 ipcMain.handle('store:save-personas', (_, data) => { writeJSON(PERSONAS_FILE, data); return true })
 
-// --- IPC: Recipes -----------------------------------------------------------
+// --- IPC: Tasks -------------------------------------------------------------
 
-ipcMain.handle('recipes:list', async () => readJSONAsync(RECIPES_FILE, []))
+ipcMain.handle('tasks:list', async () => readJSONAsync(TASKS_FILE, []))
 
-ipcMain.handle('recipes:save', async (_, recipe) => {
+ipcMain.handle('tasks:save', async (_, task) => {
   try {
-    let recipes = await readJSONAsync(RECIPES_FILE, [])
-    const idx = recipes.findIndex(r => r.id === recipe.id)
-    if (idx >= 0) recipes[idx] = recipe
-    else recipes.unshift(recipe)
-    await writeJSONAtomic(RECIPES_FILE, recipes)
-    // Update cron schedule
-    const recipeScheduler = require('./recipe-scheduler')
-    recipeScheduler.schedule(recipe)
-    return { success: true, recipe }
+    let tasks = await readJSONAsync(TASKS_FILE, [])
+    const idx = tasks.findIndex(t => t.id === task.id)
+    if (idx >= 0) tasks[idx] = task
+    else tasks.unshift(task)
+    await writeJSONAtomic(TASKS_FILE, tasks)
+    return { success: true, task }
   } catch (err) {
-    logger.error('recipes:save error', err.message)
+    logger.error('tasks:save error', err.message)
     return { success: false, error: err.message }
   }
 })
 
-ipcMain.handle('recipes:delete', async (_, id) => {
+ipcMain.handle('tasks:delete', async (_, id) => {
   try {
-    let recipes = await readJSONAsync(RECIPES_FILE, [])
-    recipes = recipes.filter(r => r.id !== id)
-    await writeJSONAtomic(RECIPES_FILE, recipes)
-    // Cancel schedule
-    const recipeScheduler = require('./recipe-scheduler')
-    recipeScheduler.unschedule(id)
+    let tasks = await readJSONAsync(TASKS_FILE, [])
+    tasks = tasks.filter(t => t.id !== id)
+    await writeJSONAtomic(TASKS_FILE, tasks)
     return { success: true }
   } catch (err) {
-    logger.error('recipes:delete error', err.message)
+    logger.error('tasks:delete error', err.message)
     return { success: false, error: err.message }
   }
 })
 
-ipcMain.handle('recipes:get-runs', async (_, { recipeId, limit } = {}) => {
+// --- IPC: Plans -------------------------------------------------------------
+
+ipcMain.handle('plans:list', async () => readJSONAsync(PLANS_FILE, []))
+
+ipcMain.handle('plans:save', async (_, plan) => {
   try {
-    let index = await readJSONAsync(RECIPE_RUNS_INDEX, [])
-    if (recipeId) index = index.filter(r => r.recipeId === recipeId)
+    let plans = await readJSONAsync(PLANS_FILE, [])
+    const idx = plans.findIndex(p => p.id === plan.id)
+    if (idx >= 0) plans[idx] = plan
+    else plans.unshift(plan)
+    await writeJSONAtomic(PLANS_FILE, plans)
+    // Update cron/one-time schedule
+    const taskScheduler = require('./task-scheduler')
+    taskScheduler.schedulePlan(plan)
+    return { success: true, plan }
+  } catch (err) {
+    logger.error('plans:save error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('plans:delete', async (_, id) => {
+  try {
+    let plans = await readJSONAsync(PLANS_FILE, [])
+    plans = plans.filter(p => p.id !== id)
+    await writeJSONAtomic(PLANS_FILE, plans)
+    const taskScheduler = require('./task-scheduler')
+    taskScheduler.unschedulePlan(id)
+    return { success: true }
+  } catch (err) {
+    logger.error('plans:delete error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// --- IPC: Task Runs ---------------------------------------------------------
+
+ipcMain.handle('tasks:get-runs', async (_, { planId, limit } = {}) => {
+  try {
+    let index = await readJSONAsync(TASK_RUNS_INDEX, [])
+    if (planId) index = index.filter(r => r.planId === planId)
     if (limit) index = index.slice(0, limit)
     return index
   } catch {
@@ -1119,54 +1184,53 @@ ipcMain.handle('recipes:get-runs', async (_, { recipeId, limit } = {}) => {
   }
 })
 
-ipcMain.handle('recipes:get-run', async (_, runId) => {
+ipcMain.handle('tasks:get-run', async (_, runId) => {
   try {
-    const file = path.join(RECIPE_RUNS_DIR, `${runId}.json`)
+    const file = path.join(TASK_RUNS_DIR, `${runId}.json`)
     return await readJSONAsync(file, null)
   } catch {
     return null
   }
 })
 
-ipcMain.handle('recipes:delete-run', async (_, runId) => {
+ipcMain.handle('tasks:delete-run', async (_, runId) => {
   try {
-    const file = path.join(RECIPE_RUNS_DIR, `${runId}.json`)
+    const file = path.join(TASK_RUNS_DIR, `${runId}.json`)
     if (fs.existsSync(file)) fs.unlinkSync(file)
-    let index = await readJSONAsync(RECIPE_RUNS_INDEX, [])
+    let index = await readJSONAsync(TASK_RUNS_INDEX, [])
     index = index.filter(r => r.id !== runId)
-    await writeJSONAtomic(RECIPE_RUNS_INDEX, index)
+    await writeJSONAtomic(TASK_RUNS_INDEX, index)
     return { success: true }
   } catch (err) {
-    logger.error('recipes:delete-run error', err.message)
+    logger.error('tasks:delete-run error', err.message)
     return { success: false, error: err.message }
   }
 })
 
-ipcMain.handle('recipes:save-run', async (_, runDetail) => {
+ipcMain.handle('tasks:save-run', async (_, runDetail) => {
   try {
-    if (!fs.existsSync(RECIPE_RUNS_DIR)) fs.mkdirSync(RECIPE_RUNS_DIR, { recursive: true })
-    const file = path.join(RECIPE_RUNS_DIR, `${runDetail.id}.json`)
+    if (!fs.existsSync(TASK_RUNS_DIR)) fs.mkdirSync(TASK_RUNS_DIR, { recursive: true })
+    const file = path.join(TASK_RUNS_DIR, `${runDetail.id}.json`)
     await writeJSONAtomic(file, runDetail)
-    // Update index entry
-    let index = await readJSONAsync(RECIPE_RUNS_INDEX, [])
+    let index = await readJSONAsync(TASK_RUNS_INDEX, [])
     const existing = index.findIndex(r => r.id === runDetail.id)
     const summary = {
-      id: runDetail.id,
-      recipeId: runDetail.recipeId,
-      recipeName: runDetail.recipeName,
+      id:          runDetail.id,
+      planId:      runDetail.planId,
+      planName:    runDetail.planName,
       triggeredBy: runDetail.triggeredBy,
-      status: runDetail.status,
-      startedAt: runDetail.startedAt,
+      status:      runDetail.status,
+      startedAt:   runDetail.startedAt,
       completedAt: runDetail.completedAt,
-      error: runDetail.error || null,
+      error:       runDetail.error || null,
     }
     if (existing >= 0) index[existing] = summary
     else index.unshift(summary)
     if (index.length > 200) index = index.slice(0, 200)
-    await writeJSONAtomic(RECIPE_RUNS_INDEX, index)
+    await writeJSONAtomic(TASK_RUNS_INDEX, index)
     return { success: true }
   } catch (err) {
-    logger.error('recipes:save-run error', err.message)
+    logger.error('tasks:save-run error', err.message)
     return { success: false, error: err.message }
   }
 })

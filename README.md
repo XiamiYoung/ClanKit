@@ -62,6 +62,21 @@ npm run build
 
 Produces a production build in `dist/`.
 
+## Package / Distribution
+
+```bash
+# Windows installer (.exe via NSIS)
+npm run dist:win
+
+# macOS disk image (.dmg)
+npm run dist:mac
+
+# Linux
+npm run dist:linux
+```
+
+Output is written to `dist-release/`.
+
 ## Project Structure
 
 ```
