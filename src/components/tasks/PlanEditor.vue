@@ -460,7 +460,7 @@ import { v4 as uuid } from 'uuid'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import PlanHistoryModal from './PlanHistoryModal.vue'
-import EmojiPicker from '../personas/EmojiPicker.vue'
+import EmojiPicker from '../agents/EmojiPicker.vue'
 
 const props = defineProps({
   visible: Boolean,

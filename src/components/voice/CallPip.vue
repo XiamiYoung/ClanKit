@@ -53,7 +53,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useVoiceStore } from '../../stores/voice'
 import { useAgentsStore } from '../../stores/agents'
-import { getAvatarDataUri } from '../personas/personaAvatars'
+import { getAvatarDataUri } from '../agents/personaAvatars'
 
 const voiceStore = useVoiceStore()
 const agentsStore = useAgentsStore()

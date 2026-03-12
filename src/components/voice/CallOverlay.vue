@@ -136,7 +136,7 @@ import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useVoiceStore } from '../../stores/voice'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
-import { getAvatarDataUri } from '../personas/personaAvatars'
+import { getAvatarDataUri } from '../agents/personaAvatars'
 import { resolveModelPrice, formatCost } from '../../utils/pricing'
 
 const voiceStore = useVoiceStore()

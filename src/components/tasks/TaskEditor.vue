@@ -133,7 +133,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { v4 as uuid } from 'uuid'
-import EmojiPicker from '../personas/EmojiPicker.vue'
+import EmojiPicker from '../agents/EmojiPicker.vue'
 import { useConfigStore } from '../../stores/config'
 
 const props = defineProps({

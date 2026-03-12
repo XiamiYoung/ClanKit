@@ -400,7 +400,7 @@ import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { v4 as uuid } from 'uuid'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
-import EmojiPicker from '../personas/EmojiPicker.vue'
+import EmojiPicker from '../agents/EmojiPicker.vue'
 import WorkflowPreviewModal from './WorkflowPreviewModal.vue'
 
 const agentsStore = useAgentsStore()
