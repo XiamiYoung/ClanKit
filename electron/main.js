@@ -693,7 +693,7 @@ app.whenReady().then(async () => {
   ensureDataDir()
   await migrateChatsIfNeeded()
   await migrateEnvDataIfNeeded()
-  migrateAgentsToAgents()
+  migratePersonasToAgents()
   createWindow()
 
   // ── Clean up stale 'running' run entries from a previous session ────────────
