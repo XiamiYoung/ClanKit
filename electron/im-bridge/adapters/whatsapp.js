@@ -86,11 +86,16 @@ async function _createSocket() {
       // Only accept agentl 1:1 chats — skip groups, channels, status, broadcasts
       if (!remoteJid.endsWith('@s.whatsapp.net') && !remoteJid.endsWith('@lid')) continue
 
+      const fromMe = msg.key?.fromMe || false
       const username = msg.pushName || remoteJid.split('@')[0]
       const chatId   = remoteJid
+      const body = extractText(msg.message)
 
-      const allowed = _opts.allowedUsers
-      if (allowed?.length > 0 && !allowed.includes(username) && !allowed.includes(chatId.split('@')[0])) continue
+      // Only process self-messages (fromMe) - skip messages from other people
+      if (!fromMe) continue
+
+      const allowed = _opts.allowedUsers || []
+      if (allowed.length > 0 && !allowed.includes(username) && !allowed.includes(chatId.split('@')[0])) continue
 
       // Voice / audio message
       const audioMsg = msg.message?.audioMessage
@@ -101,7 +106,6 @@ async function _createSocket() {
             reuploadRequest: _sock.updateMediaMessage,
             logger: _sock.logger,
           })
-          console.log(`[whatsapp] voice from ${username}: ${buffer.length} bytes`)
           await _onVoice(chatId, username, Buffer.from(buffer))
         } catch (err) {
           console.error('[whatsapp] voice download error:', err.message)
@@ -119,7 +123,6 @@ async function _createSocket() {
             logger: _sock.logger,
           })
           const caption = imageMsg.caption || ''
-          console.log(`[whatsapp] image from ${username}: ${buffer.length} bytes`)
           await _onImage(chatId, username, Buffer.from(buffer), caption)
         } catch (err) {
           console.error('[whatsapp] image download error:', err.message)
@@ -127,10 +130,8 @@ async function _createSocket() {
         continue
       }
 
-      const body = extractText(msg.message)
       if (!body) continue
 
-      console.log(`[whatsapp] incoming from ${username}: ${body.slice(0, 80)}`)
       _onMessage(chatId, username, body)
     }
   })

@@ -130,6 +130,19 @@ async function _checkOncePlans() {
   if (_onceMap.size === 0) _stopOncePoll()
 }
 
+// ── Item ID computation (for grouping execution runs) ────────────────────────────
+
+function _computeItemId(plan, triggeredBy) {
+  const schedType = plan.schedule?.type || 'manual'
+  if (triggeredBy === 'manual' || schedType === 'manual') return `${plan.id}-manual`
+  if (schedType === 'once') return `${plan.id}-once`
+  if (schedType === 'cron' && plan.schedule?.cron) {
+    const hash = Buffer.from(plan.schedule.cron).toString('base64url')
+    return `${plan.id}-cron-${hash}`
+  }
+  return `${plan.id}-manual`
+}
+
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
 function getPaths() {
@@ -142,6 +155,9 @@ function getPaths() {
     taskRunsDir:      path.join(dir, 'task-runs'),
     taskRunsIndex:    path.join(dir, 'task-runs', 'index.json'),
     soulsDir:         path.join(dir, 'souls'),
+    taskCategoriesFile: path.join(dir, 'task-categories.json'),
+    planCategoriesFile: path.join(dir, 'plan-categories.json'),
+    aiTaskTreeFile:     path.join(dir, 'ai-task-tree.json'),
   }
 }
 
@@ -301,6 +317,59 @@ function shouldRunStep(step, stepStatuses) {
   return true
 }
 
+// ── Sync AI Task Tree with execution history ───────────────────────────────────
+
+async function _syncAiTaskTree(plan, itemId, triggeredBy) {
+  const { aiTaskTreeFile, planCategoriesFile } = getPaths()
+  const tree = readJSON(aiTaskTreeFile, { plans: [] })
+  const allPlanCats = readJSON(planCategoriesFile, [])
+  const cat = plan.categoryId ? allPlanCats.find(c => c.id === plan.categoryId) : null
+
+  let planEntry = tree.plans.find(p => p.planId === plan.id)
+  if (!planEntry) {
+    planEntry = {
+      planId: plan.id,
+      planName: plan.name,
+      categoryId: plan.categoryId || null,
+      categoryName: cat?.name || null,
+      categoryEmoji: cat?.emoji || null,
+      deletedAt: null,
+      items: [],
+    }
+    tree.plans.push(planEntry)
+  } else {
+    planEntry.planName = plan.name
+    planEntry.categoryId = plan.categoryId || null
+    planEntry.categoryName = cat?.name || null
+    planEntry.categoryEmoji = cat?.emoji || null
+  }
+
+  const schedType = plan.schedule?.type || 'manual'
+  let itemType = 'manual', itemDescription = 'Manual', itemCronExpr = null
+  if (triggeredBy !== 'manual' && schedType === 'once') {
+    itemType = 'once'
+    itemDescription = 'One-time scheduled'
+  } else if (triggeredBy !== 'manual' && schedType === 'cron' && plan.schedule?.cron) {
+    itemType = 'cron'
+    itemCronExpr = plan.schedule.cron
+    itemDescription = `Recurring: ${plan.schedule.cron}`
+  }
+
+  if (!planEntry.items.find(i => i.itemId === itemId)) {
+    const itemObj = {
+      itemId,
+      type: itemType,
+      description: itemDescription,
+      createdAt: new Date().toISOString(),
+      deletedAt: null,
+    }
+    if (itemCronExpr) itemObj.cronExpr = itemCronExpr
+    planEntry.items.push(itemObj)
+  }
+
+  await writeJSONAtomic(aiTaskTreeFile, tree)
+}
+
 // ── Execute a full plan (all steps sequentially) ──────────────────────────────
 
 async function _executePlan(plan, triggeredBy = 'schedule') {
@@ -342,8 +411,9 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
   await writeJSONAtomic(path.join(taskRunsDir, `${runId}.json`), runDetail)
 
   // Update index
+  const itemId = _computeItemId(plan, triggeredBy)
   let runIndex = readJSON(taskRunsIndex, [])
-  runIndex.unshift({ id: runId, planId: plan.id, planName: plan.name, triggeredBy, status: 'running', startedAt, completedAt: null, error: null })
+  runIndex.unshift({ id: runId, planId: plan.id, planName: plan.name, triggeredBy, status: 'running', startedAt, completedAt: null, error: null, itemId, stepCount: (plan.steps || []).length })
   if (runIndex.length > 200) runIndex = runIndex.slice(0, 200)
   await writeJSONAtomic(taskRunsIndex, runIndex)
 
@@ -465,6 +535,8 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
   runDetail.status       = runStatus
   runDetail.completedAt  = completedAt
   runDetail.error        = runError
+  runDetail.itemId       = itemId
+  runDetail.stepCount    = stepResults.length
   await writeJSONAtomic(path.join(taskRunsDir, `${runId}.json`), runDetail)
 
   // Update index entry
@@ -474,6 +546,8 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
     idxEntry.status      = runStatus
     idxEntry.completedAt = completedAt
     idxEntry.error       = runError
+    idxEntry.itemId      = itemId
+    idxEntry.stepCount   = stepResults.length
     await writeJSONAtomic(taskRunsIndex, runIndex)
   }
 
@@ -487,6 +561,13 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
       await writeJSONAtomic(plansFile, plans)
     }
   } catch {}
+
+  // Sync AI Task Tree
+  try {
+    await _syncAiTaskTree(plan, itemId, triggeredBy)
+  } catch (err) {
+    logger.warn('[TaskScheduler] ai-task sync error:', err.message)
+  }
 
   logger.info(`[TaskScheduler] Plan run ${runId} ${runStatus}`)
 
@@ -511,7 +592,14 @@ function schedulePlan(plan) {
       logger.warn(`[TaskScheduler] Invalid cron for plan ${plan.id}: ${plan.schedule.cron}`)
       return
     }
-    const timezone = plan.schedule.timezone || 'UTC'
+    let timezone = plan.schedule.timezone || 'UTC'
+    // Validate timezone — fallback to UTC if invalid
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: timezone })
+    } catch {
+      logger.warn(`[TaskScheduler] Invalid timezone "${timezone}" for plan ${plan.id}, using UTC`)
+      timezone = 'UTC'
+    }
     try {
       const task = cron.schedule(plan.schedule.cron, async () => {
         try { await _executePlan(plan, 'schedule') }

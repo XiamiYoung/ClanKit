@@ -133,6 +133,16 @@ export const storage = {
     lsSet('maestro:agents', agents)
   },
 
+  // ── Plaza ─────────────────────────────────────────────────────────────────
+  async getPlazaTopics() {
+    if (isElectron()) return window.electronAPI.plaza.getTopics()
+    return lsGet('clankai:plaza-topics', [])
+  },
+  async savePlazaTopics(topics) {
+    if (isElectron()) return window.electronAPI.plaza.saveTopics(topics)
+    lsSet('clankai:plaza-topics', topics)
+  },
+
   // ── Soul Memory ────────────────────────────────────────────────────────────
   async getSoul(agentId, type) {
     if (isElectron()) return window.electronAPI.souls.read(agentId, type)

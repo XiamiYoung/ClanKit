@@ -486,7 +486,7 @@ function makeBlankDraft() {
     agents:     [],
     inputs:       [],
     schedule: {
-      enabled:   false,
+      enabled:   true,
       preset:    'daily',
       time:      '09:00',
       day:       '1',

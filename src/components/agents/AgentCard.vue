@@ -24,15 +24,15 @@
       </div>
 
       <!-- Description -->
-      <p class="agent-card-desc">{{ agent.description || 'No description' }}</p>
+      <p class="agent-card-desc">{{ agent.description || t('agents.noDescription') }}</p>
 
       <!-- Provider + Model metadata -->
       <div v-if="agent.providerId || agent.modelId" class="pc-model-meta">
-        <span v-if="agent.providerId" class="pc-provider-badge">
-          {{ PROVIDER_LABELS[agent.providerId] || agent.providerId }}
+        <span v-if="agentProviderLabel" class="pc-provider-badge">
+          {{ agentProviderLabel }}
         </span>
         <span v-if="agent.modelId" class="pc-model-id">{{ agent.modelId }}</span>
-        <span v-if="isProviderInactive" class="pc-inactive-warn">&#9888; Provider inactive</span>
+        <span v-if="isProviderInactive" class="pc-inactive-warn">&#9888; {{ t('agents.providerInactive') }}</span>
       </div>
 
       <!-- Footer -->
@@ -40,9 +40,9 @@
         <div class="agent-card-badges">
           <span v-if="agent.isDefault" class="agent-card-default-badge">
             <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-            Default
+            {{ t('agents.default') }}
           </span>
-          <span v-if="agent.isBuiltin" class="agent-card-builtin-badge">Built-in</span>
+          <span v-if="agent.isBuiltin" class="agent-card-builtin-badge">{{ t('agents.builtin') }}</span>
           <span v-if="agent.voiceId" class="agent-card-voice-badge">
             <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
             {{ agent.voiceId }}
@@ -53,8 +53,8 @@
             v-if="!agent.isDefault && !hideSetDefault && !showUnassign"
             @click.stop="$emit('set-default')"
             class="agent-action-btn star-btn-always"
-            title="Set as default"
-            aria-label="Set as default"
+            :title="t('agents.setAsDefault')"
+            :aria-label="t('agents.setAsDefault')"
           >
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </button>
@@ -62,18 +62,19 @@
             v-if="showUnassign"
             @click.stop="$emit('unassign')"
             class="unassign-chip"
-            title="Unassign from category"
-            aria-label="Unassign from category"
+            :title="t('agents.unassignFromCategory')"
+            :aria-label="t('agents.unassignFromCategory')"
           >
             <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            Unassign
+            {{ t('agents.unassign') }}
           </button>
           <button
             v-if="!agent.isBuiltin && !hideDelete"
-            @click.stop="$emit('delete')"
+            @click.stop="!deleteDisabled && $emit('delete')"
+            :disabled="deleteDisabled"
             class="agent-action-btn delete-btn-always"
-            title="Delete agent"
-            aria-label="Delete agent"
+            :title="deleteTitle"
+            :aria-label="t('agents.deleteAgent')"
           >
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
           </button>
@@ -87,6 +88,9 @@
 import { computed } from 'vue'
 import { getAvatarDataUri } from './agentAvatars'
 import { useConfigStore } from '../../stores/config'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const PROVIDER_LABELS = {
   anthropic:  'Anthropic',
@@ -96,13 +100,14 @@ const PROVIDER_LABELS = {
 }
 
 const configStore = useConfigStore()
-
 const props = defineProps({
   agent:      { type: Object,  required: true },
   gradient:     { type: String,  default: 'linear-gradient(135deg, #0F0F0F, #374151)' },
   hideDelete:     { type: Boolean, default: false },
   hideSetDefault: { type: Boolean, default: false },
   showUnassign:   { type: Boolean, default: false },
+  deleteDisabled: { type: Boolean, default: false },
+  deleteTitle:    { type: String,  default: 'Delete Agent' },
 })
 
 defineEmits(['click', 'delete', 'unassign', 'set-default'])
@@ -113,9 +118,18 @@ const fallbackInitial = computed(() => {
   return (props.agent.name || '?').charAt(0).toUpperCase()
 })
 
+const agentProviderLabel = computed(() => {
+  const pid = props.agent.providerId
+  if (!pid) return ''
+  const provider = configStore.config.providers?.find(p => p.id === pid)
+  if (provider?.name) return provider.name
+  return PROVIDER_LABELS[pid] || pid.slice(0, 8)
+})
+
 const isProviderInactive = computed(() => {
   if (!props.agent.providerId) return false
-  return !configStore.config[props.agent.providerId]?.isActive
+  const provider = configStore.config.providers?.find(p => p.id === props.agent.providerId)
+  return !provider?.isActive
 })
 </script>
 

@@ -5,8 +5,8 @@
     <div class="config-header">
       <div class="config-header-top">
         <div>
-          <h1 class="config-title">Configuration</h1>
-          <p class="config-subtitle">Providers, paths, voice, knowledge, security and more</p>
+          <h1 class="config-title">{{ t('config.title') }}</h1>
+          <p class="config-subtitle">{{ t('config.configSubtitle') }}</p>
         </div>
       </div>
     </div>
@@ -45,6 +45,34 @@
         <div class="config-content-inner">
 
         <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- Language (General > Language) -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <template v-if="activeTopTab === 'general' && activeSubTab === 'language'">
+
+          <div class="config-card">
+            <div class="form-section-header">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+              </div>
+              <h3 class="form-section-title">Language / 语言</h3>
+            </div>
+            <div class="form-group">
+              <label class="form-label">{{ form.language === 'zh' ? '应用语言' : 'Application Language' }}</label>
+              <select v-model="form.language" class="field" @change="handleLanguageChange">
+                <option value="en">English</option>
+                <option value="zh">中文</option>
+              </select>
+              <p class="hint">
+                {{ form.language === 'zh' ? '选择应用的默认语言。这将用于界面文字和新创建智能体的默认语言。' : 'Select the default language for the application. This will be used for UI text and as the default language for new agents.' }}
+              </p>
+            </div>
+          </div>
+
+        </template>
+
+        <!-- ════════════════════════════════════════════════════════════════ -->
         <!-- Paths (General > Paths) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
         <template v-if="activeTopTab === 'general' && activeSubTab === 'paths'">
@@ -57,22 +85,15 @@
                   <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
                 </svg>
               </div>
-              <h3 class="form-section-title">Data Path</h3>
+              <h3 class="form-section-title">{{ t('config.dataPath') }}</h3>
               <span class="form-label-hint">CLANKAI_DATA_PATH</span>
             </div>
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
-                <input id="dataPath" v-model="form.dataPath" type="text" :placeholder="defaultDataPath" class="field font-mono" />
-                <button class="open-folder-btn" @click="openInExplorer(form.dataPath || defaultDataPath)" title="Open in file explorer">
-                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                  </svg>
-                </button>
+                <input id="dataPath" type="text" :value="form.dataPath || defaultDataPath" readonly class="field font-mono" style="background:#f5f5f5;" />
               </div>
               <p class="hint">
-                Directory where ClankAI stores all data (config, chats, agents, MCP servers, tools, souls).
-                Stored in .env — requires restart to take effect.
-                Default: <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultDataPath }}</code>
+                {{ t('config.dataPathHint') }} <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultDataPath }}</code>
               </p>
             </div>
           </div>
@@ -85,7 +106,7 @@
                   <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>
                 </svg>
               </div>
-              <h3 class="form-section-title">Artifact Path</h3>
+              <h3 class="form-section-title">{{ t('config.artifactPath') }}</h3>
               <span class="form-label-hint">CLANKAI_ARTIFACT_PATH</span>
             </div>
             <div class="form-group" style="margin-bottom:0;">
@@ -98,8 +119,7 @@
                 </button>
               </div>
               <p class="hint">
-                Directory where the AI creates artifacts (markdown, temp files, docs, exports) during chats.
-                Default: <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultArtifactPath }}</code>
+                {{ t('config.artifactPathHint') }} <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultArtifactPath }}</code>
               </p>
             </div>
           </div>
@@ -112,7 +132,7 @@
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
                 </svg>
               </div>
-              <h3 class="form-section-title">Skills Path</h3>
+              <h3 class="form-section-title">{{ t('config.skillsPath') }}</h3>
             </div>
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
@@ -123,7 +143,7 @@
                   </svg>
                 </button>
               </div>
-              <p class="hint">Directory containing skill folders. Leave empty for default: ~/.claude/skills</p>
+              <p class="hint">{{ t('config.skillsPathHint') }}</p>
             </div>
           </div>
 
@@ -133,7 +153,6 @@
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                 <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
               </svg>
-              {{ savingGeneral ? 'Saving…' : 'Save' }}
             </AppButton>
             <span v-if="savedGeneralMsg" class="save-indicator" :class="savedGeneralMsg.ok ? 'success' : 'error'">
               <svg v-if="savedGeneralMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -148,471 +167,406 @@
         <!-- ════════════════════════════════════════════════════════════════ -->
         <template v-if="activeTopTab === 'ai' && activeSubTab === 'models'">
 
-          <!-- Provider tab selector -->
-          <div class="provider-tab-group">
-            <button
-              v-for="tab in providerOptions"
-              :key="tab.value"
-              @click="activeProviderTab = tab.value"
-              class="config-tab-btn"
-              :class="{ active: activeProviderTab === tab.value }"
-            >
-              <component :is="tab.icon" class="config-tab-icon" />
-              {{ tab.label }}
-              <span class="prov-dot" :class="form[tab.value]?.isActive ? 'active' : 'inactive'" />
-            </button>
-          </div>
-
-          <!-- ── Anthropic Tab ─────────────────────────────────────────── -->
-          <template v-if="activeProviderTab === 'anthropic'">
-
-            <!-- Credentials -->
-            <div class="config-card">
-              <div class="form-section-header">
-                <div class="section-icon-sm">
-                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                  </svg>
-                </div>
-                <h3 class="form-section-title">Credentials</h3>
-              </div>
-
-              <!-- API Key -->
-              <div class="form-group">
-                <label for="apiKey" class="form-label">
-                  API Key
-                  <span class="form-label-hint">ANTHROPIC_API_KEY</span>
-                </label>
-                <div class="input-with-action">
-                  <input
-                    id="apiKey"
-                    v-model="form.anthropic.apiKey"
-                    :type="showKey ? 'text' : 'password'"
-                    placeholder="sk-ant-…"
-                    class="field font-mono"
-                  />
-                  <button @click="showKey = !showKey" class="field-action-btn" :aria-label="showKey ? 'Hide key' : 'Show key'">
-                    <svg v-if="!showKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                    </svg>
-                    <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                      <line x1="1" y1="1" x2="23" y2="23"/>
-                    </svg>
-                  </button>
-                </div>
-                <p class="hint">Stored locally in {{ form.dataPath || defaultDataPath }}/config.json — never sent elsewhere</p>
-              </div>
-
-              <!-- Base URL -->
-              <div class="form-group">
-                <label for="baseURL" class="form-label">
-                  Base URL
-                  <span class="form-label-hint">ANTHROPIC_BASE_URL</span>
-                </label>
-                <input id="baseURL" v-model="form.anthropic.baseURL" type="url" placeholder="https://api.anthropic.com" class="field" />
-                <p class="hint">Change for custom backends: LiteLLM, Ollama, corporate proxy, etc.</p>
-              </div>
-
-            </div>
-
-            <!-- Models section -->
-            <div class="config-card">
-              <div class="form-section-header">
-                <div class="section-icon-sm">
-                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-                </div>
-                <h3 class="form-section-title">Models</h3>
-              </div>
-
-              <div class="models-grid">
-                <div class="form-group compact">
-                  <label for="sonnetModel" class="form-label">Sonnet Model</label>
-                  <input id="sonnetModel" v-model="form.anthropic.sonnetModel" type="text" placeholder="anthropic/claude-sonnet-latest" class="field font-mono"
-                    @click="testModelAnthropicTemp = form.anthropic.sonnetModel" />
-                </div>
-                <div class="form-group compact">
-                  <label for="opusModel" class="form-label">Opus Model</label>
-                  <input id="opusModel" v-model="form.anthropic.opusModel" type="text" placeholder="anthropic/claude-opus-latest" class="field font-mono"
-                    @click="testModelAnthropicTemp = form.anthropic.opusModel" />
-                </div>
-                <div class="form-group compact">
-                  <label for="haikuModel" class="form-label">Haiku Model</label>
-                  <input id="haikuModel" v-model="form.anthropic.haikuModel" type="text" placeholder="anthropic/claude-3-5-haiku-20241022" class="field font-mono"
-                    @click="testModelAnthropicTemp = form.anthropic.haikuModel" />
-                </div>
-              </div>
-
-              <div class="form-divider"></div>
-
-              <div class="test-simple-row">
-                <span class="test-selected-label">{{ testModelAnthropicTemp ? testModelAnthropicTemp : 'Click a model above to select' }}</span>
-                <AppButton size="compact" @click="testProviderConnection('anthropic')" :disabled="testingProvider === 'anthropic' || !canTestAnthropic" :loading="testingProvider === 'anthropic'">
-                  <svg v-if="testingProvider !== 'anthropic'" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                  {{ testingProvider === 'anthropic' ? 'Testing\u2026' : 'Test' }}
-                </AppButton>
-              </div>
-              <div v-if="testResults.anthropic" class="test-result" :class="testResults.anthropic.ok ? 'success' : 'error'" style="margin-top:0.5rem;">
-                <svg v-if="testResults.anthropic.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                <svg v-else class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <span>{{ testResults.anthropic.message }}</span>
-              </div>
-            </div>
-          </template>
-
-          <!-- ── OpenRouter Tab ────────────────────────────────────────── -->
-          <template v-if="activeProviderTab === 'openrouter'">
-
-            <!-- Credentials -->
-            <div class="config-card">
-              <div class="form-section-header">
-                <div class="section-icon-sm">
-                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                  </svg>
-                </div>
-                <h3 class="form-section-title">Credentials</h3>
-              </div>
-
-              <div class="form-group">
-                <label for="openrouterApiKey" class="form-label">
-                  API Key <span class="form-label-hint">OPENROUTER_API_KEY</span>
-                </label>
-                <div class="input-with-action">
-                  <input id="openrouterApiKey" v-model="form.openrouter.apiKey" :type="showOpenRouterKey ? 'text' : 'password'" placeholder="sk-or-…" class="field font-mono" />
-                  <button @click="showOpenRouterKey = !showOpenRouterKey" class="field-action-btn" :aria-label="showOpenRouterKey ? 'Hide key' : 'Show key'">
-                    <svg v-if="!showOpenRouterKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                  </button>
-                </div>
-                <p class="hint">Your OpenRouter API key — stored locally</p>
-              </div>
-
-              <div class="form-group">
-                <label for="openrouterBaseURL" class="form-label">Base URL</label>
-                <input id="openrouterBaseURL" v-model="form.openrouter.baseURL" type="url" placeholder="https://openrouter.ai/api" class="field" />
-                <p class="hint">OpenRouter base URL (without /v1 — the SDK adds it). Change only for custom proxies.</p>
-              </div>
-            </div>
-
-            <!-- Available Models + Test -->
-            <div class="config-card">
-              <div class="form-section-header">
-                <div class="section-icon-sm">
-                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                  </svg>
-                </div>
-                <h3 class="form-section-title">Available Models</h3>
-                <span class="form-label-hint" style="margin-left:auto;">{{ modelsStore.openrouterModels.length > 0 ? `${modelsStore.openrouterModels.length} loaded` : 'Enter API key and fetch' }}</span>
-                <AppButton size="compact" @click="fetchOrModels" :disabled="orModelsFetching || !form.openrouter.apiKey" :loading="orModelsFetching">
-                  <svg v-if="!orModelsFetching" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                  {{ orModelsFetching ? 'Fetching…' : 'Fetch' }}
-                </AppButton>
-              </div>
-              <div v-if="modelsStore.openrouterModels.length > 0" class="model-list-area">
-                <input v-model="orModelFilter" type="text" placeholder="Filter models…" class="model-filter font-mono" />
-                <div class="model-list font-mono">
-                  <div v-for="m in filteredOrModels" :key="m.id"
-                    class="model-list-item" :class="{ selected: orSelectedTestModel === m.id }"
-                    @click="orSelectedTestModel = m.id; testModelOpenRouterTemp = m.id">{{ m.id }} — {{ m.name }}</div>
-                </div>
-              </div>
-              <div v-if="orModelsFetchError" class="test-result error">
-                <svg class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <span>{{ orModelsFetchError }}</span>
-              </div>
-
-              <div class="form-divider"></div>
-
-              <div class="test-simple-row">
-                <span class="test-selected-label">{{ testModelOpenRouterTemp ? testModelOpenRouterTemp : 'Select a model above to test' }}</span>
-                <AppButton size="compact" @click="testProviderConnection('openrouter')" :disabled="testingProvider === 'openrouter' || !canTestOpenRouter" :loading="testingProvider === 'openrouter'">
-                  <svg v-if="testingProvider !== 'openrouter'" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                  {{ testingProvider === 'openrouter' ? 'Testing\u2026' : 'Test' }}
-                </AppButton>
-              </div>
-              <div v-if="testResults.openrouter" class="test-result" :class="testResults.openrouter.ok ? 'success' : 'error'" style="margin-top:0.5rem;">
-                <svg v-if="testResults.openrouter.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                <svg v-else class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <span>{{ testResults.openrouter.message }}</span>
-              </div>
-            </div>
-          </template>
-
-          <!-- ── OpenAI Tab ──────────────────────────────────────────── -->
-          <template v-if="activeProviderTab === 'openai'">
-
-            <!-- Credentials -->
-            <div class="config-card">
-              <div class="form-section-header">
-                <div class="section-icon-sm">
-                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                  </svg>
-                </div>
-                <h3 class="form-section-title">Credentials</h3>
-              </div>
-
-              <div class="form-group">
-                <label for="openaiApiKey" class="form-label">
-                  API Key <span class="form-label-hint">x-api-key</span>
-                </label>
-                <div class="input-with-action">
-                  <input id="openaiApiKey" v-model="form.openai.apiKey" :type="showOpenAIKey ? 'text' : 'password'" placeholder="your-openai-api-key" class="field font-mono" />
-                  <button @click="showOpenAIKey = !showOpenAIKey" class="field-action-btn" :aria-label="showOpenAIKey ? 'Hide key' : 'Show key'">
-                    <svg v-if="!showOpenAIKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                  </button>
-                </div>
-                <p class="hint">OpenAI x-api-key — stored locally</p>
-              </div>
-
-              <div class="form-group">
-                <label for="openaiBaseURL" class="form-label">Base URL</label>
-                <input id="openaiBaseURL" v-model="form.openai.baseURL" type="url" placeholder="https://mlaas.virtuosgames.com" class="field" />
-                <p class="hint">OpenAI base URL (without /proxy/openai/v1 — added automatically)</p>
-              </div>
-            </div>
-
-            <!-- Available Models + Test -->
-            <div class="config-card">
-              <div class="form-section-header">
-                <div class="section-icon-sm">
-                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                  </svg>
-                </div>
-                <h3 class="form-section-title">Available Models</h3>
-                <span class="form-label-hint" style="margin-left:auto;">{{ modelsStore.openaiModels.length > 0 ? `${modelsStore.openaiModels.length} loaded` : 'Enter API key and fetch' }}</span>
-                <AppButton size="compact" @click="fetchOpenAIModelsLocal" :disabled="openaiModelsFetching || !form.openai.apiKey" :loading="openaiModelsFetching">
-                  <svg v-if="!openaiModelsFetching" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                  {{ openaiModelsFetching ? 'Fetching…' : 'Fetch' }}
-                </AppButton>
-              </div>
-              <div v-if="modelsStore.openaiModels.length > 0" class="model-list-area">
-                <input v-model="openaiModelFilter" type="text" placeholder="Filter models…" class="model-filter font-mono" />
-                <div class="model-list font-mono">
-                  <div v-for="m in filteredOpenAIModels" :key="m.id"
-                    class="model-list-item" :class="{ selected: openaiSelectedTestModel === m.id }"
-                    @click="openaiSelectedTestModel = m.id; testModelOpenAITemp = m.id">{{ m.id }} — {{ m.name }}</div>
-                </div>
-              </div>
-              <div v-if="openaiModelsFetchError" class="test-result error">
-                <svg class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <span>{{ openaiModelsFetchError }}</span>
-              </div>
-
-              <div class="form-divider"></div>
-
-              <div class="test-simple-row">
-                <span class="test-selected-label">{{ testModelOpenAITemp ? testModelOpenAITemp : 'Select a model above to test' }}</span>
-                <AppButton size="compact" @click="testProviderConnection('openai')" :disabled="testingProvider === 'openai' || !canTestOpenAI" :loading="testingProvider === 'openai'">
-                  <svg v-if="testingProvider !== 'openai'" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                  {{ testingProvider === 'openai' ? 'Testing\u2026' : 'Test' }}
-                </AppButton>
-              </div>
-              <div v-if="testResults.openai" class="test-result" :class="testResults.openai.ok ? 'success' : 'error'" style="margin-top:0.5rem;">
-                <svg v-if="testResults.openai.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                <svg v-else class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <span>{{ testResults.openai.message }}</span>
-              </div>
-            </div>
-          </template>
-
-          <!-- ── DeepSeek Tab ────────────────────────────────────────── -->
-          <template v-if="activeProviderTab === 'deepseek'">
-
-            <!-- Credentials -->
-            <div class="config-card">
-              <div class="form-section-header">
-                <div class="section-icon-sm">
-                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                  </svg>
-                </div>
-                <h3 class="form-section-title">Credentials</h3>
-              </div>
-
-              <div class="form-group">
-                <label for="deepseekApiKey" class="form-label">
-                  API Key <span class="form-label-hint">Bearer token</span>
-                </label>
-                <div class="input-with-action">
-                  <input id="deepseekApiKey" v-model="form.deepseek.apiKey" :type="showDeepSeekKey ? 'text' : 'password'" placeholder="sk-…" class="field font-mono" />
-                  <button @click="showDeepSeekKey = !showDeepSeekKey" class="field-action-btn" :aria-label="showDeepSeekKey ? 'Hide key' : 'Show key'">
-                    <svg v-if="!showDeepSeekKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                  </button>
-                </div>
-                <p class="hint">DeepSeek API key — stored locally</p>
-              </div>
-
-              <div class="form-group">
-                <label for="deepseekBaseURL" class="form-label">Base URL</label>
-                <input id="deepseekBaseURL" v-model="form.deepseek.baseURL" type="url" placeholder="https://api.deepseek.com" class="field" />
-                <p class="hint">DeepSeek base URL. Leave blank to use the official API endpoint.</p>
-              </div>
-            </div>
-
-            <!-- Available Models + Test -->
-            <div class="config-card">
-              <div class="form-section-header">
-                <div class="section-icon-sm">
-                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                  </svg>
-                </div>
-                <h3 class="form-section-title">Available Models</h3>
-                <span class="form-label-hint" style="margin-left:auto;">{{ modelsStore.deepseekModels.length > 0 ? `${modelsStore.deepseekModels.length} loaded` : 'Enter API key and fetch' }}</span>
-                <AppButton size="compact" @click="fetchDeepSeekModels" :disabled="deepseekModelsFetching || !form.deepseek.apiKey" :loading="deepseekModelsFetching">
-                  <svg v-if="!deepseekModelsFetching" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                  {{ deepseekModelsFetching ? 'Fetching…' : 'Fetch' }}
-                </AppButton>
-              </div>
-              <div v-if="modelsStore.deepseekModels.length > 0" class="model-list-area">
-                <input v-model="deepseekModelFilter" type="text" placeholder="Filter models…" class="model-filter font-mono" />
-                <div class="model-list font-mono">
-                  <div v-for="m in filteredDeepSeekModels" :key="m.id"
-                    class="model-list-item" :class="{ selected: deepseekSelectedTestModel === m.id }"
-                    @click="deepseekSelectedTestModel = m.id; testModelDeepSeekTemp = m.id">{{ m.id }}</div>
-                </div>
-              </div>
-              <div v-if="deepseekModelsFetchError" class="test-result error">
-                <svg class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <span>{{ deepseekModelsFetchError }}</span>
-              </div>
-
-              <div class="form-divider"></div>
-
-              <div class="test-simple-row">
-                <span class="test-selected-label">{{ testModelDeepSeekTemp ? testModelDeepSeekTemp : 'Select a model above to test' }}</span>
-                <AppButton size="compact" @click="testProviderConnection('deepseek')" :disabled="testingProvider === 'deepseek' || !canTestDeepSeek" :loading="testingProvider === 'deepseek'">
-                  <svg v-if="testingProvider !== 'deepseek'" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                  {{ testingProvider === 'deepseek' ? 'Testing\u2026' : 'Test' }}
-                </AppButton>
-              </div>
-              <div v-if="testResults.deepseek" class="test-result" :class="testResults.deepseek.ok ? 'success' : 'error'" style="margin-top:0.5rem;">
-                <svg v-if="testResults.deepseek.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                <svg v-else class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <span>{{ testResults.deepseek.message }}</span>
-              </div>
-            </div>
-
-            <!-- Limits -->
-            <div class="config-card">
-              <div class="form-section-header">
-                <div class="section-icon-sm">
-                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-                    <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-                  </svg>
-                </div>
-                <h3 class="form-section-title">Limits</h3>
-              </div>
-              <div class="form-group" style="margin-bottom:0;">
-                <label for="deepseekMaxTokens" class="form-label">
-                  Max Output Tokens <span class="form-label-hint">1 – 8192</span>
-                </label>
-                <input
-                  id="deepseekMaxTokens"
-                  v-model.number="form.deepseek.maxTokens"
-                  type="number"
-                  min="1"
-                  max="8192"
-                  step="256"
-                  class="field font-mono"
-                  style="max-width:160px;"
-                  placeholder="8192"
-                />
-                <p class="hint">DeepSeek enforces a hard limit of 8192 tokens per response.</p>
-              </div>
-            </div>
-          </template>
-
-          <!-- Global Model Settings (below provider tabs) -->
-          <div class="config-card">
-            <div class="form-section-header">
-              <div class="section-icon-sm">
-                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/>
+          <!-- New layout: left sidebar + right content -->
+          <div class="models-page-layout">
+            <!-- Left Sidebar -->
+            <div class="models-left-nav">
+              <!-- Add button -->
+              <button class="models-add-btn" @click="showAddProviderModal = true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
-              </div>
-              <h3 class="form-section-title">Global Model Settings</h3>
-            </div>
+                <span>{{ t('common.add', 'Add Provider') }}</span>
+              </button>
 
-            <div class="form-group">
-              <label for="maxOutputTokens" class="form-label">
-                Max Output Tokens
-                <span class="form-label-hint">Per-turn output limit</span>
-              </label>
-              <input
-                id="maxOutputTokens"
-                v-model.number="form.maxOutputTokens"
-                type="number"
-                min="1024"
-                max="98304"
-                class="field font-mono"
-                style="max-width: 160px;"
-                @blur="form.maxOutputTokens = Math.min(98304, Math.max(1024, Number(form.maxOutputTokens) || 32768))"
-              />
-              <p class="hint">
-                Maximum tokens the model can generate per turn. Default: 32768. Hard limit: 98304 (96k).
-              </p>
-            </div>
+              <div class="models-nav-divider"></div>
 
-            <div class="form-divider"></div>
-
-            <div class="form-group" style="margin-bottom:0;">
-              <label class="form-label">
-                Utility Model <span class="cfg-required">*</span>
-                <span class="form-label-hint">Background tasks</span>
-              </label>
-              <ProviderModelPicker
-                :provider="form.utilityModel.provider"
-                :model="form.utilityModel.model"
-                @update:provider="form.utilityModel.provider = $event; form.utilityModel.model = ''; testUtilityModelResult = null"
-                @update:model="form.utilityModel.model = $event; testUtilityModelResult = null"
-              />
-              <div class="test-simple-row" style="margin-top:0.5rem;">
-                <span class="test-selected-label">{{ form.utilityModel.model || 'Select a provider and model above' }}</span>
-                <AppButton
-                  size="compact"
-                  :disabled="testingUtilityModel || !form.utilityModel.provider || !form.utilityModel.model"
-                  :loading="testingUtilityModel"
-                  @click="testUtilityModel"
+              <!-- Models section -->
+              <div class="models-nav-section">
+                <div class="models-nav-section-label">{{ t('config.models') }}</div>
+                <button
+                  v-for="p in configStore.config.providers"
+                  :key="p.id"
+                  class="models-nav-item"
+                  :class="{ active: modelsLeftNav === p.id }"
+                  @click="modelsLeftNav = p.id"
                 >
-                  <svg v-if="!testingUtilityModel" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                  {{ testingUtilityModel ? 'Testing\u2026' : 'Test' }}
-                </AppButton>
+                  <span class="models-nav-name">{{ p.name }}</span>
+                  <span class="models-nav-dot" :class="p.isActive ? 'active' : 'inactive'"></span>
+                </button>
+                <div v-if="configStore.config.providers.length === 0" class="models-nav-empty">
+                  No providers configured
+                </div>
               </div>
-              <div v-if="testUtilityModelResult" class="test-result" :class="testUtilityModelResult.ok ? 'success' : 'error'" style="margin-top:0.375rem;">
-                {{ testUtilityModelResult.message }}
+
+              <div class="models-nav-divider"></div>
+
+              <!-- Global Settings section -->
+              <div class="models-nav-section">
+                <div class="models-nav-section-label">{{ t('config.globalSettings') }}</div>
+                <button
+                  class="models-nav-item"
+                  :class="{ active: modelsLeftNav === 'global' }"
+                  @click="modelsLeftNav = 'global'"
+                >
+                  <span class="models-nav-name">{{ t('config.models', 'Models') }}</span>
+                </button>
+                <button
+                  class="models-nav-item"
+                  :class="{ active: modelsLeftNav === 'utility' }"
+                  @click="modelsLeftNav = 'utility'"
+                >
+                  <span class="models-nav-name">{{ t('config.utilityModel', 'Utility Model') }}</span>
+                </button>
               </div>
-              <p class="hint">
-                Used for generic background Tasks.
-                Pick the cheapest/fastest model across any active provider.
-              </p>
+            </div>
+
+            <!-- Right Content -->
+            <div class="models-right-content">
+              <!-- Empty state -->
+              <template v-if="modelsLeftNav === 'empty'">
+                <div class="config-card">
+                  <div style="text-align:center; padding: 3rem 1rem; color: var(--text-muted);">
+                    <svg style="width:48px;height:48px;margin:0 auto 1rem;display:block;opacity:0.4;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    <p style="font-size:var(--fs-body); margin-bottom:0.5rem;">Select a provider or setting to configure</p>
+                    <p style="font-size:var(--fs-secondary);">Click the <span style="font-weight:600;">+</span> button to add a new provider</p>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Global Model Settings -->
+              <template v-else-if="modelsLeftNav === 'global'">
+                <div class="config-card">
+                  <div class="form-section-header">
+                    <div class="section-icon-sm">
+                      <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                      </svg>
+                    </div>
+                    <h3 class="form-section-title">{{ t('config.models', 'Models') }}</h3>
+                  </div>
+                  <div class="form-group">
+                    <label for="maxOutputTokens" class="form-label">
+                      Max Output Tokens
+                      <span class="form-label-hint">{{ t('config.perTurnOutputLimit') }}</span>
+                    </label>
+                    <input
+                      id="maxOutputTokens"
+                      v-model.number="form.maxOutputTokens"
+                      type="number"
+                      min="1024"
+                      max="98304"
+                      class="field font-mono"
+                      style="max-width: 160px;"
+                      @blur="form.maxOutputTokens = Math.min(98304, Math.max(1024, Number(form.maxOutputTokens) || 32768))"
+                    />
+                    <p class="hint">
+                      Maximum tokens the model can generate per turn. Default: 32768. Hard limit: 98304 (96k).
+                    </p>
+                  </div>
+                </div>
+                <div class="save-row">
+                  <AppButton size="save" @click="saveModels" :disabled="savingModels" :loading="savingModels">
+                    <svg v-if="!savingModels" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                      <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                  </AppButton>
+                  <span v-if="savedModelsMsg" class="save-indicator" :class="savedModelsMsg.ok ? 'success' : 'error'">
+                    <svg v-if="savedModelsMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    {{ savedModelsMsg.text }}
+                  </span>
+                </div>
+              </template>
+
+              <!-- Utility Model -->
+              <template v-else-if="modelsLeftNav === 'utility'">
+                <div class="config-card">
+                  <div class="form-section-header">
+                    <div class="section-icon-sm">
+                      <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                      </svg>
+                    </div>
+                    <h3 class="form-section-title">{{ t('config.utilityModel', 'Utility Model') }}</h3>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">
+                      Utility Model <span class="cfg-required">*</span>
+                      <span class="form-label-hint">{{ t('config.backgroundTasks') }}</span>
+                    </label>
+                    <div class="test-connection-row">
+                      <div style="flex:1;">
+                        <ProviderModelPicker
+                          :provider="form.utilityModel.provider"
+                          :model="form.utilityModel.model"
+                          @update:provider="form.utilityModel.provider = $event; form.utilityModel.model = ''; testUtilityModelResult = null"
+                          @update:model="form.utilityModel.model = $event; testUtilityModelResult = null"
+                        />
+                      </div>
+                      <AppButton
+                        size="compact"
+                        :disabled="testingUtilityModel || !form.utilityModel.provider || !form.utilityModel.model"
+                        :loading="testingUtilityModel"
+                        @click="testUtilityModel"
+                      >
+                        <svg v-if="!testingUtilityModel" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        {{ testingUtilityModel ? 'Testing…' : 'Test' }}
+                      </AppButton>
+                    </div>
+                    <div v-if="testUtilityModelResult" class="test-result" :class="testUtilityModelResult.ok ? 'success' : 'error'" style="margin-top:0.375rem;">
+                      {{ testUtilityModelResult.message }}
+                    </div>
+                    <p class="hint">
+                      Used for generic background Tasks.
+                      Pick the cheapest/fastest model across any active provider.
+                    </p>
+                  </div>
+                </div>
+                <div class="save-row">
+                  <AppButton size="save" @click="saveModels" :disabled="savingModels" :loading="savingModels">
+                    <svg v-if="!savingModels" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                      <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                  </AppButton>
+                  <span v-if="savedModelsMsg" class="save-indicator" :class="savedModelsMsg.ok ? 'success' : 'error'">
+                    <svg v-if="savedModelsMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    {{ savedModelsMsg.text }}
+                  </span>
+                </div>
+              </template>
+
+              <!-- Provider Config -->
+              <template v-else-if="selectedProvider">
+                <div class="config-card">
+                  <div class="form-section-header" style="justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                      <div class="section-icon-sm">
+                        <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                      </div>
+                      <h3 class="form-section-title">{{ selectedProvider.name }}</h3>
+                    </div>
+                    <div class="header-actions">
+                      <button class="action-btn danger" @click="deleteProvider(selectedProvider.id)" :title="t('config.deleteProvider', 'Delete provider')">
+                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        </svg>
+                      </button>
+                      <AppButton size="icon" @click="saveModels" :disabled="savingModels" :loading="savingModels" :title="t('common.save', 'Save')">
+                        <svg v-if="!savingModels" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                          <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                      </AppButton>
+                    </div>
+                  </div>
+
+                  <!-- Credentials -->
+                  <div class="form-section-subheader">
+                    <div class="section-icon-sm" style="width: 1.25rem; height: 1.25rem;">
+                      <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 0.75rem; height: 0.75rem;">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                    </div>
+                    Credentials
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <div class="input-with-action">
+                      <input
+                        v-model="selectedProvider.apiKey"
+                        :type="showProviderKey ? 'text' : 'password'"
+                        placeholder="sk-..."
+                        class="field font-mono"
+                      />
+                      <button @click="showProviderKey = !showProviderKey" class="field-action-btn">
+                        <svg v-if="!showProviderKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Base URL</label>
+                    <input v-model="selectedProvider.baseURL" type="url" :placeholder="configStore.PROVIDER_PRESETS[selectedProvider.type]?.defaultBaseURL || 'https://...'" class="field" />
+                  </div>
+
+                  <!-- Model -->
+                  <div class="form-divider"></div>
+                  <div class="form-section-subheader">
+                    <div class="section-icon-sm" style="width: 1.25rem; height: 1.25rem;">
+                      <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 0.75rem; height: 0.75rem;">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                      </svg>
+                    </div>
+                    {{ selectedProvider.type === 'anthropic' ? 'Models' : 'Available Models' }}
+                  </div>
+
+                  <!-- Anthropic: 3 model inputs with Test -->
+                  <template v-if="selectedProvider.type === 'anthropic'">
+                    <div class="form-group compact">
+                      <label class="form-label">Sonnet Model</label>
+                      <input v-model="selectedProvider.model" type="text" class="field font-mono" placeholder="claude-sonnet-latest" />
+                    </div>
+                    <div class="form-group compact">
+                      <label class="form-label">Opus Model</label>
+                      <input v-model="selectedProvider.settings.opusModel" type="text" class="field font-mono" placeholder="claude-opus-latest" />
+                    </div>
+                    <div class="form-group compact">
+                      <label class="form-label">Haiku Model</label>
+                      <input v-model="selectedProvider.settings.haikuModel" type="text" class="field font-mono" placeholder="claude-3-5-haiku-20241022" />
+                    </div>
+                    <div class="test-connection-row" style="margin-top: 0.5rem;">
+                      <select v-model="selectedTestModel" class="field font-mono" style="flex:1;">
+                        <option value="">Select a model...</option>
+                        <option v-for="m in testableModels" :key="m.id" :value="m.id">{{ m.label }}</option>
+                      </select>
+                      <AppButton @click="testProviderNew" :disabled="testingProviderNew || !canTestNew" :loading="testingProviderNew">
+                        <svg v-if="!testingProviderNew" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        {{ testingProviderNew ? 'Testing…' : 'Test' }}
+                      </AppButton>
+                    </div>
+                    <div v-if="testResultNew" class="test-result" :class="testResultNew.ok ? 'success' : 'error'" style="margin-top: 0.5rem;">
+                      <svg v-if="testResultNew.ok" class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                      <svg v-else class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      <span>{{ testResultNew.message }}</span>
+                    </div>
+                  </template>
+
+                  <!-- Other providers: model list selection -->
+                  <template v-else>
+                    <div class="test-connection-row">
+                      <div>
+                        <p class="hint" style="margin-top:2px;">{{ selectedProviderModels.length > 0 ? `${selectedProviderModels.length} models loaded` : 'Enter API key and fetch models' }}</p>
+                      </div>
+                      <AppButton size="compact" @click="fetchProviderModels" :disabled="providerModelsFetching || !selectedProvider.apiKey || !selectedProvider.baseURL" :loading="providerModelsFetching">
+                        <svg v-if="!providerModelsFetching" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                        {{ providerModelsFetching ? 'Fetching…' : 'Fetch Models' }}
+                      </AppButton>
+                    </div>
+                    <div v-if="selectedProviderModels.length > 0" style="margin-top: 0.5rem;">
+                      <input v-model="providerModelFilter" type="text" placeholder="Filter models…" class="field font-mono field-sm" style="width: 100%; margin-bottom: 0.5rem;" />
+                      <select v-model="selectedProvider.model" class="field font-mono field-sm" :size="Math.min(filteredProviderModels.length, 8)" style="width: 100%; height: auto; padding: 6px 8px;">
+                        <option v-for="m in filteredProviderModels" :key="m.id" :value="m.id">{{ m.id }} — {{ m.name || m.id }}</option>
+                      </select>
+                      <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+                        <AppButton size="compact" @click="testProviderNew" :disabled="testingProviderNew || !canTestNew" :loading="testingProviderNew">
+                          <svg v-if="!testingProviderNew" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                          {{ testingProviderNew ? 'Testing…' : 'Test' }}
+                        </AppButton>
+                      </div>
+                    </div>
+                    <div v-if="providerModelsFetchError" class="test-result error" style="margin-top: 0.5rem;">
+                      <svg class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      <span>{{ providerModelsFetchError }}</span>
+                    </div>
+                    <div v-if="testResultNew" class="test-result" :class="testResultNew.ok ? 'success' : 'error'" style="margin-top: 0.5rem;">
+                      <svg v-if="testResultNew.ok" class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                      <svg v-else class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      <span>{{ testResultNew.message }}</span>
+                    </div>
+                  </template>
+
+                  <!-- Generic Settings -->
+                  <div class="form-divider"></div>
+                  <div class="form-section-subheader">
+                    <div class="section-icon-sm" style="width: 1.25rem; height: 1.25rem;">
+                      <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 0.75rem; height: 0.75rem;">
+                        <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+                        <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                      </svg>
+                    </div>
+                    Generic Settings
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">
+                      Max Output Tokens
+                      <span v-if="getHardLimit(selectedProvider, 'maxOutputTokens')" class="form-label-hint" style="color:#EF4444;">
+                        Max: {{ getHardLimit(selectedProvider, 'maxOutputTokens') }}
+                      </span>
+                    </label>
+                    <input
+                      v-model.number="selectedProvider.settings.maxOutputTokens"
+                      type="number"
+                      min="1"
+                      :max="getHardLimit(selectedProvider, 'maxOutputTokens') || 98304"
+                      class="field font-mono"
+                      style="max-width: 160px;"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Temperature</label>
+                    <input
+                      v-model.number="selectedProvider.settings.temperature"
+                      type="number"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      class="field font-mono"
+                      style="max-width: 100px;"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Top P</label>
+                    <input
+                      v-model.number="selectedProvider.settings.topP"
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      class="field font-mono"
+                      style="max-width: 100px;"
+                    />
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
 
-          <!-- Save (AI Models) -->
-          <div class="save-row">
-            <AppButton size="save" @click="saveModels" :disabled="savingModels" :loading="savingModels">
-              <svg v-if="!savingModels" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-              </svg>
-              {{ savingModels ? 'Saving…' : 'Save' }}
-            </AppButton>
-            <span v-if="savedModelsMsg" class="save-indicator" :class="savedModelsMsg.ok ? 'success' : 'error'">
-              <svg v-if="savedModelsMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              {{ savedModelsMsg.text }}
-            </span>
-          </div>
+          <!-- Add Provider Modal -->
+          <Teleport to="body">
+            <div v-if="showAddProviderModal" class="modal-backdrop" @click.self="showAddProviderModal = false">
+              <div class="modal-content" style="max-width:400px;">
+                <div class="modal-header">
+                  <h3>{{ t('config.addProvider', 'Add Provider') }}</h3>
+                  <button class="modal-close" @click="showAddProviderModal = false">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                <div class="modal-body">
+                  <div class="form-group">
+                    <label class="form-label">Provider Type</label>
+                    <select v-model="addProviderPreset" class="field">
+                      <option v-for="opt in providerPresetOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                    </select>
+                  </div>
+                  <div v-if="addProviderPreset === 'custom'" class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Provider Name</label>
+                    <input v-model="addProviderName" type="text" class="field" placeholder="My Custom Provider" />
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <AppButton variant="secondary" @click="showAddProviderModal = false">Cancel</AppButton>
+                  <AppButton variant="primary" @click="confirmAddProvider">Add</AppButton>
+                </div>
+              </div>
+            </div>
+          </Teleport>
+
         </template>
 
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- Knowledge (AI > Knowledge) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
         <!-- Knowledge (AI > Knowledge) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
@@ -626,7 +580,7 @@
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                 </svg>
               </div>
-              <h3 class="form-section-title">Pinecone Credentials</h3>
+              <h3 class="form-section-title">{{ t('config.pineconeCredentials') }}</h3>
             </div>
 
             <div class="form-group">
@@ -665,7 +619,6 @@
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                 <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
               </svg>
-              {{ savingKnowledge ? 'Saving...' : 'Save' }}
             </AppButton>
             <span v-if="savedKnowledgeMsg" class="save-indicator" :class="savedKnowledgeMsg.ok ? 'success' : 'error'">
               <svg v-if="savedKnowledgeMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -686,7 +639,7 @@
               <div class="section-icon-sm">
                 <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
               </div>
-              <h3 class="form-section-title">Whisper STT (Speech-to-Text)</h3>
+              <h3 class="form-section-title">{{ t('config.whisperSTT') }}</h3>
             </div>
             <p class="hint" style="margin-bottom:1rem;">
               Voice calls use OpenAI's Whisper API for speech recognition. Text-to-speech uses your browser's built-in SpeechSynthesis (free, no API key needed).
@@ -696,7 +649,7 @@
             <div class="form-group">
               <label for="whisperApiKey" class="form-label">
                 OpenAI API Key
-                <span class="form-label-hint">For Whisper STT</span>
+                <span class="form-label-hint">{{ t('config.forWhisperSTT') }}</span>
               </label>
               <div class="input-with-action">
                 <input
@@ -723,7 +676,7 @@
             <div class="form-group">
               <label for="whisperBaseURL" class="form-label">
                 Base URL
-                <span class="form-label-hint">Optional</span>
+                <span class="form-label-hint">{{ t('config.optional') }}</span>
               </label>
               <input id="whisperBaseURL" v-model="form.voiceCall.whisperBaseURL" type="url" placeholder="https://api.openai.com" class="field font-mono" />
               <p class="hint">Leave blank for standard OpenAI. Change only if using a custom Whisper-compatible endpoint.</p>
@@ -733,7 +686,7 @@
             <div class="form-group">
               <label for="whisperLanguage" class="form-label">
                 STT Language
-                <span class="form-label-hint">Recommended for noise reduction</span>
+                <span class="form-label-hint">{{ t('config.recommendedNoiseReduction') }}</span>
               </label>
               <input id="whisperLanguage" v-model="form.voiceCall.language" type="text" placeholder="e.g. en, zh, ja, fr (leave blank for auto)" class="field font-mono" />
               <p class="hint">Setting your language (e.g. <code>en</code>) prevents Whisper from misidentifying background noise or echo as speech in another language, significantly reducing false triggers.</p>
@@ -764,7 +717,7 @@
               <div class="section-icon-sm">
                 <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
               </div>
-              <h3 class="form-section-title">Microphone Sensitivity (VAD)</h3>
+              <h3 class="form-section-title">{{ t('config.microphoneSensitivity') }}</h3>
             </div>
             <p class="hint" style="margin-bottom:1rem;">
               Controls when the mic starts and stops capturing. Tune these if the AI triggers on keyboard noise, background sound, or misses quiet speech.
@@ -854,7 +807,7 @@
               <div class="section-icon-sm">
                 <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
               </div>
-              <h3 class="form-section-title">Text-to-Speech</h3>
+              <h3 class="form-section-title">{{ t('config.textToSpeech') }}</h3>
             </div>
             <div class="form-group" style="margin-bottom:0;">
               <label class="form-label">TTS Mode</label>
@@ -934,7 +887,6 @@
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                 <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
               </svg>
-              {{ savingVoice ? 'Saving...' : 'Save' }}
             </AppButton>
             <span v-if="savedVoiceMsg" class="save-indicator" :class="savedVoiceMsg.ok ? 'success' : 'error'">
               <svg v-if="savedVoiceMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -958,7 +910,7 @@
                 </svg>
               </div>
               <div>
-                <h3 class="form-section-title">Currency Rates</h3>
+                <h3 class="form-section-title">{{ t('config.currencyRates') }}</h3>
                 <p class="form-section-desc">USD is the base. Enter how many units equal $1 USD.</p>
               </div>
             </div>
@@ -983,7 +935,7 @@
                 </svg>
               </div>
               <div style="flex:1;">
-                <h3 class="form-section-title">Model Prices</h3>
+                <h3 class="form-section-title">{{ t('config.modelPrices') }}</h3>
                 <p class="form-section-desc">USD per 1M tokens. Overrides built-in defaults.</p>
               </div>
               <button class="action-btn" @click="fetchOpenRouterPrices" :disabled="isFetchingPrices">
@@ -1048,7 +1000,7 @@
                 </svg>
               </div>
               <div>
-                <h3 class="form-section-title">Model Aliases</h3>
+                <h3 class="form-section-title">{{ t('config.modelAliases') }}</h3>
                 <p class="form-section-desc">Map custom or provider-prefixed model names to a known price tier.</p>
               </div>
             </div>
@@ -1093,18 +1045,16 @@
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
                 </svg>
               </div>
-              <h3 class="form-section-title">SMTP Server</h3>
+              <h3 class="form-section-title">{{ t('config.smtpServer') }}</h3>
             </div>
             <p class="hint" style="margin-bottom:16px;">
-              Credentials for outbound email. The agent will use these to send emails when asked.
-              Uses STARTTLS on port 587 (Office 365, Outlook, Gmail, etc.)
+              {{ t('config.emailCredentials') }}
             </p>
 
             <!-- Host -->
             <div class="form-group">
               <label for="smtpHost" class="form-label">
-                Host
-                <span class="form-label-hint">SMTP server hostname</span>
+                {{ t('config.smtpServerHostname') }}
               </label>
               <input id="smtpHost" v-model="form.smtp.host" type="text" placeholder="smtp.office365.com" class="field font-mono" />
             </div>
@@ -1112,8 +1062,8 @@
             <!-- Port -->
             <div class="form-group">
               <label for="smtpPort" class="form-label">
-                Port
-                <span class="form-label-hint">Default 587 (STARTTLS)</span>
+                {{ t('config.smtpServerPort') }}
+                <span class="form-label-hint">{{ t('config.smtpServerPortHint') }}</span>
               </label>
               <input id="smtpPort" v-model.number="form.smtp.port" type="number" placeholder="587" class="field font-mono" style="max-width:120px;" />
             </div>
@@ -1121,8 +1071,8 @@
             <!-- Username -->
             <div class="form-group">
               <label for="smtpUser" class="form-label">
-                Username
-                <span class="form-label-hint">Usually your full email address</span>
+                {{ t('config.smtpUsername') }}
+                <span class="form-label-hint">{{ t('config.smtpUsernameHint') }}</span>
               </label>
               <input id="smtpUser" v-model="form.smtp.user" type="text" placeholder="you@yourdomain.com" class="field font-mono" />
             </div>
@@ -1130,8 +1080,8 @@
             <!-- Password -->
             <div class="form-group">
               <label for="smtpPass" class="form-label">
-                Password
-                <span class="form-label-hint">App password or account password</span>
+                {{ t('config.smtpPassword') }}
+                <span class="form-label-hint">{{ t('config.smtpPasswordHint') }}</span>
               </label>
               <div class="input-with-action">
                 <input
@@ -1151,7 +1101,7 @@
                   </svg>
                 </button>
               </div>
-              <p class="hint">For Office 365 with MFA, use an app password from your Microsoft account security settings.</p>
+              <p class="hint">{{ t('config.emailMfaHint') }}</p>
             </div>
 
             <!-- Test Connection -->
@@ -1179,7 +1129,6 @@
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                 <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
               </svg>
-              {{ savingEmail ? 'Saving...' : 'Save' }}
             </AppButton>
             <span v-if="savedEmailMsg" class="save-indicator" :class="savedEmailMsg.ok ? 'success' : 'error'">
               <svg v-if="savedEmailMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1197,8 +1146,8 @@
           <!-- Global Mode -->
           <div class="config-card">
             <div class="form-group" style="margin-bottom:0;">
-              <label class="form-label">Global Sandbox Mode</label>
-              <p class="hint" style="margin-bottom:12px;">Controls how the agent handles shell commands and file writes across all chats. Per-chat settings can override this.</p>
+              <label class="form-label">{{ t('config.globalSandboxMode') }}</label>
+              <p class="hint" style="margin-bottom:12px;">{{ t('config.sandboxControls') }}</p>
               <div class="sec-mode-btns">
                 <button
                   class="sec-mode-btn"
@@ -1208,8 +1157,8 @@
                   <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                   </svg>
-                  Sandbox
-                  <span class="sec-mode-badge">Default</span>
+                  {{ t('config.sandboxModeSandbox') }}
+                  <span class="sec-mode-badge">{{ t('config.sandboxModeDefault') }}</span>
                 </button>
                 <button
                   class="sec-mode-btn"
@@ -1219,12 +1168,12 @@
                   <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                   </svg>
-                  All Permissions
+                  {{ t('config.sandboxModeAll') }}
                 </button>
               </div>
               <p class="hint" style="margin-top:8px;">
-                <template v-if="sandboxForm.defaultMode === 'sandbox'">Agent will ask before running shell commands or writing files. Use the allow list below to pre-approve safe patterns.</template>
-                <template v-else>Agent can run any command freely. Only the danger block list below can restrict it.</template>
+                <template v-if="sandboxForm.defaultMode === 'sandbox'">{{ t('config.sandboxModeSandboxHint') }}</template>
+                <template v-else>{{ t('config.sandboxModeAllHint') }}</template>
               </p>
             </div>
           </div>
@@ -1260,8 +1209,8 @@
             <!-- All Permissions → Danger Block List -->
             <template v-else>
               <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label">Danger Block List <span class="sec-count-badge danger">{{ sandboxForm.dangerBlockList.length }}</span></label>
-                <p class="hint" style="margin-bottom:10px;">Commands that are always blocked, even in All Permissions mode. Protects against destructive operations.</p>
+                <label class="form-label">{{ t('config.dangerBlockList') }} <span class="sec-count-badge danger">{{ sandboxForm.dangerBlockList.length }}</span></label>
+                <p class="hint" style="margin-bottom:10px;">{{ t('config.dangerBlockListHint') }}</p>
                 <div class="sec-list">
                   <div v-if="sandboxForm.dangerBlockList.length === 0" class="sec-list-empty">No block list entries.</div>
                   <div v-for="(entry, idx) in sandboxForm.dangerBlockList" :key="entry.id || idx" class="sec-list-entry">
@@ -1290,7 +1239,6 @@
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                 <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
               </svg>
-              {{ savingSecurity ? 'Saving...' : 'Save' }}
             </AppButton>
             <span v-if="savedSecurityMsg" class="save-indicator" :class="savedSecurityMsg.ok ? 'success' : 'error'">
               <svg v-if="savedSecurityMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1336,14 +1284,14 @@
                 <div class="section-icon-sm">
                   <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 </div>
-                <h3 class="form-section-title">Telegram</h3>
+                <h3 class="form-section-title">{{ t('config.telegram') }}</h3>
                 <span class="im-platform-status" :class="telegramReady ? 'ready' : 'idle'">
                   {{ telegramReady ? '● Configured' : '○ Not configured' }}
                 </span>
               </div>
 
               <div class="im-enable-row">
-                <span class="im-enable-label">Enable Telegram Bot</span>
+                <span class="im-enable-label">{{ t('config.telegramEnable') }}</span>
                 <label class="im-toggle" @click.stop>
                   <input type="checkbox" v-model="form.im.telegram.enabled" />
                   <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
@@ -1353,7 +1301,7 @@
               <div class="form-divider" />
 
               <div class="form-group">
-                <label class="form-label" for="tgBotToken">Bot Token</label>
+                <label class="form-label" for="tgBotToken">{{ t('config.telegramBotToken') }}</label>
                 <div style="position:relative;">
                   <input
                     id="tgBotToken"
@@ -1370,11 +1318,11 @@
                     </svg>
                   </button>
                 </div>
-                <p class="hint">Get a bot token from <strong>@BotFather</strong> on Telegram.</p>
+                <p class="hint">{{ t('config.telegramBotTokenHint') }}</p>
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="tgAllowedUsers">Allowed Users <span class="form-label-hint">comma-separated usernames or chat IDs</span></label>
+                <label class="form-label" for="tgAllowedUsers">{{ t('config.allowedUsers') }} <span class="form-label-hint">{{ t('config.commaSeparatedUsernames') }}</span></label>
                 <input
                   id="tgAllowedUsers"
                   :value="(form.im.telegram.allowedUsers || []).join(',')"
@@ -1393,15 +1341,9 @@
                   <svg class="im-setup-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
                 <ol class="im-setup-steps">
-                  <li>Open Telegram and search for <code>@BotFather</code></li>
-                  <li>Send <code>/newbot</code> — BotFather will ask for a display name and a username (must end in <code>bot</code>)</li>
-                  <li>BotFather replies with your <strong>bot token</strong> — copy it</li>
-                  <li>Paste the token in the <em>Bot Token</em> field above</li>
-                  <li>Toggle <strong>Enable Telegram Bot</strong> on and click <strong>Save</strong></li>
-                  <li>Go to the <strong>Bridge</strong> tab and click <strong>Start Bridge</strong></li>
-                  <li>In Telegram, search for your bot by its username and send it any message — it will reply via ClankAI</li>
+                  <li>{{ t('config.telegramInstructions') }}</li>
                 </ol>
-                <p class="im-setup-note">Add your Telegram username (without @) to <em>Allowed Users</em> to restrict access to your account only.</p>
+                <p class="im-setup-note">{{ t('config.telegramAllowedUsers') }}</p>
               </details>
 
               <div class="form-divider" style="margin-top:1rem;" />
@@ -1426,7 +1368,7 @@
                 <div class="section-icon-sm">
                   <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
                 </div>
-                <h3 class="form-section-title">WhatsApp</h3>
+                <h3 class="form-section-title">{{ t('config.whatsapp') }}</h3>
                 <span class="im-platform-status" :class="whatsappReady ? 'ready' : (whatsappQr ? 'pending' : 'idle')">
                   {{ whatsappReady ? '● Connected' : (whatsappQr ? '◌ Awaiting scan' : '○ Not connected') }}
                 </span>
@@ -1443,7 +1385,7 @@
               <div class="form-divider" />
 
               <div class="form-group">
-                <label class="form-label" for="waAllowedUsers">Allowed Users <span class="form-label-hint">comma-separated phone numbers or JIDs</span></label>
+                <label class="form-label" for="waAllowedUsers">{{ t('config.allowedUsers') }} <span class="form-label-hint">{{ t('config.commaSeparatedPhones') }}</span></label>
                 <input
                   id="waAllowedUsers"
                   :value="(form.im.whatsapp.allowedUsers || []).join(',')"
@@ -1533,7 +1475,7 @@
                 <div class="section-icon-sm">
                   <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                 </div>
-                <h3 class="form-section-title">Feishu / Lark</h3>
+                <h3 class="form-section-title">{{ t('config.feishu') }}</h3>
                 <span class="im-platform-status" :class="feishuReady ? 'ready' : 'idle'">
                   {{ feishuReady ? '● Configured' : '○ Not configured' }}
                 </span>
@@ -1582,7 +1524,7 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="feishuAllowedUsers">Allowed Users <span class="form-label-hint">comma-separated open_ids</span></label>
+                <label class="form-label" for="feishuAllowedUsers">{{ t('config.allowedUsers') }} <span class="form-label-hint">{{ t('config.commaSeparatedOpenIds') }}</span></label>
                 <input
                   id="feishuAllowedUsers"
                   :value="(form.im.feishu.allowedUsers || []).join(',')"
@@ -1636,7 +1578,7 @@
                 <div class="section-icon-sm">
                   <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 </div>
-                <h3 class="form-section-title">Bridge Control</h3>
+                <h3 class="form-section-title">{{ t('config.bridgeControl') }}</h3>
               </div>
 
               <!-- Per-platform toggle rows -->
@@ -1865,6 +1807,19 @@
       </div>
     </div>
   </Teleport>
+
+  <!-- Delete Confirmation Modal -->
+  <ConfirmModal
+    :visible="showDeleteConfirm"
+    :title="t('common.confirmDelete', 'Confirm Delete')"
+    :message="t('config.deleteProviderConfirm', `Are you sure you want to delete ${deleteConfirmName}? This action cannot be undone.`)"
+    :confirm-text="t('common.delete', 'Delete')"
+    :cancel-text="t('common.cancel', 'Cancel')"
+    confirm-class="danger"
+    :loading-text="t('common.deleting', 'Deleting...')"
+    @confirm="confirmDeleteProvider"
+    @close="showDeleteConfirm = false"
+  />
 </template>
 
 <script setup>
@@ -1875,11 +1830,14 @@ import { useConfigStore } from '../stores/config'
 import { useModelsStore } from '../stores/models'
 import AppButton from '../components/common/AppButton.vue'
 import ProviderModelPicker from '../components/common/ProviderModelPicker.vue'
+import ConfirmModal from '../components/common/ConfirmModal.vue'
+import { useI18n } from '../i18n/useI18n'
 import { DEFAULT_PRICES } from '../utils/pricing.js'
 
 const configStore = useConfigStore()
 const modelsStore = useModelsStore()
 const route = useRoute()
+const { t } = useI18n()
 
 const isElectron = !!(typeof window !== 'undefined' && window.electronAPI)
 
@@ -2077,6 +2035,13 @@ const IconIM = defineComponent({
     h('path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' })
   ])
 })
+const IconLanguage = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('circle', { cx: '12', cy: '12', r: '10' }),
+    h('line', { x1: '2', y1: '12', x2: '22', y2: '12' }),
+    h('path', { d: 'M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z' })
+  ])
+})
 const IconPricing = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
     h('line', { x1: '12', y1: '1', x2: '12', y2: '23' }),
@@ -2084,38 +2049,40 @@ const IconPricing = defineComponent({
   ])
 })
 // Top-level tabs (2 primary)
-const topTabs = [
-  { value: 'general', label: 'General', icon: IconGeneral },
-  { value: 'ai',      label: 'AI',      icon: IconModels  },
-]
+const topTabs = computed(() => [
+  { value: 'general', label: t('config.general'), icon: IconGeneral },
+  { value: 'ai',      label: t('config.ai'),      icon: IconModels  },
+])
 
 // Sub-tab arrays
-const subTabsGeneral = [
-  { value: 'paths',    label: 'Paths',    icon: IconPaths    },
-  { value: 'security', label: 'Security', icon: IconSecurity },
-  { value: 'email',    label: 'Email',    icon: IconEmail    },
-  { value: 'im',       label: 'IM',       icon: IconIM       },
-]
-const subTabsAI = [
-  { value: 'models',    label: 'Models',    icon: IconModels    },
-  { value: 'voice',     label: 'Voice',     icon: IconVoice     },
-  { value: 'knowledge', label: 'Knowledge', icon: IconKnowledge },
-  { value: 'pricing',   label: 'Pricing',   icon: IconPricing   },
-]
+const subTabsGeneral = computed(() => [
+  { value: 'language', label: 'Language / 语言', icon: IconLanguage },
+  { value: 'paths',    label: t('config.paths'),    icon: IconPaths    },
+  { value: 'security', label: t('config.security'), icon: IconSecurity },
+  { value: 'email',    label: t('config.email'),    icon: IconEmail    },
+  { value: 'im',       label: t('config.im'),       icon: IconIM       },
+])
+const subTabsAI = computed(() => [
+  { value: 'models',    label: t('config.models'),    icon: IconModels    },
+  { value: 'voice',     label: t('config.voice'),     icon: IconVoice     },
+  { value: 'knowledge', label: t('config.knowledge'), icon: IconKnowledge },
+  { value: 'pricing',   label: t('config.pricing'),   icon: IconPricing   },
+])
 
-const activeSubTab = ref('paths')
+const activeSubTab = ref('language')
 
 const currentSubTabs = computed(() =>
-  activeTopTab.value === 'general' ? subTabsGeneral : subTabsAI
+  activeTopTab.value === 'general' ? subTabsGeneral.value : subTabsAI.value
 )
 
 function switchTopTab(tab) {
   activeTopTab.value = tab
-  activeSubTab.value = tab === 'general' ? 'paths' : 'models'
+  activeSubTab.value = tab === 'general' ? 'language' : 'models'
 }
 
 function getSubTabStatus(subTab) {
   switch (subTab) {
+    case 'language':  return form.language ? 'configured' : 'empty'
     case 'paths':     return (form.dataPath || form.artifactPath || form.skillsPath) ? 'configured' : 'empty'
     case 'security':  return 'configured'
     case 'email':     return form.smtp?.host ? 'configured' : 'empty'
@@ -2418,6 +2385,7 @@ const form = reactive({
     whatsapp: { enabled: false, allowedUsers: [] },
     feishu:   { enabled: false, appId: '', appSecret: '', allowedUsers: [] },
   },
+  language: 'en',
 })
 
 // Reset isActive when key fields change (skip initial population)
@@ -2432,17 +2400,198 @@ watch(() => [form.openrouter.apiKey, form.openrouter.baseURL], () => resetActive
 watch(() => [form.openai.apiKey, form.openai.baseURL], () => resetActive('openai'))
 watch(() => [form.deepseek.apiKey, form.deepseek.baseURL], () => resetActive('deepseek'))
 
+// ── Models Page: New left sidebar logic ────────────────────────────────
+const modelsLeftNav = ref('empty')  // 'empty' | providerId | 'global' | 'utility'
+const showAddProviderModal = ref(false)
+const showDeleteConfirm = ref(false)
+const deleteConfirmId = ref(null)
+const deleteConfirmName = ref('')
+const addProviderPreset = ref('anthropic')
+const addProviderName = ref('')
+const testModelTemp = ref('')
+const selectedTestModel = ref('')
+const testingProviderNew = ref(false)
+const testResultNew = ref(null)
+const showProviderKey = ref(false)
+
+// Selected provider model fetching state
+const providerModelsFetching = ref(false)
+const providerModelsFetchError = ref('')
+const providerModelFilter = ref('')
+
+const providerPresetOptions = [
+  { value: 'anthropic', label: 'Anthropic' },
+  { value: 'openai', label: 'OpenAI Compatible' },
+  { value: 'openrouter', label: 'OpenRouter' },
+  { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'google', label: 'Google' },
+  { value: 'minimax', label: 'MiniMax' },
+  { value: 'custom', label: 'Custom' },
+]
+
+const selectedProvider = computed(() => {
+  if (modelsLeftNav.value === 'empty' || modelsLeftNav.value === 'global' || modelsLeftNav.value === 'utility') return null
+  return configStore.config.providers.find(p => p.id === modelsLeftNav.value)
+})
+
+const canTestNew = computed(() => {
+  if (!selectedProvider.value) return false
+  if (selectedProvider.value.type === 'anthropic') {
+    return !!(selectedProvider.value.apiKey && selectedProvider.value.baseURL && selectedTestModel.value)
+  }
+  return !!(selectedProvider.value.apiKey && selectedProvider.value.baseURL && selectedProvider.value.model)
+})
+
+const selectedProviderModels = computed(() => {
+  if (!selectedProvider.value) return []
+  const type = selectedProvider.value.type
+  if (type === 'openrouter') return modelsStore.openrouterModels
+  if (type === 'openai') return modelsStore.openaiModels
+  if (type === 'deepseek') return modelsStore.deepseekModels
+  return []
+})
+
+const filteredProviderModels = computed(() => {
+  const models = selectedProviderModels.value
+  if (!providerModelFilter.value) return models
+  const q = providerModelFilter.value.toLowerCase()
+  return models.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
+})
+
+const testableModels = computed(() => {
+  if (!selectedProvider.value) return []
+  const p = selectedProvider.value
+  if (p.type === 'anthropic') {
+    return [
+      { id: p.model, label: p.model },
+      { id: p.settings?.opusModel, label: p.settings?.opusModel },
+      { id: p.settings?.haikuModel, label: p.settings?.haikuModel },
+    ].filter(m => m.id)
+  }
+  if (p.model) return [{ id: p.model, label: p.model }]
+  return filteredProviderModels.value.slice(0, 10).map(m => ({ id: m.id, label: m.id }))
+})
+
+function openAddProvider(preset) {
+  addProviderPreset.value = preset
+  addProviderName.value = ''
+  showAddProviderModal.value = true
+}
+
+function confirmAddProvider() {
+  const name = addProviderPreset.value === 'custom' ? (addProviderName.value || 'Custom') : null
+  const newProvider = configStore.addProvider(addProviderPreset.value, name)
+  modelsLeftNav.value = newProvider.id
+  showAddProviderModal.value = false
+}
+
+function deleteProvider(id) {
+  const provider = configStore.config.providers.find(p => p.id === id)
+  deleteConfirmId.value = id
+  deleteConfirmName.value = provider?.name || 'this provider'
+  showDeleteConfirm.value = true
+}
+
+function confirmDeleteProvider() {
+  if (deleteConfirmId.value) {
+    configStore.removeProvider(deleteConfirmId.value)
+    if (modelsLeftNav.value === deleteConfirmId.value) {
+      modelsLeftNav.value = configStore.config.providers.length > 0 ? configStore.config.providers[0].id : 'empty'
+    }
+  }
+  showDeleteConfirm.value = false
+  deleteConfirmId.value = null
+  deleteConfirmName.value = ''
+}
+
+async function testProviderNew() {
+  if (!selectedProvider.value || testingProviderNew.value) return
+  testingProviderNew.value = true
+  testResultNew.value = null
+  try {
+    const model = selectedProvider.value.type === 'anthropic' ? selectedTestModel.value : selectedProvider.value.model
+    const res = await window.electronAPI.testProvider({
+      provider: selectedProvider.value.type,
+      apiKey: selectedProvider.value.apiKey,
+      baseURL: selectedProvider.value.baseURL,
+      utilityModel: model,
+    })
+    if (res.success) {
+      selectedProvider.value.isActive = true
+      selectedProvider.value.testedAt = Date.now()
+      testResultNew.value = { ok: true, message: `Connected · ${res.ms}ms` }
+    } else {
+      selectedProvider.value.isActive = false
+      testResultNew.value = { ok: false, message: res.error }
+    }
+    await configStore.saveConfig({ providers: configStore.config.providers })
+  } catch (err) {
+    testResultNew.value = { ok: false, message: err.message || 'Test failed' }
+  } finally {
+    testingProviderNew.value = false
+  }
+}
+
+async function fetchProviderModels() {
+  if (!selectedProvider.value || !selectedProvider.value.apiKey || !selectedProvider.value.baseURL) {
+    providerModelsFetchError.value = 'Enter API key and Base URL first.'
+    return
+  }
+  providerModelsFetching.value = true
+  providerModelsFetchError.value = ''
+  try {
+    const type = selectedProvider.value.type
+    if (type === 'openrouter') {
+      const result = await window.electronAPI.fetchOpenRouterModels({ apiKey: selectedProvider.value.apiKey, baseURL: selectedProvider.value.baseURL })
+      if (result.success) { modelsStore.openrouterModels = result.models; modelsStore.openrouterCached = true }
+      else { providerModelsFetchError.value = result.error || 'Unknown error' }
+    } else if (type === 'openai') {
+      const result = await window.electronAPI.fetchOpenAIModels({ apiKey: selectedProvider.value.apiKey, baseURL: selectedProvider.value.baseURL })
+      if (result.success) { modelsStore.openaiModels = result.models; modelsStore.openaiCached = true }
+      else { providerModelsFetchError.value = result.error || 'Unknown error' }
+    } else if (type === 'deepseek') {
+      configStore.config.deepseek = configStore.config.deepseek || {}
+      configStore.config.deepseek.apiKey = selectedProvider.value.apiKey
+      configStore.config.deepseek.baseURL = selectedProvider.value.baseURL
+      await modelsStore.fetchDeepSeekModels()
+      if (!modelsStore.deepseekCached) { providerModelsFetchError.value = 'Fetch failed — check API key and Base URL.' }
+    } else {
+      providerModelsFetchError.value = 'Model fetching not supported for this provider type.'
+    }
+  } catch (err) { providerModelsFetchError.value = err.message }
+  finally { providerModelsFetching.value = false }
+}
+
+function getHardLimit(provider, key) {
+  const { PROVIDER_PRESETS } = configStore
+  const preset = PROVIDER_PRESETS[provider.type]
+  return preset?.hardLimits?.[key]
+}
+
 onMounted(async () => {
   const c = JSON.parse(JSON.stringify(configStore.config))
   delete c.defaultProvider
-  // Deep-merge nested provider objects
+  
+  // Legacy provider objects (for backward compat during transition)
   if (c.anthropic)    Object.assign(form.anthropic, c.anthropic)
   if (c.openrouter)   Object.assign(form.openrouter, c.openrouter)
   if (c.openai)       Object.assign(form.openai, c.openai)
   if (c.deepseek)     Object.assign(form.deepseek, c.deepseek)
+  
   if (c.voiceCall)    Object.assign(form.voiceCall, c.voiceCall)
   if (c.smtp)         Object.assign(form.smtp, c.smtp)
   if (c.utilityModel) Object.assign(form.utilityModel, c.utilityModel)
+  
+  // Initialize left nav if providers exist
+  if (c.providers && c.providers.length > 0) {
+    modelsLeftNav.value = c.providers[0].id
+  } else if (c.anthropic?.apiKey || c.openrouter?.apiKey || c.openai?.apiKey || c.deepseek?.apiKey) {
+    // Legacy config exists, migrate
+    modelsLeftNav.value = 'global'
+  } else {
+    modelsLeftNav.value = 'empty'
+  }
+  
   form.im = {
     telegram: {
       enabled:      c.im?.telegram?.enabled      ?? false,
@@ -2531,6 +2680,10 @@ onMounted(async () => {
   nextTick(() => { formReady.value = true })
 })
 
+async function handleLanguageChange() {
+  await configStore.saveConfig({ language: form.language })
+}
+
 onUnmounted(() => {
   window.electronAPI?.im?.onWhatsAppQr?.(() => {})
   window.electronAPI?.im?.onWhatsAppReady?.(() => {})
@@ -2615,6 +2768,8 @@ async function saveModels() {
     delete modelFields.artifactPath
     delete modelFields.DoCPath
     delete modelFields.voiceCall
+    // Include providers from configStore
+    modelFields.providers = JSON.parse(JSON.stringify(configStore.config.providers))
     await configStore.saveConfig(modelFields)
     savedModelsMsg.value = { ok: true, text: 'Saved successfully' }
   } catch (err) {
@@ -3005,7 +3160,7 @@ async function savePricing() {
 .config-subnav-item.active .config-subnav-dot { background: #FCA5A5; }
 
 /* ── Content area ───────────────────────────────────────────────────────── */
-.config-content { flex: 1; min-width: 0; overflow-y: auto; padding: 1.5rem 2rem 2rem; scrollbar-width: thin; }
+.config-content { flex: 1; min-width: 0; overflow-y: auto; padding: 1.5rem 2rem 5rem; scrollbar-width: thin; }
 .config-content-inner { max-width: 860px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 @media (min-width: 2560px) {
   .config-content-inner { max-width: 1000px; }
@@ -3040,6 +3195,8 @@ async function savePricing() {
 
 
 .form-section-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.form-section-header:has(.header-actions) { justify-content: space-between; }
+.header-actions { display: flex; align-items: center; gap: 0.5rem; }
 .section-icon-sm { width: 1.75rem; height: 1.75rem; border-radius: 0.4375rem; display: flex; align-items: center; justify-content: center; background: var(--text-primary); color: #fff; flex-shrink: 0; }
 .form-section-title { font-family: 'Inter', sans-serif; font-size: var(--fs-body); font-weight: 700; color: var(--text-primary); margin: 0; }
 .hint { margin-top: 4px; color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: var(--fs-caption); }
@@ -3177,7 +3334,16 @@ async function savePricing() {
 .cfg-hint { display: block; font-size: var(--fs-caption); color: var(--text-muted); margin-bottom: 6px; line-height: 1.4; }
 
 /* ── Save row ───────────────────────────────────────────────────────────── */
-.save-row { display: flex; align-items: center; gap: 12px; }
+.save-row { display: flex; align-items: center; gap: 12px; margin-top: 1rem; }
+.save-row.fixed-bottom {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 280px;
+  z-index: 10;
+  background: var(--bg-page, #F2F2F7);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+}
 .save-indicator {
   display: inline-flex; align-items: center; gap: 6px;
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); font-weight: 600;
@@ -3974,5 +4140,202 @@ async function savePricing() {
 }
 .im-guide-ok-btn:hover {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MODELS PAGE — New left sidebar layout
+   ══════════════════════════════════════════════════════════════════════════ */
+.models-page-layout {
+  display: flex;
+  gap: 1.5rem;
+  height: 100%;
+}
+
+.models-left-nav {
+  width: 240px;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+}
+
+.models-add-btn {
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.models-add-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+}
+.models-add-btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.models-nav-divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 0.25rem 0;
+}
+
+.models-nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.models-nav-section-label {
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.25rem 0.5rem;
+}
+
+.models-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  color: var(--text-secondary);
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.models-nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.models-nav-item.active {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #fff;
+}
+
+.models-nav-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.models-nav-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+.models-nav-dot.active {
+  background: #10B981;
+}
+
+.models-nav-dot.inactive {
+  background: #D1D5DB;
+}
+
+.models-nav-empty {
+  padding: 0.5rem;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.models-right-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.form-section-subheader {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 700;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  color: var(--text-muted);
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 1.25rem;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--border);
 }
 </style>

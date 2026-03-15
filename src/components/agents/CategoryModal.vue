@@ -1,5 +1,5 @@
 <template>
-  <Teleport to="body">
+  <Teleport v-if="visible" to="body">
     <div class="cat-modal-backdrop">
       <div class="cat-modal" role="dialog" aria-modal="true">
 
@@ -10,7 +10,7 @@
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             </svg>
           </div>
-          <span class="cat-modal-title">{{ mode === 'create' ? `New ${noun}` : (renameTitle || `Rename ${noun}`) }}</span>
+          <span class="cat-modal-title">{{ detectedMode === 'create' ? t('categoryModal.new', { noun: noun }) : (renameTitle || t('categoryModal.rename', { noun: noun })) }}</span>
           <button class="cat-modal-close" @click="$emit('close')" aria-label="Close">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
@@ -20,28 +20,28 @@
         <div class="cat-modal-body">
           <!-- Type selector (create mode only, agent categories) -->
           <template v-if="showTypeSelector">
-            <div v-if="mode === 'create'" class="cat-type-row">
+            <div v-if="detectedMode === 'create'" class="cat-type-row">
               <button
                 class="cat-type-btn"
                 :class="{ active: localType === 'system' }"
                 @click="localType = 'system'"
-              >System</button>
+              >{{ t('categoryModal.system') }}</button>
               <button
                 class="cat-type-btn"
                 :class="{ active: localType === 'user' }"
                 @click="localType = 'user'"
-              >User</button>
+              >{{ t('categoryModal.user') }}</button>
             </div>
             <p v-else class="cat-modal-subtitle">
-              {{ type === 'system' ? 'System' : 'User' }} category
+              {{ type === 'system' ? t('categoryModal.systemCategory') : t('categoryModal.userCategory') }}
             </p>
           </template>
 
           <div class="cat-field-row">
             <!-- Emoji button -->
             <div class="cat-field cat-field-emoji">
-              <label class="cat-label">Emoji</label>
-              <button class="cat-emoji-btn" @click="showEmojiPicker = true" title="Choose emoji">
+              <label class="cat-label">{{ t('categoryModal.emoji') }}</label>
+              <button class="cat-emoji-btn" @click="showEmojiPicker = true" :title="t('categoryModal.chooseEmoji')">
                 <span class="cat-emoji-display">{{ localEmoji }}</span>
                 <svg class="cat-emoji-edit-icon" style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -52,14 +52,14 @@
 
             <!-- Name -->
             <div class="cat-field cat-field-name">
-              <label class="cat-label">Name</label>
+              <label class="cat-label">{{ t('categoryModal.name') }}</label>
               <input
                 ref="nameRef"
                 v-model="localName"
                 class="cat-input"
                 type="text"
                 maxlength="40"
-                placeholder="e.g. Engineering"
+                :placeholder="t('categoryModal.namePlaceholder')"
                 @keydown.enter="submit"
               />
             </div>
@@ -68,9 +68,9 @@
 
         <!-- Footer -->
         <div class="cat-modal-footer">
-          <button class="cat-btn-cancel" @click="$emit('close')">Cancel</button>
-          <button class="cat-btn-confirm" :disabled="!localName.trim()" @click="submit">
-            {{ mode === 'create' ? 'Create' : 'Save' }}
+          <button class="cat-btn-cancel" @click="$emit('close')">{{ t('common.cancel') }}</button>
+          <button class="cat-btn-confirm" @click="submit">
+            {{ detectedMode === 'create' ? t('common.create') : t('common.save') }}
           </button>
         </div>
 
@@ -89,11 +89,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import EmojiPicker from './EmojiPicker.vue'
+import { useI18n } from '../../i18n/useI18n'
+
+defineOptions({ inheritAttrs: false })
+
+const { t } = useI18n()
 
 const props = defineProps({
-  mode:             { type: String,  default: 'create' },  // 'create' | 'rename'
+  visible:          { type: Boolean, default: false },
+  category:         { type: Object,  default: null },
+  mode:             { type: String,  default: null },  // 'create' | 'rename' | null (auto-detect)
   type:             { type: String,  default: 'system' },  // 'system' | 'user'
   initial:          { type: Object,  default: () => ({ name: '', emoji: '📁' }) },
   noun:             { type: String,  default: 'Category' }, // e.g. 'Category' | 'Folder'
@@ -101,7 +108,10 @@ const props = defineProps({
   showTypeSelector: { type: Boolean, default: true },
 })
 
-const emit = defineEmits(['confirm', 'close'])
+const emit = defineEmits(['confirm', 'close', 'saved'])
+
+// Auto-detect mode: if category is provided, it's rename; otherwise create
+const detectedMode = computed(() => props.mode || (props.category ? 'rename' : 'create'))
 
 const localName      = ref(props.initial?.name  || '')
 const localEmoji     = ref(props.initial?.emoji || '📁')
@@ -132,7 +142,9 @@ function onEmojiSelect(emoji) {
 function submit() {
   const name = localName.value.trim()
   if (!name) return
-  emit('confirm', { name, emoji: localEmoji.value || '📁', type: localType.value })
+  const data = { name, emoji: localEmoji.value || '📁', type: localType.value }
+  emit('confirm', data)
+  emit('saved', data)
 }
 </script>
 

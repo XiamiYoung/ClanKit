@@ -152,11 +152,12 @@
           <table class="tdb-table">
             <thead>
               <tr>
+                <th class="tdb-th tdb-th--category">Category</th>
                 <th class="tdb-th tdb-th--plan">Plan</th>
                 <th class="tdb-th tdb-th--trigger">Trigger</th>
                 <th class="tdb-th tdb-th--started">Started</th>
                 <th class="tdb-th tdb-th--dur">Duration</th>
-                <th class="tdb-th tdb-th--steps">Steps</th>
+                <th class="tdb-th tdb-th--steps">{{ t('tasks.step.steps') }}</th>
                 <th class="tdb-th tdb-th--status">Status</th>
               </tr>
             </thead>
@@ -168,13 +169,22 @@
                 @click="openDetail(row)"
               >
                 <td class="tdb-td">
+                  <div v-if="row.planCategoryEmoji || row.planCategoryName" class="tdb-cat-cell">
+                    <span class="tdb-cat-emoji">{{ row.planCategoryEmoji }}</span>
+                    <span class="tdb-cat-name">{{ row.planCategoryName }}</span>
+                  </div>
+                  <div v-else class="tdb-cat-cell">
+                    <span class="tdb-cat-name">Uncategorized</span>
+                  </div>
+                </td>
+                <td class="tdb-td">
                   <div class="tdb-plan-cell">
                     <span class="tdb-plan-icon" :style="{ background: row.planColor }">{{ row.planIcon }}</span>
                     <span class="tdb-plan-name">{{ row.planName }}</span>
                   </div>
                 </td>
                 <td class="tdb-td">
-                  <span :class="['tdb-trigger-badge', `tdb-trigger--${row.triggeredBy}`]">{{ row.triggeredBy === 'schedule' ? 'Scheduled' : 'Manual' }}</span>
+                  <span :class="['tdb-trigger-badge', `tdb-trigger--${row.triggeredBy}`]">{{ row.triggeredBy === 'schedule' ? t('tasks.scheduled') : t('tasks.manual') }}</span>
                 </td>
                 <td class="tdb-td tdb-td--mono">{{ fmtDateTime(row.startedAt) }}</td>
                 <td class="tdb-td tdb-td--mono">{{ row.duration || '—' }}</td>
@@ -212,31 +222,35 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   runs:     { type: Array, default: () => [] },
   plans:    { type: Array, default: () => [] },
   planColors: { type: Object, default: () => ({}) },
+  planCategories: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['open-run'])
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const STATUS_FILTERS = [
-  { value: 'all',       label: 'All' },
-  { value: 'completed', label: 'Success' },
-  { value: 'error',     label: 'Failed' },
-  { value: 'skipped',   label: 'Skipped' },
-  { value: 'running',   label: 'Running' },
-]
+const STATUS_FILTERS = computed(() => [
+  { value: 'all',       label: t('common.all') },
+  { value: 'completed', label: t('tasks.status.completed') },
+  { value: 'error',     label: t('tasks.status.error') },
+  { value: 'skipped',   label: t('tasks.dashboard.skipped') },
+  { value: 'running',   label: t('tasks.status.running') },
+])
 
-const STATUS_LABEL = {
-  completed: 'Success',
-  error:     'Failed',
-  skipped:   'Skipped',
-  running:   'Running',
-}
+const STATUS_LABEL = computed(() => ({
+  completed: t('tasks.status.completed'),
+  error:     t('tasks.status.error'),
+  skipped:   t('tasks.dashboard.skipped'),
+  running:   t('tasks.status.running'),
+}))
 
 const STATUS_COLORS = {
   completed: '#10B981',
@@ -258,6 +272,8 @@ const page         = ref(1)
 function planById(id) {
   return props.plans.find(p => p.id === id) || null
 }
+
+const planCatMap = computed(() => Object.fromEntries(props.planCategories.map(c => [c.id, c])))
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
@@ -378,17 +394,20 @@ const allRows = computed(() => {
     .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))
     .map(r => {
       const plan = planById(r.planId)
+      const category = plan?.categoryId ? planCatMap.value[plan.categoryId] : null
       return {
-        id:          r.id,
-        planId:      r.planId,
-        planName:    plan?.name || r.planId || '—',
-        planIcon:    plan?.icon || '📋',
-        planColor:   props.planColors[r.planId] || '#6B7280',
-        triggeredBy: r.triggeredBy || 'manual',
-        startedAt:   r.startedAt,
-        status:      r.status,
-        duration:    fmtMs(r.startedAt && r.completedAt ? new Date(r.completedAt) - new Date(r.startedAt) : null),
-        stepCount:   r.stepCount ?? null,
+        id:                  r.id,
+        planId:              r.planId,
+        planName:            plan?.name || r.planId || '—',
+        planIcon:            plan?.icon || '📋',
+        planColor:           props.planColors[r.planId] || '#6B7280',
+        planCategoryEmoji:   category?.emoji || null,
+        planCategoryName:    category?.name || null,
+        triggeredBy:         r.triggeredBy || 'manual',
+        startedAt:           r.startedAt,
+        status:              r.status,
+        duration:            fmtMs(r.startedAt && r.completedAt ? new Date(r.completedAt) - new Date(r.startedAt) : null),
+        stepCount:           r.stepCount ?? null,
       }
     })
 })
@@ -762,6 +781,7 @@ function openDetail(row) {
   white-space: nowrap;
   background: #FAFAFA;
 }
+.tdb-th--category { width: 10rem; }
 .tdb-th--plan    { min-width: 12rem; }
 .tdb-th--trigger { width: 7rem; }
 .tdb-th--started { width: 9rem; }
@@ -784,6 +804,24 @@ function openDetail(row) {
 }
 .tdb-td--mono   { font-family: 'JetBrains Mono', monospace; font-size: var(--fs-small); color: var(--text-secondary); }
 .tdb-td--center { text-align: center; }
+
+.tdb-cat-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.tdb-cat-emoji {
+  font-size: var(--fs-body);
+  flex-shrink: 0;
+}
+
+.tdb-cat-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .tdb-plan-cell {
   display: flex;

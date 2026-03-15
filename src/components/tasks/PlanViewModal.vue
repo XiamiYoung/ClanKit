@@ -38,18 +38,17 @@
                 <div class="pv-section-icon">
                   <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 </div>
-                <span class="pv-section-title">Steps</span>
-                <span class="pv-section-hint">{{ plan?.steps?.length || 0 }} step{{ plan?.steps?.length === 1 ? '' : 's' }}</span>
+                <span class="pv-section-title">{{ t('tasks.step.steps') }}</span>
+                <span class="pv-section-hint">{{ plan?.steps?.length || 0 }} {{ plan?.steps?.length === 1 ? t('tasks.step.step') : t('tasks.step.steps') }}</span>
               </div>
-
-              <div v-if="!plan?.steps?.length" class="pv-no-steps">No steps defined.</div>
+              <div v-if="!plan?.steps?.length" class="pv-no-steps">{{ t('tasks.step.noStepsYet') }}</div>
 
               <div class="pv-steps-list">
                 <div v-for="(step, stepIdx) in plan?.steps || []" :key="step.id" class="pv-step-card">
 
                   <div class="pv-step-head">
                     <div class="pv-step-num">{{ stepIdx + 1 }}</div>
-                    <span class="pv-step-task-label">{{ taskName(step.taskId) || '(no task)' }}</span>
+                    <span class="pv-step-task-label">{{ taskName(step.taskId) || t('tasks.step.noTask') }}</span>
                   </div>
 
                   <!-- Agents -->
@@ -120,7 +119,7 @@
                     <span class="pv-toggle-knob-display"></span>
                   </div>
                   <span :class="['pv-status-text', plan?.schedule?.enabled ? 'pv-status-text--on' : 'pv-status-text--off']">
-                    {{ plan?.schedule?.enabled ? 'Enabled — will run on schedule' : 'Disabled — will not run automatically' }}
+                    {{ plan?.schedule?.enabled ? t('tasks.viewModal.enabledWillRun') : t('tasks.viewModal.disabledWillNotRun') }}
                   </span>
                 </div>
               </template>
@@ -137,18 +136,18 @@
           <div class="pv-canvas">
             <div class="pv-canvas-label">
               <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="11"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="11" x2="5" y2="16"/><line x1="12" y1="11" x2="19" y2="16"/></svg>
-              Workflow
+              {{ t('tasks.workflow') }}
             </div>
             <div class="pv-flow-scroll">
               <div v-if="!flowWaves.length" class="pv-flow-empty">
                 <svg style="width:28px;height:28px;opacity:0.2;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="11"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="11" x2="5" y2="16"/><line x1="12" y1="11" x2="19" y2="16"/></svg>
-                <span>No steps</span>
+                <span>{{ t('tasks.step.noStepsYet') }}</span>
               </div>
 
               <div v-else class="pv-flow">
                 <div class="pf-terminus">
                   <div class="pf-terminus-dot"></div>
-                  <span>START</span>
+                  <span>{{ t('tasks.start') }}</span>
                 </div>
                 <template v-for="(wave, wi) in flowWaves" :key="wi">
                   <div class="pf-hconn">
@@ -184,7 +183,7 @@
                 </div>
                 <div class="pf-terminus">
                   <div class="pf-terminus-dot pf-terminus-dot--end"></div>
-                  <span>END</span>
+                  <span>{{ t('tasks.history.end') }}</span>
                 </div>
               </div>
             </div>
@@ -200,7 +199,7 @@
         <!-- Footer -->
         <div class="pv-footer">
           <div></div>
-          <button class="pv-close-footer-btn" @click="$emit('close')">Close</button>
+          <button class="pv-close-footer-btn" @click="$emit('close')">{{ t('tasks.actions.close') }}</button>
         </div>
 
       </div>
@@ -218,6 +217,9 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useAgentsStore } from '../../stores/agents'
 import PlanHistoryModal from './PlanHistoryModal.vue'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   visible:     Boolean,

@@ -4,7 +4,7 @@
     <div v-if="embeddedUrl" class="embedded-overlay">
       <!-- Header: back button + page title -->
       <div class="embedded-header">
-        <button class="back-btn" @click="closeEmbedded" title="Back">
+        <button class="back-btn" @click="closeEmbedded" :title="t('common.back')">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
@@ -15,24 +15,24 @@
       <!-- Browser toolbar -->
       <div class="embedded-toolbar">
         <!-- Nav: Back / Forward -->
-        <button class="toolbar-btn" @click="wvGoBack" :disabled="!wvCanGoBack" title="Back">
+        <button class="toolbar-btn" @click="wvGoBack" :disabled="!wvCanGoBack" :title="t('common.back')">
           <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
         </button>
-        <button class="toolbar-btn" @click="wvGoForward" :disabled="!wvCanGoForward" title="Forward">
+        <button class="toolbar-btn" @click="wvGoForward" :disabled="!wvCanGoForward" :title="t('common.forward')">
           <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
         </button>
 
         <!-- Reload / Stop -->
-        <button v-if="wvIsLoading" class="toolbar-btn" @click="wvStop" title="Stop">
+        <button v-if="wvIsLoading" class="toolbar-btn" @click="wvStop" :title="t('common.stop')">
           <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
-        <button v-else class="toolbar-btn" @click="wvReload" title="Reload">
+        <button v-else class="toolbar-btn" @click="wvReload" :title="t('common.reload')">
           <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="23 4 23 10 17 10"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -68,12 +68,12 @@
       <div class="catalog-header">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
           <div style="display:flex; flex-direction:column; justify-content:center;">
-            <h1 class="catalog-title">AI News</h1>
-            <p class="catalog-subtitle">Live RSS feeds from your configured sources.</p>
+            <h1 class="catalog-title">{{ t('news.title') }}</h1>
+            <p class="catalog-subtitle">{{ t('news.subtitle') }}</p>
           </div>
           <div class="news-header-actions">
           <!-- Rotate -->
-          <AppButton size="icon" @click="rotateAll" :disabled="isRefreshing" :loading="isRotating" title="Rotate feeds">
+          <AppButton size="icon" @click="rotateAll" :disabled="isRefreshing" :loading="isRotating" :title="t('news.rotateFeeds')">
             <svg v-if="!isRotating" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="16 3 21 3 21 8"/>
               <line x1="4" y1="20" x2="21" y2="3"/>
@@ -83,21 +83,21 @@
             </svg>
           </AppButton>
           <!-- Default (only when rotated) -->
-          <AppButton v-if="newsStore.isRotated" size="icon" @click="restoreDefaults" :disabled="isRefreshing" title="Restore defaults">
+          <AppButton v-if="newsStore.isRotated" size="icon" @click="restoreDefaults" :disabled="isRefreshing" :title="t('news.restoreDefaults')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
               <polyline points="3 3 3 8 8 8"/>
             </svg>
           </AppButton>
           <!-- Refresh -->
-          <AppButton size="icon" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing" title="Refresh">
+          <AppButton size="icon" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing" :title="t('common.refresh')">
             <svg v-if="!isRefreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="23 4 23 10 17 10"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
           </AppButton>
           <!-- Configure Feeds -->
-          <AppButton size="icon" @click="openFeedConfig" title="Configure feeds">
+          <AppButton size="icon" @click="openFeedConfig" :title="t('news.configureFeeds')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>
             </svg>
@@ -116,7 +116,7 @@
                   <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>
                 </svg>
               </div>
-              <h2 class="add-feed-title">Configure Feeds</h2>
+              <h2 class="add-feed-title">{{ t('news.configureFeeds') }}</h2>
               <span class="add-feed-count">{{ feedRows.length }} feed{{ feedRows.length !== 1 ? 's' : '' }}</span>
               <button class="add-feed-close" @click="closeFeedConfig">
                 <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -124,8 +124,8 @@
             </div>
             <div class="add-feed-body">
               <div class="add-feed-rows-header">
-                <span class="add-feed-col-label" style="flex:1;">Name</span>
-                <span class="add-feed-col-label" style="flex:1.5;">RSS URL</span>
+                <span class="add-feed-col-label" style="flex:1;">{{ t('news.feedName') }}</span>
+                <span class="add-feed-col-label" style="flex:1.5;">{{ t('news.feedUrl') }}</span>
                 <span style="width:28px;"></span>
               </div>
               <div class="add-feed-rows">
@@ -133,19 +133,19 @@
                   <input
                     v-model="row.name"
                     class="add-feed-input"
-                    placeholder="e.g. TechCrunch"
+                    :placeholder="t('news.feedNamePlaceholder')"
                     style="flex:1;"
                   />
                   <input
                     v-model="row.url"
                     class="add-feed-input add-feed-input--mono"
-                    placeholder="https://feeds.example.com/rss"
+                    :placeholder="t('news.feedUrlPlaceholder')"
                     style="flex:1.5;"
                   />
                   <button
                     class="add-feed-row-remove"
                     @click="removeFeedRow(i)"
-                    title="Remove feed"
+                    :title="t('common.remove')"
                   >
                     <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -157,18 +157,18 @@
                 <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
-                Add new feed
+                {{ t('news.addNewFeed') }}
               </button>
               <p v-if="feedConfigError" class="add-feed-error">{{ feedConfigError }}</p>
               <div v-if="feedConfigSuccess" class="add-feed-success">{{ feedConfigSuccess }}</div>
             </div>
             <div class="add-feed-footer">
-              <button class="add-feed-cancel" @click="closeFeedConfig">Cancel</button>
+              <button class="add-feed-cancel" @click="closeFeedConfig">{{ t('common.cancel') }}</button>
               <button class="add-feed-submit" @click="saveFeedConfig">
                 <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
-                Save
+                {{ t('common.save') }}
               </button>
             </div>
           </div>
@@ -185,41 +185,41 @@
                   <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
                 </svg>
               </div>
-              <h2 class="top-criteria-title">Top Stories Criteria</h2>
+              <h2 class="top-criteria-title">{{ t('news.topStoriesCriteria') }}</h2>
               <button class="top-criteria-close" @click="showTopCriteria = false">
                 <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
             </div>
             <div class="top-criteria-body">
               <div class="top-criteria-field">
-                <label class="top-criteria-label">Priority Topics</label>
+                <label class="top-criteria-label">{{ t('news.priorityTopics') }}</label>
                 <textarea
                   v-model="criteriaForm.highKeywords"
                   class="top-criteria-textarea"
-                  placeholder="artificial intelligence, ai, machine learning..."
+                  :placeholder="t('news.priorityTopicsPlaceholder')"
                   rows="3"
                 ></textarea>
-                <span class="top-criteria-hint">Comma-separated keywords (highest weight)</span>
+                <span class="top-criteria-hint">{{ t('news.priorityTopicsHint') }}</span>
               </div>
               <div class="top-criteria-field">
-                <label class="top-criteria-label">Secondary Topics</label>
+                <label class="top-criteria-label">{{ t('news.secondaryTopics') }}</label>
                 <textarea
                   v-model="criteriaForm.medKeywords"
                   class="top-criteria-textarea"
-                  placeholder="robot, automation, algorithm..."
+                  :placeholder="t('news.secondaryTopicsPlaceholder')"
                   rows="3"
                 ></textarea>
-                <span class="top-criteria-hint">Comma-separated keywords (medium weight)</span>
+                <span class="top-criteria-hint">{{ t('news.secondaryTopicsHint') }}</span>
               </div>
               <div class="top-criteria-field">
-                <label class="top-criteria-label">Breaking Signals</label>
+                <label class="top-criteria-label">{{ t('news.breakingSignals') }}</label>
                 <textarea
                   v-model="criteriaForm.breakingKeywords"
                   class="top-criteria-textarea"
-                  placeholder="breaking, exclusive, announces..."
+                  :placeholder="t('news.breakingSignalsPlaceholder')"
                   rows="2"
                 ></textarea>
-                <span class="top-criteria-hint">Comma-separated keywords (breaking news boost)</span>
+                <span class="top-criteria-hint">{{ t('news.breakingSignalsHint') }}</span>
               </div>
               <!-- AI Enhance Button -->
               <button
@@ -232,11 +232,11 @@
                   <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
                   <path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/>
                 </svg>
-                <span>{{ isEnhancing ? 'Enhancing...' : 'AI Enhance' }}</span>
+                <span>{{ isEnhancing ? t('news.enhancing') : t('news.aiEnhance') }}</span>
               </button>
               <p v-if="enhanceError" class="top-criteria-error">{{ enhanceError }}</p>
               <div class="top-criteria-field">
-                <label class="top-criteria-label">Time Window</label>
+                <label class="top-criteria-label">{{ t('news.timeWindow') }}</label>
                 <div class="top-criteria-time-row">
                   <input
                     v-model.number="criteriaForm.timeWindowHours"
@@ -245,18 +245,18 @@
                     min="1"
                     max="168"
                   />
-                  <span class="top-criteria-time-suffix">hours</span>
+                  <span class="top-criteria-time-suffix">{{ t('news.hours') }}</span>
                 </div>
-                <span class="top-criteria-hint">Articles older than this are excluded from Top Stories</span>
+                <span class="top-criteria-hint">{{ t('news.timeWindowHint') }}</span>
               </div>
             </div>
             <div class="top-criteria-footer">
-              <button class="top-criteria-cancel" @click="showTopCriteria = false">Cancel</button>
+              <button class="top-criteria-cancel" @click="showTopCriteria = false">{{ t('common.cancel') }}</button>
               <button class="top-criteria-save" @click="saveTopCriteria">
                 <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
-                Save
+                {{ t('common.save') }}
               </button>
             </div>
           </div>
@@ -291,9 +291,9 @@
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
           </svg>
-          Top Stories
+          {{ t('news.topStories') }}
           <div v-if="newsStore.topLoading" class="top-news-spinner"></div>
-          <button class="top-criteria-btn" @click="openTopCriteria" title="Top Stories Settings">
+          <button class="top-criteria-btn" @click="openTopCriteria" :title="t('news.topStoriesSettings')">
             <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
@@ -335,7 +335,7 @@
                 :modelValue="card.selectedFeedId"
                 @update:modelValue="onFeedChange(idx, $event)"
                 :options="feedOptions"
-                placeholder="Select a feed..."
+                :placeholder="t('news.selectFeed')"
               />
               <div v-if="card.loading" class="feed-spinner" :class="`spinner--${idx}`"></div>
             </div>
@@ -362,12 +362,12 @@
               <svg style="width:24px;height:24px;opacity:0.4;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>
               </svg>
-              <span>Select a feed above</span>
+              <span>{{ t('news.selectFeedAbove') }}</span>
             </div>
 
             <!-- Empty State -->
             <div v-else-if="!card.loading && card.fetched && !card.articles.length" class="feed-empty">
-              <span>No articles found</span>
+              <span>{{ t('news.noArticles') }}</span>
             </div>
 
             <!-- Article List -->
@@ -397,8 +397,11 @@ import { ref, reactive, computed, onMounted, watch, nextTick, onBeforeUnmount } 
 import { v4 as uuidv4 } from 'uuid'
 import { useNewsStore } from '../stores/news'
 import { useConfigStore } from '../stores/config'
+import { useI18n } from '../i18n/useI18n'
 import ComboBox from '../components/common/ComboBox.vue'
 import AppButton from '../components/common/AppButton.vue'
+
+const { t } = useI18n()
 
 const PAGE_SIZE = 20
 
@@ -594,19 +597,19 @@ function saveFeedConfig() {
     const name = rows[i].name.trim()
     const url = rows[i].url.trim()
     if (!name || !url) {
-      feedConfigError.value = `Row ${i + 1}: Both name and URL are required`
+      feedConfigError.value = t('news.rowNumber', { number: i + 1 }) + ': ' + t('news.feedRequired')
       return
     }
     try {
       new URL(url)
     } catch {
-      feedConfigError.value = `Row ${i + 1}: "${url}" is not a valid URL`
+      feedConfigError.value = t('news.rowNumber', { number: i + 1 }) + ': "' + url + '" ' + t('news.invalidUrl')
       return
     }
     // Check for duplicates within the rows
     for (let j = 0; j < i; j++) {
       if (rows[j].url.trim() === url) {
-        feedConfigError.value = `Row ${i + 1}: Duplicate URL`
+        feedConfigError.value = t('news.rowNumber', { number: i + 1 }) + ': ' + t('news.duplicateUrl')
         return
       }
     }
@@ -636,7 +639,7 @@ function saveFeedConfig() {
   // Persist
   configStore.saveConfig({ newsFeeds: newFeeds })
 
-  feedConfigSuccess.value = 'Feeds saved'
+  feedConfigSuccess.value = t('news.feedsSaved')
   setTimeout(() => closeFeedConfig(), 1000)
 }
 
@@ -690,7 +693,7 @@ Return format: {"highKeywords": "...", "medKeywords": "...", "breakingKeywords":
     const config = JSON.parse(JSON.stringify(configStore.config))
     const result = await window.electronAPI.enhancePrompt({ prompt, config })
     if (!result.success) {
-      enhanceError.value = result.error || 'Failed to enhance keywords'
+      enhanceError.value = result.error || t('news.failedToSummarize')
       return
     }
     // Parse JSON from response (handle markdown code blocks)
@@ -800,7 +803,7 @@ async function showTooltip(article, colorIdx = 0) {
     if (!tooltip.visible) return   // user already left
     if (!result.success) {
       tooltip.loading = false
-      tooltip.error = result.error || 'Could not summarize'
+      tooltip.error = result.error || t('news.couldNotSummarize')
       await clampTooltip()
       return
     }
@@ -812,7 +815,7 @@ async function showTooltip(article, colorIdx = 0) {
   } catch (err) {
     if (!tooltip.visible) return
     tooltip.loading = false
-    tooltip.error = err.message || 'Failed to summarize'
+    tooltip.error = err.message || t('news.failedToSummarize')
     await clampTooltip()
   }
 }
@@ -848,7 +851,7 @@ function formatDate(dateStr) {
     // If diff is negative the parsed date is in the future (timezone ambiguity);
     // treat as "just now" when within 24h, otherwise show absolute date.
     if (diff < 0) {
-      return Math.abs(diff) < 86400000 ? 'just now' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      return Math.abs(diff) < 86400000 ? t('news.justNow') : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     }
     const mins = Math.floor(diff / 60000)
     if (mins < 60) return `${mins}m ago`

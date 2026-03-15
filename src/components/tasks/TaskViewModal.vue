@@ -23,16 +23,16 @@
           <!-- Left: prompt -->
           <div class="tvm-col-left">
             <div class="tvm-section">
-              <div class="tvm-section-label">Prompt</div>
-              <pre class="tvm-prompt-pre">{{ task.prompt || '(no prompt)' }}</pre>
+              <div class="tvm-section-label">{{ t('tasks.taskEditor.prompt') }}</div>
+              <pre class="tvm-prompt-pre">{{ task.prompt || t('tasks.step.noTask') }}</pre>
             </div>
           </div>
 
           <!-- Right: used in plans -->
           <div class="tvm-col-right">
             <div class="tvm-section">
-              <div class="tvm-section-label">Used in plans</div>
-              <div v-if="usedInPlans.length === 0" class="tvm-plans-empty">Not used in any plan</div>
+              <div class="tvm-section-label">{{ t('tasks.taskEditor.usedInPlans') }}</div>
+              <div v-if="usedInPlans.length === 0" class="tvm-plans-empty">{{ t('tasks.taskEditor.notUsedInAnyPlan') }}</div>
               <div v-else class="tvm-plans-list">
                 <button
                   v-for="plan in usedInPlans"
@@ -43,7 +43,7 @@
                   <span class="tvm-plan-icon">{{ plan.icon || '📋' }}</span>
                   <div class="tvm-plan-info">
                     <span class="tvm-plan-name">{{ plan.name }}</span>
-                    <span class="tvm-plan-steps">{{ plan.steps?.length || 0 }} step{{ plan.steps?.length === 1 ? '' : 's' }}</span>
+                    <span class="tvm-plan-steps">{{ plan.steps?.length || 0 }} {{ plan.steps?.length === 1 ? t('tasks.misc.stepSingular') : t('tasks.misc.stepPlural') }}</span>
                   </div>
                   <svg class="tvm-plan-arrow" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
@@ -55,7 +55,7 @@
 
         <!-- Footer -->
         <div class="tvm-footer">
-          <button class="tvm-close-btn" @click="$emit('close')">Close</button>
+          <button class="tvm-close-btn" @click="$emit('close')">{{ t('tasks.actions.close') }}</button>
         </div>
 
       </div>
@@ -65,6 +65,9 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   visible: Boolean,

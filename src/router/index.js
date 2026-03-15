@@ -9,11 +9,16 @@ import McpView from '../views/McpView.vue'
 import ToolsView from '../views/ToolsView.vue'
 import KnowledgeView from '../views/KnowledgeView.vue'
 import TaskEngineView from '../views/TaskEngineView.vue'
+import AiTaskView from '../views/AiTaskView.vue'
+import PlazaView from '../views/PlazaView.vue'
+import PlazaSessionView from '../views/PlazaSessionView.vue'
+import AuthView from '../views/AuthView.vue'
 
 export default createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/',          redirect: '/chats' },
+    { path: '/auth',      component: AuthView },
     { path: '/news',      component: NewsView },
     { path: '/chats',     component: ChatsView },
     { path: '/agents',    component: AgentsView },
@@ -22,7 +27,8 @@ export default createRouter({
     { path: '/mcp',       component: McpView },
     { path: '/tools',     component: ToolsView },
     { path: '/tasks',     component: TaskEngineView },
+    { path: '/ai-tasks',  component: AiTaskView },
     { path: '/notes',     component: DocsView },
-    { path: '/config',    component: ConfigView }
+    { path: '/config',    component: ConfigView },
   ]
 })

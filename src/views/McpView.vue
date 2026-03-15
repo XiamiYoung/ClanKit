@@ -6,7 +6,7 @@
       <div style="display:flex; align-items:center; justify-content:space-between;">
         <div>
           <div style="display:flex; align-items:center; gap:0.5rem;">
-            <h1 class="catalog-title">MCP Servers</h1>
+            <h1 class="catalog-title">{{ t('mcp.title') }}</h1>
             <span class="catalog-count-badge">{{ mcpStore.servers.length }}</span>
           </div>
           <p class="catalog-subtitle">
@@ -14,7 +14,7 @@
           </p>
         </div>
         <div class="flex items-center gap-2">
-          <AppButton size="icon" @click="refreshServers" :loading="refreshing" title="Refresh">
+          <AppButton size="icon" @click="refreshServers" :loading="refreshing" :title="t('common.refresh')">
             <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </AppButton>
           <AppButton size="icon" @click="openAdd" title="Add Server">
@@ -31,7 +31,7 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search servers by name or description..."
+          :placeholder="t('mcp.searchServers')"
           class="catalog-search-input"
         />
         <span v-if="searchQuery" class="catalog-search-clear" @click="searchQuery = ''">
@@ -147,7 +147,7 @@
                   <circle cx="12" cy="12" r="3"/>
                 </svg>
               </div>
-              <h2 class="mcp-modal-title">{{ editingServer ? 'Edit Server' : 'Add MCP Server' }}</h2>
+              <h2 class="mcp-modal-title">{{ editingServer ? t('mcp.editServerTitle') : t('mcp.addServer') }}</h2>
             </div>
             <button class="mcp-modal-close" @click="closeModal">
               <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -302,8 +302,9 @@
     <!-- Confirm Delete Modal -->
     <ConfirmModal
       v-if="showConfirmDelete && editingServer"
-      title="Delete Server"
-      :message="`Are you sure you want to delete &quot;${editingServer.name}&quot;? This action cannot be undone.`"
+      :visible="showConfirmDelete && editingServer"
+      :title="t('mcp.deleteServer')"
+      :message="t('mcp.deleteServerConfirm', { name: editingServer.name })"
       confirm-text="Delete"
       confirm-class="danger"
       @confirm="executeDelete"
@@ -319,6 +320,9 @@ import { useMcpStore } from '../stores/mcp'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import { useConfigStore } from '../stores/config'
+import { useI18n } from '../i18n/useI18n'
+
+const { t } = useI18n()
 
 const mcpStore = useMcpStore()
 const configStore = useConfigStore()
@@ -510,16 +514,16 @@ async function runTestConnection() {
   const isHttp = form.value.transportType === 'http'
   const env = Object.fromEntries(
     form.value.envVars
-      .filter(ev => ev.key.trim())
-      .map(ev => [ev.key.trim(), ev.value])
+      .filter(ev => (ev.key || '').trim())
+      .map(ev => [(ev.key || '').trim(), ev.value])
   )
 
   const connConfig = isHttp
-    ? { name: form.value.name || 'test', url: form.value.url.trim(), env }
+    ? { name: form.value.name || 'test', url: (form.value.url || '').trim(), env }
     : {
         name: form.value.name || 'test',
-        command: form.value.command.trim(),
-        args: form.value.argsText.split('\n').map(l => l.trim()).filter(Boolean),
+        command: (form.value.command || '').trim(),
+        args: form.value.argsText.split('\n').map(l => (l || '').trim()).filter(Boolean),
         env,
       }
 

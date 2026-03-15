@@ -7,12 +7,12 @@
   >
     <!-- Left group -->
     <div class="flex items-center gap-1" style="padding-left:0.5rem;" @mousedown.stop @dblclick.stop>
-      <button @click.stop="$emit('toggle-sidebar')" class="tb-btn" title="Toggle sidebar">
+      <button @click.stop="$emit('toggle-sidebar')" class="tb-btn" :title="t('titlebar.toggleSidebar')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>
         </svg>
       </button>
-      <button @click.stop="toggleMinibar" class="tb-btn" :class="{ 'tb-btn-active': isMinibar }" title="Minibar mode">
+      <button @click.stop="toggleMinibar" class="tb-btn" :class="{ 'tb-btn-active': isMinibar }" :title="t('titlebar.minibarMode')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/>
           <rect x="3" y="3" width="18" height="7" rx="2" fill="currentColor" stroke="none"/>
@@ -32,14 +32,14 @@
       <button @click.stop="minimize" @dblclick.stop class="flex items-center justify-center rounded transition-colors"
         style="width:2rem;height:1.625rem;background:transparent;border:none;color:#6B7280;cursor:pointer;"
         @mouseenter="e=>e.currentTarget.style.background='#F5F5F5'"
-        @mouseleave="e=>e.currentTarget.style.background='transparent'" title="Minimize">
+        @mouseleave="e=>e.currentTarget.style.background='transparent'" :title="t('titlebar.minimize')">
         <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="5.5" width="10" height="1.2" rx="0.6" fill="currentColor"/></svg>
       </button>
       <button @click.stop="toggleMaximize" @dblclick.stop class="flex items-center justify-center rounded transition-colors"
         style="width:2rem;height:1.625rem;background:transparent;border:none;color:#6B7280;cursor:pointer;"
         @mouseenter="e=>e.currentTarget.style.background='#F5F5F5'"
         @mouseleave="e=>e.currentTarget.style.background='transparent'"
-        :title="isMaximized?'Restore':'Maximize'">
+        :title="isMaximized ? t('titlebar.restore') : t('titlebar.maximize')">
         <svg v-if="!isMaximized" width="11" height="11" viewBox="0 0 11 11">
           <rect x="0.5" y="0.5" width="10" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>
         </svg>
@@ -52,7 +52,7 @@
         style="width:2rem;height:1.625rem;background:transparent;border:none;color:#6B7280;cursor:pointer;"
         @mouseenter="e=>{e.currentTarget.style.background='#c0392b';e.currentTarget.style.color='#ffffff';}"
         @mouseleave="e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='#6B7280';}"
-        title="Close">
+        :title="t('titlebar.close')">
         <svg width="11" height="11" viewBox="0 0 11 11">
           <line x1="1" y1="1" x2="10" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
           <line x1="10" y1="1" x2="1" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -66,12 +66,14 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useFocusModeStore } from '../../stores/focusMode'
 import { useTasksStore } from '../../stores/tasks'
+import { useI18n } from '../../i18n/useI18n'
 import MinibarContent from '../focus/MinibarContent.vue'
 
 defineEmits(['toggle-sidebar'])
 
 const focusModeStore = useFocusModeStore()
 const tasksStore = useTasksStore()
+const { t } = useI18n()
 
 const isMinibar = computed(() => focusModeStore.isMinibarMode)
 

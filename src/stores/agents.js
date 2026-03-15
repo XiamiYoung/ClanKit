@@ -171,6 +171,10 @@ export const useAgentsStore = defineStore('agents', () => {
         ...agent,
         isBuiltin: existing.isBuiltin || false,
         categoryIds: existing.categoryIds || [],
+        requiredToolIds: agent.requiredToolIds ?? existing.requiredToolIds ?? [],
+        requiredSkillIds: agent.requiredSkillIds ?? existing.requiredSkillIds ?? [],
+        requiredMcpServerIds: agent.requiredMcpServerIds ?? existing.requiredMcpServerIds ?? [],
+        requiredKnowledgeBaseIds: agent.requiredKnowledgeBaseIds ?? existing.requiredKnowledgeBaseIds ?? [],
         updatedAt: Date.now(),
       }
     } else {
@@ -180,6 +184,10 @@ export const useAgentsStore = defineStore('agents', () => {
         updatedAt: Date.now(),
         isBuiltin: false,
         categoryIds: [],
+        requiredToolIds: [],
+        requiredSkillIds: [],
+        requiredMcpServerIds: [],
+        requiredKnowledgeBaseIds: [],
         ...agent,
       })
     }
@@ -268,6 +276,28 @@ export const useAgentsStore = defineStore('agents', () => {
     })
   }
 
+  // ── Agent usage in plans (deletion protection) ────────────────────────────
+
+  function isAgentUsedInPlans(agentId) {
+    try {
+      const { useTasksStore } = require('./tasks')
+      const tasksStore = useTasksStore()
+      return tasksStore.plans.some(p => (p.steps || []).some(s => (s.defaultAgentIds || []).includes(agentId)))
+    } catch {
+      return false
+    }
+  }
+
+  function agentPlanUsageCount(agentId) {
+    try {
+      const { useTasksStore } = require('./tasks')
+      const tasksStore = useTasksStore()
+      return tasksStore.plans.reduce((acc, p) => acc + (p.steps || []).filter(s => (s.defaultAgentIds || []).includes(agentId)).length, 0)
+    } catch {
+      return 0
+    }
+  }
+
   return {
     agents, categories,
     systemAgents, userAgents,
@@ -278,5 +308,7 @@ export const useAgentsStore = defineStore('agents', () => {
     loadAgents, saveAgent, deleteAgent, setDefault,
     addCategory, renameCategory, deleteCategory, reorderCategory,
     assignToCategory, unassignFromCategory,
+    // Plan usage protection
+    isAgentUsedInPlans, agentPlanUsageCount,
   }
 })

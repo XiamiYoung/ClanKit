@@ -4,17 +4,17 @@
     <!-- Header -->
     <div class="agents-header">
       <div class="agents-title-row">
-        <h1 class="agents-title">Agents</h1>
+        <h1 class="agents-title">{{ t('nav.agents') }}</h1>
         <span class="catalog-count-badge">{{ agentsStore.agents.length }}</span>
       </div>
-      <p class="agents-subtitle">Configure AI agentlities and user profiles for your chats.</p>
+      <p class="agents-subtitle">{{ t('agents.pageDescription') }}</p>
     </div>
 
     <!-- Shared header row spanning full width -->
     <div class="shared-header">
       <div class="shared-header-nav" :style="{ width: navWidth + 'px' }">
-        <span class="shared-header-title">Category</span>
-        <button class="nav-section-add-btn" title="Add category" @click="openCreateCategory()">
+        <span class="shared-header-title">{{ t('common.category', 'Category') }}</span>
+        <button class="nav-section-add-btn" :title="t('common.add') + ' ' + t('common.category', 'Category')" @click="openCreateCategory()">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
       </div>
@@ -35,28 +35,33 @@
             v-model="filterQuery"
             class="content-filter-input"
             type="text"
-            placeholder="Filter agents…"
+            :placeholder="t('agents.searchAgents')"
             @keydown.escape="filterQuery = ''"
           />
-          <button v-if="filterQuery" class="content-filter-clear" @click="filterQuery = ''" aria-label="Clear filter">
+          <button v-if="filterQuery" class="content-filter-clear" @click="filterQuery = ''" :aria-label="t('common.clear')">
             <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
         <div class="content-header-right">
-          <AppButton size="icon" @click="refreshAgents" :loading="refreshing" title="Refresh">
+          <AppButton size="icon" @click="refreshAgents" :loading="refreshing" :title="t('common.refresh')">
             <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </AppButton>
           <template v-if="selectedView.type === 'category'">
             <AppButton v-if="selectMode && selectedAgentIds.size > 0" size="compact" variant="danger" @click="unassignSelected">
-              Unassign
+              {{ t('agents.remove', 'Unassign') }}
             </AppButton>
-            <AppButton size="icon" @click="selectMode ? exitSelectMode() : enterSelectMode()" :title="selectMode ? 'Cancel selection' : 'Select agents'">
+            <AppButton size="icon" @click="selectMode ? exitSelectMode() : enterSelectMode()" :title="selectMode ? t('common.cancel') : t('agents.select', 'Select agents')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
               </svg>
             </AppButton>
           </template>
-          <AppButton v-if="selectedView.type !== 'category'" size="icon" @click="createNew(selectedView.agentType)" title="Add agent">
+          <AppButton v-if="selectedView.type !== 'category'" size="icon" @click="openGroupCreator" :title="t('agents.groupCreator.addMultiple', 'Add Multiple Agents')">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </AppButton>
+          <AppButton v-if="selectedView.type !== 'category'" size="icon" @click="createNew(selectedView.agentType)" :title="t('agents.newAgent')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </AppButton>
         </div>
@@ -72,7 +77,7 @@
         <!-- System section -->
         <div class="nav-section nav-section--half nav-section--first">
           <div class="nav-section-header">
-            <span class="nav-section-label">System</span>
+            <span class="nav-section-label">{{ t('agents.systemAgents') }}</span>
           </div>
 
           <!-- All System -->
@@ -86,7 +91,7 @@
                 <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
               </svg>
             </span>
-            <span class="nav-item-label">All</span>
+            <span class="nav-item-label">{{ t('common.all') }}</span>
             <span class="nav-item-count">{{ agentsStore.systemAgents.length }}</span>
           </button>
 
@@ -135,7 +140,7 @@
         <!-- User section -->
         <div class="nav-section nav-section--half nav-section--user">
           <div class="nav-section-header">
-            <span class="nav-section-label">User</span>
+            <span class="nav-section-label">{{ t('agents.userAgents') }}</span>
           </div>
 
           <!-- All User -->
@@ -149,7 +154,7 @@
                 <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
               </svg>
             </span>
-            <span class="nav-item-label">All</span>
+            <span class="nav-item-label">{{ t('common.all') }}</span>
             <span class="nav-item-count">{{ agentsStore.userAgents.length }}</span>
           </button>
 
@@ -203,7 +208,7 @@
 
         <!-- Drag hint -->
         <p v-if="isDragging && selectedView.type !== 'all'" class="drag-hint">
-          Drop onto a category in the left panel to assign
+          {{ t('agents.dragHint', 'Drop onto a category in the left panel to assign') }}
         </p>
 
         <!-- Grid -->
@@ -230,6 +235,8 @@
                 :hide-delete="selectedView.type === 'category'"
                 :hide-set-default="selectedView.type === 'category'"
                 :show-unassign="selectedView.type === 'category'"
+                :delete-disabled="isDeleteButtonDisabled(agent)"
+                :delete-title="getDeleteButtonTitle(agent)"
                 @click="selectMode ? toggleSelect(agent.id) : openSoulViewer(agent)"
                 @delete="confirmDelete(agent)"
                 @unassign="agentsStore.unassignFromCategory(agent.id, selectedView.categoryId)"
@@ -244,8 +251,8 @@
                 <path v-else d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                 <circle v-if="selectedView.agentType !== 'system'" cx="12" cy="7" r="4"/>
               </svg>
-              <p v-if="selectedView.type === 'category'">No agents assigned — drag cards here from another view.</p>
-              <p v-else>No agents yet.</p>
+              <p v-if="selectedView.type === 'category'">{{ t('agents.noAgentsAssigned', 'No agents assigned — drag cards here from another view.') }}</p>
+              <p v-else>{{ t('agents.noAgents') }}</p>
             </div>
           </div>
         </div>
@@ -265,6 +272,10 @@
       :agent-model-id="soulViewerAgent.modelId || null"
       :agent-voice-id="soulViewerAgent.voiceId || null"
       :agent-avatar="soulViewerAgent.avatar || null"
+      :agent-required-tool-ids="soulViewerAgent.requiredToolIds || []"
+      :agent-required-skill-ids="soulViewerAgent.requiredSkillIds || []"
+      :agent-required-mcp-server-ids="soulViewerAgent.requiredMcpServerIds || []"
+      :agent-required-knowledge-base-ids="soulViewerAgent.requiredKnowledgeBaseIds || []"
       :is-new="!!soulViewerAgent.isNew"
       @close="soulViewerAgent = null"
       @update-agent="onUpdateAgent"
@@ -273,8 +284,9 @@
     <!-- Confirm Delete Agent Modal -->
     <ConfirmModal
       v-if="confirmDeleteTarget"
-      title="Delete Agent"
-      :message="`Are you sure you want to delete &quot;${confirmDeleteTarget.name}&quot;? This action cannot be undone.`"
+      :visible="!!confirmDeleteTarget"
+      :title="t('agents.deleteAgent')"
+      :message="t('agents.deleteAgentConfirm', { name: confirmDeleteTarget.name })"
       confirm-text="Delete"
       confirm-class="danger"
       @confirm="executeDelete"
@@ -284,8 +296,9 @@
     <!-- Confirm Delete Category Modal -->
     <ConfirmModal
       v-if="confirmDeleteCategory"
-      title="Delete Category"
-      :message="`Delete the &quot;${confirmDeleteCategory.name}&quot; category? This cannot be undone.`"
+      :visible="!!confirmDeleteCategory"
+      :title="t('agents.deleteCategory')"
+      :message="t('agents.deleteCategoryConfirm', { name: confirmDeleteCategory.name })"
       confirm-text="Delete"
       confirm-class="danger"
       @confirm="executeDeleteCategory"
@@ -295,23 +308,30 @@
     <!-- Category not empty warning -->
     <ConfirmModal
       v-if="deleteCategoryError"
-      title="Cannot Delete Category"
-      :message="`&quot;${deleteCategoryError.name}&quot; still has agents assigned. Unassign all agents from this category before deleting it.`"
+      :visible="!!deleteCategoryError"
+      :title="t('agents.cannotDeleteCategory')"
+      :message="t('agents.cannotDeleteCategoryReason', { name: deleteCategoryError.name })"
       confirm-text="OK"
       confirm-class="primary"
-      cancel-text=""
       @confirm="deleteCategoryError = null"
       @close="deleteCategoryError = null"
     />
 
     <!-- Category Modal (create / rename) -->
     <CategoryModal
-      v-if="categoryModal.open"
+      :visible="categoryModal.open"
       :mode="categoryModal.mode"
       :type="categoryModal.catType"
       :initial="categoryModal.initial"
       @confirm="onCategoryModalConfirm"
       @close="categoryModal.open = false"
+    />
+
+    <!-- Agent Group Creator Modal -->
+    <AgentGroupCreator
+      v-if="showGroupCreator"
+      @close="showGroupCreator = false"
+      @created="refreshAgents"
     />
 
   </div>
@@ -331,18 +351,25 @@ defineOptions({ inheritAttrs: false })
 import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { useAgentsStore } from '../stores/agents'
+import { useTasksStore } from '../stores/tasks'
 import { AGENT_AVATARS } from '../components/agents/agentAvatars'
 import AgentCard from '../components/agents/AgentCard.vue'
 import SoulViewer from '../components/agents/SoulViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import CategoryModal from '../components/agents/CategoryModal.vue'
+import AgentGroupCreator from '../components/agents/AgentGroupCreator.vue'
+import { useI18n } from '../i18n/useI18n'
+
+const { t } = useI18n()
 
 const agentsStore = useAgentsStore()
+const tasksStore = useTasksStore()
 const refreshing = ref(false)
 
 onMounted(async () => {
   await agentsStore.loadAgents()
+  await tasksStore.loadPlans()
 })
 
 async function refreshAgents() {
@@ -458,6 +485,10 @@ function createNew(type) {
     providerId: null,
     modelId: null,
     voiceId: null,
+    requiredToolIds: [],
+    requiredSkillIds: [],
+    requiredMcpServerIds: [],
+    requiredKnowledgeBaseIds: [],
     isNew: true,
   }
 }
@@ -480,7 +511,11 @@ async function onUpdateAgent(updates) {
 // ── Delete agent ────────────────────────────────────────────────────────────
 const confirmDeleteTarget = ref(null)
 
-function confirmDelete(agent) { confirmDeleteTarget.value = agent }
+function confirmDelete(agent) {
+  if (!agent.isBuiltin && !agentsStore.isAgentUsedInPlans(agent.id)) {
+    confirmDeleteTarget.value = agent
+  }
+}
 
 async function executeDelete() {
   if (!confirmDeleteTarget.value) return
@@ -511,8 +546,13 @@ async function onCategoryModalConfirm({ name, emoji, type }) {
   }
 }
 
+const showGroupCreator = ref(false)
 const confirmDeleteCategory = ref(null)
 const deleteCategoryError   = ref(null)
+
+function openGroupCreator() {
+  showGroupCreator.value = true
+}
 
 function tryDeleteCategory(cat) {
   if (agentsStore.agentsInCategory(cat.id).length > 0) {
@@ -668,6 +708,20 @@ function getAvatarGradient(agent) {
     return `linear-gradient(135deg, ${c}, ${c}dd)`
   }
   return 'linear-gradient(135deg, #0F0F0F, #374151)'
+}
+
+function getDeleteButtonTitle(agent) {
+  if (agent.isBuiltin) return 'Built-in agent'
+  const count = agentsStore.isAgentUsedInPlans(agent.id)
+  if (count) {
+    const plural = count === 1 ? 'step' : 'steps'
+    return `Cannot delete: used in ${count} plan ${plural}`
+  }
+  return 'Delete'
+}
+
+function isDeleteButtonDisabled(agent) {
+  return agent.isBuiltin || agentsStore.isAgentUsedInPlans(agent.id) > 0
 }
 </script>
 

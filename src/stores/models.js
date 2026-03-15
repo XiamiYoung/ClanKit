@@ -22,25 +22,31 @@ export const useModelsStore = defineStore('models', () => {
 
   // ── Anthropic (derived from config) ─────────────────────────────────────
   const anthropicModels = computed(() => {
-    const a = configStore.config.anthropic || {}
+    const providers = configStore.config.providers || []
+    const anthropic = providers.find(p => p.type === 'anthropic')
+    if (!anthropic) return []
     return [
-      a.sonnetModel ? { id: a.sonnetModel } : null,
-      a.opusModel   ? { id: a.opusModel   } : null,
-      a.haikuModel  ? { id: a.haikuModel  } : null,
+      anthropic.model ? { id: anthropic.model } : null,
     ].filter(Boolean)
   })
+
+  // Helper to find provider config by type
+  function getProviderConfigByType(type) {
+    const providers = configStore.config.providers || []
+    return providers.find(p => p.type === type)
+  }
 
   // ── Fetch functions ─────────────────────────────────────────────────────
 
   async function fetchOpenRouterModels() {
     if (!window.electronAPI?.fetchOpenRouterModels) return
-    const or = configStore.config.openrouter || {}
-    if (!or.apiKey) return
+    const provider = getProviderConfigByType('openrouter')
+    if (!provider?.apiKey) return
     openrouterLoading.value = true
     try {
       const result = await window.electronAPI.fetchOpenRouterModels({
-        apiKey: or.apiKey,
-        baseURL: or.baseURL,
+        apiKey: provider.apiKey,
+        baseURL: provider.baseURL,
       })
       if (result.success) {
         openrouterModels.value = result.models
@@ -55,13 +61,13 @@ export const useModelsStore = defineStore('models', () => {
 
   async function fetchOpenAIModels() {
     if (!window.electronAPI?.fetchOpenAIModels) return
-    const oa = configStore.config.openai || {}
-    if (!oa.apiKey) return
+    const provider = getProviderConfigByType('openai')
+    if (!provider?.apiKey) return
     openaiLoading.value = true
     try {
       const result = await window.electronAPI.fetchOpenAIModels({
-        apiKey: oa.apiKey,
-        baseURL: oa.baseURL,
+        apiKey: provider.apiKey,
+        baseURL: provider.baseURL,
       })
       if (result.success) {
         openaiModels.value = result.models
@@ -75,14 +81,13 @@ export const useModelsStore = defineStore('models', () => {
   }
 
   async function fetchDeepSeekModels() {
-    const ds = configStore.config.deepseek || {}
-    if (!ds.apiKey) return
-    if (!ds.baseURL) return
-    const baseURL = ds.baseURL.replace(/\/+$/, '')
+    const provider = getProviderConfigByType('deepseek')
+    if (!provider?.apiKey || !provider?.baseURL) return
+    const baseURL = provider.baseURL.replace(/\/+$/, '')
     deepseekLoading.value = true
     try {
       const resp = await fetch(`${baseURL}/v1/models`, {
-        headers: { 'Authorization': `Bearer ${ds.apiKey}`, 'Accept': 'application/json' }
+        headers: { 'Authorization': `Bearer ${provider.apiKey}`, 'Accept': 'application/json' }
       })
       if (!resp.ok) return
       const data = await resp.json()

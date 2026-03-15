@@ -23,14 +23,14 @@
     <aside v-if="!gridMode" class="chat-sidebar" :style="{ width: chatSidebarCollapsed ? '0' : sidebarWidth + 'px', minWidth: chatSidebarCollapsed ? '0' : undefined, overflow: chatSidebarCollapsed ? 'hidden' : undefined }">
       <!-- Header -->
       <div class="chat-sidebar-header">
-        <span class="chat-sidebar-title">Chats</span>
+        <span class="chat-sidebar-title">{{ t('nav.chats') }}</span>
         <div class="flex items-center gap-1">
           <!-- New Folder button -->
           <button
             @click="(e) => openCtxDialog('newFolder', '', selectedFolderId ?? chatsStore.activeFolderId ?? null, e.clientX, e.clientY)"
             class="chat-sidebar-new-btn"
-            aria-label="New folder"
-            title="New folder"
+            :aria-label="t('chats.newFolder', 'New folder')"
+            :title="t('chats.newFolder', 'New folder')"
           >
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -40,8 +40,8 @@
           <button
             @click="newChat()"
             class="chat-sidebar-new-btn"
-            aria-label="New chat"
-            title="New chat"
+            :aria-label="t('chats.newChat')"
+            :title="t('chats.newChat')"
           >
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -69,7 +69,7 @@
         <input
           v-model="chatFilterQuery"
           type="text"
-          placeholder="Search chats..."
+          :placeholder="t('chats.searchChats')"
           class="chat-filter-input"
         />
         <button v-if="chatFilterQuery" class="chat-filter-clear" @click="chatFilterQuery = ''">
@@ -1906,6 +1906,7 @@ import { useModelsStore } from '../stores/models'
 import { useKnowledgeStore } from '../stores/knowledge'
 import { useVoiceStore } from '../stores/voice'
 import { useFocusModeStore } from '../stores/focusMode'
+import { useI18n } from '../i18n/useI18n'
 import { getAvatarDataUri } from '../components/agents/agentAvatars'
 import SoulViewer from '../components/agents/SoulViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
@@ -2267,6 +2268,7 @@ const modelsStore = useModelsStore()
 const knowledgeStore = useKnowledgeStore()
 const voiceStore = useVoiceStore()
 const focusModeStore = useFocusModeStore()
+const { t } = useI18n()
 
 // ── Voice call ──
 async function handleStartCall(chatId) {
@@ -4699,6 +4701,87 @@ function handleChatWindowSend(text) {
   sendMessage()
 }
 
+// ── Provider credential helpers ─────────────────────────────────────────────
+
+/**
+ * Look up a provider's credentials from config.providers[] by provider type.
+ * Returns { apiKey, baseURL } or empty strings if not found.
+ * Supports both new providers[] array and legacy flat config.anthropic/.openrouter etc.
+ */
+function resolveProviderCreds(cfg, providerType) {
+  // New structure: config.providers[] array
+  if (cfg.providers && Array.isArray(cfg.providers)) {
+    const p = cfg.providers.find(p => p.type === providerType)
+    if (p) return { apiKey: p.apiKey || '', baseURL: p.baseURL || '', model: p.model || '' }
+  }
+  // Legacy flat structure fallback
+  const legacy = cfg[providerType]
+  if (legacy) return { apiKey: legacy.apiKey || '', baseURL: legacy.baseURL || '', model: legacy.model || '' }
+  return { apiKey: '', baseURL: '', model: '' }
+}
+
+/**
+ * Check if a provider type has an active configuration in config.providers[].
+ */
+function isProviderActive(cfg, providerType) {
+  if (cfg.providers && Array.isArray(cfg.providers)) {
+    return cfg.providers.some(p => p.type === providerType && p.isActive)
+  }
+  // Legacy fallback
+  return !!(cfg[providerType]?.isActive)
+}
+
+/**
+ * Apply provider credentials to a config object for the given provider type.
+ * Mutates cfg in place. Handles Anthropic/OpenRouter (apiKey+baseURL) vs
+ * OpenAI-compatible (openaiApiKey+openaiBaseURL) providers.
+ */
+function applyProviderCredsToConfig(cfg, providerType) {
+  const { apiKey, baseURL } = resolveProviderCreds(cfg, providerType)
+  if (providerType === 'anthropic') {
+    cfg.apiKey  = apiKey
+    cfg.baseURL = baseURL
+    delete cfg._directAuth
+    delete cfg.openaiApiKey
+    delete cfg.openaiBaseURL
+    cfg._resolvedProvider = undefined
+    cfg.defaultProvider   = undefined
+  } else if (providerType === 'openrouter') {
+    cfg.apiKey  = apiKey
+    cfg.baseURL = baseURL
+    delete cfg._directAuth
+    delete cfg.openaiApiKey
+    delete cfg.openaiBaseURL
+    cfg._resolvedProvider = undefined
+    cfg.defaultProvider   = undefined
+  } else if (providerType === 'openai') {
+    cfg.openaiApiKey  = apiKey
+    cfg.openaiBaseURL = baseURL
+    cfg._resolvedProvider = 'openai'
+    cfg.defaultProvider   = 'openai'
+    delete cfg._directAuth
+    delete cfg.apiKey
+    delete cfg.baseURL
+  } else if (providerType === 'deepseek') {
+    cfg.openaiApiKey  = apiKey
+    cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')
+    cfg._resolvedProvider = 'openai'
+    cfg._directAuth       = true
+    cfg.defaultProvider   = 'openai'
+    delete cfg.apiKey
+    delete cfg.baseURL
+  } else {
+    // Generic OpenAI-compatible (minimax, google, custom, etc.)
+    cfg.openaiApiKey  = apiKey
+    cfg.openaiBaseURL = baseURL
+    cfg._resolvedProvider = 'openai'
+    cfg.defaultProvider   = 'openai'
+    delete cfg._directAuth
+    delete cfg.apiKey
+    delete cfg.baseURL
+  }
+}
+
 // ── Group chat collaboration helpers ──────────────────────────────────────────
 
 /**
@@ -4713,69 +4796,14 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPromp
 
     const agentCfg = { ...cfg }
     const resolvedProvider = agent.providerId || 'anthropic'
-    if (resolvedProvider === 'anthropic') {
-      agentCfg.apiKey = cfg.anthropic?.apiKey || ''
-      agentCfg.baseURL = cfg.anthropic?.baseURL || ''
-      delete agentCfg._directAuth
-      delete agentCfg.openaiApiKey
-      delete agentCfg.openaiBaseURL
-      agentCfg._resolvedProvider = undefined
-      agentCfg.defaultProvider = undefined
-    } else if (resolvedProvider === 'openrouter') {
-      agentCfg.apiKey = cfg.openrouter?.apiKey || ''
-      agentCfg.baseURL = cfg.openrouter?.baseURL || ''
-      delete agentCfg._directAuth
-      delete agentCfg.openaiApiKey
-      delete agentCfg.openaiBaseURL
-      agentCfg._resolvedProvider = undefined
-      agentCfg.defaultProvider = undefined
-    } else if (resolvedProvider === 'openai') {
-      agentCfg.openaiApiKey = cfg.openai?.apiKey || ''
-      agentCfg.openaiBaseURL = cfg.openai?.baseURL || ''
-      agentCfg._resolvedProvider = 'openai'
-      agentCfg.defaultProvider = 'openai'
-      delete agentCfg._directAuth
-    } else if (resolvedProvider === 'deepseek') {
-      agentCfg.openaiApiKey = cfg.deepseek?.apiKey || ''
-      agentCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
-      agentCfg._resolvedProvider = 'openai'
-      agentCfg._directAuth = true
-      agentCfg.defaultProvider = 'openai'
-    }
+    applyProviderCredsToConfig(agentCfg, resolvedProvider)
+
     // Model+provider override (chat-scoped): takes priority over agent settings
     const rawOverride = targetChat.agentModelOverrides?.[pid]
     const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
     const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
     if (overrideProvider && overrideProvider !== resolvedProvider) {
-      if (overrideProvider === 'anthropic') {
-        agentCfg.apiKey = cfg.anthropic?.apiKey || ''
-        agentCfg.baseURL = cfg.anthropic?.baseURL || ''
-        delete agentCfg._directAuth
-        delete agentCfg.openaiApiKey
-        delete agentCfg.openaiBaseURL
-        agentCfg._resolvedProvider = undefined
-        agentCfg.defaultProvider = undefined
-      } else if (overrideProvider === 'openrouter') {
-        agentCfg.apiKey = cfg.openrouter?.apiKey || ''
-        agentCfg.baseURL = cfg.openrouter?.baseURL || ''
-        delete agentCfg._directAuth
-        delete agentCfg.openaiApiKey
-        delete agentCfg.openaiBaseURL
-        agentCfg._resolvedProvider = undefined
-        agentCfg.defaultProvider = undefined
-      } else if (overrideProvider === 'openai') {
-        agentCfg.openaiApiKey = cfg.openai?.apiKey || ''
-        agentCfg.openaiBaseURL = cfg.openai?.baseURL || ''
-        agentCfg._resolvedProvider = 'openai'
-        agentCfg.defaultProvider = 'openai'
-        delete agentCfg._directAuth
-      } else if (overrideProvider === 'deepseek') {
-        agentCfg.openaiApiKey = cfg.deepseek?.apiKey || ''
-        agentCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
-        agentCfg._resolvedProvider = 'openai'
-        agentCfg._directAuth = true
-        agentCfg.defaultProvider = 'openai'
-      }
+      applyProviderCredsToConfig(agentCfg, overrideProvider)
     }
     const resolvedModel = overrideModel || agent.modelId || null
     if (resolvedModel) agentCfg.customModel = resolvedModel
@@ -5145,68 +5173,31 @@ async function sendMessage() {
   const chatProvider = sysAgent?.providerId || 'anthropic'
   const cfg = { ...configStore.config }
 
-  if (chatProvider === 'anthropic') {
-    cfg.apiKey = cfg.anthropic?.apiKey || ''
-    cfg.baseURL = cfg.anthropic?.baseURL || ''
-  } else if (chatProvider === 'openrouter') {
-    cfg.apiKey = cfg.openrouter?.apiKey || ''
-    cfg.baseURL = cfg.openrouter?.baseURL || ''
-  } else if (chatProvider === 'openai') {
-    cfg.openaiApiKey = cfg.openai?.apiKey || ''
-    cfg.openaiBaseURL = cfg.openai?.baseURL || ''
-    cfg._resolvedProvider = 'openai'
-    cfg.defaultProvider = 'openai'
-  } else if (chatProvider === 'deepseek') {
-    cfg.openaiApiKey = cfg.deepseek?.apiKey || ''
-    cfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
-    cfg._resolvedProvider = 'openai'
-    cfg._directAuth = true
-    cfg.defaultProvider = 'openai'
-  }
+  applyProviderCredsToConfig(cfg, chatProvider)
 
   // Model+provider override (chat-scoped): takes priority over agent settings
   const rawOverride = targetChat.agentModelOverrides?.[sysAgentId]
   const chatOverrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
   const chatOverrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
   if (chatOverrideProvider && chatOverrideProvider !== chatProvider) {
-    if (chatOverrideProvider === 'anthropic') {
-      cfg.apiKey = cfg.anthropic?.apiKey || ''
-      cfg.baseURL = cfg.anthropic?.baseURL || ''
-      delete cfg._directAuth
-      delete cfg.openaiApiKey
-      delete cfg.openaiBaseURL
-      cfg._resolvedProvider = undefined
-      cfg.defaultProvider = undefined
-    } else if (chatOverrideProvider === 'openrouter') {
-      cfg.apiKey = cfg.openrouter?.apiKey || ''
-      cfg.baseURL = cfg.openrouter?.baseURL || ''
-      delete cfg._directAuth
-      delete cfg.openaiApiKey
-      delete cfg.openaiBaseURL
-      cfg._resolvedProvider = undefined
-      cfg.defaultProvider = undefined
-    } else if (chatOverrideProvider === 'openai') {
-      cfg.openaiApiKey = cfg.openai?.apiKey || ''
-      cfg.openaiBaseURL = cfg.openai?.baseURL || ''
-      cfg._resolvedProvider = 'openai'
-      cfg.defaultProvider = 'openai'
-      delete cfg._directAuth
-    } else if (chatOverrideProvider === 'deepseek') {
-      cfg.openaiApiKey = cfg.deepseek?.apiKey || ''
-      cfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
-      cfg._resolvedProvider = 'openai'
-      cfg._directAuth = true
-      cfg.defaultProvider = 'openai'
-    }
+    applyProviderCredsToConfig(cfg, chatOverrideProvider)
   }
   const resolvedModel = chatOverrideModel || sysAgent?.modelId || null
   if (resolvedModel) cfg.customModel = resolvedModel
 
   // isActive guard
-  if (!isGroup && !configStore.config[chatProvider]?.isActive) {
+  if (!isGroup && !isProviderActive(configStore.config, chatOverrideProvider || chatProvider)) {
+    // Remove the streaming placeholder before adding the error message
+    if (streamingMsgId && targetChat.messages) {
+      const idx = targetChat.messages.findIndex(m => m.id === streamingMsgId)
+      if (idx !== -1) targetChat.messages.splice(idx, 1)
+      perChatStreamingMsgId.delete(chatId)
+      perChatStreamingSegments.delete(chatId)
+    }
+    if (streamingTimer) { clearInterval(streamingTimer); streamingTimer = null; streamingSeconds.value = 0 }
     await chatsStore.addMessage(chatId, {
       role: 'assistant',
-      content: `⚠️ Provider **${chatProvider}** is not active. Go to **Configuration** and run Test Connection to activate it.`,
+      content: `⚠️ Provider **${chatOverrideProvider || chatProvider}** is not active. Go to **Configuration** and run Test Connection to activate it.`,
     })
     targetChat.isRunning = false
     return
@@ -5233,7 +5224,7 @@ async function sendMessage() {
     }
   }
   dbg(`runAgent → chatId=${chatId} provider=${chatProvider} model=${resolvedModel || '(default)'} msgs=${apiMessages.length} skills=[${enabledSkills.value.join(',')||'none'}] group=${isGroup}`)
-  dbg(`config → baseURL=${cfg.baseURL} apiKey=${cfg.apiKey ? cfg.apiKey.slice(0,8)+'…' : '(empty)'} sonnet=${cfg.anthropic?.sonnetModel}`)
+  dbg(`config → baseURL=${cfg.baseURL} apiKey=${cfg.apiKey ? cfg.apiKey.slice(0,8)+'…' : '(empty)'}  openaiApiKey=${cfg.openaiApiKey ? cfg.openaiApiKey.slice(0,8)+'…' : '(empty)'}`)
 
   // Chunks are handled by the persistent handleChunk listener registered in onMounted
 
@@ -5726,24 +5717,7 @@ async function compactContext() {
     const sysAgent = sysAgentId ? agentsStore.getAgentById(sysAgentId) : agentsStore.defaultSystemAgent
     const chatProvider = sysAgent?.providerId || 'anthropic'
     const cfg = { ...raw }
-    if (chatProvider === 'anthropic') {
-      cfg.apiKey = raw.anthropic?.apiKey || ''
-      cfg.baseURL = raw.anthropic?.baseURL || ''
-    } else if (chatProvider === 'openrouter') {
-      cfg.apiKey = raw.openrouter?.apiKey || ''
-      cfg.baseURL = raw.openrouter?.baseURL || ''
-    } else if (chatProvider === 'openai') {
-      cfg.openaiApiKey = raw.openai?.apiKey || ''
-      cfg.openaiBaseURL = raw.openai?.baseURL || ''
-      cfg._resolvedProvider = 'openai'
-      cfg.defaultProvider = 'openai'
-    } else if (chatProvider === 'deepseek') {
-      cfg.openaiApiKey = raw.deepseek?.apiKey || ''
-      cfg.openaiBaseURL = (raw.deepseek?.baseURL || '').replace(/\/+$/, '')
-      cfg._resolvedProvider = 'openai'
-      cfg._directAuth = true
-      cfg.defaultProvider = 'openai'
-    }
+    applyProviderCredsToConfig(cfg, chatProvider)
     const rawOvr = targetChat.agentModelOverrides?.[sysAgentId]
     const resolvedModel = (rawOvr ? (typeof rawOvr === 'object' ? rawOvr.model : rawOvr) : null) || sysAgent?.modelId || null
     if (resolvedModel) cfg.customModel = resolvedModel

@@ -9,12 +9,12 @@
             <div class="pe-header-icon">
               <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </div>
-            <span class="pe-header-title">{{ isNew ? 'New Plan' : 'Edit Plan' }}</span>
+            <span class="pe-header-title">{{ isNew ? t('tasks.planEditor.newPlan') : t('tasks.planEditor.editPlan') }}</span>
           </div>
           <div class="pe-header-center">
             <button v-if="!isNew" class="pe-history-btn" @click="showHistory = true">
               <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              Execution History
+              {{ t('tasks.history.executionHistory') }}
             </button>
           </div>
           <button class="pe-close-btn" @click="cancel">
@@ -30,18 +30,18 @@
 
             <!-- Icon + Name row -->
             <div class="pe-field">
-              <label class="pe-label">Plan name <span class="pe-required">*</span></label>
+              <label class="pe-label">{{ t('tasks.planEditor.planName') }} <span class="pe-required">*</span></label>
               <div class="pe-name-row">
-                <button class="pe-icon-btn" @click="showIconPicker = true" title="Choose icon">{{ draft.icon || '📋' }}</button>
-                <input v-model="draft.name" class="pe-input" placeholder="e.g. Daily Market Pipeline" maxlength="80" />
+                <button class="pe-icon-btn" @click="showIconPicker = true" :title="t('tasks.taskEditor.changeIcon')">{{ draft.icon || '📋' }}</button>
+                <input v-model="draft.name" class="pe-input" :placeholder="t('tasks.planEditor.planName')" maxlength="80" />
                 <EmojiPicker v-if="showIconPicker" :current="draft.icon" @select="e => { draft.icon = e; showIconPicker = false }" @close="showIconPicker = false" />
               </div>
             </div>
 
             <!-- Description -->
             <div class="pe-field">
-              <label class="pe-label">Description</label>
-              <input v-model="draft.description" class="pe-input" placeholder="What does this plan accomplish?" maxlength="200" />
+              <label class="pe-label">{{ t('tasks.planEditor.description') }}</label>
+              <input v-model="draft.description" class="pe-input" :placeholder="t('tasks.planEditor.description')" maxlength="200" />
             </div>
 
             <!-- Steps -->
@@ -50,12 +50,12 @@
                 <div class="pe-section-icon">
                   <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 </div>
-                <span class="pe-section-title">Steps</span>
-                <span class="pe-section-hint">Steps can run in parallel — set dependencies to sequence them</span>
+                <span class="pe-section-title">{{ t('tasks.step.steps') }}</span>
+                <span class="pe-section-hint">{{ t('tasks.planEditor.parallelHint') }}</span>
               </div>
 
               <div v-if="draft.steps.length === 0" class="pe-no-steps">
-                No steps yet — add one below.
+                {{ t('tasks.step.noSteps') }}
               </div>
 
               <div class="pe-steps-list">
@@ -65,16 +65,16 @@
                   <div class="pe-step-head">
                     <div class="pe-step-num">{{ stepIdx + 1 }}</div>
                     <span class="pe-step-task-label">
-                      {{ taskName(step.taskId) || 'Select a task →' }}
+                      {{ taskName(step.taskId) || t('tasks.step.selectTask') }}
                     </span>
                     <div class="pe-step-actions">
-                      <button class="pe-step-btn" @click="moveStep(stepIdx, -1)" :disabled="stepIdx === 0" title="Move up">
+                      <button class="pe-step-btn" @click="moveStep(stepIdx, -1)" :disabled="stepIdx === 0" :title="t('tasks.step.moveUp')">
                         <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
                       </button>
-                      <button class="pe-step-btn" @click="moveStep(stepIdx, 1)" :disabled="stepIdx === draft.steps.length - 1" title="Move down">
+                      <button class="pe-step-btn" @click="moveStep(stepIdx, 1)" :disabled="stepIdx === draft.steps.length - 1" :title="t('tasks.step.moveDown')">
                         <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
                       </button>
-                      <button class="pe-step-btn pe-step-remove" @click="removeStep(stepIdx)" title="Remove step">
+                      <button class="pe-step-btn pe-step-remove" @click="removeStep(stepIdx)" :title="t('tasks.step.removeStep')">
                         <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                       </button>
                     </div>
@@ -82,9 +82,9 @@
 
                   <!-- Task picker -->
                   <div class="pe-step-field">
-                    <label class="pe-step-label">Task</label>
+                    <label class="pe-step-label">{{ t('tasks.step.task') }}</label>
                     <select v-model="step.taskId" class="pe-select" @change="onTaskChange(step)">
-                      <option value="">— select task —</option>
+                      <option value="">{{ t('tasks.step.selectTask') }}</option>
                       <option v-for="t in tasks" :key="t.id" :value="t.id">{{ t.icon }} {{ t.name }}</option>
                     </select>
                   </div>
@@ -92,29 +92,42 @@
                   <!-- Agents -->
                   <template v-if="step.taskId">
                     <div class="pe-step-field">
-                      <label class="pe-step-label">Agent(s) <span class="pe-required">*</span></label>
+                      <label class="pe-step-label">{{ t('tasks.step.agents') }} <span class="pe-required">*</span></label>
                       <div class="pe-agent-chips">
-                        <div v-for="pid in step.defaultAgentIds" :key="pid" class="pe-agent-chip">
-                          {{ agentName(pid) }}
+                        <div
+                          v-for="pid in step.defaultAgentIds"
+                          :key="pid"
+                          class="pe-agent-chip"
+                          @mouseenter="showChipTooltip($event, pid)"
+                          @mouseleave="hideChipTooltip"
+                        >
+                          <img
+                            v-if="getAgentAvatar(pid)"
+                            :src="getAgentAvatar(pid)"
+                            alt=""
+                            class="pe-agent-chip-avatar"
+                          />
+                          <span v-else class="pe-agent-chip-fallback">{{ agentInitial(pid) }}</span>
+                          <span class="pe-agent-chip-name">{{ agentName(pid) }}</span>
                           <button class="pe-chip-remove" @click="removeDefaultAgent(step, pid)">
                             <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                           </button>
                         </div>
-                        <select class="pe-select pe-select-add-agent" @change="addDefaultAgent(step, $event)">
-                          <option value="">+ Add agent</option>
-                          <option v-for="p in availableAgentsForStep(step)" :key="p.id" :value="p.id">{{ p.name }}</option>
-                        </select>
+                        <button class="pe-add-agent-btn" @click="() => { currentStep = step; showAgentModal = true }" type="button">
+                          <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                          {{ t('tasks.step.addAgent') }}
+                        </button>
                       </div>
                     </div>
                   </template>
 
                   <!-- Prompt override (optional) -->
                   <div v-if="step.taskId" class="pe-step-field">
-                    <label class="pe-step-label">Prompt override <span class="pe-step-label-hint">(leave blank to use task prompt)</span></label>
-                    <textarea v-model="step.promptOverride" class="pe-textarea" rows="2" placeholder="Override the task prompt for this step only…"></textarea>
+                    <label class="pe-step-label">{{ t('tasks.step.promptOverride') }} <span class="pe-step-label-hint">{{ t('tasks.step.promptOverrideHint') }}</span></label>
+                    <textarea v-model="step.promptOverride" class="pe-textarea" rows="2" :placeholder="t('tasks.step.promptOverrideHint')"></textarea>
                     <!-- Output token pills for dependencies -->
                     <div v-if="(step.dependsOn || []).length > 0" class="pe-output-tokens">
-                      <span class="pe-output-tokens-label">Insert output token:</span>
+                      <span class="pe-output-tokens-label">{{ t('tasks.planEditor.insertOutputToken') }}</span>
                       <code
                         v-for="depId in step.dependsOn"
                         :key="depId"
@@ -137,7 +150,7 @@
                     </button>
 
                     <div v-if="depOpen[step.id]" class="pe-dep-body">
-                      <div class="pe-dep-hint">By default steps without dependencies run in parallel. Select steps this step must wait for.</div>
+                      <div class="pe-dep-hint">{{ t('tasks.selectStepsThisStepMustWaitFor') }}</div>
                       <div class="pe-dep-chips">
                         <button
                           v-for="prev in draft.steps.slice(0, stepIdx)"
@@ -176,7 +189,7 @@
 
               <button class="pe-add-step-btn" @click="addStep">
                 <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Step
+                {{ t('tasks.step.addStep') }}
               </button>
             </div>
 
@@ -186,17 +199,17 @@
                 <div class="pe-section-icon">
                   <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 </div>
-                <span class="pe-section-title">Schedule</span>
+                <span class="pe-section-title">{{ t('tasks.schedule.schedule') }}</span>
                 <div v-if="draft.schedule.type !== 'manual'" class="pe-sched-toggle-row" @click.stop>
                   <button
                     type="button"
                     :class="['pe-toggle-switch', draft.schedule.enabled && 'pe-toggle-switch--on']"
                     @click="draft.schedule.enabled = !draft.schedule.enabled"
-                    :title="draft.schedule.enabled ? 'Schedule enabled — click to disable' : 'Schedule disabled — click to enable'"
+                    :title="draft.schedule.enabled ? t('tasks.schedule.willRunAutomatically') : t('tasks.schedule.scheduleDisabled')"
                   >
                     <span class="pe-toggle-knob"></span>
                   </button>
-                  <span class="pe-toggle-label">{{ draft.schedule.enabled ? 'Enabled' : 'Disabled' }}</span>
+                  <span class="pe-toggle-label">{{ draft.schedule.enabled ? t('tasks.schedule.enabled') : t('tasks.schedule.disabled') }}</span>
                 </div>
               </div>
 
@@ -210,11 +223,11 @@
               </div>
 
               <div v-if="draft.schedule.type === 'once'" class="pe-field">
-                <label class="pe-label">Run at</label>
+                <label class="pe-label">{{ t('tasks.schedule.runAt') }}</label>
                 <div class="pe-datetime-row">
-                  <button class="pe-pick-btn" @click="$refs.dtInput.showPicker ? $refs.dtInput.showPicker() : $refs.dtInput.click()" type="button" title="Pick date &amp; time">
+                  <button class="pe-pick-btn" @click="$refs.dtInput.showPicker ? $refs.dtInput.showPicker() : $refs.dtInput.click()" type="button" :title="t('tasks.schedule.runAt')">
                     <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    Pick
+                    {{ t('tasks.schedule.runAt') }}
                   </button>
                   <input ref="dtInput" v-model="draft.schedule.runAt" type="datetime-local" class="pe-dt-input" />
                 </div>
@@ -231,10 +244,10 @@
                 </div>
                 <div class="pe-field">
                   <div class="pe-cron-field-header">
-                    <label class="pe-label">Cron expression</label>
+                    <label class="pe-label">{{ t('tasks.schedule.cronExpression') }}</label>
                     <button type="button" class="pe-cron-gen-btn" @click="showCronGen = !showCronGen">
                       <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                      Generate from description
+                      {{ t('tasks.schedule.generateFromDescription') }}
                     </button>
                   </div>
                   <input v-model="draft.schedule.cron" class="pe-input pe-mono" placeholder="0 18 * * 1-5" />
@@ -275,8 +288,15 @@
                   </div>
                 </div>
                 <div class="pe-field">
-                  <label class="pe-label">Timezone</label>
-                  <input v-model="draft.schedule.timezone" class="pe-input" placeholder="UTC" />
+                  <label class="pe-label">{{ t('tasks.schedule.timezone') }}</label>
+                  <div class="pe-combo-dark">
+                    <ComboBox
+                      :model-value="draft.schedule.timezone"
+                      :options="timezoneOptions"
+                      :placeholder="t('tasks.schedule.timezone')"
+                      @update:model-value="draft.schedule.timezone = $event"
+                    />
+                  </div>
                 </div>
               </template>
 
@@ -291,7 +311,7 @@
                 <div class="pe-section-icon">
                   <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 </div>
-                <span class="pe-section-title">Permissions</span>
+                <span class="pe-section-title">{{ t('tasks.permissions.permissions') }}</span>
               </div>
 
               <div class="pe-perm-btns">
@@ -304,30 +324,30 @@
                 >{{ m.label }}</button>
               </div>
               <p class="pe-perm-hint">
-                <template v-if="draft.permissionMode === 'inherit'">Uses the global mode from Config → Security.</template>
-                <template v-else-if="draft.permissionMode === 'chat_only'">Agent asks permission before running shell commands or writing files.</template>
-                <template v-else>Agent can run any tool freely. Danger blocks still apply.</template>
+                <template v-if="draft.permissionMode === 'inherit'">{{ t('tasks.permissions.inheritDesc') }}</template>
+                <template v-else-if="draft.permissionMode === 'chat_only'">{{ t('tasks.permissions.chatOnlyDesc') }}</template>
+                <template v-else>{{ t('tasks.permissions.allPermissionsDesc') }}</template>
               </p>
 
               <!-- Allow list (shown for inherit + chat_only) -->
               <template v-if="draft.permissionMode !== 'all_permissions'">
                 <div class="pe-perm-allow-label">
-                  Allow List
+                  {{ t('tasks.permissions.allowList') }}
                   <span class="pe-perm-badge">{{ draft.allowList.length }}</span>
                 </div>
                 <div class="pe-perm-allow-list">
-                  <div v-if="draft.allowList.length === 0" class="pe-perm-empty">No entries — all shell/file ops require approval.</div>
+                  <div v-if="draft.allowList.length === 0" class="pe-perm-empty">{{ t('tasks.permissions.noEntries') }}</div>
                   <div v-for="(entry, i) in draft.allowList" :key="entry.id" class="pe-perm-entry">
                     <span class="pe-perm-pattern">{{ entry.pattern }}</span>
                     <span v-if="entry.description" class="pe-perm-desc">{{ entry.description }}</span>
-                    <button class="pe-perm-remove" @click="removeAllowEntry(i)" title="Remove">
+                    <button class="pe-perm-remove" @click="removeAllowEntry(i)" :title="t('tasks.step.removeStep')">
                       <svg style="width:9px;height:9px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                   </div>
                   <div class="pe-perm-add-row">
-                    <input v-model="newAllowPattern" class="pe-perm-input" placeholder="glob pattern, e.g. node *" @keydown.enter="addAllowEntry" />
-                    <input v-model="newAllowDesc" class="pe-perm-input pe-perm-input--desc" placeholder="description (optional)" @keydown.enter="addAllowEntry" />
-                    <button class="pe-perm-add-btn" @click="addAllowEntry" :disabled="!newAllowPattern.trim()">Add</button>
+                    <input v-model="newAllowPattern" class="pe-perm-input" :placeholder="t('tasks.permissions.pattern')" @keydown.enter="addAllowEntry" />
+                    <input v-model="newAllowDesc" class="pe-perm-input pe-perm-input--desc" :placeholder="t('tasks.permissions.description')" @keydown.enter="addAllowEntry" />
+                    <button class="pe-perm-add-btn" @click="addAllowEntry" :disabled="!newAllowPattern.trim()">{{ t('tasks.permissions.addEntry') }}</button>
                   </div>
                 </div>
               </template>
@@ -344,14 +364,14 @@
           <div class="pe-canvas">
             <div class="pe-canvas-label">
               <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="11"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="11" x2="5" y2="16"/><line x1="12" y1="11" x2="19" y2="16"/></svg>
-              Workflow Preview
+              {{ t('tasks.workflowPreview') }}
             </div>
 
             <!-- Horizontal flow scroll -->
             <div class="pe-flow-scroll">
               <div v-if="draft.steps.length === 0" class="pe-flow-empty">
                 <svg style="width:28px;height:28px;opacity:0.2;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="11"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="11" x2="5" y2="16"/><line x1="12" y1="11" x2="19" y2="16"/></svg>
-                <span>Add steps to see the workflow</span>
+                <span>{{ t('tasks.addStepsToSeeWorkflow') }}</span>
               </div>
 
               <div v-else class="pe-flow">
@@ -436,9 +456,9 @@
             </div>
           </div>
           <div class="pe-footer-right">
-            <button class="pe-cancel-btn" @click="cancel">Cancel</button>
+            <button class="pe-cancel-btn" @click="cancel">{{ t('tasks.actions.cancel') }}</button>
             <button class="pe-save-btn" @click="save" :disabled="!canSave">
-              Save
+              {{ t('tasks.actions.save') }}
             </button>
           </div>
         </div>
@@ -451,21 +471,45 @@
       :plan="props.plan"
       @close="showHistory = false"
     />
+
+    <!-- Agent chip tooltip -->
+    <div
+      v-if="chipTooltip.visible"
+      class="pe-chip-tooltip"
+      :style="{ top: chipTooltip.y + 'px', left: chipTooltip.x + 'px' }"
+    >
+      <div class="pe-chip-tooltip-name">{{ chipTooltip.name }}</div>
+      <div v-if="chipTooltip.desc" class="pe-chip-tooltip-desc">{{ chipTooltip.desc }}</div>
+    </div>
+
+    <AgentSelectModal
+      :visible="showAgentModal"
+      :selectedAgentIds="currentStep?.defaultAgentIds || []"
+      @close="showAgentModal = false"
+      @select="addDefaultAgentFromModal"
+    />
   </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { v4 as uuid } from 'uuid'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import PlanHistoryModal from './PlanHistoryModal.vue'
 import EmojiPicker from '../agents/EmojiPicker.vue'
+import ComboBox from '../common/ComboBox.vue'
+import AgentSelectModal from './AgentSelectModal.vue'
+import { getAvatarDataUri } from '../agents/agentAvatars'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   visible: Boolean,
   plan: { type: Object, default: null },
   tasks: { type: Array, default: () => [] },
+  planCategories: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['close', 'saved'])
 
@@ -473,6 +517,36 @@ const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 const allAgents = computed(() => agentsStore.agents)
 const showIconPicker = ref(false)
+
+// ── Timezone options ───────────────────────────────────────────────────────────
+function getDeviceTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
+function getTimezoneOptions() {
+  const timezones = [
+    'UTC', 'GMT',
+    'US/Eastern', 'US/Central', 'US/Mountain', 'US/Pacific', 'US/Alaska', 'US/Hawaii',
+    'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Madrid', 'Europe/Rome', 'Europe/Amsterdam', 'Europe/Brussels', 'Europe/Vienna', 'Europe/Prague', 'Europe/Warsaw', 'Europe/Istanbul',
+    'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Singapore', 'Asia/Bangkok', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Seoul', 'Asia/Manila', 'Asia/Jakarta',
+    'Australia/Sydney', 'Australia/Melbourne', 'Australia/Brisbane', 'Australia/Perth', 'Australia/Adelaide',
+    'Pacific/Auckland', 'Pacific/Fiji', 'Pacific/Honolulu',
+    'America/New_York', 'America/Los_Angeles', 'America/Chicago', 'America/Denver', 'America/Toronto', 'America/Mexico_City', 'America/Sao_Paulo', 'America/Buenos_Aires',
+    'Africa/Cairo', 'Africa/Johannesburg', 'Africa/Lagos', 'Africa/Nairobi',
+  ].sort()
+
+  return timezones.map(tz => ({
+    id: tz,
+    name: tz,
+  }))
+}
+
+const deviceTimezone = getDeviceTimezone()
+const timezoneOptions = getTimezoneOptions()
 
 // ── AI cron description ────────────────────────────────────────────────────────
 
@@ -550,19 +624,19 @@ If you cannot produce a valid cron expression for this description, respond with
   }
 }
 
-const CRON_PRESETS = [
-  { label: 'Hourly',       cron: '0 * * * *' },
-  { label: 'Daily 9am',    cron: '0 9 * * *' },
-  { label: 'Daily 6pm',    cron: '0 18 * * *' },
-  { label: 'Weekdays 9am', cron: '0 9 * * 1-5' },
-  { label: 'Weekly Mon',   cron: '0 9 * * 1' },
-]
+const CRON_PRESETS = computed(() => [
+  { label: t('tasks.misc.cronPresets.hourly'),       cron: '0 * * * *' },
+  { label: t('tasks.misc.cronPresets.daily9am'),    cron: '0 9 * * *' },
+  { label: t('tasks.misc.cronPresets.daily6pm'),    cron: '0 18 * * *' },
+  { label: t('tasks.misc.cronPresets.weekdays9am'), cron: '0 9 * * 1-5' },
+  { label: t('tasks.misc.cronPresets.weeklyMon'),   cron: '0 9 * * 1' },
+])
 
-const PERMISSION_MODES = [
-  { id: 'inherit',         label: 'Inherit' },
-  { id: 'chat_only',       label: 'Chat Only' },
-  { id: 'all_permissions', label: 'All Permissions' },
-]
+const PERMISSION_MODES = computed(() => [
+  { id: 'inherit',         label: t('tasks.permissions.inherit') },
+  { id: 'chat_only',       label: t('tasks.permissions.chatOnly') },
+  { id: 'all_permissions', label: t('tasks.permissions.allPermissions') },
+])
 
 const newAllowPattern = ref('')
 const newAllowDesc    = ref('')
@@ -579,14 +653,37 @@ function removeAllowEntry(idx) {
   draft.value.allowList.splice(idx, 1)
 }
 
-const RUN_CONDITIONS = [
-  { id: 'always',     label: 'Always' },
-  { id: 'on_success', label: 'On success' },
-  { id: 'on_failure', label: 'On failure' },
-]
+const RUN_CONDITIONS = computed(() => [
+  { id: 'always',     label: t('tasks.planEditor.always') },
+  { id: 'on_success', label: t('tasks.planEditor.onSuccess') },
+  { id: 'on_failure', label: t('tasks.planEditor.onFailure') },
+])
 
 const isNew = computed(() => !props.plan?.id)
 const showHistory = ref(false)
+const showAgentModal = ref(false)
+const currentStep = ref(null)
+
+// ── Agent chip tooltip ────────────────────────────────────────────────────────
+const chipTooltip = reactive({ visible: false, name: '', desc: '', x: 0, y: 0 })
+
+function showChipTooltip(event, pid) {
+  const agent = agentsStore.getAgentById(pid)
+  if (!agent) return
+  const rect = event.currentTarget.getBoundingClientRect()
+  chipTooltip.name = agent.name
+  chipTooltip.desc = agent.description || ''
+  const tooltipWidth = 280
+  let left = rect.left + rect.width / 2
+  left = Math.max(tooltipWidth / 2 + 8, Math.min(left, window.innerWidth - tooltipWidth / 2 - 8))
+  chipTooltip.x = left
+  chipTooltip.y = rect.top - 8
+  chipTooltip.visible = true
+}
+
+function hideChipTooltip() {
+  chipTooltip.visible = false
+}
 
 // Dep panel open state keyed by step.id
 const depOpen = ref({})
@@ -608,6 +705,7 @@ function makeDraft(plan) {
     name:           plan?.name || '',
     description:    plan?.description || '',
     icon:           plan?.icon || '',
+    categoryId:     plan?.categoryId || null,
     steps:          (plan?.steps || []).map(makeStep),
     permissionMode: plan?.permissionMode || 'all_permissions',
     allowList:      (plan?.allowList || []).map(e => ({ ...e })),
@@ -615,7 +713,7 @@ function makeDraft(plan) {
       type:     plan?.schedule?.type     || 'manual',
       cron:     plan?.schedule?.cron     || '',
       runAt:    plan?.schedule?.runAt    || '',
-      timezone: plan?.schedule?.timezone || 'UTC',
+      timezone: plan?.schedule?.timezone || deviceTimezone,
       enabled:  plan?.schedule?.enabled  ?? false,
     },
   }
@@ -697,14 +795,38 @@ function agentEmoji(pid) {
   return p?.avatar || p?.emoji || '🤖'
 }
 
+function getAgentAvatar(pid) {
+  const agent = agentsStore.getAgentById(pid)
+  return agent?.avatar ? getAvatarDataUri(agent.avatar) : null
+}
+
+function agentInitial(pid) {
+  const agent = agentsStore.getAgentById(pid)
+  return agent ? agent.name.charAt(0).toUpperCase() : '?'
+}
+
+function agentDescription(pid) {
+  const agent = agentsStore.getAgentById(pid)
+  return agent?.description || agent?.name || ''
+}
+
 function availableAgentsForStep(step) {
   return allAgents.value.filter(p => !(step.defaultAgentIds || []).includes(p.id))
 }
 
+function addDefaultAgentFromModal(agentId) {
+  if (!currentStep.value) return
+  const agent = agentsStore.getAgentById(agentId)
+  if (agent && !currentStep.value.defaultAgentIds.includes(agentId)) {
+    currentStep.value.defaultAgentIds.push(agentId)
+  }
+  showAgentModal.value = false
+}
+
 function schedTypeLabel(type) {
-  if (type === 'manual') return 'Manual only'
-  if (type === 'once')   return 'One-time'
-  return 'Recurring (cron)'
+  if (type === 'manual') return t('tasks.schedule.manual')
+  if (type === 'once')   return t('tasks.schedule.oneTime')
+  return t('tasks.schedule.recurring')
 }
 
 // ── Cron field matcher ─────────────────────────────────────────────────────────
@@ -1376,14 +1498,26 @@ function cancel() {
 .pe-select-agent { flex: 1; min-width: 10rem; }
 
 /* Agent chips */
-.pe-agent-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 0.375rem; }
+.pe-agent-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
 .pe-agent-chip {
-  display: inline-flex; align-items: center; gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  padding: 0.25rem 0.5rem 0.25rem 0.25rem;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   border-radius: 9999px; font-family: 'Inter', sans-serif;
   font-size: var(--fs-small); font-weight: 600; color: #FFFFFF;
+  cursor: default; transition: all 0.15s ease;
 }
+.pe-agent-chip:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
+.pe-agent-chip-avatar {
+  width: 1rem; height: 1rem; border-radius: 50%; flex-shrink: 0;
+  object-fit: cover; display: inline-block;
+}
+.pe-agent-chip-fallback {
+  width: 1rem; height: 1rem; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; font-size: 0.625rem; font-weight: 700; background: rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+.pe-agent-chip-name { flex-shrink: 0; }
 .pe-chip-remove {
   width: 1rem; height: 1rem;
   display: flex; align-items: center; justify-content: center;
@@ -1391,7 +1525,14 @@ function cancel() {
   color: rgba(255,255,255,0.7); cursor: pointer; flex-shrink: 0; transition: all 0.15s ease;
 }
 .pe-chip-remove:hover { background: rgba(239,68,68,0.4); color: #FFFFFF; }
-.pe-select-add-agent { width: auto; min-width: 9rem; flex-shrink: 0; }
+.pe-add-agent-btn {
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  padding: 0.25rem 0.5rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 9999px; font-family: 'Inter', sans-serif; font-size: var(--fs-small);
+  font-weight: 600; color: rgba(255,255,255,0.6); cursor: pointer;
+  transition: all 0.15s ease; flex-shrink: 0;
+}
+.pe-add-agent-btn:hover { background: rgba(255,255,255,0.15); color: #FFFFFF; border-color: rgba(255,255,255,0.2); }
 
 /* Dependencies section */
 .pe-dep-section {
@@ -1811,4 +1952,57 @@ function cancel() {
 }
 .pe-save-btn:hover:not(:disabled) { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .pe-save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ComboBox dark theme wrapper — overrides scoped ComboBox styles */
+.pe-combo-dark [class*="combo-box"] {
+  background: #1A1A1A !important;
+  border-color: #2A2A2A !important;
+}
+.pe-combo-dark [class*="combo-box"]:focus-within {
+  border-color: #4B5563 !important;
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.06) !important;
+}
+.pe-combo-dark [class*="combo-input"],
+.pe-combo-dark [class*="combo-multi-input"] {
+  color: #E5E7EB !important;
+}
+.pe-combo-dark [class*="combo-input"]::placeholder,
+.pe-combo-dark [class*="combo-multi-input"]::placeholder {
+  color: #6B7280 !important;
+}
+.pe-combo-dark [class*="combo-dropdown"] {
+  background: #1A1A1A !important;
+  border: 1px solid #2A2A2A !important;
+}
+.pe-combo-dark [class*="combo-option-name"] {
+  color: #D1D5DB !important;
+}
+
+/* Agent chip tooltip — same style as cw-avatar-tooltip-fixed in ChatWindow */
+.pe-chip-tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  min-width: 8.75rem;
+  max-width: 17.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(0, 0, 0, 0.92);
+  border-radius: 0.625rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+.pe-chip-tooltip-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #F5F5F5;
+}
+.pe-chip-tooltip-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: #D1D1D6;
+  line-height: 1.45;
+  margin-top: 0.1875rem;
+}
 </style>

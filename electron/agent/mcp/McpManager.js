@@ -53,10 +53,11 @@ class McpManager {
    *  - 'stdio' — default, local subprocess via command/args
    */
   _toDefinition(serverConfig) {
-    const { id, command, args = [], env = {}, url, headers } = serverConfig
+    const { id, name, command, args = [], env = {}, url, headers } = serverConfig
+    const serverId = id || name || 'unnamed-server'
     if (url) {
       return {
-        name: id,
+        name: serverId,
         command: {
           kind: 'http',
           url: new URL(url),
@@ -66,7 +67,7 @@ class McpManager {
       }
     }
     return {
-      name: id,
+      name: serverId,
       command: {
         kind: 'stdio',
         command,
@@ -192,13 +193,17 @@ class McpManager {
    * Returns { success, tools, error }.
    */
   async testConnection(serverConfig) {
+    if (!serverConfig) {
+      return { success: false, error: 'No server config provided', tools: [] }
+    }
+    const serverId = serverConfig.id || serverConfig.name || 'test-server'
     // Use a fresh isolated registration so the test doesn't pollute live state
     try {
       const { createRuntime } = await _loadMcporter()
-      const def = this._toDefinition(serverConfig)
+      const def = this._toDefinition({ ...serverConfig, id: serverId })
       const rt = await createRuntime({ servers: [def] })
       try {
-        const tools = await rt.listTools(serverConfig.id, {
+        const tools = await rt.listTools(serverId, {
           autoAuthorize: false,
           allowCachedAuth: true,
         })

@@ -133,7 +133,27 @@ class AgentLoop {
     this._cachedAbortPromise = null // Cache abort promise to avoid listener accumulation
 
     // Core components — choose client based on provider
-    const isOpenAIProvider = config.defaultProvider === 'openai' || config._resolvedProvider === 'openai'
+    // Support new config.provider structure or fall back to legacy
+    let isOpenAIProvider = config.defaultProvider === 'openai' || config._resolvedProvider === 'openai'
+    
+    // If using new provider config structure
+    if (config.provider && config.provider.type) {
+      const pType = config.provider.type
+      isOpenAIProvider = (pType === 'openai' || pType === 'deepseek' || pType === 'minimax')
+      
+      // Normalize config for clients
+      if (isOpenAIProvider) {
+        config.openaiApiKey = config.provider.apiKey
+        config.openaiBaseURL = config.provider.baseURL
+        config.customModel = config.provider.model
+        config._directAuth = (pType === 'deepseek' || pType === 'minimax')
+      } else {
+        config.apiKey = config.provider.apiKey
+        config.baseURL = config.provider.baseURL
+        config.customModel = config.provider.model
+      }
+    }
+    
     if (isOpenAIProvider) {
       this.anthropicClient = new OpenAIClient(config)
       this.isOpenAI = true
@@ -411,23 +431,14 @@ CORE TOOLS (always available):
 - dispatch_subagents: Dispatch MULTIPLE sub-agents in parallel at once (preferred for 2+ independent tasks)
 - background_task: Run long operations in the background`
 
-    // List active skills — frontier only (name + summary).
-    // Full skill content is loaded on demand via the load_skill tool.
-    const skillEntries = (enabledSkills || [])
-      .filter(s => typeof s !== 'string' && s.name)
-      .map(s => {
-        const summary = s.summary ? `: ${s.summary}` : ''
-        return `- ${s.name} (id: ${s.id})${summary}`
-      })
+    // List active skills — minimal format for cache efficiency
+    const skillIds = (enabledSkills || [])
+      .filter(s => typeof s !== 'string' && s.id)
+      .map(s => s.id)
+      .join(', ')
 
-    if (skillEntries.length > 0) {
-      system += `\n\nACTIVE SKILLS (enabled by user):
-${skillEntries.join('\n')}
-
-To use a skill's full instructions, call the load_skill tool with the skill's id.
-Load a skill when the user's request clearly matches its description.`
-    } else {
-      system += `\n\nACTIVE SKILLS: None enabled.`
+    if (skillIds) {
+      system += `\nSKILLS: ${skillIds}`
     }
 
     // ── ClankAI Data Directory ──
@@ -518,18 +529,14 @@ Then write the file to the chosen location. For non-.md files, continue using th
 - The chat UI has a built-in 3D viewer that automatically renders 3D model URLs (.glb, .gltf, .obj, .stl, .babylon, .fbx). When the user shares a 3D asset URL, acknowledge it — the viewer is already displaying it inline. You can discuss the model, suggest interactions (rotate, zoom, wireframe toggle), or help with 3D-related questions.`
     }
 
-    // Append MCP server info if any are enabled
+    // Append MCP server info if any are enabled (minimal format for cache efficiency)
     const mcpServers = this.mcpServers || []
     if (mcpServers.length > 0) {
-      const mcpEntries = mcpServers.map(s =>
-        `- ${s.name}: ${s.description || 'No description'}`
-      )
-      system += `\n\nMCP SERVERS (external integrations — available on demand):
-${mcpEntries.join('\n')}
-When the user's request involves one of these integrations, call search_mcp_tools with the server name first to load its tools, then use them.`
+      const mcpIds = mcpServers.map(s => s.id).join(', ')
+      system += `\n\nMCP SERVERS: ${mcpIds}`
     }
 
-    // Append user-defined tools info if any are enabled
+    // Append user-defined tools info if any are enabled (minimal format for cache efficiency)
     const allUserTools = this.httpTools || []
     const httpToolsList = allUserTools.filter(t => (t.type || 'http') === 'http')
     const codeToolsList = allUserTools.filter(t => t.type === 'code')
@@ -537,152 +544,23 @@ When the user's request involves one of these integrations, call search_mcp_tool
     const smtpToolsList = allUserTools.filter(t => t.type === 'smtp')
 
     if (httpToolsList.length > 0) {
-      const toolEntries = httpToolsList.map(t =>
-        `- http_${t.id}: [${t.method}] ${t.endpoint} — ${t.description || t.name}`
-      )
-      system += `\n\nHTTP TOOLS (user-defined API endpoints):
-${toolEntries.join('\n')}
-Use these tools when the user's request matches their description. Pass a 'body' object if the endpoint requires request data.`
+      const toolIds = httpToolsList.map(t => t.id).join(', ')
+      system += `\nHTTP TOOLS: ${toolIds}`
     }
 
     if (codeToolsList.length > 0) {
-      const toolEntries = codeToolsList.map(t =>
-        `- code_${t.id}: [${(t.language || 'javascript').toUpperCase()}] ${t.description || t.name}`
-      )
-      system += `\n\nCODE REFERENCE TOOLS (user-defined code snippets):
-${toolEntries.join('\n')}
-Call these tools to retrieve reference code. Use execute_shell to run similar code based on the reference.`
+      const toolIds = codeToolsList.map(t => t.id).join(', ')
+      system += `\nCODE TOOLS: ${toolIds}`
     }
 
     if (promptToolsList.length > 0) {
-      const toolEntries = promptToolsList.map(t =>
-        `- prompt_${t.id}: ${t.description || t.name}`
-      )
-      system += `\n\nPROMPT TOOLS (user-defined prompt templates):
-${toolEntries.join('\n')}
-Call these tools to retrieve prompt templates or reusable instructions on demand.`
+      const toolIds = promptToolsList.map(t => t.id).join(', ')
+      system += `\nPROMPT TOOLS: ${toolIds}`
     }
 
     if (smtpToolsList.length > 0) {
-      const toolEntries = smtpToolsList.map(t =>
-        `- smtp_${t.id}: ${t.description || t.name}`
-      )
-      system += `\n\nSMTP EMAIL TOOLS (send emails via configured SMTP server):
-${toolEntries.join('\n')}
-Always confirm recipient, subject, and content before sending unless the user explicitly said to send it.`
-    }
-
-    // -- Coding Mode: CLAUDE.md project context --
-    // Injected after tool listings but before agent prompts so agent identity
-    // takes precedence. claudeContext is loaded by the renderer via claude:load-context IPC
-    // and passed through config.claudeContext when codingMode is enabled on the chat.
-    // v1 simplification: context is re-read on every send (no caching).
-    // Future: add mtime-based cache invalidation if per-message latency becomes an issue.
-    const claudeContext = this.config.claudeContext
-    if (claudeContext) {
-      system += `\n\n## PROJECT CONTEXT (CLAUDE.md)\n${claudeContext}`
-    }
-
-    if (userAgentPrompt) {
-      system += `\n\n## USER CONTEXT\n${userAgentPrompt}`
-    }
-
-    // Append group chat context if this is a group conversation
-    // This MUST come after the agent prompt to override any conflicting instructions
-    if (groupChatContext) {
-      const { agentName, agentDescription, otherParticipants } = groupChatContext
-      const otherNames = (otherParticipants || []).map(p => p.name)
-      // Build detailed participant profiles
-      const participantProfiles = (otherParticipants || []).map(p => {
-        let profile = `### ${p.name}`
-        if (p.description) profile += ` — ${p.description}`
-        if (p.prompt) profile += `\n${p.prompt}`
-        // Append participant's soul memory if available
-        const soul = (participantSouls || []).find(s => s.name === p.name)
-        if (soul?.content) {
-          const trimmed = prepareSoulContent(soul.content)
-          if (trimmed) profile += `\n\n**${p.name}'s Memory:**\n${trimmed}`
-        }
-        return profile
-      }).join('\n\n')
-
-      system += `\n\n## GROUP CHAT — MANDATORY OVERRIDE (supersedes all prior instructions)
-You are "${agentName}"${agentDescription ? ` (${agentDescription})` : ''} in a group chat.
-
-### Other participants in this conversation:
-${participantProfiles}
-
----
-Each participant runs independently and sends their own separate message to the user. YOU ARE ONLY "${agentName}".
-
-## YOUR TASK SCOPE — READ THIS FIRST
-When the user's message uses "@Name: ..." format to assign tasks to multiple participants:
-- Find the section starting with "@${agentName}:" — that is YOUR ONLY task.
-- Every other "@OtherName: ..." section belongs to someone else. TREAT THOSE SECTIONS AS IF THEY DO NOT EXIST.
-- Do NOT read, execute, reference, or act on any section that starts with a different @Name.
-- If no "@${agentName}:" section exists, respond only to parts of the message directed at you.
-
-RULES YOU MUST FOLLOW:
-1. Respond ONLY as yourself — your voice, your perspective, your expertise.
-2. NEVER write dialogue, quotes, or messages for other participants. Never write "${otherNames[0] || 'OtherName'}:" or simulate what others would say.
-3. DO NOT prefix your response with your own name. No "${agentName}:" label. Just speak directly.
-4. You may reference other participants by name (e.g. "Mark could help with that") but never speak AS them.
-5. Keep your response concise and relevant to your role.
-6. Stay in your assigned role. NEVER execute shell commands, write files, or take actions for tasks that were assigned to OTHER participants — even if you think it would be helpful. Each participant handles ONLY the work explicitly assigned to them. NEVER simulate, fabricate, or pre-generate another participant's work. If your role depends on someone else's output (e.g. you are a reviewer but the developer has not submitted code yet), just acknowledge readiness and wait — do NOT invent placeholder content to act on.
-7. When you want another participant to respond next (e.g. to review, continue, or take action), you MUST use the @Name format: ${otherNames.map(n => '@' + n).join(', ')}. Without the @ prefix the system cannot detect the handoff and no one will respond. STOP IMMEDIATELY after the @mention — do NOT write anything after it, do NOT simulate or predict what the other participant will say or do.
-8. Do NOT @mention someone just to confirm, check in, or ask "are you done?". Only @mention when you have a concrete request that requires them to take action (e.g. review code, fix a bug, write something). Idle confirmation @mentions create infinite loops.
-9. CRITICAL — avoid redundant @mentions: if the user's message already addressed multiple participants each with their own independent task, those participants are ALREADY running in parallel. Do NOT @mention them when you finish — they do not need you to "hand off" or "signal" them. Only @mention someone if YOUR output is a required INPUT for their task (e.g. you wrote code they must now test). If the tasks are independent, just finish and stop.`
-    }
-
-    // ── RAG Knowledge Injection ──
-    if (this.ragContext && this.ragContext.length > 0) {
-      const chunks = this.ragContext.map((m, i) =>
-        `[${i + 1}] (score: ${m.score?.toFixed(3) || 'N/A'}${m.documentName ? `, source: ${m.documentName}` : ''})\n${m.text}`
-      ).join('\n\n')
-      system += `\n\n## RELEVANT KNOWLEDGE (from RAG retrieval)
-The following knowledge chunks were retrieved from the user's knowledge base as relevant to the current query. Use this information to inform your response when applicable.
-
-${chunks}
-
-Note: Reference this knowledge naturally in your response. Do not mention "RAG" or "vector search" to the user unless they ask about how the knowledge was retrieved.`
-    }
-
-    // ── Soul Memory Injection ──
-    const injectedUserSoul = prepareSoulContent(userSoulContent)
-    if (injectedUserSoul) {
-      system += `\n\n## USER MEMORY (learned over time)\n${injectedUserSoul}`
-    }
-
-    const injectedSystemSoul = prepareSoulContent(systemSoulContent)
-    if (injectedSystemSoul) {
-      system += `\n\n## AGENT MEMORY\n${injectedSystemSoul}`
-    }
-
-    // Memory system instructions + agent IDs for targeting
-    system += `\n\nMEMORY SYSTEM:
-You have access to update_soul_memory and read_soul_memory tools to persist learnings over time. There are two memory targets:
-
-USER MEMORY (agent_type: "users", agent_id: "${userAgentId || '__default_user__'}"):
-- Store facts about the user: preferences, habits, working style, agentl info, projects they work on.
-- When the user states a clear preference or fact about themselves, memorize it automatically.
-- Examples: "I prefer dark mode", "I use Vue 3 + Pinia", "My name is Young", "I work on ClankAI".
-
-AGENT MEMORY (agent_type: "system", agent_id: "${systemAgentId || '__default_system__'}"):
-- Store learnings about how YOU (this AI agent) should behave, respond, and adapt.
-- When the user gives you feedback on your behavior, tone, format, or approach, memorize it for this agent.
-- Examples: "User wants me to always provide code examples", "Keep responses under 3 paragraphs", "Use TypeScript not JavaScript in examples", "Explain concepts step-by-step for this user".
-- Also store domain knowledge or context relevant to this agent's role that should persist across sessions.
-
-RULES:
-- For ambiguous or sensitive information: ask the user "Should I remember that?" before saving.
-- Never memorize temporary or session-specific context (e.g. "fix this bug" — that's a task, not a memory).
-- Check existing memory with read_soul_memory before adding duplicates.
-- The user can say "remember that..." or "forget that..." to explicitly control memory.
-- Use the correct agent_type and agent_id when calling the tools — user facts go to user memory, behavioral/agent feedback goes to agent memory.`
-
-    // ── Injected approved plan ──
-    if (this.config.injectedPlan) {
-      system += `\n\n## APPROVED PLAN (execute this now)\nThe user has approved the following plan. Execute it step by step. Do not call submit_plan again.\n\n${this.config.injectedPlan}`
+      const toolIds = smtpToolsList.map(t => t.id).join(', ')
+      system += `\nSMTP TOOLS: ${toolIds}`
     }
 
     return system

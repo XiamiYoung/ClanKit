@@ -1,5 +1,8 @@
 <template>
-  <template v-if="!focusModeStore.isMinibarMode">
+  <!-- Auth page (full screen, no title bar/sidebar) -->
+  <AuthView v-if="authRequired || isAuthPage" />
+  
+  <template v-else-if="!focusModeStore.isMinibarMode">
     <div class="flex flex-col h-screen w-screen overflow-hidden" style="background:#F2F2F7; color:#1A1A1A; border-radius:10px; border:1px solid #999;">
 
       <TitleBar @toggle-sidebar="sidebarRef?.toggleCollapse()" />
@@ -13,8 +16,8 @@
               <line x1="12" y1="9" x2="12" y2="13"/>
               <line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
-            <span class="setup-banner-text">No AI provider configured. Set up your API key and endpoint to start chatting.</span>
-            <button class="setup-banner-btn" @click="router.push('/config')">Configure now</button>
+            <span class="setup-banner-text">{{ t('config.noProviderConfigured') }}</span>
+            <button class="setup-banner-btn" @click="router.push('/config')">{{ t('config.configureNow') }}</button>
             <button class="setup-banner-dismiss" @click="bannerDismissed = true" title="Dismiss">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -29,9 +32,9 @@
           </RouterView>
         </main>
 
-        <!-- Global voice call components -->
-        <CallOverlay @end-call="handleEndCall" @toggle-mute="handleToggleMute" />
-        <CallPip @end-call="handleEndCall" @toggle-mute="handleToggleMute" />
+        <!-- Global voice call components (only in normal mode, not focus mode) -->
+        <CallOverlay v-if="!focusModeStore.isFocusMode" @end-call="handleEndCall" @toggle-mute="handleToggleMute" />
+        <CallPip v-if="!focusModeStore.isFocusMode" @end-call="handleEndCall" @toggle-mute="handleToggleMute" />
       </div>
     </div>
 
@@ -41,12 +44,15 @@
 
   <!-- Minibar overlay (teleports to body, always mounted so store state persists) -->
   <MinibarOverlay />
+
+  <!-- Setup Wizard for first-time users -->
+  <SetupWizard :visible="showSetupWizard" @close="setupWizardDismissed = true" @complete="handleSetupComplete" />
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useFocusModeStore } from './stores/focusMode'
-import { RouterView, useRouter } from 'vue-router'
+import { RouterView, useRouter, useRoute } from 'vue-router'
 import Sidebar  from './components/layout/Sidebar.vue'
 import TitleBar from './components/layout/TitleBar.vue'
 import CallOverlay from './components/voice/CallOverlay.vue'
@@ -63,9 +69,16 @@ import { useModelsStore } from './stores/models'
 import { useToolsStore } from './stores/tools'
 import { useKnowledgeStore } from './stores/knowledge'
 import { useVoiceStore } from './stores/voice'
+import { useUserStore } from './stores/user'
+import { useI18n } from './i18n/useI18n'
+import SetupWizard from './components/setup/SetupWizard.vue'
+import AuthView from './views/AuthView.vue'
+
+const { t } = useI18n()
 
 const sidebarRef    = ref(null)
 const router        = useRouter()
+const route         = useRoute()
 const chatsStore    = useChatsStore()
 const skillsStore   = useSkillsStore()
 const configStore   = useConfigStore()
@@ -78,9 +91,20 @@ const knowledgeStore = useKnowledgeStore()
 const focusModeStore = useFocusModeStore()
 
 const voiceStore = useVoiceStore()
+const userStore = useUserStore()
 
 const configLoaded = ref(false)
 const bannerDismissed = ref(false)
+const setupWizardDismissed = ref(false)
+const authRequired = ref(false)
+
+const showSetupWizard = computed(() => {
+  return configLoaded.value && !configStore.isConfigured && !setupWizardDismissed.value
+})
+
+const isAuthPage = computed(() => {
+  return route.path === '/auth'
+})
 
 // Handle quick-send from minibar — runs here so it works even when ChatsView is unmounted
 watch(() => chatsStore.pendingMinibarSend, async (pending) => {
@@ -102,10 +126,24 @@ function handleToggleMute() {
   if (window.electronAPI?.voice?.mute) window.electronAPI.voice.mute({ muted: newMuted })
 }
 
+function handleSetupComplete() {
+  setupWizardDismissed.value = true
+  configStore.loadConfig()
+}
+
 onMounted(async () => {
   // Load config first so skillsPath is available
   await configStore.loadConfig()
   configLoaded.value = true
+
+  // Initialize user store
+  userStore.init()
+  
+  // Check if auth is required (API is configured but user not logged in)
+  const apiConfigured = localStorage.getItem('api-cn-url') || localStorage.getItem('api-global-url')
+  if (apiConfigured && !userStore.isAuthenticated) {
+    authRequired.value = true
+  }
 
   // Auto-fetch models for providers that have API keys configured
   if (configStore.config.openrouter?.apiKey) modelsStore.fetchOpenRouterModels()

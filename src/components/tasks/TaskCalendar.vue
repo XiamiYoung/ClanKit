@@ -7,7 +7,7 @@
         <button class="tca-nav-btn" @click="navigate(-1)">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <button class="tca-today-btn" @click="goToday">Today</button>
+        <button class="tca-today-btn" @click="goToday">{{ t('tasks.calendar.today') }}</button>
         <button class="tca-nav-btn" @click="navigate(1)">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
@@ -187,7 +187,7 @@
                   <td class="tca-mtd tca-mtd--mono">{{ ev.timeLabel }}</td>
                   <td class="tca-mtd">
                     <span :class="['tca-more-trigger', ev.triggeredBy === 'manual' ? 'tca-more-trigger--manual' : 'tca-more-trigger--schedule']">
-                      {{ ev.triggeredBy === 'manual' ? 'Manual' : 'Scheduled' }}
+                      {{ ev.triggeredBy === 'manual' ? t('tasks.manual') : t('tasks.scheduled') }}
                     </span>
                   </td>
                   <td class="tca-mtd tca-mtd--mono">{{ ev.runDuration || '—' }}</td>
@@ -219,7 +219,7 @@
       >
         <div class="tca-tt-plan-row">
           <span class="tca-tt-plan">{{ tooltip.event.planName }}</span>
-          <span v-if="tooltip.event.triggeredBy === 'manual'" class="tca-tt-trigger">Manual</span>
+          <span v-if="tooltip.event.triggeredBy === 'manual'" class="tca-tt-trigger">{{ t('tasks.manual') }}</span>
         </div>
         <div class="tca-tt-time">{{ tooltip.event.dateLabel }}</div>
         <div class="tca-tt-divider"></div>
@@ -227,7 +227,7 @@
         <template v-if="tooltip.event.statusClass === 'completed'">
           <div class="tca-tt-status tca-tt-status--completed">
             <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            Completed
+            {{ t('tasks.status.completed') }}
           </div>
           <div v-if="tooltip.event.runDuration" class="tca-tt-meta">{{ tooltip.event.runDuration }}</div>
         </template>
@@ -235,7 +235,7 @@
         <template v-else-if="tooltip.event.statusClass === 'error'">
           <div class="tca-tt-status tca-tt-status--error">
             <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-            Failed
+            {{ t('tasks.status.error') }}
           </div>
           <div v-if="tooltip.event.runDuration" class="tca-tt-meta">{{ tooltip.event.runDuration }}</div>
           <div v-if="tooltip.event.runError" class="tca-tt-error">{{ tooltip.event.runError }}</div>
@@ -280,6 +280,9 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   plans: { type: Array, default: () => [] },
@@ -288,17 +291,17 @@ const props = defineProps({
 })
 const emit = defineEmits(['select-plan', 'new-plan', 'open-history', 'open-plan', 'delete-plan'])
 
-const VIEWS   = ['Month', 'Week', 'Day']
-const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const VIEWS = computed(() => [t('tasks.calendar.month'), t('tasks.calendar.week'), t('tasks.calendar.day')])
+const DAY_ABBR = computed(() => [t('tasks.calendar.sunday'), t('tasks.calendar.monday'), t('tasks.calendar.tuesday'), t('tasks.calendar.wednesday'), t('tasks.calendar.thursday'), t('tasks.calendar.friday'), t('tasks.calendar.saturday')])
 
-const STATUS_LABEL = {
-  completed:    'Completed',
-  error:        'Failed',
-  running:      'Running',
-  planned:      'Planned',
-  'not-executed': 'Not run',
-  disabled:     'Disabled',
-}
+const STATUS_LABEL = computed(() => ({
+  completed:    t('tasks.status.completed'),
+  error:       t('tasks.status.error'),
+  running:     t('tasks.status.running'),
+  planned:     t('tasks.status.planned'),
+  'not-executed': t('tasks.status.notExecuted'),
+  disabled:    t('tasks.status.disabled'),
+}))
 
 const viewMode    = ref('Month')
 const currentDate = ref(today())

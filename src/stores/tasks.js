@@ -16,6 +16,10 @@ export const useTasksStore = defineStore('tasks', () => {
   const tasks = ref([])
   // Plan definitions
   const plans = ref([])
+  // Task categories
+  const taskCategories = ref([])
+  // Plan categories
+  const planCategories = ref([])
   // Run index summaries
   const runs = ref([])
   // Currently selected run detail (for Runs panel)
@@ -244,6 +248,28 @@ export const useTasksStore = defineStore('tasks', () => {
     return true
   }
 
+  // ── Deletion protection (usage counting) ────────────────────────────────
+
+  const taskUsageCount = computed(() => {
+    const map = {}
+    for (const plan of plans.value) {
+      for (const step of (plan.steps || [])) {
+        if (step.taskId) map[step.taskId] = (map[step.taskId] || 0) + 1
+      }
+    }
+    return map
+  })
+
+  const planRunSet = computed(() => new Set(runs.value.map(r => r.planId)))
+
+  function taskUsedByPlanCount(taskId) {
+    return taskUsageCount.value[taskId] || 0
+  }
+
+  function planHasRuns(planId) {
+    return planRunSet.value.has(planId)
+  }
+
   // ── Run a single agent for a step ──────────────────────────────────────
 
   async function _runAgentForStep(agent, promptText, chatId, permissionMode = 'all_permissions', allowList = []) {
@@ -301,6 +327,15 @@ export const useTasksStore = defineStore('tasks', () => {
 
     const plan = plans.value.find(p => p.id === run.planId)
 
+    // Compute itemId
+    const schedType = plan?.schedule?.type || 'manual'
+    let itemId = `${run.planId}-manual`
+    if (schedType === 'once') itemId = `${run.planId}-once`
+    if (schedType === 'cron' && plan?.schedule?.cron) {
+      const hash = btoa(plan.schedule.cron).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+      itemId = `${run.planId}-cron-${hash}`
+    }
+
     const runDetail = {
       id:          run.runId,
       planId:      run.planId,
@@ -314,11 +349,33 @@ export const useTasksStore = defineStore('tasks', () => {
       startedAt:   run.startedAt,
       completedAt: new Date().toISOString(),
       error:       error || null,
+      itemId,
+      stepCount:   run.stepResults.length,
     }
 
     try {
       await window.electronAPI.tasks.saveRun(runDetail)
       await loadRuns()
+      // Sync with AI Task Tree
+      if (window.electronAPI?.aiTask) {
+        try {
+          const planCat = planCategories.value.find(c => c.id === plan?.categoryId)
+          await window.electronAPI.aiTask.syncTree({
+            planId: plan?.id,
+            planName: plan?.name || '',
+            categoryId: plan?.categoryId || null,
+            categoryName: planCat?.name || null,
+            categoryEmoji: planCat?.emoji || null,
+            itemId,
+            itemType: schedType,
+            itemDescription: schedType === 'cron' ? `Recurring: ${plan?.schedule?.cron}` : schedType === 'once' ? 'One-time scheduled' : 'Manual',
+            itemCronExpr: schedType === 'cron' ? plan?.schedule?.cron : undefined,
+            itemCreatedAt: new Date().toISOString(),
+          })
+        } catch (err) {
+          console.warn('[TasksStore] ai-task sync error:', err)
+        }
+      }
     } catch (err) {
       console.warn('[TasksStore] Failed to persist run:', err)
     } finally {
@@ -556,6 +613,62 @@ export const useTasksStore = defineStore('tasks', () => {
     } catch (err) { console.error('[TasksStore] deletePlan error:', err) }
   }
 
+  // ── CRUD: Task Categories ──────────────────────────────────────────────
+
+  async function loadTaskCategories() {
+    if (!window.electronAPI?.taskCategories) return
+    try { taskCategories.value = await window.electronAPI.taskCategories.list() || [] }
+    catch (err) { console.error('[TasksStore] loadTaskCategories error:', err) }
+  }
+
+  async function saveTaskCategory(cat) {
+    if (!window.electronAPI?.taskCategories) return null
+    try {
+      const result = await window.electronAPI.taskCategories.save(cat)
+      if (result.success) await loadTaskCategories()
+      return result
+    } catch (err) {
+      console.error('[TasksStore] saveTaskCategory error:', err)
+      return { success: false, error: err.message }
+    }
+  }
+
+  async function deleteTaskCategory(id) {
+    if (!window.electronAPI?.taskCategories) return
+    try {
+      await window.electronAPI.taskCategories.delete(id)
+      await loadTaskCategories()
+    } catch (err) { console.error('[TasksStore] deleteTaskCategory error:', err) }
+  }
+
+  // ── CRUD: Plan Categories ──────────────────────────────────────────────
+
+  async function loadPlanCategories() {
+    if (!window.electronAPI?.planCategories) return
+    try { planCategories.value = await window.electronAPI.planCategories.list() || [] }
+    catch (err) { console.error('[TasksStore] loadPlanCategories error:', err) }
+  }
+
+  async function savePlanCategory(cat) {
+    if (!window.electronAPI?.planCategories) return null
+    try {
+      const result = await window.electronAPI.planCategories.save(cat)
+      if (result.success) await loadPlanCategories()
+      return result
+    } catch (err) {
+      console.error('[TasksStore] savePlanCategory error:', err)
+      return { success: false, error: err.message }
+    }
+  }
+
+  async function deletePlanCategory(id) {
+    if (!window.electronAPI?.planCategories) return
+    try {
+      await window.electronAPI.planCategories.delete(id)
+      await loadPlanCategories()
+    } catch (err) { console.error('[TasksStore] deletePlanCategory error:', err) }
+  }
+
   // ── Runs ──────────────────────────────────────────────────────────────────
 
   async function loadRuns(planId = null) {
@@ -582,16 +695,23 @@ export const useTasksStore = defineStore('tasks', () => {
 
   return {
     tasks, plans, runs, activeRun, selectedRunDetail, isRunning, planActivity,
+    taskCategories, planCategories,
     pendingOpenPlanId, requestOpenPlan, clearPendingOpenPlan,
     // Tasks CRUD
     loadTasks, saveTask, deleteTask,
     // Plans CRUD
     loadPlans, savePlan, deletePlan,
+    // Task Categories
+    loadTaskCategories, saveTaskCategory, deleteTaskCategory,
+    // Plan Categories
+    loadPlanCategories, savePlanCategory, deletePlanCategory,
     // Runs
     loadRuns, getRunDetail, deleteRun,
     // Execution
     runPlan, stopRun, resetActiveRun,
     // Subscription
     subscribeToScheduledRuns, unsubscribeFromScheduledRuns,
+    // Deletion protection
+    taskUsageCount, planRunSet, taskUsedByPlanCount, planHasRuns,
   }
 })

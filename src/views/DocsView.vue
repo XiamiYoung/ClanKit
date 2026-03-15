@@ -24,7 +24,7 @@
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
-          Browse Folder
+          {{ t('notes.browseFolder') }}
         </AppButton>
       </div>
     </div>
@@ -36,20 +36,20 @@
         <div style="display:flex; align-items:center; justify-content:space-between;">
           <div>
             <div style="display:flex; align-items:center; gap:0.5rem;">
-              <h1 class="docs-catalog-title">Documents</h1>
+              <h1 class="docs-catalog-title">{{ t('notes.title') }}</h1>
               <span
                 class="catalog-count-badge truncate"
                 style="max-width:18rem;"
                 :title="store.vaultPath"
               >{{ vaultName }}</span>
             </div>
-            <p class="docs-catalog-subtitle">Files from your vault folder.</p>
+            <p class="docs-catalog-subtitle">{{ t('notes.filesFromVault') }}</p>
           </div>
           <div class="flex items-center gap-2">
-            <AppButton size="icon" @click="store.loadTree()" title="Refresh">
+            <AppButton size="icon" @click="store.loadTree()" :title="t('common.refresh')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </AppButton>
-            <AppButton size="icon" @click="store.pickVault()" title="Browse folder">
+            <AppButton size="icon" @click="store.pickVault()" :title="t('notes.browseFolder')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
               </svg>
@@ -74,7 +74,7 @@
           ></div>
           <!-- Tree toolbar -->
           <div class="px-3 py-2 flex items-center gap-1 shrink-0" style="border-bottom:1px solid #E5E5EA;">
-            <span style="font-family:'Inter',sans-serif;font-size:var(--fs-caption);color:#9CA3AF;">Right-click or drag &amp; drop files here</span>
+            <span style="font-family:'Inter',sans-serif;font-size:var(--fs-caption);color:#9CA3AF;">{{ t('notes.dragDropHint') }}</span>
           </div>
 
           <!-- File tree (root drop zone) -->
@@ -191,19 +191,19 @@
                 class="ai-doc-toggle-btn"
                 :class="{ active: aiDocEnabled }"
                 @click="toggleAiDoc"
-                title="Toggle AI Assistant"
+                :title="t('notes.aiAssistant')"
                 style="margin-left:0.75rem;"
               >
                 <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                   <path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z"/>
                 </svg>
-                AI Assistant
+                {{ t('notes.aiAssistant') }}
               </button>
 
               <div class="ml-auto flex items-center gap-2">
                 <!-- Mode toggle (markdown only) — iOS-style switch with state label -->
-                <div v-if="isMarkdown" class="docs-mode-switch" @click="editMode = !editMode" :title="editMode ? 'Switch to Formatted' : 'Switch to Source'">
-                  <span class="docs-mode-state-label">{{ editMode ? 'Source' : 'Formatted' }}</span>
+                <div v-if="isMarkdown" class="docs-mode-switch" @click="editMode = !editMode" :title="editMode ? t('notes.switchToFormatted') : t('notes.switchToSource')">
+                  <span class="docs-mode-state-label">{{ editMode ? t('notes.source') : t('notes.formatted') }}</span>
                   <div class="docs-mode-track" :class="{ on: editMode }">
                     <span class="docs-mode-thumb"></span>
                   </div>
@@ -214,7 +214,7 @@
                   v-if="store.activeFile?.path"
                   @click="openWithExternalApp"
                   class="docs-hdr-btn"
-                  title="Open with default app"
+                  :title="t('notes.openWithDefaultApp')"
                 >
                   <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                 </button>
@@ -224,7 +224,7 @@
                   v-if="!isDrawio && !isImage && !isPptx && !isDocx && !isXlsx"
                   @click="copySource"
                   class="docs-hdr-btn"
-                  title="Copy file contents"
+                  :title="t('notes.copyFileContents')"
                 >
                   <svg v-if="copied" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                   <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -236,7 +236,7 @@
                   class="docs-hdr-btn"
                   :class="{ 'docs-hdr-btn--ok': saveStatus === 'ok', 'docs-hdr-btn--err': saveStatus === 'error' }"
                   @click="saveFile"
-                  title="Save file (Ctrl+S)"
+                  :title="t('notes.saveFile')"
                 >
                   <!-- saving spinner -->
                   <svg v-if="saveStatus === 'saving'" class="animate-spin" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
@@ -433,12 +433,12 @@
           </div>
           <!-- Right: perm + close -->
           <div class="ai-doc-float-topbar-right">
-            <button class="aidoc-topbar-btn" :class="{ 'aidoc-topbar-btn--warn': aiDocPermissionMode !== 'allow_all' }" @mousedown.stop @click.stop="showDocPermModal = true" title="Permission settings">
+            <button class="aidoc-topbar-btn" :class="{ 'aidoc-topbar-btn--warn': aiDocPermissionMode !== 'allow_all' }" @mousedown.stop @click.stop="showDocPermModal = true" :title="t('notes.permissionSettings')">
               <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
             </button>
-            <button class="aidoc-topbar-btn aidoc-topbar-btn--close" @mousedown.stop @click="closeAiDoc" title="Close (Esc)">
+            <button class="aidoc-topbar-btn aidoc-topbar-btn--close" @mousedown.stop @click="closeAiDoc" :title="t('notes.closeEsc')">
               <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
@@ -493,7 +493,7 @@
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
             </div>
-            <span class="aidoc-modal-title">Permission Mode</span>
+            <span class="aidoc-modal-title">{{ t('notes.permissionMode') }}</span>
             <button class="aidoc-modal-close" @click="showDocPermModal = false">
               <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
@@ -501,9 +501,9 @@
           <div class="aidoc-perm-body">
             <button
               v-for="m in [
-                { id: 'inherit', label: 'Inherit', desc: 'Uses the global mode from Config → Security.' },
-                { id: 'chat_only', label: 'Ask Permission', desc: 'Agent must ask before running shell commands or writing files.' },
-                { id: 'allow_all', label: 'Allow All', desc: 'Agent can run any tool without asking. Danger blocks still apply.' },
+                { id: 'inherit', label: t('notes.permInherit'), desc: t('notes.permInheritDesc') },
+                { id: 'chat_only', label: t('notes.permAskPermission'), desc: t('notes.permAskPermissionDesc') },
+                { id: 'allow_all', label: t('notes.permAllowAll'), desc: t('notes.permAllowAllDesc') },
               ]"
               :key="m.id"
               class="aidoc-perm-option"
@@ -527,7 +527,7 @@
             <div class="aidoc-modal-header-icon">
               <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             </div>
-            <span class="aidoc-modal-title">Select Agent</span>
+            <span class="aidoc-modal-title">{{ t('notes.selectAgent') }}</span>
             <button class="aidoc-modal-close" @click="showDocAgentModal = false">
               <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
@@ -535,7 +535,7 @@
           <!-- Search -->
           <div class="ch-modal-search">
             <svg style="width:14px;height:14px;flex-shrink:0;color:#6B7280;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input ref="docAgentSearchEl" v-model="docAgentSearchQuery" type="text" placeholder="Search agents..." class="ch-modal-search-input" />
+            <input ref="docAgentSearchEl" v-model="docAgentSearchQuery" type="text" :placeholder="t('notes.searchAgents')" class="ch-modal-search-input" />
           </div>
           <div class="aidoc-modal-body">
             <!-- Flat search results -->
@@ -555,7 +555,7 @@
                 </div>
                 <svg v-if="p.id === selectedAgentId" style="width:16px;height:16px;flex-shrink:0;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
-              <div v-if="filteredDocAgents.length === 0" class="ch-modal-empty">No agents match</div>
+              <div v-if="filteredDocAgents.length === 0" class="ch-modal-empty">{{ t('notes.noAgentsMatch') }}</div>
             </template>
             <!-- Category tree -->
             <template v-else>
@@ -589,7 +589,7 @@
               <div class="ch-cat-section">
                 <button class="ch-cat-header" @click="toggleDocCat('__all__')">
                   <svg class="ch-cat-chevron" :class="{ expanded: expandedDocCatIds.has('__all__') }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                  <span class="ch-cat-name">All</span>
+                  <span class="ch-cat-name">{{ t('notes.all') }}</span>
                   <span class="ch-cat-count">{{ sortedDocAgents.length }}</span>
                 </button>
                 <div v-if="expandedDocCatIds.has('__all__')" class="ch-cat-items">
@@ -632,23 +632,23 @@
         <template v-if="ctxMenu.targetType !== 'file'">
           <button class="ctx-item" @click="startCtxAction('newFile', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-            New Markdown
+            {{ t('notes.newMarkdown') }}
           </button>
           <button class="ctx-item" @click="startCtxAction('newDocx', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="#2B5797" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13l1.5 5 2-4 2 4L15 13"/></svg>
-            New Document
+            {{ t('notes.newDocument') }}
           </button>
           <button class="ctx-item" @click="startCtxAction('newXlsx', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="#217346" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h8M8 17h8M8 13v4M12 13v4M16 13v4"/></svg>
-            New Spreadsheet
+            {{ t('notes.newSpreadsheet') }}
           </button>
           <button class="ctx-item" @click="startCtxAction('newDiagram', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            New Diagram
+            {{ t('notes.newDiagram') }}
           </button>
           <button class="ctx-item" @click="startCtxAction('newFolder', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            New Folder
+            {{ t('notes.newFolder') }}
           </button>
           <div v-if="ctxMenu.targetType === 'dir'" class="ctx-divider" />
         </template>
@@ -657,20 +657,20 @@
         <template v-if="ctxMenu.targetType">
           <button class="ctx-item" @click="copyPathFromCtx(ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            {{ ctxPathCopied ? 'Copied!' : 'Copy Path' }}
+            {{ ctxPathCopied ? t('notes.copied') : t('notes.copyPath') }}
           </button>
           <button class="ctx-item" @click="revealInExplorer(ctxMenu.targetPath); closeContextMenu()">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            Open in Explorer
+            {{ t('notes.openInExplorer') }}
           </button>
           <button class="ctx-item" @click="startCtxAction('rename', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            Rename
+            {{ t('notes.rename') }}
           </button>
           <div class="ctx-divider" />
           <button class="ctx-item ctx-danger" @click="startCtxDelete(ctxMenu.targetPath, ctxMenu.targetType)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-            Delete
+            {{ t('notes.delete') }}
           </button>
         </template>
       </div>
@@ -693,9 +693,9 @@
           @keydown.escape="cancelCtxAction"
         />
         <div class="ctx-dialog-footer">
-          <button class="ctx-dialog-cancel" @click="cancelCtxAction">Cancel</button>
+          <button class="ctx-dialog-cancel" @click="cancelCtxAction">{{ t('notes.cancel') }}</button>
           <button class="ctx-dialog-confirm" @click="commitCtxAction">
-            {{ ctxAction.type === 'rename' ? 'Rename' : 'Create' }}
+            {{ ctxAction.type === 'rename' ? t('notes.rename') : t('notes.create') }}
           </button>
         </div>
       </div>
@@ -732,9 +732,10 @@
     <!-- Confirm Delete Modal (blocked: folder not empty) -->
     <ConfirmModal
       v-if="confirmDeleteTarget?.blocked"
-      title="Cannot Delete Folder"
+      :visible="!!confirmDeleteTarget?.blocked"
+      :title="t('notes.cannotDeleteFolder')"
       :message="confirmDeleteTarget.blocked"
-      confirm-text="OK"
+      :confirm-text="t('notes.ok')"
       confirm-class="primary"
       cancel-text=""
       @confirm="closeDeleteDialog"
@@ -743,14 +744,15 @@
     <!-- Confirm Delete Modal (normal) -->
     <ConfirmModal
       v-else-if="confirmDeleteTarget"
-      :title="confirmDeleteTarget.isDir ? 'Delete Folder' : 'Delete File'"
+      :visible="!!confirmDeleteTarget"
+      :title="confirmDeleteTarget.isDir ? t('notes.deleteFolder') : t('notes.deleteFile')"
       :message="confirmDeleteTarget.isDir
-        ? `Delete the folder &quot;${confirmDeleteTarget.name}&quot;? It is empty and will be permanently removed.`
-        : `Delete &quot;${confirmDeleteTarget.name}&quot;? This cannot be undone.`"
-      confirm-text="Delete"
+        ? t('notes.deleteFolderConfirm', { name: confirmDeleteTarget.name })
+        : t('notes.deleteFileConfirm', { name: confirmDeleteTarget.name })"
+      :confirm-text="t('notes.delete')"
       confirm-class="danger"
       :loading="deleting"
-      loading-text="Deleting…"
+      :loading-text="t('notes.deleting')"
       :error="deleteError"
       @confirm="executeDelete"
       @close="closeDeleteDialog"
@@ -784,6 +786,9 @@ import { useKnowledgeStore } from '../stores/knowledge'
 import { useAiMagic } from '../composables/useAiMagic'
 import { getAvatarDataUri } from '../components/agents/agentAvatars'
 import { useFocusModeStore } from '../stores/focusMode'
+import { useI18n } from '../i18n/useI18n'
+
+const { t } = useI18n()
 
 // When true, this instance is embedded inside FocusModeView and owns the AI panel.
 // The router-level instance suppresses its panel to avoid duplicates.
@@ -825,7 +830,7 @@ const sortedDocAgents = computed(() =>
 
 // Agent toolbar computeds
 const activeDocAgent = computed(() => agentsStore.getAgentById(selectedAgentId.value))
-const activeDocAgentName = computed(() => activeDocAgent.value?.name || 'Select Agent')
+const activeDocAgentName = computed(() => activeDocAgent.value?.name || t('notes.selectAgent'))
 const activeDocAgentAvatar = computed(() => {
   if (!activeDocAgent.value?.avatar) return null
   return getAvatarDataUri(activeDocAgent.value.avatar)
@@ -1141,23 +1146,23 @@ const ctxInputRef = ref(null)
 const ctxDialogWidth = computed(() => Math.max(280, Math.min(640, ctxInputValue.value.length * 9.5 + 64)))
 
 const ctxActionLabel = computed(() => {
-  const t = ctxAction.value.type
-  if (t === 'newFile')    return 'New Markdown File'
-  if (t === 'newDiagram') return 'New Diagram'
-  if (t === 'newDocx')    return 'New Document'
-  if (t === 'newXlsx')    return 'New Spreadsheet'
-  if (t === 'newFolder')  return 'New Folder'
-  if (t === 'rename')     return 'Rename'
+  const actionType = ctxAction.value.type
+  if (actionType === 'newFile')    return t('notes.newMarkdownFile')
+  if (actionType === 'newDiagram') return t('notes.newDiagram')
+  if (actionType === 'newDocx')    return t('notes.newDocument')
+  if (actionType === 'newXlsx')    return t('notes.newSpreadsheet')
+  if (actionType === 'newFolder')  return t('notes.newFolder')
+  if (actionType === 'rename')     return t('notes.rename')
   return ''
 })
 
 const ctxActionPlaceholder = computed(() => {
-  const t = ctxAction.value.type
-  if (t === 'newFile')    return 'note.md'
-  if (t === 'newDiagram') return 'diagram.drawio'
-  if (t === 'newDocx')    return 'document.docx'
-  if (t === 'newXlsx')    return 'spreadsheet.xlsx'
-  if (t === 'newFolder')  return 'folder name'
+  const actionType = ctxAction.value.type
+  if (actionType === 'newFile')    return t('notes.noteMd')
+  if (actionType === 'newDiagram') return t('notes.diagramDrawio')
+  if (actionType === 'newDocx')    return t('notes.documentDocx')
+  if (actionType === 'newXlsx')    return t('notes.spreadsheetXlsx')
+  if (actionType === 'newFolder')  return t('notes.folderName')
   return ''
 })
 
@@ -2195,7 +2200,7 @@ async function startCtxDelete(itemPath, itemType) {
     }
     if (!res?.empty) {
       // Folder has contents on disk — block deletion
-      confirmDeleteTarget.value = { path: itemPath, name, isDir: true, blocked: 'This folder is not empty. Remove all files inside it first.' }
+      confirmDeleteTarget.value = { path: itemPath, name, isDir: true, blocked: t('notes.folderNotEmpty') }
       return
     }
   }

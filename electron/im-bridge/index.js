@@ -14,6 +14,19 @@ const DATA_DIR = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clan
 let _mainWindow = null
 let _config     = {}  // full config from config.json
 
+function getDataDir() {
+  const envPath = process.env.CLANKAI_DATA_PATH
+  let dataDir = envPath && envPath !== 'null' && envPath.trim() !== '' ? envPath : null
+  if (!dataDir) {
+    dataDir = os.homedir ? path.join(os.homedir(), '.clankai') : null
+  }
+  if (!dataDir || dataDir === 'null' || !path.isAbsolute(dataDir)) {
+    console.error('[im-bridge] Invalid DATA_DIR:', dataDir)
+    return null
+  }
+  return dataDir
+}
+
 /**
  * Resolve STT credentials from the Voice Call config section.
  * Uses the same whisperApiKey / whisperBaseURL that ChatView voice calls use.
@@ -291,7 +304,12 @@ function start(fullConfig) {
 }
 
 function _startWhatsApp() {
-  const authDir = path.join(DATA_DIR, 'whatsapp-session')
+  const dataDir = getDataDir()
+  if (!dataDir) {
+    console.error('[im-bridge] Cannot start WhatsApp: DATA_DIR is invalid')
+    return
+  }
+  const authDir = path.join(dataDir, 'whatsapp-session')
   whatsapp.start(
     { authDir, allowedUsers: _config.im?.whatsapp?.allowedUsers || [] },
     // onMessage
@@ -402,7 +420,12 @@ function getStatus() {
  * Called from the "Link Device" button in ConfigView.
  */
 function requestWhatsAppQR() {
-  const authDir = path.join(DATA_DIR, 'whatsapp-session')
+  const dataDir = getDataDir()
+  if (!dataDir) {
+    console.error('[im-bridge] Cannot request WhatsApp QR: DATA_DIR is invalid')
+    return
+  }
+  const authDir = path.join(dataDir, 'whatsapp-session')
   whatsapp.requestQR(
     authDir,
     (qrDataUri) => notifyRenderer('im:whatsapp-qr', { qr: qrDataUri }),

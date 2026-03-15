@@ -5,7 +5,7 @@
       <!-- Loading state -->
       <div v-if="chat?.messages === null" class="cw-placeholder">
         <div class="cw-spinner"></div>
-        <span class="cw-placeholder-text">Loading messages</span>
+        <span class="cw-placeholder-text">{{ t('chats.loadingMessages') }}</span>
       </div>
       <!-- Empty state -->
       <div v-else-if="!chat?.messages?.length" class="cw-placeholder">
@@ -15,8 +15,8 @@
           </svg>
         </div>
         <div>
-          <p class="cw-empty-title">Start a conversation</p>
-          <p class="cw-empty-subtitle">Type a message below to begin</p>
+          <p class="cw-empty-title">{{ t('chats.startConversation') }}</p>
+          <p class="cw-empty-subtitle">{{ t('chats.typeMessageBelow') }}</p>
         </div>
       </div>
 
@@ -32,11 +32,11 @@
             @mouseenter="e => e.currentTarget.style.background='rgba(0,122,255,0.1)'"
             @mouseleave="e => e.currentTarget.style.background='#F5F5F5'"
           >
-            <span v-if="isLoadingSegment">Loading…</span>
+            <span v-if="isLoadingSegment">{{ t('common.loading') }}</span>
             <span v-else-if="(chat?.messages?.filter(m=>!m.hidden)?.length ?? 0) > visibleLimit">
-              Show earlier messages ({{ (chat?.messages?.filter(m=>!m.hidden)?.length ?? 0) - visibleLimit }} hidden)
+              {{ t('chats.showEarlier', { count: (chat?.messages?.filter(m=>!m.hidden)?.length ?? 0) - visibleLimit }) }}
             </span>
-            <span v-else>Load older messages</span>
+            <span v-else>{{ t('chats.loadOlder') }}</span>
           </button>
         </div>
         <div
@@ -67,14 +67,14 @@
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
             <template v-if="msg.compaction">
-              <span class="cw-system-banner-text">Context compacted</span>
+              <span class="cw-system-banner-text">{{ t('chats.contextCompacted') }}</span>
               <template v-if="msg.tokensBefore && msg.tokensAfter">
                 <span class="cw-system-banner-sep">·</span>
                 <span class="cw-system-banner-tokens">
                   {{ msg.tokensBefore >= 1000 ? (msg.tokensBefore / 1000).toFixed(1) + 'k' : msg.tokensBefore }}
                   <svg style="width:10px;height:10px;opacity:0.6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
                   {{ msg.tokensAfter >= 1000 ? (msg.tokensAfter / 1000).toFixed(1) + 'k' : msg.tokensAfter }}
-                  <span style="opacity:0.5;">tokens</span>
+                  <span style="opacity:0.5;">{{ t('common.tokens') }}</span>
                 </span>
               </template>
             </template>
@@ -115,8 +115,8 @@
                 v-if="showQuote && msg.content"
                 @click="quoteMessage(msg)"
                 class="cw-msg-action-btn"
-                title="Quote message"
-                aria-label="Quote message"
+                :title="t('chats.quoteMessage')"
+                :aria-label="t('chats.quoteMessage')"
               >
                 <svg class="w-3.5 h-3.5" style="transform:rotate(180deg);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21z"/>
@@ -128,8 +128,8 @@
                 v-if="msg.content"
                 @click="copyMessage(msg)"
                 class="cw-msg-action-btn"
-                :title="copiedId === msg.id ? 'Copied!' : 'Copy message'"
-                aria-label="Copy message"
+                :title="copiedId === msg.id ? t('chats.messageCopied') : t('chats.copyMessage')"
+                :aria-label="t('chats.copyMessage')"
               >
                 <svg v-if="copiedId === msg.id" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <polyline points="20 6 9 17 4 12"/>
@@ -144,8 +144,8 @@
                 v-if="showDelete"
                 @click="$emit('delete-message', msg)"
                 class="cw-msg-action-btn cw-msg-action-btn-delete"
-                title="Delete message"
-                aria-label="Delete message"
+                :title="t('chats.deleteMessage')"
+                :aria-label="t('chats.deleteMessage')"
               >
                 <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="3 6 5 6 21 6"/>
@@ -231,8 +231,8 @@
             style="color:#9CA3AF; background:none; border:none;"
             @mouseenter="e => e.currentTarget.style.color='#1A1A1A'"
             @mouseleave="e => e.currentTarget.style.color='#9CA3AF'"
-            aria-label="Remove quote"
-            title="Remove quote"
+            :aria-label="t('chats.removeQuote')"
+            :title="t('chats.removeQuote')"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -244,7 +244,7 @@
           <template v-for="att in attachments" :key="att.id">
             <div v-if="att.type === 'image' && att.preview" class="cw-att-thumb">
               <img :src="att.preview" :alt="att.name" style="width:100%;height:100%;object-fit:cover;display:block;" />
-              <button class="cw-att-remove" @click="removeAttachment(att.id)" title="Remove">
+              <button class="cw-att-remove" @click="removeAttachment(att.id)" :title="t('common.remove')">
                 <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
@@ -256,8 +256,8 @@
             @click="pickFiles"
             :disabled="isRunning"
             class="cw-btn attach"
-            aria-label="Attach files"
-            title="Attach files"
+            :aria-label="t('chats.attachFiles')"
+            :title="t('chats.attachFiles')"
           >
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
@@ -269,13 +269,13 @@
             @keydown="onKeydown"
             @focus="inputFocused = true"
             @blur="inputFocused = false"
-            placeholder="Type your message here..."
+            :placeholder="t('chats.placeholder')"
             rows="2"
             class="cw-textarea"
           />
           <!-- Stop -->
           <template v-if="isRunning">
-            <button @click.stop="defaultStop" class="cw-btn stop" aria-label="Stop" title="Stop (Esc) — interrupt and clear queue">
+            <button @click.stop="defaultStop" class="cw-btn stop" :aria-label="t('chats.stopGenerating')" :title="t('chats.stopAndClear')">
               <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
             </button>
           </template>
@@ -285,8 +285,8 @@
             :disabled="!defaultInputText.trim() && attachments.length === 0"
             class="cw-btn send"
             :class="{ active: defaultInputText.trim() || attachments.length > 0 }"
-            aria-label="Send"
-            :title="isRunning ? 'Queue message' : 'Send message'"
+            :aria-label="t('chats.sendMessageBtn')"
+            :title="isRunning ? t('chats.queueMessage') : t('chats.sendMessageBtn')"
           >
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -314,6 +314,7 @@
 import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useChatsStore } from '../../stores/chats'
 import { useAgentsStore } from '../../stores/agents'
+import { useI18n } from '../../i18n/useI18n'
 import { getAvatarDataUri } from '../agents/agentAvatars'
 import MessageRenderer from './MessageRenderer.vue'
 import PlanCard from './PlanCard.vue'
@@ -331,6 +332,7 @@ const emit = defineEmits(['send', 'stop', 'quote', 'delete-message', 'send-with-
 
 const chatsStore = useChatsStore()
 const agentsStore = useAgentsStore()
+const { t } = useI18n()
 
 const messagesEl = ref(null)
 const inputEl = ref(null)

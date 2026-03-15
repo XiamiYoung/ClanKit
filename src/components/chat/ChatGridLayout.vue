@@ -3,12 +3,12 @@
     <!-- Toolbar -->
     <div class="grid-toolbar">
       <!-- Left: back + new chat -->
-      <button class="grid-back-btn" @click="$emit('exit-grid')" title="Back to single view">
+      <button class="grid-back-btn" @click="$emit('exit-grid')" :title="t('chats.backToSingleView')">
         <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="15 18 9 12 15 6"/>
         </svg>
       </button>
-      <button class="grid-new-btn" @click="$emit('new-chat')" title="New chat">
+      <button class="grid-new-btn" @click="$emit('new-chat')" :title="t('chats.newChat')">
         <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
@@ -21,7 +21,6 @@
             <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
             <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
           </svg>
-          <span>Grids</span>
           <span class="grid-dropdown-count">{{ gridCount }}</span>
           <svg style="width:12px;height:12px;transition:transform 0.15s;" :style="showDropdown ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="6 9 12 15 18 9"/>
@@ -35,7 +34,7 @@
             :class="{ active: gridCount === n }"
             @click="$emit('update:gridCount', n); showDropdown = false"
           >
-            <span class="grid-dropdown-item-label">{{ n }} panels</span>
+            <span class="grid-dropdown-item-label">{{ t('chats.gridPanels', undefined, { n }) }}</span>
             <span class="grid-dropdown-item-layout">{{ getLayoutLabel(n) }}</span>
             <svg v-if="gridCount === n" style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <polyline points="20 6 9 17 4 12"/>
@@ -99,6 +98,9 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import ChatGridPanel from './ChatGridPanel.vue'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   gridCount: { type: Number, default: 4 },

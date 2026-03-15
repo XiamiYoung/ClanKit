@@ -23,35 +23,8 @@
           <span class="call-panel-status">{{ statusLabel }}</span>
         </div>
 
-        <!-- Header actions: cost chip · mute · end -->
+        <!-- Header actions: mute · end -->
         <div class="call-panel-header-actions">
-          <!-- Cost chip -->
-          <div
-            v-if="callCost.whisperCalls > 0 || callCost.llmUsd > 0"
-            class="call-cost-chip"
-            @mouseenter="openCostTooltip"
-            @mouseleave="showCostTooltip = false"
-          >
-            {{ formatCost(callCost.totalUsd) }}
-            <!-- Tooltip -->
-            <div v-if="showCostTooltip" class="call-cost-tooltip" :style="tooltipStyle">
-              <div class="cct-row cct-header">
-                <span>Call cost</span>
-                <span class="cct-total">{{ formatCost(callCost.totalUsd) }}</span>
-              </div>
-              <div v-if="callCost.whisperCalls > 0" class="cct-row">
-                <span class="cct-label">Speech-to-text</span>
-                <span class="cct-value">{{ callCost.whisperCalls }} rounds · {{ callCost.whisperSecs.toFixed(1) }}s</span>
-                <span class="cct-usd">{{ formatCost(callCost.whisperUsd) }}</span>
-              </div>
-              <div v-if="callCost.llmUsd > 0" class="cct-row">
-                <span class="cct-label">AI response</span>
-                <span class="cct-value">{{ (n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : n)(voiceStore.callVoiceInputTokens + voiceStore.callVoiceOutputTokens) }} tok</span>
-                <span class="cct-usd">{{ formatCost(callCost.llmUsd) }}</span>
-              </div>
-            </div>
-          </div>
-
           <!-- Mute -->
           <button
             class="call-panel-icon-btn" :class="{ active: voiceStore.isMuted }"
@@ -137,7 +110,6 @@ import { useVoiceStore } from '../../stores/voice'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import { getAvatarDataUri } from '../agents/agentAvatars'
-import { resolveModelPrice, formatCost } from '../../utils/pricing'
 
 const voiceStore = useVoiceStore()
 const agentsStore = useAgentsStore()
@@ -145,138 +117,16 @@ const configStore = useConfigStore()
 
 const emit = defineEmits(['end-call', 'toggle-mute', 'mic-change', 'speaker-change'])
 
+const panelEl = ref(null)
 const micDevices = ref([])
 const speakerDevices = ref([])
-const showCostTooltip = ref(false)
-const tooltipStyle = ref({})
 
-const TOOLTIP_H = 96  // estimated rendered height (2–3 rows)
-const TOOLTIP_GAP = 8
+const panelPos = ref({ left: 24, top: 24 })
+let _drag = null
 
-function openCostTooltip(e) {
-  const r = e.currentTarget.getBoundingClientRect()
-  const vw = window.innerWidth
-  const style = {}
-
-  // ── Vertical: prefer above, fall back to below ──
-  if (r.top - TOOLTIP_H - TOOLTIP_GAP >= 0) {
-    style.top = (r.top - TOOLTIP_GAP) + 'px'
-    style.transform = 'translateY(-100%)'
-  } else {
-    style.top = (r.bottom + TOOLTIP_GAP) + 'px'
-    style.transform = 'none'
-  }
-
-  // ── Horizontal: anchor by whichever edge has more room ──
-  // Right half of screen → pin tooltip's right edge to chip's right edge (extends leftward)
-  // Left half of screen  → pin tooltip's left  edge to chip's left  edge (extends rightward)
-  if (r.right > vw / 2) {
-    style.right = (vw - r.right) + 'px'
-    style.left = 'auto'
-  } else {
-    style.left = r.left + 'px'
-    style.right = 'auto'
-  }
-
-  tooltipStyle.value = style
-  showCostTooltip.value = true
-}
-
-// ── Drag-to-reposition ──
-const panelEl = ref(null)
-const PANEL_WIDTH = 300
-const dragPos = ref({ right: 24, bottom: 24 })
-let dragging = false
-let dragStartX = 0
-let dragStartY = 0
-let startRight = 24
-let startBottom = 24
-
-const panelStyle = computed(() => ({
-  right: `${dragPos.value.right}px`,
-  bottom: `${dragPos.value.bottom}px`,
-}))
-
-function clampPos(right, bottom) {
-  const panelHeight = panelEl.value?.offsetHeight || 260
-  return {
-    right:  Math.max(0, Math.min(right,  window.innerWidth  - PANEL_WIDTH)),
-    bottom: Math.max(0, Math.min(bottom, window.innerHeight - panelHeight)),
-  }
-}
-
-function onDragStart(e) {
-  // Don't initiate drag on interactive elements
-  if (e.target.closest('button, select, option')) return
-  dragging = true
-  dragStartX = e.clientX
-  dragStartY = e.clientY
-  startRight = dragPos.value.right
-  startBottom = dragPos.value.bottom
-  e.preventDefault()
-}
-
-function onMouseMove(e) {
-  if (!dragging) return
-  const dx = e.clientX - dragStartX
-  const dy = e.clientY - dragStartY
-  Object.assign(dragPos.value, clampPos(startRight - dx, startBottom - dy))
-}
-
-function onMouseUp() {
-  dragging = false
-}
-
-function onWindowResize() {
-  // Re-clamp position when the window is resized so the panel can't end up outside
-  Object.assign(dragPos.value, clampPos(dragPos.value.right, dragPos.value.bottom))
-}
-
-onMounted(() => {
-  window.addEventListener('mousemove', onMouseMove)
-  window.addEventListener('mouseup', onMouseUp)
-  window.addEventListener('resize', onWindowResize)
-  navigator.mediaDevices.addEventListener('devicechange', enumerateDevices)
-  // Clamp initial position once the panel has rendered and we know its height
-  nextTick(() => Object.assign(dragPos.value, clampPos(dragPos.value.right, dragPos.value.bottom)))
+const panelStyle = computed(() => {
+  return { left: panelPos.value.left + 'px', top: panelPos.value.top + 'px', transform: 'none' }
 })
-
-onUnmounted(() => {
-  window.removeEventListener('mousemove', onMouseMove)
-  window.removeEventListener('mouseup', onMouseUp)
-  window.removeEventListener('resize', onWindowResize)
-  navigator.mediaDevices.removeEventListener('devicechange', enumerateDevices)
-})
-
-const defaultMicLabel = ref('Default microphone')
-const defaultSpeakerLabel = ref('Default speaker')
-
-function parseDefaultLabel(raw, fallback) {
-  if (!raw) return fallback
-  // "Default - AirPods Pro" or "Default (AirPods Pro)" → "Default (AirPods Pro)"
-  const match = raw.match(/^Default\s*[-–—]\s*(.+)$/i)
-  return match ? `Default (${match[1].trim()})` : raw
-}
-
-async function enumerateDevices() {
-  try {
-    // Need to request mic permission first so labels are available
-    await navigator.mediaDevices.getUserMedia({ audio: true }).then(s => s.getTracks().forEach(t => t.stop()))
-    const devices = await navigator.mediaDevices.enumerateDevices()
-
-    const defMic = devices.find(d => d.kind === 'audioinput' && d.deviceId === 'default')
-    const defSpk = devices.find(d => d.kind === 'audiooutput' && d.deviceId === 'default')
-    defaultMicLabel.value = parseDefaultLabel(defMic?.label, 'Default microphone')
-    defaultSpeakerLabel.value = parseDefaultLabel(defSpk?.label, 'Default speaker')
-
-    micDevices.value = devices.filter(d => d.kind === 'audioinput' && d.deviceId !== 'default' && d.deviceId !== 'communications')
-    speakerDevices.value = devices.filter(d => d.kind === 'audiooutput' && d.deviceId !== 'default' && d.deviceId !== 'communications')
-  } catch {
-    // Silently fall back to unnamed defaults
-  }
-}
-
-onMounted(enumerateDevices)
 
 const agentAvatar = computed(() => {
   if (!voiceStore.activeAgentId) return null
@@ -287,47 +137,60 @@ const agentAvatar = computed(() => {
 
 const statusClass = computed(() => {
   const s = voiceStore.status
-  if (s === 'speaking')  return 'speaking'
+  if (s === 'speaking') return 'speaking'
   if (s === 'listening') return 'listening'
   if (s === 'processing') return 'processing'
-  if (s === 'standby')   return 'standby'
   return ''
 })
 
 const statusLabel = computed(() => {
   const s = voiceStore.status
-  if (s === 'standby')   return 'Ready'
-  if (s === 'listening') return 'Listening...'
-  if (s === 'processing') return 'Thinking...'
-  if (s === 'speaking')  return 'Speaking...'
-  return 'Connecting...'
+  if (s === 'listening') return 'Listening'
+  if (s === 'processing') return 'Thinking'
+  if (s === 'speaking') return 'Speaking'
+  return 'On call'
 })
 
-// Real-time call cost
-const callCost = computed(() => {
-  const M = 1_000_000
-  const pricing = configStore.config?.pricing
+const defaultMicLabel = computed(() => {
+  return configStore.config?.voiceCall?.defaultMicLabel || 'Default Microphone'
+})
 
-  const whisperPrice   = resolveModelPrice('whisper-1', pricing)
-  const whisperUsd     = (voiceStore.callWhisperSecs) * (whisperPrice?.perSec ?? 0.0001)
+const defaultSpeakerLabel = computed(() => {
+  return configStore.config?.voiceCall?.defaultSpeakerLabel || 'Default Speaker'
+})
 
-  const llmModelId     = voiceStore.callModelId
-  const llmPrice       = llmModelId ? resolveModelPrice(llmModelId, pricing) : null
-  const llmUsd         = llmPrice
-    ? ((voiceStore.callVoiceInputTokens  / M) * (llmPrice.input  || 0)
-    +  (voiceStore.callVoiceOutputTokens / M) * (llmPrice.output || 0))
-    : 0
+function onDragStart(e) {
+  if (e.button !== 0) return
+  _drag = { startX: e.clientX, startY: e.clientY, startLeft: panelPos.value.left, startTop: panelPos.value.top }
+  document.addEventListener('mousemove', onDragMove)
+  document.addEventListener('mouseup', onDragEnd)
+}
 
-  const totalUsd = whisperUsd + llmUsd
-  return {
-    totalUsd,
-    whisperUsd,
-    llmUsd,
-    whisperSecs:  voiceStore.callWhisperSecs,
-    whisperCalls: voiceStore.callWhisperCalls,
-    hasLlmPrice:  !!llmPrice,
+function onDragMove(e) {
+  if (!_drag) return
+  const panelWidth = 300
+  const panelHeight = 200
+  panelPos.value = {
+    left: Math.max(0, Math.min(_drag.startLeft + (e.clientX - _drag.startX), window.innerWidth - panelWidth)),
+    top: Math.max(0, Math.min(_drag.startTop + (e.clientY - _drag.startY), window.innerHeight - panelHeight)),
   }
-})
+}
+
+function onDragEnd() {
+  _drag = null
+  document.removeEventListener('mousemove', onDragMove)
+  document.removeEventListener('mouseup', onDragEnd)
+}
+
+async function loadDevices() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    micDevices.value = devices.filter(d => d.kind === 'audioinput')
+    speakerDevices.value = devices.filter(d => d.kind === 'audiooutput')
+  } catch (err) {
+    console.error('Failed to enumerate devices:', err)
+  }
+}
 
 function onMicChange(e) {
   voiceStore.setMicId(e.target.value)
@@ -341,6 +204,15 @@ function onSpeakerChange(e) {
 
 function toggleMute() { emit('toggle-mute') }
 function endCall() { emit('end-call') }
+
+onMounted(() => {
+  loadDevices()
+})
+
+onUnmounted(() => {
+  document.removeEventListener('mousemove', onDragMove)
+  document.removeEventListener('mouseup', onDragEnd)
+})
 </script>
 
 <style>
@@ -492,81 +364,6 @@ function endCall() { emit('end-call') }
   color: #E5E5EA;
   line-height: 1.4;
   word-break: break-word;
-}
-
-/* Cost chip + tooltip */
-.call-cost-chip {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.5rem 0.625rem;
-  border-radius: 0.625rem;
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: #F59E0B;
-  cursor: default;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.call-cost-tooltip {
-  position: fixed;
-  min-width: 14rem;
-  background: #111111;
-  border: 1px solid #2A2A2A;
-  border-radius: 0.625rem;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-  padding: 0.5rem 0.625rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  pointer-events: none;
-  z-index: 9999;
-}
-.cct-row {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-.cct-header {
-  justify-content: space-between;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid #2A2A2A;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.625rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #F59E0B;
-}
-.cct-total {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #FFFFFF;
-}
-.cct-label {
-  font-family: 'Inter', sans-serif;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: #6B7280;
-  width: 7rem;
-  flex-shrink: 0;
-}
-.cct-value {
-  flex: 1;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.6875rem;
-  color: #9CA3AF;
-}
-.cct-usd {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.6875rem;
-  color: #D1D5DB;
-  white-space: nowrap;
 }
 
 /* Device selectors */

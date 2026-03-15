@@ -2,6 +2,61 @@ const path = require('path')
 const fs = require('fs')
 const { v4: uuidv4 } = require('uuid')
 
+// Helper to get provider config by type from the new providers array
+function getProviderByType(config, type) {
+  if (config.providers && Array.isArray(config.providers)) {
+    return config.providers.find(p => p.type === type && p.isActive)
+  }
+  return null
+}
+
+// Get provider config by ID (uuid)
+function getProviderById(config, id) {
+  if (config.providers && Array.isArray(config.providers)) {
+    return config.providers.find(p => p.id === id)
+  }
+  return null
+}
+
+// Build provider client config from provider object
+function buildProviderClientConfig(provider, model = null) {
+  if (!provider) return null
+  
+  const isOpenAI = provider.type === 'openai' || provider.type === 'deepseek' || provider.type === 'minimax'
+  
+  const cfg = {
+    provider: {
+      id: provider.id,
+      type: provider.type,
+      name: provider.name,
+      baseURL: provider.baseURL,
+      apiKey: provider.apiKey,
+      model: model || provider.model,
+      settings: provider.settings || {},
+    },
+  }
+  
+  if (isOpenAI) {
+    cfg.defaultProvider = 'openai'
+    cfg._resolvedProvider = 'openai'
+    if (provider.type === 'deepseek' || provider.type === 'minimax') {
+      cfg._directAuth = true
+    }
+  } else {
+    cfg.defaultProvider = provider.type
+    cfg._resolvedProvider = provider.type
+  }
+  
+  return cfg
+}
+
+// Suppress libsignal verbose warnings — they use console.warn internally
+const originalWarn = console.warn
+console.warn = function (...args) {
+  if (args[0]?.includes?.('Closing open session')) return
+  originalWarn.apply(console, args)
+}
+
 // Point Chromium's fontconfig at our bundled fonts.conf BEFORE electron is
 // required -- this is the only hook that runs before Chromium initialises its
 // font subsystem. On Linux/WSL2 this makes Segoe UI Emoji available so the
@@ -15,94 +70,30 @@ const os = require('os')
 const { execFile } = require('child_process')
 const { logger, LOG_DIR } = require('./logger')
 
-// Load .env into the Electron main process using a direct parser.
-// dotenv v17 has ESM-first issues in Electron; plain fs is 100% reliable.
-// Supports multi-line JSON values (brace-balanced accumulation).
-// Two-pass strategy: load the default .env first (to discover CLANKAI_DATA_PATH),
-// then if DATA_DIR differs, also load DATA_DIR/.env. CLANKAI_DATA_PATH is the
-// only runtime key still stored in .env; all other paths live in config.json.
-;(function loadEnv() {
-  function parseFile(filePath) {
-    if (!filePath || !fs.existsSync(filePath)) return
-    const lines = fs.readFileSync(filePath, 'utf8').split('\n')
-    let pendingKey = null
-    let pendingVal = ''
-    let braceDepth = 0
-
-    function commitPending() {
-      if (pendingKey) {
-        process.env[pendingKey] = pendingVal.trim()
-        pendingKey = null
-        pendingVal = ''
-        braceDepth = 0
-      }
-    }
-
-    for (const line of lines) {
-      if (pendingKey && braceDepth > 0) {
-        pendingVal += '\n' + line
-        for (const ch of line) {
-          if (ch === '{' || ch === '[') braceDepth++
-          else if (ch === '}' || ch === ']') braceDepth--
-        }
-        if (braceDepth <= 0) commitPending()
-        continue
-      }
-
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#')) continue
-      const idx = trimmed.indexOf('=')
-      if (idx === -1) continue
-      const key = trimmed.slice(0, idx).trim()
-      const val = trimmed.slice(idx + 1).trim()
-
-      if (val.startsWith('{') || val.startsWith('[')) {
-        pendingKey = key
-        pendingVal = val
-        braceDepth = 0
-        for (const ch of val) {
-          if (ch === '{' || ch === '[') braceDepth++
-          else if (ch === '}' || ch === ']') braceDepth--
-        }
-        if (braceDepth <= 0) commitPending()
-      } else {
-        process.env[key] = val
-      }
-    }
-    commitPending()
-  }
-
-  // Pass 1: load the default user env (or project fallback in dev).
-  // This is needed to discover CLANKAI_DATA_PATH.
-  const defaultUserEnv = path.join(os.homedir(), '.clankai', '.env')
-  const projectEnv     = path.join(__dirname, '..', '.env')
-  if (fs.existsSync(defaultUserEnv)) parseFile(defaultUserEnv)
-  else parseFile(projectEnv)
-
-  // Pass 2: if CLANKAI_DATA_PATH points to a different directory, also load
-  // that .env so any remaining keys there (e.g. CLANKAI_DATA_PATH itself) are not missed.
-  if (process.env.CLANKAI_DATA_PATH) {
-    const dataEnv = path.join(process.env.CLANKAI_DATA_PATH, '.env')
-    if (dataEnv !== defaultUserEnv && dataEnv !== projectEnv) {
-      parseFile(dataEnv)
-    }
-  }
-})()
-
 logger.info('=== ClankAI starting ===')
 
 // Dev mode: run-electron.js sets ELECTRON_DEV=true
 const isDev = process.env.ELECTRON_DEV === 'true'
 
 // --- Storage ----------------------------------------------------------------
-const DEFAULT_DATA_PATH = path.join(os.homedir(), '.clankai')
-let DATA_DIR = process.env.CLANKAI_DATA_PATH || DEFAULT_DATA_PATH
+// DEFAULT_DATA_PATH will be set after app is ready
+let DEFAULT_DATA_PATH = null
+let DATA_DIR = null
 // Derived paths — re-computed by initDataPaths() if DATA_DIR changes at startup
 let CHATS_FILE, CHATS_DIR, CHATS_INDEX_FILE, CONFIG_FILE, AGENTS_FILE,
-    MCP_SERVERS_FILE, TOOLS_FILE, SOULS_DIR, KNOWLEDGE_FILE, ENV_FILE,
-    UTILITY_USAGE_FILE, TASKS_FILE, PLANS_FILE, TASK_RUNS_DIR, TASK_RUNS_INDEX
+    MCP_SERVERS_FILE, TOOLS_FILE, SOULS_DIR, KNOWLEDGE_FILE,
+    UTILITY_USAGE_FILE, TASKS_FILE, PLANS_FILE, TASK_RUNS_DIR, TASK_RUNS_INDEX,
+    TASK_CATEGORIES_FILE, PLAN_CATEGORIES_FILE, AI_TASK_TREE_FILE,
+    PLAZA_TOPICS_FILE, PLAZA_SESSIONS_DIR
 
 function initDataPaths() {
+  if (!DATA_DIR) {
+    DEFAULT_DATA_PATH = path.join(app.getPath('appData'), 'clankai', 'data')
+    DATA_DIR = DEFAULT_DATA_PATH
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+    }
+  }
   CHATS_FILE         = path.join(DATA_DIR, 'chats.json')
   CHATS_DIR          = path.join(DATA_DIR, 'chats')
   CHATS_INDEX_FILE   = path.join(CHATS_DIR, 'index.json')
@@ -112,14 +103,18 @@ function initDataPaths() {
   TOOLS_FILE         = path.join(DATA_DIR, 'tools.json')
   SOULS_DIR          = path.join(DATA_DIR, 'souls')
   KNOWLEDGE_FILE     = path.join(DATA_DIR, 'knowledge.json')
-  ENV_FILE           = path.join(DATA_DIR, '.env')
   UTILITY_USAGE_FILE = path.join(DATA_DIR, 'utility-usage.json')
   TASKS_FILE         = path.join(DATA_DIR, 'tasks.json')
   PLANS_FILE         = path.join(DATA_DIR, 'plans.json')
   TASK_RUNS_DIR      = path.join(DATA_DIR, 'task-runs')
   TASK_RUNS_INDEX    = path.join(DATA_DIR, 'task-runs', 'index.json')
+  TASK_CATEGORIES_FILE = path.join(DATA_DIR, 'task-categories.json')
+  PLAN_CATEGORIES_FILE = path.join(DATA_DIR, 'plan-categories.json')
+  AI_TASK_TREE_FILE    = path.join(DATA_DIR, 'ai-task-tree.json')
+  PLAZA_TOPICS_FILE    = path.join(DATA_DIR, 'plaza-topics.json')
+  PLAZA_SESSIONS_DIR   = path.join(DATA_DIR, 'plaza-sessions')
 }
-initDataPaths()
+
 
 // --- Env-backed path accessors -----------------------------------------------
 // These three paths are stored in config.json under CLANKAI_DATA_PATH.
@@ -132,25 +127,11 @@ function getEnvPaths() {
   }
 }
 
-/** Write or replace a single key=value line in .env */
+/* Removed: .env file no longer used - all config in config.json */
+/** Write or replace a single key=value line in .env (DEPRECATED) */
 function saveEnvKey(key, value) {
-  let lines = []
-  if (fs.existsSync(ENV_FILE)) {
-    lines = fs.readFileSync(ENV_FILE, 'utf8').split('\n')
-  }
-  const prefix = `${key}=`
-  let found = false
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim().startsWith(prefix)) {
-      lines[i] = `${key}=${value}`
-      found = true
-      break
-    }
-  }
-  if (!found) lines.push(`${key}=${value}`)
-  fs.writeFileSync(ENV_FILE, lines.join('\n'), 'utf8')
-  process.env[key] = value
-  logger.info(`Saved ${key} to .env:`, value)
+  // No longer used - paths stored in config.json
+  logger.info(`[DEPRECATED] saveEnvKey called for ${key}:`, value)
 }
 
 const OLD_DATA_DIR = path.join(os.homedir(), '.maestro-agent')
@@ -175,33 +156,38 @@ function findExistingDataDir() {
   candidates.delete(os.homedir()) // already checked as DATA_DIR
 
   for (const home of candidates) {
+    // Check for .clankai directory (legacy)
     const dir = path.join(home, '.clankai')
     if (fs.existsSync(dir)) {
       logger.info(`Found existing data directory at ${dir}`)
       return dir
+    }
+    // Check for clankai/data directory (new structure)
+    const dir2 = path.join(home, 'AppData', 'Roaming', 'clankai', 'data')
+    if (fs.existsSync(dir2)) {
+      logger.info(`Found existing data directory at ${dir2}`)
+      return dir2
     }
   }
   return null
 }
 
 function ensureDataDir() {
+  // Always use default path - no user customization
+  DEFAULT_DATA_PATH = path.join(app.getPath('appData'), 'clankai', 'data')
+  DATA_DIR = DEFAULT_DATA_PATH
+  initDataPaths()
+  logger.info(`Data path set to: ${DATA_DIR}`)
+
   if (!fs.existsSync(DATA_DIR)) {
-    // Before creating a new directory, look for existing data elsewhere
-    const existing = findExistingDataDir()
-    if (existing) {
-      DATA_DIR = existing
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+    } catch (err) {
+      const fallback = app.getPath('userData')
+      logger.warn(`Cannot create ${DATA_DIR} (${err.code}), falling back to ${fallback}`)
+      DATA_DIR = fallback
       initDataPaths()
-    } else {
-      try {
-        fs.mkdirSync(DATA_DIR, { recursive: true })
-      } catch (err) {
-        // EPERM on Windows: fall back to Electron's standard app data directory
-        const fallback = app.getPath('userData')
-        logger.warn(`Cannot create ${DATA_DIR} (${err.code}), falling back to ${fallback}`)
-        DATA_DIR = fallback
-        initDataPaths()
-        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-      }
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
     }
   }
 
@@ -471,7 +457,8 @@ async function migrateEnvDataIfNeeded() {
 
 // --- Default Data -----------------------------------------------------------
 const DEFAULT_CONFIG = {
-  anthropic: {
+  providers: [],  // New dynamic providers array
+  anthropic: {    // Legacy structure for backward compat
     apiKey:       '',
     baseURL:      '',
     sonnetModel:  'claude-sonnet-4-5',
@@ -509,6 +496,7 @@ const DEFAULT_CONFIG = {
   DoCPath:           '',
   artifactPath:      '',
   pineconeApiKey:    '',
+  maxOutputTokens: 32768,
   newsFeeds: [],
   sandboxConfig: {
     defaultMode: 'sandbox',
@@ -537,16 +525,21 @@ function createWindow() {
 
   mainWindow = new BrowserWindow({
     icon: path.join(__dirname, '../public/icon.png'),
-    width: winW,
-    height: winH,
-    x: Math.round((screenW - winW) / 2),
-    y: Math.round((screenH - winH) / 2),
+    width: Math.round(screenW * 0.7),
+    height: Math.round(screenH * 0.7),
+    x: Math.round((screenW - screenW * 0.7) / 2),
+    y: Math.round((screenH - screenH * 0.7) / 2),
     minWidth: 600,
     minHeight: 400,
     frame: false,
+    fullscreen: false,
+    maximizable: true,
+    autoHideMenuBar: true,
+    titleBarStyle: 'hidden',
     transparent: true,
     backgroundColor: '#00000000',
     hasShadow: false,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -557,15 +550,61 @@ function createWindow() {
     }
   })
 
+  mainWindow.once('ready-to-show', () => mainWindow.show())
+
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173')
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
-
   mainWindow.on('closed', () => { mainWindow = null })
-  mainWindow.on('maximize',   () => mainWindow?.webContents.send('window:maximized', true))
+
+  // Double-click titlebar to resize to 70% screen
+  mainWindow.on('maximize', () => mainWindow?.webContents.send('window:maximized', true))
   mainWindow.on('unmaximize', () => mainWindow?.webContents.send('window:maximized', false))
+  mainWindow.on('enter-full-screen', () => mainWindow?.webContents.send('window:maximized', true))
+  mainWindow.on('leave-full-screen', () => mainWindow?.webContents.send('window:maximized', false))
+  
+  // Custom titlebar double-click handler - resize to 70%
+  const titleBarHeight = 40
+  mainWindow.on('blur', () => { _isFocused = false })
+  mainWindow.on('focus', () => { _isFocused = true })
+  let _lastClickTime = 0
+  mainWindow.on('touch-start', (e) => {
+    const now = Date.now()
+    if (now - _lastClickTime < 300) {
+      const bounds = mainWindow.getBounds()
+      if (bounds.y <= titleBarHeight || e.getPosition()[1] <= titleBarHeight) {
+        const screen = require('electron').screen.getDisplayMatching(mainWindow.getBounds())
+        const screenBounds = screen.workArea
+        const newWidth = Math.round(screenBounds.width * 0.7)
+        const newHeight = Math.round(screenBounds.height * 0.7)
+        mainWindow.setBounds({
+          x: Math.round(screenBounds.x + (screenBounds.width - newWidth) / 2),
+          y: Math.round(screenBounds.y + (screenBounds.height - newHeight) / 2),
+          width: newWidth,
+          height: newHeight
+        })
+      }
+    }
+    _lastClickTime = now
+  })
+  
+  // Also handle double-click on titlebar area via webContents
+  mainWindow.webContents.on('input-event', (event, input) => {
+    if (input.type === 'mouseDoubleClick' && input.mouseY <= 40) {
+      const screen = require('electron').screen.getDisplayMatching(mainWindow.getBounds())
+      const screenBounds = screen.workArea
+      const newWidth = Math.round(screenBounds.width * 0.7)
+      const newHeight = Math.round(screenBounds.height * 0.7)
+      mainWindow.setBounds({
+        x: Math.round(screenBounds.x + (screenBounds.width - newWidth) / 2),
+        y: Math.round(screenBounds.y + (screenBounds.height - newHeight) / 2),
+        width: newWidth,
+        height: newHeight
+      })
+    }
+  })
   _attachMinibarMovedGuard(mainWindow)
 
   // -- Grant microphone access for voice calls --
@@ -663,6 +702,7 @@ app.whenReady().then(async () => {
   })
 
   ensureDataDir()
+
   await migrateChatsIfNeeded()
   await migrateEnvDataIfNeeded()
   createWindow()
@@ -975,6 +1015,68 @@ ipcMain.handle('store:save-chats', async (_, chats) => {
 
 ipcMain.handle('store:get-config', () => {
   const saved = readJSON(CONFIG_FILE, {})
+  
+  // Migration: convert legacy providers to new providers array
+  let providers = saved.providers || []
+  if (providers.length === 0) {
+    // Try to migrate from legacy structure
+    const { v4: uuidv4 } = require('uuid')
+    providers = []
+    
+    if (saved.anthropic?.apiKey) {
+      providers.push({
+        id: uuidv4(),
+        name: 'Anthropic',
+        type: 'anthropic',
+        apiKey: saved.anthropic.apiKey,
+        baseURL: saved.anthropic.baseURL || 'https://api.anthropic.com',
+        model: saved.anthropic.sonnetModel || 'claude-sonnet-4-5',
+        settings: { temperature: 1, topP: 1, maxOutputTokens: 32768 },
+        isActive: saved.anthropic.isActive || false,
+        testedAt: saved.anthropic.testedAt || null,
+      })
+    }
+    if (saved.openrouter?.apiKey) {
+      providers.push({
+        id: uuidv4(),
+        name: 'OpenRouter',
+        type: 'openrouter',
+        apiKey: saved.openrouter.apiKey,
+        baseURL: saved.openrouter.baseURL || 'https://openrouter.ai/api',
+        model: '',
+        settings: { temperature: 1, topP: 1, maxOutputTokens: 32768 },
+        isActive: saved.openrouter.isActive || false,
+        testedAt: saved.openrouter.testedAt || null,
+      })
+    }
+    if (saved.openai?.apiKey) {
+      providers.push({
+        id: uuidv4(),
+        name: 'OpenAI Compatible',
+        type: 'openai',
+        apiKey: saved.openai.apiKey,
+        baseURL: saved.openai.baseURL || '',
+        model: '',
+        settings: { temperature: 1, topP: 1, maxOutputTokens: 32768 },
+        isActive: saved.openai.isActive || false,
+        testedAt: saved.openai.testedAt || null,
+      })
+    }
+    if (saved.deepseek?.apiKey) {
+      providers.push({
+        id: uuidv4(),
+        name: 'DeepSeek',
+        type: 'deepseek',
+        apiKey: saved.deepseek.apiKey,
+        baseURL: saved.deepseek.baseURL || 'https://api.deepseek.com',
+        model: 'deepseek-chat',
+        settings: { temperature: 1, topP: 1, maxOutputTokens: saved.deepseek.maxTokens || 8192 },
+        isActive: saved.deepseek.isActive || false,
+        testedAt: saved.deepseek.testedAt || null,
+      })
+    }
+  }
+  
   // Only let saved non-empty values override defaults (top-level scalars).
   const nonEmpty = Object.fromEntries(
     Object.entries(saved).filter(([, v]) => v !== '' && v !== null && v !== undefined)
@@ -983,6 +1085,7 @@ ipcMain.handle('store:get-config', () => {
   const result = {
     ...DEFAULT_CONFIG,
     ...nonEmpty,
+    providers,  // Use migrated or existing providers
     anthropic:    { ...DEFAULT_CONFIG.anthropic,    ...saved.anthropic },
     openrouter:   { ...DEFAULT_CONFIG.openrouter,   ...saved.openrouter },
     openai:       { ...DEFAULT_CONFIG.openai,       ...saved.openai },
@@ -999,14 +1102,9 @@ ipcMain.handle('store:get-config', () => {
     },
   }
   logger.info('store:get-config', {
-    baseURL: result.anthropic?.baseURL,
-    hasApiKey: !!(result.anthropic?.apiKey),
-    apiKeyPrefix: result.anthropic?.apiKey ? result.anthropic.apiKey.slice(0, 8) + '...' : '(empty)',
-    sonnetModel: result.anthropic?.sonnetModel,
-    activeModel: result.anthropic?.activeModel,
+    providersCount: result.providers?.length || 0,
+    hasOpenRouterKey: providers.some(p => p.type === 'openrouter' && p.apiKey),
     defaultProvider: result.defaultProvider,
-    hasOpenRouterKey: !!(result.openrouter?.apiKey),
-    openrouterBaseURL: result.openrouter?.baseURL
   })
   return result
 })
@@ -1020,10 +1118,12 @@ ipcMain.handle('store:save-config', (_, config) => {
   const merged = {
     ...existing,
     ...config,
-    // Deep-merge nested provider objects
+    // Deep-merge nested provider objects (legacy)
     anthropic:  { ...(existing.anthropic || {}),  ...(config.anthropic || {}) },
     openrouter: { ...(existing.openrouter || {}), ...(config.openrouter || {}) },
     openai:     { ...(existing.openai || {}),     ...(config.openai || {}) },
+    // Keep providers array (new structure)
+    providers: config.providers || existing.providers || [],
     smtp:       { ...(existing.smtp || {}),       ...(config.smtp || {}) },
   }
   writeJSON(CONFIG_FILE, merged)
@@ -1174,10 +1274,11 @@ ipcMain.handle('plans:delete', async (_, id) => {
 
 // --- IPC: Task Runs ---------------------------------------------------------
 
-ipcMain.handle('tasks:get-runs', async (_, { planId, limit } = {}) => {
+ipcMain.handle('tasks:get-runs', async (_, { planId, itemId, limit } = {}) => {
   try {
     let index = await readJSONAsync(TASK_RUNS_INDEX, [])
     if (planId) index = index.filter(r => r.planId === planId)
+    if (itemId) index = index.filter(r => r.itemId === itemId)
     if (limit) index = index.slice(0, limit)
     return index
   } catch {
@@ -1219,6 +1320,7 @@ ipcMain.handle('tasks:save-run', async (_, runDetail) => {
       id:          runDetail.id,
       planId:      runDetail.planId,
       planName:    runDetail.planName,
+      itemId:      runDetail.itemId || null,
       triggeredBy: runDetail.triggeredBy,
       status:      runDetail.status,
       startedAt:   runDetail.startedAt,
@@ -1229,9 +1331,704 @@ ipcMain.handle('tasks:save-run', async (_, runDetail) => {
     else index.unshift(summary)
     if (index.length > 200) index = index.slice(0, 200)
     await writeJSONAtomic(TASK_RUNS_INDEX, index)
+
+    // Emit completion event if run has completed
+    if (runDetail.completedAt && mainWindow) {
+      mainWindow.webContents.send('tasks:run-completed', {
+        runId: runDetail.id,
+        planId: runDetail.planId,
+        status: runDetail.status,
+      })
+    }
+
     return { success: true }
   } catch (err) {
     logger.error('tasks:save-run error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// --- IPC: Task Categories ---------------------------------------------------
+
+ipcMain.handle('task-categories:list', async () => {
+  return await readJSONAsync(TASK_CATEGORIES_FILE, [])
+})
+
+ipcMain.handle('task-categories:save', async (_, cat) => {
+  try {
+    let categories = await readJSONAsync(TASK_CATEGORIES_FILE, [])
+    const idx = categories.findIndex(c => c.id === cat.id)
+    if (idx >= 0) categories[idx] = cat
+    else categories.push(cat)
+    await writeJSONAtomic(TASK_CATEGORIES_FILE, categories)
+    return { success: true }
+  } catch (err) {
+    logger.error('task-categories:save error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('task-categories:delete', async (_, id) => {
+  try {
+    let categories = await readJSONAsync(TASK_CATEGORIES_FILE, [])
+    categories = categories.filter(c => c.id !== id)
+    await writeJSONAtomic(TASK_CATEGORIES_FILE, categories)
+    return { success: true }
+  } catch (err) {
+    logger.error('task-categories:delete error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// --- IPC: Plan Categories ---------------------------------------------------
+
+ipcMain.handle('plan-categories:list', async () => {
+  return await readJSONAsync(PLAN_CATEGORIES_FILE, [])
+})
+
+ipcMain.handle('plan-categories:save', async (_, cat) => {
+  try {
+    let categories = await readJSONAsync(PLAN_CATEGORIES_FILE, [])
+    const idx = categories.findIndex(c => c.id === cat.id)
+    if (idx >= 0) categories[idx] = cat
+    else categories.push(cat)
+    await writeJSONAtomic(PLAN_CATEGORIES_FILE, categories)
+    return { success: true }
+  } catch (err) {
+    logger.error('plan-categories:save error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('plan-categories:delete', async (_, id) => {
+  try {
+    let categories = await readJSONAsync(PLAN_CATEGORIES_FILE, [])
+    categories = categories.filter(c => c.id !== id)
+    await writeJSONAtomic(PLAN_CATEGORIES_FILE, categories)
+    return { success: true }
+  } catch (err) {
+    logger.error('plan-categories:delete error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// --- IPC: AI Task Tree -------------------------------------------------------
+
+ipcMain.handle('ai-task:get-tree', async () => {
+  // Backfill itemId into index entries that are missing it (from runs before this fix)
+  try {
+    let index = await readJSONAsync(TASK_RUNS_INDEX, [])
+    let changed = false
+    for (const entry of index) {
+      if (!entry.itemId) {
+        try {
+          const runFile = path.join(TASK_RUNS_DIR, `${entry.id}.json`)
+          const detail = await readJSONAsync(runFile, null)
+          if (detail?.itemId) {
+            entry.itemId = detail.itemId
+            changed = true
+          }
+        } catch {}
+      }
+    }
+    if (changed) await writeJSONAtomic(TASK_RUNS_INDEX, index)
+  } catch {}
+  return await readJSONAsync(AI_TASK_TREE_FILE, { plans: [] })
+})
+
+ipcMain.handle('ai-task:sync-tree', async (_, payload) => {
+  try {
+    const { planId, planName, categoryId, categoryName, categoryEmoji, itemId, itemType, itemDescription, itemCronExpr, itemCreatedAt } = payload
+    let tree = await readJSONAsync(AI_TASK_TREE_FILE, { plans: [] })
+
+    let planEntry = tree.plans.find(p => p.planId === planId)
+    if (!planEntry) {
+      planEntry = {
+        planId,
+        planName,
+        categoryId: categoryId || null,
+        categoryName: categoryName || null,
+        categoryEmoji: categoryEmoji || null,
+        deletedAt: null,
+        items: [],
+      }
+      tree.plans.push(planEntry)
+    } else {
+      planEntry.planName = planName
+      planEntry.categoryId = categoryId || null
+      planEntry.categoryName = categoryName || null
+      planEntry.categoryEmoji = categoryEmoji || null
+    }
+
+    if (!planEntry.items.find(i => i.itemId === itemId)) {
+      const itemObj = {
+        itemId,
+        type: itemType,
+        description: itemDescription,
+        createdAt: itemCreatedAt || new Date().toISOString(),
+        deletedAt: null,
+      }
+      if (itemCronExpr) itemObj.cronExpr = itemCronExpr
+      planEntry.items.push(itemObj)
+    }
+
+    await writeJSONAtomic(AI_TASK_TREE_FILE, tree)
+    return { success: true }
+  } catch (err) {
+    logger.error('ai-task:sync-tree error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// --- IPC: Plaza -------------------------------------------------------------
+
+ipcMain.handle('plaza:get-topics', async () => readJSONAsync(PLAZA_TOPICS_FILE, []))
+
+ipcMain.handle('plaza:save-topics', async (_, data) => {
+  try {
+    await writeJSONAtomic(PLAZA_TOPICS_FILE, data)
+    return true
+  } catch (err) {
+    logger.error('plaza:save-topics error', err.message)
+    return false
+  }
+})
+
+ipcMain.handle('plaza:get-sessions', async (_, topicId) => {
+  try {
+    const dir = path.join(PLAZA_SESSIONS_DIR, topicId)
+    if (!fs.existsSync(dir)) return []
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'))
+    const sessions = []
+    for (const f of files) {
+      const s = await readJSONAsync(path.join(dir, f), null)
+      if (s) sessions.push(s)
+    }
+    return sessions
+  } catch (err) {
+    logger.error('plaza:get-sessions error', err.message)
+    return []
+  }
+})
+
+ipcMain.handle('plaza:save-session', async (_, session) => {
+  try {
+    const dir = path.join(PLAZA_SESSIONS_DIR, session.topicId)
+    fs.mkdirSync(dir, { recursive: true })
+    await writeJSONAtomic(path.join(dir, `${session.id}.json`), session)
+    return true
+  } catch (err) {
+    logger.error('plaza:save-session error', err.message)
+    return false
+  }
+})
+
+ipcMain.handle('plaza:get-session-by-id', async (_, sessionId) => {
+  try {
+    if (!fs.existsSync(PLAZA_SESSIONS_DIR)) return null
+    const dirs = fs.readdirSync(PLAZA_SESSIONS_DIR, { withFileTypes: true }).filter(x => x.isDirectory())
+    for (const d of dirs) {
+      const file = path.join(PLAZA_SESSIONS_DIR, d.name, `${sessionId}.json`)
+      if (fs.existsSync(file)) return readJSONAsync(file, null)
+    }
+    return null
+  } catch (err) {
+    logger.error('plaza:get-session-by-id error', err.message)
+    return null
+  }
+})
+
+// Utility model: generate 10 debate topics
+ipcMain.handle('plaza:generate-topics', async (_, { config, language }) => {
+  try {
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) {
+      return { success: false, error: 'Utility model not configured.' }
+    }
+    const providerCfg = config[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
+      return { success: false, error: `Provider "${um.provider}" missing apiKey or baseURL.` }
+    }
+    const lang = language === 'zh' ? 'Chinese (Simplified)' : 'English'
+    const langExample = language === 'zh'
+      ? '[{"title":"时间旅行悖论能被解决吗？","description":"探讨祖父悖论、因果循环等时间旅行难题是否存在合理的解决方案。"}]'
+      : '[{"title":"Can time travel paradoxes be resolved?","description":"Exploring whether paradoxes like the grandfather problem have coherent solutions."}]'
+    const prompt = `Generate exactly 10 creative and surprising debate topics for a multi-agent discussion arena.
+Topics MUST be imaginative, thought-provoking, and span wildly different domains. Do NOT focus on AI or technology — be creative!
+Include topics from: philosophy, history, mythology, food & culture, space, biology, psychology, art, music, sports, literature, hypothetical scenarios, moral dilemmas, everyday life paradoxes, weird science, and "what if" thought experiments.
+Each topic should spark genuine disagreement and interesting arguments from different perspectives.
+Topics must be non-political, non-discriminatory, and suitable for intellectual fun.
+All titles and descriptions MUST be written in ${lang}.
+
+Return ONLY a JSON array with objects containing "title" (short, max 60 chars) and "description" (1-2 sentences, max 150 chars).
+Example: ${langExample}`
+
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    let text
+    if (isOpenAI) {
+      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const cfg = {
+        openaiApiKey: providerCfg.apiKey,
+        openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+        _resolvedProvider: 'openai',
+        defaultProvider: 'openai',
+        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+      }
+      const client = new OpenAIClient(cfg).getClient()
+      const response = await client.chat.completions.create({
+        model: um.model, max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+      })
+      text = response.choices?.[0]?.message?.content || ''
+      accumulateUtilityUsage(um.model, um.provider, response.usage?.prompt_tokens || 0, response.usage?.completion_tokens || 0).catch(() => {})
+    } else {
+      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const cfg = { apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model }
+      const client = new AnthropicClient(cfg).getClient()
+      const response = await client.messages.create({
+        model: um.model, max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+      })
+      text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+      accumulateUtilityUsage(um.model, um.provider, response.usage?.input_tokens || 0, response.usage?.output_tokens || 0).catch(() => {})
+    }
+    // Parse JSON from response (handle markdown code fences)
+    const jsonMatch = text.match(/\[[\s\S]*\]/)
+    if (!jsonMatch) return { success: false, error: 'Failed to parse topics from AI response.' }
+    const topics = JSON.parse(jsonMatch[0])
+    return { success: true, topics }
+  } catch (err) {
+    logger.error('plaza:generate-topics error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// Utility model: description → single topic
+ipcMain.handle('plaza:generate-from-desc', async (_, { description, config }) => {
+  try {
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) return { success: false, error: 'Utility model not configured.' }
+    const providerCfg = config[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) return { success: false, error: `Provider "${um.provider}" missing credentials.` }
+
+    const prompt = `Given this description of a debate topic idea: "${description}"
+
+Create a well-formed debate topic. IMPORTANT: Write the title and description in the SAME LANGUAGE as the user's input above. If the input is in Chinese, respond in Chinese. If in English, respond in English. Match the language exactly.
+
+Return ONLY a JSON object with:
+- "title": concise debate topic title (max 60 chars, same language as input)
+- "description": 1-2 sentence description (max 150 chars, same language as input)
+
+Example (English input): {"title":"Can machines truly think?","description":"Examining whether artificial intelligence possesses genuine consciousness or merely simulates it."}
+Example (Chinese input): {"title":"机器真的能思考吗？","description":"探讨人工智能是否具有真正的意识，还是仅仅模拟思考的过程。"}`
+
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    let text
+    if (isOpenAI) {
+      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const cfg = {
+        openaiApiKey: providerCfg.apiKey,
+        openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model, _resolvedProvider: 'openai', defaultProvider: 'openai',
+        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+      }
+      const client = new OpenAIClient(cfg).getClient()
+      const response = await client.chat.completions.create({
+        model: um.model, max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }],
+      })
+      text = response.choices?.[0]?.message?.content || ''
+      accumulateUtilityUsage(um.model, um.provider, response.usage?.prompt_tokens || 0, response.usage?.completion_tokens || 0).catch(() => {})
+    } else {
+      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const cfg = { apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model }
+      const client = new AnthropicClient(cfg).getClient()
+      const response = await client.messages.create({
+        model: um.model, max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }],
+      })
+      text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+      accumulateUtilityUsage(um.model, um.provider, response.usage?.input_tokens || 0, response.usage?.output_tokens || 0).catch(() => {})
+    }
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) return { success: false, error: 'Failed to parse topic from AI response.' }
+    const result = JSON.parse(jsonMatch[0])
+    return { success: true, title: result.title, description: result.description }
+  } catch (err) {
+    logger.error('plaza:generate-from-desc error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// Surprise me: always generate a new topic + select 2-5 random agents
+ipcMain.handle('plaza:surprise-me', async (_, { config, language }) => {
+  try {
+    const agentsData = await readJSONAsync(AGENTS_FILE, { categories: [], agents: [] })
+    const systemAgents = (agentsData.agents || []).filter(a => a.type === 'system')
+    if (systemAgents.length < 2) return { success: false, error: 'Need at least 2 system agents for a discussion.' }
+
+    // Always generate a fresh topic via utility model
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) return { success: false, error: 'Utility model not configured.' }
+    const providerCfg = config[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) return { success: false, error: `Provider "${um.provider}" missing credentials.` }
+
+    const lang = language === 'zh' ? 'Chinese (Simplified)' : 'English'
+    const langExample = language === 'zh'
+      ? '{"title":"如果动物能投票，世界会怎样？","description":"探讨动物拥有投票权后的社会变化和荒诞后果。"}'
+      : '{"title":"What if animals could vote?","description":"Exploring the absurd consequences of granting animals democratic rights."}'
+    const prompt = `Generate 1 creative, surprising, and thought-provoking debate topic.
+It should NOT be about AI, technology, or politics. Be wildly creative — think philosophy, mythology, hypothetical scenarios, moral dilemmas, food culture, art, weird science, "what if" thought experiments, etc.
+All text MUST be written in ${lang}.
+Return ONLY a JSON object: {"title":"... (max 60 chars)","description":"... (1-2 sentences, max 150 chars)"}
+Example: ${langExample}`
+
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    let text
+    if (isOpenAI) {
+      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const cfg = { openaiApiKey: providerCfg.apiKey, openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model, _resolvedProvider: 'openai', defaultProvider: 'openai', ...(um.provider === 'deepseek' ? { _directAuth: true } : {}) }
+      const client = new OpenAIClient(cfg).getClient()
+      const response = await client.chat.completions.create({ model: um.model, max_tokens: 512, messages: [{ role: 'user', content: prompt }] })
+      text = response.choices?.[0]?.message?.content || ''
+      accumulateUtilityUsage(um.model, um.provider, response.usage?.prompt_tokens || 0, response.usage?.completion_tokens || 0).catch(() => {})
+    } else {
+      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const cfg = { apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model }
+      const client = new AnthropicClient(cfg).getClient()
+      const response = await client.messages.create({ model: um.model, max_tokens: 512, messages: [{ role: 'user', content: prompt }] })
+      text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+      accumulateUtilityUsage(um.model, um.provider, response.usage?.input_tokens || 0, response.usage?.output_tokens || 0).catch(() => {})
+    }
+    const match = text.match(/\{[\s\S]*\}/)
+    if (!match) return { success: false, error: 'Could not generate a surprise topic.' }
+    const res = JSON.parse(match[0])
+    const { v4: uuidv4 } = require('uuid')
+    const topic = { id: uuidv4(), title: res.title, description: res.description, isBuiltin: false, createdAt: Date.now(), lastSessionId: null, lastSessionStatus: 'idle' }
+
+    // Pick 2-5 random agents
+    const count = Math.min(systemAgents.length, 2 + Math.floor(Math.random() * 4))
+    const shuffled = [...systemAgents].sort(() => Math.random() - 0.5)
+    const agentIds = shuffled.slice(0, count).map(a => a.id)
+    return { success: true, topic, agentIds }
+  } catch (err) {
+    logger.error('plaza:surprise-me error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// Run a single discussion round
+ipcMain.handle('plaza:run-discussion-round', async (event, { topicId, sessionId, config }) => {
+  try {
+    const sessionFile = (() => {
+      const dir = path.join(PLAZA_SESSIONS_DIR, topicId)
+      return path.join(dir, `${sessionId}.json`)
+    })()
+    let session = await readJSONAsync(sessionFile, null)
+    if (!session) return { success: false, error: 'Session not found.' }
+
+    const topics = await readJSONAsync(PLAZA_TOPICS_FILE, [])
+    const topic = topics.find(t => t.id === topicId)
+    if (!topic) return { success: false, error: 'Topic not found.' }
+
+    const agentsData = await readJSONAsync(AGENTS_FILE, { categories: [], agents: [] })
+    const allAgents = agentsData.agents || []
+    const sessionAgents = session.agentIds.map(id => allAgents.find(a => a.id === id)).filter(Boolean)
+    if (sessionAgents.length < 2) return { success: false, error: 'Not enough agents found.' }
+
+    // Determine next speaker
+    let nextSpeaker
+    if (session.currentRound === 0) {
+      nextSpeaker = sessionAgents[Math.floor(Math.random() * sessionAgents.length)]
+    } else {
+      // Check for @mentions in last message
+      const lastMsg = session.messages[session.messages.length - 1]
+      if (lastMsg) {
+        const mentionedAgent = sessionAgents.find(a => a.id !== lastMsg.agentId && lastMsg.content && lastMsg.content.includes(`@${a.name}`))
+        if (mentionedAgent) {
+          nextSpeaker = mentionedAgent
+        } else {
+          // Round-robin: pick the next agent who didn't speak last
+          const lastIdx = sessionAgents.findIndex(a => a.id === lastMsg.agentId)
+          nextSpeaker = sessionAgents[(lastIdx + 1) % sessionAgents.length]
+        }
+      } else {
+        nextSpeaker = sessionAgents[0]
+      }
+    }
+
+    // Build system prompt
+    const otherNames = sessionAgents.filter(a => a.id !== nextSpeaker.id).map(a => a.name)
+    const plazaPromptAddon = nextSpeaker.plazaStyle?.debatePrompt || ''
+    const sessionLang = session.language === 'zh' ? 'Chinese (Simplified)' : 'English'
+    const systemPrompt = [
+      nextSpeaker.prompt || '',
+      plazaPromptAddon,
+      `\n\nYou are in a Plaza discussion. Topic: "${topic.title}"`,
+      topic.description ? `\n${topic.description}` : '',
+      `\nOther participants: ${otherNames.join(', ')}`,
+      '\nKeep responses focused and under 200 words. You may address another participant with @TheirName to direct the conversation.',
+      `\nIMPORTANT: You MUST respond entirely in ${sessionLang}. All your text must be in ${sessionLang}.`,
+      `\nThis is round ${session.currentRound + 1} of ${session.maxRounds}.`,
+    ].join('')
+
+    // Build messages array
+    const messages = session.messages.map(m => ({
+      role: m.agentId === nextSpeaker.id ? 'assistant' : 'user',
+      content: `[${m.agentName}]: ${m.content}`,
+    }))
+    if (messages.length === 0) {
+      messages.push({ role: 'user', content: `The discussion topic is: "${topic.title}" — ${topic.description || ''}. Please share your opening thoughts.` })
+    }
+
+    // Build agent config
+    const { AgentLoop } = require('./agent/agentLoop')
+    const globalCfg = { ...config }
+    delete globalCfg.apiKey; delete globalCfg.baseURL
+    delete globalCfg.openaiApiKey; delete globalCfg.openaiBaseURL
+    delete globalCfg._directAuth; delete globalCfg._resolvedProvider
+
+    // Get provider from new providers array or legacy config
+    const providerId = nextSpeaker.providerId || config.defaultProvider || 'anthropic'
+    
+    // Try to find provider in new providers array first
+    let providerConfig = null
+    if (config.providers && Array.isArray(config.providers)) {
+      // If providerId looks like a UUID, find by id; otherwise find by type
+      providerConfig = config.providers.find(p => 
+        p.id === providerId || p.type === providerId
+      )
+    }
+    
+    if (providerConfig) {
+      // Use new providers array config
+      const isOpenAI = providerConfig.type === 'openai' || providerConfig.type === 'deepseek' || providerConfig.type === 'minimax'
+      
+      globalCfg.provider = {
+        id: providerConfig.id,
+        type: providerConfig.type,
+        name: providerConfig.name,
+        baseURL: providerConfig.baseURL,
+        apiKey: providerConfig.apiKey,
+        model: nextSpeaker.modelId || providerConfig.model || '',
+        settings: providerConfig.settings || {},
+      }
+      
+      if (isOpenAI) {
+        globalCfg._resolvedProvider = 'openai'
+        globalCfg.defaultProvider = 'openai'
+        globalCfg._directAuth = (providerConfig.type === 'deepseek' || providerConfig.type === 'minimax')
+      } else {
+        globalCfg.defaultProvider = providerConfig.type
+        globalCfg._resolvedProvider = providerConfig.type
+      }
+    } else {
+      // Fallback to legacy config structure
+      const provider = providerId
+      if (provider === 'anthropic') {
+        globalCfg.apiKey  = config.anthropic?.apiKey  || ''
+        globalCfg.baseURL = config.anthropic?.baseURL || ''
+      } else if (provider === 'openrouter') {
+        globalCfg.apiKey  = config.openrouter?.apiKey  || ''
+        globalCfg.baseURL = config.openrouter?.baseURL || ''
+      } else if (provider === 'openai') {
+        globalCfg.openaiApiKey  = config.openai?.apiKey  || ''
+        globalCfg.openaiBaseURL = config.openai?.baseURL || ''
+        globalCfg._resolvedProvider = 'openai'
+        globalCfg.defaultProvider   = 'openai'
+      } else if (provider === 'deepseek') {
+        globalCfg.openaiApiKey  = config.deepseek?.apiKey  || ''
+        globalCfg.openaiBaseURL = (config.deepseek?.baseURL || '').replace(/\/+$/, '')
+        globalCfg._resolvedProvider = 'openai'
+        globalCfg._directAuth       = true
+        globalCfg.defaultProvider   = 'openai'
+      }
+    }
+
+    globalCfg.soulsDir      = SOULS_DIR
+    globalCfg.artifactPath  = ''
+    globalCfg.skillsPath    = ''
+    globalCfg.DoCPath       = ''
+    globalCfg.chatPermissionMode = 'allow_all'
+    globalCfg.chatAllowList = []
+
+    let fullText = ''
+    const enableTools = session.agentToolPermissions?.[nextSpeaker.id] === true
+    const loop = new AgentLoop({ ...globalCfg })
+    await loop.run(
+      messages,
+      enableTools ? sessionAgents : [],
+      [],
+      (chunk) => {
+        if (chunk.type === 'text' && chunk.text) {
+          fullText += chunk.text
+          event.sender.send('plaza:chunk', { sessionId, agentId: nextSpeaker.id, agentName: nextSpeaker.name, chunk })
+        }
+      },
+      null,
+      {
+        systemAgentPrompt: systemPrompt,
+        systemAgentId: nextSpeaker.id,
+        userAgentId: '__plaza__',
+        groupChatContext: {
+          agentName: nextSpeaker.name,
+          agentDescription: nextSpeaker.description || '',
+          otherParticipants: otherNames,
+        },
+      },
+      [],
+      [],
+      null
+    )
+
+    // Append message to session
+    const { v4: uuidv4 } = require('uuid')
+    session.messages.push({
+      id: uuidv4(),
+      agentId: nextSpeaker.id,
+      agentName: nextSpeaker.name,
+      content: fullText,
+      round: session.currentRound,
+    })
+    session.currentRound++
+    if (session.status === 'setup') session.status = 'running'
+
+    // Check termination
+    if (session.currentRound >= session.maxRounds) {
+      session.status = 'concluded'
+    }
+
+    await writeJSONAtomic(sessionFile, session)
+    return { success: true, session }
+  } catch (err) {
+    logger.error('plaza:run-discussion-round error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// Memory extraction via utility model
+ipcMain.handle('plaza:extract-memories', async (_, { session, agents, config }) => {
+  try {
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) return { success: false, error: 'Utility model not configured.' }
+    const providerCfg = config[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) return { success: false, error: `Provider "${um.provider}" missing credentials.` }
+
+    const transcript = session.messages.map(m => `[${m.agentName}]: ${m.content}`).join('\n\n')
+    const agentNames = agents.map(a => `"${a.name}" (id: ${a.id})`).join(', ')
+    const memLang = session.language === 'zh' ? 'Chinese (Simplified)' : 'English'
+    const memExample = session.language === 'zh'
+      ? '{"agent-id-1":["认为X很重要","主张应优先考虑Y"]}'
+      : '{"agent-id-1":["Believes X is important","Argues that Y should be prioritized"]}'
+
+    const prompt = `Analyze this multi-agent discussion transcript and extract 2-5 key opinions, insights, or stances for each participant.
+IMPORTANT: All extracted memories MUST be written in ${memLang}.
+
+Participants: ${agentNames}
+
+Transcript:
+${transcript}
+
+Return ONLY a JSON object where keys are agent IDs and values are arrays of short memory strings (1 sentence each, in ${memLang}).
+Example: ${memExample}`
+
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    let text
+    if (isOpenAI) {
+      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const cfg = { openaiApiKey: providerCfg.apiKey, openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model, _resolvedProvider: 'openai', defaultProvider: 'openai', ...(um.provider === 'deepseek' ? { _directAuth: true } : {}) }
+      const client = new OpenAIClient(cfg).getClient()
+      const response = await client.chat.completions.create({ model: um.model, max_tokens: 2048, messages: [{ role: 'user', content: prompt }] })
+      text = response.choices?.[0]?.message?.content || ''
+      accumulateUtilityUsage(um.model, um.provider, response.usage?.prompt_tokens || 0, response.usage?.completion_tokens || 0).catch(() => {})
+    } else {
+      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const cfg = { apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model }
+      const client = new AnthropicClient(cfg).getClient()
+      const response = await client.messages.create({ model: um.model, max_tokens: 2048, messages: [{ role: 'user', content: prompt }] })
+      text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+      accumulateUtilityUsage(um.model, um.provider, response.usage?.input_tokens || 0, response.usage?.output_tokens || 0).catch(() => {})
+    }
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) return { success: false, error: 'Failed to parse memories from AI response.' }
+    const memories = JSON.parse(jsonMatch[0])
+    return { success: true, memories }
+  } catch (err) {
+    logger.error('plaza:extract-memories error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// Generate conclusion summary via utility model
+ipcMain.handle('plaza:generate-conclusion', async (_, { session, topicTitle, agents, config }) => {
+  try {
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) return { success: false, error: 'Utility model not configured.' }
+    const providerCfg = config[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) return { success: false, error: `Provider "${um.provider}" missing credentials.` }
+
+    const transcript = session.messages.map(m => `[${m.agentName}]: ${m.content}`).join('\n\n')
+    const agentNames = agents.map(a => a.name).join(', ')
+
+    const concLang = session.language === 'zh' ? 'Chinese (Simplified)' : 'English'
+    const prompt = `You are summarizing a multi-agent discussion that has concluded.
+Topic: "${topicTitle}"
+Participants: ${agentNames}
+
+Transcript:
+${transcript}
+
+Write a concise conclusion (3-5 sentences) that summarizes:
+1. The key points of agreement and disagreement
+2. The most compelling arguments made
+3. The overall outcome of the discussion
+
+IMPORTANT: You MUST write the entire conclusion in ${concLang}. Every word of your response must be in ${concLang}.
+
+Return ONLY the conclusion text, no JSON, no formatting, just plain text.`
+
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    let text
+    if (isOpenAI) {
+      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const cfg = { openaiApiKey: providerCfg.apiKey, openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model, _resolvedProvider: 'openai', defaultProvider: 'openai', ...(um.provider === 'deepseek' ? { _directAuth: true } : {}) }
+      const client = new OpenAIClient(cfg).getClient()
+      const response = await client.chat.completions.create({ model: um.model, max_tokens: 1024, messages: [{ role: 'user', content: prompt }] })
+      text = response.choices?.[0]?.message?.content || ''
+      accumulateUtilityUsage(um.model, um.provider, response.usage?.prompt_tokens || 0, response.usage?.completion_tokens || 0).catch(() => {})
+    } else {
+      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const cfg = { apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model }
+      const client = new AnthropicClient(cfg).getClient()
+      const response = await client.messages.create({ model: um.model, max_tokens: 1024, messages: [{ role: 'user', content: prompt }] })
+      text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+      accumulateUtilityUsage(um.model, um.provider, response.usage?.input_tokens || 0, response.usage?.output_tokens || 0).catch(() => {})
+    }
+    return { success: true, conclusion: text.trim() }
+  } catch (err) {
+    logger.error('plaza:generate-conclusion error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// Commit memories to soul files
+ipcMain.handle('plaza:commit-memories', async (_, { topicTitle, agentMemories, agentTypes }) => {
+  try {
+    for (const [agentId, memories] of Object.entries(agentMemories)) {
+      if (!memories || memories.length === 0) continue
+      const type = agentTypes?.[agentId] || 'system'
+      const dir = path.join(SOULS_DIR, type)
+      fs.mkdirSync(dir, { recursive: true })
+      const filePath = path.join(dir, `${agentId}.md`)
+      let existing = ''
+      try { existing = fs.readFileSync(filePath, 'utf8') } catch {}
+      const section = `\n\n## Plaza Discussion: ${topicTitle}\n${memories.map(m => `- ${m}`).join('\n')}\n`
+      fs.writeFileSync(filePath, existing + section, 'utf8')
+    }
+    return { success: true }
+  } catch (err) {
+    logger.error('plaza:commit-memories error', err.message)
     return { success: false, error: err.message }
   }
 })
@@ -2130,7 +2927,12 @@ ipcMain.handle('mcp:get-status', () => {
 })
 
 ipcMain.handle('mcp:test-connection', async (event, config) => {
-  const transport = config.url ? `http [${config.url}]` : `stdio [${config.command} ${(config.args || []).join(' ')}]`.trim()
+  if (!config) {
+    return { success: false, error: 'No config provided', tools: [] }
+  }
+  const transport = (config.url || '').trim()
+    ? `http [${config.url}]`
+    : `stdio [${(config.command || '').trim()} ${(config.args || []).join(' ')}]`.trim()
   logger.info(`[MCP test] ${config.name || '(unnamed)'} — ${transport}`)
   try {
     const result = await mcpManager.testConnection(config)

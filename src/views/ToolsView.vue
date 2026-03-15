@@ -6,7 +6,7 @@
       <div style="display:flex; align-items:center; justify-content:space-between;">
         <div>
           <div style="display:flex; align-items:center; gap:0.5rem;">
-            <h1 class="catalog-title">Tools</h1>
+            <h1 class="catalog-title">{{ t('tools.title') }}</h1>
             <span class="catalog-count-badge">{{ toolsStore.tools.length }}</span>
           </div>
           <p class="catalog-subtitle">
@@ -14,7 +14,7 @@
           </p>
         </div>
         <div class="flex items-center gap-2">
-          <AppButton size="icon" @click="refreshTools" :loading="refreshing" title="Refresh">
+          <AppButton size="icon" @click="refreshTools" :loading="refreshing" :title="t('common.refresh')">
             <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </AppButton>
           <AppButton size="icon" @click="openAdd" title="Add Tool">
@@ -31,7 +31,7 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search tools by name, description, or category..."
+          :placeholder="t('tools.searchTools')"
           class="catalog-search-input"
         />
         <span v-if="searchQuery" class="catalog-search-clear" @click="searchQuery = ''">
@@ -413,8 +413,9 @@
     <!-- Confirm Delete Modal -->
     <ConfirmModal
       v-if="showConfirmDelete && editingTool"
-      title="Delete Tool"
-      :message="`Are you sure you want to delete &quot;${editingTool.name}&quot;? This action cannot be undone.`"
+      :visible="showConfirmDelete && editingTool"
+      :title="t('tools.deleteTool')"
+      :message="t('tools.deleteToolConfirm', { name: editingTool.name })"
       confirm-text="Delete"
       confirm-class="danger"
       @confirm="executeDelete"
@@ -430,9 +431,11 @@ import { useToolsStore } from '../stores/tools'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import { useConfigStore } from '../stores/config'
+import { useI18n } from '../i18n/useI18n'
 
 const toolsStore = useToolsStore()
 const configStore = useConfigStore()
+const { t } = useI18n()
 const refreshing = ref(false)
 
 function isToolDefault(toolId) {
@@ -528,9 +531,14 @@ const filteredTools = computed(() => {
 })
 
 const modalTitle = computed(() => {
-  const typeLabels = { http: 'HTTP Tool', code: 'Code Snippet', prompt: 'Prompt Tool', smtp: 'SMTP Email Tool' }
-  const label = typeLabels[form.value.type] || 'Tool'
-  return editingTool.value ? `Edit ${label}` : `Add ${label}`
+  const typeLabels = { 
+    http: t('tools.httpTool'), 
+    code: t('tools.codeSnippet'), 
+    prompt: t('tools.promptTool'), 
+    smtp: t('tools.smtpEmailTool') 
+  }
+  const label = typeLabels[form.value.type] || t('tools.title')
+  return editingTool.value ? `${t('tools.edit')} ${label}` : `${t('tools.add')} ${label}`
 })
 
 const canSave = computed(() => {

@@ -82,7 +82,13 @@ const showModelMenu = ref(false)
 const modelSearch = ref('')
 
 const activeProviderOptions = computed(() =>
-  configStore.activeProviders.map(id => ({ id, label: PROVIDER_LABELS[id] }))
+  configStore.config.providers
+    .filter(p => p.isActive && p.apiKey && p.baseURL)
+    .map(p => ({ 
+      id: p.type,
+      label: p.name,
+      providerId: p.id
+    }))
 )
 
 const modelsLoading = computed(() => {
@@ -111,14 +117,18 @@ function toggleModelMenu() {
   showModelMenu.value = !showModelMenu.value
 }
 
-function selectProvider(id) {
-  emit('update:provider', id)
-  emit('update:model', null)
+function selectProvider(type) {
+  // Find the first active provider with this type
+  const provider = configStore.config.providers.find(p => p.type === type && p.isActive && p.apiKey)
+  if (provider) {
+    emit('update:provider', provider.id)
+    emit('update:model', null)
+  }
   showProviderMenu.value = false
   modelSearch.value = ''
-  if (id === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
-  if (id === 'openai'     && !modelsStore.openaiCached)     modelsStore.fetchOpenAIModels()
-  if (id === 'deepseek'   && !modelsStore.deepseekCached)   modelsStore.fetchDeepSeekModels()
+  if (type === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
+  if (type === 'openai'     && !modelsStore.openaiCached)     modelsStore.fetchOpenAIModels()
+  if (type === 'deepseek'   && !modelsStore.deepseekCached)   modelsStore.fetchDeepSeekModels()
 }
 
 function selectModel(id) {

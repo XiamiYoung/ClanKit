@@ -11,7 +11,7 @@
               <path v-else d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
             </svg>
           </div>
-          <h2 class="wiz-title">{{ editAgent ? 'Edit' : 'New' }} {{ type === 'system' ? 'System' : 'User' }} Agent</h2>
+          <h2 class="wiz-title">{{ editAgent ? t('agents.editAgent') : t('agents.newAgent') }} {{ type === 'system' ? t('agents.systemAgent') : t('agents.userAgent') }}</h2>
         </div>
         <button class="wiz-close-btn" @click="$emit('close')" aria-label="Close">
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -26,21 +26,21 @@
             <div class="wiz-mode-icon">
               <svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
             </div>
-            <span class="wiz-mode-label">Step me through it</span>
-            <span class="wiz-mode-desc">Answer a few questions</span>
+            <span class="wiz-mode-label">{{ t('agents.stepMeThrough') }}</span>
+            <span class="wiz-mode-desc">{{ t('agents.stepMeThroughDesc') }}</span>
           </button>
           <button class="wiz-mode-card" @click="selectMode('describe')">
             <div class="wiz-mode-icon">
               <svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             </div>
-            <span class="wiz-mode-label">Describe it</span>
-            <span class="wiz-mode-desc">You describe, AI builds it</span>
+            <span class="wiz-mode-label">{{ t('agents.describeIt') }}</span>
+            <span class="wiz-mode-desc">{{ t('agents.describeItDesc') }}</span>
           </button>
           <button class="wiz-mode-card" @click="selectMode('random')">
             <div class="wiz-mode-icon">
               <svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.5 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.7l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg>
             </div>
-            <span class="wiz-mode-label">Surprise me</span>
+            <span class="wiz-mode-label">{{ t('agents.surpriseMe') }}</span>
             <span class="wiz-mode-desc">AI picks something interesting</span>
           </button>
         </div>
@@ -49,7 +49,7 @@
       <!-- Generating spinner -->
       <div v-if="generating && !showPreview" class="wiz-generating">
         <div class="wiz-gen-dots"><span></span><span></span><span></span></div>
-        <p class="wiz-gen-label">Generating agent...</p>
+        <p class="wiz-gen-label">{{ t('agents.generating') }}</p>
       </div>
 
       <!-- Chat area (hidden in edit mode when no messages) -->
@@ -80,11 +80,11 @@
               <div v-if="msg.avatarPicker && msg.active" class="wiz-avatar-trigger">
                 <button class="wiz-pick-avatar-btn" @click="showAvatarPicker = true">
                   <svg style="width:20px;height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  Browse Avatars
+                  {{ t('agents.browseAvatars', 'Browse Avatars') }}
                 </button>
                 <span v-if="form.avatar" class="wiz-avatar-preview-inline">
                   <img :src="selectedAvatarDataUri" alt="" style="width:44px;height:44px;border-radius:50%;" />
-                  <span class="wiz-avatar-selected-label">Selected</span>
+                  <span class="wiz-avatar-selected-label">{{ t('common.selected') }}</span>
                 </span>
               </div>
               <!-- Provider combo (system agents only) -->
@@ -185,6 +185,95 @@
             </div>
           </div>
         </div>
+        <!-- Plaza Style (system agents) -->
+        <div v-if="type === 'system'" class="wiz-preview-config" style="margin-bottom:0.75rem;">
+          <div class="wpc-section" style="margin-bottom:0;">
+            <div class="wpc-label" @click="plazaExpanded = !plazaExpanded" style="cursor:pointer;user-select:none;">
+              <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M3 10h18M3 7l9-4 9 4M4 10v11M20 10v11M8 10v11M12 10v11M16 10v11"/></svg>
+              Plaza Style
+              <svg style="width:10px;height:10px;margin-left:auto;transition:transform 0.15s;" :style="{ transform: plazaExpanded ? 'rotate(180deg)' : '' }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div v-if="plazaExpanded" style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.5rem;">
+              <div class="wpc-btn-row" style="flex-wrap:wrap;">
+                <button
+                  v-for="p in PLAZA_PERSONALITIES"
+                  :key="p.value"
+                  class="wpc-btn"
+                  :class="{ active: form.plazaPersonality === p.value }"
+                  @click="form.plazaPersonality = form.plazaPersonality === p.value ? '' : p.value"
+                >{{ p.label }}</button>
+              </div>
+              <textarea
+                v-model="form.plazaDebatePrompt"
+                class="wiz-preview-textarea"
+                rows="2"
+                placeholder="Optional debate prompt addendum (e.g. 'You tend to question assumptions...')"
+                style="min-height:3rem;"
+              ></textarea>
+            </div>
+          </div>
+        </div>
+        <!-- Capabilities: Tools, Skills, MCP, Knowledge -->
+        <div v-if="type === 'system'" class="wiz-preview-config" style="margin-bottom:0.75rem;">
+          <div class="wpc-section" style="margin-bottom:0;">
+            <div class="wpc-label">
+              <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Capabilities
+            </div>
+            <!-- Tab buttons -->
+            <div class="cap-tab-buttons">
+              <button
+                v-for="tab in capTabOptions"
+                :key="tab.key"
+                class="cap-tab-btn"
+                :class="{ active: activeCapTab === tab.key }"
+                @click="activeCapTab = tab.key"
+              >
+                {{ tab.label }}
+                <span v-if="getCapCount(tab.key) > 0" class="cap-badge">{{ getCapCount(tab.key) }}</span>
+              </button>
+            </div>
+            <!-- Tab content -->
+            <div class="cap-tab-content">
+              <!-- Tools -->
+              <div v-if="activeCapTab === 'tools'" class="cap-items">
+                <div v-if="availableTools.length === 0" class="cap-empty">No tools available</div>
+                <label v-for="t in availableTools" :key="t.id" class="cap-item">
+                  <input type="checkbox" :value="t.id" v-model="form.requiredToolIds" />
+                  <span class="cap-item-name">{{ t.name }}</span>
+                  <span class="cap-item-desc">{{ t.description || t.category || '' }}</span>
+                </label>
+              </div>
+              <!-- Skills -->
+              <div v-if="activeCapTab === 'skills'" class="cap-items">
+                <div v-if="availableSkills.length === 0" class="cap-empty">No skills available</div>
+                <label v-for="s in availableSkills" :key="s.id" class="cap-item">
+                  <input type="checkbox" :value="s.id" v-model="form.requiredSkillIds" />
+                  <span class="cap-item-name">{{ s.name }}</span>
+                  <span class="cap-item-desc">{{ s.summary || '' }}</span>
+                </label>
+              </div>
+              <!-- MCP Servers -->
+              <div v-if="activeCapTab === 'mcp'" class="cap-items">
+                <div v-if="availableMcpServers.length === 0" class="cap-empty">No MCP servers configured</div>
+                <label v-for="m in availableMcpServers" :key="m.id" class="cap-item">
+                  <input type="checkbox" :value="m.id" v-model="form.requiredMcpServerIds" />
+                  <span class="cap-item-name">{{ m.name }}</span>
+                  <span class="cap-item-desc">{{ m.description || '' }}</span>
+                </label>
+              </div>
+              <!-- Knowledge -->
+              <div v-if="activeCapTab === 'knowledge'" class="cap-items">
+                <div v-if="availableKnowledgeBases.length === 0" class="cap-empty">No knowledge bases configured</div>
+                <label v-for="k in availableKnowledgeBases" :key="k.id" class="cap-item">
+                  <input type="checkbox" :value="k.id" v-model="form.requiredKnowledgeBaseIds" />
+                  <span class="cap-item-name">{{ k.name }}</span>
+                  <span class="cap-item-desc">{{ k.description || '' }}</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
         <!-- Generated prompt -->
         <div class="wiz-preview-prompt">
           <label class="wiz-preview-label">Generated prompt (editable)</label>
@@ -238,7 +327,7 @@
               @click="generateAgentFromAI(rewriteText, true)"
             >
               <svg v-if="!generating" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8"/></svg>
-              {{ generating ? 'Generating...' : 'Generate' }}
+              {{ generating ? t('agents.generating') : t('common.create') }}
             </AppButton>
             <AppButton
               size="compact"
@@ -278,10 +367,17 @@ import { ref, reactive, nextTick, computed, onMounted } from 'vue'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import { useModelsStore } from '../../stores/models'
+import { useToolsStore } from '../../stores/tools'
+import { useSkillsStore } from '../../stores/skills'
+import { useMcpStore } from '../../stores/mcp'
+import { useKnowledgeStore } from '../../stores/knowledge'
 import { getAvatarDataUri } from './agentAvatars'
 import AvatarPicker from './AvatarPicker.vue'
 import AppButton from '../common/AppButton.vue'
 import ProviderModelPicker from '../common/ProviderModelPicker.vue'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   type: { type: String, required: true },
@@ -292,6 +388,10 @@ const emit = defineEmits(['close', 'saved'])
 const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 const modelsStore = useModelsStore()
+const toolsStore = useToolsStore()
+const skillsStore = useSkillsStore()
+const mcpStore = useMcpStore()
+const knowledgeStore = useKnowledgeStore()
 
 
 const chatEl = ref(null)
@@ -312,7 +412,47 @@ const form = reactive({
   providerId: 'anthropic',
   modelId: '',
   voiceId: 'alloy',
+  plazaPersonality: '',
+  plazaDebatePrompt: '',
+  // Capability selections
+  requiredToolIds: [],
+  requiredSkillIds: [],
+  requiredMcpServerIds: [],
+  requiredKnowledgeBaseIds: [],
 })
+
+const plazaExpanded = ref(false)
+
+// Capability tabs
+const activeCapTab = ref('tools')
+
+const capTabOptions = [
+  { key: 'tools', label: 'Tools', icon: 'wrench' },
+  { key: 'skills', label: 'Skills', icon: 'book' },
+  { key: 'mcp', label: 'MCP Servers', icon: 'server' },
+  { key: 'knowledge', label: 'Knowledge', icon: 'database' },
+]
+
+const availableTools = computed(() => toolsStore.tools || [])
+const availableSkills = computed(() => skillsStore.skills || [])
+const availableMcpServers = computed(() => mcpStore.servers || [])
+const availableKnowledgeBases = computed(() => {
+  // Use indexConfigs as knowledge bases
+  const configs = knowledgeStore.indexConfigs || {}
+  return Object.entries(configs).map(([name, cfg]) => ({
+    id: name,
+    name: name,
+    description: cfg.description || (cfg.enabled ? 'Enabled' : 'Disabled')
+  }))
+})
+
+const PLAZA_PERSONALITIES = [
+  { value: 'analytical', label: 'Analytical' },
+  { value: 'contrarian', label: 'Contrarian' },
+  { value: 'pragmatic',  label: 'Pragmatic'  },
+  { value: 'idealist',   label: 'Idealist'   },
+  { value: 'devil-advocate', label: "Devil's Advocate" },
+]
 
 const voiceOptions = [
   { value: 'alloy',   label: 'Alloy',   desc: 'Neutral, balanced' },
@@ -671,12 +811,18 @@ async function generateAgentFromAI(description, isRewrite) {
   aiError.value = ''
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
+    const appLang = configStore.config.language || 'en'
+    const isZh = appLang.startsWith('zh')
+    const langInstruction = isZh
+      ? '请用中文回复。'
+      : 'Reply in the same language as the user.'
+
     const descLine = description
       ? `The user wants a agent described as: "${description}"\n\n`
       : 'Generate a completely random, creative, and surprising agent. Be imaginative — pick something unexpected.\n\n'
 
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `${descLine}Create a detailed AI agent character. Be specific and creative. It can be a fictional character, historical figure, professional archetype, mythological being, movie/TV character, or anything interesting.\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"character name","role":"brief role or identity (5-10 words)","description":"one sentence who they are (max 15 words)","prompt":"300-500 word character prompt — start with 'You are [name]...', include: who they are, how they speak day-to-day, their agentlity quirks, what they genuinely care about, what annoys them, their background. Make them feel like a real person or character — NOT an AI assistant. No \\"Certainly!\\", no formal helper voice."}\n\nIMPORTANT: the prompt field must make the character feel authentic and human, with real agentlity.`,
+      prompt: `${langInstruction}\n\n${descLine}Create a detailed AI agent character. Be specific and creative. It can be a fictional character, historical figure, professional archetype, mythological being, movie/TV character, or anything interesting.\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"character name","role":"brief role or identity (5-10 words)","description":"one sentence who they are (max 15 words)","prompt":"300-500 word character prompt — start with 'You are [name]...', include: who they are, how they speak day-to-day, their personality quirks, what they genuinely care about, what annoys them, their background. Make them feel like a real person or character — NOT an AI assistant. No \\"Certainly!\\", no formal helper voice."}\n\nIMPORTANT: the prompt field must make the character feel authentic and human, with real personality.`,
       config,
     })
 
@@ -752,6 +898,14 @@ async function save() {
       providerId: form.providerId || null,
       modelId: form.modelId || null,
       voiceId: form.voiceId || null,
+      plazaStyle: (form.plazaPersonality || form.plazaDebatePrompt)
+        ? { personality: form.plazaPersonality, debatePrompt: form.plazaDebatePrompt }
+        : undefined,
+      // Capabilities
+      requiredToolIds: form.requiredToolIds || [],
+      requiredSkillIds: form.requiredSkillIds || [],
+      requiredMcpServerIds: form.requiredMcpServerIds || [],
+      requiredKnowledgeBaseIds: form.requiredKnowledgeBaseIds || [],
     }
     await agentsStore.saveAgent(agent)
     emit('saved')
@@ -773,10 +927,28 @@ onMounted(() => {
     form.providerId = props.editAgent.providerId || 'anthropic'
     form.modelId = props.editAgent.modelId || ''
     form.voiceId = props.editAgent.voiceId || 'alloy'
+    form.plazaPersonality = props.editAgent?.plazaStyle?.personality || ''
+    form.plazaDebatePrompt = props.editAgent?.plazaStyle?.debatePrompt || ''
+    // Load capabilities
+    form.requiredToolIds = props.editAgent.requiredToolIds || []
+    form.requiredSkillIds = props.editAgent.requiredSkillIds || []
+    form.requiredMcpServerIds = props.editAgent.requiredMcpServerIds || []
+    form.requiredKnowledgeBaseIds = props.editAgent.requiredKnowledgeBaseIds || []
     showPreview.value = true
   }
   // New agent: show mode picker — advanceConversation() called by selectMode('guided')
 })
+
+// Helper to get count for each capability tab
+function getCapCount(tabKey) {
+  switch (tabKey) {
+    case 'tools': return form.requiredToolIds.length
+    case 'skills': return form.requiredSkillIds.length
+    case 'mcp': return form.requiredMcpServerIds.length
+    case 'knowledge': return form.requiredKnowledgeBaseIds.length
+    default: return 0
+  }
+}
 </script>
 
 <style scoped>
@@ -1371,6 +1543,100 @@ onMounted(() => {
 .wiz-preview-body :deep(.combo-option:hover .combo-option-name),
 .wiz-chat :deep(.combo-option:hover .combo-option-name) {
   color: #FFFFFF;
+}
+
+/* -- Capability tabs ---------------------------------------------------------- */
+.cap-tab-buttons {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+.cap-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  color: #FFFFFF;
+  background: transparent;
+  border: 1px solid #374151;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cap-tab-btn:hover {
+  background: #1F2937;
+  color: #FFFFFF;
+}
+.cap-tab-btn.active {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  border-color: transparent;
+}
+.cap-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: #374151;
+  color: #FFFFFF;
+  border-radius: 0.5625rem;
+}
+.cap-tab-btn.active .cap-badge {
+  background: rgba(255, 255, 255, 0.2);
+}
+.cap-tab-content {
+  max-height: 12rem;
+  overflow-y: auto;
+  border: 1px solid #374151;
+  border-radius: 0.625rem;
+  background: #111827;
+}
+.cap-items {
+  display: flex;
+  flex-direction: column;
+}
+.cap-empty {
+  padding: 1rem;
+  text-align: center;
+  color: #6B7280;
+  font-size: var(--fs-secondary);
+}
+.cap-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid #1F2937;
+}
+.cap-item:last-child {
+  border-bottom: none;
+}
+.cap-item:hover {
+  background: #1F2937;
+}
+.cap-item input[type="checkbox"] {
+  margin-top: 0.25rem;
+  width: 1rem;
+  height: 1rem;
+  accent-color: #3B82F6;
+}
+.cap-item-name {
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  color: #FFFFFF;
+}
+.cap-item-desc {
+  font-size: var(--fs-caption);
+  color: #9CA3AF;
+  line-height: 1.4;
 }
 
 @media (prefers-reduced-motion: reduce) {

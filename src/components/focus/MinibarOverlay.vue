@@ -9,7 +9,7 @@
       <MinibarContent />
 
       <!-- Exit -->
-      <button class="minibar-exit" @click.stop="exit" title="Exit minibar">
+      <button class="minibar-exit" @click.stop="exit" :title="t('titlebar.exitMinibar')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
@@ -24,9 +24,11 @@
 <script setup>
 import { ref, watch, nextTick, onUnmounted } from 'vue'
 import { useFocusModeStore } from '../../stores/focusMode'
+import { useI18n } from '../../i18n/useI18n'
 import MinibarContent from './MinibarContent.vue'
 
 const focusModeStore = useFocusModeStore()
+const { t } = useI18n()
 const barEl = ref(null)
 const MIN_BAR_W = 200
 let WINDOW_H = 48
@@ -39,7 +41,8 @@ watch(() => focusModeStore.isMinibarMode, async (val) => {
     const rect = barEl.value?.getBoundingClientRect()
     const barH = rect?.height ?? 40
     WINDOW_H = barH + INSET * 2
-    window.electronAPI?.window?.setMinibar({ enable: true, height: WINDOW_H })
+    const defaultW = Math.round(window.innerWidth / 3)
+    window.electronAPI?.window?.setMinibar({ enable: true, width: defaultW, height: WINDOW_H })
   }
 }, { immediate: true })
 
@@ -51,7 +54,8 @@ let _resizeRafPending = false
 function startResize(e) {
   const el = e.currentTarget
   el.setPointerCapture(e.pointerId)
-  _resizeStart = { el, screenX: e.screenX, barW: barEl.value?.getBoundingClientRect().width ?? 230 }
+  const currentW = barEl.value?.getBoundingClientRect().width
+  _resizeStart = { el, screenX: e.screenX, barW: currentW ?? Math.round(window.innerWidth / 3) }
   _latestScreenX = e.screenX
   el.addEventListener('pointermove', onResizeMove)
   el.addEventListener('pointerup', onResizeEnd)

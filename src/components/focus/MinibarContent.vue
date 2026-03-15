@@ -12,11 +12,11 @@
             <line x1="8" y1="23" x2="16" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
         </div>
-        <span class="mbc-call-name">{{ voiceStore.activeAgentName || 'Call' }}</span>
+        <span class="mbc-call-name">{{ voiceStore.activeAgentName || t('minibar.call') }}</span>
         <span class="mbc-call-status">
-          {{ voiceStore.status === 'speaking' ? 'speaking' : voiceStore.status === 'processing' ? 'thinking' : 'listening' }}
+          {{ voiceStore.status === 'speaking' ? t('minibar.speaking') : voiceStore.status === 'processing' ? t('minibar.thinking') : t('minibar.listening') }}
         </span>
-        <button class="mbc-call-end" @click.stop="endCall" title="End call">
+        <button class="mbc-call-end" @click.stop="endCall" :title="t('minibar.endCall')">
           <svg viewBox="0 0 24 24" fill="currentColor" style="width:9px;height:9px;">
             <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24 11.47 11.47 0 0 0 3.58.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.47 11.47 0 0 0 .57 3.58 1 1 0 0 1-.25 1.02z"/>
           </svg>
@@ -80,7 +80,7 @@
           </div>
         </div>
       </template>
-      <span v-else class="mbc-ticker-idle">No recent activity</span>
+      <span v-else class="mbc-ticker-idle">{{ t('minibar.noRecentActivity') }}</span>
     </div>
 
     <!-- ── Compose ────────────────────────────────────── -->
@@ -89,11 +89,11 @@
         ref="composeInputRef"
         v-model="composeText"
         class="mbc-compose-input"
-        placeholder="Send a message…"
+        :placeholder="t('minibar.sendMessagePlaceholder')"
         @keydown.enter.exact.prevent="submitCompose"
         @keydown.escape="closeCompose"
       />
-      <button class="mbc-compose-send" :disabled="!composeText.trim()" @click.stop="submitCompose" title="Send (Enter)">
+      <button class="mbc-compose-send" :disabled="!composeText.trim()" @click.stop="submitCompose" :title="t('minibar.sendEnter')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;">
           <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
         </svg>
@@ -103,7 +103,7 @@
     <div class="mbc-sep" />
 
     <!-- ── Compose toggle ─────────────────────────────── -->
-    <button class="mbc-compose-btn" :class="{ active: showCompose }" @click.stop="toggleCompose" title="Quick message">
+    <button class="mbc-compose-btn" :class="{ active: showCompose }" @click.stop="toggleCompose" :title="t('minibar.quickMessage')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -117,7 +117,7 @@
         v-if="chatKitVisible && !isMinibarMode"
         class="mbc-toolkit"
         :style="{ top: chatKitPos.top + 'px', left: chatKitPos.left + 'px' }"
-        @mouseenter="() => clearTimeout(chatKitHideTimer)"
+        @mouseenter="showChatKit"
         @mouseleave="hideChatKit"
       >
         <div class="mbc-kit-header">
@@ -146,7 +146,7 @@
         v-if="planKitVisible && !isMinibarMode"
         class="mbc-toolkit"
         :style="{ top: planKitPos.top + 'px', left: planKitPos.left + 'px' }"
-        @mouseenter="() => clearTimeout(planKitHideTimer)"
+        @mouseenter="showPlanKit"
         @mouseleave="hidePlanKit"
       >
         <div class="mbc-kit-header">
@@ -191,6 +191,7 @@ import { useAgentsStore } from '../../stores/agents'
 import { useVoiceStore } from '../../stores/voice'
 import { useTasksStore } from '../../stores/tasks'
 import { useFocusModeStore } from '../../stores/focusMode'
+import { useI18n } from '../../i18n/useI18n'
 
 const router = useRouter()
 const chatsStore = useChatsStore()
@@ -198,6 +199,7 @@ const agentsStore = useAgentsStore()
 const voiceStore = useVoiceStore()
 const tasksStore = useTasksStore()
 const focusModeStore = useFocusModeStore()
+const { t } = useI18n()
 const isMinibarMode = computed(() => focusModeStore.isMinibarMode)
 
 if (!agentsStore.agents.length) agentsStore.loadAgents()

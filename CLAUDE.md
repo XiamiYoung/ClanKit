@@ -15,6 +15,63 @@ ClankAI is a multi-LLM desktop chat application built with **Electron + Vue 3 + 
 - **3D Viewer:** Babylon.js (model preview in chat)
 - **Avatars:** DiceBear Avataaars
 - **IDs:** `uuid` v9
+- **i18n:** Custom lightweight solution (`src/i18n/`)
+
+## i18n 多语言支持 (Prerequisite for All Development)
+
+**所有新功能开发必须支持多语言。** 这不是可选特性，而是架构前提。
+
+### 配置层
+
+- 语言设置存储在 `config.json` 的 `language` 字段 (`'en'` | `'zh'`)
+- 通过 `configStore.language` 访问（computed，自动响应配置变化）
+- 语言变更立即生效，无需重启
+
+### 翻译文件结构
+
+```
+src/i18n/
+├── index.js      # 翻译词条对象 (en, zh)
+└── useI18n.js    # composable: useI18n() 返回 { t, locale }
+```
+
+### 使用方式
+
+```vue
+<script setup>
+import { useI18n } from '../i18n/useI18n'
+
+const { t, locale } = useI18n()
+</script>
+
+<template>
+  <button>{{ t('common.save') }}</button>
+  <span>{{ t('nav.chats') }}</span>
+</template>
+```
+
+### 词条命名规范
+
+- `app.*` - 应用级（名称、标语）
+- `nav.*` - 导航项
+- `common.*` - 通用按钮/标签（Save, Cancel, Delete, Add, Search 等）
+- `config.*` - 配置页面
+- `agents.*` - 智能体相关
+- `chats.*` - 对话相关
+- `skills.*`, `knowledge.*`, `mcp.*`, `tools.*` - 各功能模块
+
+### AI 语言
+
+- `config.language` 作为 AI 的**默认语言**
+- 创建新 agent 时，name、description 等字段应使用当前语言生成
+- 对话级别可覆盖：`chat.languageOverride` 允许单对话内切换 AI 语言
+
+### 迁移指南
+
+现有硬编码文本需要逐个改造为 `t('key')` 调用。优先处理：
+1. 高频使用组件（NavItem, AppButton, 表单标签）
+2. 主要页面（ConfigView, AgentsView, ChatsView）
+3. 低频组件后续处理
 
 ## Repository Structure
 

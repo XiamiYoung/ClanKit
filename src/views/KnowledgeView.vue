@@ -6,7 +6,7 @@
       <div class="knowledge-header-top">
         <div>
           <div style="display:flex; align-items:center; gap:0.5rem;">
-            <h1 class="knowledge-title">AI Knowledge</h1>
+            <h1 class="knowledge-title">{{ t('knowledge.title') }}</h1>
             <span class="catalog-count-badge">{{ knowledgeStore.indexes.length }}</span>
           </div>
           <p class="knowledge-subtitle">
@@ -14,7 +14,7 @@
           </p>
         </div>
         <div class="header-actions">
-          <AppButton size="icon" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing" title="Refresh">
+          <AppButton size="icon" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing" :title="t('common.refresh')">
             <svg v-if="!isRefreshing" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="23 4 23 10 17 10"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -60,7 +60,7 @@
               <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
             </svg>
           </div>
-          <h2 class="empty-title">{{ !hasApiKey ? 'Configure API Key' : 'Connecting...' }}</h2>
+          <h2 class="empty-title">{{ !hasApiKey ? t('knowledge.configureApiKey') : t('knowledge.connecting') }}</h2>
           <p class="empty-desc">
             {{ !hasApiKey ? 'Add your Pinecone API key in Configuration to get started.' : 'Establishing connection to Pinecone...' }}
           </p>
@@ -333,7 +333,7 @@
                   <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
                 </svg>
               </div>
-              <h2 class="modal-title">Document Summary</h2>
+              <h2 class="modal-title">{{ t('knowledge.documentSummary') }}</h2>
             </div>
             <button class="modal-close" @click="inspectDoc = null">
               <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -388,8 +388,9 @@
     <!-- Confirm Delete Source Modal -->
     <ConfirmModal
       v-if="deleteSourceTarget"
-      title="Delete Source"
-      :message="`Are you sure you want to delete &quot;${deleteSourceTarget.name}&quot; from this index? This removes all vector embeddings for this source file.`"
+      :visible="!!deleteSourceTarget"
+      :title="t('knowledge.deleteSource')"
+      :message="t('knowledge.deleteSourceConfirm', { name: deleteSourceTarget.name })"
       confirm-text="Delete"
       confirm-class="primary"
       :loading="isDeletingSource"
@@ -409,10 +410,12 @@ import { useConfigStore } from '../stores/config'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import ComboBox from '../components/common/ComboBox.vue'
+import { useI18n } from '../i18n/useI18n'
 
 const knowledgeStore = useKnowledgeStore()
 const modelsStore = useModelsStore()
 const configStore = useConfigStore()
+const { t } = useI18n()
 
 onMounted(async () => {
   if (knowledgeStore.connectionStatus === 'disconnected') {

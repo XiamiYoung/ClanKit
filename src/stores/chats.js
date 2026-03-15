@@ -3,6 +3,59 @@ import { ref, computed } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { storage } from '../services/storage'
 
+/**
+ * Look up a provider's credentials from config.providers[] by provider type.
+ * Supports new providers[] array structure and legacy flat config.
+ */
+function resolveProviderCreds(cfg, providerType) {
+  if (cfg.providers && Array.isArray(cfg.providers)) {
+    const p = cfg.providers.find(p => p.type === providerType)
+    if (p) return { apiKey: p.apiKey || '', baseURL: p.baseURL || '' }
+  }
+  const legacy = cfg[providerType]
+  if (legacy) return { apiKey: legacy.apiKey || '', baseURL: legacy.baseURL || '' }
+  return { apiKey: '', baseURL: '' }
+}
+
+/** Apply provider credentials to a flat config object (mutates in place). */
+function applyProviderCredsToConfig(cfg, providerType) {
+  const { apiKey, baseURL } = resolveProviderCreds(cfg, providerType)
+  if (providerType === 'anthropic' || providerType === 'openrouter') {
+    cfg.apiKey  = apiKey
+    cfg.baseURL = baseURL
+    delete cfg._directAuth
+    delete cfg.openaiApiKey
+    delete cfg.openaiBaseURL
+    cfg._resolvedProvider = undefined
+    cfg.defaultProvider   = undefined
+  } else if (providerType === 'openai') {
+    cfg.openaiApiKey  = apiKey
+    cfg.openaiBaseURL = baseURL
+    cfg._resolvedProvider = 'openai'
+    cfg.defaultProvider   = 'openai'
+    delete cfg._directAuth
+    delete cfg.apiKey
+    delete cfg.baseURL
+  } else if (providerType === 'deepseek') {
+    cfg.openaiApiKey  = apiKey
+    cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')
+    cfg._resolvedProvider = 'openai'
+    cfg._directAuth       = true
+    cfg.defaultProvider   = 'openai'
+    delete cfg.apiKey
+    delete cfg.baseURL
+  } else {
+    // Generic OpenAI-compatible
+    cfg.openaiApiKey  = apiKey
+    cfg.openaiBaseURL = baseURL
+    cfg._resolvedProvider = 'openai'
+    cfg.defaultProvider   = 'openai'
+    delete cfg._directAuth
+    delete cfg.apiKey
+    delete cfg.baseURL
+  }
+}
+
 export const useChatsStore = defineStore('chats', () => {
   // chatTree holds ChatTreeNode[] — folders and chats in a nested structure
   const chatTree = ref([])
@@ -1016,40 +1069,14 @@ export const useChatsStore = defineStore('chats', () => {
     const chatProvider = sysAgent?.providerId || 'anthropic'
     const cfg = { ...configStore.config }
 
-    if (chatProvider === 'anthropic') {
-      cfg.apiKey = cfg.anthropic?.apiKey || ''; cfg.baseURL = cfg.anthropic?.baseURL || ''
-    } else if (chatProvider === 'openrouter') {
-      cfg.apiKey = cfg.openrouter?.apiKey || ''; cfg.baseURL = cfg.openrouter?.baseURL || ''
-    } else if (chatProvider === 'openai') {
-      cfg.openaiApiKey = cfg.openai?.apiKey || ''; cfg.openaiBaseURL = cfg.openai?.baseURL || ''
-      cfg._resolvedProvider = 'openai'; cfg.defaultProvider = 'openai'
-    } else if (chatProvider === 'deepseek') {
-      cfg.openaiApiKey = cfg.deepseek?.apiKey || ''
-      cfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
-      cfg._resolvedProvider = 'openai'; cfg._directAuth = true; cfg.defaultProvider = 'openai'
-    }
+    applyProviderCredsToConfig(cfg, chatProvider)
 
     // Per-chat model override
     const rawOverride = targetChat.agentModelOverrides?.[sysAgentId]
     const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
     const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
     if (overrideProvider && overrideProvider !== chatProvider) {
-      if (overrideProvider === 'anthropic') {
-        cfg.apiKey = cfg.anthropic?.apiKey || ''; cfg.baseURL = cfg.anthropic?.baseURL || ''
-        delete cfg._directAuth; delete cfg.openaiApiKey; delete cfg.openaiBaseURL
-        cfg._resolvedProvider = undefined; cfg.defaultProvider = undefined
-      } else if (overrideProvider === 'openrouter') {
-        cfg.apiKey = cfg.openrouter?.apiKey || ''; cfg.baseURL = cfg.openrouter?.baseURL || ''
-        delete cfg._directAuth; delete cfg.openaiApiKey; delete cfg.openaiBaseURL
-        cfg._resolvedProvider = undefined; cfg.defaultProvider = undefined
-      } else if (overrideProvider === 'openai') {
-        cfg.openaiApiKey = cfg.openai?.apiKey || ''; cfg.openaiBaseURL = cfg.openai?.baseURL || ''
-        cfg._resolvedProvider = 'openai'; cfg.defaultProvider = 'openai'; delete cfg._directAuth
-      } else if (overrideProvider === 'deepseek') {
-        cfg.openaiApiKey = cfg.deepseek?.apiKey || ''
-        cfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, '')
-        cfg._resolvedProvider = 'openai'; cfg._directAuth = true; cfg.defaultProvider = 'openai'
-      }
+      applyProviderCredsToConfig(cfg, overrideProvider)
     }
     const resolvedModel = overrideModel || sysAgent?.modelId || null
     if (resolvedModel) cfg.customModel = resolvedModel

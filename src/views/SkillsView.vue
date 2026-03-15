@@ -10,7 +10,7 @@
         <div style="display:flex; align-items:center; justify-content:space-between;">
           <div>
             <div style="display:flex; align-items:center; gap:0.5rem;">
-              <h1 style="font-family:'Inter',sans-serif; font-size:var(--fs-page-title); font-weight:700; color:#1A1A1A; margin:0;">Skills</h1>
+              <h1 style="font-family:'Inter',sans-serif; font-size:var(--fs-page-title); font-weight:700; color:#1A1A1A; margin:0;">{{ t('skills.title') }}</h1>
               <span class="catalog-count-badge">{{ filteredSkills.length }}</span>
             </div>
             <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#6B7280; margin:0.25rem 0 0 0;">
@@ -18,7 +18,7 @@
             </p>
           </div>
           <div class="flex items-center gap-2">
-            <AppButton size="icon" @click="refresh" title="Refresh skills">
+            <AppButton size="icon" @click="refresh" :title="t('skills.refreshSkills')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </AppButton>
           </div>
@@ -32,7 +32,7 @@
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search skills by name, description, or content..."
+            :placeholder="t('skills.searchSkills')"
             class="catalog-search-input"
           />
           <span v-if="searchQuery" class="catalog-search-clear" @click="searchQuery = ''">
@@ -91,7 +91,7 @@
             <svg class="mx-auto" style="width:40px;height:40px;color:#9CA3AF;margin-bottom:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
-            <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#6B7280; margin:0 0 0.25rem;">No skills match "{{ searchQuery }}"</p>
+            <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#6B7280; margin:0 0 0.25rem;">{{ t('common.noResults') }} "{{ searchQuery }}"</p>
             <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF; margin:0;">Try a different search term or clear the filter.</p>
           </div>
         </div>
@@ -188,7 +188,7 @@
               style="color:#fff; border:none; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
               @mouseenter="e => e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'"
               @mouseleave="e => e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
-              title="Refresh"
+              :title="t('common.refresh')"
             >
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </button>
@@ -197,7 +197,7 @@
           <!-- File tree -->
           <div class="flex-1 overflow-y-auto py-1.5" style="scrollbar-width:thin;">
             <div v-if="fileTree.length === 0" class="px-4 py-8 text-center">
-              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">No files found</p>
+              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">{{ t('common.noData') }}</p>
             </div>
             <SkillTreeNode
               v-for="node in fileTree"
@@ -373,8 +373,10 @@ import TurndownService from 'turndown'
 import { gfm } from 'turndown-plugin-gfm'
 import { useSkillsStore } from '../stores/skills'
 import { useConfigStore } from '../stores/config'
+import { useI18n } from '../i18n/useI18n'
 import AppButton from '../components/common/AppButton.vue'
 
+const { t } = useI18n()
 const skillsStore = useSkillsStore()
 const configStore = useConfigStore()
 

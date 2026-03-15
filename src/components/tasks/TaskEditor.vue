@@ -9,7 +9,7 @@
             <div class="te-header-icon">
               <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             </div>
-            <span class="te-header-title">{{ isNew ? 'New Task' : 'Edit Task' }}</span>
+            <span class="te-header-title">{{ isNew ? t('tasks.taskEditor.newTask') : t('tasks.taskEditor.editTask') }}</span>
           </div>
           <button class="te-close-btn" @click="cancel">
             <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -24,35 +24,46 @@
 
             <!-- Name + Icon row -->
             <div class="te-field-row">
-              <button class="te-icon-btn" @click="showEmojiPicker = true" title="Change icon">{{ draft.icon }}</button>
+              <button class="te-icon-btn" @click="showEmojiPicker = true" :title="t('tasks.taskEditor.changeIcon')">{{ draft.icon }}</button>
               <EmojiPicker v-if="showEmojiPicker" :current="draft.icon" @select="e => { draft.icon = e; showEmojiPicker = false }" @close="showEmojiPicker = false" />
               <div class="te-field te-field-grow">
-                <label class="te-label">Task name <span class="te-required">*</span></label>
-                <input v-model="draft.name" class="te-input" placeholder="e.g. Send daily report" maxlength="80" />
+                <label class="te-label">{{ t('tasks.taskEditor.taskName') }} <span class="te-required">*</span></label>
+                <input v-model="draft.name" class="te-input" :placeholder="t('tasks.taskEditor.taskName')" maxlength="80" />
               </div>
             </div>
 
             <!-- Description -->
             <div class="te-field">
-              <label class="te-label">Description</label>
-              <input v-model="draft.description" class="te-input" placeholder="What does this task accomplish?" maxlength="200" />
+              <label class="te-label">{{ t('tasks.taskEditor.description') }}</label>
+              <input v-model="draft.description" class="te-input" :placeholder="t('tasks.taskEditor.description')" maxlength="200" />
+            </div>
+
+            <!-- Category -->
+            <div class="te-field">
+              <label class="te-label">{{ t('tasks.taskEditor.category') }}</label>
+              <ComboBox
+                :model-value="draft.categoryId"
+                :options="props.taskCategories.map(c => ({ id: c.id, name: c.emoji + ' ' + c.name }))"
+                :placeholder="t('tasks.taskEditor.uncategorized')"
+                @update:model-value="draft.categoryId = $event"
+              />
             </div>
 
             <!-- Prompt -->
             <div class="te-field">
               <div class="te-label-row">
                 <label class="te-label">
-                  Prompt <span class="te-required">*</span>
-                  <span class="te-label-hint">Use @AgentName to address agents directly.</span>
+                  {{ t('tasks.taskEditor.prompt') }} <span class="te-required">*</span>
+                  <span class="te-label-hint">{{ t('tasks.taskEditor.promptHint') }}</span>
                 </label>
                 <button
                   class="te-describe-btn"
                   @click="showDescribePanel = !showDescribePanel; describeInput = ''; describeError = ''"
                   :disabled="!draft.name.trim()"
-                  title="Let AI draft the prompt"
+                  :title="t('tasks.taskEditor.generate')"
                 >
                   <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                  Describe it
+                  {{ t('tasks.taskEditor.describeIt') }}
                 </button>
               </div>
 
@@ -61,7 +72,7 @@
                 <textarea
                   v-model="describeInput"
                   class="te-describe-textarea"
-                  placeholder='Describe what this task should do... e.g. "pull latest GitHub issues, summarize them, post to Slack"'
+                  :placeholder="t('tasks.taskEditor.promptHint')"
                   rows="3"
                   autofocus
                 ></textarea>
@@ -74,13 +85,13 @@
                   >
                     <svg v-if="describeLoading" class="te-spin" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                     <svg v-else style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                    {{ describeLoading ? 'Generating…' : 'Generate' }}
+                    {{ describeLoading ? t('tasks.taskEditor.generating') : t('tasks.taskEditor.generate') }}
                   </button>
                   <button
                     class="te-cancel-inline-btn"
                     @click="showDescribePanel = false; describeInput = ''"
                     :disabled="describeLoading"
-                  >Cancel</button>
+                  >{{ t('tasks.taskEditor.cancel') }}</button>
                 </div>
               </div>
 
@@ -88,7 +99,7 @@
                 v-model="draft.prompt"
                 class="te-textarea"
                 rows="6"
-                placeholder="@analyst review today's market data and @writer draft a summary..."
+                :placeholder="t('tasks.taskEditor.promptHint')"
               />
             </div>
 
@@ -96,8 +107,8 @@
 
           <!-- Right: used in plans -->
           <div class="te-plans-col">
-            <div class="te-plans-label">Used in plans</div>
-            <div v-if="usedInPlans.length === 0" class="te-plans-empty">Not used in any plan</div>
+            <div class="te-plans-label">{{ t('tasks.taskEditor.usedInPlans') }}</div>
+            <div v-if="usedInPlans.length === 0" class="te-plans-empty">{{ t('tasks.taskEditor.notUsedInAnyPlan') }}</div>
             <div v-else class="te-plans-list">
               <button
                 v-for="plan in usedInPlans"
@@ -108,7 +119,7 @@
                 <span class="te-plan-icon">{{ plan.icon || '📋' }}</span>
                 <div class="te-plan-info">
                   <span class="te-plan-name">{{ plan.name }}</span>
-                  <span class="te-plan-steps">{{ plan.steps?.length || 0 }} step{{ plan.steps?.length === 1 ? '' : 's' }}</span>
+                  <span class="te-plan-steps">{{ plan.steps?.length || 0 }} {{ plan.steps?.length === 1 ? t('tasks.misc.stepSingular') : t('tasks.misc.stepPlural') }}</span>
                 </div>
                 <svg style="width:12px;height:12px;flex-shrink:0;color:rgba(255,255,255,0.3);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
@@ -119,9 +130,9 @@
 
         <!-- Footer -->
         <div class="te-footer">
-          <button class="te-cancel-btn" @click="cancel">Cancel</button>
+          <button class="te-cancel-btn" @click="cancel">{{ t('tasks.taskEditor.cancel') }}</button>
           <button class="te-save-btn" @click="save" :disabled="!canSave">
-            {{ isNew ? 'Create Task' : 'Save' }}
+            {{ isNew ? t('tasks.taskEditor.createTask') : t('tasks.actions.save') }}
           </button>
         </div>
 
@@ -134,12 +145,17 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { v4 as uuid } from 'uuid'
 import EmojiPicker from '../agents/EmojiPicker.vue'
+import ComboBox from '../common/ComboBox.vue'
 import { useConfigStore } from '../../stores/config'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
-  visible: Boolean,
-  task:    { type: Object, default: null },
-  plans:   { type: Array,  default: () => [] },
+  visible:        Boolean,
+  task:           { type: Object, default: null },
+  plans:          { type: Array,  default: () => [] },
+  taskCategories: { type: Array,  default: () => [] },
 })
 const emit = defineEmits(['close', 'saved', 'open-plan'])
 
@@ -166,6 +182,7 @@ const makeDraft = (task) => ({
   description: task?.description || '',
   icon:        task?.icon || DEFAULT_ICON,
   prompt:      task?.prompt || '',
+  categoryId:  task?.categoryId || null,
 })
 
 const draft = ref(makeDraft(props.task))

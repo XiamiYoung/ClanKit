@@ -15,7 +15,7 @@
       class="focus-bar-btn"
       :class="{ 'panel-on': focusStore.showChat, 'panel-off': !focusStore.showChat }"
       @click="onClickChat"
-      :title="focusStore.showChat ? 'Hide Chat' : 'Show Chat'"
+      :title="focusStore.showChat ? t('focusMode.hideChat') : t('focusMode.showChat')"
     >
       <svg v-if="focusStore.showChat" style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -31,7 +31,7 @@
       class="focus-bar-btn"
       :class="{ 'panel-on': focusStore.showDocs, 'panel-off': !focusStore.showDocs }"
       @click="onClickDocs"
-      :title="focusStore.showDocs ? 'Hide Docs' : 'Show Docs'"
+      :title="focusStore.showDocs ? t('focusMode.hideDocs') : t('focusMode.showDocs')"
     >
       <svg v-if="focusStore.showDocs" style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
@@ -50,7 +50,7 @@
     <button
       class="focus-bar-exit"
       @click="onClickExit"
-      title="Exit Focus Mode"
+      :title="t('focusMode.exitFocusMode')"
     >
       <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -62,8 +62,10 @@
 <script setup>
 import { ref, computed, onUnmounted } from 'vue'
 import { useFocusModeStore } from '../../stores/focusMode'
+import { useI18n } from '../../i18n/useI18n'
 
 const focusStore = useFocusModeStore()
+const { t } = useI18n()
 
 const barEl = ref(null)
 

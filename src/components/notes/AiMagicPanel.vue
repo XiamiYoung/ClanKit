@@ -28,8 +28,8 @@
             <path d="M14 15l-1.5 1.5"/>
             <path d="M21 2l-9.5 9.5"/>
           </svg>
-          <p class="ai-magic-empty-title">Ask anything about this file</p>
-          <p class="ai-magic-empty-hint">Ask questions or request edits. Select text first to target a specific section, or work with the full file.</p>
+          <p class="ai-magic-empty-title">{{ t('notes.askAnything') }}</p>
+          <p class="ai-magic-empty-hint">{{ t('notes.askHint') }}</p>
         </div>
 
         <div
@@ -56,9 +56,9 @@
                 <div v-if="tc._permBlock" class="ai-magic-perm-block" :class="{ 'ai-magic-perm-resolved': tc.status !== 'pending' }">
                   <div class="ai-magic-perm-header">
                     <svg style="width:12px;height:12px;flex-shrink:0;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span class="ai-magic-perm-title">Permission Required</span>
+                    <span class="ai-magic-perm-title">{{ t('notes.permissionRequired') }}</span>
                     <span v-if="tc.status !== 'pending'" class="ai-magic-perm-badge" :class="tc.status === 'rejected' ? 'badge-rejected' : 'badge-allowed'">
-                      {{ tc.status === 'rejected' ? 'Rejected' : 'Allowed' }}
+                      {{ tc.status === 'rejected' ? t('notes.rejected') : t('notes.allowed') }}
                     </span>
                   </div>
                   <div class="ai-magic-perm-body">
@@ -66,9 +66,9 @@
                     <span v-if="tc.command" class="ai-magic-perm-cmd">{{ tc.command }}</span>
                   </div>
                   <div v-if="tc.status === 'pending'" class="ai-magic-perm-actions">
-                    <button class="ai-magic-perm-btn ai-magic-perm-btn-primary" @click="onPermAllow(tc, 'allow_chat')">Allow</button>
-                    <button class="ai-magic-perm-btn ai-magic-perm-btn-secondary" @click="onPermAllow(tc, 'allow_global')">Allow all</button>
-                    <button class="ai-magic-perm-btn ai-magic-perm-btn-danger" @click="onPermDeny(tc)">Reject</button>
+                    <button class="ai-magic-perm-btn ai-magic-perm-btn-primary" @click="onPermAllow(tc, 'allow_chat')">{{ t('notes.allow') }}</button>
+                    <button class="ai-magic-perm-btn ai-magic-perm-btn-secondary" @click="onPermAllow(tc, 'allow_global')">{{ t('notes.allowAll') }}</button>
+                    <button class="ai-magic-perm-btn ai-magic-perm-btn-danger" @click="onPermDeny(tc)">{{ t('notes.reject') }}</button>
                   </div>
                 </div>
                 <!-- Normal tool call -->
@@ -91,7 +91,7 @@
                 <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                 </svg>
-                Replacement
+                {{ t('notes.replacement') }}
               </div>
               <pre class="ai-magic-replacement-code">{{ msg.replacement }}</pre>
               <!-- Apply / Revert buttons -->
@@ -104,7 +104,7 @@
                   <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <polyline points="20 6 9 17 4 12"/>
                   </svg>
-                  Apply to Doc
+                  {{ t('notes.applyToDoc') }}
                 </button>
                 <button
                   v-else
@@ -115,7 +115,7 @@
                     <polyline points="1 4 1 10 7 10"/>
                     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
                   </svg>
-                  Revert
+                  {{ t('notes.revert') }}
                 </button>
               </div>
             </div>
@@ -125,7 +125,7 @@
               <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
               </svg>
-              Error
+              {{ t('notes.error') }}
             </div>
           </div>
         </div>
@@ -136,7 +136,7 @@
         <div v-if="streaming" class="ai-magic-stop-row">
           <button class="ai-magic-stop-btn" @click="$emit('stop')">
             <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
-            Stop
+            {{ t('notes.stop') }}
           </button>
         </div>
         <div class="ai-magic-input-row">
@@ -144,7 +144,7 @@
             ref="inputRef"
             v-model="inputText"
             class="ai-magic-textarea"
-            placeholder="Ask a question or give an instruction..."
+            :placeholder="t('notes.messagePlaceholder')"
             rows="2"
             :disabled="streaming"
             @keydown.enter.exact.prevent="onSend"
@@ -154,7 +154,7 @@
             class="ai-magic-send-btn"
             :disabled="!inputText.trim() || streaming"
             @click="onSend"
-            title="Send (Enter)"
+            :title="t('notes.sendMessage')"
           >
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -167,6 +167,9 @@
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   panelOpen: { type: Boolean, default: false },
@@ -204,12 +207,12 @@ const contextLabel = computed(() => {
   if (!ctx.fileName) return ''
   if (!hasSelection.value) {
     const chars = ctx.fullFileContent ? ctx.fullFileContent.length : 0
-    return `Entire file: ${ctx.fileName}${chars ? ` (${chars} chars)` : ''}`
+    return `${t('notes.entireFile')}: ${ctx.fileName}${chars ? ` (${chars} ${t('notes.chars')})` : ''}`
   }
   const lines = ctx.selectedText.split('\n').length
   const chars = ctx.selectedText.length
-  const lineStr = lines === 1 ? '1 line' : `${lines} lines`
-  return `${lineStr} · ${chars} chars · ${ctx.fileName}`
+  const lineStr = lines === 1 ? `1 ${t('notes.lines')}` : `${lines} ${t('notes.lines')}`
+  return `${lineStr} · ${chars} ${t('notes.chars')} · ${ctx.fileName}`
 })
 
 const selectionPreview = computed(() => {

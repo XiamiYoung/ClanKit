@@ -11,11 +11,11 @@
             </svg>
           </div>
           <div>
-            <h2 class="soul-title">{{ isNew ? (agentType === 'system' ? 'New System Agent' : 'New User Agent') : `${draftName || agentName} — ${tabLabel}` }}</h2>
-            <span class="soul-meta">{{ agentType === 'system' ? 'System Agent' : 'User Agent' }}</span>
+            <h2 class="soul-title">{{ isNew ? (agentType === 'system' ? t('agents.newSystemAgent') : t('agents.newUserAgent')) : `${draftName || agentName} — ${tabLabel}` }}</h2>
+            <span class="soul-meta">{{ agentType === 'system' ? t('agents.systemAgent') : t('agents.userAgent') }}</span>
           </div>
         </div>
-        <button class="soul-close-btn" @click="$emit('close')" aria-label="Close">
+        <button class="soul-close-btn" @click="$emit('close')" :aria-label="t('common.close')">
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
@@ -27,7 +27,7 @@
             <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
             <line x1="10" y1="22" x2="14" y2="22"/>
           </svg>
-          Summary
+          {{ t('agents.summary') }}
           <span v-if="hasSummaryErrors" class="soul-tab-error-dot"></span>
         </button>
         <button v-if="!isNew" class="soul-tab" :class="{ active: activeTab === 'memory' }" @click="activeTab = 'memory'">
@@ -35,15 +35,22 @@
             <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 2 17.5v-15A2.5 2.5 0 0 1 4.5 0"/>
             <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44A2.5 2.5 0 0 0 22 17.5v-15A2.5 2.5 0 0 0 19.5 0"/>
           </svg>
-          Memory
+          {{ t('agents.memory') }}
         </button>
         <button v-if="agentType === 'system'" class="soul-tab" :class="{ active: activeTab === 'model' }" @click="activeTab = 'model'">
           <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
           </svg>
-          AI Model
+          {{ t('agents.aiModel') }}
           <span v-if="hasModelErrors" class="soul-tab-error-dot"></span>
+        </button>
+        <button v-if="agentType === 'system'" class="soul-tab" :class="{ active: activeTab === 'capabilities' }" @click="activeTab = 'capabilities'">
+          <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          {{ t('agents.capabilities') }}
+          <span v-if="capErrorsCount > 0" class="soul-tab-error-dot"></span>
         </button>
         <button v-if="agentType === 'system'" class="soul-tab" :class="{ active: activeTab === 'voice' }" @click="activeTab = 'voice'">
           <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -51,7 +58,7 @@
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
             <line x1="12" y1="19" x2="12" y2="23"/>
           </svg>
-          Voice
+          {{ t('agents.voice') }}
           <span v-if="hasVoiceErrors" class="soul-tab-error-dot"></span>
         </button>
       </div>
@@ -61,15 +68,15 @@
 
         <!-- AI creation bar (new agent only) -->
         <div v-if="isNew && !readOnly" class="soul-ai-create-bar">
-          <span class="soul-ai-create-label">Start with AI:</span>
+          <span class="soul-ai-create-label">{{ t('agents.startWithAi') }}:</span>
           <button class="soul-btn-inline soul-btn-enhance" :disabled="generating" @click="toggleDescribeInput">
             <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-            Describe it
+            {{ t('agents.describeIt') }}
           </button>
           <button class="soul-btn-inline soul-btn-enhance" :disabled="generating" @click="generateAgentFromAI(null, false)">
             <svg v-if="!generating" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.5 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.7l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg>
             <span v-if="generating" class="soul-spinner"></span>
-            {{ generating ? 'Generating...' : 'Surprise me' }}
+            {{ generating ? t('agents.generating') : t('agents.surpriseMe') }}
           </button>
         </div>
         <!-- Describe input (toggled) -->
@@ -77,7 +84,7 @@
           <textarea
             v-model="describeText"
             class="soul-describe-textarea"
-            placeholder='Describe who you want... e.g. "a grumpy doctor like House MD", "Gordon Ramsay for code reviews", "Yoda as a DevOps engineer"'
+            :placeholder="t('agents.describePlaceholder')"
             rows="3"
             autofocus
           ></textarea>
@@ -85,16 +92,16 @@
             <button class="soul-btn-inline soul-btn-enhance" :disabled="!describeText.trim() || generating" @click="generateAgentFromAI(describeText, false)">
               <svg v-if="!generating" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
               <span v-if="generating" class="soul-spinner"></span>
-              {{ generating ? 'Generating...' : 'Generate' }}
+              {{ generating ? t('agents.generating') : t('agents.generate') }}
             </button>
-            <button class="soul-btn-inline" :disabled="generating" @click="showDescribeInput = false; describeText = ''">Cancel</button>
+            <button class="soul-btn-inline" :disabled="generating" @click="showDescribeInput = false; describeText = ''">{{ t('common.cancel') }}</button>
           </div>
         </div>
 
         <div class="soul-agent-card">
           <!-- Avatar + Name row -->
           <div class="soul-identity-row">
-            <button v-if="!readOnly" class="soul-avatar-btn" :class="{ 'soul-avatar-error': errors.avatar }" @click="showAvatarPicker = true" title="Change avatar">
+            <button v-if="!readOnly" class="soul-avatar-btn" :class="{ 'soul-avatar-error': errors.avatar }" @click="showAvatarPicker = true" :title="t('agents.changeAvatar')">
               <img v-if="avatarDataUri" :src="avatarDataUri" class="soul-avatar-img" alt="" />
               <div v-else class="soul-avatar-fallback">{{ fallbackInitial }}</div>
               <span class="soul-avatar-edit-badge">
@@ -106,14 +113,14 @@
               <div v-else class="soul-avatar-fallback">{{ fallbackInitial }}</div>
             </div>
             <div class="soul-identity-fields">
-              <span class="soul-agent-label">Name</span>
+              <span class="soul-agent-label">{{ t('agents.name') }}</span>
               <input
                 v-if="!readOnly"
                 v-model="draftName"
                 type="text"
                 class="soul-name-input"
                 :class="{ 'soul-input-error': errors.name }"
-                placeholder="Agent name"
+                :placeholder="t('agents.agentNamePlaceholder')"
                 spellcheck="false"
                 @input="clearError('name')"
               />
@@ -123,76 +130,75 @@
           </div>
 
           <div class="soul-agent-field">
-            <span class="soul-agent-label">Description</span>
+            <span class="soul-agent-label">{{ t('agents.description') }}</span>
             <template v-if="!readOnly">
               <textarea
                 v-model="draftDescription"
                 class="soul-desc-textarea"
                 :class="{ 'soul-input-error': errors.description }"
-                placeholder="Short description of this agent"
+                :placeholder="t('agents.descriptionPlaceholder')"
                 spellcheck="false"
                 rows="3"
                 @input="clearError('description')"
               ></textarea>
               <span v-if="errors.description" class="soul-validation-error">{{ errors.description }}</span>
               <div class="soul-ai-btn-row">
-                <button
-                  class="soul-btn-inline soul-btn-enhance soul-desc-ai-btn"
-                  :disabled="summarizing || !draftPrompt.trim() || !isProviderActive"
-                  :title="!isProviderActive ? providerInactiveTooltip : 'Generate description from agent prompt'"
-                  @click="summarizeDescription"
-                >
-                  <svg v-if="!summarizing" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                  <span v-if="summarizing" class="soul-spinner"></span>
-                  {{ summarizing ? 'Generating...' : 'AI Summarize' }}
+                <button class="soul-btn-inline soul-btn-enhance" :disabled="enhancing || generating || !draftDescription.trim()" @click="toggleRewriteInput">
+                  <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  {{ t('agents.rewriteFromDescription') }}
                 </button>
-                <span v-if="!isProviderActive" class="soul-provider-inactive-chip" :title="providerInactiveTooltip">
+                <span v-if="!isUtilityModelConfigured" class="soul-provider-inactive-chip" :title="providerInactiveTooltip">
                   <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                  Provider inactive
+                  {{ t('agents.providerInactive') }}
                 </span>
+              </div>
+              <div v-if="showRewriteInput" class="soul-rewrite-wrap">
+                <textarea
+                  v-model="rewriteText"
+                  class="soul-describe-textarea"
+                  :placeholder="t('agents.rewritePlaceholder')"
+                  rows="3"
+                ></textarea>
+                <div class="soul-describe-actions">
+                  <button class="soul-btn-inline soul-btn-enhance" :disabled="!rewriteText.trim() || generating || !isUtilityModelConfigured" :title="!isUtilityModelConfigured ? providerInactiveTooltip : ''" @click="applyRewriteInstruction">
+                    <svg v-if="!generating" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    <span v-if="generating" class="soul-spinner"></span>
+                    {{ generating ? t('agents.applying') : t('agents.apply') }}
+                  </button>
+                  <button class="soul-btn-inline" :disabled="generating" @click="showRewriteInput = false; rewriteText = ''">{{ t('common.cancel') }}</button>
+                </div>
               </div>
               <span v-if="aiError" class="soul-ai-error">{{ aiError }}</span>
             </template>
             <textarea v-else class="soul-desc-textarea soul-desc-readonly" :value="draftDescription || '—'" readonly rows="2"></textarea>
           </div>
           <div class="soul-agent-field soul-prompt-field">
-            <span class="soul-agent-label">Agent</span>
+            <span class="soul-agent-label">{{ t('agents.agentDefinition') }}</span>
             <template v-if="!readOnly">
-              <textarea v-model="draftPrompt" class="soul-editor soul-editor-prompt" :class="{ 'soul-input-error': errors.prompt }" spellcheck="false" :placeholder="agentType === 'system' ? 'Enter the agent system prompt...' : 'Describe yourself, your role, and context for the AI...'" @input="clearError('prompt')"></textarea>
+              <textarea v-model="draftPrompt" class="soul-editor soul-editor-prompt" :class="{ 'soul-input-error': errors.prompt }" spellcheck="false" :placeholder="agentType === 'system' ? t('agents.systemPromptPlaceholder') : t('agents.userPromptPlaceholder')" @input="clearError('prompt')"></textarea>
               <span v-if="errors.prompt" class="soul-validation-error">{{ errors.prompt }}</span>
               <div class="soul-enhance-row">
-                <button class="soul-btn-inline soul-btn-enhance" :disabled="enhancing || generating || !draftPrompt.trim() || !isProviderActive" :title="!isProviderActive ? providerInactiveTooltip : 'Enhance prompt with AI'" @click="enhancePrompt">
+                <button class="soul-btn-inline soul-btn-enhance" :disabled="enhancing || generating || !draftPrompt.trim() || !isUtilityModelConfigured" :title="!isUtilityModelConfigured ? providerInactiveTooltip : t('agents.enhancePromptWithAi')" @click="enhancePrompt">
                   <svg v-if="!enhancing" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                   <span v-if="enhancing" class="soul-spinner"></span>
-                  {{ enhancing ? 'Enhancing...' : 'AI Enhance' }}
+                  {{ enhancing ? t('agents.enhancing') : t('agents.aiEnhance') }}
                 </button>
-                <button class="soul-btn-inline soul-btn-enhance" :disabled="enhancing || generating || !draftPrompt.trim()" @click="toggleRewriteInput">
-                  <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                  Rewrite from description
+                <button
+                  class="soul-btn-inline soul-btn-enhance soul-desc-ai-btn"
+                  :disabled="summarizing || !draftPrompt.trim() || !isUtilityModelConfigured"
+                  :title="!isUtilityModelConfigured ? providerInactiveTooltip : t('agents.generateDescFromPrompt')"
+                  @click="summarizeDescription"
+                >
+                  <svg v-if="!summarizing" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                  <span v-if="summarizing" class="soul-spinner"></span>
+                  {{ summarizing ? t('agents.generating') : t('agents.aiSummarize') }}
                 </button>
-                <span v-if="!isProviderActive" class="soul-provider-inactive-chip" :title="providerInactiveTooltip">
+                <span v-if="!isUtilityModelConfigured" class="soul-provider-inactive-chip" :title="providerInactiveTooltip">
                   <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                  Provider inactive
+                  {{ t('agents.providerInactive') }}
                 </span>
               </div>
-              <!-- Rewrite input (inline, toggled) -->
-              <div v-if="showRewriteInput" class="soul-rewrite-wrap">
-                <textarea
-                  v-model="rewriteText"
-                  class="soul-describe-textarea"
-                  placeholder='Give an instruction to update this agent... e.g. "translate to Chinese", "make this a female character", "make the tone more aggressive"'
-                  rows="3"
-                ></textarea>
-                <div class="soul-describe-actions">
-                  <button class="soul-btn-inline soul-btn-enhance" :disabled="!rewriteText.trim() || generating" @click="applyRewriteInstruction">
-                    <svg v-if="!generating" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                    <span v-if="generating" class="soul-spinner"></span>
-                    {{ generating ? 'Applying...' : 'Apply' }}
-                  </button>
-                  <button class="soul-btn-inline" :disabled="generating" @click="showRewriteInput = false; rewriteText = ''">Cancel</button>
-                </div>
-              </div>
-              <span v-if="aiError" class="soul-ai-error">{{ aiError }}</span>
+              <span v-if="aiError && !showRewriteInput" class="soul-ai-error">{{ aiError }}</span>
             </template>
             <pre v-else class="soul-agent-prompt">{{ agentPrompt || '—' }}</pre>
           </div>
@@ -203,11 +209,11 @@
       <div v-else-if="activeTab === 'memory'" class="soul-body soul-memory-body">
         <div v-if="fileSize" class="soul-memory-meta">
           <span>{{ fileSizeFormatted }}</span>
-          <span v-if="lastUpdated"> · Updated: {{ lastUpdated }}</span>
+          <span v-if="lastUpdated"> · {{ t('agents.updated') }}: {{ lastUpdated }}</span>
         </div>
 
         <template v-if="loading">
-          <div class="soul-empty">Loading...</div>
+          <div class="soul-empty">{{ t('common.loading') }}...</div>
         </template>
         <!-- AgentView: directly editable textarea -->
         <template v-else-if="!readOnly">
@@ -215,14 +221,14 @@
             v-model="draftMemory"
             class="soul-editor soul-editor-memory"
             spellcheck="false"
-            placeholder="No learned memory yet. The AI will automatically learn preferences and context during conversations."
+            :placeholder="t('agents.memoryPlaceholder')"
           ></textarea>
         </template>
         <!-- ChatView (readOnly): rendered markdown or empty state -->
         <template v-else-if="!content">
           <div class="soul-empty">
-            <p>No learned memory yet.</p>
-            <p class="soul-empty-hint">The AI will automatically learn preferences and context during conversations.</p>
+            <p>{{ t('agents.noMemory') }}</p>
+            <p class="soul-empty-hint">{{ t('agents.memoryAutoLearn') }}</p>
           </div>
         </template>
         <template v-else>
@@ -233,10 +239,10 @@
       <!-- ═══ VOICE TAB (system agents only) ═══ -->
       <div v-else-if="activeTab === 'voice'" class="soul-body soul-voice-body">
         <div class="soul-voice-heading">
-          <span class="soul-voice-heading-label">Select a TTS voice for this agent</span>
+          <span class="soul-voice-heading-label">{{ t('agents.selectTtsVoice') }}</span>
           <span class="soul-voice-status" :class="isVoiceCallActive ? 'active' : 'inactive'">
             <span class="soul-voice-status-dot"></span>
-            {{ isVoiceCallActive ? 'Active' : 'Inactive' }}
+            {{ isVoiceCallActive ? t('agents.active') : t('agents.inactive') }}
           </span>
         </div>
         <span v-if="errors.voice" class="soul-validation-error" style="margin-bottom: 0.25rem;">{{ errors.voice }}</span>
@@ -255,7 +261,7 @@
               tabindex="0"
               class="soul-voice-demo-btn"
               :class="{ disabled: !isVoiceCallActive || !!playingVoice }"
-              :title="isVoiceCallActive ? 'Play demo' : 'Voice call not active — test connection in Configuration'"
+              :title="isVoiceCallActive ? t('agents.playDemo') : t('agents.voiceCallNotActive')"
               @click.stop="isVoiceCallActive && !playingVoice && playVoiceDemo(v.value)"
               @keydown.enter.stop="isVoiceCallActive && !playingVoice && playVoiceDemo(v.value)"
             >
@@ -274,10 +280,10 @@
         <div class="soul-model-section">
           <div class="soul-model-section-label">
             <span class="soul-step-num">1</span>
-            Provider
+            {{ t('agents.provider') }}
           </div>
           <div v-if="activeProviderOptions.length === 0" class="soul-no-providers">
-            No active providers. Enable a provider in Configuration first.
+            {{ t('agents.noActiveProviders') }}
           </div>
           <div v-else class="soul-provider-custom" :class="{ 'soul-input-error': errors.provider }">
             <button
@@ -286,7 +292,7 @@
               :class="{ open: providerDropdownOpen }"
               @click.stop="toggleProviderDropdown"
             >
-              <span>{{ activeProviderOptions.find(p => p.id === draftProvider)?.label || 'Select a provider' }}</span>
+              <span>{{ activeProviderOptions.find(p => p.id === draftProvider)?.label || t('agents.selectProvider') }}</span>
               <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 12 12" fill="none" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 4.5L6 7.5L9 4.5"/>
               </svg>
@@ -314,20 +320,20 @@
         <div class="soul-model-section soul-model-section-grow">
           <div class="soul-model-section-label">
             <span class="soul-step-num">2</span>
-            Model
+            {{ t('agents.model') }}
             <span class="soul-model-badge">{{ currentModelLabel }}</span>
           </div>
           <input
-            v-if="draftProvider !== 'anthropic'"
+            v-if="draftProviderType !== 'anthropic'"
             v-model="modelFilter"
             type="text"
-            placeholder="Search models..."
+            :placeholder="t('agents.searchModels')"
             class="soul-model-search"
             @click.stop
           />
           <div class="soul-model-list" :class="{ 'soul-input-error': errors.model }">
-            <div v-if="(draftProvider === 'openrouter' && modelsStore.openrouterLoading) || (draftProvider === 'openai' && modelsStore.openaiLoading) || (draftProvider === 'deepseek' && modelsStore.deepseekLoading)" class="soul-model-loading">
-              Loading models...
+            <div v-if="(draftProviderType === 'openrouter' && modelsStore.openrouterLoading) || (draftProviderType === 'openai' && modelsStore.openaiLoading) || (draftProviderType === 'deepseek' && modelsStore.deepseekLoading)" class="soul-model-loading">
+              {{ t('common.loading') }}...
             </div>
             <button
               v-for="m in filteredModels"
@@ -344,12 +350,71 @@
         </div>
       </div>
 
+      <!-- ═══ CAPABILITIES TAB (system agents only) ═══ -->
+      <div v-else-if="activeTab === 'capabilities'" class="soul-body soul-cap-body">
+        <div class="cap-section">
+          <div class="cap-section-label">{{ t('agents.selectCapabilities') }}</div>
+          <!-- Tab buttons -->
+          <div class="cap-tab-row">
+            <button
+              v-for="tab in capTabOptions"
+              :key="tab.key"
+              class="cap-tab-btn"
+              :class="{ active: capTab === tab.key }"
+              @click="capTab = tab.key"
+            >
+              {{ t(`agents.${tab.key}`) }}
+              <span v-if="getCapCount(tab.key) > 0" class="cap-count">{{ getCapCount(tab.key) }}</span>
+            </button>
+          </div>
+          <!-- Tab content -->
+          <div class="cap-content">
+            <!-- Tools -->
+            <div v-if="capTab === 'tools'" class="cap-items">
+              <div v-if="availableTools.length === 0" class="cap-empty">{{ t('agents.noToolsAvailable') }}</div>
+              <label v-for="t in availableTools" :key="t.id" class="cap-item">
+                <input type="checkbox" :value="t.id" v-model="draftRequiredToolIds" />
+                <span class="cap-item-name">{{ t.name }}</span>
+                <span class="cap-item-desc">{{ t.description || t.category || '' }}</span>
+              </label>
+            </div>
+            <!-- Skills -->
+            <div v-if="capTab === 'skills'" class="cap-items">
+              <div v-if="availableSkills.length === 0" class="cap-empty">{{ t('agents.noSkillsAvailable') }}</div>
+              <label v-for="s in availableSkills" :key="s.id" class="cap-item">
+                <input type="checkbox" :value="s.id" v-model="draftRequiredSkillIds" />
+                <span class="cap-item-name">{{ s.name }}</span>
+                <span class="cap-item-desc">{{ s.summary || '' }}</span>
+              </label>
+            </div>
+            <!-- MCP Servers -->
+            <div v-if="capTab === 'mcp'" class="cap-items">
+              <div v-if="availableMcpServers.length === 0" class="cap-empty">{{ t('agents.noMcpServers') }}</div>
+              <label v-for="m in availableMcpServers" :key="m.id" class="cap-item">
+                <input type="checkbox" :value="m.id" v-model="draftRequiredMcpServerIds" />
+                <span class="cap-item-name">{{ m.name }}</span>
+                <span class="cap-item-desc">{{ m.description || '' }}</span>
+              </label>
+            </div>
+            <!-- Knowledge -->
+            <div v-if="capTab === 'knowledge'" class="cap-items">
+              <div v-if="availableKnowledgeBases.length === 0" class="cap-empty">{{ t('agents.noKnowledgeBases') }}</div>
+              <label v-for="k in availableKnowledgeBases" :key="k.id" class="cap-item">
+                <input type="checkbox" :value="k.id" v-model="draftRequiredKnowledgeBaseIds" />
+                <span class="cap-item-name">{{ k.name }}</span>
+                <span class="cap-item-desc">{{ k.description || '' }}</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ═══ UNIFIED FOOTER ═══ -->
       <div class="soul-footer">
         <div class="soul-footer-left"></div>
         <div class="soul-footer-right">
-          <button class="soul-btn secondary" @click="$emit('close')">Cancel</button>
-          <button class="soul-btn primary" @click="saveAll">Save</button>
+          <button class="soul-btn secondary" @click="$emit('close')">{{ t('common.cancel') }}</button>
+          <button class="soul-btn primary" @click="saveAll">{{ t('common.save') }}</button>
         </div>
       </div>
 
@@ -370,6 +435,11 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import { useModelsStore } from '../../stores/models'
 import { useConfigStore } from '../../stores/config'
+import { useToolsStore } from '../../stores/tools'
+import { useSkillsStore } from '../../stores/skills'
+import { useMcpStore } from '../../stores/mcp'
+import { useKnowledgeStore } from '../../stores/knowledge'
+import { useI18n } from '../../i18n/useI18n'
 import { getAvatarDataUri } from './agentAvatars'
 import AvatarPicker from './AvatarPicker.vue'
 
@@ -383,6 +453,10 @@ const props = defineProps({
   agentModelId:     { type: String, default: null },
   agentVoiceId:     { type: String, default: null },
   agentAvatar:      { type: String, default: null },
+  agentRequiredToolIds: { type: Array, default: () => [] },
+  agentRequiredSkillIds: { type: Array, default: () => [] },
+  agentRequiredMcpServerIds: { type: Array, default: () => [] },
+  agentRequiredKnowledgeBaseIds: { type: Array, default: () => [] },
   readOnly:           { type: Boolean, default: false },
   isNew:              { type: Boolean, default: false },
 })
@@ -391,13 +465,47 @@ const emit = defineEmits(['close', 'update-agent'])
 
 const modelsStore = useModelsStore()
 const configStore = useConfigStore()
+const toolsStore = useToolsStore()
+const skillsStore = useSkillsStore()
+const mcpStore = useMcpStore()
+const knowledgeStore = useKnowledgeStore()
+const { t } = useI18n()
+
+// ── Capabilities data ──
+const capTab = ref('tools')
+
+const capTabOptions = [
+  { key: 'tools', label: t('agents.tools') },
+  { key: 'skills', label: t('agents.skills') },
+  { key: 'mcp', label: t('agents.mcpServers') },
+  { key: 'knowledge', label: t('agents.knowledge') },
+]
+
+const availableTools = computed(() => toolsStore.tools || [])
+const availableSkills = computed(() => skillsStore.skills || [])
+const availableMcpServers = computed(() => mcpStore.servers || [])
+const availableKnowledgeBases = computed(() => {
+  const configs = knowledgeStore.indexConfigs || {}
+  return Object.entries(configs).map(([name, cfg]) => ({
+    id: name,
+    name: name,
+    description: cfg.enabled ? 'Enabled' : 'Disabled'
+  }))
+})
+
+const capErrorsCount = computed(() => {
+  return (draftRequiredToolIds.value?.length || 0) +
+         (draftRequiredSkillIds.value?.length || 0) +
+         (draftRequiredMcpServerIds.value?.length || 0) +
+         (draftRequiredKnowledgeBaseIds.value?.length || 0)
+})
 
 // ── Tab state ──
 const activeTab = ref('summary')
 
 const tabLabel = computed(() => {
-  const labels = { summary: 'Summary', memory: 'Memory', model: 'AI Model', voice: 'Voice' }
-  return labels[activeTab.value] || 'Summary'
+  const labels = { summary: t('agents.summary'), memory: t('agents.memory'), model: t('agents.aiModel'), capabilities: t('agents.capabilities'), voice: t('agents.voice') }
+  return labels[activeTab.value] || t('agents.summary')
 })
 
 // ── Name, avatar, description draft ──
@@ -471,7 +579,10 @@ async function playVoiceDemo(voiceId) {
 // ── Provider / model draft (AI Model tab) ──
 const activeProviderOptions = computed(() => {
   const labels = { anthropic: 'Anthropic', openrouter: 'OpenRouter', openai: 'OpenAI', deepseek: 'DeepSeek' }
-  return configStore.activeProviders.map(id => ({ id, label: labels[id] }))
+  return configStore.activeProviders.map(id => {
+    const provider = configStore.config.providers.find(p => p.id === id)
+    return { id, label: labels[provider?.type] || provider?.name || id }
+  })
 })
 
 const initProvider = props.agentProviderId || (configStore.activeProviders[0] || 'anthropic')
@@ -479,6 +590,11 @@ const draftProvider = ref(initProvider)
 const draftModelId = ref(props.agentModelId || null)
 const modelFilter = ref('')
 const providerDropdownOpen = ref(false)
+
+const draftProviderType = computed(() => {
+  const provider = configStore.config.providers.find(p => p.id === draftProvider.value)
+  return provider?.type || 'anthropic'
+})
 
 function toggleProviderDropdown() {
   providerDropdownOpen.value = !providerDropdownOpen.value
@@ -498,14 +614,14 @@ function pickProvider(id) {
 
 const filteredModels = computed(() => {
   const q = modelFilter.value.trim().toLowerCase()
-  const models = modelsStore.getModelsForProvider(draftProvider.value)
+  const models = modelsStore.getModelsForProvider(draftProviderType.value)
   if (!q) return models
   return models.filter(m => (m.name || m.label || '').toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
 })
 
 const currentModelLabel = computed(() => {
   if (!draftModelId.value) return '—'
-  const models = modelsStore.getModelsForProvider(draftProvider.value)
+  const models = modelsStore.getModelsForProvider(draftProviderType.value)
   const m = models.find(x => x.id === draftModelId.value)
   return m?.name || m?.label || draftModelId.value
 })
@@ -514,9 +630,11 @@ function selectProvider(prov) {
   draftProvider.value = prov
   draftModelId.value = null
   modelFilter.value = ''
-  if (prov === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
-  if (prov === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
-  if (prov === 'deepseek' && !modelsStore.deepseekCached) modelsStore.fetchDeepSeekModels()
+  const provider = configStore.config.providers.find(p => p.id === prov)
+  const providerType = provider?.type || 'anthropic'
+  if (providerType === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
+  if (providerType === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
+  if (providerType === 'deepseek' && !modelsStore.deepseekCached) modelsStore.fetchDeepSeekModels()
 }
 
 // ── Memory & content ──
@@ -528,14 +646,30 @@ const draftMemory = ref('')
 // ── Prompt draft (always editable in AgentView) ──
 const draftPrompt = ref(props.agentPrompt || '')
 
-// ── Provider active check for AI buttons ──
+// ── Capabilities draft (from agent props) ──
+const draftRequiredToolIds = ref(props.agentRequiredToolIds || [])
+const draftRequiredSkillIds = ref(props.agentRequiredSkillIds || [])
+const draftRequiredMcpServerIds = ref(props.agentRequiredMcpServerIds || [])
+const draftRequiredKnowledgeBaseIds = ref(props.agentRequiredKnowledgeBaseIds || [])
+
+// ── Provider active check for AI buttons (use utility model) ──
 const PROVIDER_LABELS = { anthropic: 'Anthropic', openrouter: 'OpenRouter', openai: 'OpenAI', deepseek: 'DeepSeek' }
+const isUtilityModelConfigured = computed(() => {
+  const um = configStore.config.utilityModel
+  return um?.provider && um?.model
+})
 const isProviderActive = computed(() => {
-  const pid = draftProvider.value
-  return configStore.config[pid]?.isActive === true
+  const um = configStore.config.utilityModel
+  if (!um?.provider || !um?.model) return false
+  const provider = configStore.config.providers?.find(p => p.id === um.provider)
+  return provider?.isActive === true
 })
 const providerInactiveTooltip = computed(() => {
-  const label = PROVIDER_LABELS[draftProvider.value] || draftProvider.value
+  const um = configStore.config.utilityModel
+  if (!um?.provider || !um?.model) {
+    return 'Utility model not configured — set it in Configuration → AI → Models → Global Model Settings'
+  }
+  const label = PROVIDER_LABELS[um.provider] || um.provider
   return `${label} provider is inactive — test connection in Configuration first`
 })
 
@@ -748,6 +882,17 @@ function clearError(field) {
   }
 }
 
+// ── Capabilities helper ──
+function getCapCount(tabKey) {
+  switch (tabKey) {
+    case 'tools': return draftRequiredToolIds.value?.length || 0
+    case 'skills': return draftRequiredSkillIds.value?.length || 0
+    case 'mcp': return draftRequiredMcpServerIds.value?.length || 0
+    case 'knowledge': return draftRequiredKnowledgeBaseIds.value?.length || 0
+    default: return 0
+  }
+}
+
 // ── Unified save ──
 function saveAll() {
   const e = {}
@@ -780,6 +925,10 @@ function saveAll() {
     providerId: draftProvider.value,
     modelId: draftModelId.value || null,
     voiceId: draftVoiceId.value,
+    requiredToolIds: draftRequiredToolIds.value || [],
+    requiredSkillIds: draftRequiredSkillIds.value || [],
+    requiredMcpServerIds: draftRequiredMcpServerIds.value || [],
+    requiredKnowledgeBaseIds: draftRequiredKnowledgeBaseIds.value || [],
   })
 
   // Memory: save if changed
@@ -798,9 +947,14 @@ function onKeyDown(e) {
 
 onMounted(() => {
   loadContent()
-  if (draftProvider.value === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
-  if (draftProvider.value === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
-  if (draftProvider.value === 'deepseek' && !modelsStore.deepseekCached) modelsStore.fetchDeepSeekModels()
+  if (draftProviderType.value === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
+  if (draftProviderType.value === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
+  if (draftProviderType.value === 'deepseek' && !modelsStore.deepseekCached) modelsStore.fetchDeepSeekModels()
+  // Ensure capability stores are loaded
+  if (toolsStore.tools.length === 0) toolsStore.loadTools()
+  if (skillsStore.skills.length === 0) skillsStore.loadSkills(configStore.config.skillsPath)
+  if (mcpStore.servers.length === 0) mcpStore.loadServers()
+  if (Object.keys(knowledgeStore.indexConfigs || {}).length === 0) knowledgeStore.loadConfig()
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('click', onProviderDropdownClickOutside)
 })
@@ -1109,7 +1263,7 @@ onUnmounted(() => {
   font-family: 'JetBrains Mono', monospace;
 }
 .soul-provider-custom {
-  position: relative; width: 100%;
+  position: relative; width: 100%; overflow: visible;
 }
 .soul-provider-custom.soul-input-error .soul-provider-trigger {
   border-color: #EF4444 !important;
@@ -1329,5 +1483,115 @@ onUnmounted(() => {
 .soul-describe-actions {
   display: flex;
   gap: 0.375rem;
+}
+
+/* ── Capabilities Tab ── */
+.soul-cap-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  overflow-y: auto;
+}
+.cap-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.cap-section-label {
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  color: #9CA3AF;
+}
+.cap-tab-row {
+  display: flex;
+  gap: 0.25rem;
+}
+.cap-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  color: #FFFFFF;
+  background: transparent;
+  border: 1px solid #374151;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cap-tab-btn:hover {
+  background: #1F2937;
+  color: #FFFFFF;
+}
+.cap-tab-btn.active {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  border-color: transparent;
+}
+.cap-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: #374151;
+  color: #FFFFFF;
+  border-radius: 0.5625rem;
+}
+.cap-tab-btn.active .cap-count {
+  background: rgba(255, 255, 255, 0.2);
+}
+.cap-content {
+  max-height: 28rem;
+  overflow-y: auto;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.75rem;
+  background: #1A1A1A;
+}
+.cap-items {
+  display: flex;
+  flex-direction: column;
+}
+.cap-empty {
+  padding: 1rem;
+  text-align: center;
+  color: #6B7280;
+  font-size: var(--fs-secondary);
+}
+.cap-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid #1F2937;
+}
+.cap-item:last-child {
+  border-bottom: none;
+}
+.cap-item:hover {
+  background: #1F2937;
+}
+.cap-item input[type="checkbox"] {
+  margin-top: 0.25rem;
+  width: 1rem;
+  height: 1rem;
+  accent-color: #3B82F6;
+}
+.cap-item-name {
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  color: #FFFFFF;
+}
+.cap-item-desc {
+  font-size: var(--fs-caption);
+  color: #9CA3AF;
+  line-height: 1.4;
 }
 </style>

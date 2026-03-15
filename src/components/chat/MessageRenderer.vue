@@ -13,7 +13,7 @@
           :src="att.preview"
           :alt="att.name"
           style="max-width:280px; max-height:200px; border-radius:10px; object-fit:contain; display:block; background:rgba(255,255,255,0.12); cursor:pointer;"
-          :title="'Click to open ' + att.name"
+          :title="t('common.clickToOpen') + ' ' + att.name"
           @click="openImage(att)"
         />
       </div>
@@ -28,12 +28,12 @@
       <!-- Header -->
       <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none" style="background:#eaf3ea; border-bottom:1px solid #d4e4d4;" @click="todoCollapsed = !todoCollapsed">
         <span style="color:#4c8446; font-size:0.85rem;">☑</span>
-        <span style="font-size:0.8rem; font-weight:600; color:#3a6b35;">Task List</span>
+        <span style="font-size:0.8rem; font-weight:600; color:#3a6b35;">{{ t('chats.taskList') }}</span>
         <div class="flex gap-1.5 ml-2">
-          <span v-if="todoSummary.done > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#dcfce7; color:#15803d;">{{ todoSummary.done }} done</span>
-          <span v-if="todoSummary.running > 0" class="px-1.5 py-0.5 rounded-full animate-pulse" style="font-size:0.7rem; background:#fef9c3; color:#a16207;">{{ todoSummary.running }} running</span>
-          <span v-if="todoSummary.blocked > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#fee2e2; color:#dc2626;">{{ todoSummary.blocked }} blocked</span>
-          <span v-if="todoSummary.pending > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#F5F5F5; color:#9CA3AF;">{{ todoSummary.pending }} pending</span>
+          <span v-if="todoSummary.done > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#dcfce7; color:#15803d;">{{ todoSummary.done }} {{ t('chats.done') }}</span>
+          <span v-if="todoSummary.running > 0" class="px-1.5 py-0.5 rounded-full animate-pulse" style="font-size:0.7rem; background:#fef9c3; color:#a16207;">{{ todoSummary.running }} {{ t('chats.running') }}</span>
+          <span v-if="todoSummary.blocked > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#fee2e2; color:#dc2626;">{{ todoSummary.blocked }} {{ t('chats.blocked') }}</span>
+          <span v-if="todoSummary.pending > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#F5F5F5; color:#9CA3AF;">{{ todoSummary.pending }} {{ t('chats.pending') }}</span>
         </div>
         <span class="ml-auto" style="font-size:0.75rem; color:#6b7c6b;">{{ todoSummary.done }}/{{ latestTodos.length }}</span>
         <span style="font-size:0.7rem; color:#9ca89c; margin-left:4px;">{{ todoCollapsed ? '▶' : '▼' }}</span>
@@ -59,7 +59,7 @@
                     todo.status === 'in_progress' ? 'background:#fef9c3; color:#a16207;' :
                     todo.status === 'blocked' ? 'background:#fee2e2; color:#dc2626;' :
                     'background:#F5F5F5; color:#9CA3AF;'">
-            {{ todo.status === 'completed' ? 'done' : todo.status === 'in_progress' ? 'running' : todo.status === 'blocked' ? 'blocked' : 'pending' }}
+            {{ todo.status === 'completed' ? t('chats.done') : todo.status === 'in_progress' ? t('chats.running') : todo.status === 'blocked' ? t('chats.blocked') : t('chats.pending') }}
           </span>
         </div>
       </div>
@@ -81,12 +81,12 @@
           <span v-if="seg.input?.path" class="px-1.5 py-0.5 rounded" style="background:#1e3a5f; color:#93c5fd; font-size:0.7rem; font-family:monospace;">{{ seg.input.path }}</span>
           <div class="ml-auto flex items-center gap-2">
             <span class="flex items-center gap-1">
-              <span style="color:#22c55e; font-size:0.68rem;">+ added</span>
-              <span style="color:#ef4444; font-size:0.68rem; margin-left:4px;">− removed</span>
-              <span style="color:#60a5fa; font-size:0.68rem; margin-left:4px;">~ updated</span>
+              <span style="color:#22c55e; font-size:0.68rem;">+ {{ t('chats.added') }}</span>
+              <span style="color:#ef4444; font-size:0.68rem; margin-left:4px;">− {{ t('chats.removed') }}</span>
+              <span style="color:#60a5fa; font-size:0.68rem; margin-left:4px;">~ {{ t('chats.updated') }}</span>
             </span>
-            <span v-if="seg.output === undefined" class="animate-pulse px-1.5 py-0.5 rounded" style="background:#422006; color:#fb923c; font-size:0.68rem;">writing…</span>
-            <span v-else class="px-1.5 py-0.5 rounded" style="background:#14532d; color:#4ade80; font-size:0.68rem;">done</span>
+            <span v-if="seg.output === undefined" class="animate-pulse px-1.5 py-0.5 rounded" style="background:#422006; color:#fb923c; font-size:0.68rem;">{{ t('chats.writing') }}</span>
+            <span v-else class="px-1.5 py-0.5 rounded" style="background:#14532d; color:#4ade80; font-size:0.68rem;">{{ t('chats.done') }}</span>
             <span style="color:#6b7280; font-size:0.7rem;">{{ expandedTools[i] ? '▼' : '▶' }}</span>
           </div>
         </div>
@@ -94,9 +94,9 @@
         <div v-if="expandedTools[i] !== false">
           <!-- Copy button -->
           <div class="flex items-center justify-between px-3 py-1.5" style="background:#161b22; border-bottom:1px solid #30363d;">
-            <span style="font-size:0.7rem; color:#6b7280;">Changes</span>
+            <span style="font-size:0.7rem; color:#6b7280;">{{ t('chats.changes') }}</span>
             <button @click.stop="copyBlock('diff-'+i, seg.input?.content || '')" class="flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer" style="background:#21262d; border:1px solid #30363d; color:#8b949e; font-size:0.68rem;">
-              <span>{{ copiedBlock === 'diff-'+i ? '✓ Copied' : '⎘ Copy' }}</span>
+              <span>{{ copiedBlock === 'diff-'+i ? '✓ ' + t('common.copied') : '⎘ ' + t('common.copy') }}</span>
             </button>
           </div>
           <!-- Diff lines -->
@@ -108,7 +108,7 @@
                 <span style="flex:1; padding:0 8px; font-family:monospace; font-size:0.72rem; white-space:pre; overflow-x:auto;">{{ line.content }}</span>
               </div>
               <div v-if="getDiff(i, seg).length > 8" class="flex items-center justify-center py-1.5 cursor-pointer" style="background:#161b22; color:#58a6ff; font-size:0.72rem;" @click.stop="expandedDiffs[i] = true">
-                Show all {{ getDiff(i, seg).length }} lines ▼
+                {{ t('chats.showAllLines', { count: getDiff(i, seg).length }) }} ▼
               </div>
             </div>
             <div v-else>
@@ -118,7 +118,7 @@
                 <span style="flex:1; padding:0 8px; font-family:monospace; font-size:0.72rem; white-space:pre; overflow-x:auto;">{{ line.content }}</span>
               </div>
               <div class="flex items-center justify-center py-1.5 cursor-pointer" style="background:#161b22; color:#58a6ff; font-size:0.72rem;" @click.stop="expandedDiffs[i] = false">
-                Show less ▲
+                {{ t('chats.showLess') }} ▲
               </div>
             </div>
           </div>
@@ -152,13 +152,13 @@
             class="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full animate-pulse"
             style="background:#fef3c7; color:#d97706; font-size:0.7rem;">
             <span class="inline-block w-1.5 h-1.5 rounded-full" style="background:#f59e0b;"></span>
-            running
+            {{ t('chats.running') }}
           </span>
           <span v-else
             class="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full"
             style="background:#dcfce7; color:#15803d; font-size:0.7rem;">
             <span>✓</span>
-            done
+            {{ t('chats.done') }}
           </span>
           <!-- Chevron -->
           <span style="font-size:0.7rem; color:#9CA3AF; margin-left:2px;">{{ isToolExpanded(i, seg) ? '▼' : '▶' }}</span>
@@ -168,25 +168,25 @@
           <!-- Input -->
           <div v-if="seg.input && Object.keys(seg.input).length > 0" class="px-3 py-2">
             <div class="flex items-center justify-between mb-1">
-              <span style="font-size:0.7rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">Input</span>
+              <span style="font-size:0.7rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">{{ t('chats.input') }}</span>
               <button @click.stop="copyBlock('input-'+i, JSON.stringify(seg.input, null, 2))" class="flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer" style="background:#F5F5F5; border:1px solid #E5E5EA; color:#9CA3AF; font-size:0.68rem;">
-                {{ copiedBlock === 'input-'+i ? '✓ Copied' : '⎘ Copy' }}
+                {{ copiedBlock === 'input-'+i ? '✓ ' + t('common.copied') : '⎘ ' + t('common.copy') }}
               </button>
             </div>
             <pre class="rounded-xl p-2 overflow-x-auto" style="background:#1C1C1E; color:#E5E5EA; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px;">{{ expandedInputs[i] || JSON.stringify(seg.input, null, 2).length <= 50 ? JSON.stringify(seg.input, null, 2) : JSON.stringify(seg.input, null, 2).slice(0, 50) + '…' }}</pre>
-            <button v-if="JSON.stringify(seg.input, null, 2).length > 50" @click.stop="expandedInputs[i] = !expandedInputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#007AFF; background:none; border:none; padding:0;">{{ expandedInputs[i] ? 'Show less ▲' : 'View full ▼' }}</button>
+            <button v-if="JSON.stringify(seg.input, null, 2).length > 50" @click.stop="expandedInputs[i] = !expandedInputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#007AFF; background:none; border:none; padding:0;">{{ expandedInputs[i] ? t('chats.showLess') + ' ▲' : t('chats.viewFull') + ' ▼' }}</button>
           </div>
           <!-- Tool images are rendered via the standalone inline image segment below -->
           <!-- Output -->
           <div v-if="seg.output !== undefined" class="px-3 py-2" style="border-top:1px solid #E5E5EA;">
             <div class="flex items-center justify-between mb-1">
-              <span style="font-size:0.7rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">Output</span>
+              <span style="font-size:0.7rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">{{ t('chats.output') }}</span>
               <button @click.stop="copyBlock('output-'+i, String(seg.output))" class="flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer" style="background:#F5F5F5; border:1px solid #E5E5EA; color:#9CA3AF; font-size:0.68rem;">
-                {{ copiedBlock === 'output-'+i ? '✓ Copied' : '⎘ Copy' }}
+                {{ copiedBlock === 'output-'+i ? '✓ ' + t('common.copied') : '⎘ ' + t('common.copy') }}
               </button>
             </div>
             <pre class="rounded-xl p-2 overflow-x-auto" style="background:#1C1C1E; color:#E5E5EA; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px;">{{ expandedOutputs[i] || String(seg.output).length <= 50 ? String(seg.output) : String(seg.output).slice(0, 50) + '…' }}</pre>
-            <button v-if="String(seg.output).length > 50" @click.stop="expandedOutputs[i] = !expandedOutputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#007AFF; background:none; border:none; padding:0;">{{ expandedOutputs[i] ? 'Show less ▲' : 'View full ▼' }}</button>
+            <button v-if="String(seg.output).length > 50" @click.stop="expandedOutputs[i] = !expandedOutputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#007AFF; background:none; border:none; padding:0;">{{ expandedOutputs[i] ? t('chats.showLess') + ' ▲' : t('chats.viewFull') + ' ▼' }}</button>
           </div>
         </div>
       </div>
@@ -203,8 +203,8 @@
       <!-- Inline images — always visible in the message flow (base64 or URL) -->
       <div v-else-if="seg.type === 'image' && seg.images && seg.images.length > 0" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #E5E5EA; background:#FFFFFF;">
         <div class="px-3 py-2" style="background:#F5F5F5; border-bottom:1px solid #E5E5EA;">
-          <span style="font-size:0.75rem; font-weight:600; color:#6B7280;">Image{{ seg.images.length > 1 ? 's' : '' }}</span>
-          <span v-if="seg.source" style="font-size:0.7rem; color:#9CA3AF; margin-left:6px;">from {{ seg.source }}</span>
+          <span style="font-size:0.75rem; font-weight:600; color:#6B7280;">{{ t('chats.image') }}{{ seg.images.length > 1 ? 's' : '' }}</span>
+          <span v-if="seg.source" style="font-size:0.7rem; color:#9CA3AF; margin-left:6px;">{{ t('chats.from') }} {{ seg.source }}</span>
         </div>
         <div class="inline-images-grid p-3">
           <img
@@ -229,11 +229,11 @@
       <!-- Duration label: live while streaming, final when done -->
       <div v-if="message.streaming && message.streamingStartedAt && !hasPendingPermission" class="flex items-center gap-1 mt-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
         <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span>cooking for {{ formatDuration(elapsedMs) }}…</span>
+        <span>{{ t('chats.cookingFor') }} {{ formatDuration(elapsedMs) }}…</span>
       </div>
       <div v-else-if="!message.streaming && message.durationMs" class="flex items-center gap-1 mt-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
         <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span>cooked for {{ formatDuration(message.durationMs) }}</span>
+        <span>{{ t('chats.cookedFor') }} {{ formatDuration(message.durationMs) }}</span>
       </div>
   </template>
   </div>
@@ -248,10 +248,12 @@ import PermissionPrompt from './PermissionPrompt.vue'
 import { useChatsStore } from '../../stores/chats'
 import { useConfigStore } from '../../stores/config'
 import { useAgentsStore } from '../../stores/agents'
+import { useI18n } from '../../i18n/useI18n'
 
 const chatsStore = useChatsStore()
 const configStore = useConfigStore()
 const agentsStore = useAgentsStore()
+const { t } = useI18n()
 
 const props = defineProps({
   message: { type: Object, required: true }
@@ -399,7 +401,7 @@ function renderMarkdown(text) {
     const withCodeBlocks = withMentions
       .replace(/<pre><code(?:\s+class="language-(\w+)")?>/g, (m, lang) => {
         const label = lang ? `<span class="code-lang">${lang}</span>` : ''
-        return `<div class="code-block-wrap">${label}<span class="code-copy-btn">Copy</span><pre><code${lang ? ` class="language-${lang}"` : ''}>`
+        return `<div class="code-block-wrap">${label}<span class="code-copy-btn">${t('common.copy')}</span><pre><code${lang ? ` class="language-${lang}"` : ''}>`
       })
       .replace(/<\/code><\/pre>/g, '</code></pre></div>')
     // Inject file-path chips (skipping paths inside code/pre/a)
@@ -417,8 +419,8 @@ function handleContentClick(e) {
   const code = wrap.querySelector('code')
   if (!code) return
   navigator.clipboard.writeText(code.textContent).then(() => {
-    btn.textContent = 'Copied!'
-    setTimeout(() => { btn.textContent = 'Copy' }, 2000)
+    btn.textContent = t('common.copiedExclaim')
+    setTimeout(() => { btn.textContent = t('common.copy') }, 2000)
   }).catch(() => {})
 }
 

@@ -37,6 +37,9 @@
 
       <!-- Floating control bar -->
       <FocusModeBar />
+
+      <!-- Voice call overlay (shown when in focus mode) -->
+      <CallOverlay @end-call="handleEndCall" @toggle-mute="handleToggleMute" />
     </div>
   </Teleport>
 </template>
@@ -46,16 +49,30 @@ import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useFocusModeStore } from '../stores/focusMode'
 import { useObsidianStore } from '../stores/obsidian'
 import { useChatsStore } from '../stores/chats'
+import { useVoiceStore } from '../stores/voice'
 import ChatsView from './ChatsView.vue'
 import DocsView from './DocsView.vue'
 import FocusModeBar from '../components/focus/FocusModeBar.vue'
+import CallOverlay from '../components/voice/CallOverlay.vue'
 
 const focusStore  = useFocusModeStore()
 const obsidian    = useObsidianStore()
 const chatsStore  = useChatsStore()
+const voiceStore  = useVoiceStore()
 
 const chatsViewRef = ref(null)
 const docsViewRef  = ref(null)
+
+function handleEndCall() {
+  if (window.electronAPI?.voice?.stop) window.electronAPI.voice.stop()
+  voiceStore.endCall()
+}
+
+function handleToggleMute() {
+  const newMuted = !voiceStore.isMuted
+  voiceStore.setMuted(newMuted)
+  if (window.electronAPI?.voice?.mute) window.electronAPI.voice.mute({ muted: newMuted })
+}
 
 // Find the first file node in the tree (depth-first)
 function findFirstFile(nodes) {

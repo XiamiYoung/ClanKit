@@ -1,61 +1,95 @@
 import { defineStore } from 'pinia'
 import { ref, computed, toRaw } from 'vue'
 import { storage } from '../services/storage'
+import { v4 as uuidv4 } from 'uuid'
+
+export const PROVIDER_PRESETS = {
+  anthropic: {
+    name: 'Anthropic',
+    type: 'anthropic',
+    auth: 'x-api-key',
+    defaultBaseURL: 'https://api.anthropic.com',
+    defaultModels: ['claude-sonnet-latest', 'claude-opus-latest', 'claude-haiku-latest'],
+    hardLimits: {}
+  },
+  openai: {
+    name: 'OpenAI Compatible',
+    type: 'openai',
+    auth: 'x-api-key',
+    defaultBaseURL: '',
+    defaultModels: [],
+    hardLimits: {}
+  },
+  openrouter: {
+    name: 'OpenRouter',
+    type: 'openrouter',
+    auth: 'bearer',
+    defaultBaseURL: 'https://openrouter.ai/api',
+    defaultModels: [],
+    hardLimits: {}
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    type: 'deepseek',
+    auth: 'bearer',
+    defaultBaseURL: 'https://api.deepseek.com',
+    defaultModels: ['deepseek-chat', 'deepseek-coder'],
+    hardLimits: { maxOutputTokens: 8192 }
+  },
+  google: {
+    name: 'Google',
+    type: 'google',
+    auth: 'bearer',
+    defaultBaseURL: 'https://generativelanguage.googleapis.com',
+    defaultModels: [],
+    hardLimits: {}
+  },
+  minimax: {
+    name: 'MiniMax',
+    type: 'minimax',
+    auth: 'bearer',
+    defaultBaseURL: 'https://api.minimax.chat',
+    defaultModels: [],
+    hardLimits: {}
+  },
+  custom: {
+    name: 'Custom',
+    type: 'custom',
+    auth: 'bearer',
+    defaultBaseURL: '',
+    defaultModels: [],
+    hardLimits: {}
+  }
+}
 
 export const useConfigStore = defineStore('config', () => {
   const config = ref({
-    anthropic: {
-      apiKey:      '',
-      baseURL:     '',
-      sonnetModel: 'anthropic/claude-sonnet-latest',
-      opusModel:   'anthropic/claude-opus-latest',
-      haikuModel:  'anthropic/claude-haiku-latest',
-      isActive:    false,
-      testedAt:    null,
-    },
-    openrouter: {
-      apiKey:  '',
-      baseURL: '',
-      isActive:    false,
-      testedAt:    null,
-    },
-    openai: {
-      apiKey:       '',
-      baseURL:      '',
-      isActive:    false,
-      testedAt:    null,
-    },
-    deepseek: {
-      apiKey:     '',
-      baseURL:    '',
-      isActive:    false,
-      testedAt:    null,
-      maxTokens:  8192,
-    },
+    maxOutputTokens: 32768,
     utilityModel: {
       provider: '',
-      model:    '',
+      model: '',
     },
-    skillsPath:  '',
-    DoCPath:     '',
+    providers: [],
+    skillsPath: '',
+    DoCPath: '',
     artifactPath: '',
-    pineconeApiKey:    '',
-    defaultToolIds:    null,       // null = all tools enabled by default; array = specific IDs
-    defaultMcpServerIds: null,     // null = all MCP servers enabled by default; array = specific IDs
-    newsFeeds:         [],         // populated from config.json at startup
-    feedSelection:     [],         // array of 6 feed IDs for the news cards
+    pineconeApiKey: '',
+    defaultToolIds: null,
+    defaultMcpServerIds: null,
+    newsFeeds: [],
+    feedSelection: [],
     sandboxConfig: {
       defaultMode: 'sandbox',
       sandboxAllowList: [],
       dangerBlockList: [
-        { id: 'danger-1', pattern: 'rm -rf *',        description: 'Recursive force delete' },
-        { id: 'danger-2', pattern: 'sudo *',           description: 'Superuser commands' },
-        { id: 'danger-3', pattern: 'curl * | *sh',     description: 'Remote script execution' },
-        { id: 'danger-4', pattern: 'curl * | bash',    description: 'Remote bash execution' },
-        { id: 'danger-5', pattern: 'wget * | bash',    description: 'Remote bash execution' },
-        { id: 'danger-6', pattern: ':(){ :|:& };:',    description: 'Fork bomb' },
-        { id: 'danger-7', pattern: 'dd if=/dev/zero *',description: 'Disk wipe' },
-        { id: 'danger-8', pattern: 'mkfs.*',           description: 'Format filesystem' },
+        { id: 'danger-1', pattern: 'rm -rf *', description: 'Recursive force delete' },
+        { id: 'danger-2', pattern: 'sudo *', description: 'Superuser commands' },
+        { id: 'danger-3', pattern: 'curl * | *sh', description: 'Remote script execution' },
+        { id: 'danger-4', pattern: 'curl * | bash', description: 'Remote bash execution' },
+        { id: 'danger-5', pattern: 'wget * | bash', description: 'Remote bash execution' },
+        { id: 'danger-6', pattern: ':(){ :|:& };:', description: 'Fork bomb' },
+        { id: 'danger-7', pattern: 'dd if=/dev/zero *', description: 'Disk wipe' },
+        { id: 'danger-8', pattern: 'mkfs.*', description: 'Format filesystem' },
       ],
     },
     topStoriesCriteria: {
@@ -64,19 +98,18 @@ export const useConfigStore = defineStore('config', () => {
       breakingKeywords: 'breaking, exclusive, announces, launches, reveals, introduces, unveils, raises, acquires, partnership',
       timeWindowHours: 24,
     },
-    maxOutputTokens: 32768,  // global default; per-chat can override; hard limit 98304 (96k)
     smtp: {
-      host:      '',
-      port:      587,
-      user:      '',
-      pass:      '',
+      host: '',
+      port: 587,
+      user: '',
+      pass: '',
       userEmail: '',
     },
     voiceCall: {
-      whisperApiKey: '',     // OpenAI API key for Whisper STT
-      whisperBaseURL: '',    // Base URL (defaults to https://api.openai.com)
-      ttsMode: 'browser',   // 'browser' = free SpeechSynthesis, 'openai' = TTS $15/1M chars, 'openai-hd' = TTS HD $30/1M chars
-      isActive: false,       // set to true after successful test connection
+      whisperApiKey: '',
+      whisperBaseURL: '',
+      ttsMode: 'browser',
+      isActive: false,
     },
     pricing: {
       models: {},
@@ -86,60 +119,185 @@ export const useConfigStore = defineStore('config', () => {
     im: {
       telegram: { enabled: false, botToken: '', allowedUsers: [] },
       whatsapp: { enabled: false, allowedUsers: [] },
-      feishu:   { enabled: false, appId: '', appSecret: '', allowedUsers: [] },
+      feishu: { enabled: false, appId: '', appSecret: '', allowedUsers: [] },
     },
+    language: 'en',
   })
 
-  // True when at least one provider has both an API key and a baseURL configured.
+  function createProvider(presetType, name = null) {
+    const preset = PROVIDER_PRESETS[presetType] || PROVIDER_PRESETS.custom
+    const settings = {
+      temperature: 1,
+      topP: 1,
+      maxOutputTokens: config.value.maxOutputTokens,
+    }
+    if (presetType === 'anthropic') {
+      settings.opusModel = 'claude-opus-latest'
+      settings.haikuModel = 'claude-haiku-latest'
+    }
+    return {
+      id: uuidv4(),
+      name: name || preset.name,
+      type: preset.type,
+      apiKey: '',
+      baseURL: preset.defaultBaseURL || '',
+      model: preset.defaultModels[0] || '',
+      settings,
+      isActive: false,
+      testedAt: null,
+    }
+  }
+
+  function addProvider(presetType, name = null) {
+    const provider = createProvider(presetType, name)
+    config.value.providers.push(provider)
+    return provider
+  }
+
+  function removeProvider(providerId) {
+    const index = config.value.providers.findIndex(p => p.id === providerId)
+    if (index !== -1) {
+      config.value.providers.splice(index, 1)
+    }
+  }
+
+  function updateProvider(providerId, updates) {
+    const provider = config.value.providers.find(p => p.id === providerId)
+    if (provider) {
+      Object.assign(provider, updates)
+    }
+  }
+
+  function getProvider(providerId) {
+    return config.value.providers.find(p => p.id === providerId)
+  }
+
   const isConfigured = computed(() => {
-    const c = config.value
-    return !!(
-      (c.anthropic?.apiKey && c.anthropic?.baseURL) ||
-      (c.openrouter?.apiKey && c.openrouter?.baseURL) ||
-      (c.openai?.apiKey && c.openai?.baseURL) ||
-      (c.deepseek?.apiKey && c.deepseek?.baseURL)
-    )
+    return config.value.providers.some(p => p.apiKey && p.baseURL && p.isActive)
   })
 
   const activeProviders = computed(() => {
-    const c = config.value
-    return ['anthropic', 'openrouter', 'openai', 'deepseek'].filter(
-      p => c[p]?.isActive === true
-    )
+    return config.value.providers
+      .filter(p => p.isActive)
+      .map(p => p.id)
   })
 
   async function loadConfig() {
     const defaults = config.value
     const saved = await storage.getConfig()
-    // Deep-merge nested provider objects
-    const savedSandbox = saved.sandboxConfig || {}
-    config.value = {
-      ...defaults,
-      ...saved,
-      anthropic:    { ...defaults.anthropic,    ...saved.anthropic },
-      openrouter:   { ...defaults.openrouter,   ...saved.openrouter },
-      openai:       { ...defaults.openai,       ...saved.openai },
-      deepseek:     { ...defaults.deepseek,     ...saved.deepseek },
-      voiceCall:    { ...defaults.voiceCall,    ...saved.voiceCall },
-      smtp:         { ...defaults.smtp,         ...saved.smtp },
-      utilityModel: { ...defaults.utilityModel, ...saved.utilityModel },
-      sandboxConfig: {
-        ...defaults.sandboxConfig,
-        ...savedSandbox,
-        sandboxAllowList: savedSandbox.sandboxAllowList || [],
-        dangerBlockList: (savedSandbox.dangerBlockList && savedSandbox.dangerBlockList.length > 0)
-          ? savedSandbox.dangerBlockList
-          : defaults.sandboxConfig.dangerBlockList,
-      },
-      pricing: { models: {}, modelPriceMap: {}, currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 }, ...(saved.pricing || {}) },
-      im: {
+
+    if (saved.providers && Array.isArray(saved.providers) && saved.providers.length > 0) {
+      config.value = {
+        ...defaults,
+        ...saved,
+        providers: saved.providers,
+      }
+    } else {
+      const migratedProviders = migrateLegacyConfig(saved)
+      config.value = {
+        ...defaults,
+        ...saved,
+        providers: migratedProviders,
+      }
+    }
+
+    const savedSandbox = saved?.sandboxConfig || {}
+    config.value.sandboxConfig = {
+      ...defaults.sandboxConfig,
+      ...savedSandbox,
+      sandboxAllowList: savedSandbox.sandboxAllowList || [],
+      dangerBlockList: (savedSandbox.dangerBlockList && savedSandbox.dangerBlockList.length > 0)
+        ? savedSandbox.dangerBlockList
+        : defaults.sandboxConfig.dangerBlockList,
+    }
+
+    if (saved?.voiceCall) {
+      config.value.voiceCall = { ...defaults.voiceCall, ...saved.voiceCall }
+    }
+    if (saved?.smtp) {
+      config.value.smtp = { ...defaults.smtp, ...saved.smtp }
+    }
+    if (saved?.utilityModel) {
+      config.value.utilityModel = { ...defaults.utilityModel, ...saved.utilityModel }
+    }
+    if (saved?.pricing) {
+      config.value.pricing = { models: {}, modelPriceMap: {}, currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 }, ...saved.pricing }
+    }
+    if (saved?.im) {
+      config.value.im = {
         telegram: { ...defaults.im.telegram, ...(saved.im?.telegram || {}) },
         whatsapp: { ...defaults.im.whatsapp, ...(saved.im?.whatsapp || {}) },
-        feishu:   { ...defaults.im.feishu,   ...(saved.im?.feishu   || {}) },
-      },
+        feishu: { ...defaults.im.feishu, ...(saved.im?.feishu || {}) },
+      }
     }
-    // Also load the env-backed paths
+
     await loadEnvPaths()
+  }
+
+  function migrateLegacyConfig(saved) {
+    const providers = []
+
+    if (saved?.anthropic?.apiKey) {
+      providers.push({
+        id: uuidv4(),
+        name: 'Anthropic',
+        type: 'anthropic',
+        apiKey: saved.anthropic.apiKey,
+        baseURL: saved.anthropic.baseURL || 'https://api.anthropic.com',
+        model: saved.anthropic.sonnetModel || 'claude-sonnet-latest',
+        settings: { temperature: 1, topP: 1, maxOutputTokens: config.value.maxOutputTokens },
+        isActive: saved.anthropic.isActive || false,
+        testedAt: saved.anthropic.testedAt || null,
+      })
+    }
+
+    if (saved?.openrouter?.apiKey) {
+      providers.push({
+        id: uuidv4(),
+        name: 'OpenRouter',
+        type: 'openrouter',
+        apiKey: saved.openrouter.apiKey,
+        baseURL: saved.openrouter.baseURL || 'https://openrouter.ai/api',
+        model: '',
+        settings: { temperature: 1, topP: 1, maxOutputTokens: config.value.maxOutputTokens },
+        isActive: saved.openrouter.isActive || false,
+        testedAt: saved.openrouter.testedAt || null,
+      })
+    }
+
+    if (saved?.openai?.apiKey) {
+      providers.push({
+        id: uuidv4(),
+        name: 'OpenAI Compatible',
+        type: 'openai',
+        apiKey: saved.openai.apiKey,
+        baseURL: saved.openai.baseURL || '',
+        model: '',
+        settings: { temperature: 1, topP: 1, maxOutputTokens: config.value.maxOutputTokens },
+        isActive: saved.openai.isActive || false,
+        testedAt: saved.openai.testedAt || null,
+      })
+    }
+
+    if (saved?.deepseek?.apiKey) {
+      providers.push({
+        id: uuidv4(),
+        name: 'DeepSeek',
+        type: 'deepseek',
+        apiKey: saved.deepseek.apiKey,
+        baseURL: saved.deepseek.baseURL || 'https://api.deepseek.com',
+        model: 'deepseek-chat',
+        settings: { 
+          temperature: 1, 
+          topP: 1, 
+          maxOutputTokens: saved.deepseek.maxTokens || 8192 
+        },
+        isActive: saved.deepseek.isActive || false,
+        testedAt: saved.deepseek.testedAt || null,
+      })
+    }
+
+    return providers
   }
 
   async function loadEnvPaths() {
@@ -159,23 +317,38 @@ export const useConfigStore = defineStore('config', () => {
     config.value = {
       ...prev,
       ...newConfig,
-      anthropic:    { ...prev.anthropic,    ...newConfig.anthropic },
-      openrouter:   { ...prev.openrouter,   ...newConfig.openrouter },
-      openai:       { ...prev.openai,       ...newConfig.openai },
-      deepseek:     { ...prev.deepseek,     ...newConfig.deepseek },
-      voiceCall:    { ...prev.voiceCall,    ...newConfig.voiceCall },
-      smtp:         { ...prev.smtp,         ...newConfig.smtp },
+      providers: newConfig.providers || prev.providers,
       utilityModel: { ...prev.utilityModel, ...newConfig.utilityModel },
+      voiceCall: { ...prev.voiceCall, ...newConfig.voiceCall },
+      smtp: { ...prev.smtp, ...newConfig.smtp },
+      sandboxConfig: { ...prev.sandboxConfig, ...newConfig.sandboxConfig },
       im: {
         telegram: { ...prev.im?.telegram, ...(newConfig.im?.telegram || {}) },
         whatsapp: { ...prev.im?.whatsapp, ...(newConfig.im?.whatsapp || {}) },
-        feishu:   { ...prev.im?.feishu,   ...(newConfig.im?.feishu   || {}) },
+        feishu: { ...prev.im?.feishu, ...(newConfig.im?.feishu || {}) },
       },
     }
     await storage.saveConfig(JSON.parse(JSON.stringify(toRaw(config.value))))
   }
 
   const isVoiceCallActive = computed(() => config.value.voiceCall?.isActive === true)
+  const language = computed(() => config.value.language || 'en')
 
-  return { config, activeProviders, isConfigured, isVoiceCallActive, loadConfig, loadEnvPaths, saveEnvPath, saveConfig }
+  return { 
+    config, 
+    activeProviders, 
+    isConfigured, 
+    isVoiceCallActive, 
+    language,
+    PROVIDER_PRESETS,
+    createProvider,
+    addProvider,
+    removeProvider,
+    updateProvider,
+    getProvider,
+    loadConfig, 
+    loadEnvPaths, 
+    saveEnvPath, 
+    saveConfig 
+  }
 })

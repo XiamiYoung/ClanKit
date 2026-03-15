@@ -73,7 +73,7 @@
               <div class="phm-canvas-header">
                 <!-- Row 1: timing + summary -->
                 <div class="phm-canvas-row">
-                  <span class="phm-canvas-label">Workflow</span>
+                  <span class="phm-canvas-label">{{ t('tasks.workflow') }}</span>
                   <div class="phm-canvas-chips">
                     <span v-if="activeRun?.startedAt" class="phm-chip">
                       <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -94,7 +94,7 @@
                   <!-- Trigger type -->
                   <span class="phm-chip phm-chip--meta">
                     <svg style="width:9px;height:9px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                    {{ activeRun?.triggeredBy === 'schedule' ? 'Scheduled' : 'Manual' }}
+                    {{ activeRun?.triggeredBy === 'schedule' ? t('tasks.scheduled') : t('tasks.manual') }}
                   </span>
                   <!-- Schedule type + detail -->
                   <template v-if="plan.schedule?.type === 'once' && plan.schedule?.runAt">
@@ -116,7 +116,7 @@
                   <template v-else-if="plan.schedule?.type === 'manual'">
                     <span class="phm-chip phm-chip--meta">
                       <svg style="width:9px;height:9px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
-                      Manual only
+                      {{ t('tasks.manualOnly') }}
                     </span>
                   </template>
                   <!-- Permission mode -->
@@ -135,7 +135,7 @@
               <div class="phm-flow">
                 <div class="phm-terminus phm-terminus--start">
                   <div class="phm-terminus-dot"></div>
-                  <span>START</span>
+                  <span>{{ t('tasks.start') }}</span>
                 </div>
 
                 <template v-for="(wave, wi) in flowWaves" :key="wi">
@@ -173,7 +173,7 @@
                       </div>
                       <div v-if="node.dependsOnLabels.length" class="phm-node-after">after: {{ node.dependsOnLabels.join(', ') }}</div>
                       <div class="phm-agents-line">
-                        <span class="phm-agents-label">Agent:</span>
+                        <span class="phm-agents-label">{{ t('tasks.history.agent') }}:</span>
                         <span class="phm-agents-names">{{ node.agents.length ? node.agents.map(p=>p.name).join(', ') : '—' }}</span>
                       </div>
                     </div>
@@ -186,7 +186,7 @@
                 </div>
                 <div class="phm-terminus phm-terminus--end">
                   <div class="phm-terminus-dot phm-terminus-dot--end"></div>
-                  <span>END</span>
+                  <span>{{ t('tasks.history.end') }}</span>
                 </div>
               </div>
             </template>
@@ -281,7 +281,7 @@
         <!-- Footer -->
         <div class="phm-footer">
           <span class="phm-footer-count">{{ mergedRuns.length }} run{{ mergedRuns.length !== 1 ? 's' : '' }}</span>
-          <button class="phm-close-btn" @click="$emit('close')">Close</button>
+          <button class="phm-close-btn" @click="$emit('close')">{{ t('tasks.actions.close') }}</button>
         </div>
 
       </div>
@@ -293,6 +293,9 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useTasksStore } from '../../stores/tasks'
 import { useAgentsStore } from '../../stores/agents'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   visible:      { type: Boolean, default: false },

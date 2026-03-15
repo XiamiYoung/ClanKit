@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400">
+  <!-- sky -->
+  <rect width="900" height="400" fill="#87CEEB"/>
+  <!-- grass -->
+  <rect y="240" width="900" height="160" fill="#4A7C59"/>
+  <!-- grass variation -->
+  <rect y="280" width="900" height="120" fill="#3D6B4A"/>
+  <!-- path -->
+  <path d="M350 400 Q400 320 450 280 Q500 250 550 240 Q620 230 700 240 Q780 250 900 240" fill="none" stroke="#C4A97D" stroke-width="40" stroke-linecap="round" opacity="0.6"/>
+  <path d="M350 400 Q400 320 450 280 Q500 250 550 240 Q620 230 700 240 Q780 250 900 240" fill="none" stroke="#D4B98D" stroke-width="30" stroke-linecap="round" opacity="0.3"/>
+  <!-- tree left -->
+  <rect x="100" y="140" width="16" height="120" fill="#5D4037"/>
+  <ellipse cx="108" cy="130" rx="50" ry="60" fill="#2E7D32"/>
+  <ellipse cx="90" cy="120" rx="35" ry="45" fill="#388E3C" opacity="0.8"/>
+  <ellipse cx="126" cy="125" rx="30" ry="40" fill="#43A047" opacity="0.7"/>
+  <!-- tree right -->
+  <rect x="720" y="150" width="14" height="100" fill="#5D4037"/>
+  <ellipse cx="727" cy="140" rx="45" ry="55" fill="#2E7D32"/>
+  <ellipse cx="712" cy="130" rx="30" ry="40" fill="#388E3C" opacity="0.8"/>
+  <ellipse cx="742" cy="135" rx="28" ry="38" fill="#43A047" opacity="0.7"/>
+  <!-- small tree/bush center -->
+  <rect x="448" y="180" width="10" height="60" fill="#5D4037"/>
+  <ellipse cx="453" cy="175" rx="30" ry="35" fill="#388E3C"/>
+  <!-- bench -->
+  <rect x="550" y="280" width="80" height="8" rx="2" fill="#6D4C2C"/>
+  <rect x="555" y="260" width="4" height="28" fill="#6D4C2C"/>
+  <rect x="621" y="260" width="4" height="28" fill="#6D4C2C"/>
+  <rect x="555" y="260" width="70" height="6" rx="1" fill="#8B6340"/>
+  <!-- clouds -->
+  <ellipse cx="200" cy="60" rx="60" ry="25" fill="#FFFFFF" opacity="0.7"/>
+  <ellipse cx="240" cy="55" rx="40" ry="20" fill="#FFFFFF" opacity="0.6"/>
+  <ellipse cx="650" cy="45" rx="50" ry="22" fill="#FFFFFF" opacity="0.6"/>
+  <ellipse cx="690" cy="40" rx="35" ry="18" fill="#FFFFFF" opacity="0.5"/>
+  <!-- flowers -->
+  <circle cx="300" cy="320" r="4" fill="#FF6B6B" opacity="0.7"/>
+  <circle cx="320" cy="330" r="3" fill="#FFD700" opacity="0.7"/>
+  <circle cx="600" cy="310" r="4" fill="#FF69B4" opacity="0.6"/>
+  <circle cx="180" cy="340" r="3" fill="#FFD700" opacity="0.6"/>
+  <circle cx="800" cy="330" r="4" fill="#FF6B6B" opacity="0.6"/>
+</svg>

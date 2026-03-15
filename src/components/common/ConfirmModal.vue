@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="confirm-backdrop" @click.self="!loading && $emit('close')" @keydown.escape="!loading && $emit('close')">
+    <div v-if="visible" class="confirm-backdrop">
       <div class="confirm-modal" role="alertdialog" aria-modal="true">
         <!-- Header -->
         <div class="confirm-header">
@@ -18,7 +18,7 @@
 
         <!-- Footer -->
         <div class="confirm-footer">
-          <button v-if="cancelText" class="confirm-cancel-btn" @click="$emit('close')" :disabled="loading">{{ cancelText }}</button>
+          <button v-if="computedCancelText" class="confirm-cancel-btn" @click="$emit('close')" :disabled="loading">{{ computedCancelText }}</button>
           <button
             class="confirm-action-btn"
             :class="[confirmClass, { 'confirm-action-loading': loading }]"
@@ -26,7 +26,7 @@
             @click="$emit('confirm')"
           >
             <svg v-if="loading" class="confirm-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-            {{ loading ? loadingText : confirmText }}
+            {{ loading ? computedLoadingText : computedConfirmText }}
           </button>
         </div>
       </div>
@@ -35,9 +35,12 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
-defineOptions({ inheritAttrs: false })
+import { computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from '../../i18n/useI18n'
 
+const { t } = useI18n()
+
+defineOptions({ inheritAttrs: false })
 const props = defineProps({
   visible: {
     type: Boolean,
@@ -53,7 +56,7 @@ const props = defineProps({
   },
   confirmText: {
     type: String,
-    default: 'Delete',
+    default: '',
   },
   confirmClass: {
     type: String,
@@ -61,7 +64,7 @@ const props = defineProps({
   },
   cancelText: {
     type: String,
-    default: 'Cancel',
+    default: undefined,
   },
   loading: {
     type: Boolean,
@@ -69,7 +72,7 @@ const props = defineProps({
   },
   loadingText: {
     type: String,
-    default: 'Deleting…',
+    default: '',
   },
   error: {
     type: String,
@@ -78,6 +81,19 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['confirm', 'close'])
+
+function onBackdropClick() {
+  if (!props.loading) {
+    emit('close')
+  }
+}
+
+const computedConfirmText = computed(() => props.confirmText || t('common.delete'))
+const computedCancelText = computed(() => {
+  if (props.cancelText === '') return ''
+  return props.cancelText ?? t('common.cancel')
+})
+const computedLoadingText = computed(() => props.loadingText || t('common.deleting'))
 
 function onKeydown(e) {
   if (e.key === 'Escape' && !props.loading) {

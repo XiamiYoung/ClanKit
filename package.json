@@ -111,6 +111,7 @@
     "node-telegram-bot-api": "^0.67.0",
     "nodemailer": "^8.0.1",
     "openai": "^6.24.0",
+    "phaser": "^3.90.0",
     "pptxgenjs": "^4.0.1",
     "pptxtojson": "^1.12.1",
     "qrcode": "^1.5.4",

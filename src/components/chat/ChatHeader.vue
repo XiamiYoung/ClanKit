@@ -30,7 +30,7 @@
         </div>
         <span v-if="isRunning" class="ch-title-spinner"></span>
         <span class="chat-header-title">{{ truncatedTitle }}</span>
-        <button class="ch-edit-btn" @click.stop="startEdit" title="Rename chat">
+        <button class="ch-edit-btn" @click.stop="startEdit" :title="t('chats.renameChat')">
           <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -53,7 +53,7 @@
           @keydown.escape="cancelEdit"
           @blur="confirmEdit"
         />
-        <button class="ch-edit-confirm" @click.stop="confirmEdit" title="Save">
+        <button class="ch-edit-confirm" @click.stop="confirmEdit" :title="t('common.save')">
           <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
@@ -132,7 +132,7 @@
                 </button>
               </div>
               <!-- User agent select button -->
-              <button class="sys-add-btn" @click.stop="togglePopover('user')" title="Switch user agent">
+              <button class="sys-add-btn" @click.stop="togglePopover('user')" :title="t('chats.switchUserAgent', 'Switch user agent')">
                 <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="8" r="4"/><path d="M3 21v-2a6 6 0 0 1 9.29-5"/><path d="M19 14v6m-3-3 3 3 3-3"/></svg>
               </button>
               </div>
@@ -202,7 +202,7 @@
 
             <!-- Configure agent button -->
             <div class="agent-chip-wrap" ref="groupAddChipWrap">
-              <button class="sys-add-btn" @click.stop="openAgentCombobox" title="Configure agents">
+              <button class="sys-add-btn" @click.stop="openAgentCombobox" :title="t('chats.configureAgents', 'Configure agents')">
                 <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </button>
             </div>
@@ -243,7 +243,7 @@
           <div class="ch-modal-header-icon">
             <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
-          <span class="ch-modal-title">User Agent</span>
+          <span class="ch-modal-title">{{ t('chats.userAgent') }}</span>
           <button class="ch-modal-close" @click="showUsrPopover = false">
             <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
@@ -318,7 +318,7 @@
           <div class="ch-modal-header-icon">
             <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><path d="M4 12h16"/><path d="M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1"/><path d="M9 16h0"/><path d="M15 16h0"/></svg>
           </div>
-          <span class="ch-modal-title">System Agents</span>
+          <span class="ch-modal-title">{{ t('chats.systemAgents') }}</span>
           <button class="ch-modal-close" @click="showGroupAddPopover = false">
             <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
@@ -329,7 +329,7 @@
             ref="agentSearchEl"
             v-model="agentSearchQuery"
             type="text"
-            placeholder="Search agents..."
+            :placeholder="t('chats.searchAgents')"
             class="ch-modal-search-input"
           />
         </div>
@@ -355,7 +355,7 @@
                 <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
               </div>
             </label>
-            <div v-if="filteredSystemAgents.length === 0" class="ch-modal-empty">No agents match</div>
+            <div v-if="filteredSystemAgents.length === 0" class="ch-modal-empty">{{ t('chats.noAgentsMatch') }}</div>
           </template>
           <!-- No search: category tree -->
           <template v-else>
@@ -432,14 +432,9 @@
       class="ch-config-tooltip-fixed"
       :style="{ top: configTooltipY + 'px', right: configTooltipRight + 'px' }"
     >
-      <div class="ch-config-tooltip-row"><span class="cct-key">Provider</span><span class="cct-val">{{ effectiveProviderLabel }}</span></div>
-      <div class="ch-config-tooltip-row"><span class="cct-key">Model</span><span class="cct-val">{{ effectiveModelLabel }}</span></div>
-      <div class="ch-config-tooltip-row"><span class="cct-key">Tools</span><span class="cct-val">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }} ({{ formatTokens(toolsTokenEstimate) }})</span></div>
-      <div class="ch-config-tooltip-row"><span class="cct-key">MCP</span><span class="cct-val">{{ enabledMcpServers.length }}/{{ mcpStore.servers.length }} ({{ formatTokens(mcpTokenEstimate) }})</span></div>
-      <div class="ch-config-tooltip-row"><span class="cct-key">RAG</span><span class="cct-val">{{ ragEnabledCount }} index{{ ragEnabledCount !== 1 ? 'es' : '' }}</span></div>
-      <div class="ch-config-tooltip-row"><span class="cct-key">Path</span><span class="cct-val">{{ effectiveWorkingPath }}</span></div>
-      <div class="ch-config-tooltip-row"><span class="cct-key">Rounds</span><span class="cct-val">{{ effectiveAgentRounds }}</span></div>
-      <div class="ch-config-tooltip-row"><span class="cct-key">Max Tokens</span><span class="cct-val">{{ effectiveMaxOutputTokens.toLocaleString() }}</span></div>
+      <div class="ch-config-tooltip-row"><span class="cct-key">{{ t('chats.chatSettingsPath') }}</span><span class="cct-val">{{ effectiveWorkingPath }}</span></div>
+      <div class="ch-config-tooltip-row"><span class="cct-key">{{ t('chats.chatSettingsAgentRounds') }}</span><span class="cct-val">{{ effectiveAgentRounds }}</span></div>
+      <div class="ch-config-tooltip-row"><span class="cct-key">{{ t('chats.chatSettingsMaxTokens') }}</span><span class="cct-val">{{ effectiveMaxOutputTokens.toLocaleString() }}</span></div>
     </div>
   </Teleport>
 
@@ -484,6 +479,9 @@ import { useKnowledgeStore } from '../../stores/knowledge'
 import { getAvatarDataUri } from '../agents/agentAvatars'
 import { estimateToolTokens, estimateMcpTokens, formatTokens } from '../../utils/tokenEstimate'
 import { useVoiceStore } from '../../stores/voice'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   chatId: { type: String, required: true },

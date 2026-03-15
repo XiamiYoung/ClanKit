@@ -14,8 +14,8 @@
               </svg>
             </div>
             <div>
-              <div class="wf-title">Workflow Preview</div>
-              <div class="wf-subtitle">{{ plan.name }} · {{ plan.steps?.length || 0 }} step{{ (plan.steps?.length || 0) !== 1 ? 's' : '' }}</div>
+              <div class="wf-title">{{ t('tasks.workflowPreview') }}</div>
+              <div class="wf-subtitle">{{ plan.name }} · {{ plan.steps?.length || 0 }} {{ (plan.steps?.length || 0) !== 1 ? t('tasks.steps') : t('tasks.step') }}</div>
             </div>
           </div>
           <button class="wf-close" @click="$emit('close')" title="Close">
@@ -34,7 +34,7 @@
             <!-- START terminus -->
             <div class="wf-terminus wf-terminus--start">
               <div class="wf-terminus-ring"></div>
-              <span>START</span>
+              <span>{{ t('tasks.start') }}</span>
             </div>
 
             <template v-for="(wave, wi) in flowWaves" :key="wi">
@@ -209,6 +209,9 @@
 import { computed, ref, watch } from 'vue'
 import { useAgentsStore } from '../../stores/agents'
 import { useTasksStore } from '../../stores/tasks'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -298,6 +301,7 @@ function buildNode(step, allSteps) {
                  : runStatus === 'running' ? 'wf-node--run-running'
                  : ''
 
+  const task = tasksStore.tasks.find(t => t.id === step.taskId) || null
   return {
     stepId: step.id,
     stepIndex,
@@ -343,7 +347,7 @@ function fmtTs(iso) {
 
 const scheduleLabel = computed(() => {
   const s = props.plan?.schedule
-  if (!s || s.type === 'manual') return 'Manual only'
+  if (!s || s.type === 'manual') return t('tasks.manualOnly')
   if (s.type === 'once')  return s.runAt ? `Once at ${new Date(s.runAt).toLocaleString()}` : 'Once (no time set)'
   if (s.type === 'cron')  return s.cron ? `Cron: ${s.cron}` : 'Cron (no expression)'
   return ''
