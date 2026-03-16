@@ -112,24 +112,23 @@
             <div class="agent-card-wrap" ref="usrChipWrap">
               <div class="agent-card user" @mouseenter="showAgentTooltip($event, resolvedUserAgentId)" @mouseleave="hideAgentTooltip">
                 <div class="agent-card-avatar">
-                  <img v-if="activeUserAvatarDataUri" :src="activeUserAvatarDataUri" alt="" class="agent-card-avatar-img" />
-                  <div v-else class="agent-card-avatar-default user">
+                  <img
+                    v-if="activeUserAvatarDataUri"
+                    :src="activeUserAvatarDataUri"
+                    alt=""
+                    class="agent-card-avatar-img"
+                    @click.stop="$emit('open-soul-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
+                    title="View summary"
+                  />
+                  <div
+                    v-else
+                    class="agent-card-avatar-default user"
+                    @click.stop="$emit('open-soul-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
+                    title="View summary"
+                  >
                     <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                   </div>
                 </div>
-                <div v-if="!compactAgents" class="agent-card-info">
-                  <span class="agent-card-name">{{ activeUserAgentName }}</span>
-                </div>
-                <button
-                  class="agent-card-summary-btn"
-                  @click.stop="$emit('open-soul-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
-                  title="View summary"
-                >
-                  <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
-                    <line x1="10" y1="22" x2="14" y2="22"/>
-                  </svg>
-                </button>
               </div>
               <!-- User agent select button -->
               <button class="sys-add-btn" @click.stop="togglePopover('user')" :title="t('chats.switchUserAgent', 'Switch user agent')">
@@ -171,34 +170,6 @@
                 <span class="sys-avatar-fallback">+{{ overflowSystemCount }}</span>
               </div>
             </div>
-
-            <!-- Active agent name label (no click) -->
-            <template v-if="!compactAgents">
-              <div
-                v-if="activeSystemAgentIds.length === 1"
-                class="sys-agent-label"
-                @mouseenter="showAgentTooltip($event, activeSystemAgentIds[0])"
-                @mouseleave="hideAgentTooltip"
-              >
-                <span class="sys-agent-name">{{ agentsStore.getAgentById(activeSystemAgentIds[0])?.name || 'Unknown' }}</span>
-              </div>
-              <div v-else-if="activeSystemAgentIds.length > 1" class="sys-agent-label">
-                <span class="sys-agent-name">{{ activeSystemAgentIds.length }} agents</span>
-              </div>
-            </template>
-
-            <!-- Summary button (single agent) — opens SoulViewer -->
-            <button
-              v-if="activeSystemAgentIds.length === 1"
-              class="agent-card-summary-btn"
-              @click.stop="$emit('open-soul-viewer', activeSystemAgentIds[0], 'system', agentsStore.getAgentById(activeSystemAgentIds[0])?.name || 'System')"
-              title="View summary"
-            >
-              <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
-                <line x1="10" y1="22" x2="14" y2="22"/>
-              </svg>
-            </button>
 
             <!-- Configure agent button -->
             <div class="agent-chip-wrap" ref="groupAddChipWrap">
@@ -751,11 +722,7 @@ function toggleSystemAgent(agentId) {
 
 // ── System avatar click: grid/group → soul viewer; normal → nothing ──
 function onSysAvatarClick(pid) {
-  if (props.compactAgents || activeSystemAgentIds.value.length > 1) {
-    // Grid view or group chat: icon click opens soul viewer
-    emit('open-soul-viewer', pid, 'system', agentsStore.getAgentById(pid)?.name || 'System')
-  }
-  // Normal single-agent view: no action on avatar click (use View Summary btn instead)
+  emit('open-soul-viewer', pid, 'system', agentsStore.getAgentById(pid)?.name || 'System')
 }
 
 // ── Agent tooltip (header-only) ──
@@ -1168,6 +1135,7 @@ const effectiveMaxOutputTokens = computed(() => {
   height: 1.875rem;
   border-radius: 50%;
   object-fit: cover;
+  cursor: pointer;
 }
 .agent-card-avatar-default {
   width: 1.875rem;
@@ -1179,6 +1147,7 @@ const effectiveMaxOutputTokens = computed(() => {
 }
 .agent-card-avatar-default.user {
   background: rgba(255,255,255,0.15);
+  cursor: pointer;
 }
 .agent-card-info {
   display: flex;
@@ -1201,25 +1170,6 @@ const effectiveMaxOutputTokens = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 5rem;
-}
-.agent-card-summary-btn {
-  width: 1.25rem;
-  height: 1.25rem;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255,255,255,0.15);
-  color: rgba(255,255,255,0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s;
-  flex-shrink: 0;
-}
-.agent-card-summary-btn:hover {
-  background: rgba(255,255,255,0.25);
-  color: #FFFFFF;
-  transform: scale(1.1);
 }
 
 /* ── System agents: Teams-style avatar stack ── */
@@ -1288,38 +1238,12 @@ const effectiveMaxOutputTokens = computed(() => {
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
-  z-index: 10;
+  z-index: 100;
 }
 .sys-avatar-item:hover .sys-avatar-remove {
   opacity: 1;
 }
 
-/* System agent name label */
-.sys-agent-label {
-  display: flex;
-  align-items: baseline;
-  gap: 0.25rem;
-  margin-left: 0.25rem;
-  flex-shrink: 0;
-}
-.sys-agent-name {
-  font-family: 'Inter', sans-serif;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: #FFFFFF;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.sys-agent-desc {
-  font-family: 'Inter', sans-serif;
-  font-size: 0.625rem;
-  font-weight: 500;
-  color: rgba(255,255,255,0.6);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 6.25rem;
-}
 
 /* Add agent button */
 .sys-add-btn {

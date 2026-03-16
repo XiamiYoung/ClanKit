@@ -258,6 +258,27 @@ function hideTooltip() {
 }
 
 /**
+ * Insert text at current cursor position in the textarea.
+ */
+function insertTextAtCursor(text) {
+  const el = inputEl.value
+  if (!el) {
+    appendTextToInput(text)
+    return
+  }
+  const start = el.selectionStart
+  const end = el.selectionEnd
+  const before = localText.value.slice(0, start)
+  const after = localText.value.slice(end)
+  localText.value = `${before}${text}${after}`
+  nextTick(() => {
+    const newPos = start + text.length
+    el.setSelectionRange(newPos, newPos)
+    el.focus()
+  })
+}
+
+/**
  * Append text into the textarea (below existing content).
  */
 function appendTextToInput(text) {
@@ -282,7 +303,7 @@ function handleAttachResults(results) {
     }
   }
   if (imageAtts.length > 0) emit('attach', imageAtts)
-  if (pathTexts.length > 0) appendTextToInput(pathTexts.join('\n'))
+  if (pathTexts.length > 0) insertTextAtCursor(pathTexts.join('\n'))
 }
 
 /**
@@ -363,7 +384,11 @@ function resetHeight() {
   if (inputEl.value) inputEl.value.style.height = 'auto'
 }
 
-defineExpose({ focus, resetHeight })
+function insertTextAtCursorExposed(text) {
+  insertTextAtCursor(text)
+}
+
+defineExpose({ focus, resetHeight, insertTextAtCursor: insertTextAtCursorExposed })
 </script>
 
 <style scoped>

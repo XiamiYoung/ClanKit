@@ -18,8 +18,9 @@
 
         <!-- Footer -->
         <div class="confirm-footer">
-          <button v-if="computedCancelText" class="confirm-cancel-btn" @click="$emit('close')" :disabled="loading">{{ computedCancelText }}</button>
+          <button v-if="computedCancelText !== null" class="confirm-cancel-btn" @click="$emit('close')" :disabled="loading">{{ computedCancelText }}</button>
           <button
+            v-if="computedConfirmText !== null"
             class="confirm-action-btn"
             :class="[confirmClass, { 'confirm-action-loading': loading }]"
             :disabled="loading"
@@ -88,10 +89,14 @@ function onBackdropClick() {
   }
 }
 
-const computedConfirmText = computed(() => props.confirmText || t('common.delete'))
+const computedConfirmText = computed(() => {
+  if (props.confirmText === '') return null
+  return props.confirmText || t('common.delete')
+})
 const computedCancelText = computed(() => {
-  if (props.cancelText === '') return ''
-  return props.cancelText ?? t('common.cancel')
+  if (props.cancelText === '') return null
+  if (props.cancelText === null || props.cancelText === undefined) return t('common.cancel')
+  return props.cancelText
 })
 const computedLoadingText = computed(() => props.loadingText || t('common.deleting'))
 

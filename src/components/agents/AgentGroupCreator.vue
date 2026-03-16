@@ -127,6 +127,19 @@
           </div>
         </div>
 
+        <div v-if="dupSkipped.length > 0" class="agc-dup-warning">
+          <svg style="width:14px;height:14px;flex-shrink:0;margin-top:1px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <div>
+            <div class="agc-dup-title">{{ t('agents.groupCreator.dupTitle', 'Already exists — skipped') }}</div>
+            <div class="agc-dup-names">{{ dupSkipped.join(', ') }}</div>
+          </div>
+          <button class="agc-dup-close" @click="dupSkipped = []; $emit('created'); $emit('close')">
+            {{ t('common.confirm', 'OK') }}
+          </button>
+        </div>
+
         <div class="agc-footer">
           <button class="agc-btn agc-btn-cancel" @click="$emit('close')">
             {{ t('common.cancel', 'Cancel') }}
@@ -150,15 +163,15 @@ import { ref, computed, watch } from 'vue'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
-import { AGENT_TEMPLATES } from '../../data/agentTemplates'
+import { getAgentTemplates } from '../../data/agentTemplates'
 
 const emit = defineEmits(['close', 'created'])
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 
-const templates = AGENT_TEMPLATES
+const templates = computed(() => getAgentTemplates(locale.value))
 
 const activeTab = ref('templates')
 const selectedTemplate = ref(null)
@@ -170,6 +183,7 @@ const generatedProposal = ref(null)
 const aiError = ref('')
 
 const agentType = ref('system')
+const dupSkipped = ref([])
 
 const placeholderText = computed(() => {
   return t('agents.groupCreator.placeholder', 'Describe what you need... e.g. I want to create an engineering department with frontend team (5 people), backend team (8 people), and QA team (3 people)')
@@ -281,6 +295,7 @@ Rules:
 
 async function createAgents() {
   creating.value = true
+  dupSkipped.value = []
 
   try {
     let categoryId
@@ -293,7 +308,7 @@ async function createAgents() {
         name: a.name,
         description: a.description,
         prompt: a.prompt,
-        avatar: a.avatar
+        avatar: a.avatar || `a${Math.floor(Math.random() * 36) + 1}`
       }))
     } else if (generatedProposal.value) {
       const prop = generatedProposal.value
@@ -301,35 +316,53 @@ async function createAgents() {
       agentsData = prop.agents.map(a => ({
         name: a.name,
         description: a.description,
-        prompt: `You are ${a.name}, ${a.role}.\n\n${a.description}`,
+        prompt: `You are **${a.name}**, ${a.role}.\n\n## Your Role\n${a.description}\n\n## How You Work\n- Stay in character as ${a.name} — bring your expertise and personality to every response\n- Be specific and actionable, not generic\n- Ask clarifying questions when requirements are ambiguous\n- Collaborate with other team members when tasks overlap your domain`,
         avatar: `a${Math.floor(Math.random() * 36) + 1}`
       }))
     }
 
+    const utilityProvider = configStore.config?.utilityModel?.provider || null
+    const utilityModel = configStore.config?.utilityModel?.model || null
+
     if (categoryId && agentsData) {
-      const existingCount = agentsStore.agents.length
+      const existingNames = new Set(agentsStore.agents.map(a => a.name?.toLowerCase()))
+      const toCreate = []
       for (const agent of agentsData) {
-        await agentsStore.saveAgent({
-          ...agent,
-          type: agentType.value,
-          providerId: null,
-          modelId: null,
-          voiceId: null,
-          requiredToolIds: [],
-          requiredSkillIds: [],
-          requiredMcpServerIds: [],
-          requiredKnowledgeBaseIds: []
-        })
+        if (existingNames.has(agent.name?.toLowerCase())) {
+          dupSkipped.value.push(agent.name)
+        } else {
+          toCreate.push(agent)
+        }
       }
 
-      const newAgents = agentsStore.agents.slice(existingCount)
-      for (const agent of newAgents) {
-        await agentsStore.assignToCategory(agent.id, categoryId)
+      if (toCreate.length > 0) {
+        const existingCount = agentsStore.agents.length
+        for (const agent of toCreate) {
+          await agentsStore.saveAgent({
+            ...agent,
+            type: agentType.value,
+            providerId: utilityProvider,
+            modelId: utilityModel,
+            voiceId: null,
+            requiredToolIds: [],
+            requiredSkillIds: [],
+            requiredMcpServerIds: [],
+            requiredKnowledgeBaseIds: []
+          })
+        }
+
+        const newAgents = agentsStore.agents.slice(existingCount)
+        for (const agent of newAgents) {
+          await agentsStore.assignToCategory(agent.id, categoryId)
+        }
       }
     }
 
-    emit('created')
-    emit('close')
+    if (dupSkipped.value.length === 0) {
+      emit('created')
+      emit('close')
+    }
+    // If there were skips, stay open and show the message
   } catch (err) {
     console.error('Failed to create agents:', err)
   }
@@ -740,6 +773,49 @@ async function createAgents() {
   color: rgba(255, 255, 255, 0.4);
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
+}
+
+.agc-dup-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  margin: 0 1.5rem 0;
+  padding: 0.75rem 1rem;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 0.625rem;
+  color: #FCD34D;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+}
+
+.agc-dup-title {
+  font-weight: 600;
+  margin-bottom: 0.1875rem;
+}
+
+.agc-dup-names {
+  color: rgba(252, 211, 77, 0.75);
+  word-break: break-word;
+}
+
+.agc-dup-close {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 0.375rem;
+  color: #FCD34D;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  padding: 0.25rem 0.625rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.agc-dup-close:hover {
+  background: rgba(251, 191, 36, 0.25);
 }
 
 .agc-footer {

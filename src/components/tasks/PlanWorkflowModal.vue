@@ -15,10 +15,10 @@
             </div>
             <div>
               <div class="wf-title">{{ t('tasks.workflowPreview') }}</div>
-              <div class="wf-subtitle">{{ plan.name }} · {{ plan.steps?.length || 0 }} {{ (plan.steps?.length || 0) !== 1 ? t('tasks.steps') : t('tasks.step') }}</div>
+              <div class="wf-subtitle">{{ plan.name }} · {{ plan.steps?.length || 0 }} {{ (plan.steps?.length || 0) !== 1 ? t('tasks.steps') : t('tasks.stepLabel') }}</div>
             </div>
           </div>
-          <button class="wf-close" @click="$emit('close')" title="Close">
+          <button class="wf-close" @click="$emit('close')" :title="t('tasks.close')">
             <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
@@ -47,7 +47,7 @@
               <!-- wave column -->
               <div class="wf-wave-col">
                 <div v-if="wave.length > 1" class="wf-wave-tag">
-                  <span class="wf-parallel-badge">parallel ×{{ wave.length }}</span>
+                  <span class="wf-parallel-badge">{{ t('tasks.step.parallelCount', { count: wave.length }) }}</span>
                 </div>
 
                 <div
@@ -75,11 +75,11 @@
                   </div>
                   <!-- after: Step N label -->
                   <div v-if="node.dependsOnLabels.length > 0" class="wf-node-after">
-                    after: {{ node.dependsOnLabels.join(', ') }}
+                    {{ t('tasks.step.after') }}: {{ node.dependsOnLabels.join(', ') }}
                   </div>
                   <!-- agents -->
                   <div class="wf-agents-line">
-                    <span class="wf-agents-label">Agent:</span>
+                    <span class="wf-agents-label">{{ t('tasks.step.agentsLabel') }}</span>
                     <span class="wf-agents-names">{{ node.agents.length ? node.agents.map(p => p.name).join(', ') : '—' }}</span>
                   </div>
                 </div>
@@ -107,7 +107,7 @@
                 <span class="wf-detail-num">{{ selectedStep.stepIndex + 1 }}</span>
                 {{ selectedStep.taskIcon }} {{ selectedStep.taskName }}
               </div>
-              <button class="wf-detail-close" @click="selectedStep = null" title="Close">
+              <button class="wf-detail-close" @click="selectedStep = null" :title="t('tasks.close')">
                 <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
@@ -126,48 +126,48 @@
             </div>
             <div v-else class="wf-detail-status wf-detail-status--pending">
               <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16"/></svg>
-              Not yet run
+              {{ t('tasks.actions.notYetRun') }}
             </div>
 
             <!-- step timestamps (independent of status row) -->
             <div v-if="selectedStep.runStartedAt || selectedStep.runCompletedAt" class="wf-detail-timestamps">
               <div v-if="selectedStep.runStartedAt" class="wf-detail-ts">
-                <span class="wf-detail-ts-label">Started</span>
+                <span class="wf-detail-ts-label">{{ t('tasks.actions.started') }}</span>
                 <span class="wf-detail-ts-value">{{ fmtTs(selectedStep.runStartedAt) }}</span>
               </div>
               <div v-if="selectedStep.runCompletedAt" class="wf-detail-ts">
-                <span class="wf-detail-ts-label">Finished</span>
+                <span class="wf-detail-ts-label">{{ t('tasks.actions.finished') }}</span>
                 <span class="wf-detail-ts-value">{{ fmtTs(selectedStep.runCompletedAt) }}</span>
               </div>
             </div>
 
             <!-- output -->
             <div v-if="selectedStep.runOutput" class="wf-detail-section">
-              <div class="wf-detail-section-label">Output</div>
+              <div class="wf-detail-section-label">{{ t('tasks.actions.output') }}</div>
               <pre class="wf-detail-pre">{{ selectedStep.runOutput }}</pre>
             </div>
 
             <!-- error -->
             <div v-if="selectedStep.runError" class="wf-detail-section">
-              <div class="wf-detail-section-label wf-detail-section-label--error">Error</div>
+              <div class="wf-detail-section-label wf-detail-section-label--error">{{ t('tasks.actions.error') }}</div>
               <pre class="wf-detail-pre wf-detail-pre--error">{{ selectedStep.runError }}</pre>
             </div>
 
             <div v-if="!selectedStep.runOutput && !selectedStep.runError && !selectedStep.runStatus" class="wf-detail-empty">
-              No execution data available for this step.
+              {{ t('tasks.actions.noExecutionData') }}
             </div>
           </div>
 
           <!-- Legend -->
           <div class="wf-legend">
-            <span class="wf-legend-item"><span class="wf-legend-dot wf-legend-dot--parallel"></span>Parallel</span>
-            <span class="wf-legend-item"><span class="wf-legend-dot wf-legend-dot--success"></span>On success</span>
-            <span class="wf-legend-item"><span class="wf-legend-dot wf-legend-dot--failure"></span>On failure</span>
+            <span class="wf-legend-item"><span class="wf-legend-dot wf-legend-dot--parallel"></span>{{ t('tasks.actions.parallel') }}</span>
+            <span class="wf-legend-item"><span class="wf-legend-dot wf-legend-dot--success"></span>{{ t('tasks.actions.onSuccess') }}</span>
+            <span class="wf-legend-item"><span class="wf-legend-dot wf-legend-dot--failure"></span>{{ t('tasks.actions.onFailure') }}</span>
             <template v-if="run">
               <span class="wf-legend-sep"></span>
-              <span class="wf-legend-item"><span class="wf-legend-dot wf-legend-dot--run-done"></span>Done</span>
-              <span class="wf-legend-item"><span class="wf-legend-dot wf-legend-dot--run-failed"></span>Failed</span>
-              <span class="wf-legend-item"><span class="wf-legend-dot wf-legend-dot--run-skipped"></span>Skipped</span>
+              <span class="wf-legend-item"><span class="wf-legend-dot wf-legend-dot--run-done"></span>{{ t('tasks.actions.done') }}</span>
+              <span class="wf-legend-item"><span class="wf-legend-dot wf-legend-dot--run-failed"></span>{{ t('tasks.actions.failed') }}</span>
+              <span class="wf-legend-item"><span class="wf-legend-dot wf-legend-dot--run-skipped"></span>{{ t('tasks.actions.skipped') }}</span>
             </template>
           </div>
         </div>
@@ -197,7 +197,7 @@
               </span>
             </template>
           </div>
-          <button class="wf-close-btn" @click="$emit('close')">Close</button>
+          <button class="wf-close-btn" @click="$emit('close')">{{ t('tasks.close') }}</button>
         </div>
 
       </div>
@@ -294,7 +294,12 @@ function buildNode(step, allSteps) {
   // Resolve run result for this step
   const runResult = props.run?.stepResults?.find(r => r.stepIndex === stepIndex)
   const runStatus = runResult?.status || null
-  const runStatusLabels = { done: 'Done', failed: 'Failed', skipped: 'Skipped', running: 'Running' }
+  const runStatusLabels = { 
+    done: t('tasks.actions.done'), 
+    failed: t('tasks.actions.failed'), 
+    skipped: t('tasks.actions.skipped'), 
+    running: t('tasks.actions.running') 
+  }
   const runClass = runStatus === 'done'    ? 'wf-node--run-done'
                  : runStatus === 'failed'  ? 'wf-node--run-failed'
                  : runStatus === 'skipped' ? 'wf-node--run-skipped'
@@ -309,11 +314,11 @@ function buildNode(step, allSteps) {
     taskIcon: task?.icon || '✍️',
     agents,
     runCondition: cond,
-    conditionBadge: hasDeps && cond !== 'always' ? (cond === 'on_success' ? 'on success' : 'on failure') : null,
+    conditionBadge: hasDeps && cond !== 'always' ? (cond === 'on_success' ? t('tasks.actions.onSuccess') : t('tasks.actions.onFailure')) : null,
     condClass: hasDeps ? (cond === 'on_success' ? 'wf-node--success' : cond === 'on_failure' ? 'wf-node--failure' : '') : '',
     dependsOnLabels: (step.dependsOn || []).map(id => {
       const di = allSteps.findIndex(s => s.id === id)
-      return di === -1 ? '?' : `Step ${di + 1}`
+      return di === -1 ? '?' : `${t('tasks.step.step')} ${di + 1}`
     }),
     // run result fields
     runStatus,
@@ -348,22 +353,22 @@ function fmtTs(iso) {
 const scheduleLabel = computed(() => {
   const s = props.plan?.schedule
   if (!s || s.type === 'manual') return t('tasks.manualOnly')
-  if (s.type === 'once')  return s.runAt ? `Once at ${new Date(s.runAt).toLocaleString()}` : 'Once (no time set)'
-  if (s.type === 'cron')  return s.cron ? `Cron: ${s.cron}` : 'Cron (no expression)'
+  if (s.type === 'once')  return s.runAt ? `${t('tasks.schedule.onceAt')} ${new Date(s.runAt).toLocaleString()}` : t('tasks.schedule.onceNoTimeSet')
+  if (s.type === 'cron')  return s.cron ? `Cron: ${s.cron}` : t('tasks.schedule.cronNoExpression')
   return ''
 })
 
 const runStatusSummary = computed(() => {
-  if (!props.run?.stepResults) return 'No data'
+  if (!props.run?.stepResults) return t('tasks.actions.noData')
   const results = props.run.stepResults
   const done    = results.filter(r => r.status === 'done').length
   const failed  = results.filter(r => r.status === 'failed').length
   const skipped = results.filter(r => r.status === 'skipped').length
   const total   = props.plan?.steps?.length || 0
   const parts = []
-  if (done)    parts.push(`${done} done`)
-  if (failed)  parts.push(`${failed} failed`)
-  if (skipped) parts.push(`${skipped} skipped`)
+  if (done)    parts.push(`${done} ${t('tasks.actions.done')}`)
+  if (failed)  parts.push(`${failed} ${t('tasks.actions.failed')}`)
+  if (skipped) parts.push(`${skipped} ${t('tasks.actions.skipped')}`)
   if (parts.length === 0) parts.push(`0/${total}`)
   return parts.join(', ')
 })

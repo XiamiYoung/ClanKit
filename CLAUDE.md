@@ -623,6 +623,8 @@ Do NOT write task state to files on disk — it conflicts across concurrent term
 
 - **2026-03-10**: Used `npx vite build` after every task to verify compilation. **Rule: NEVER run `npx vite build` (or any build command) after completing a task in this project. The user explicitly forbids it. Trust the code changes are correct; only run a build if the user explicitly asks.**
 
+- **2026-03-16**: Delete buttons in sidebar and message bubbles were not working — clicking triggered the click handler but the ConfirmModal dialog never appeared. Root cause: The buttons were rendered inside a container with `opacity: 0` and `pointer-events: none` (used for hover effects), but without sufficient `z-index`. When opacity transitioned to 1 on hover, the click events were being intercepted by an overlapping element. **Rule: When using opacity/pointer-events for hover effects, always ensure buttons have explicit `z-index` AND the parent container has proper z-index stacking context. For sidebar action buttons use `z-index: 10-20`, for message action buttons use `z-index: 100`.**
+
 ## App Icon
 
 ### Icon Design

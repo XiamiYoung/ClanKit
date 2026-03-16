@@ -9,7 +9,7 @@
         </div>
         <div class="tdb-stat-body">
           <div class="tdb-stat-value">{{ totalRuns }}</div>
-          <div class="tdb-stat-label">Total Runs</div>
+          <div class="tdb-stat-label">{{ t('tasks.dashboard.totalRuns') }}</div>
         </div>
       </div>
       <div class="tdb-stat-card">
@@ -18,7 +18,7 @@
         </div>
         <div class="tdb-stat-body">
           <div class="tdb-stat-value">{{ scheduledCount }}</div>
-          <div class="tdb-stat-label">Scheduled Ahead</div>
+          <div class="tdb-stat-label">{{ t('tasks.dashboard.scheduledAhead') }}</div>
         </div>
       </div>
       <div class="tdb-stat-card">
@@ -27,7 +27,7 @@
         </div>
         <div class="tdb-stat-body">
           <div class="tdb-stat-value">{{ successRate }}%</div>
-          <div class="tdb-stat-label">Success Rate</div>
+          <div class="tdb-stat-label">{{ t('tasks.dashboard.successRate') }}</div>
         </div>
       </div>
       <div class="tdb-stat-card">
@@ -36,7 +36,7 @@
         </div>
         <div class="tdb-stat-body">
           <div class="tdb-stat-value">{{ avgDuration }}</div>
-          <div class="tdb-stat-label">Avg Duration</div>
+          <div class="tdb-stat-label">{{ t('tasks.dashboard.avgDuration') }}</div>
         </div>
       </div>
       <div class="tdb-stat-card">
@@ -45,7 +45,7 @@
         </div>
         <div class="tdb-stat-body">
           <div class="tdb-stat-value tdb-stat-value--sm">{{ mostActivePlan || '—' }}</div>
-          <div class="tdb-stat-label">Most Active Plan</div>
+          <div class="tdb-stat-label">{{ t('tasks.dashboard.mostActivePlan') }}</div>
         </div>
       </div>
     </div>
@@ -54,7 +54,7 @@
     <div class="tdb-charts">
       <!-- Donut chart -->
       <div class="tdb-chart-card tdb-chart-card--donut">
-        <div class="tdb-chart-title">Status Distribution</div>
+        <div class="tdb-chart-title">{{ t('tasks.dashboard.statusDistribution') }}</div>
         <div class="tdb-donut-wrap">
           <svg class="tdb-donut-svg" viewBox="0 0 120 120">
             <circle cx="60" cy="60" r="46" fill="none" stroke="#1E1E1E" stroke-width="18"/>
@@ -71,7 +71,7 @@
               />
             </template>
             <text x="60" y="57" text-anchor="middle" fill="#FFFFFF" font-size="18" font-weight="700" font-family="Inter,sans-serif">{{ totalRuns }}</text>
-            <text x="60" y="71" text-anchor="middle" fill="#6B7280" font-size="8" font-family="Inter,sans-serif">total runs</text>
+            <text x="60" y="71" text-anchor="middle" fill="#6B7280" font-size="8" font-family="Inter,sans-serif">{{ t('tasks.dashboard.totalRuns').toLowerCase() }}</text>
           </svg>
           <div class="tdb-donut-legend">
             <div v-for="seg in donutSegments" :key="seg.status" class="tdb-legend-item">
@@ -85,9 +85,9 @@
 
       <!-- Bar chart -->
       <div class="tdb-chart-card tdb-chart-card--bar">
-        <div class="tdb-chart-title">Runs — Last 14 Days</div>
+        <div class="tdb-chart-title">{{ t('tasks.dashboard.runsLast14Days') }}</div>
         <div class="tdb-bar-area">
-          <div v-if="barDays.every(d => d.total === 0)" class="tdb-bar-empty">No runs in the last 14 days</div>
+          <div v-if="barDays.every(d => d.total === 0)" class="tdb-bar-empty">{{ t('tasks.dashboard.noRunsLast14Days') }}</div>
           <template v-else>
             <div class="tdb-bar-cols">
               <div v-for="day in barDays" :key="day.date" class="tdb-bar-col">
@@ -113,9 +113,9 @@
               </div>
             </div>
             <div class="tdb-bar-legend">
-              <span class="tdb-bar-legend-item"><span class="tdb-legend-dot" style="background:#10B981"></span>Success</span>
-              <span class="tdb-bar-legend-item"><span class="tdb-legend-dot" style="background:#EF4444"></span>Failed</span>
-              <span class="tdb-bar-legend-item"><span class="tdb-legend-dot" style="background:#6B7280"></span>Skipped</span>
+              <span class="tdb-bar-legend-item"><span class="tdb-legend-dot" style="background:#10B981"></span>{{ t('tasks.dashboard.success') }}</span>
+              <span class="tdb-bar-legend-item"><span class="tdb-legend-dot" style="background:#EF4444"></span>{{ t('tasks.dashboard.failed') }}</span>
+              <span class="tdb-bar-legend-item"><span class="tdb-legend-dot" style="background:#6B7280"></span>{{ t('tasks.dashboard.skipped') }}</span>
             </div>
           </template>
         </div>
@@ -126,11 +126,11 @@
     <div class="tdb-table-card">
       <div class="tdb-table-scroll">
       <div class="tdb-table-header">
-        <div class="tdb-table-title">All Executions</div>
+        <div class="tdb-table-title">{{ t('tasks.dashboard.allExecutions') }}</div>
         <div class="tdb-table-controls">
           <div class="tdb-search-wrap">
             <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input class="tdb-search-input" v-model="searchQuery" placeholder="Search plans…" @input="page = 1" />
+            <input class="tdb-search-input" v-model="searchQuery" :placeholder="t('tasks.searchPlans')" @input="page = 1" />
             <button v-if="searchQuery" class="tdb-search-clear" @click="searchQuery = ''; page = 1">
               <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -146,19 +146,19 @@
         </div>
       </div>
 
-      <div v-if="filteredRuns.length === 0" class="tdb-table-empty">No executions found</div>
+      <div v-if="filteredRuns.length === 0" class="tdb-table-empty">{{ t('tasks.dashboard.noExecutionsFound') }}</div>
       <template v-else>
         <div class="tdb-table-wrap">
           <table class="tdb-table">
             <thead>
               <tr>
-                <th class="tdb-th tdb-th--category">Category</th>
-                <th class="tdb-th tdb-th--plan">Plan</th>
-                <th class="tdb-th tdb-th--trigger">Trigger</th>
-                <th class="tdb-th tdb-th--started">Started</th>
-                <th class="tdb-th tdb-th--dur">Duration</th>
+                <th class="tdb-th tdb-th--category">{{ t('tasks.dashboard.category') }}</th>
+                <th class="tdb-th tdb-th--plan">{{ t('tasks.dashboard.plan') }}</th>
+                <th class="tdb-th tdb-th--trigger">{{ t('tasks.dashboard.trigger') }}</th>
+                <th class="tdb-th tdb-th--started">{{ t('tasks.dashboard.started') }}</th>
+                <th class="tdb-th tdb-th--dur">{{ t('tasks.dashboard.duration') }}</th>
                 <th class="tdb-th tdb-th--steps">{{ t('tasks.step.steps') }}</th>
-                <th class="tdb-th tdb-th--status">Status</th>
+                <th class="tdb-th tdb-th--status">{{ t('tasks.dashboard.status') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -174,7 +174,7 @@
                     <span class="tdb-cat-name">{{ row.planCategoryName }}</span>
                   </div>
                   <div v-else class="tdb-cat-cell">
-                    <span class="tdb-cat-name">Uncategorized</span>
+                    <span class="tdb-cat-name">{{ t('tasks.category.uncategorized') }}</span>
                   </div>
                 </td>
                 <td class="tdb-td">

@@ -116,8 +116,6 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.isGroupChat === undefined) chat.isGroupChat = false
     if (chat.groupAgentOverrides === undefined) chat.groupAgentOverrides = {}
     if (chat.workingPath === undefined) chat.workingPath = null
-    if (chat.enabledToolIds === undefined) chat.enabledToolIds = null    // null = "use defaults"
-    if (chat.enabledMcpIds === undefined) chat.enabledMcpIds = null      // null = "use defaults"
     if (chat.permissionMode === undefined) chat.permissionMode = 'inherit'
     if (chat.permissionMode === 'sandbox') chat.permissionMode = 'chat_only' // migrate old value
     if (chat.chatAllowList === undefined) chat.chatAllowList = []
@@ -340,8 +338,6 @@ export const useChatsStore = defineStore('chats', () => {
       groupAgentIds: [],
       groupAgentOverrides: {},
       workingPath: null,
-      enabledToolIds: null,
-      enabledMcpIds: null,
       codingMode: false,
       codingProvider: 'claude-code',
       maxOutputTokens: null,    // null = use global default from config
@@ -398,8 +394,6 @@ export const useChatsStore = defineStore('chats', () => {
       groupAgentIds: [...(source.groupAgentIds || [])],
       groupAgentOverrides: JSON.parse(JSON.stringify(source.groupAgentOverrides || {})),
       workingPath: source.workingPath || null,
-      enabledToolIds: source.enabledToolIds ? [...source.enabledToolIds] : null,
-      enabledMcpIds: source.enabledMcpIds ? [...source.enabledMcpIds] : null,
       codingMode: source.codingMode || false,
       codingProvider: source.codingProvider || 'claude-code',
       agentModelOverrides: {},  // overrides are not copied — intentional
@@ -732,8 +726,6 @@ export const useChatsStore = defineStore('chats', () => {
     if ('workingPath' in settings) chat.workingPath = settings.workingPath
     if ('codingMode' in settings) chat.codingMode = settings.codingMode
     if ('codingProvider' in settings) chat.codingProvider = settings.codingProvider
-    if ('enabledToolIds' in settings) chat.enabledToolIds = settings.enabledToolIds
-    if ('enabledMcpIds' in settings) chat.enabledMcpIds = settings.enabledMcpIds
     if ('permissionMode' in settings) chat.permissionMode = settings.permissionMode
     if ('chatAllowList' in settings) chat.chatAllowList = settings.chatAllowList
     if ('chatDangerOverrides' in settings) chat.chatDangerOverrides = settings.chatDangerOverrides

@@ -90,7 +90,7 @@
                   <button class="nav-icon-btn" @click.stop="openTaskCategoryEditor(cat)" :title="t('tasks.category.renameCategory')">
                     <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
-                  <button class="nav-icon-btn nav-icon-btn-danger" @click.stop="deleteTaskCategory(cat.id)" :disabled="taskCategoryCount(cat.id) > 0" :title="taskCategoryCount(cat.id) > 0 ? t('tasks.category.cannotDeleteCategory') : t('common.delete')">
+                  <button class="nav-icon-btn nav-icon-btn-danger" @click.stop="deleteTaskCategory(cat.id)" :title="t('common.delete')">
                     <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                   </button>
                 </div>
@@ -207,7 +207,7 @@
                   <button class="nav-icon-btn" @click.stop="openPlanCategoryEditor(cat)" title="Rename">
                     <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15t-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
-                  <button class="nav-icon-btn nav-icon-btn-danger" @click.stop="deletePlanCategory(cat.id)" :disabled="planCategoryCount(cat.id) > 0" :title="planCategoryCount(cat.id) > 0 ? 'Cannot delete: category has items' : 'Delete'">
+                  <button class="nav-icon-btn nav-icon-btn-danger" @click.stop="deletePlanCategory(cat.id)" :title="t('common.delete')">
                     <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                   </button>
                 </div>
@@ -819,6 +819,8 @@ async function deleteTaskCategory(categoryId) {
       visible: true,
       title: t('tasks.category.cannotDeleteCategory'),
       message: t('tasks.category.categoryHasItems', { count }),
+      confirmText: t('common.ok'),
+      cancelText: '',
       onConfirm: () => {},
     }
     return
@@ -838,6 +840,8 @@ async function deletePlanCategory(categoryId) {
       visible: true,
       title: t('tasks.category.cannotDeleteCategory'),
       message: t('tasks.category.categoryHasItems', { count }),
+      confirmText: t('common.ok'),
+      cancelText: '',
       onConfirm: () => {},
     }
     return
@@ -1193,7 +1197,7 @@ onBeforeUnmount(() => {
 }
 
 .tev-cat-nav {
-  width: 200px;
+  width: 300px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-card);
@@ -1257,9 +1261,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  width: 100%;
+  width: calc(100% - 1rem);
   padding: 0.625rem 0.75rem;
-  margin: 0 0.5rem;
+  margin: 0.25rem 0.5rem;
   border: none;
   border-radius: 0.5rem;
   background: transparent;
@@ -1286,6 +1290,8 @@ onBeforeUnmount(() => {
   color: #FFFFFF;
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  border-radius: var(--radius-sm);
+  margin-right: 0.5rem;
 }
 
 .tev-cat-nav .nav-item-icon {

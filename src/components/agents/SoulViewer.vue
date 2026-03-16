@@ -276,78 +276,94 @@
 
       <!-- ═══ AI MODEL TAB (system agents only) ═══ -->
       <div v-else-if="activeTab === 'model'" class="soul-body soul-model-body">
-        <!-- Provider -->
-        <div class="soul-model-section">
-          <div class="soul-model-section-label">
-            <span class="soul-step-num">1</span>
-            {{ t('agents.provider') }}
+        <!-- Read-only view when opened from chat -->
+        <template v-if="fromChat">
+          <div class="soul-readonly-model">
+            <div class="soul-readonly-row">
+              <span class="soul-readonly-label">{{ t('agents.provider') }}</span>
+              <span class="soul-readonly-value">{{ activeProviderOptions.find(p => p.id === draftProvider)?.label || draftProvider || t('agents.notSet') }}</span>
+            </div>
+            <div class="soul-readonly-row">
+              <span class="soul-readonly-label">{{ t('agents.model') }}</span>
+              <span class="soul-readonly-value">{{ currentModelLabel || t('agents.notSet') }}</span>
+            </div>
+            <p class="soul-readonly-hint">{{ t('agents.modelConfigInAgentsView') }}</p>
           </div>
-          <div v-if="activeProviderOptions.length === 0" class="soul-no-providers">
-            {{ t('agents.noActiveProviders') }}
-          </div>
-          <div v-else class="soul-provider-custom" :class="{ 'soul-input-error': errors.provider }">
-            <button
-              type="button"
-              class="soul-provider-trigger"
-              :class="{ open: providerDropdownOpen }"
-              @click.stop="toggleProviderDropdown"
-            >
-              <span>{{ activeProviderOptions.find(p => p.id === draftProvider)?.label || t('agents.selectProvider') }}</span>
-              <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 12 12" fill="none" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 4.5L6 7.5L9 4.5"/>
-              </svg>
-            </button>
-            <div v-if="providerDropdownOpen" class="soul-provider-dropdown">
+        </template>
+        <template v-else>
+          <!-- Provider -->
+          <div class="soul-model-section">
+            <div class="soul-model-section-label">
+              <span class="soul-step-num">1</span>
+              {{ t('agents.provider') }}
+            </div>
+            <div v-if="activeProviderOptions.length === 0" class="soul-no-providers">
+              {{ t('agents.noActiveProviders') }}
+            </div>
+            <div v-else class="soul-provider-custom" :class="{ 'soul-input-error': errors.provider }">
               <button
-                v-for="p in activeProviderOptions"
-                :key="p.id"
                 type="button"
-                class="soul-provider-option"
-                :class="{ active: draftProvider === p.id }"
-                @click.stop="pickProvider(p.id)"
+                class="soul-provider-trigger"
+                :class="{ open: providerDropdownOpen }"
+                @click.stop="toggleProviderDropdown"
               >
-                {{ p.label }}
-                <svg v-if="draftProvider === p.id" style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="20 6 9 17 4 12"/>
+                <span>{{ activeProviderOptions.find(p => p.id === draftProvider)?.label || t('agents.selectProvider') }}</span>
+                <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 12 12" fill="none" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 4.5L6 7.5L9 4.5"/>
                 </svg>
               </button>
+              <div v-if="providerDropdownOpen" class="soul-provider-dropdown">
+                <button
+                  v-for="p in activeProviderOptions"
+                  :key="p.id"
+                  type="button"
+                  class="soul-provider-option"
+                  :class="{ active: draftProvider === p.id }"
+                  @click.stop="pickProvider(p.id)"
+                >
+                  {{ p.label }}
+                  <svg v-if="draftProvider === p.id" style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+              </div>
             </div>
+            <span v-if="errors.provider" class="soul-validation-error">{{ errors.provider }}</span>
           </div>
-          <span v-if="errors.provider" class="soul-validation-error">{{ errors.provider }}</span>
-        </div>
 
-        <!-- Model -->
-        <div class="soul-model-section soul-model-section-grow">
-          <div class="soul-model-section-label">
-            <span class="soul-step-num">2</span>
-            {{ t('agents.model') }}
-            <span class="soul-model-badge">{{ currentModelLabel }}</span>
-          </div>
-          <input
-            v-if="draftProviderType !== 'anthropic'"
-            v-model="modelFilter"
-            type="text"
-            :placeholder="t('agents.searchModels')"
-            class="soul-model-search"
-            @click.stop
-          />
-          <div class="soul-model-list" :class="{ 'soul-input-error': errors.model }">
-            <div v-if="(draftProviderType === 'openrouter' && modelsStore.openrouterLoading) || (draftProviderType === 'openai' && modelsStore.openaiLoading) || (draftProviderType === 'deepseek' && modelsStore.deepseekLoading)" class="soul-model-loading">
-              {{ t('common.loading') }}...
+          <!-- Model -->
+          <div class="soul-model-section soul-model-section-grow">
+            <div class="soul-model-section-label">
+              <span class="soul-step-num">2</span>
+              {{ t('agents.model') }}
+              <span class="soul-model-badge">{{ currentModelLabel }}</span>
             </div>
-            <button
-              v-for="m in filteredModels"
-              :key="m.id"
-              class="soul-model-item"
-              :class="{ active: draftModelId === m.id }"
-              @click="draftModelId = m.id; clearError('model')"
-            >
-              <span>{{ m.name || m.label || m.id }}</span>
-              <span v-if="m.id !== (m.name || m.label)" class="soul-model-id">{{ m.id }}</span>
-            </button>
+            <input
+              v-if="draftProviderType !== 'anthropic'"
+              v-model="modelFilter"
+              type="text"
+              :placeholder="t('agents.searchModels')"
+              class="soul-model-search"
+              @click.stop
+            />
+            <div class="soul-model-list" :class="{ 'soul-input-error': errors.model }">
+              <div v-if="(draftProviderType === 'openrouter' && modelsStore.openrouterLoading) || (draftProviderType === 'openai' && modelsStore.openaiLoading) || (draftProviderType === 'deepseek' && modelsStore.deepseekLoading)" class="soul-model-loading">
+                {{ t('common.loading') }}...
+              </div>
+              <button
+                v-for="m in filteredModels"
+                :key="m.id"
+                class="soul-model-item"
+                :class="{ active: draftModelId === m.id }"
+                @click="draftModelId = m.id; clearError('model')"
+              >
+                <span>{{ m.name || m.label || m.id }}</span>
+                <span v-if="m.id !== (m.name || m.label)" class="soul-model-id">{{ m.id }}</span>
+              </button>
+            </div>
+            <span v-if="errors.model" class="soul-validation-error">{{ errors.model }}</span>
           </div>
-          <span v-if="errors.model" class="soul-validation-error">{{ errors.model }}</span>
-        </div>
+        </template>
       </div>
 
       <!-- ═══ CAPABILITIES TAB (system agents only) ═══ -->
@@ -372,8 +388,8 @@
             <!-- Tools -->
             <div v-if="capTab === 'tools'" class="cap-items">
               <div v-if="availableTools.length === 0" class="cap-empty">{{ t('agents.noToolsAvailable') }}</div>
-              <label v-for="t in availableTools" :key="t.id" class="cap-item">
-                <input type="checkbox" :value="t.id" v-model="draftRequiredToolIds" />
+              <label v-for="t in availableTools" :key="t.id" class="cap-item" :class="{ 'cap-item-disabled': fromChat }">
+                <input type="checkbox" :value="t.id" v-model="draftRequiredToolIds" :disabled="fromChat" />
                 <span class="cap-item-name">{{ t.name }}</span>
                 <span class="cap-item-desc">{{ t.description || t.category || '' }}</span>
               </label>
@@ -381,8 +397,8 @@
             <!-- Skills -->
             <div v-if="capTab === 'skills'" class="cap-items">
               <div v-if="availableSkills.length === 0" class="cap-empty">{{ t('agents.noSkillsAvailable') }}</div>
-              <label v-for="s in availableSkills" :key="s.id" class="cap-item">
-                <input type="checkbox" :value="s.id" v-model="draftRequiredSkillIds" />
+              <label v-for="s in availableSkills" :key="s.id" class="cap-item" :class="{ 'cap-item-disabled': fromChat }">
+                <input type="checkbox" :value="s.id" v-model="draftRequiredSkillIds" :disabled="fromChat" />
                 <span class="cap-item-name">{{ s.name }}</span>
                 <span class="cap-item-desc">{{ s.summary || '' }}</span>
               </label>
@@ -390,8 +406,8 @@
             <!-- MCP Servers -->
             <div v-if="capTab === 'mcp'" class="cap-items">
               <div v-if="availableMcpServers.length === 0" class="cap-empty">{{ t('agents.noMcpServers') }}</div>
-              <label v-for="m in availableMcpServers" :key="m.id" class="cap-item">
-                <input type="checkbox" :value="m.id" v-model="draftRequiredMcpServerIds" />
+              <label v-for="m in availableMcpServers" :key="m.id" class="cap-item" :class="{ 'cap-item-disabled': fromChat }">
+                <input type="checkbox" :value="m.id" v-model="draftRequiredMcpServerIds" :disabled="fromChat" />
                 <span class="cap-item-name">{{ m.name }}</span>
                 <span class="cap-item-desc">{{ m.description || '' }}</span>
               </label>
@@ -399,8 +415,8 @@
             <!-- Knowledge -->
             <div v-if="capTab === 'knowledge'" class="cap-items">
               <div v-if="availableKnowledgeBases.length === 0" class="cap-empty">{{ t('agents.noKnowledgeBases') }}</div>
-              <label v-for="k in availableKnowledgeBases" :key="k.id" class="cap-item">
-                <input type="checkbox" :value="k.id" v-model="draftRequiredKnowledgeBaseIds" />
+              <label v-for="k in availableKnowledgeBases" :key="k.id" class="cap-item" :class="{ 'cap-item-disabled': fromChat }">
+                <input type="checkbox" :value="k.id" v-model="draftRequiredKnowledgeBaseIds" :disabled="fromChat" />
                 <span class="cap-item-name">{{ k.name }}</span>
                 <span class="cap-item-desc">{{ k.description || '' }}</span>
               </label>
@@ -413,8 +429,8 @@
       <div class="soul-footer">
         <div class="soul-footer-left"></div>
         <div class="soul-footer-right">
-          <button class="soul-btn secondary" @click="$emit('close')">{{ t('common.cancel') }}</button>
-          <button class="soul-btn primary" @click="saveAll">{{ t('common.save') }}</button>
+          <button class="soul-btn secondary" @click="$emit('close')">{{ fromChat ? t('common.close') : t('common.cancel') }}</button>
+          <button v-if="!fromChat" class="soul-btn primary" @click="saveAll">{{ t('common.save') }}</button>
         </div>
       </div>
 
@@ -459,6 +475,7 @@ const props = defineProps({
   agentRequiredKnowledgeBaseIds: { type: Array, default: () => [] },
   readOnly:           { type: Boolean, default: false },
   isNew:              { type: Boolean, default: false },
+  fromChat:           { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['close', 'update-agent'])
@@ -501,7 +518,7 @@ const capErrorsCount = computed(() => {
 })
 
 // ── Tab state ──
-const activeTab = ref('summary')
+const activeTab = ref(props.fromChat ? 'model' : 'summary')
 
 const tabLabel = computed(() => {
   const labels = { summary: t('agents.summary'), memory: t('agents.memory'), model: t('agents.aiModel'), capabilities: t('agents.capabilities'), voice: t('agents.voice') }
@@ -742,6 +759,8 @@ function detectLanguage() {
   if (/[\u4e00-\u9fff]/.test(text)) return 'Chinese'
   if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'Japanese'
   if (/[\uac00-\ud7af]/.test(text)) return 'Korean'
+  const appLang = configStore.config?.language || 'en'
+  if (appLang.startsWith('zh')) return 'Chinese'
   return null // default: English
 }
 
@@ -1301,6 +1320,39 @@ onUnmounted(() => {
 .soul-no-providers {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary, 0.875rem);
   color: #EF4444; padding: 0.625rem 0;
+}
+.soul-readonly-model {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.soul-readonly-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.soul-readonly-label {
+  font-size: var(--fs-caption);
+  color: #9CA3AF;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.soul-readonly-value {
+  font-size: var(--fs-body);
+  color: #FFFFFF;
+  font-weight: 500;
+}
+.soul-readonly-hint {
+  font-size: var(--fs-caption);
+  color: #6B7280;
+  line-height: 1.5;
+  margin-top: 0.5rem;
+}
+.cap-item-disabled {
+  opacity: 0.5;
+  pointer-events: none;
 }
 .soul-model-search {
   width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;

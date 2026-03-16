@@ -132,7 +132,7 @@
                         v-for="depId in step.dependsOn"
                         :key="depId"
                         class="pe-output-token"
-                        :title="`Insert output of step: ${stepLabel(depId)}`"
+                        :title="`${t('tasks.insertOutputOfStep')} ${stepLabel(depId)}`"
                         @click="insertOutputToken(step, depId)"
                       >&#123;&#123;output:{{ stepLabel(depId) }}}}</code>
                     </div>
@@ -160,13 +160,13 @@
                           @click="toggleDepStep(step, prev.id)"
                         >
                           <span class="pe-dep-chip-num">{{ draft.steps.indexOf(prev) + 1 }}</span>
-                          {{ taskName(prev.taskId) || '(no task)' }}
+                          {{ taskName(prev.taskId) || t('tasks.planEditor.noTask') }}
                           <svg v-if="(step.dependsOn || []).includes(prev.id)" style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                         </button>
                       </div>
 
                       <div v-if="(step.dependsOn || []).length > 0" class="pe-dep-cond-row">
-                        <label class="pe-dep-cond-label">Run condition</label>
+                        <label class="pe-dep-cond-label">{{ t('tasks.planEditor.runCondition') }}</label>
                         <div class="pe-dep-cond-btns">
                           <button
                             v-for="c in RUN_CONDITIONS"
@@ -255,7 +255,7 @@
                   <div v-if="showCronGen" class="pe-cron-gen-panel">
                     <div class="pe-cron-gen-hint">Describe your schedule in plain English:</div>
                     <div class="pe-cron-gen-row">
-                      <input v-model="cronGenInput" class="pe-input" placeholder='e.g. "every weekday at 9am"' @keydown.enter="generateCronFromNL" />
+                      <input v-model="cronGenInput" class="pe-input" :placeholder="t('tasks.schedule.generateFromDescription')" @keydown.enter="generateCronFromNL" />
                       <button type="button" class="pe-cron-gen-submit" @click="generateCronFromNL" :disabled="cronGenLoading">
                         <svg v-if="cronGenLoading" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="pe-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                         <span v-else>→</span>
@@ -281,7 +281,7 @@
                   </div>
                   <!-- Next 7 occurrences -->
                   <div v-if="cronNextOccurrences(draft.schedule.cron).length" class="pe-cron-next">
-                    <div class="pe-cron-next-label">Next 7 occurrences</div>
+                    <div class="pe-cron-next-label">{{ t('tasks.schedule.nextOccurrences') }}</div>
                     <div class="pe-cron-next-list">
                       <span v-for="(ts, i) in cronNextOccurrences(draft.schedule.cron)" :key="i" class="pe-cron-next-chip">{{ ts }}</span>
                     </div>
@@ -301,7 +301,7 @@
               </template>
 
               <div v-if="draft.schedule.type !== 'manual'" class="pe-sched-enable-hint">
-                <span class="pe-pass-hint">{{ draft.schedule.enabled ? 'This plan will run automatically on schedule.' : 'Schedule disabled — won\'t run automatically.' }}</span>
+                <span class="pe-pass-hint">{{ draft.schedule.enabled ? t('tasks.schedule.willRunAutomatically') : t('tasks.schedule.scheduleDisabled') }}</span>
               </div>
             </div>
 
@@ -392,7 +392,7 @@
                   <!-- Wave column -->
                   <div class="pf-wave-col">
                     <div v-if="wave.length > 1" class="pf-wave-tag">
-                      <span class="pf-wave-parallel">parallel ×{{ wave.length }}</span>
+                      <span class="pf-wave-parallel">{{ t('tasks.step.parallelCount', { count: wave.length }) }}</span>
                     </div>
 
                     <div
@@ -412,12 +412,12 @@
 
                       <!-- Depends-on line -->
                       <div v-if="node.dependsOnLabels.length > 0" class="pf-depends-on">
-                        after: {{ node.dependsOnLabels.join(', ') }}
+                        {{ t('tasks.step.after') }}: {{ node.dependsOnLabels.join(', ') }}
                       </div>
 
                       <!-- Agents -->
                       <div class="pf-agents-line">
-                        <span class="pf-agents-label">Agent:</span>
+                        <span class="pf-agents-label">{{ t('tasks.step.agentsLabel') }}</span>
                         <span class="pf-agents-names">{{ node.agents.length ? node.agents.map(p => p.name).join(', ') : '—' }}</span>
                       </div>
                     </div>
@@ -439,9 +439,9 @@
 
             <!-- Legend -->
             <div class="pe-canvas-legend">
-              <span class="pf-legend-item"><span class="pf-legend-dot pf-legend-dot--parallel"></span>Parallel</span>
-              <span class="pf-legend-item"><span class="pf-legend-dot pf-legend-dot--success"></span>On success</span>
-              <span class="pf-legend-item"><span class="pf-legend-dot pf-legend-dot--failure"></span>On failure</span>
+              <span class="pf-legend-item"><span class="pf-legend-dot pf-legend-dot--parallel"></span>{{ t('tasks.actions.parallel') }}</span>
+              <span class="pf-legend-item"><span class="pf-legend-dot pf-legend-dot--success"></span>{{ t('tasks.actions.onSuccess') }}</span>
+              <span class="pf-legend-item"><span class="pf-legend-dot pf-legend-dot--failure"></span>{{ t('tasks.actions.onFailure') }}</span>
             </div>
           </div>
 
@@ -902,8 +902,8 @@ function stepLabel(stepId) {
   const idx = draft.value.steps.findIndex(s => s.id === stepId)
   if (idx === -1) return '?'
   const step = draft.value.steps[idx]
-  const t = props.tasks.find(t => t.id === step.taskId)
-  return t ? `${t.name}` : `Step ${idx + 1}`
+  const task = props.tasks.find(t => t.id === step.taskId)
+  return task ? `${task.name}` : `${t('tasks.step.step')} ${idx + 1}`
 }
 
 // ── Step management ────────────────────────────────────────────────────────────
@@ -1035,7 +1035,7 @@ function buildFlowNode(step, allSteps) {
     condClass,
     dependsOnLabels: (step.dependsOn || []).map(id => {
       const di = allSteps.findIndex(s => s.id === id)
-      return di === -1 ? '?' : `Step ${di + 1}`
+      return di === -1 ? '?' : `${t('tasks.step.step')} ${di + 1}`
     }),
   }
 }
@@ -1061,15 +1061,15 @@ const canSave = computed(() => {
 
 const validationErrors = computed(() => {
   const errs = []
-  if (!draft.value.name.trim()) errs.push('Plan name is required')
-  if (draft.value.steps.length === 0) errs.push('At least one step is required')
-  else if (draft.value.steps.some(s => !s.taskId)) errs.push('All steps must have a task selected')
+  if (!draft.value.name.trim()) errs.push(t('tasks.plan.planNameRequired'))
+  if (draft.value.steps.length === 0) errs.push(t('tasks.plan.atLeastOneStepRequired'))
+  else if (draft.value.steps.some(s => !s.taskId)) errs.push(t('tasks.plan.allStepsMustHaveTask'))
   if (draft.value.schedule.type === 'cron') {
     const parts = (draft.value.schedule.cron || '').trim().split(/\s+/)
-    if (parts.length !== 5 || parts.some(p => !p)) errs.push('Cron expression must have exactly 5 fields')
+    if (parts.length !== 5 || parts.some(p => !p)) errs.push(t('tasks.schedule.cronFieldsError'))
   }
   if (draft.value.schedule.type === 'once' && !draft.value.schedule.runAt)
-    errs.push('One-time schedule requires a date and time')
+    errs.push(t('tasks.schedule.oneTimeRequiresDateTime'))
   return errs
 })
 

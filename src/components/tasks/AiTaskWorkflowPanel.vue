@@ -6,7 +6,7 @@
         <span class="atwp-title">{{ t('tasks.workflow') }}</span>
         <span class="atwp-step-count">{{ plan.steps?.length || 0 }} {{ t('tasks.step.steps') }}</span>
       </div>
-      <button class="atwp-hide-btn" @click="$emit('hide')" title="Hide workflow">
+      <button class="atwp-hide-btn" @click="$emit('hide')" :title="t('tasks.hideWorkflow')">
         <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="9 18 15 12 9 6"/>
         </svg>
@@ -32,7 +32,7 @@
         <!-- wave column -->
         <div class="wf-wave-col">
           <div v-if="wave.length > 1" class="wf-wave-tag">
-            <span class="wf-parallel-badge">parallel ×{{ wave.length }}</span>
+            <span class="wf-parallel-badge">{{ t('tasks.step.parallelCount', { count: wave.length }) }}</span>
           </div>
 
           <div
@@ -60,11 +60,11 @@
             </div>
             <!-- after: Step N label -->
             <div v-if="node.dependsOnLabels.length > 0" class="wf-node-after">
-              after: {{ node.dependsOnLabels.join(', ') }}
+              {{ t('tasks.step.after') }}: {{ node.dependsOnLabels.join(', ') }}
             </div>
             <!-- agents -->
             <div class="wf-agents-line">
-              <span class="wf-agents-label">{{ t('common.agent') }}:</span>
+              <span class="wf-agents-label">{{ t('tasks.step.agentsLabel') }}</span>
               <span class="wf-agents-names">{{ node.agents.length ? node.agents.map(p => p.name).join(', ') : '—' }}</span>
             </div>
           </div>
@@ -180,11 +180,11 @@ function buildNode(step, allSteps) {
     taskIcon: task?.icon || '✍️',
     agents,
     runCondition: cond,
-    conditionBadge: hasDeps && cond !== 'always' ? (cond === 'on_success' ? 'on success' : 'on failure') : null,
+    conditionBadge: hasDeps && cond !== 'always' ? (cond === 'on_success' ? t('tasks.actions.onSuccess') : t('tasks.actions.onFailure')) : null,
     condClass: hasDeps ? (cond === 'on_success' ? 'wf-node--success' : cond === 'on_failure' ? 'wf-node--failure' : '') : '',
     dependsOnLabels: (step.dependsOn || []).map(id => {
       const di = allSteps.findIndex(s => s.id === id)
-      return di === -1 ? '?' : `Step ${di + 1}`
+      return di === -1 ? '?' : `${t('tasks.step.step')} ${di + 1}`
     }),
     runStatus,
     runStatusLabel: runStatus ? (runStatusLabels[runStatus] || runStatus) : null,

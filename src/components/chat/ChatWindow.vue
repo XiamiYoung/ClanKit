@@ -108,7 +108,7 @@
             <!-- Hover action buttons -->
             <div
               v-if="!msg.streaming"
-              class="absolute -top-2 right-1 z-10 flex items-center gap-1 opacity-0 group-hover/bubble:opacity-100 transition-all duration-150"
+              class="absolute -top-2 right-1 z-10 flex items-center gap-1 transition-all duration-150"
             >
               <!-- Quote button -->
               <button
@@ -364,7 +364,7 @@ function getAvatarUri(agent) {
 }
 
 function getSystemAvatar(msg) {
-  const pid = msg.agentId || chat.value?.systemAgentId
+  const pid = msg.agentId || systemAgentIds.value[0]
   const agent = pid ? agentsStore.getAgentById(pid) : agentsStore.defaultSystemAgent
   return getAvatarUri(agent)
 }
@@ -862,7 +862,13 @@ defineExpose({ scrollToBottom })
   color: #fff;
   border: none;
   box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-  transition: background 0.15s;
+  transition: background 0.15s, opacity 0.15s;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: auto;
+}
+.group\/bubble:hover .cw-msg-action-btn {
+  opacity: 1;
 }
 .cw-msg-action-btn:hover { background: #374151; }
 .cw-msg-action-btn-delete:hover { background: #DC2626; }

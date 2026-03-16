@@ -89,7 +89,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import EmojiPicker from './EmojiPicker.vue'
 import { useI18n } from '../../i18n/useI18n'
 
@@ -118,6 +118,16 @@ const localEmoji     = ref(props.initial?.emoji || '📁')
 const localType      = ref(props.type || 'system')
 const showEmojiPicker = ref(false)
 const nameRef        = ref(null)
+
+// Re-sync local state whenever the modal opens (props may differ between opens)
+watch(() => props.visible, (val) => {
+  if (val) {
+    localName.value  = props.initial?.name  || ''
+    localEmoji.value = props.initial?.emoji || '📁'
+    localType.value  = props.type || 'system'
+    showEmojiPicker.value = false
+  }
+})
 
 onMounted(async () => {
   await nextTick()

@@ -14,7 +14,7 @@
               <span class="catalog-count-badge">{{ filteredSkills.length }}</span>
             </div>
             <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#6B7280; margin:0.25rem 0 0 0;">
-              Skills are loaded from your skills directory. Each subfolder with a SKILL.md is a skill.
+              {{ t('skills.subtitle') }}
             </p>
           </div>
           <div class="flex items-center gap-2">
@@ -43,7 +43,7 @@
 
       <!-- Loading -->
       <div v-if="skillsStore.loading" class="flex-1 flex items-center justify-center">
-        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">Loading skills...</p>
+        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">{{ t('common.loading') }}</p>
       </div>
 
       <!-- Error -->
@@ -54,7 +54,7 @@
             @click="refresh"
             class="mt-3 px-4 py-2 rounded-lg cursor-pointer"
             style="background:#007AFF; color:#fff; border:none; font-family:'Inter',sans-serif;"
-          >Retry</button>
+          >{{ t('skills.retry') }}</button>
         </div>
       </div>
 
@@ -70,12 +70,10 @@
             </svg>
           </div>
           <h2 style="font-family:'Inter',sans-serif; font-size:var(--fs-section); font-weight:700; color:#1A1A1A; margin:0 0 0.5rem;">
-            No skills found
+            {{ t('skills.noSkillsFound') }}
           </h2>
           <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; line-height:1.6; margin:0 0 1rem;">
-            Create skill folders in your skills directory. Each folder should contain a
-            <code style="background:#F5F5F5; padding:0.125rem 0.375rem; border-radius:0.25rem; font-size:0.875em;">SKILL.md</code>
-            file with the skill's system prompt.
+            {{ t('skills.skillFolderHint') }}
           </p>
           <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">
             Default path: <code style="background:#F5F5F5; padding:0.125rem 0.375rem; border-radius:0.25rem; font-size:0.875em;">~/.claude/skills</code>
@@ -92,7 +90,7 @@
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
             <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#6B7280; margin:0 0 0.25rem;">{{ t('common.noResults') }} "{{ searchQuery }}"</p>
-            <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF; margin:0;">Try a different search term or clear the filter.</p>
+            <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF; margin:0;">{{ t('skills.clearSearch') }}</p>
           </div>
         </div>
 
@@ -294,7 +292,7 @@
             <!-- Content area -->
             <template v-if="loadingFile">
               <div class="flex-1 flex items-center justify-center">
-                <p style="color:#9CA3AF; font-family:'Inter',sans-serif; font-size:var(--fs-body);">Loading...</p>
+                <p style="color:#9CA3AF; font-family:'Inter',sans-serif; font-size:var(--fs-body);">{{ t('common.loading') }}</p>
               </div>
             </template>
             <template v-else-if="fileError">

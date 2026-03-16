@@ -81,19 +81,21 @@
           </div>
 
           <!-- All System -->
-          <button
-            class="nav-item nav-item--all"
-            :class="{ active: selectedView.type === 'all' && selectedView.agentType === 'system' }"
-            @click="selectView({ type: 'all', agentType: 'system' })"
-          >
-            <span class="nav-item-icon">
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-              </svg>
-            </span>
-            <span class="nav-item-label">{{ t('common.all') }}</span>
-            <span class="nav-item-count">{{ agentsStore.systemAgents.length }}</span>
-          </button>
+          <div class="nav-all-wrap" :class="{ active: selectedView.type === 'all' && selectedView.agentType === 'system' }">
+            <button
+              class="nav-item nav-item--all"
+              :class="{ active: selectedView.type === 'all' && selectedView.agentType === 'system' }"
+              @click="selectView({ type: 'all', agentType: 'system' })"
+            >
+              <span class="nav-item-icon">
+                <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                </svg>
+              </span>
+              <span class="nav-item-label">{{ t('common.all') }}</span>
+              <span class="nav-item-count">{{ agentsStore.systemAgents.length }}</span>
+            </button>
+          </div>
 
           <!-- System categories -->
           <template v-for="cat in agentsStore.systemCategories" :key="cat.id">
@@ -144,19 +146,21 @@
           </div>
 
           <!-- All User -->
-          <button
-            class="nav-item nav-item--all"
-            :class="{ active: selectedView.type === 'all' && selectedView.agentType === 'user' }"
-            @click="selectView({ type: 'all', agentType: 'user' })"
-          >
-            <span class="nav-item-icon">
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-              </svg>
-            </span>
-            <span class="nav-item-label">{{ t('common.all') }}</span>
-            <span class="nav-item-count">{{ agentsStore.userAgents.length }}</span>
-          </button>
+          <div class="nav-all-wrap" :class="{ active: selectedView.type === 'all' && selectedView.agentType === 'user' }">
+            <button
+              class="nav-item nav-item--all"
+              :class="{ active: selectedView.type === 'all' && selectedView.agentType === 'user' }"
+              @click="selectView({ type: 'all', agentType: 'user' })"
+            >
+              <span class="nav-item-icon">
+                <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                </svg>
+              </span>
+              <span class="nav-item-label">{{ t('common.all') }}</span>
+              <span class="nav-item-count">{{ agentsStore.userAgents.length }}</span>
+            </button>
+          </div>
 
           <!-- User categories -->
           <template v-for="cat in agentsStore.userCategories" :key="cat.id">
@@ -229,19 +233,21 @@
                   <svg v-if="selectedAgentIds.has(agent.id)" style="width:10px;height:10px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
               </div>
-              <AgentCard
-                :agent="agent"
-                :gradient="getAvatarGradient(agent)"
-                :hide-delete="selectedView.type === 'category'"
-                :hide-set-default="selectedView.type === 'category'"
-                :show-unassign="selectedView.type === 'category'"
-                :delete-disabled="isDeleteButtonDisabled(agent)"
-                :delete-title="getDeleteButtonTitle(agent)"
-                @click="selectMode ? toggleSelect(agent.id) : openSoulViewer(agent)"
-                @delete="confirmDelete(agent)"
-                @unassign="agentsStore.unassignFromCategory(agent.id, selectedView.categoryId)"
-                @set-default="agentsStore.setDefault(agent.id)"
-              />
+              <div class="agent-card-inner-wrap">
+                <AgentCard
+                  :agent="agent"
+                  :gradient="getAvatarGradient(agent)"
+                  :hide-delete="selectedView.type === 'category'"
+                  :hide-set-default="selectedView.type === 'category'"
+                  :show-unassign="selectedView.type === 'category'"
+                  :delete-disabled="isDeleteButtonDisabled(agent)"
+                  :delete-title="getDeleteButtonTitle(agent)"
+                  @click="selectMode ? toggleSelect(agent.id) : openBodyViewer(agent)"
+                  @delete="confirmDelete(agent)"
+                  @unassign="agentsStore.unassignFromCategory(agent.id, selectedView.categoryId)"
+                  @set-default="agentsStore.setDefault(agent.id)"
+                />
+              </div>
             </div>
           </div>
           <div v-else class="section-empty">
@@ -260,25 +266,28 @@
       </div>
     </div>
 
-    <!-- Soul Viewer Modal -->
-    <SoulViewer
-      v-if="soulViewerAgent"
-      :agent-id="soulViewerAgent.id"
-      :agent-type="soulViewerAgent.type === 'system' ? 'system' : 'users'"
-      :agent-name="soulViewerAgent.name"
-      :agent-description="soulViewerAgent.description"
-      :agent-prompt="soulViewerAgent.prompt"
-      :agent-provider-id="soulViewerAgent.providerId || null"
-      :agent-model-id="soulViewerAgent.modelId || null"
-      :agent-voice-id="soulViewerAgent.voiceId || null"
-      :agent-avatar="soulViewerAgent.avatar || null"
-      :agent-required-tool-ids="soulViewerAgent.requiredToolIds || []"
-      :agent-required-skill-ids="soulViewerAgent.requiredSkillIds || []"
-      :agent-required-mcp-server-ids="soulViewerAgent.requiredMcpServerIds || []"
-      :agent-required-knowledge-base-ids="soulViewerAgent.requiredKnowledgeBaseIds || []"
-      :is-new="!!soulViewerAgent.isNew"
-      @close="soulViewerAgent = null"
-      @update-agent="onUpdateAgent"
+    <!-- Agent Body Viewer Modal (create + edit) -->
+    <AgentBodyViewer
+      v-if="bodyViewerAgent"
+      :agent-id="bodyViewerAgent.id"
+      :agent-type="bodyViewerAgent.type === 'system' ? 'system' : 'users'"
+      :agent-name="bodyViewerAgent.name"
+      :agent-description="bodyViewerAgent.description"
+      :agent-prompt="bodyViewerAgent.prompt"
+      :agent-provider-id="bodyViewerAgent.providerId || null"
+      :agent-model-id="bodyViewerAgent.modelId || null"
+      :agent-voice-id="bodyViewerAgent.voiceId || null"
+      :agent-avatar="bodyViewerAgent.avatar || null"
+      :agent-required-tool-ids="bodyViewerAgent.requiredToolIds || []"
+      :agent-required-skill-ids="bodyViewerAgent.requiredSkillIds || []"
+      :agent-required-mcp-server-ids="bodyViewerAgent.requiredMcpServerIds || []"
+      :agent-required-knowledge-base-ids="bodyViewerAgent.requiredKnowledgeBaseIds || []"
+      :agent-tone="bodyViewerAgent.tone || []"
+      :agent-verbosity-level="bodyViewerAgent.verbosityLevel || []"
+      :agent-personality-tags="bodyViewerAgent.personalityTags || []"
+      :is-new="!!bodyViewerAgent.isNew"
+      @close="bodyViewerAgent = null"
+      @update-agent="onBodyViewerUpdate"
     />
 
     <!-- Confirm Delete Agent Modal -->
@@ -354,7 +363,7 @@ import { useAgentsStore } from '../stores/agents'
 import { useTasksStore } from '../stores/tasks'
 import { AGENT_AVATARS } from '../components/agents/agentAvatars'
 import AgentCard from '../components/agents/AgentCard.vue'
-import SoulViewer from '../components/agents/SoulViewer.vue'
+import AgentBodyViewer from '../components/agents/AgentBodyViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import CategoryModal from '../components/agents/CategoryModal.vue'
@@ -466,16 +475,15 @@ const visibleAgents = computed(() => {
   return [...list].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
 })
 
-// ── SoulViewer / create ────────────────────────────────────────────────────
-const soulViewerAgent = ref(null)
+// ── AgentBodyViewer (create + edit) ───────────────────────────────────────
+const bodyViewerAgent = ref(null)
 
-function openSoulViewer(agent) {
-  // Shallow-clone so SoulViewer never holds a reference to the store object.
-  soulViewerAgent.value = { ...agent }
+function openBodyViewer(agent) {
+  bodyViewerAgent.value = { ...agent }
 }
 
 function createNew(type) {
-  soulViewerAgent.value = {
+  bodyViewerAgent.value = {
     id: uuidv4(),
     name: '',
     type: type || selectedView.agentType,
@@ -489,21 +497,18 @@ function createNew(type) {
     requiredSkillIds: [],
     requiredMcpServerIds: [],
     requiredKnowledgeBaseIds: [],
+    tone: [],
+    verbosityLevel: [],
+    personalityTags: [],
     isNew: true,
   }
 }
 
-async function onUpdateAgent(updates) {
-  if (!soulViewerAgent.value) return
-  const updated = { ...soulViewerAgent.value }
+async function onBodyViewerUpdate(updates) {
+  if (!bodyViewerAgent.value) return
+  const updated = { ...bodyViewerAgent.value }
   delete updated.isNew
-  if (updates.name !== undefined) updated.name = updates.name
-  if (updates.avatar !== undefined) updated.avatar = updates.avatar
-  if (updates.description !== undefined) updated.description = updates.description
-  if (updates.prompt !== undefined) updated.prompt = updates.prompt
-  if (updates.providerId !== undefined) updated.providerId = updates.providerId
-  if (updates.modelId !== undefined) updated.modelId = updates.modelId
-  if (updates.voiceId !== undefined) updated.voiceId = updates.voiceId
+  Object.assign(updated, updates)
   if (!updated.name) updated.name = 'Untitled Agent'
   await agentsStore.saveAgent(updated)
 }
@@ -979,18 +984,42 @@ function isDeleteButtonDisabled(agent) {
   color: rgba(255,255,255,0.8);
 }
 
-/* All button — slightly bolder label, count as plain number (no pill) */
-.nav-item--all { font-weight: 600; color: #4B5563; }
+/* All button wrapper — mirrors nav-cat-wrap so gradient + rounded corners live on the wrapper */
+.nav-all-wrap {
+  display: flex;
+  align-items: center;
+  border-radius: 0.5rem;
+  padding-right: 0.25rem;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+.nav-all-wrap:hover {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+.nav-all-wrap.active {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* All button — transparent bg (wrapper provides gradient), bolder label */
+.nav-item--all,
+.nav-item--all:hover,
+.nav-item--all.active {
+  font-weight: 600;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.nav-all-wrap:hover .nav-item--all,
+.nav-all-wrap.active .nav-item--all { color: #FFFFFF; }
 .nav-item--all .nav-item-count {
   background: transparent;
   color: #9CA3AF;
   font-weight: 700;
   font-size: var(--fs-secondary);
-  /* keep same padding as category pill so the number sits at the same x position */
   padding: 0.125rem 0.375rem;
 }
-.nav-item--all:hover .nav-item-count,
-.nav-item--all.active .nav-item-count {
+.nav-all-wrap:hover .nav-item--all .nav-item-count,
+.nav-all-wrap.active .nav-item--all .nav-item-count {
   background: transparent;
   color: rgba(255,255,255,0.6);
 }
@@ -1248,6 +1277,44 @@ function isDeleteButtonDisabled(agent) {
 .agent-card-wrap:active { cursor: grabbing; }
 .agent-card-wrap.select-mode { cursor: pointer; }
 .agent-card-wrap.is-selected { outline: 2px solid #007AFF; outline-offset: 2px; }
+
+/* Body View button: appears on card hover */
+.agent-card-inner-wrap {
+  position: relative;
+}
+
+.body-view-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(0, 122, 255, 0.3);
+  background: rgba(0, 0, 0, 0.7);
+  color: #60A5FA;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  z-index: 5;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+}
+
+.agent-card-inner-wrap:hover .body-view-btn {
+  opacity: 1;
+}
+
+.body-view-btn:hover {
+  background: rgba(0, 122, 255, 0.15);
+  border-color: rgba(0, 122, 255, 0.6);
+  color: #93C5FD;
+}
 
 .select-overlay {
   position: absolute;

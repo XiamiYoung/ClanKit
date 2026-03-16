@@ -122,7 +122,7 @@
       >
         <div class="mbc-kit-header">
           <span class="mbc-kit-dot mbc-kit-dot--chat" />
-          Active Chats
+          {{ t('minibar.activeChats') }}
         </div>
         <div class="mbc-kit-divider" />
         <template v-if="runningChats.length">
@@ -134,11 +134,11 @@
             <span v-else class="mbc-kit-status-dot" style="background:#34D399;" />
             <span class="mbc-kit-row-name">{{ chat.title }}</span>
             <span class="mbc-kit-badge" :class="chat.isRunning ? 'mbc-badge--running' : 'mbc-badge--idle'">
-              {{ chat.isRunning ? 'running' : 'idle' }}
+              {{ chat.isRunning ? t('minibar.chatKitRunning') : t('minibar.chatKitIdle') }}
             </span>
           </div>
         </template>
-        <div v-else class="mbc-kit-empty">No active chats</div>
+        <div v-else class="mbc-kit-empty">{{ t('minibar.noActiveChats') }}</div>
       </div>
 
       <!-- Plan toolkit -->
@@ -151,14 +151,14 @@
       >
         <div class="mbc-kit-header">
           <span class="mbc-kit-dot mbc-kit-dot--plan" />
-          Task Engine
+          {{ t('minibar.taskEngine') }}
         </div>
         <div class="mbc-kit-divider" />
         <template v-if="planActivity">
           <div class="mbc-kit-plan-row">
             <span class="mbc-kit-plan-name">{{ planActivity.planName }}</span>
             <span class="mbc-kit-plan-badge" :class="`mbc-plan-badge--${planActivity.status}`">
-              {{ planActivity.status === 'running' ? 'running' : planActivity.status === 'done' ? 'done' : 'error' }}
+              {{ planActivity.status === 'running' ? t('minibar.planRunning') : planActivity.status === 'done' ? t('minibar.planDone') : t('minibar.planError') }}
             </span>
           </div>
           <div class="mbc-kit-progress-row">
@@ -174,10 +174,10 @@
           <template v-if="planActivity.status !== 'running'">
             <div class="mbc-kit-divider" />
             <div v-if="planActivity.summary" class="mbc-kit-summary">{{ planActivity.summary }}</div>
-            <div v-else class="mbc-kit-empty" style="font-style:italic;">Summarizing…</div>
+            <div v-else class="mbc-kit-empty" style="font-style:italic;">{{ t('minibar.summarizing') }}</div>
           </template>
         </template>
-        <div v-else class="mbc-kit-empty">No recent plan activity</div>
+        <div v-else class="mbc-kit-empty">{{ t('minibar.noRecentPlanActivity') }}</div>
       </div>
     </Teleport>
   </div>

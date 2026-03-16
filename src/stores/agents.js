@@ -188,6 +188,9 @@ export const useAgentsStore = defineStore('agents', () => {
         requiredSkillIds: [],
         requiredMcpServerIds: [],
         requiredKnowledgeBaseIds: [],
+        tone: [],
+        verbosityLevel: [],
+        personalityTags: [],
         ...agent,
       })
     }

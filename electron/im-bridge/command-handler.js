@@ -5,7 +5,8 @@ const path    = require('path')
 const os      = require('os')
 const { v4: uuidv4 } = require('uuid')
 
-const DATA_DIR    = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankai')
+const _dataDir = process.env.CLANKAI_DATA_PATH
+const DATA_DIR = (_dataDir && _dataDir !== 'null') ? _dataDir : path.join(os.homedir(), '.clankai')
 const CHATS_DIR   = path.join(DATA_DIR, 'chats')
 const CHATS_INDEX = path.join(CHATS_DIR, 'index.json')
 const AGENTS_FILE = path.join(DATA_DIR, 'agents.json')

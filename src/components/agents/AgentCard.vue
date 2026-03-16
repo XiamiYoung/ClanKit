@@ -18,16 +18,15 @@
           </div>
         </div>
         <div class="agent-card-title-col">
-          <h3 class="agent-card-name">{{ agent.name }}</h3>
-          <span class="agent-card-type" :class="agent.type">{{ agent.type }}</span>
+          <p class="agent-card-name">{{ agent.name }}</p>
         </div>
       </div>
 
       <!-- Description -->
       <p class="agent-card-desc">{{ agent.description || t('agents.noDescription') }}</p>
 
-      <!-- Provider + Model metadata -->
-      <div v-if="agent.providerId || agent.modelId" class="pc-model-meta">
+      <!-- Provider + Model metadata — only shown for system agents -->
+      <div v-if="agent.type !== 'user' && (agent.providerId || agent.modelId)" class="pc-model-meta">
         <span v-if="agentProviderLabel" class="pc-provider-badge">
           {{ agentProviderLabel }}
         </span>

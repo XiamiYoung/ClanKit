@@ -10,7 +10,7 @@
             <span class="catalog-count-badge">{{ knowledgeStore.indexes.length }}</span>
           </div>
           <p class="knowledge-subtitle">
-            Manage RAG with Pinecone vector database
+            {{ t('knowledge.subtitle') }}
           </p>
         </div>
         <div class="header-actions">
@@ -33,7 +33,7 @@
           <div class="top-bar-row">
             <!-- RAG Retrieval switch on left -->
             <div class="embedding-rag-left">
-              <span class="switch-title">RAG Retrieval</span>
+              <span class="switch-title">{{ t('knowledge.ragRetrieval') }}</span>
               <button class="switch-track" :class="{ active: knowledgeStore.ragEnabled && hasApiKey }" :disabled="!hasApiKey" @click="toggleRag">
                 <span class="switch-thumb"></span>
               </button>
@@ -44,7 +44,7 @@
               <span class="status-dot" :class="statusDotClass"></span>
               <span class="status-label">{{ connectionLabel }}</span>
               <router-link v-if="!hasApiKey" to="/config" class="btn-primary compact">
-                Go to Configuration
+                {{ t('knowledge.goToConfig') }}
                 <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
               </router-link>
             </div>
@@ -62,7 +62,7 @@
           </div>
           <h2 class="empty-title">{{ !hasApiKey ? t('knowledge.configureApiKey') : t('knowledge.connecting') }}</h2>
           <p class="empty-desc">
-            {{ !hasApiKey ? 'Add your Pinecone API key in Configuration to get started.' : 'Establishing connection to Pinecone...' }}
+            {{ !hasApiKey ? t('knowledge.addApiKeyHint') : t('knowledge.establishingConnection') }}
           </p>
         </div>
 
@@ -75,10 +75,10 @@
             <!-- Left: Index list -->
             <div class="index-list-panel config-card">
               <div class="index-list-header">
-                <h3 class="form-section-title">Indexes</h3>
-                <span class="hint" style="margin:0;">{{ knowledgeStore.indexes.length }} found</span>
+                <h3 class="form-section-title">{{ t('knowledge.indexes') }}</h3>
+                <span class="hint" style="margin:0;">{{ knowledgeStore.indexes.length }} {{ t('knowledge.found') }}</span>
               </div>
-              <div v-if="knowledgeStore.isLoadingIndexes" class="hint" style="padding: 12px 0;">Loading...</div>
+              <div v-if="knowledgeStore.isLoadingIndexes" class="hint" style="padding: 12px 0;">{{ t('knowledge.loading') }}</div>
               <div v-else class="index-list">
                 <button
                   v-for="idx in knowledgeStore.indexes"
@@ -94,7 +94,7 @@
                   <span
                     class="index-enabled-chip"
                     :class="isIndexEnabled(idx.name) ? 'chip-enabled' : 'chip-disabled'"
-                  >{{ isIndexEnabled(idx.name) ? 'On' : 'Off' }}</span>
+                  >{{ isIndexEnabled(idx.name) ? t('knowledge.on') : t('knowledge.off') }}</span>
                 </button>
               </div>
             </div>
@@ -104,7 +104,7 @@
 
               <!-- No index selected -->
               <div v-if="!knowledgeStore.pineconeIndexName" class="config-card" style="text-align:center; padding: 48px 24px;">
-                <p class="hint" style="margin:0;">Select an index from the list to view details.</p>
+                <p class="hint" style="margin:0;">{{ t('knowledge.selectIndexHint') }}</p>
               </div>
 
               <!-- Index detail card -->
@@ -115,21 +115,21 @@
                   <div class="embedding-index-row">
                     <!-- Provider -->
                     <div class="embedding-field embedding-provider-field">
-                      <label class="form-label-inline">Provider</label>
+                      <label class="form-label-inline">{{ t('knowledge.provider') }}</label>
                       <ComboBox
                         :model-value="knowledgeStore.embeddingProvider"
                         :options="embeddingProviderOptions"
-                        placeholder="Select provider..."
+                        :placeholder="t('knowledge.selectProvider')"
                         @update:model-value="onEmbeddingProviderChange"
                       />
                     </div>
                     <!-- Model -->
                     <div class="embedding-field embedding-model-field">
-                      <label class="form-label-inline">Model</label>
+                      <label class="form-label-inline">{{ t('knowledge.model') }}</label>
                       <ComboBox
                         :model-value="knowledgeStore.embeddingModel"
                         :options="embeddingModelOptions"
-                        placeholder="Select embedding model..."
+                        :placeholder="t('knowledge.selectEmbeddingModel')"
                         :disabled="embeddingModelsLoading"
                         @update:model-value="onEmbeddingModelChange"
                       />
@@ -141,14 +141,14 @@
                         <polyline points="17 21 17 13 7 13 7 21"/>
                         <polyline points="7 3 7 8 15 8"/>
                       </svg>
-                      Save
+                      {{ t('knowledge.save') }}
                     </AppButton>
                   </div>
                   <!-- Warning when no model selected, or selection differs from recorded embedding model -->
                   <div v-if="embeddingModelMismatch" class="embedding-msg embedding-msg-warning">
                     <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                    <span v-if="!knowledgeStore.embeddingModel">No embedding model selected. Select a provider and model before uploading or querying.</span>
-                    <span v-else>Selected model differs from the recorded embedding model ({{ currentIndexConfig?.embeddingModel }}). Changing it will break retrieval unless you re-embed all documents.</span>
+                    <span v-if="!knowledgeStore.embeddingModel">{{ t('knowledge.noEmbeddingModel') }}</span>
+                    <span v-else>{{ t('knowledge.embeddingModelMismatch', { model: currentIndexConfig?.embeddingModel }) }}</span>
                   </div>
                   <!-- Error messages (e.g. model not found in list) -->
                   <div v-else-if="embeddingError" class="embedding-msg embedding-msg-error">
@@ -186,7 +186,7 @@
                         <polyline points="17 8 12 3 7 8"/>
                         <line x1="12" y1="3" x2="12" y2="15"/>
                       </svg>
-                      {{ knowledgeStore.isUploading ? 'Uploading...' : 'Upload' }}
+                      {{ knowledgeStore.isUploading ? t('knowledge.uploading') : t('knowledge.upload') }}
                     </AppButton>
                   </div>
 
@@ -194,30 +194,30 @@
                   <template v-if="knowledgeStore.indexStats">
                     <div class="index-stats-row">
                       <div class="stat-item-inline">
-                        <span class="stat-label">Records</span>
+                        <span class="stat-label">{{ t('knowledge.records') }}</span>
                         <span class="stat-value">{{ (knowledgeStore.indexStats.vectorCount || 0).toLocaleString() }}</span>
                       </div>
                       <div class="stat-item-inline">
-                        <span class="stat-label">Region</span>
+                        <span class="stat-label">{{ t('knowledge.region') }}</span>
                         <span class="stat-value">
                           <template v-if="knowledgeStore.indexStats.cloud || knowledgeStore.indexStats.region">{{ knowledgeStore.indexStats.cloud }} {{ knowledgeStore.indexStats.region }}</template>
                           <template v-else>—</template>
                         </span>
                       </div>
                       <div class="stat-item-inline">
-                        <span class="stat-label">Type</span>
+                        <span class="stat-label">{{ t('knowledge.type') }}</span>
                         <span class="stat-value">{{ knowledgeStore.indexStats.vectorType || 'Dense' }}</span>
                       </div>
                       <div class="stat-item-inline">
-                        <span class="stat-label">Dimension</span>
+                        <span class="stat-label">{{ t('knowledge.dimension') }}</span>
                         <span class="stat-value">{{ knowledgeStore.indexStats.dimension }}</span>
                       </div>
                       <div class="stat-item-inline">
-                        <span class="stat-label">Metric</span>
+                        <span class="stat-label">{{ t('knowledge.metric') }}</span>
                         <span class="stat-value">{{ knowledgeStore.indexStats.metric }}</span>
                       </div>
                       <div class="stat-item-inline" v-if="currentIndexConfig">
-                        <span class="stat-label">Embedding</span>
+                        <span class="stat-label">{{ t('knowledge.embedding') }}</span>
                         <span class="stat-value" style="font-size: var(--fs-caption);">
                           {{ currentIndexConfig.embeddingProvider === 'openrouter' ? 'OpenRouter' : 'OpenAI' }}
                           / {{ currentIndexConfig.embeddingModel }}
@@ -225,17 +225,17 @@
                       </div>
                     </div>
                     <div v-if="knowledgeStore.indexStats.host" class="index-host-row">
-                      <span class="stat-label">Host</span>
+                      <span class="stat-label">{{ t('knowledge.host') }}</span>
                       <span class="stat-value font-mono" style="font-size: var(--fs-caption); word-break: break-all;">{{ knowledgeStore.indexStats.host }}</span>
                     </div>
                   </template>
-                  <div v-else class="hint">Loading index details...</div>
+                  <div v-else class="hint">{{ t('knowledge.loadingIndexDetails') }}</div>
 
                   <!-- Sources in index -->
                   <div class="index-sources-section">
                     <div class="index-sources-header">
-                      <span class="stat-label">Sources in Index</span>
-                      <span v-if="knowledgeStore.isLoadingSources" class="hint" style="margin: 0;">Loading...</span>
+                      <span class="stat-label">{{ t('knowledge.sourcesInIndex') }}</span>
+                      <span v-if="knowledgeStore.isLoadingSources" class="hint" style="margin: 0;">{{ t('knowledge.loading') }}</span>
                     </div>
                     <div v-if="knowledgeStore.indexSources.length > 0" class="index-sources-list">
                       <span
@@ -248,14 +248,14 @@
                           <polyline points="14 2 14 8 20 8"/>
                         </svg>
                         {{ src.name }}
-                        <span class="source-badge-count">{{ src.chunks }} chunks</span>
+                        <span class="source-badge-count">{{ src.chunks }} {{ t('knowledge.chunks') }}</span>
                         <button class="source-delete-btn" @click.stop="confirmDeleteSource(src)" :disabled="isDeletingSource">
                           <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                         </button>
                       </span>
                     </div>
                     <div v-else-if="!knowledgeStore.isLoadingSources" class="hint" style="margin-top: 4px;">
-                      No sources found — upload documents to populate this index.
+                      {{ t('knowledge.noSourcesFound') }}
                     </div>
                   </div>
                 </div>
@@ -268,7 +268,7 @@
                         <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
                       </svg>
                     </div>
-                    <h3 class="form-section-title">Test RAG</h3>
+                    <h3 class="form-section-title">{{ t('knowledge.testRag') }}</h3>
                   </div>
                   <div class="form-group" style="margin-bottom:0;">
                     <div class="test-rag-row">
@@ -276,11 +276,11 @@
                         v-model="testQuery"
                         type="text"
                         class="field"
-                        placeholder="Enter a test query..."
+                        :placeholder="t('knowledge.enterTestQuery')"
                         @keydown.enter="runTestQuery"
                       />
                       <AppButton @click="runTestQuery" :disabled="!testQuery.trim() || testQueryLoading" :loading="testQueryLoading" size="compact">
-                        Search
+                        {{ t('knowledge.search') }}
                       </AppButton>
                     </div>
                   </div>
@@ -291,14 +291,14 @@
                     <div v-for="(match, idx) in testQueryResults" :key="match.id" class="rag-result-item">
                       <div class="rag-result-header">
                         <span class="rag-result-rank">#{{ idx + 1 }}</span>
-                        <span class="rag-result-score">Score: {{ match.score?.toFixed(4) }}</span>
+                        <span class="rag-result-score">{{ t('knowledge.score') }}: {{ match.score?.toFixed(4) }}</span>
                         <span v-if="match.documentName" class="rag-result-source">{{ match.documentName }}</span>
                       </div>
                       <p class="rag-result-text">{{ match.text }}</p>
                     </div>
                   </div>
                   <div v-else-if="testQuerySearched && !testQueryLoading && !testQueryError" class="test-rag-empty">
-                    <p class="hint">No matching chunks found.</p>
+                    <p class="hint">{{ t('knowledge.noMatchingChunks') }}</p>
                   </div>
                 </div>
 
@@ -344,7 +344,7 @@
               <svg class="animate-spin icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
               </svg>
-              <p class="hint">Loading summary...</p>
+              <p class="hint">{{ t('knowledge.loadingSummary') }}</p>
             </div>
             <template v-else-if="inspectData">
               <div class="inspect-row">
@@ -575,11 +575,11 @@ const connectionLabel = computed(() => {
   const s = knowledgeStore.connectionStatus
   if (s === 'connected') {
     const count = knowledgeStore.indexes.length
-    return `Connected — ${count} index${count !== 1 ? 'es' : ''}`
+    return `${t('knowledge.connected')} — ${count} ${t('knowledge.indexes')}`
   }
-  if (s === 'connecting') return 'Connecting...'
-  if (s === 'error') return knowledgeStore.connectionError || 'Connection failed'
-  return 'Disconnected'
+  if (s === 'connecting') return t('knowledge.connecting')
+  if (s === 'error') return knowledgeStore.connectionError || t('knowledge.error')
+  return t('knowledge.notConnected')
 })
 
 const statusDotClass = computed(() => {

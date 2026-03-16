@@ -10,14 +10,14 @@
             <span class="catalog-count-badge">{{ mcpStore.servers.length }}</span>
           </div>
           <p class="catalog-subtitle">
-            Configure MCP servers to extend the AI agent with dynamic tools. Uses subprocess + stdio (JSON-RPC 2.0).
+            {{ t('mcp.subtitle') }}
           </p>
         </div>
         <div class="flex items-center gap-2">
           <AppButton size="icon" @click="refreshServers" :loading="refreshing" :title="t('common.refresh')">
             <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </AppButton>
-          <AppButton size="icon" @click="openAdd" title="Add Server">
+          <AppButton size="icon" @click="openAdd" :title="t('mcp.addServer')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </AppButton>
         </div>
@@ -54,11 +54,10 @@
           </svg>
         </div>
         <h2 style="font-family:'Inter',sans-serif; font-size:var(--fs-section); font-weight:700; color:#1A1A1A; margin:0 0 8px;">
-          No MCP servers configured
+          {{ t('mcp.noServers') }}
         </h2>
         <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; line-height:1.6; margin:0;">
-          Add an MCP server to connect external tools and services to the AI agent.
-          Tools are discovered automatically from the server.
+          {{ t('mcp.serversDiscoverHint') }}
         </p>
       </div>
     </div>
@@ -69,8 +68,8 @@
         <svg class="mx-auto" style="width:40px;height:40px;color:#9CA3AF;margin-bottom:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
         </svg>
-        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#6B7280; margin:0 0 4px;">No servers match "{{ searchQuery }}"</p>
-        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF; margin:0;">Try a different search term or clear the filter.</p>
+        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#6B7280; margin:0 0 4px;">{{ t('mcp.noServersMatch', { query: searchQuery }) }}</p>
+        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF; margin:0;">{{ t('skills.clearSearch') }}</p>
       </div>
     </div>
 

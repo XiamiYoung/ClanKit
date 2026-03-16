@@ -37,6 +37,12 @@
 
       <!-- Footer -->
       <div class="avpicker-footer">
+        <label class="avpicker-upload-btn" title="Upload a photo from your computer">
+          <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload Photo
+          <input type="file" accept="image/*" style="display:none;" @change="onFileUpload" />
+        </label>
+        <div style="flex:1;"></div>
         <button class="avpicker-btn secondary" @click="$emit('close')">Cancel</button>
         <button class="avpicker-btn primary" :disabled="!selectedId" @click="confirm">Select Avatar</button>
       </div>
@@ -94,6 +100,18 @@ function select(id) {
 
 function confirm() {
   if (selectedId.value) emit('select', selectedId.value)
+}
+
+function onFileUpload(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const dataUri = e.target.result
+    selectedId.value = dataUri
+    emit('select', dataUri)
+  }
+  reader.readAsDataURL(file)
 }
 </script>
 
@@ -203,10 +221,19 @@ function confirm() {
 
 /* Footer */
 .avpicker-footer {
-  display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem;
+  display: flex; align-items: center; gap: 0.5rem;
   padding: 0.875rem 1.5rem; border-top: 1px solid #1F1F1F; background: #0A0A0A;
   flex-shrink: 0;
 }
+
+.avpicker-upload-btn {
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  padding: 0.5rem 1rem; border-radius: 0.5rem;
+  font-family: 'Inter', sans-serif; font-size: 0.875rem; font-weight: 600;
+  cursor: pointer; border: 1px solid #2A2A2A; background: #1A1A1A;
+  color: #9CA3AF; transition: all 0.15s; white-space: nowrap;
+}
+.avpicker-upload-btn:hover { background: #242424; color: #FFFFFF; border-color: #374151; }
 .avpicker-btn {
   padding: 0.5rem 1.25rem; border-radius: 0.5rem;
   font-family: 'Inter', sans-serif; font-size: 0.875rem; font-weight: 600;

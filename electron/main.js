@@ -3606,77 +3606,80 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     }
   }
 
-  // -- RAG retrieval (if enabled) --
-  // Merge with file-based config so we always have the latest indexConfigs
-  if (knowledgeConfig) {
+  // -- RAG retrieval helper: query RAG for a given knowledgeConfig + messages --
+  async function queryRagContext(kCfg, msgs) {
+    if (!kCfg) return null
+    // Merge with file-based config so we always have the latest indexConfigs
     const fileCfg = readJSON(KNOWLEDGE_FILE, {})
     const filePineconeKey = readJSON(CONFIG_FILE, {}).pineconeApiKey || ''
-    if (!knowledgeConfig.pineconeApiKey && filePineconeKey) knowledgeConfig.pineconeApiKey = filePineconeKey
-    if (!knowledgeConfig.indexConfigs || Object.keys(knowledgeConfig.indexConfigs).length === 0) {
-      knowledgeConfig.indexConfigs = fileCfg.indexConfigs || {}
+    if (!kCfg.pineconeApiKey && filePineconeKey) kCfg.pineconeApiKey = filePineconeKey
+    if (!kCfg.indexConfigs || Object.keys(kCfg.indexConfigs).length === 0) {
+      kCfg.indexConfigs = fileCfg.indexConfigs || {}
     }
-    if (knowledgeConfig.ragEnabled === undefined) knowledgeConfig.ragEnabled = fileCfg.ragEnabled !== false
-  }
-  let ragContext = null
-  if (knowledgeConfig?.ragEnabled && knowledgeConfig.pineconeApiKey) {
+    if (kCfg.ragEnabled === undefined) kCfg.ragEnabled = fileCfg.ragEnabled !== false
+
+    if (!kCfg.ragEnabled || !kCfg.pineconeApiKey) return null
+
     try {
-      // Extract the last user message text
-      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
+      const lastUserMsg = [...msgs].reverse().find(m => m.role === 'user')
       const queryText = typeof lastUserMsg?.content === 'string'
         ? lastUserMsg.content
         : (Array.isArray(lastUserMsg?.content)
           ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text).join(' ')
           : '')
 
-      if (queryText.trim()) {
-        // Determine which indexes to query: all enabled indexes from indexConfigs
-        const idxConfigs = knowledgeConfig.indexConfigs || {}
-        const enabledIndexes = Object.entries(idxConfigs)
-          .filter(([, cfg]) => cfg.enabled)
-          .map(([name, cfg]) => ({ name, embeddingProvider: cfg.embeddingProvider, embeddingModel: cfg.embeddingModel }))
+      if (!queryText.trim()) return null
 
-        // Fallback: if no indexConfigs yet, use the selected index with default embedding config
-        if (enabledIndexes.length === 0 && knowledgeConfig.pineconeIndexName) {
-          enabledIndexes.push({
-            name: knowledgeConfig.pineconeIndexName,
-            embeddingProvider: 'openai',
-            embeddingModel: 'text-embedding-3-small'
+      const idxConfigs = kCfg.indexConfigs || {}
+      const enabledIndexes = Object.entries(idxConfigs)
+        .filter(([, cfg]) => cfg.enabled)
+        .map(([name, cfg]) => ({ name, embeddingProvider: cfg.embeddingProvider, embeddingModel: cfg.embeddingModel }))
+
+      if (enabledIndexes.length === 0 && kCfg.pineconeIndexName) {
+        enabledIndexes.push({
+          name: kCfg.pineconeIndexName,
+          embeddingProvider: 'openai',
+          embeddingModel: 'text-embedding-3-small'
+        })
+      }
+
+      if (enabledIndexes.length === 0) return null
+
+      logger.agent('RAG query', { chatId, queryLen: queryText.length, indexes: enabledIndexes.map(i => i.name) })
+      const allMatches = []
+      for (const idx of enabledIndexes) {
+        try {
+          const ragResult = await queryRAG({
+            query: queryText,
+            pineconeApiKey: kCfg.pineconeApiKey,
+            pineconeIndexName: idx.name,
+            topK: 5,
+            embeddingProvider: idx.embeddingProvider,
+            embeddingModel: idx.embeddingModel
           })
-        }
-
-        if (enabledIndexes.length > 0) {
-          logger.agent('RAG query', { chatId, queryLen: queryText.length, indexes: enabledIndexes.map(i => i.name) })
-          const allMatches = []
-          for (const idx of enabledIndexes) {
-            try {
-              const ragResult = await queryRAG({
-                query: queryText,
-                pineconeApiKey: knowledgeConfig.pineconeApiKey,
-                pineconeIndexName: idx.name,
-                topK: 5,
-                embeddingProvider: idx.embeddingProvider,
-                embeddingModel: idx.embeddingModel
-              })
-              if (ragResult.success && ragResult.matches.length > 0) {
-                allMatches.push(...ragResult.matches)
-              }
-            } catch (idxErr) {
-              logger.error('RAG index query error (non-fatal)', { chatId, index: idx.name, error: idxErr.message })
-            }
+          if (ragResult.success && ragResult.matches.length > 0) {
+            allMatches.push(...ragResult.matches)
           }
-          if (allMatches.length > 0) {
-            // Sort by score descending and take top 5
-            allMatches.sort((a, b) => (b.score || 0) - (a.score || 0))
-            ragContext = allMatches.slice(0, 5)
-            logger.agent('RAG matches found', { chatId, count: ragContext.length, topScore: ragContext[0]?.score })
-          }
+        } catch (idxErr) {
+          logger.error('RAG index query error (non-fatal)', { chatId, index: idx.name, error: idxErr.message })
         }
       }
+      if (allMatches.length > 0) {
+        allMatches.sort((a, b) => (b.score || 0) - (a.score || 0))
+        const result = allMatches.slice(0, 5)
+        logger.agent('RAG matches found', { chatId, count: result.length, topScore: result[0]?.score })
+        return result
+      }
+      return null
     } catch (err) {
       logger.error('RAG retrieval error (non-fatal)', { chatId, error: err.message })
-      // Non-fatal -- continue without RAG context
+      return null
     }
   }
+
+  // -- Single agent: query RAG once using top-level knowledgeConfig --
+  const singleAgentRagContext = agentRuns && agentRuns.length >= 1 ? null : await queryRagContext(knowledgeConfig, messages)
+
   // -- Group chat: one or more agent runs (concurrent) --
   if (agentRuns && agentRuns.length >= 1) {
     logger.agent('Group chat mode (concurrent)', { chatId, agentCount: agentRuns.length })
@@ -3713,6 +3716,9 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
 
       return (async () => {
         try {
+          // Query RAG per-agent using agent's own knowledgeConfig
+          const runRagContext = await queryRagContext(run.knowledgeConfig ? { ...run.knowledgeConfig } : null, baseMessages)
+
           // Inject pending memory facts for conversational confirmation (one-shot per run)
           const runAgentPrompts = run.agentPrompts || agentPrompts
           const groupPending = pendingMemoryFacts.get(chatId)
@@ -3732,8 +3738,8 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
           }
           const result = await loop.run(
             baseMessages,
-            run.enabledAgents || enabledAgents,
-            run.enabledSkills || enabledSkills,
+            run.enabledAgents ?? enabledAgents,
+            run.enabledSkills ?? enabledSkills,
             (chunk) => {
               if (!event.sender.isDestroyed()) {
                 event.sender.send('agent:chunk', {
@@ -3744,9 +3750,9 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
             },
             currentAttachments,
             runAgentPrompts,
-            run.mcpServers || mcpServers,
-            run.httpTools || httpTools,
-            ragContext
+            run.mcpServers ?? mcpServers,
+            run.httpTools ?? httpTools,
+            runRagContext
           )
           return { agentId: run.agentId, agentName: run.agentName, success: true, result }
         } catch (err) {
@@ -3856,7 +3862,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       agentPrompts,
       mcpServers,
       httpTools,
-      ragContext
+      singleAgentRagContext
     )
     logger.agent('run done', { chatId, success: result !== undefined, resultLen: typeof result === 'string' ? result.length : 0 })
     // Persist cumulative usage to chat JSON

@@ -171,19 +171,18 @@
           <div class="models-page-layout">
             <!-- Left Sidebar -->
             <div class="models-left-nav">
-              <!-- Add button -->
-              <button class="models-add-btn" @click="showAddProviderModal = true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-                <span>{{ t('common.add', 'Add Provider') }}</span>
-              </button>
-
-              <div class="models-nav-divider"></div>
+              <!-- Add button in header row -->
+              <div class="models-nav-header">
+                <span class="models-nav-section-label">{{ t('config.models') }}</span>
+                <button class="models-add-btn" @click="showAddProviderModal = true" :title="t('common.add', 'Add Provider')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                </button>
+              </div>
 
               <!-- Models section -->
               <div class="models-nav-section">
-                <div class="models-nav-section-label">{{ t('config.models') }}</div>
                 <button
                   v-for="p in configStore.config.providers"
                   :key="p.id"
@@ -195,7 +194,7 @@
                   <span class="models-nav-dot" :class="p.isActive ? 'active' : 'inactive'"></span>
                 </button>
                 <div v-if="configStore.config.providers.length === 0" class="models-nav-empty">
-                  No providers configured
+                  {{ t('config.noProvidersConfigured') }}
                 </div>
               </div>
 
@@ -209,14 +208,14 @@
                   :class="{ active: modelsLeftNav === 'global' }"
                   @click="modelsLeftNav = 'global'"
                 >
-                  <span class="models-nav-name">{{ t('config.models', 'Models') }}</span>
+                  <span class="models-nav-name">{{ t('config.globalModelSettings') }}</span>
                 </button>
                 <button
                   class="models-nav-item"
                   :class="{ active: modelsLeftNav === 'utility' }"
                   @click="modelsLeftNav = 'utility'"
                 >
-                  <span class="models-nav-name">{{ t('config.utilityModel', 'Utility Model') }}</span>
+                  <span class="models-nav-name">{{ t('config.utilityModel') }}</span>
                 </button>
               </div>
             </div>
@@ -230,8 +229,8 @@
                     <svg style="width:48px;height:48px;margin:0 auto 1rem;display:block;opacity:0.4;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                       <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
                     </svg>
-                    <p style="font-size:var(--fs-body); margin-bottom:0.5rem;">Select a provider or setting to configure</p>
-                    <p style="font-size:var(--fs-secondary);">Click the <span style="font-weight:600;">+</span> button to add a new provider</p>
+                    <p style="font-size:var(--fs-body); margin-bottom:0.5rem;">{{ t('config.selectProviderOrSetting') }}</p>
+                    <p style="font-size:var(--fs-secondary);">{{ t('config.clickToAddProvider') }}</p>
                   </div>
                 </div>
               </template>
@@ -249,7 +248,7 @@
                   </div>
                   <div class="form-group">
                     <label for="maxOutputTokens" class="form-label">
-                      Max Output Tokens
+                      {{ t('config.maxOutputTokens') }}
                       <span class="form-label-hint">{{ t('config.perTurnOutputLimit') }}</span>
                     </label>
                     <input
@@ -308,21 +307,18 @@
                         />
                       </div>
                       <AppButton
-                        size="compact"
+                        size="icon"
                         :disabled="testingUtilityModel || !form.utilityModel.provider || !form.utilityModel.model"
                         :loading="testingUtilityModel"
+                        :title="testingUtilityModel ? t('config.testing') : t('config.test')"
                         @click="testUtilityModel"
-                      >
-                        <svg v-if="!testingUtilityModel" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                        {{ testingUtilityModel ? 'Testing…' : 'Test' }}
-                      </AppButton>
+                      ><svg v-if="!testingUtilityModel" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
                     </div>
                     <div v-if="testUtilityModelResult" class="test-result" :class="testUtilityModelResult.ok ? 'success' : 'error'" style="margin-top:0.375rem;">
                       {{ testUtilityModelResult.message }}
                     </div>
                     <p class="hint">
-                      Used for generic background Tasks.
-                      Pick the cheapest/fastest model across any active provider.
+                      {{ t('config.utilityModelLabel') }}
                     </p>
                   </div>
                 </div>
@@ -354,7 +350,7 @@
                       <h3 class="form-section-title">{{ selectedProvider.name }}</h3>
                     </div>
                     <div class="header-actions">
-                      <button class="action-btn danger" @click="deleteProvider(selectedProvider.id)" :title="t('config.deleteProvider', 'Delete provider')">
+                      <button class="action-btn danger icon-only" @click="deleteProvider(selectedProvider.id)" :title="t('config.deleteProvider', 'Delete provider')">
                         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
                         </svg>
@@ -375,10 +371,10 @@
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                       </svg>
                     </div>
-                    Credentials
+                    {{ t('config.credentials') }}
                   </div>
                   <div class="form-group">
-                    <label class="form-label">API Key</label>
+                    <label class="form-label">{{ t('config.apiKey') }}</label>
                     <div class="input-with-action">
                       <input
                         v-model="selectedProvider.apiKey"
@@ -397,7 +393,7 @@
                     </div>
                   </div>
                   <div class="form-group">
-                    <label class="form-label">Base URL</label>
+                    <label class="form-label">{{ t('config.baseURL') }}</label>
                     <input v-model="selectedProvider.baseURL" type="url" :placeholder="configStore.PROVIDER_PRESETS[selectedProvider.type]?.defaultBaseURL || 'https://...'" class="field" />
                   </div>
 
@@ -409,32 +405,29 @@
                         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
                       </svg>
                     </div>
-                    {{ selectedProvider.type === 'anthropic' ? 'Models' : 'Available Models' }}
+                    {{ selectedProvider.type === 'anthropic' ? t('config.anthropicModels') : t('config.availableModels') }}
                   </div>
 
                   <!-- Anthropic: 3 model inputs with Test -->
                   <template v-if="selectedProvider.type === 'anthropic'">
                     <div class="form-group compact">
-                      <label class="form-label">Sonnet Model</label>
+                      <label class="form-label">{{ t('config.sonnetModel') }}</label>
                       <input v-model="selectedProvider.model" type="text" class="field font-mono" placeholder="claude-sonnet-latest" />
                     </div>
                     <div class="form-group compact">
-                      <label class="form-label">Opus Model</label>
+                      <label class="form-label">{{ t('config.opusModel') }}</label>
                       <input v-model="selectedProvider.settings.opusModel" type="text" class="field font-mono" placeholder="claude-opus-latest" />
                     </div>
                     <div class="form-group compact">
-                      <label class="form-label">Haiku Model</label>
+                      <label class="form-label">{{ t('config.haikuModel') }}</label>
                       <input v-model="selectedProvider.settings.haikuModel" type="text" class="field font-mono" placeholder="claude-3-5-haiku-20241022" />
                     </div>
                     <div class="test-connection-row" style="margin-top: 0.5rem;">
                       <select v-model="selectedTestModel" class="field font-mono" style="flex:1;">
-                        <option value="">Select a model...</option>
+                        <option value="">{{ t('config.selectModel') }}</option>
                         <option v-for="m in testableModels" :key="m.id" :value="m.id">{{ m.label }}</option>
                       </select>
-                      <AppButton @click="testProviderNew" :disabled="testingProviderNew || !canTestNew" :loading="testingProviderNew">
-                        <svg v-if="!testingProviderNew" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                        {{ testingProviderNew ? 'Testing…' : 'Test' }}
-                      </AppButton>
+                      <AppButton size="icon" @click="testProviderNew" :disabled="testingProviderNew || !canTestNew" :loading="testingProviderNew" :title="testingProviderNew ? t('config.testing') : t('config.test')"><svg v-if="!testingProviderNew" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
                     </div>
                     <div v-if="testResultNew" class="test-result" :class="testResultNew.ok ? 'success' : 'error'" style="margin-top: 0.5rem;">
                       <svg v-if="testResultNew.ok" class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
@@ -447,12 +440,9 @@
                   <template v-else>
                     <div class="test-connection-row">
                       <div>
-                        <p class="hint" style="margin-top:2px;">{{ selectedProviderModels.length > 0 ? `${selectedProviderModels.length} models loaded` : 'Enter API key and fetch models' }}</p>
+                        <p class="hint" style="margin-top:2px;">{{ selectedProviderModels.length > 0 ? t('config.modelsLoaded', '', { count: selectedProviderModels.length }) : t('config.enterApiKeyFetchModels') }}</p>
                       </div>
-                      <AppButton size="compact" @click="fetchProviderModels" :disabled="providerModelsFetching || !selectedProvider.apiKey || !selectedProvider.baseURL" :loading="providerModelsFetching">
-                        <svg v-if="!providerModelsFetching" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                        {{ providerModelsFetching ? 'Fetching…' : 'Fetch Models' }}
-                      </AppButton>
+                      <AppButton size="icon" @click="fetchProviderModels" :disabled="providerModelsFetching || !selectedProvider.apiKey || !selectedProvider.baseURL" :loading="providerModelsFetching" :title="providerModelsFetching ? t('config.fetching') : t('config.fetchModels')"><svg v-if="!providerModelsFetching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/></svg></AppButton>
                     </div>
                     <div v-if="selectedProviderModels.length > 0" style="margin-top: 0.5rem;">
                       <input v-model="providerModelFilter" type="text" placeholder="Filter models…" class="field font-mono field-sm" style="width: 100%; margin-bottom: 0.5rem;" />
@@ -460,10 +450,7 @@
                         <option v-for="m in filteredProviderModels" :key="m.id" :value="m.id">{{ m.id }} — {{ m.name || m.id }}</option>
                       </select>
                       <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
-                        <AppButton size="compact" @click="testProviderNew" :disabled="testingProviderNew || !canTestNew" :loading="testingProviderNew">
-                          <svg v-if="!testingProviderNew" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                          {{ testingProviderNew ? 'Testing…' : 'Test' }}
-                        </AppButton>
+                        <AppButton size="icon" @click="testProviderNew" :disabled="testingProviderNew || !canTestNew" :loading="testingProviderNew" :title="testingProviderNew ? t('config.testing') : t('config.test')"><svg v-if="!testingProviderNew" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
                       </div>
                     </div>
                     <div v-if="providerModelsFetchError" class="test-result error" style="margin-top: 0.5rem;">
@@ -486,13 +473,13 @@
                         <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
                       </svg>
                     </div>
-                    Generic Settings
+                    {{ t('config.genericSettings') }}
                   </div>
                   <div class="form-group">
                     <label class="form-label">
-                      Max Output Tokens
+                      {{ t('config.maxOutputTokens') }}
                       <span v-if="getHardLimit(selectedProvider, 'maxOutputTokens')" class="form-label-hint" style="color:#EF4444;">
-                        Max: {{ getHardLimit(selectedProvider, 'maxOutputTokens') }}
+                        {{ t('config.hardLimit', '', { count: getHardLimit(selectedProvider, 'maxOutputTokens') }) }}
                       </span>
                     </label>
                     <input
@@ -505,7 +492,7 @@
                     />
                   </div>
                   <div class="form-group">
-                    <label class="form-label">Temperature</label>
+                    <label class="form-label">{{ t('config.temperature') }}</label>
                     <input
                       v-model.number="selectedProvider.settings.temperature"
                       type="number"
@@ -556,8 +543,8 @@
                   </div>
                 </div>
                 <div class="modal-footer">
-                  <AppButton variant="secondary" @click="showAddProviderModal = false">Cancel</AppButton>
-                  <AppButton variant="primary" @click="confirmAddProvider">Add</AppButton>
+                  <AppButton variant="secondary" @click="showAddProviderModal = false">{{ t('common.cancel') }}</AppButton>
+                  <AppButton variant="primary" @click="confirmAddProvider">{{ t('common.add') }}</AppButton>
                 </div>
               </div>
             </div>
@@ -584,7 +571,7 @@
             </div>
 
             <div class="form-group">
-              <label for="pineconeApiKey" class="form-label">Pinecone API Key</label>
+              <label for="pineconeApiKey" class="form-label">{{ t('config.pineconeCredentials') }}</label>
               <div class="input-with-action">
                 <input id="pineconeApiKey" v-model="form.pineconeApiKey" :type="showPineconeKey ? 'text' : 'password'" placeholder="pcsk_..." class="field font-mono" />
                 <button @click="showPineconeKey = !showPineconeKey" class="field-action-btn" :aria-label="showPineconeKey ? 'Hide key' : 'Show key'">
@@ -592,19 +579,15 @@
                   <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                 </button>
               </div>
-              <p class="hint">Your Pinecone API key — stored locally in {{ form.dataPath || defaultDataPath }}/config.json</p>
+              <p class="hint">{{ t('config.pineconeApiKeyHint', '', { path: form.dataPath || defaultDataPath }) }}</p>
             </div>
 
             <div class="form-divider"></div>
             <div class="test-connection-row">
               <div>
-                <p class="form-section-title">Test</p>
-                <p class="hint" style="margin-top:2px;">Verify Pinecone API key access. Select an index on the Knowledge page.</p>
+                <p class="hint" style="margin-top:2px;">{{ t('config.verifyPineconeHint') }}</p>
               </div>
-              <AppButton @click="testPineconeConnection" :disabled="testingPinecone || !form.pineconeApiKey" :loading="testingPinecone">
-                <svg v-if="!testingPinecone" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                {{ testingPinecone ? 'Testing\u2026' : 'Test' }}
-              </AppButton>
+              <AppButton size="icon" @click="testPineconeConnection" :disabled="testingPinecone || !form.pineconeApiKey" :loading="testingPinecone" :title="testingPinecone ? t('config.testing') : t('config.test')"><svg v-if="!testingPinecone" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
             </div>
             <div v-if="testResultPinecone" class="test-result" :class="testResultPinecone.ok ? 'success' : 'error'">
               <svg v-if="testResultPinecone.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
@@ -642,13 +625,13 @@
               <h3 class="form-section-title">{{ t('config.whisperSTT') }}</h3>
             </div>
             <p class="hint" style="margin-bottom:1rem;">
-              Voice calls use OpenAI's Whisper API for speech recognition. Text-to-speech uses your browser's built-in SpeechSynthesis (free, no API key needed).
+              {{ t('config.voiceCallsUseWhisper') }}
             </p>
 
             <!-- API Key -->
             <div class="form-group">
               <label for="whisperApiKey" class="form-label">
-                OpenAI API Key
+                {{ t('config.openAIAPIKey') }}
                 <span class="form-label-hint">{{ t('config.forWhisperSTT') }}</span>
               </label>
               <div class="input-with-action">
@@ -669,40 +652,37 @@
                   </svg>
                 </button>
               </div>
-              <p class="hint">Your OpenAI API key — used only for Whisper speech-to-text. Can be the same key as your OpenAI provider if you have one configured.</p>
+              <p class="hint">{{ t('config.whisperApiKeyHint') }}</p>
             </div>
 
             <!-- Base URL -->
             <div class="form-group">
               <label for="whisperBaseURL" class="form-label">
-                Base URL
+                {{ t('config.baseURL') }}
                 <span class="form-label-hint">{{ t('config.optional') }}</span>
               </label>
               <input id="whisperBaseURL" v-model="form.voiceCall.whisperBaseURL" type="url" placeholder="https://api.openai.com" class="field font-mono" />
-              <p class="hint">Leave blank for standard OpenAI. Change only if using a custom Whisper-compatible endpoint.</p>
+              <p class="hint">{{ t('config.baseURLHint') }}</p>
             </div>
 
             <!-- STT Language -->
             <div class="form-group">
               <label for="whisperLanguage" class="form-label">
-                STT Language
+                {{ t('config.sttLanguage') }}
                 <span class="form-label-hint">{{ t('config.recommendedNoiseReduction') }}</span>
               </label>
               <input id="whisperLanguage" v-model="form.voiceCall.language" type="text" placeholder="e.g. en, zh, ja, fr (leave blank for auto)" class="field font-mono" />
-              <p class="hint">Setting your language (e.g. <code>en</code>) prevents Whisper from misidentifying background noise or echo as speech in another language, significantly reducing false triggers.</p>
+              <p class="hint">{{ t('config.sttLanguageHint') }}</p>
             </div>
 
             <!-- Test -->
             <div class="form-divider"></div>
             <div class="test-connection-row">
               <div>
-                <p class="form-section-title">Test</p>
-                <p class="hint" style="margin-top:2px;">Verify Whisper API key and endpoint</p>
+                <p class="form-section-title">{{ t('config.test') }}</p>
+                <p class="hint" style="margin-top:2px;">{{ t('config.verifyWhisperEndpoint') }}</p>
               </div>
-              <AppButton @click="testWhisperConnection" :disabled="testingWhisper || !form.voiceCall.whisperApiKey" :loading="testingWhisper">
-                <svg v-if="!testingWhisper" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                {{ testingWhisper ? 'Testing\u2026' : 'Test' }}
-              </AppButton>
+              <AppButton size="icon" @click="testWhisperConnection" :disabled="testingWhisper || !form.voiceCall.whisperApiKey" :loading="testingWhisper" :title="testingWhisper ? t('config.testing') : t('config.test')"><svg v-if="!testingWhisper" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
             </div>
             <div v-if="testResultWhisper" class="test-result" :class="testResultWhisper.ok ? 'success' : 'error'" style="margin-top:10px;">
               <svg v-if="testResultWhisper.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
@@ -720,14 +700,14 @@
               <h3 class="form-section-title">{{ t('config.microphoneSensitivity') }}</h3>
             </div>
             <p class="hint" style="margin-bottom:1rem;">
-              Controls when the mic starts and stops capturing. Tune these if the AI triggers on keyboard noise, background sound, or misses quiet speech.
+              {{ t('config.vadSensitivityHint') }}
             </p>
 
             <div class="vad-grid">
               <!-- Amplitude threshold -->
               <div class="form-group" style="margin-bottom:0;">
                 <label class="form-label">
-                  Amplitude Threshold
+                  {{ t('config.amplitudeThreshold') }}
                   <span class="form-label-hint">Current: {{ form.voiceCall.vadAmplitude }}</span>
                 </label>
                 <input
@@ -735,14 +715,14 @@
                   v-model.number="form.voiceCall.vadAmplitude"
                   class="vad-slider"
                 />
-                <div class="vad-slider-labels"><span>Sensitive</span><span>Selective</span></div>
-                <p class="hint">Minimum loudness to register as speech. Raise if keyboard/noise triggers the mic. Lower if quiet speech is missed. Default: 0.018</p>
+                <div class="vad-slider-labels"><span>{{ t('config.sensitive') }}</span><span>{{ t('config.selective') }}</span></div>
+                <p class="hint">{{ t('config.amplitudeHint') }}</p>
               </div>
 
               <!-- Silence duration -->
               <div class="form-group" style="margin-bottom:0;">
                 <label class="form-label">
-                  Silence Cutoff
+                  {{ t('config.silenceCutoff') }}
                   <span class="form-label-hint">Current: {{ form.voiceCall.vadSilenceMs }}ms</span>
                 </label>
                 <input
@@ -750,14 +730,14 @@
                   v-model.number="form.voiceCall.vadSilenceMs"
                   class="vad-slider"
                 />
-                <div class="vad-slider-labels"><span>Faster (300ms)</span><span>Slower (2000ms)</span></div>
-                <p class="hint">How long silence must last before audio is sent to Whisper. Lower = faster response, higher = fewer accidental cutoffs mid-sentence. Default: 700ms</p>
+                <div class="vad-slider-labels"><span>{{ t('config.faster') }} (300ms)</span><span>{{ t('config.slower') }} (2000ms)</span></div>
+                <p class="hint">{{ t('config.silenceHint') }}</p>
               </div>
 
               <!-- Min speech frames -->
               <div class="form-group" style="margin-bottom:0;">
                 <label class="form-label">
-                  Min Speech Frames
+                  {{ t('config.minSpeechFrames') }}
                   <span class="form-label-hint">Current: {{ form.voiceCall.vadSpeechFrames }} (~{{ Math.round(form.voiceCall.vadSpeechFrames / 60 * 1000) }}ms)</span>
                 </label>
                 <input
@@ -766,13 +746,13 @@
                   class="vad-slider"
                 />
                 <div class="vad-slider-labels"><span>5 frames</span><span>60 frames</span></div>
-                <p class="hint">How many consecutive loud frames before a recording starts. Higher values reject brief noise bursts and single key clicks. Default: 20</p>
+                <p class="hint">{{ t('config.speechFramesHint') }}</p>
               </div>
 
               <!-- Voice band ratio -->
               <div class="form-group" style="margin-bottom:0;">
                 <label class="form-label">
-                  Voice Band Ratio
+                  {{ t('config.voiceBandRatio') }}
                   <span class="form-label-hint">Current: {{ Math.round(form.voiceCall.vadVoiceBandRatio * 100) }}%</span>
                 </label>
                 <input
@@ -780,14 +760,14 @@
                   v-model.number="form.voiceCall.vadVoiceBandRatio"
                   class="vad-slider"
                 />
-                <div class="vad-slider-labels"><span>Permissive (5%)</span><span>Strict (60%)</span></div>
-                <p class="hint">Minimum fraction of audio energy that must be in the 300–3400 Hz voice range. Keyboard clicks have ~10%, speech has ~40–70%. Raise to block more noise. Default: 25%</p>
+                <div class="vad-slider-labels"><span>{{ t('config.permissive') }} (5%)</span><span>{{ t('config.strict') }} (60%)</span></div>
+                <p class="hint">{{ t('config.voiceBandHint') }}</p>
               </div>
 
               <!-- Proximity multiplier -->
               <div class="form-group" style="margin-bottom:0;">
                 <label class="form-label">
-                  Background Noise Rejection
+                  {{ t('config.backgroundNoiseRejection') }}
                   <span class="form-label-hint">Current: {{ form.voiceCall.vadProximityMult }}×</span>
                 </label>
                 <input
@@ -795,8 +775,8 @@
                   v-model.number="form.voiceCall.vadProximityMult"
                   class="vad-slider"
                 />
-                <div class="vad-slider-labels"><span>Relaxed (1.2×)</span><span>Strict (5×)</span></div>
-                <p class="hint">How much louder you must be than the background before the mic activates. Higher values block people chatting nearby. If the mic stops picking up your voice, lower this. Default: 2.5×</p>
+                <div class="vad-slider-labels"><span>{{ t('config.relaxed') }} (1.2×)</span><span>{{ t('config.strict') }} (5×)</span></div>
+                <p class="hint">{{ t('config.backgroundNoiseHint') }}</p>
               </div>
             </div>
           </div>
@@ -810,7 +790,7 @@
               <h3 class="form-section-title">{{ t('config.textToSpeech') }}</h3>
             </div>
             <div class="form-group" style="margin-bottom:0;">
-              <label class="form-label">TTS Mode</label>
+              <label class="form-label">{{ t('config.ttsMode') }}</label>
               <div class="tts-option-list">
 
                 <!-- Browser -->
@@ -822,14 +802,14 @@
                       </svg>
                     </div>
                     <div>
-                      <div class="tts-option-name">Browser <span class="sec-mode-badge">Free · Default</span></div>
-                      <div class="tts-option-desc">Uses your system's built-in voices. No API cost. Quality depends on your OS.</div>
+                      <div class="tts-option-name">{{ t('config.browser') }} <span class="sec-mode-badge">{{ t('config.browserFree') }}</span></div>
+                      <div class="tts-option-desc">{{ t('config.browserDesc') }}</div>
                     </div>
                   </div>
-                  <button class="tts-demo-btn" :class="{ playing: demoingTts === 'browser' }" @click.stop="demoTts('browser')" :disabled="demoingTts !== null" title="Play demo">
+                  <button class="tts-demo-btn" :class="{ playing: demoingTts === 'browser' }" @click.stop="demoTts('browser')" :disabled="demoingTts !== null" :title="t('config.demo')">
                     <svg v-if="demoingTts !== 'browser'" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                    {{ demoingTts === 'browser' ? 'Playing…' : 'Demo' }}
+                    {{ demoingTts === 'browser' ? t('config.playing') : t('config.demo') }}
                   </button>
                 </div>
 
@@ -842,14 +822,14 @@
                       </svg>
                     </div>
                     <div>
-                      <div class="tts-option-name">OpenAI TTS <span class="tts-cost-badge">$15 / 1M chars</span></div>
-                      <div class="tts-option-desc">OpenAI tts-1 — natural voices. Requires Whisper API key.</div>
+                      <div class="tts-option-name">{{ t('config.openaiTTS') }} <span class="tts-cost-badge">{{ t('config.openaiTTSCost') }}</span></div>
+                      <div class="tts-option-desc">{{ t('config.openaiTTSDesc') }}</div>
                     </div>
                   </div>
-                  <button class="tts-demo-btn" :class="{ playing: demoingTts === 'openai' }" @click.stop="demoTts('openai')" :disabled="demoingTts !== null || !form.voiceCall.whisperApiKey" title="Play demo">
+                  <button class="tts-demo-btn" :class="{ playing: demoingTts === 'openai' }" @click.stop="demoTts('openai')" :disabled="demoingTts !== null || !form.voiceCall.whisperApiKey" :title="t('config.demo')">
                     <svg v-if="demoingTts !== 'openai'" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                    {{ demoingTts === 'openai' ? 'Playing…' : 'Demo' }}
+                    {{ demoingTts === 'openai' ? t('config.playing') : t('config.demo') }}
                   </button>
                 </div>
 
@@ -862,22 +842,22 @@
                       </svg>
                     </div>
                     <div>
-                      <div class="tts-option-name">OpenAI HD <span class="tts-cost-badge">$30 / 1M chars</span></div>
-                      <div class="tts-option-desc">OpenAI tts-1-hd — higher fidelity, more natural. Requires Whisper API key.</div>
+                      <div class="tts-option-name">{{ t('config.openaiHD') }} <span class="tts-cost-badge">{{ t('config.openaiHDCost') }}</span></div>
+                      <div class="tts-option-desc">{{ t('config.openaiHDDesc') }}</div>
                     </div>
                   </div>
-                  <button class="tts-demo-btn" :class="{ playing: demoingTts === 'openai-hd' }" @click.stop="demoTts('openai-hd')" :disabled="demoingTts !== null || !form.voiceCall.whisperApiKey" title="Play demo">
+                  <button class="tts-demo-btn" :class="{ playing: demoingTts === 'openai-hd' }" @click.stop="demoTts('openai-hd')" :disabled="demoingTts !== null || !form.voiceCall.whisperApiKey" :title="t('config.demo')">
                     <svg v-if="demoingTts !== 'openai-hd'" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                    {{ demoingTts === 'openai-hd' ? 'Playing…' : 'Demo' }}
+                    {{ demoingTts === 'openai-hd' ? t('config.playing') : t('config.demo') }}
                   </button>
                 </div>
 
               </div>
               <p v-if="(form.voiceCall.ttsMode === 'openai' || form.voiceCall.ttsMode === 'openai-hd') && !form.voiceCall.whisperApiKey" class="hint" style="margin-top:8px; color:#EF4444;">
-                Enter a Whisper API key above to enable Demo for OpenAI TTS.
+                {{ t('config.enterWhisperKeyForDemo') }}
               </p>
-              <p class="hint" style="margin-top:6px; font-size:var(--fs-small);">Whisper STT: $0.006 / minute</p>
+              <p class="hint" style="margin-top:6px; font-size:var(--fs-small);">{{ t('config.whisperSttCost') }}</p>
             </div>
           </div>
 
@@ -897,9 +877,9 @@
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <!-- Pricing (AI > Pricing) -->
+        <!-- Pricing (AI > Pricing) - DISABLED -->
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <template v-if="activeTopTab === 'ai' && activeSubTab === 'pricing'">
+        <template v-if="false">
 
           <!-- Currency Rates -->
           <div class="config-card">
@@ -938,14 +918,13 @@
                 <h3 class="form-section-title">{{ t('config.modelPrices') }}</h3>
                 <p class="form-section-desc">USD per 1M tokens. Overrides built-in defaults.</p>
               </div>
-              <button class="action-btn" @click="fetchOpenRouterPrices" :disabled="isFetchingPrices">
-                <svg v-if="!isFetchingPrices" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <button class="action-btn icon-only" @click="fetchOpenRouterPrices" :disabled="isFetchingPrices" :title="isFetchingPrices ? t('config.fetching') : t('config.fetchModels')">
+                <svg v-if="!isFetchingPrices" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/>
                 </svg>
-                <svg v-else class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg v-else class="icon-sm animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                 </svg>
-                {{ isFetchingPrices ? 'Updating…' : 'Update OpenRouter' }}
               </button>
             </div>
             <!-- Filter -->
@@ -1106,16 +1085,13 @@
 
             <!-- Test Connection -->
             <div class="form-divider"></div>
-            <div class="test-connection-row">
-              <div>
-                <p class="form-section-title">Test</p>
-                <p class="hint" style="margin-top:2px;">Verify SMTP credentials and server connectivity</p>
+              <div class="test-connection-row">
+                <div>
+                  <p class="form-section-title">{{ t('config.smtpTest') }}</p>
+                  <p class="hint" style="margin-top:2px;">{{ t('config.smtpTestButton') }}</p>
+                </div>
+                <AppButton size="icon" @click="testSmtpConnection" :disabled="testingSmtp || !form.smtp.host || !form.smtp.user" :loading="testingSmtp" :title="testingSmtp ? t('config.smtpTestTesting') : t('config.smtpTestButton')" />
               </div>
-              <AppButton @click="testSmtpConnection" :disabled="testingSmtp || !form.smtp.host || !form.smtp.user" :loading="testingSmtp">
-                <svg v-if="!testingSmtp" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                {{ testingSmtp ? 'Testing\u2026' : 'Test' }}
-              </AppButton>
-            </div>
             <div v-if="testResultSmtp" class="test-result" :class="testResultSmtp.ok ? 'success' : 'error'" style="margin-top:10px;">
               <svg v-if="testResultSmtp.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
               <svg v-else class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -1184,10 +1160,10 @@
             <!-- Sandbox → Global Allow List -->
             <template v-if="sandboxForm.defaultMode === 'sandbox'">
               <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label">Global Allow List <span class="sec-count-badge">{{ sandboxForm.sandboxAllowList.length }}</span></label>
-                <p class="hint" style="margin-bottom:10px;">Commands that bypass the permission prompt for all chats. Use glob patterns — <code class="inline-code">*</code> matches anything.</p>
+                <label class="form-label">{{ t('config.globalAllowList') }} <span class="sec-count-badge">{{ sandboxForm.sandboxAllowList.length }}</span></label>
+                <p class="hint" style="margin-bottom:10px;">{{ t('config.globalAllowListHint') }}</p>
                 <div class="sec-list">
-                  <div v-if="sandboxForm.sandboxAllowList.length === 0" class="sec-list-empty">No allow list entries yet. Add patterns below.</div>
+                  <div v-if="sandboxForm.sandboxAllowList.length === 0" class="sec-list-empty">{{ t('config.noAllowListEntries') }}</div>
                   <div v-for="(entry, idx) in sandboxForm.sandboxAllowList" :key="entry.id || idx" class="sec-list-entry">
                     <div class="sec-entry-info">
                       <span class="sec-entry-pattern">{{ entry.pattern }}</span>
@@ -1199,9 +1175,9 @@
                   </div>
                 </div>
                 <div class="sec-add-row">
-                  <input v-model="newAllowPattern" type="text" placeholder="Pattern (e.g. ls *)" class="sec-add-input" @keydown.enter.prevent="addAllowEntry" />
-                  <input v-model="newAllowDesc" type="text" placeholder="Description" class="sec-add-input" @keydown.enter.prevent="addAllowEntry" />
-                  <button class="sec-add-btn" @click="addAllowEntry" :disabled="!newAllowPattern.trim()">Add</button>
+                  <input v-model="newAllowPattern" type="text" :placeholder="t('config.allowListPatternPlaceholder')" class="sec-add-input" @keydown.enter.prevent="addAllowEntry" />
+                  <input v-model="newAllowDesc" type="text" :placeholder="t('config.allowListDescPlaceholder')" class="sec-add-input" @keydown.enter.prevent="addAllowEntry" />
+                  <button class="sec-add-btn" @click="addAllowEntry" :disabled="!newAllowPattern.trim()">{{ t('common.add') }}</button>
                 </div>
               </div>
             </template>
@@ -1212,7 +1188,7 @@
                 <label class="form-label">{{ t('config.dangerBlockList') }} <span class="sec-count-badge danger">{{ sandboxForm.dangerBlockList.length }}</span></label>
                 <p class="hint" style="margin-bottom:10px;">{{ t('config.dangerBlockListHint') }}</p>
                 <div class="sec-list">
-                  <div v-if="sandboxForm.dangerBlockList.length === 0" class="sec-list-empty">No block list entries.</div>
+                  <div v-if="sandboxForm.dangerBlockList.length === 0" class="sec-list-empty">{{ t('config.noBlockListEntries') }}</div>
                   <div v-for="(entry, idx) in sandboxForm.dangerBlockList" :key="entry.id || idx" class="sec-list-entry">
                     <div class="sec-entry-info">
                       <span class="sec-entry-pattern danger">{{ entry.pattern }}</span>
@@ -1224,9 +1200,9 @@
                   </div>
                 </div>
                 <div class="sec-add-row">
-                  <input v-model="newDangerPattern" type="text" placeholder="Pattern (e.g. rm -rf *)" class="sec-add-input" @keydown.enter.prevent="addDangerEntry" />
-                  <input v-model="newDangerDesc" type="text" placeholder="Description" class="sec-add-input" @keydown.enter.prevent="addDangerEntry" />
-                  <button class="sec-add-btn danger" @click="addDangerEntry" :disabled="!newDangerPattern.trim()">Add</button>
+                  <input v-model="newDangerPattern" type="text" :placeholder="t('config.dangerBlockListPatternPlaceholder')" class="sec-add-input" @keydown.enter.prevent="addDangerEntry" />
+                  <input v-model="newDangerDesc" type="text" :placeholder="t('config.allowListDescPlaceholder')" class="sec-add-input" @keydown.enter.prevent="addDangerEntry" />
+                  <button class="sec-add-btn danger" @click="addDangerEntry" :disabled="!newDangerPattern.trim()">{{ t('common.add') }}</button>
                 </div>
               </div>
             </template>
@@ -1286,7 +1262,7 @@
                 </div>
                 <h3 class="form-section-title">{{ t('config.telegram') }}</h3>
                 <span class="im-platform-status" :class="telegramReady ? 'ready' : 'idle'">
-                  {{ telegramReady ? '● Configured' : '○ Not configured' }}
+                  {{ telegramReady ? t('config.telegramConfigured') : t('config.telegramNotConfigured') }}
                 </span>
               </div>
 
@@ -1330,14 +1306,14 @@
                   placeholder="username1,username2"
                   class="field font-mono"
                 />
-                <p class="hint">Leave empty to allow all users.</p>
+                <p class="hint">{{ t('config.telegramAllowedUsersHint') }}</p>
               </div>
 
               <div class="form-divider" />
               <details class="im-setup-guide">
                 <summary class="im-setup-guide-summary">
                   <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></svg>
-                  Setup Guide
+                  {{ t('config.setupGuide') }}
                   <svg class="im-setup-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
                 <ol class="im-setup-steps">
@@ -1349,8 +1325,8 @@
               <div class="form-divider" style="margin-top:1rem;" />
               <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-top:0.75rem;">
                 <AppButton size="compact" @click="saveIM" :loading="savingIM">
-                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                  Save
+                  <svg v-if="!savingIM" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  {{ t('common.save') }}
                 </AppButton>
                 <span v-if="savedIMMsg" class="save-indicator" :class="savedIMMsg.ok ? 'success' : 'error'">
                   <svg v-if="savedIMMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1370,12 +1346,12 @@
                 </div>
                 <h3 class="form-section-title">{{ t('config.whatsapp') }}</h3>
                 <span class="im-platform-status" :class="whatsappReady ? 'ready' : (whatsappQr ? 'pending' : 'idle')">
-                  {{ whatsappReady ? '● Connected' : (whatsappQr ? '◌ Awaiting scan' : '○ Not connected') }}
+                  {{ whatsappReady ? t('config.whatsappConnected') : (whatsappQr ? t('config.whatsappAwaitingScan') : t('config.whatsappNotConnected')) }}
                 </span>
               </div>
 
               <div class="im-enable-row">
-                <span class="im-enable-label">Enable WhatsApp</span>
+                <span class="im-enable-label">{{ t('config.whatsappEnable') }}</span>
                 <label class="im-toggle" @click.stop>
                   <input type="checkbox" v-model="form.im.whatsapp.enabled" />
                   <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
@@ -1393,7 +1369,7 @@
                   placeholder="6512345678,6587654321"
                   class="field font-mono"
                 />
-                <p class="hint">Leave empty to allow all senders. Use phone numbers without the + prefix.</p>
+                <p class="hint">{{ t('config.whatsappAllowedUsersHint') }}</p>
               </div>
 
               <div class="form-divider" />
@@ -1402,15 +1378,15 @@
               <div class="im-wa-link-section">
                 <div class="im-wa-link-header">
                   <div>
-                    <p class="form-label" style="margin:0 0 0.2rem;">Device Linking</p>
+                    <p class="form-label" style="margin:0 0 0.2rem;">{{ t('config.whatsappDeviceLinking') }}</p>
                     <p class="hint" style="margin:0;">
-                      <template v-if="whatsappReady">Your phone is linked. Session is saved and persists across restarts.</template>
-                      <template v-else>Link a WhatsApp account to this device by scanning a QR code.</template>
+                      <template v-if="whatsappReady">{{ t('config.whatsappLinkedHint') }}</template>
+                      <template v-else>{{ t('config.whatsappNotLinkedHint') }}</template>
                     </p>
                   </div>
                   <AppButton size="compact" variant="primary" @click="requestWhatsAppLink" :loading="waLinking" :disabled="waLinking">
                     <svg v-if="!waLinking" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                    {{ waLinking ? 'Generating…' : (whatsappReady ? 'Re-link Device' : 'Link Device') }}
+                    {{ waLinking ? t('config.whatsappGenerating') : (whatsappReady ? t('config.whatsappRelinkDevice') : t('config.whatsappLinkDevice')) }}
                   </AppButton>
                 </div>
 
@@ -1418,20 +1394,20 @@
                 <div v-if="whatsappQr && !whatsappConnected" class="im-qr-block">
                   <img :src="whatsappQr" alt="WhatsApp QR Code" class="im-qr-img" />
                   <div class="im-qr-instructions">
-                    <p style="margin:0 0 0.4rem; font-weight:600; font-size:var(--fs-secondary); color:var(--text-primary);">Scan with WhatsApp</p>
+                    <p style="margin:0 0 0.4rem; font-weight:600; font-size:var(--fs-secondary); color:var(--text-primary);">{{ t('config.whatsappScanWith') }}</p>
                     <ol class="im-inline-steps" style="margin:0; padding-left:1rem;">
-                      <li>Open WhatsApp on your phone</li>
-                      <li>Go to Settings → Linked Devices</li>
-                      <li>Tap <strong>Link a Device</strong> and scan this QR</li>
+                      <li>{{ t('config.whatsappQrInstructions1') }}</li>
+                      <li>{{ t('config.whatsappQrInstructions2') }}</li>
+                      <li>{{ t('config.whatsappQrInstructions3') }}</li>
                     </ol>
-                    <p class="im-inline-note" style="margin-top:0.5rem;">QR expires after 60 seconds — click Link Device again if it disappears.</p>
+                    <p class="im-inline-note" style="margin-top:0.5rem;">{{ t('config.whatsappQrExpired') }}</p>
                   </div>
                 </div>
 
                 <!-- Connected state -->
                 <div v-else-if="whatsappReady" class="im-wa-connected">
                   <svg style="width:18px;height:18px;color:#10B981;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  <span>Phone linked successfully. Session is active.</span>
+                  <span>{{ t('config.whatsappLinkedSuccess') }}</span>
                 </div>
               </div>
 
@@ -1439,25 +1415,25 @@
               <details class="im-setup-guide">
                 <summary class="im-setup-guide-summary">
                   <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></svg>
-                  Setup Guide
+                  {{ t('config.setupGuide') }}
                   <svg class="im-setup-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
                 <ol class="im-setup-steps">
-                  <li>Toggle <strong>Enable WhatsApp</strong> on and click <strong>Save</strong></li>
-                  <li>Click the <strong>Link Device</strong> button above — a QR code will appear</li>
-                  <li>Open WhatsApp on your phone → tap <strong>Settings</strong> (or the three-dot menu) → <strong>Linked Devices</strong> → <strong>Link a Device</strong></li>
-                  <li>Point your phone at the QR code to scan it — WhatsApp will confirm the link instantly</li>
-                  <li>Go to the <strong>Bridge</strong> tab and click <strong>Start Bridge</strong></li>
-                  <li>From any other phone or your own phone, open WhatsApp and send a message <strong>to your linked number</strong> (the same number whose phone you used to scan the QR) — ClankAI will reply to that message</li>
+                  <li>{{ t('config.whatsappSetupGuide1') }}</li>
+                  <li>{{ t('config.whatsappSetupGuide2') }}</li>
+                  <li>{{ t('config.whatsappSetupGuide3') }}</li>
+                  <li>{{ t('config.whatsappSetupGuide4') }}</li>
+                  <li>{{ t('config.whatsappSetupGuide5') }}</li>
+                  <li>{{ t('config.whatsappSetupGuide6') }}</li>
                 </ol>
-                <p class="im-setup-note">The session is saved automatically — no need to scan again after restarts. Your phone must remain connected to the internet (same as WhatsApp Web).</p>
+                <p class="im-setup-note">{{ t('config.whatsappSetupNote') }}</p>
               </details>
 
               <div class="form-divider" style="margin-top:1rem;" />
               <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-top:0.75rem;">
                 <AppButton size="compact" @click="saveIM" :loading="savingIM">
-                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                  Save
+                  <svg v-if="!savingIM" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  {{ t('common.save') }}
                 </AppButton>
                 <span v-if="savedIMMsg" class="save-indicator" :class="savedIMMsg.ok ? 'success' : 'error'">
                   <svg v-if="savedIMMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1477,12 +1453,12 @@
                 </div>
                 <h3 class="form-section-title">{{ t('config.feishu') }}</h3>
                 <span class="im-platform-status" :class="feishuReady ? 'ready' : 'idle'">
-                  {{ feishuReady ? '● Configured' : '○ Not configured' }}
+                  {{ feishuReady ? t('config.feishuConfigured') : t('config.feishuNotConfigured') }}
                 </span>
               </div>
 
               <div class="im-enable-row">
-                <span class="im-enable-label">Enable Feishu / Lark Bot</span>
+                <span class="im-enable-label">{{ t('config.feishuEnable') }}</span>
                 <label class="im-toggle" @click.stop>
                   <input type="checkbox" v-model="form.im.feishu.enabled" />
                   <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
@@ -1492,7 +1468,7 @@
               <div class="form-divider" />
 
               <div class="form-group">
-                <label class="form-label" for="feishuAppId">App ID</label>
+                <label class="form-label" for="feishuAppId">{{ t('config.feishuAppId') }}</label>
                 <input
                   id="feishuAppId"
                   v-model="form.im.feishu.appId"
@@ -1503,7 +1479,7 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="feishuAppSecret">App Secret</label>
+                <label class="form-label" for="feishuAppSecret">{{ t('config.feishuAppSecret') }}</label>
                 <div style="position:relative;">
                   <input
                     id="feishuAppSecret"
@@ -1520,7 +1496,7 @@
                     </svg>
                   </button>
                 </div>
-                <p class="hint">Get App ID and App Secret from <strong>open.feishu.cn/app</strong>.</p>
+                <p class="hint">{{ t('config.feishuAppIdHint') }}</p>
               </div>
 
               <div class="form-group">
@@ -1532,35 +1508,35 @@
                   placeholder="ou_xxxxxxxx,ou_yyyyyyyy"
                   class="field font-mono"
                 />
-                <p class="hint">Leave empty to allow all workspace users.</p>
+                <p class="hint">{{ t('config.feishuAllowedUsersHint') }}</p>
               </div>
 
               <div class="form-divider" />
               <details class="im-setup-guide">
                 <summary class="im-setup-guide-summary">
                   <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></svg>
-                  Setup Guide
+                  {{ t('config.setupGuide') }}
                   <svg class="im-setup-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
                 <ol class="im-setup-steps">
-                  <li>Go to <strong>open.feishu.cn/app</strong> (or <strong>open.larksuite.com/app</strong> for Lark) and create a new <em>Custom App</em></li>
-                  <li>Under <strong>Capabilities</strong>, enable the <strong>Bot</strong> feature</li>
-                  <li>Under <strong>Permissions &amp; Scopes</strong>, add the permission <code>im:message:receive_v1</code></li>
-                  <li>Under <strong>Event Subscriptions</strong>, add the <code>im.message.receive_v1</code> event and set connection mode to <strong>Long Connection (WebSocket)</strong></li>
-                  <li>Under <strong>Credentials &amp; Basic Info</strong>, copy your <strong>App ID</strong> and <strong>App Secret</strong></li>
-                  <li>Paste them in the fields above, toggle <strong>Enable</strong> on, and click <strong>Save</strong></li>
-                  <li>Publish the app to your workspace (release → publish)</li>
-                  <li>Go to the <strong>Bridge</strong> tab and click <strong>Start Bridge</strong></li>
-                  <li>In Feishu, open a chat with your bot (search its name in the top bar) and send it a message — ClankAI will respond</li>
+                  <li>{{ t('config.feishuSetupGuide1') }}</li>
+                  <li>{{ t('config.feishuSetupGuide2') }}</li>
+                  <li>{{ t('config.feishuSetupGuide3') }}</li>
+                  <li>{{ t('config.feishuSetupGuide4') }}</li>
+                  <li>{{ t('config.feishuSetupGuide5') }}</li>
+                  <li>{{ t('config.feishuSetupGuide6') }}</li>
+                  <li>{{ t('config.feishuSetupGuide7') }}</li>
+                  <li>{{ t('config.feishuSetupGuide8') }}</li>
+                  <li>{{ t('config.feishuSetupGuide9') }}</li>
                 </ol>
-                <p class="im-setup-note">No public URL required — the bridge uses a persistent WebSocket connection to Feishu's servers.</p>
+                <p class="im-setup-note">{{ t('config.feishuSetupNote') }}</p>
               </details>
 
               <div class="form-divider" style="margin-top:1rem;" />
               <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-top:0.75rem;">
                 <AppButton size="compact" @click="saveIM" :loading="savingIM">
-                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                  Save
+                  <svg v-if="!savingIM" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  {{ t('common.save') }}
                 </AppButton>
                 <span v-if="savedIMMsg" class="save-indicator" :class="savedIMMsg.ok ? 'success' : 'error'">
                   <svg v-if="savedIMMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1589,7 +1565,7 @@
                   <div class="im-bridge-info">
                     <span class="im-bridge-name">Telegram</span>
                     <span class="im-bridge-sub" :class="imStatus.platforms?.telegram ? 'running' : (telegramReady ? 'ready' : 'idle')">
-                      {{ imStatus.platforms?.telegram ? '● Running' : (telegramReady ? '○ Configured' : '○ Not configured') }}
+                      {{ imStatus.platforms?.telegram ? t('config.bridgeRunning') : (telegramReady ? t('config.bridgeConfigured') : t('config.bridgeNotConfigured')) }}
                     </span>
                   </div>
                   <label class="im-toggle" :class="{ disabled: !telegramReady }" @click.stop>
@@ -1607,7 +1583,7 @@
                   <div class="im-bridge-info">
                     <span class="im-bridge-name">WhatsApp</span>
                     <span class="im-bridge-sub" :class="imStatus.platforms?.whatsapp ? 'running' : (whatsappReady ? 'ready' : 'idle')">
-                      {{ imStatus.platforms?.whatsapp ? '● Running' : (whatsappReady ? '○ Linked' : '○ Not linked') }}
+                      {{ imStatus.platforms?.whatsapp ? t('config.bridgeRunning') : (whatsappReady ? t('config.whatsappLinked') : t('config.whatsappNotLinked')) }}
                     </span>
                   </div>
                   <label class="im-toggle" :class="{ disabled: !whatsappReady }" @click.stop>
@@ -1623,9 +1599,9 @@
                 <div class="im-bridge-row">
                   <svg style="width:15px;height:15px;flex-shrink:0;color:var(--text-muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                   <div class="im-bridge-info">
-                    <span class="im-bridge-name">Feishu / Lark</span>
+                    <span class="im-bridge-name">{{ t('config.feishuLark') }}</span>
                     <span class="im-bridge-sub" :class="imStatus.platforms?.feishu ? 'running' : (feishuReady ? 'ready' : 'idle')">
-                      {{ imStatus.platforms?.feishu ? '● Running' : (feishuReady ? '○ Configured' : '○ Not configured') }}
+                      {{ imStatus.platforms?.feishu ? t('config.bridgeRunning') : (feishuReady ? t('config.bridgeConfigured') : t('config.bridgeNotConfigured')) }}
                     </span>
                   </div>
                   <label class="im-toggle" :class="{ disabled: !feishuReady }" @click.stop>
@@ -1638,7 +1614,7 @@
 
               <!-- Active sessions -->
               <div v-if="imStatus.sessions?.length" style="margin-top:1.25rem;">
-                <p class="form-label" style="margin-bottom:0.5rem;">Active Sessions</p>
+                <p class="form-label" style="margin-bottom:0.5rem;">{{ t('config.activeSessions') }}</p>
                 <div class="im-sessions-list">
                   <div v-for="(session, i) in imStatus.sessions" :key="i" class="im-session-row">
                     <span class="font-mono" style="font-size:var(--fs-caption);color:var(--text-secondary);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
@@ -1668,7 +1644,7 @@
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
           </div>
-          <span class="im-guide-title">IM Bridge Setup Guide</span>
+          <span class="im-guide-title">{{ t('config.imBridgeSetupGuide') }}</span>
           <button class="im-guide-close" @click="showIMGuide = false">
             <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
@@ -1680,13 +1656,13 @@
           <div class="im-guide-section">
             <div class="im-guide-section-title">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              Telegram — 4 steps
+              {{ t('config.telegramSteps') }}
             </div>
             <ol class="im-guide-steps">
-              <li>Open Telegram and search for <code>@BotFather</code></li>
-              <li>Send <code>/newbot</code>, follow the prompts to name your bot</li>
-              <li>Copy the bot token (looks like <code>123456:ABC-xyz…</code>)</li>
-              <li>Paste the token here, check <em>Enable Telegram Bot</em>, click <strong>Save</strong> then <strong>Start Bridge</strong></li>
+              <li>{{ t('config.telegramGuide1') }}</li>
+              <li>{{ t('config.telegramGuide2') }}</li>
+              <li>{{ t('config.telegramGuide3') }}</li>
+              <li>{{ t('config.telegramGuide4') }}</li>
             </ol>
             <p class="im-guide-note">To restrict access, add your Telegram username to <em>Allowed Users</em>. Leave empty to allow anyone.</p>
           </div>
@@ -1697,14 +1673,14 @@
           <div class="im-guide-section">
             <div class="im-guide-section-title">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-              WhatsApp — 3 steps
+              {{ t('config.whatsappSteps') }}
             </div>
             <ol class="im-guide-steps">
-              <li>Enable WhatsApp, click <strong>Save</strong> then <strong>Start Bridge</strong></li>
-              <li>A QR code appears in the config page — open WhatsApp on your phone → Settings → Linked Devices → Link a Device → scan the QR</li>
-              <li>Session is saved automatically — no need to scan again after restarts</li>
+              <li>{{ t('config.whatsappGuide1') }}</li>
+              <li>{{ t('config.whatsappGuide2') }}</li>
+              <li>{{ t('config.whatsappGuide3') }}</li>
             </ol>
-            <p class="im-guide-note">Your phone must stay connected to the internet (same as WhatsApp Web). To restrict access, add phone numbers (without +) to <em>Allowed Users</em>.</p>
+            <p class="im-guide-note">{{ t('config.whatsappGuideNote') }}</p>
           </div>
 
           <div class="im-guide-divider" />
@@ -1713,17 +1689,17 @@
           <div class="im-guide-section">
             <div class="im-guide-section-title">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-              Feishu / Lark — 6 steps
+              {{ t('config.feishuSteps') }}
             </div>
             <ol class="im-guide-steps">
-              <li>Go to <strong>open.feishu.cn/app</strong> → Create App (Custom App)</li>
-              <li>Under <em>Capabilities</em>, enable <strong>Bot</strong></li>
-              <li>Under <em>Permissions &amp; Scopes</em>, add <code>im:message:receive_v1</code></li>
-              <li>Under <em>Event Subscriptions</em>, add event <code>im.message.receive_v1</code> and set delivery to <strong>WebSocket</strong> mode</li>
-              <li>Publish the app to your workspace</li>
-              <li>Paste App ID and App Secret here, enable Feishu, click <strong>Save</strong> then <strong>Start Bridge</strong></li>
+              <li>{{ t('config.feishuGuide1') }}</li>
+              <li>{{ t('config.feishuGuide2') }}</li>
+              <li>{{ t('config.feishuGuide3') }}</li>
+              <li>{{ t('config.feishuGuide4') }}</li>
+              <li>{{ t('config.feishuGuide5') }}</li>
+              <li>{{ t('config.feishuGuide6') }}</li>
             </ol>
-            <p class="im-guide-note">No public URL is required — the bridge uses a persistent WebSocket connection to Feishu's servers.</p>
+            <p class="im-guide-note">{{ t('config.feishuGuideNote') }}</p>
           </div>
 
           <div class="im-guide-divider" />
@@ -1732,18 +1708,18 @@
           <div class="im-guide-section">
             <div class="im-guide-section-title">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-              Agents
+              {{ t('config.imGuideAgents') }}
             </div>
             <p class="im-guide-note" style="border-color:#10B981;">
-              Each chat automatically uses the agent assigned to it. In a group chat, all assigned agents respond in turn.
+              {{ t('config.imGuideAgentsNote') }}
             </p>
             <table class="im-guide-table">
               <tbody>
-                <tr><td><code>/agents</code></td><td>List all available agents</td></tr>
-                <tr><td><code>/agent &lt;name&gt;</code></td><td>Show agent details (prompt, model, provider)</td></tr>
-                <tr><td><code>/agent add &lt;name&gt;</code></td><td>Add a agent to the current chat</td></tr>
-                <tr><td><code>/agent remove &lt;name&gt;</code></td><td>Remove a agent from the current chat</td></tr>
-                <tr><td><code>/agent model &lt;name&gt;</code></td><td>Change agent's provider &amp; model via inline buttons</td></tr>
+                <tr><td><code>/agents</code></td><td>{{ t('config.imGuideListAgents') }}</td></tr>
+                <tr><td><code>/agent &lt;name&gt;</code></td><td>{{ t('config.imGuideShowAgent') }}</td></tr>
+                <tr><td><code>/agent add &lt;name&gt;</code></td><td>{{ t('config.imGuideAddAgent') }}</td></tr>
+                <tr><td><code>/agent remove &lt;name&gt;</code></td><td>{{ t('config.imGuideRemoveAgent') }}</td></tr>
+                <tr><td><code>/agent model &lt;name&gt;</code></td><td>{{ t('config.imGuideChangeAgent') }}</td></tr>
               </tbody>
             </table>
           </div>
@@ -1754,13 +1730,13 @@
           <div class="im-guide-section">
             <div class="im-guide-section-title">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>
-              @mentions in group chats
+              {{ t('config.imGuideMentions') }}
             </div>
             <table class="im-guide-table">
               <tbody>
-                <tr><td><code>@all</code></td><td>All agents in the chat respond</td></tr>
-                <tr><td><code>@Mark</code></td><td>Only Mark responds (case-insensitive)</td></tr>
-                <tr><td><em>no mention</em></td><td>All agents respond (same as @all)</td></tr>
+                <tr><td><code>@all</code></td><td>{{ t('config.imGuideMentionAll') }}</td></tr>
+                <tr><td><code>@Mark</code></td><td>{{ t('config.imGuideMentionName') }}</td></tr>
+                <tr><td><em>no mention</em></td><td>{{ t('config.imGuideNoMention') }}</td></tr>
               </tbody>
             </table>
           </div>
@@ -1771,10 +1747,10 @@
           <div class="im-guide-section">
             <div class="im-guide-section-title">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-              Voice notes (Telegram)
+              {{ t('config.imGuideVoiceNotes') }}
             </div>
             <p class="im-guide-note">
-              Voice messages are automatically transcribed via Whisper and routed as text. Requires an <strong>OpenAI API key</strong> configured in <em>AI → Models → OpenAI</em>.
+              {{ t('config.imGuideVoiceNote') }}
             </p>
           </div>
 
@@ -1784,25 +1760,25 @@
           <div class="im-guide-section">
             <div class="im-guide-section-title">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-              Chat Commands
+              {{ t('config.imGuideCommands') }}
             </div>
             <table class="im-guide-table">
               <tbody>
-                <tr><td><code>/list</code></td><td>Show all chats with numbers</td></tr>
-                <tr><td><code>/switch &lt;n&gt;</code></td><td>Switch active chat to #n from /list</td></tr>
-                <tr><td><code>/new [title]</code></td><td>Create a new chat and switch to it</td></tr>
-                <tr><td><code>/current</code></td><td>Show name of the active chat</td></tr>
-                <tr><td><code>/status</code></td><td>Check if the bridge is running</td></tr>
-                <tr><td><code>/help</code></td><td>Show all available commands</td></tr>
+                <tr><td><code>/list</code></td><td>{{ t('config.imGuideCmdList') }}</td></tr>
+                <tr><td><code>/switch &lt;n&gt;</code></td><td>{{ t('config.imGuideCmdSwitch') }}</td></tr>
+                <tr><td><code>/new [title]</code></td><td>{{ t('config.imGuideCmdNew') }}</td></tr>
+                <tr><td><code>/current</code></td><td>{{ t('config.imGuideCmdCurrent') }}</td></tr>
+                <tr><td><code>/status</code></td><td>{{ t('config.imGuideCmdStatus') }}</td></tr>
+                <tr><td><code>/help</code></td><td>{{ t('config.imGuideCmdHelp') }}</td></tr>
               </tbody>
             </table>
-            <p class="im-guide-note">Any non-command message is sent directly to the active chat. If no chat is active, one is created automatically.</p>
+            <p class="im-guide-note">{{ t('config.imGuideCmdNote') }}</p>
           </div>
 
         </div>
 
         <div class="im-guide-footer">
-          <button class="im-guide-ok-btn" @click="showIMGuide = false">Got it</button>
+          <button class="im-guide-ok-btn" @click="showIMGuide = false">{{ t('config.imGuideGotIt') }}</button>
         </div>
       </div>
     </div>
@@ -2066,7 +2042,6 @@ const subTabsAI = computed(() => [
   { value: 'models',    label: t('config.models'),    icon: IconModels    },
   { value: 'voice',     label: t('config.voice'),     icon: IconVoice     },
   { value: 'knowledge', label: t('config.knowledge'), icon: IconKnowledge },
-  { value: 'pricing',   label: t('config.pricing'),   icon: IconPricing   },
 ])
 
 const activeSubTab = ref('language')
@@ -2090,7 +2065,6 @@ function getSubTabStatus(subTab) {
     case 'models':    return Object.values(form).some(v => v?.apiKey) ? 'configured' : 'empty'
     case 'voice':     return form.voiceCall?.whisperApiKey ? 'configured' : 'empty'
     case 'knowledge': return form.pineconeApiKey ? 'configured' : 'empty'
-    case 'pricing':   return 'configured'
     default:          return 'empty'
   }
 }
@@ -2912,7 +2886,7 @@ async function saveEmail() {
 
 async function testSmtpConnection() {
   if (!form.smtp.host || !form.smtp.user || !form.smtp.pass) {
-    testResultSmtp.value = { ok: false, message: 'Fill in host, user, and password first.' }
+    testResultSmtp.value = { ok: false, message: t('config.smtpTestFillFirst') }
     return
   }
   if (!window.electronAPI?.testSmtp) {
@@ -2924,8 +2898,8 @@ async function testSmtpConnection() {
   try {
     const result = await window.electronAPI.testSmtp(JSON.parse(JSON.stringify(form.smtp)))
     testResultSmtp.value = result.success
-      ? { ok: true, message: 'Connected — SMTP credentials verified' }
-      : { ok: false, message: result.error || 'Connection failed' }
+      ? { ok: true, message: t('config.smtpTestSuccess') }
+      : { ok: false, message: result.error || t('config.smtpTestFailed') }
   } catch (err) {
     testResultSmtp.value = { ok: false, message: err.message }
   } finally {
@@ -3601,6 +3575,18 @@ async function savePricing() {
   opacity: 0.5;
   cursor: not-allowed;
 }
+.action-btn.icon-only {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  justify-content: center;
+}
+.action-btn.danger {
+  background: linear-gradient(135deg, #DC2626 0%, #EF4444 40%, #F87171 100%);
+}
+.action-btn.danger:hover {
+  background: linear-gradient(135deg, #B91C1C 0%, #DC2626 40%, #EF4444 100%);
+}
 
 /* form-section-desc used in pricing cards */
 .form-section-desc {
@@ -4163,13 +4149,19 @@ async function savePricing() {
   border: 1px solid var(--border);
 }
 
+.models-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem;
+}
+
 .models-add-btn {
-  width: 100%;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
   border: none;
   border-radius: var(--radius-sm);
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -4177,16 +4169,13 @@ async function savePricing() {
   cursor: pointer;
   transition: all 0.15s;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body);
-  font-weight: 600;
 }
 .models-add-btn:hover {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 .models-add-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
 

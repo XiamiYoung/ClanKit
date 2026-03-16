@@ -156,18 +156,19 @@ function clear() {
 <style scoped>
 .combo-box {
   position: relative;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--bg-card);
+  border: 1px solid #1A1A1A;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .combo-box:focus-within { border-color: var(--text-primary); box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
 
 .combo-input {
   width: 100%; display: block; padding: 0.5625rem 0.75rem; border: none; border-radius: var(--radius-sm);
-  background: transparent; color: var(--text-primary);
+  background: transparent; color: #FFFFFF;
   font-family: 'Inter', sans-serif; font-size: var(--fs-body); outline: none;
 }
-.combo-input::placeholder { color: var(--text-muted); }
+.combo-input::placeholder { color: rgba(255,255,255,0.5); }
 .combo-input:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── Single chip ───────────────────────────────────────────────────────── */
@@ -219,16 +220,17 @@ function clear() {
 .combo-multi-input {
   flex: 1; min-width: 5rem; border: none; background: transparent;
   padding: 0.25rem 0.25rem; outline: none;
-  font-family: 'Inter', sans-serif; font-size: var(--fs-body); color: var(--text-primary);
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body); color: #FFFFFF;
 }
-.combo-multi-input::placeholder { color: var(--text-muted); }
+.combo-multi-input::placeholder { color: rgba(255,255,255,0.5); }
 .combo-multi-input:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── Dropdown ──────────────────────────────────────────────────────────── */
 .combo-dropdown {
   position: absolute; left: 0; right: 0; top: 100%;
-  max-height: 17.5rem; overflow-y: auto; background: #FFFFFF;
-  border: 1px solid #E5E5EA; border-radius: 0.75rem;
+  max-height: 17.5rem; overflow-y: auto;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border-radius: 0.75rem;
   box-shadow: 0 12px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06);
   z-index: 50; margin-top: 0.25rem; padding: 0.375rem; scrollbar-width: thin;
   display: flex; flex-direction: column; gap: 0.125rem;
@@ -240,19 +242,13 @@ function clear() {
   border: 1px solid transparent; gap: 0.125rem;
 }
 .combo-option:hover {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  background: linear-gradient(135deg, #2D2D2D 0%, #3D3D3D 40%, #4B5563 100%);
   border-color: transparent;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
-.combo-option:hover .combo-option-name { color: #FFFFFF; }
-.combo-option:hover .combo-option-id { color: rgba(255,255,255,0.6); }
 .combo-option.selected {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: transparent;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  border-color: rgba(255,255,255,0.1);
 }
-.combo-option-name { font-size: 0.875rem; color: #1A1A1A; font-weight: 500; }
-.combo-option.selected .combo-option-name { color: #FFFFFF; }
-.combo-option-id { font-size: 0.6875rem; color: #9CA3AF; font-family: 'JetBrains Mono', monospace; }
-.combo-option.selected .combo-option-id { color: rgba(255,255,255,0.6); }
+.combo-option-name { font-size: 0.875rem; color: #FFFFFF; font-weight: 500; }
+.combo-option-id { font-size: 0.6875rem; color: rgba(255,255,255,0.5); font-family: 'JetBrains Mono', monospace; }
 </style>

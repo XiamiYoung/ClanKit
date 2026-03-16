@@ -156,7 +156,7 @@
                   </div>
                   <div class="pf-wave-col">
                     <div v-if="wave.length > 1" class="pf-wave-tag">
-                      <span class="pf-wave-parallel">parallel ×{{ wave.length }}</span>
+                      <span class="pf-wave-parallel">{{ t('tasks.step.parallelCount', { count: wave.length }) }}</span>
                     </div>
                     <div v-for="node in wave" :key="node.stepId" :class="['pf-step-block', node.condClass]">
                       <div class="pf-step-pill">
@@ -168,10 +168,10 @@
                         </span>
                       </div>
                       <div v-if="node.dependsOnLabels.length > 0" class="pf-depends-on">
-                        after: {{ node.dependsOnLabels.join(', ') }}
+                        {{ t('tasks.step.after') }}: {{ node.dependsOnLabels.join(', ') }}
                       </div>
                       <div class="pf-agents-line">
-                        <span class="pf-agents-label">Agent:</span>
+                        <span class="pf-agents-label">{{ t('tasks.step.agentsLabel') }}</span>
                         <span class="pf-agents-names">{{ node.agents.length ? node.agents.map(p => p.name).join(', ') : '—' }}</span>
                       </div>
                     </div>
@@ -188,9 +188,9 @@
               </div>
             </div>
             <div class="pv-canvas-legend">
-              <span class="pf-legend-item"><span class="pf-legend-dot pf-legend-dot--parallel"></span>Parallel</span>
-              <span class="pf-legend-item"><span class="pf-legend-dot pf-legend-dot--success"></span>On success</span>
-              <span class="pf-legend-item"><span class="pf-legend-dot pf-legend-dot--failure"></span>On failure</span>
+              <span class="pf-legend-item"><span class="pf-legend-dot pf-legend-dot--parallel"></span>{{ t('tasks.actions.parallel') }}</span>
+              <span class="pf-legend-item"><span class="pf-legend-dot pf-legend-dot--success"></span>{{ t('tasks.actions.onSuccess') }}</span>
+              <span class="pf-legend-item"><span class="pf-legend-dot pf-legend-dot--failure"></span>{{ t('tasks.actions.onFailure') }}</span>
             </div>
           </div>
 
@@ -277,20 +277,20 @@ onBeforeUnmount(() => {
 function describeCronSimple(expr) {
   if (!expr) return null
   const parts = expr.trim().split(/\s+/)
-  if (parts.length < 5) return 'Invalid expression'
+  if (parts.length < 5) return t('tasks.schedule.invalidExpression')
   const [minF, hourF, domF, monthF, dowF] = parts
-  if (minF === '*' && hourF === '*') return `Every minute (${expr})`
-  if (minF.startsWith('*/')) return `Every ${minF.split('/')[1]} minutes`
-  if (hourF.startsWith('*/')) return `Every ${hourF.split('/')[1]} hours`
+  if (minF === '*' && hourF === '*') return t('tasks.schedule.everyMinute', { expr })
+  if (minF.startsWith('*/')) return t('tasks.schedule.everyNMinutes', { n: minF.split('/')[1] })
+  if (hourF.startsWith('*/')) return t('tasks.schedule.everyNHours', { n: hourF.split('/')[1] })
   // Try to form HH:MM
   const h = parseInt(hourF), m = parseInt(minF)
   if (!isNaN(h) && !isNaN(m) && !hourF.includes(',') && !minF.includes(',')) {
     const ampm = h < 12 ? 'AM' : 'PM'
     const hh = h % 12 === 0 ? 12 : h % 12
     const time = `${hh}:${String(m).padStart(2,'0')} ${ampm}`
-    if (domF === '*' && monthF === '*' && dowF === '*') return `At ${time} every day`
-    if (domF === '*' && monthF === '*') return `At ${time} on selected weekdays`
-    if (dowF === '*' && monthF === '*') return `At ${time} on day ${domF} of every month`
+    if (domF === '*' && monthF === '*' && dowF === '*') return t('tasks.schedule.atTimeEveryDay', { time })
+    if (domF === '*' && monthF === '*') return t('tasks.schedule.atTimeWeekdays', { time })
+    if (dowF === '*' && monthF === '*') return t('tasks.schedule.atTimeDayOfMonth', { time, day: domF })
   }
   return expr
 }
@@ -305,15 +305,15 @@ function agentName(pid) {
   return agentsStore.getAgentById(pid)?.name || pid
 }
 function schedTypeLabel(type) {
-  if (type === 'once')   return 'One-time'
-  if (type === 'cron')   return 'Recurring (cron)'
-  return 'Manual only'
+  if (type === 'once')   return t('tasks.schedule.oneTime')
+  if (type === 'cron')   return t('tasks.schedule.recurring')
+  return t('tasks.schedule.manual')
 }
 function dependsOnLabels(step) {
   const steps = props.plan?.steps || []
   return (step.dependsOn || []).map(id => {
     const di = steps.findIndex(s => s.id === id)
-    return di === -1 ? '?' : `Step ${di + 1}`
+    return di === -1 ? '?' : `${t('tasks.step.step')} ${di + 1}`
   })
 }
 

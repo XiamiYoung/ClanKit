@@ -4,7 +4,8 @@ const fs   = require('fs')
 const path = require('path')
 const os   = require('os')
 
-const DATA_DIR = process.env.CLANKAI_DATA_PATH || path.join(os.homedir(), '.clankai')
+const _dataDir = process.env.CLANKAI_DATA_PATH
+const DATA_DIR = (_dataDir && _dataDir !== 'null') ? _dataDir : path.join(os.homedir(), '.clankai')
 const SESSIONS_FILE = path.join(DATA_DIR, 'im-sessions.json')
 
 /** In-memory state: Map<`${platform}:${channelId}`, { clankChatId, displayName }> */

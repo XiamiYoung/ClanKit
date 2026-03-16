@@ -12,7 +12,7 @@
               </svg>
             </div>
             <div>
-              <div class="phm-title">Execution History</div>
+              <div class="phm-title">{{ t('tasks.executionHistory') }}</div>
               <div class="phm-subtitle">{{ plan?.name }}</div>
             </div>
           </div>
@@ -29,14 +29,14 @@
           <!-- Left: run list (fixed 22%) -->
           <div class="phm-sidebar">
             <div class="phm-sidebar-header">
-              <span class="phm-sidebar-title">Runs</span>
-              <button class="phm-refresh-btn" @click="loadRuns" title="Refresh">
+              <span class="phm-sidebar-title">{{ t('tasks.executionHistory') }}</span>
+              <button class="phm-refresh-btn" @click="loadRuns" :title="t('tasks.refresh')">
                 <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-8.9"/></svg>
               </button>
             </div>
 
-            <div v-if="loading" class="phm-empty">Loading…</div>
-            <div v-else-if="mergedRuns.length === 0" class="phm-empty">No runs yet.</div>
+            <div v-if="loading" class="phm-empty">{{ t('common.loading') }}</div>
+            <div v-else-if="mergedRuns.length === 0" class="phm-empty">{{ t('tasks.noRunsYet') }}</div>
 
             <div v-else class="phm-run-list" ref="runListRef">
               <div
@@ -49,14 +49,14 @@
                 <div class="phm-run-info">
                   <div class="phm-run-date">{{ fmtDate(run.startedAt) }}</div>
                   <div class="phm-run-meta">
-                    {{ run.triggeredBy }} · {{ run.status }}
+                    {{ run.triggeredBy === 'schedule' ? t('tasks.scheduled') : t('tasks.manual') }} · {{ t(`tasks.status.${run.status}`) }}
                     <span v-if="fmtDuration(run.startedAt, run.completedAt)" class="phm-run-dur">{{ fmtDuration(run.startedAt, run.completedAt) }}</span>
                   </div>
                 </div>
               </div>
               <!-- load-more sentinel -->
               <div v-if="visibleCount < mergedRuns.length" ref="loadMoreRef" class="phm-load-more">
-                <span>{{ mergedRuns.length - visibleCount }} more…</span>
+                <span>{{ mergedRuns.length - visibleCount }} {{ t('common.more') }}</span>
               </div>
             </div>
           </div>
@@ -65,7 +65,7 @@
           <div class="phm-canvas" :style="{ width: canvasPct + '%' }">
             <div v-if="!selectedRunId" class="phm-canvas-empty">
               <svg style="width:32px;height:32px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="11"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="11" x2="5" y2="16"/><line x1="12" y1="11" x2="19" y2="16"/></svg>
-              <span>Select a run to see the workflow</span>
+              <span>{{ t('tasks.selectAnExecution') }}</span>
             </div>
 
             <template v-else-if="plan">
@@ -122,11 +122,11 @@
                   <!-- Permission mode -->
                   <span class="phm-chip phm-chip--meta">
                     <svg style="width:9px;height:9px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    {{ { all_permissions: 'All Permissions', chat_only: 'Chat Only', inherit: 'Inherit' }[plan.permissionMode] || plan.permissionMode || 'All Permissions' }}
+                    {{ { all_permissions: t('tasks.permissions.allPermissions'), chat_only: t('tasks.permissions.chatOnly'), inherit: t('tasks.permissions.inherit') }[plan.permissionMode] || plan.permissionMode || t('tasks.permissions.allPermissions') }}
                   </span>
                   <!-- Schedule enabled/disabled -->
                   <span v-if="plan.schedule?.type !== 'manual'" :class="['phm-chip', plan.schedule?.enabled ? 'phm-chip--enabled' : 'phm-chip--disabled']">
-                    {{ plan.schedule?.enabled ? 'Enabled' : 'Disabled' }}
+                    {{ plan.schedule?.enabled ? t('tasks.schedule.enabled') : t('tasks.schedule.disabled') }}
                   </span>
                 </div>
               </div>
@@ -144,7 +144,7 @@
                     <svg class="phm-conn-arrow" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 1 5 5 9 1"/></svg>
                   </div>
                   <div class="phm-wave">
-                    <div v-if="wave.length > 1" class="phm-parallel-badge">parallel ×{{ wave.length }}</div>
+                    <div v-if="wave.length > 1" class="phm-parallel-badge">{{ t('tasks.step.parallelCount', { count: wave.length }) }}</div>
                     <div
                       v-for="node in wave"
                       :key="node.stepId"
@@ -171,9 +171,9 @@
                       <div v-if="node.conditionBadge" class="phm-node-cond-row">
                         <span :class="['phm-cond-badge', `phm-cond-badge--${node.runCondition}`]">{{ node.conditionBadge }}</span>
                       </div>
-                      <div v-if="node.dependsOnLabels.length" class="phm-node-after">after: {{ node.dependsOnLabels.join(', ') }}</div>
+                      <div v-if="node.dependsOnLabels.length" class="phm-node-after">{{ t('tasks.step.after') }}: {{ node.dependsOnLabels.join(', ') }}</div>
                       <div class="phm-agents-line">
-                        <span class="phm-agents-label">{{ t('tasks.history.agent') }}:</span>
+                        <span class="phm-agents-label">{{ t('tasks.step.agentsLabel') }}</span>
                         <span class="phm-agents-names">{{ node.agents.length ? node.agents.map(p=>p.name).join(', ') : '—' }}</span>
                       </div>
                     </div>
@@ -197,7 +197,7 @@
             v-if="selectedStep"
             class="phm-output-divider"
             @mousedown="onDividerMousedown"
-            title="Drag to resize"
+            :title="t('tasks.dragToResize')"
           >
             <div class="phm-output-divider-handle"></div>
           </div>
@@ -217,7 +217,7 @@
                   <svg v-else style="width:9px;height:9px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   {{ selectedStep.runStatusLabel }}
                 </div>
-                <button class="phm-output-close" @click="selectedStepId = null" title="Close panel">
+                <button class="phm-output-close" @click="selectedStepId = null" :title="t('tasks.closePanel')">
                   <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
               </div>
@@ -237,7 +237,7 @@
                 {{ selectedStep.runDuration }}
               </span>
               <span v-if="selectedStep.runResults && selectedStep.runResults.length > 1" class="phm-output-meta-chip">
-                {{ selectedStep.runResults.length }} agents
+                {{ selectedStep.runResults.length }} {{ t('tasks.step.agents') }}
               </span>
             </div>
 
@@ -518,7 +518,12 @@ function buildNode(step, allSteps) {
     return p > (statusPriority[best] || 0) ? r.status : best
   }, null)
 
-  const statusLabels = { done: 'Done', failed: 'Failed', skipped: 'Skipped', running: 'Running' }
+  const statusLabels = { 
+    done: t('tasks.actions.done'), 
+    failed: t('tasks.actions.failed'), 
+    skipped: t('tasks.actions.skipped'), 
+    running: t('tasks.actions.running') 
+  }
   const runClass = runStatus === 'done'    ? 'phm-node--run-done'
                  : runStatus === 'failed'  ? 'phm-node--run-failed'
                  : runStatus === 'skipped' ? 'phm-node--run-skipped'
@@ -536,9 +541,9 @@ function buildNode(step, allSteps) {
     taskName:  task?.name || (step.taskId ? '(unknown)' : 'No task'),
     taskIcon:  task?.icon || '✍️',
     agents, runCondition: cond,
-    conditionBadge: hasDeps && cond !== 'always' ? (cond === 'on_success' ? 'on success' : 'on failure') : null,
+    conditionBadge: hasDeps && cond !== 'always' ? (cond === 'on_success' ? t('tasks.actions.onSuccess') : t('tasks.actions.onFailure')) : null,
     condClass: hasDeps ? (cond === 'on_success' ? 'phm-node--cond-success' : cond === 'on_failure' ? 'phm-node--cond-failure' : '') : '',
-    dependsOnLabels: (step.dependsOn || []).map(id => { const di = allSteps.findIndex(s => s.id === id); return di === -1 ? '?' : `Step ${di + 1}` }),
+    dependsOnLabels: (step.dependsOn || []).map(id => { const di = allSteps.findIndex(s => s.id === id); return di === -1 ? '?' : `${t('tasks.step.step')} ${di + 1}` }),
     runStatus, runStatusLabel: runStatus ? (statusLabels[runStatus] || runStatus) : null, runClass,
     // All per-agent results for the output panel
     runResults: allResults,

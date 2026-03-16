@@ -9,7 +9,7 @@ export function useI18n() {
 
   const locale = computed(() => configStore.language || 'en')
 
-  const t = (key, fallback, params) => {
+  const t = (key, ...args) => {
     const keys = key.split('.')
     let value = messages[locale.value]
     for (const k of keys) {
@@ -17,8 +17,10 @@ export function useI18n() {
     }
     if (value === undefined) {
       console.log('[i18n] MISSING key:', key, 'locale:', locale.value)
-      return fallback || key
+      return args[0] || key
     }
+    const firstArg = args[0]
+    const params = typeof firstArg === 'object' ? firstArg : args[1]
     if (typeof value === 'string' && params && typeof params === 'object') {
       return value.replace(/\{(\w+)\}/g, (_, k) => params[k] ?? `{${k}}`)
     }

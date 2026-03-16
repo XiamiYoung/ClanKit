@@ -129,6 +129,8 @@ function resolveStyle(styleKey) {
  */
 export function getAvatarDataUri(id) {
   if (!id) return null
+  // Custom uploaded image — stored as a data URI directly
+  if (id.startsWith('data:')) return id
   if (svgCache.has(id)) return svgCache.get(id)
 
   let svg

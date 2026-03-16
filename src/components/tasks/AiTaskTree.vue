@@ -2,7 +2,7 @@
   <div class="att-panel">
     <div class="att-header">
       <h3 class="att-title">{{ t('tasks.executionTree') }}</h3>
-      <input v-model="searchText" class="att-search" placeholder="Search..." />
+      <input v-model="searchText" class="att-search" :placeholder="t('common.search')" />
     </div>
 
     <div class="att-tree">

@@ -7,7 +7,7 @@
           <div class="agent-select-header-icon">
             <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
-          <span class="agent-select-title">Select Agent</span>
+          <span class="agent-select-title">{{ t('tasks.step.agents') }}</span>
           <button class="agent-select-close" @click="$emit('close')">
             <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
@@ -20,7 +20,7 @@
             ref="searchInputRef"
             v-model="searchQuery"
             type="text"
-            placeholder="Search agents..."
+            :placeholder="t('tasks.searchAgents')"
             class="agent-select-search-input"
           />
         </div>

@@ -25,9 +25,17 @@ export const useModelsStore = defineStore('models', () => {
     const providers = configStore.config.providers || []
     const anthropic = providers.find(p => p.type === 'anthropic')
     if (!anthropic) return []
-    return [
-      anthropic.model ? { id: anthropic.model } : null,
-    ].filter(Boolean)
+    const models = []
+    if (anthropic.model) {
+      models.push({ id: anthropic.model, name: 'Sonnet' })
+    }
+    if (anthropic.settings?.opusModel) {
+      models.push({ id: anthropic.settings.opusModel, name: 'Opus' })
+    }
+    if (anthropic.settings?.haikuModel) {
+      models.push({ id: anthropic.settings.haikuModel, name: 'Haiku' })
+    }
+    return models
   })
 
   // Helper to find provider config by type

@@ -10,14 +10,14 @@
             <span class="catalog-count-badge">{{ toolsStore.tools.length }}</span>
           </div>
           <p class="catalog-subtitle">
-            Define HTTP endpoints, code snippets, prompt templates, and SMTP email tools the AI agent can use.
+            {{ t('tools.subtitle') }}
           </p>
         </div>
         <div class="flex items-center gap-2">
           <AppButton size="icon" @click="refreshTools" :loading="refreshing" :title="t('common.refresh')">
             <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </AppButton>
-          <AppButton size="icon" @click="openAdd" title="Add Tool">
+          <AppButton size="icon" @click="openAdd" :title="t('tools.addTool')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </AppButton>
         </div>
@@ -46,7 +46,7 @@
           :class="{ active: !typeFilter }"
           @click="typeFilter = ''"
         >
-          All
+          {{ t('tools.all') }}
           <span class="catalog-filter-tab-count">{{ toolsStore.tools.length }}</span>
         </button>
         <button
@@ -55,7 +55,7 @@
           @click="typeFilter = 'http'"
         >
           <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          HTTP
+          {{ t('tools.http') }}
           <span class="catalog-filter-tab-count">{{ httpCount }}</span>
         </button>
         <button
@@ -64,7 +64,7 @@
           @click="typeFilter = 'code'"
         >
           <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-          Code
+          {{ t('tools.code') }}
           <span class="catalog-filter-tab-count">{{ codeCount }}</span>
         </button>
         <button
@@ -73,7 +73,7 @@
           @click="typeFilter = 'prompt'"
         >
           <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          Prompt
+          {{ t('tools.prompt') }}
           <span class="catalog-filter-tab-count">{{ promptCount }}</span>
         </button>
         <button

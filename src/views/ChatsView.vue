@@ -1008,178 +1008,6 @@
       </div>
     </div>
 
-    <!-- ── Tools Selection Modal ──────────────────────────────────────────── -->
-    <Teleport to="body">
-      <div v-if="showToolsModal" class="tools-select-backdrop" @click.self="showToolsModal = false">
-        <div class="tools-select-modal">
-          <!-- Header -->
-          <div class="tools-select-header">
-            <div class="tools-select-header-left">
-              <div class="tools-select-header-icon">
-                <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-                </svg>
-              </div>
-              <h2 class="tools-select-title">Select Tools</h2>
-              <span class="tools-select-count">{{ enabledHttpTools.length }} enabled</span>
-            </div>
-            <button class="tools-select-close" @click="showToolsModal = false">
-              <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-            </button>
-          </div>
-
-          <!-- Filter bar -->
-          <div class="tools-select-filters">
-            <div class="tools-select-search-wrap">
-              <svg style="width:14px;height:14px;color:#9CA3AF;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-              </svg>
-              <input
-                v-model="toolsSearchQuery"
-                type="text"
-                placeholder="Filter tools..."
-                class="tools-select-search"
-              />
-            </div>
-            <div class="tools-select-actions">
-              <button class="tools-select-action-btn" @click="enableAllTools">Enable All</button>
-              <button class="tools-select-action-btn" @click="disableAllTools">Disable All</button>
-            </div>
-          </div>
-
-          <!-- Category chips -->
-          <div v-if="toolsCategories.length > 1" class="tools-select-categories">
-            <button
-              class="tools-cat-chip"
-              :class="{ active: !toolsCategoryFilter }"
-              @click="toolsCategoryFilter = ''"
-            >All</button>
-            <button
-              v-for="cat in toolsCategories"
-              :key="cat"
-              class="tools-cat-chip"
-              :class="{ active: toolsCategoryFilter === cat }"
-              @click="toolsCategoryFilter = toolsCategoryFilter === cat ? '' : cat"
-            >{{ cat }}</button>
-          </div>
-
-          <!-- Tool list -->
-          <div class="tools-select-list">
-            <div v-if="toolsStore.tools.length === 0" class="tools-select-empty">
-              <p>No HTTP tools configured. Go to the Tools page to add some.</p>
-            </div>
-            <div v-else-if="filteredModalTools.length === 0" class="tools-select-empty">
-              <p>No tools match your filter.</p>
-            </div>
-            <label
-              v-for="tool in filteredModalTools"
-              :key="tool.id"
-              class="tools-select-row"
-              :class="{ enabled: chatEnabledToolIds.has(tool.id) }"
-            >
-              <input
-                type="checkbox"
-                :checked="chatEnabledToolIds.has(tool.id)"
-                @change="toggleTool(tool.id)"
-                class="tools-select-checkbox"
-              />
-              <div class="tools-select-row-info">
-                <span class="tools-select-row-name">{{ tool.name }}</span>
-                <span class="tools-select-row-desc">{{ tool.description || 'No description' }}</span>
-              </div>
-              <span class="tools-select-row-cat" :class="'tools-select-type-' + (tool.type || 'http')">{{ {http:'HTTP',code:'Code',prompt:'Prompt',smtp:'SMTP'}[tool.type || 'http'] }}</span>
-            </label>
-          </div>
-
-          <!-- Footer -->
-          <div class="tools-select-footer">
-            <AppButton size="modal" @click="showToolsModal = false">Done</AppButton>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- ── MCP Selection Modal ──────────────────────────────────────────── -->
-    <Teleport to="body">
-      <div v-if="showMcpModal" class="tools-select-backdrop" @click.self="showMcpModal = false">
-        <div class="tools-select-modal">
-          <!-- Header -->
-          <div class="tools-select-header">
-            <div class="tools-select-header-left">
-              <div class="tools-select-header-icon">
-                <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-              </div>
-              <h2 class="tools-select-title">Select MCP Servers</h2>
-              <span class="tools-select-count">{{ enabledMcpServers.length }} enabled</span>
-            </div>
-            <button class="tools-select-close" @click="showMcpModal = false">
-              <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-            </button>
-          </div>
-
-          <!-- Filter bar -->
-          <div class="tools-select-filters">
-            <div class="tools-select-search-wrap">
-              <svg style="width:14px;height:14px;color:#9CA3AF;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-              </svg>
-              <input
-                v-model="mcpSearchQuery"
-                type="text"
-                placeholder="Filter servers..."
-                class="tools-select-search"
-              />
-            </div>
-            <div class="tools-select-actions">
-              <button class="tools-select-action-btn" @click="enableAllMcp">Enable All</button>
-              <button class="tools-select-action-btn" @click="disableAllMcp">Disable All</button>
-            </div>
-          </div>
-
-          <!-- Server list -->
-          <div class="tools-select-list">
-            <div v-if="mcpStore.servers.length === 0" class="tools-select-empty">
-              <p>No MCP servers configured. Go to the MCP page to add servers.</p>
-            </div>
-            <div v-else-if="filteredModalMcpServers.length === 0" class="tools-select-empty">
-              <p>No servers match your filter.</p>
-            </div>
-            <label
-              v-for="server in filteredModalMcpServers"
-              :key="server.id"
-              class="tools-select-row"
-              :class="{ enabled: chatEnabledMcpIds.has(server.id) }"
-            >
-              <input
-                type="checkbox"
-                :checked="chatEnabledMcpIds.has(server.id)"
-                @change="toggleMcp(server.id)"
-                class="tools-select-checkbox"
-              />
-              <div class="tools-select-row-info">
-                <span class="tools-select-row-name">{{ server.name }}</span>
-                <span class="tools-select-row-desc">{{ server.description || 'No description' }}</span>
-              </div>
-              <span class="tools-select-row-cat tools-select-type-http" style="font-size:10px;">
-                {{ mcpStore.runningStatus[server.id] ? 'Running' : 'Stopped' }}
-              </span>
-            </label>
-          </div>
-
-          <!-- Footer -->
-          <div class="tools-select-footer">
-            <span style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-caption); color:#9CA3AF;">
-              {{ formatTokens(mcpTokenEstimate) }} tokens ({{ tokenPercentage(mcpTokenEstimate) }}%)
-            </span>
-            <AppButton size="modal" @click="showMcpModal = false">Done</AppButton>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
     <!-- ── Chat Settings Modal (dark theme) ──────────────────────────────── -->
     <Teleport to="body">
       <div v-if="showChatConfigModal" class="ccm-backdrop">
@@ -1190,7 +1018,7 @@
               <div class="ccm-header-icon">
                 <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
               </div>
-              <h2 class="ccm-title">Chat Settings</h2>
+              <h2 class="ccm-title">{{ t('chats.chatSettings') }}</h2>
             </div>
             <button class="ccm-close" @click="cancelChatSettings">
               <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -1201,25 +1029,11 @@
           <div class="ccm-tabs">
             <button class="ccm-tab" :class="{ active: ccmActiveTab === 'general' }" @click="ccmActiveTab = 'general'">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              General
+              {{ t('chats.general') }}
             </button>
             <button class="ccm-tab" :class="{ active: ccmActiveTab === 'permissions' }" @click="ccmActiveTab = 'permissions'">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              Permissions
-            </button>
-            <button class="ccm-tab" :class="{ active: ccmActiveTab === 'tools' }" @click="ccmActiveTab = 'tools'">
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-              Tools
-              <span class="ccm-tab-badge">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }}</span>
-            </button>
-            <button class="ccm-tab" :class="{ active: ccmActiveTab === 'mcp' }" @click="ccmActiveTab = 'mcp'">
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>
-              MCP
-              <span class="ccm-tab-badge">{{ enabledMcpServers.length }}/{{ mcpStore.servers.length }}</span>
-            </button>
-            <button class="ccm-tab" :class="{ active: ccmActiveTab === 'rag' }" @click="ccmActiveTab = 'rag'">
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-              RAG
+              {{ t('chats.permissions') }}
             </button>
           </div>
 
@@ -1229,7 +1043,7 @@
             <!-- ═══ GENERAL TAB ═══ -->
             <div v-if="ccmActiveTab === 'general'" class="ccm-tab-content">
               <div class="ccm-dark-section">
-                <div class="ccm-dark-section-label">Working Path <span class="ccm-dark-badge">Artifact Directory</span></div>
+                <div class="ccm-dark-section-label">{{ t('chats.workingPath') }} <span class="ccm-dark-badge">{{ t('chats.artifactDirectory') }}</span></div>
                 <div class="ccm-working-path-row">
                   <input
                     v-model="draftWorkingPath"
@@ -1237,33 +1051,33 @@
                     :placeholder="configStore.config.artifactPath || `${configStore.config.dataPath}/artifact`"
                     class="ccm-working-path-input"
                   />
-                  <button class="ccm-working-path-browse" @click="browseWorkingPath" title="Browse folder">
+                  <button class="ccm-working-path-browse" @click="browseWorkingPath" :title="t('chats.browseFolder')">
                     <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                   </button>
                 </div>
-                <span class="ccm-working-path-hint">Leave empty to use the global default path.</span>
+                <span class="ccm-working-path-hint">{{ t('chats.globalDefaultPath') }}</span>
               </div>
 
               <!-- Coding Mode toggle + provider selector -->
               <div class="ccm-dark-section">
                 <div class="ccm-dark-section-label">
-                  Coding Mode
+                  {{ t('chats.codingMode') }}
                   <!-- Info chip with tooltip -->
                   <span class="ccm-coding-info-chip" @mouseenter="showCodingInfoTooltip = true" @mouseleave="showCodingInfoTooltip = false">
                     <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                       <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
                     </svg>
                     <div v-if="showCodingInfoTooltip" class="ccm-coding-tooltip">
-                      <div class="ccm-coding-tooltip-title">What is Coding Mode?</div>
-                      <div class="ccm-coding-tooltip-body">Activates project-aware AI assistance. When enabled, ClankAI reads <code>CLAUDE.md</code> instruction files from your project hierarchy and injects them into the system prompt — the same way Claude Code does. Files are watched for changes and context updates automatically.</div>
-                      <div class="ccm-coding-tooltip-hint">Set your project root as the Working Path above, then select a coding provider.</div>
+                      <div class="ccm-coding-tooltip-title">{{ t('chats.whatIsCodingMode') }}</div>
+                      <div class="ccm-coding-tooltip-body">{{ t('chats.codingModeDescription') }}</div>
+                      <div class="ccm-coding-tooltip-hint">{{ t('chats.codingModeHint') }}</div>
                     </div>
                   </span>
                 </div>
 
                 <!-- Toggle row: label + switch -->
                 <div class="ccm-coding-toggle-row">
-                  <span class="ccm-coding-toggle-label">Enable coding mode for this chat</span>
+                  <span class="ccm-coding-toggle-label">{{ t('chats.enableCodingMode') }}</span>
                   <label class="ccm-coding-switch" @click.stop>
                     <input type="checkbox" v-model="draftCodingMode" />
                     <span class="ccm-coding-switch-track"><span class="ccm-coding-switch-thumb"></span></span>
@@ -1272,7 +1086,7 @@
 
                 <!-- Provider dropdown (only visible when coding mode is on) -->
                 <div v-if="draftCodingMode" class="ccm-working-path-row" style="margin-top:10px;">
-                  <label style="font-size:var(--fs-small);color:#9CA3AF;min-width:90px;">Provider</label>
+                  <label style="font-size:var(--fs-small);color:#9CA3AF;min-width:90px;">{{ t('chats.chatSettingsProvider') }}</label>
                   <select
                     v-model="draftCodingProvider"
                     class="ccm-working-path-input"
@@ -1289,7 +1103,7 @@
                       <div class="ccm-coding-tooltip-title">{{ codingProviderInfo.label }}</div>
                       <div class="ccm-coding-tooltip-body">{{ codingProviderInfo.description }}</div>
                       <div class="ccm-coding-tooltip-files">
-                        <div class="ccm-coding-tooltip-files-label">Files loaded (in order):</div>
+                        <div class="ccm-coding-tooltip-files-label">{{ t('chats.filesLoaded') }}</div>
                         <div v-for="f in codingProviderInfo.files" :key="f" class="ccm-coding-tooltip-file">
                           <svg style="width:10px;height:10px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                           <code>{{ f }}</code>
@@ -1302,8 +1116,8 @@
 
               <div class="ccm-dark-section">
                 <div class="ccm-dark-section-label">
-                  Maximum Agent Chat Rounds
-                  <span class="ccm-dark-badge">Group Chat</span>
+                  {{ t('chats.maxAgentChatRounds') }}
+                  <span class="ccm-dark-badge">{{ t('chats.groupChat') }}</span>
                 </div>
                 <div class="ccm-stepper-row">
                   <button class="ccm-stepper-btn" @click="draftMaxAgentRounds = Math.max(1, draftMaxAgentRounds - 1)">−</button>
@@ -1317,13 +1131,13 @@
                   />
                   <button class="ccm-stepper-btn" @click="draftMaxAgentRounds = Math.min(100, draftMaxAgentRounds + 1)">+</button>
                 </div>
-                <span class="ccm-working-path-hint">How many back-and-forth rounds agents can run in one message. Default: 10. Hard limit: 100.</span>
+                <span class="ccm-working-path-hint">{{ t('chats.maxAgentChatRoundsHint') }}</span>
               </div>
 
               <div class="ccm-dark-section">
                 <div class="ccm-dark-section-label">
-                  Max Output Tokens
-                  <span class="ccm-dark-badge">{{ draftMaxOutputTokens ? draftMaxOutputTokens.toLocaleString() + ' tokens' : 'Global default' }}</span>
+                  {{ t('chats.maxOutputTokens') }}
+                  <span class="ccm-dark-badge">{{ draftMaxOutputTokens ? draftMaxOutputTokens.toLocaleString() + ' ' + t('chats.tokens') : t('chats.globalDefault') }}</span>
                 </div>
                 <div class="ccm-stepper-row">
                   <button class="ccm-stepper-btn" @click="draftMaxOutputTokens = Math.max(1024, (draftMaxOutputTokens ?? configStore.config.maxOutputTokens ?? 32768) - 1024)">−</button>
@@ -1341,139 +1155,32 @@
                     v-if="draftMaxOutputTokens"
                     class="ccm-stepper-reset"
                     @click="draftMaxOutputTokens = null"
-                    title="Reset to global default"
+                    :title="t('common.reset')"
                   >
-                    Reset
+                    {{ t('common.reset') }}
                   </button>
                 </div>
                 <span class="ccm-working-path-hint">
-                  Global default: {{ (configStore.config.maxOutputTokens ?? 32768).toLocaleString() }} tokens. Hard limit: 98,304 (96k). Leave empty to inherit.
+                  {{ t('chats.globalDefaultTokens', { count: (configStore.config.maxOutputTokens ?? 32768).toLocaleString() }) }}
                 </span>
               </div>
             </div>
 
-            <!-- ═══ TOOLS TAB ═══ -->
-            <div v-else-if="ccmActiveTab === 'tools'" class="ccm-tab-content">
-              <!-- Search + actions bar -->
-              <div class="ccm-list-toolbar">
-                <div class="ccm-list-search-wrap">
-                  <svg style="width:14px;height:14px;color:#6B7280;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                  <input v-model="ccmToolSearch" type="text" placeholder="Search tools..." class="ccm-list-search" />
-                </div>
-                <div class="ccm-list-actions">
-                  <button class="ccm-list-action-btn" @click="enableAllTools">All</button>
-                  <button class="ccm-list-action-btn" @click="disableAllTools">None</button>
-                </div>
-                <span class="ccm-list-summary">{{ enabledHttpTools.length }}/{{ toolsStore.tools.length }} enabled · {{ formatTokens(toolsTokenEstimate) }}</span>
-              </div>
-              <!-- Grouped tool list -->
-              <div class="ccm-item-list">
-                <div v-if="toolsStore.tools.length === 0" class="ccm-list-empty">No tools configured. Go to the Tools page to add some.</div>
-                <div v-else-if="ccmGroupedTools.length === 0 && ccmToolSearch" class="ccm-list-empty">No tools match "{{ ccmToolSearch }}"</div>
-                <template v-else v-for="group in ccmGroupedTools" :key="group.type">
-                  <!-- Category header -->
-                  <div class="ccm-group-header">
-                    <span class="ccm-group-label">{{ group.label }}</span>
-                    <span class="ccm-group-count">{{ group.enabledCount }}/{{ group.tools.length }} enabled</span>
-                  </div>
-                  <!-- Tools in this group -->
-                  <div
-                    v-for="t in group.tools"
-                    :key="t.id"
-                    class="ccm-item-row"
-                    :class="{ enabled: chatEnabledToolIds.has(t.id) }"
-                    @click="toggleTool(t.id)"
-                  >
-                    <input
-                      type="checkbox"
-                      :checked="chatEnabledToolIds.has(t.id)"
-                      @change="toggleTool(t.id)"
-                      @click.stop
-                      class="ccm-row-checkbox"
-                    />
-                    <div class="ccm-row-info">
-                      <span class="ccm-row-name">{{ t.name }}</span>
-                      <span class="ccm-row-desc">{{ t.description || 'No description' }}</span>
-                    </div>
-                  </div>
-                </template>
-              </div>
-            </div>
-
-            <!-- ═══ MCP TAB ═══ -->
-            <div v-else-if="ccmActiveTab === 'mcp'" class="ccm-tab-content">
-              <!-- Search + actions bar -->
-              <div class="ccm-list-toolbar">
-                <div class="ccm-list-search-wrap">
-                  <svg style="width:14px;height:14px;color:#6B7280;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                  <input v-model="ccmMcpSearch" type="text" placeholder="Search MCP servers..." class="ccm-list-search" />
-                </div>
-                <div class="ccm-list-actions">
-                  <button class="ccm-list-action-btn" @click="enableAllMcp">All</button>
-                  <button class="ccm-list-action-btn" @click="disableAllMcp">None</button>
-                </div>
-                <span class="ccm-list-summary">{{ enabledMcpServers.length }}/{{ mcpStore.servers.length }} enabled · {{ formatTokens(mcpTokenEstimate) }}</span>
-              </div>
-              <!-- MCP list -->
-              <div class="ccm-item-list">
-                <div v-if="mcpStore.servers.length === 0" class="ccm-list-empty">No MCP servers configured. Go to the MCP page to add servers.</div>
-                <div v-else-if="ccmFilteredMcp.length === 0" class="ccm-list-empty">No servers match "{{ ccmMcpSearch }}"</div>
-                <div
-                  v-for="s in ccmFilteredMcp"
-                  :key="s.id"
-                  class="ccm-item-card"
-                  :class="{ enabled: chatEnabledMcpIds.has(s.id) }"
-                  @click="toggleMcp(s.id)"
-                >
-                  <div class="ccm-item-card-info">
-                    <div class="ccm-item-card-top">
-                      <span class="ccm-item-card-name">{{ s.name }}</span>
-                      <span class="ccm-item-card-status" :class="mcpStore.runningStatus[s.id] ? 'status-running' : 'status-stopped'">
-                        <span class="ccm-status-dot"></span>
-                        {{ mcpStore.runningStatus[s.id] ? 'Running' : 'Stopped' }}
-                      </span>
-                    </div>
-                    <span class="ccm-item-card-desc">{{ s.description || 'No description' }}</span>
-                  </div>
-                  <label class="ccm-toggle" @click.stop>
-                    <input type="checkbox" :checked="chatEnabledMcpIds.has(s.id)" @change="toggleMcp(s.id)" />
-                    <span class="ccm-toggle-track"><span class="ccm-toggle-thumb"></span></span>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <!-- ═══ RAG TAB ═══ -->
-            <div v-else-if="ccmActiveTab === 'rag'" class="ccm-tab-content">
-              <div class="ccm-dark-section">
-                <div class="ccm-dark-section-label">
-                  Knowledge Base
-                  <span class="ccm-dark-badge" :class="knowledgeStore.ragEnabled ? 'badge-on' : 'badge-off'">{{ knowledgeStore.ragEnabled ? 'Enabled' : 'Disabled' }}</span>
-                </div>
-                <div v-if="ragEnabledIndexes.length === 0" class="ccm-list-empty" style="margin-top:12px;">No indexes enabled. Go to Knowledge page to configure.</div>
-                <div v-else class="ccm-rag-list">
-                  <div v-for="idx in ragEnabledIndexes" :key="idx.name" class="ccm-rag-item">
-                    <span class="ccm-rag-name">{{ idx.name }}</span>
-                    <span class="ccm-rag-meta">{{ idx.embeddingProvider === 'openrouter' ? 'OpenRouter' : 'OpenAI' }} / {{ idx.embeddingModel }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
             <!-- ═══ PERMISSIONS TAB ═══ -->
             <div v-else-if="ccmActiveTab === 'permissions'" class="ccm-tab-content">
               <!-- Mode selector -->
               <div class="ccm-dark-section">
-                <div class="ccm-dark-section-label">Permission Mode</div>
+                <div class="ccm-dark-section-label">{{ t('chats.permissionMode') }}</div>
                 <div class="ccm-provider-btns">
-                  <button v-for="m in [{ id: 'inherit', label: 'Inherit' }, { id: 'chat_only', label: 'Chat Only' }, { id: 'all_permissions', label: 'All Permissions' }]"
+                  <button v-for="m in [{ id: 'inherit', label: t('chats.inherit') }, { id: 'chat_only', label: t('chats.chatOnly') }, { id: 'all_permissions', label: t('chats.allPermissions') }]"
                     :key="m.id"
                     class="ccm-provider-btn" :class="{ active: draftPermissionMode === m.id }"
                     @click="draftPermissionMode = m.id">{{ m.label }}</button>
                 </div>
                 <p class="ccm-perm-mode-hint">
-                  <template v-if="draftPermissionMode === 'inherit'">Uses the global mode from Config → Security. Chat allow list runs on top.</template>
-                  <template v-else-if="draftPermissionMode === 'chat_only'">Agent must ask permission before running shell commands or writing files. Only this chat's allow list applies.</template>
-                  <template v-else>Agent can run any tool without asking. Danger blocks below still apply unless removed for this chat.</template>
+                  <template v-if="draftPermissionMode === 'inherit'">{{ t('chats.permissionModeInherit') }}</template>
+                  <template v-else-if="draftPermissionMode === 'chat_only'">{{ t('chats.permissionModeChatOnly') }}</template>
+                  <template v-else>{{ t('chats.permissionModeAllPermissions') }}</template>
                 </p>
               </div>
 
@@ -1481,34 +1188,34 @@
               <template v-if="draftPermissionMode === 'inherit'">
                 <!-- Chat Allow List (editable) -->
                 <div class="ccm-dark-section" style="flex:0 0 auto;">
-                  <div class="ccm-dark-section-label">Chat Allow List <span class="ccm-dark-badge">{{ draftChatAllowList.length }}</span></div>
-                  <p class="ccm-perm-mode-hint" style="margin-bottom:8px;">Commands allowed for this chat only, in addition to the global list.</p>
+                  <div class="ccm-dark-section-label">{{ t('chats.chatAllowList') }} <span class="ccm-dark-badge">{{ draftChatAllowList.length }}</span></div>
+                  <p class="ccm-perm-mode-hint" style="margin-bottom:8px;">{{ t('chats.chatAllowListHintInherit') }}</p>
                   <div class="ccm-allow-list">
-                    <div v-if="draftChatAllowList.length === 0" class="ccm-list-empty">No entries yet.</div>
+                    <div v-if="draftChatAllowList.length === 0" class="ccm-list-empty">{{ t('chats.noEntriesYet') }}</div>
                     <div v-for="(entry, idx) in draftChatAllowList" :key="entry.id || idx" class="ccm-allow-entry">
                       <div class="ccm-allow-entry-info">
                         <span class="ccm-allow-pattern">{{ entry.pattern }}</span>
                         <span v-if="entry.description" class="ccm-allow-desc">{{ entry.description }}</span>
                       </div>
-                      <button class="ccm-allow-delete" @click="removeChatAllowEntry(idx)" title="Remove">
+                      <button class="ccm-allow-delete" @click="removeChatAllowEntry(idx)" :title="t('common.remove')">
                         <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                       </button>
                     </div>
                   </div>
                   <div class="ccm-allow-add-row">
-                    <input v-model="newAllowPattern" type="text" placeholder="Pattern (e.g. ls *)" class="ccm-allow-input" @keydown.enter.prevent="addChatAllowEntry" />
-                    <input v-model="newAllowDesc" type="text" placeholder="Description" class="ccm-allow-input" @keydown.enter.prevent="addChatAllowEntry" />
-                    <button class="ccm-allow-add-btn" @click="addChatAllowEntry" :disabled="!newAllowPattern.trim()">Add</button>
+                    <input v-model="newAllowPattern" type="text" :placeholder="t('chats.pattern')" class="ccm-allow-input" @keydown.enter.prevent="addChatAllowEntry" />
+                    <input v-model="newAllowDesc" type="text" :placeholder="t('chats.description')" class="ccm-allow-input" @keydown.enter.prevent="addChatAllowEntry" />
+                    <button class="ccm-allow-add-btn" @click="addChatAllowEntry" :disabled="!newAllowPattern.trim()">{{ t('common.add') }}</button>
                   </div>
                 </div>
                 <!-- Global Allow List (read-only) -->
                 <div class="ccm-dark-section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
                   <div class="ccm-dark-section-label">
-                    Global Allow List <span class="ccm-dark-badge">{{ (configStore.config.sandboxConfig?.sandboxAllowList || []).length }}</span>
+                    {{ t('chats.globalAllowList') }} <span class="ccm-dark-badge">{{ (configStore.config.sandboxConfig?.sandboxAllowList || []).length }}</span>
                   </div>
-                  <p class="ccm-perm-mode-hint" style="margin-bottom:8px;">Inherited from Config → Security. Edit there to change.</p>
+                  <p class="ccm-perm-mode-hint" style="margin-bottom:8px;">{{ t('chats.permissionModeInherit') }}</p>
                   <div class="ccm-allow-list">
-                    <div v-if="!(configStore.config.sandboxConfig?.sandboxAllowList || []).length" class="ccm-list-empty">No global entries yet.</div>
+                    <div v-if="!(configStore.config.sandboxConfig?.sandboxAllowList || []).length" class="ccm-list-empty">{{ t('chats.noEntriesYet') }}</div>
                     <div v-for="entry in (configStore.config.sandboxConfig?.sandboxAllowList || [])" :key="entry.id" class="ccm-allow-entry ccm-allow-entry-readonly">
                       <div class="ccm-allow-entry-info">
                         <span class="ccm-allow-pattern">{{ entry.pattern }}</span>
@@ -1521,36 +1228,36 @@
 
               <!-- CHAT ONLY: Chat Allow List only -->
               <div v-else-if="draftPermissionMode === 'chat_only'" class="ccm-dark-section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-                <div class="ccm-dark-section-label">Chat Allow List <span class="ccm-dark-badge">{{ draftChatAllowList.length }}</span></div>
-                <p class="ccm-perm-mode-hint" style="margin-bottom:8px;">Commands that bypass permission prompts for this chat only.</p>
+                <div class="ccm-dark-section-label">{{ t('chats.chatAllowList') }} <span class="ccm-dark-badge">{{ draftChatAllowList.length }}</span></div>
+                <p class="ccm-perm-mode-hint" style="margin-bottom:8px;">{{ t('chats.chatAllowListHintChatOnly') }}</p>
                 <div class="ccm-allow-list">
-                  <div v-if="draftChatAllowList.length === 0" class="ccm-list-empty">No entries yet.</div>
+                  <div v-if="draftChatAllowList.length === 0" class="ccm-list-empty">{{ t('chats.noEntriesYet') }}</div>
                   <div v-for="(entry, idx) in draftChatAllowList" :key="entry.id || idx" class="ccm-allow-entry">
                     <div class="ccm-allow-entry-info">
                       <span class="ccm-allow-pattern">{{ entry.pattern }}</span>
                       <span v-if="entry.description" class="ccm-allow-desc">{{ entry.description }}</span>
                     </div>
-                    <button class="ccm-allow-delete" @click="removeChatAllowEntry(idx)" title="Remove">
+                    <button class="ccm-allow-delete" @click="removeChatAllowEntry(idx)" :title="t('common.remove')">
                       <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                   </div>
                 </div>
                 <div class="ccm-allow-add-row">
-                  <input v-model="newAllowPattern" type="text" placeholder="Pattern (e.g. ls *)" class="ccm-allow-input" @keydown.enter.prevent="addChatAllowEntry" />
-                  <input v-model="newAllowDesc" type="text" placeholder="Description" class="ccm-allow-input" @keydown.enter.prevent="addChatAllowEntry" />
-                  <button class="ccm-allow-add-btn" @click="addChatAllowEntry" :disabled="!newAllowPattern.trim()">Add</button>
+                  <input v-model="newAllowPattern" type="text" :placeholder="t('chats.pattern')" class="ccm-allow-input" @keydown.enter.prevent="addChatAllowEntry" />
+                  <input v-model="newAllowDesc" type="text" :placeholder="t('chats.description')" class="ccm-allow-input" @keydown.enter.prevent="addChatAllowEntry" />
+                  <button class="ccm-allow-add-btn" @click="addChatAllowEntry" :disabled="!newAllowPattern.trim()">{{ t('common.add') }}</button>
                 </div>
               </div>
 
               <!-- ALL PERMISSIONS: Danger block list with per-chat removals -->
               <div v-else class="ccm-dark-section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
                 <div class="ccm-dark-section-label">
-                  Danger Block List
+                  {{ t('chats.dangerBlockList') }}
                   <span class="ccm-dark-badge" style="background:rgba(239,68,68,0.2);color:#f87171;">{{ (configStore.config.sandboxConfig?.dangerBlockList || []).length }}</span>
                 </div>
-                <p class="ccm-perm-mode-hint" style="margin-bottom:8px;">These are still blocked even in All Permissions mode. Remove an entry to allow it for this chat only — does not affect global config.</p>
+                <p class="ccm-perm-mode-hint" style="margin-bottom:8px;">{{ t('chats.chatAllowListHintAllPermissions') }}</p>
                 <div class="ccm-allow-list">
-                  <div v-if="!(configStore.config.sandboxConfig?.dangerBlockList || []).length" class="ccm-list-empty">No danger block entries in global config.</div>
+                  <div v-if="!(configStore.config.sandboxConfig?.dangerBlockList || []).length" class="ccm-list-empty">{{ t('chats.noEntriesYet') }}</div>
                   <div v-for="entry in (configStore.config.sandboxConfig?.dangerBlockList || [])" :key="entry.id"
                     class="ccm-allow-entry"
                     :class="draftChatDangerOverrides.includes(entry.pattern) ? 'ccm-danger-overridden' : ''">
@@ -1562,7 +1269,7 @@
                     <button v-if="!draftChatDangerOverrides.includes(entry.pattern)"
                       class="ccm-allow-delete ccm-danger-remove-btn"
                       @click="addChatDangerOverride(entry.pattern)"
-                      title="Allow for this chat">
+                      :title="t('chats.allowForThisChat')">
                       <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                     <!-- Already overridden: show "Undo" -->
@@ -1570,7 +1277,7 @@
                       class="ccm-allow-add-btn"
                       style="font-size:0.65rem;padding:3px 8px;"
                       @click="removeChatDangerOverride(entry.pattern)">
-                      Undo
+                      {{ t('chats.undo') }}
                     </button>
                   </div>
                 </div>
@@ -1580,10 +1287,9 @@
 
           <!-- Footer -->
           <div class="ccm-footer">
-            <span class="ccm-footer-tokens">{{ formatTokens(toolsTokenEstimate + mcpTokenEstimate) }} tokens total ({{ tokenPercentage(toolsTokenEstimate + mcpTokenEstimate) }}% of context)</span>
             <div class="ccm-footer-actions">
-              <button class="ccm-cancel-btn" @click="cancelChatSettings">Cancel</button>
-              <button class="ccm-save-btn" @click="saveChatSettings">Save</button>
+              <button class="ccm-cancel-btn" @click="cancelChatSettings">{{ t('common.cancel') }}</button>
+              <button class="ccm-save-btn" @click="saveChatSettings">{{ t('common.save') }}</button>
             </div>
           </div>
         </div>
@@ -1824,19 +1530,24 @@
     </div>
   </Teleport>
 
-  <!-- Soul Viewer Modal -->
-  <SoulViewer
+  <!-- Agent Body Viewer Modal (chat context — model changes go to per-chat override) -->
+  <AgentBodyViewer
     v-if="soulViewerTarget"
-    :agentId="soulViewerTarget.agentId"
-    :agentType="soulViewerTarget.agentType"
-    :agentName="soulViewerTarget.agentName"
-    :agentDescription="soulViewerTarget.agentDescription"
-    :agentPrompt="soulViewerTarget.agentPrompt"
-    :agentProviderId="soulViewerTarget.agentProviderId"
-    :agentModelId="soulViewerTarget.agentModelId"
-    :agentVoiceId="soulViewerTarget.agentVoiceId"
-    :agentAvatar="soulViewerTarget.agentAvatar"
-    :readOnly="true"
+    :agent-id="soulViewerTarget.agentId"
+    :agent-type="soulViewerTarget.agentType"
+    :agent-name="soulViewerTarget.agentName"
+    :agent-description="soulViewerTarget.agentDescription"
+    :agent-prompt="soulViewerTarget.agentPrompt"
+    :agent-provider-id="soulViewerTarget.agentProviderId"
+    :agent-model-id="soulViewerTarget.agentModelId"
+    :agent-voice-id="soulViewerTarget.agentVoiceId"
+    :agent-avatar="soulViewerTarget.agentAvatar"
+    :agent-required-tool-ids="soulViewerTarget.agentRequiredToolIds"
+    :agent-required-skill-ids="soulViewerTarget.agentRequiredSkillIds"
+    :agent-required-mcp-server-ids="soulViewerTarget.agentRequiredMcpServerIds"
+    :agent-required-knowledge-base-ids="soulViewerTarget.agentRequiredKnowledgeBaseIds"
+    :from-chat="true"
+    :read-only="true"
     @close="closeSoulViewer"
     @update-agent="handleSoulViewerUpdateAgent"
   />
@@ -1844,6 +1555,7 @@
   <!-- Confirm Delete Modal -->
   <ConfirmModal
     v-if="confirmDeleteTarget"
+    :visible="true"
     :title="confirmDeleteTarget.type === 'message' ? 'Delete Message' : confirmDeleteTarget.type === 'chat' ? 'Delete Chat' : confirmDeleteTarget.type === 'folder' ? 'Delete Folder' : 'Remove Agent'"
     :message="confirmDeleteTarget.type === 'message'
       ? 'Are you sure you want to delete this message? It will be removed from the chat history and context window.'
@@ -1856,6 +1568,7 @@
     confirm-class="danger"
     @confirm="executeConfirmedDelete"
     @close="confirmDeleteTarget = null"
+    :style="{ zIndex: 99999 }"
   />
 
   <!-- Non-empty folder alert -->
@@ -1908,7 +1621,7 @@ import { useVoiceStore } from '../stores/voice'
 import { useFocusModeStore } from '../stores/focusMode'
 import { useI18n } from '../i18n/useI18n'
 import { getAvatarDataUri } from '../components/agents/agentAvatars'
-import SoulViewer from '../components/agents/SoulViewer.vue'
+import AgentBodyViewer from '../components/agents/AgentBodyViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import MessageRenderer from '../components/chat/MessageRenderer.vue'
 import ChatWindow from '../components/chat/ChatWindow.vue'
@@ -3202,12 +2915,8 @@ const stickyTargetLabel = computed(() => {
 })
 
 
-// ── HTTP Tools modal state ──
-const showToolsModal = ref(false)
 const showChatConfigModal = ref(false)
 const ccmActiveTab = ref('general')
-const ccmToolSearch = ref('')
-const ccmMcpSearch = ref('')
 
 // ── General tab draft state ──
 const draftMaxAgentRounds = ref(10)
@@ -3242,51 +2951,6 @@ function removeChatDangerOverride(pattern) {
   if (idx !== -1) draftChatDangerOverrides.value.splice(idx, 1)
 }
 
-const ccmFilteredTools = computed(() => {
-  const q = ccmToolSearch.value.toLowerCase()
-  let list = toolsStore.tools
-  if (q) {
-    list = list.filter(t =>
-      t.name?.toLowerCase().includes(q) ||
-      t.description?.toLowerCase().includes(q) ||
-      (t.type || 'http').includes(q)
-    )
-  }
-  return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-})
-
-// Group filtered tools by type for the grouped-by-category UI
-const TYPE_LABELS = { http: 'HTTP', code: 'Code', prompt: 'Prompt', smtp: 'SMTP' }
-const TYPE_ORDER = ['http', 'code', 'prompt', 'smtp']
-const ccmGroupedTools = computed(() => {
-  const groups = {}
-  for (const t of ccmFilteredTools.value) {
-    const type = t.type || 'http'
-    if (!groups[type]) groups[type] = []
-    groups[type].push(t)
-  }
-  return TYPE_ORDER
-    .filter(k => groups[k])
-    .map(k => ({
-      type: k,
-      label: TYPE_LABELS[k] || k,
-      tools: groups[k],
-      enabledCount: groups[k].filter(t => chatEnabledToolIds.value.has(t.id)).length
-    }))
-})
-
-const ccmFilteredMcp = computed(() => {
-  const q = ccmMcpSearch.value.toLowerCase()
-  let list = mcpStore.servers
-  if (q) {
-    list = list.filter(s =>
-      s.name?.toLowerCase().includes(q) ||
-      s.description?.toLowerCase().includes(q)
-    )
-  }
-  return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-})
-
 // Snapshot of draft state before modal opens (for cancel/revert)
 let _draftSnapshot = null
 
@@ -3297,8 +2961,6 @@ watch(showChatConfigModal, (open) => {
   _loadDraftFromChat()
   // Snapshot for cancel
   _draftSnapshot = {
-    enabledToolIds: new Set(chatEnabledToolIds.value),
-    enabledMcpIds: new Set(chatEnabledMcpIds.value),
     workingPath: draftWorkingPath.value,
     codingMode: draftCodingMode.value,
     codingProvider: draftCodingProvider.value,
@@ -3318,8 +2980,6 @@ function saveChatSettings() {
   const rawMaxOutput = Number(draftMaxOutputTokens.value)
   const clampedMaxOutput = draftMaxOutputTokens.value ? Math.min(98304, Math.max(1024, rawMaxOutput)) : null
   chatsStore.setChatSettings(chatId, {
-    enabledToolIds: [...chatEnabledToolIds.value],
-    enabledMcpIds: [...chatEnabledMcpIds.value],
     workingPath: draftWorkingPath.value || null,
     codingMode: draftCodingMode.value,
     codingProvider: draftCodingProvider.value,
@@ -3345,8 +3005,6 @@ function saveChatSettings() {
 function cancelChatSettings() {
   // Revert draft to snapshot
   if (_draftSnapshot) {
-    chatEnabledToolIds.value = _draftSnapshot.enabledToolIds
-    chatEnabledMcpIds.value = _draftSnapshot.enabledMcpIds
     draftWorkingPath.value = _draftSnapshot.workingPath
     draftCodingMode.value = _draftSnapshot.codingMode ?? false
     draftCodingProvider.value = _draftSnapshot.codingProvider ?? 'claude-code'
@@ -3365,9 +3023,6 @@ async function browseWorkingPath() {
   const result = await window.electronAPI.obsidian.pickFolder()
   if (result) draftWorkingPath.value = result
 }
-const chatEnabledToolIds = ref(new Set())
-const toolsSearchQuery = ref('')
-const toolsCategoryFilter = ref('')
 const draftWorkingPath = ref('')
 const draftCodingMode = ref(false)
 const draftCodingProvider = ref('claude-code')
@@ -3392,43 +3047,10 @@ const codingProviderInfo = computed(() => {
   return providers[draftCodingProvider.value] || providers['claude-code']
 })
 
-// Resolve default tool IDs (global defaults or all tools)
-function _defaultToolIds() {
-  const allIds = toolsStore.tools.map(t => t.id)
-  const defaults = configStore.config.defaultToolIds
-  return defaults
-    ? new Set(defaults.filter(id => allIds.includes(id)))
-    : new Set(allIds)
-}
-// Resolve default MCP IDs (global defaults or all servers)
-function _defaultMcpIds() {
-  const allIds = mcpStore.servers.map(s => s.id)
-  const defaults = configStore.config.defaultMcpServerIds
-  return defaults
-    ? new Set(defaults.filter(id => allIds.includes(id)))
-    : new Set(allIds)
-}
-
 // Load draft state from the active chat's persisted settings
 function _loadDraftFromChat() {
   const chat = chatsStore.activeChat
   if (!chat) return
-  // Tools
-  const allToolIds = toolsStore.tools.map(t => t.id)
-  if (chat.enabledToolIds) {
-    chatEnabledToolIds.value = new Set(
-      chat.enabledToolIds.filter(id => allToolIds.includes(id))
-    )
-  } else {
-    chatEnabledToolIds.value = _defaultToolIds()
-  }
-  // MCP
-  const allMcpIds = mcpStore.servers.map(s => s.id)
-  if (chat.enabledMcpIds) {
-    chatEnabledMcpIds.value = new Set(chat.enabledMcpIds.filter(id => allMcpIds.includes(id)))
-  } else {
-    chatEnabledMcpIds.value = _defaultMcpIds()
-  }
   // Working path
   draftWorkingPath.value = chat.workingPath || ''
   draftCodingMode.value = chat.codingMode ?? false
@@ -3445,144 +3067,6 @@ function _loadDraftFromChat() {
   newAllowDesc.value = ''
 }
 
-// Auto-enable tools: initialize from chat or global defaults, add newly discovered tools
-watch(() => toolsStore.tools.map(t => t.id), (allIds) => {
-  if (allIds.length === 0) return
-  const chat = chatsStore.activeChat
-  if (chat?.enabledToolIds) {
-    chatEnabledToolIds.value = new Set(
-      chat.enabledToolIds.filter(id => allIds.includes(id))
-    )
-  } else if (chatEnabledToolIds.value.size === 0) {
-    chatEnabledToolIds.value = _defaultToolIds()
-  } else {
-    // Add any new tools that weren't in the set yet
-    const s = new Set(chatEnabledToolIds.value)
-    for (const id of allIds) {
-      if (!s.has(id)) s.add(id)
-    }
-    chatEnabledToolIds.value = s
-  }
-}, { deep: true })
-
-const toolsCategories = computed(() => {
-  const cats = new Set()
-  for (const t of toolsStore.tools) {
-    cats.add(t.category || 'HTTP')
-  }
-  return [...cats].sort()
-})
-
-const filteredModalTools = computed(() => {
-  let list = toolsStore.tools
-  if (toolsCategoryFilter.value) {
-    list = list.filter(t => (t.category || 'HTTP') === toolsCategoryFilter.value)
-  }
-  const q = toolsSearchQuery.value.toLowerCase()
-  if (q) {
-    list = list.filter(t =>
-      t.name?.toLowerCase().includes(q) ||
-      t.description?.toLowerCase().includes(q)
-    )
-  }
-  return list
-})
-
-const enabledHttpTools = computed(() =>
-  toolsStore.tools.filter(t => chatEnabledToolIds.value.has(t.id))
-)
-
-function toggleTool(id) {
-  const s = new Set(chatEnabledToolIds.value)
-  if (s.has(id)) s.delete(id); else s.add(id)
-  chatEnabledToolIds.value = s
-}
-function enableAllTools() {
-  chatEnabledToolIds.value = new Set(toolsStore.tools.map(t => t.id))
-}
-function disableAllTools() {
-  chatEnabledToolIds.value = new Set()
-}
-
-// Token estimate for tools chip tooltip
-const toolsTokenEstimate = computed(() =>
-  enabledHttpTools.value.reduce((sum, t) => sum + estimateToolTokens(t), 0)
-)
-
-// ── MCP Selection modal state ──
-const showMcpModal = ref(false)
-const chatEnabledMcpIds = ref(new Set())
-const mcpSearchQuery = ref('')
-
-// Auto-enable MCP servers: initialize from chat or global defaults
-watch(() => mcpStore.servers.map(s => s.id), (allIds) => {
-  if (allIds.length === 0) return
-  const chat = chatsStore.activeChat
-  if (chat?.enabledMcpIds) {
-    chatEnabledMcpIds.value = new Set(chat.enabledMcpIds.filter(id => allIds.includes(id)))
-  } else if (chatEnabledMcpIds.value.size === 0) {
-    chatEnabledMcpIds.value = _defaultMcpIds()
-  } else {
-    // Add any new servers that weren't in the set yet
-    const s = new Set(chatEnabledMcpIds.value)
-    for (const id of allIds) {
-      if (!s.has(id)) s.add(id)
-    }
-    chatEnabledMcpIds.value = s
-  }
-}, { deep: true })
-
-const enabledMcpServers = computed(() =>
-  mcpStore.servers.filter(s => chatEnabledMcpIds.value.has(s.id))
-)
-
-const filteredModalMcpServers = computed(() => {
-  const q = mcpSearchQuery.value.toLowerCase()
-  if (!q) return mcpStore.servers
-  return mcpStore.servers.filter(s =>
-    s.name?.toLowerCase().includes(q) ||
-    s.description?.toLowerCase().includes(q)
-  )
-})
-
-function toggleMcp(id) {
-  const s = new Set(chatEnabledMcpIds.value)
-  if (s.has(id)) s.delete(id); else s.add(id)
-  chatEnabledMcpIds.value = s
-}
-function enableAllMcp() {
-  chatEnabledMcpIds.value = new Set(mcpStore.servers.map(s => s.id))
-}
-function disableAllMcp() {
-  chatEnabledMcpIds.value = new Set()
-}
-
-// Token estimate for MCP chip tooltip
-const mcpTokenEstimate = computed(() =>
-  enabledMcpServers.value.reduce((sum, s) => {
-    const status = mcpStore.runningStatus[s.id]
-    const toolCount = status?.toolCount ?? 10
-    return sum + estimateMcpTokens(s, toolCount)
-  }, 0)
-)
-
-// Persisted per-chat tool/MCP selections — used by runAgent() (reads from chat object, not draft)
-const persistedEnabledToolIds = computed(() => {
-  const chat = chatsStore.activeChat
-  if (chat?.enabledToolIds) return new Set(chat.enabledToolIds)
-  return _defaultToolIds()
-})
-const persistedEnabledHttpTools = computed(() =>
-  toolsStore.tools.filter(t => persistedEnabledToolIds.value.has(t.id))
-)
-const persistedEnabledMcpIds = computed(() => {
-  const chat = chatsStore.activeChat
-  if (chat?.enabledMcpIds) return new Set(chat.enabledMcpIds)
-  return _defaultMcpIds()
-})
-const persistedEnabledMcpServers = computed(() =>
-  mcpStore.servers.filter(s => persistedEnabledMcpIds.value.has(s.id))
-)
 const persistedWorkingPath = computed(() => {
   const chat = chatsStore.activeChat
   return chat?.workingPath || configStore.config.artifactPath || ''
@@ -4032,6 +3516,10 @@ function openSoulViewer(agentId, agentType, agentName) {
   soulViewerTarget.value = {
     agentId,
     agentType,
+    agentRequiredToolIds: agent?.requiredToolIds ?? [],
+    agentRequiredSkillIds: agent?.requiredSkillIds ?? [],
+    agentRequiredMcpServerIds: agent?.requiredMcpServerIds ?? [],
+    agentRequiredKnowledgeBaseIds: agent?.requiredKnowledgeBaseIds ?? [],
     agentName: agent?.name || agentName || 'Agent',
     agentDescription: agent?.description || '',
     agentPrompt: agent?.prompt || '',
@@ -4148,18 +3636,6 @@ const ragEnabledCount = computed(() => {
   const configs = knowledgeStore.indexConfigs
   return Object.values(configs).filter(c => c.enabled).length
 })
-
-const ragEnabledIndexes = computed(() => {
-  const configs = knowledgeStore.indexConfigs
-  return Object.entries(configs)
-    .filter(([, cfg]) => cfg.enabled)
-    .map(([name, cfg]) => ({
-      name,
-      embeddingProvider: cfg.embeddingProvider || 'openai',
-      embeddingModel: cfg.embeddingModel || 'text-embedding-3-small'
-    }))
-})
-
 
 // Close popovers on outside click (agent header popovers now handled by ChatHeader)
 function handlePopoverOutsideClick(e) {
@@ -4341,8 +3817,13 @@ function handleAttachResults(results) {
   }
   if (imageAtts.length > 0) attachments.value.push(...imageAtts)
   if (pathTexts.length > 0) {
-    const prefix = inputText.value.trimEnd()
-    inputText.value = prefix ? `${prefix}\n${pathTexts.join('\n')}` : pathTexts.join('\n')
+    const pathStr = pathTexts.join('\n')
+    if (mentionInputRef.value?.insertTextAtCursor) {
+      mentionInputRef.value.insertTextAtCursor(pathStr)
+    } else {
+      const prefix = inputText.value.trimEnd()
+      inputText.value = prefix ? `${prefix}\n${pathStr}` : pathStr
+    }
   }
 }
 
@@ -4789,6 +4270,41 @@ function applyProviderCredsToConfig(cfg, providerType) {
  * Extracted so it can be reused by both the initial user-triggered run and
  * subsequent agent-to-agent collaboration rounds.
  */
+/**
+ * Filter items by agent's required IDs.
+ * undefined/null/[] all mean "give nothing".
+ */
+function filterByRequired(items, requiredIds) {
+  if (!requiredIds || requiredIds.length === 0) return []
+  return items.filter(item => requiredIds.includes(item.id))
+}
+
+/**
+ * Build per-agent knowledgeConfig using agent's requiredKnowledgeBaseIds.
+ * Returns null if agent has no knowledge bases configured.
+ */
+function buildAgentKnowledgeConfig(agent) {
+  const requiredIds = agent?.requiredKnowledgeBaseIds ?? []
+  if (requiredIds.length === 0) return null
+
+  const indexConfigs = {}
+  for (const [name, cfg] of Object.entries(knowledgeStore.indexConfigs || {})) {
+    if (requiredIds.includes(name)) {
+      indexConfigs[name] = { ...cfg, enabled: true }
+    }
+  }
+  if (Object.keys(indexConfigs).length === 0) return null
+
+  return {
+    ragEnabled: true,
+    pineconeApiKey: knowledgeStore.pineconeApiKey,
+    pineconeIndexName: Object.keys(indexConfigs)[0],
+    embeddingProvider: knowledgeStore.embeddingProvider,
+    embeddingModel: knowledgeStore.embeddingModel,
+    indexConfigs
+  }
+}
+
 function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPrompt, usrAgent) {
   return respondingIds.map(pid => {
     const agent = agentsStore.getAgentById(pid)
@@ -4819,18 +4335,27 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPromp
       userAgentPrompt: userAgentPrompt || '',
       systemAgentId: pid,
       userAgentId: usrAgent?.id || '__default_user__',
-      groupChatContext: { agentName: agent.name, agentDescription: agent.description || '', otherParticipants }
+      groupChatContext: { agentName: agent.name, agentDescription: agent.description || '', otherParticipants },
+      agentTone:            agent.tone ?? [],
+      agentVerbosityLevel:  agent.verbosityLevel ?? [],
+      agentPersonalityTags: agent.personalityTags ?? [],
     }
+
+    const agentSkills = filterByRequired(enabledSkillObjects.value, agent.requiredSkillIds ?? [])
+    const agentMcp = filterByRequired(mcpStore.servers, agent.requiredMcpServerIds ?? [])
+    const agentTools = filterByRequired(toolsStore.tools, agent.requiredToolIds ?? [])
+    const agentKnowledgeConfig = buildAgentKnowledgeConfig(agent)
 
     return {
       agentId: pid,
       agentName: agent.name,
       config: JSON.parse(JSON.stringify(agentCfg)),
       enabledAgents: [],
-      enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
+      enabledSkills: JSON.parse(JSON.stringify(agentSkills)),
       agentPrompts,
-      mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
-      httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
+      mcpServers: JSON.parse(JSON.stringify(agentMcp)),
+      httpTools: JSON.parse(JSON.stringify(agentTools)),
+      knowledgeConfig: agentKnowledgeConfig ? JSON.parse(JSON.stringify(agentKnowledgeConfig)) : null,
     }
   }).filter(Boolean)
 }
@@ -4845,23 +4370,16 @@ async function runGroupAgents(chatId, targetChat, agentRuns, apiMessages, cfg, p
     messages: JSON.parse(JSON.stringify(apiMessages)),
     config: JSON.parse(JSON.stringify(cfg)),
     enabledAgents: [],
-    enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
+    enabledSkills: [],       // fallback — per-agent values are in agentRuns
     ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
-    mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
-    httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
+    mcpServers: [],          // fallback — per-agent values are in agentRuns
+    httpTools: [],           // fallback — per-agent values are in agentRuns
     agentRuns,
     chatPermissionMode: targetChat.permissionMode || 'inherit',
     chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
     chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
     maxOutputTokens: targetChat.maxOutputTokens || null,
-    knowledgeConfig: {
-      ragEnabled: knowledgeStore.ragEnabled,
-      pineconeApiKey: knowledgeStore.pineconeApiKey,
-      pineconeIndexName: knowledgeStore.pineconeIndexName,
-      embeddingProvider: knowledgeStore.embeddingProvider,
-      embeddingModel: knowledgeStore.embeddingModel,
-      indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs))
-    },
+    knowledgeConfig: null,   // fallback — per-agent values are in agentRuns
   })
 
   dbg(`Group runAgent returned → success=${res.success} results=${res.results?.length ?? 0}`, res.success ? 'success' : 'error')
@@ -5354,32 +4872,30 @@ async function sendMessage() {
       // Pass agent IDs for soul memory system
       resolvedAgentPrompts.systemAgentId = sysAgent?.id || '__default_system__'
       resolvedAgentPrompts.userAgentId = usrAgent?.id || '__default_user__'
+      // Pass personality dimensions for system prompt injection
+      resolvedAgentPrompts.agentTone            = sysAgent?.tone ?? []
+      resolvedAgentPrompts.agentVerbosityLevel  = sysAgent?.verbosityLevel ?? []
+      resolvedAgentPrompts.agentPersonalityTags = sysAgent?.personalityTags ?? []
 
       // cfg already has provider creds + customModel resolved above
 
       dbg('Invoking window.electronAPI.runAgent…')
+      const agentKnowledgeConfig = buildAgentKnowledgeConfig(sysAgent)
       const agentRunParams = {
         chatId,
         messages: JSON.parse(JSON.stringify(apiMessages)),
         config: JSON.parse(JSON.stringify(cfg)),
         enabledAgents: [],
-        enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
+        enabledSkills: JSON.parse(JSON.stringify(filterByRequired(enabledSkillObjects.value, sysAgent?.requiredSkillIds ?? []))),
         ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
         agentPrompts: resolvedAgentPrompts,
-        mcpServers: JSON.parse(JSON.stringify(persistedEnabledMcpServers.value)),
-        httpTools: JSON.parse(JSON.stringify(persistedEnabledHttpTools.value)),
+        mcpServers: JSON.parse(JSON.stringify(filterByRequired(mcpStore.servers, sysAgent?.requiredMcpServerIds ?? []))),
+        httpTools: JSON.parse(JSON.stringify(filterByRequired(toolsStore.tools, sysAgent?.requiredToolIds ?? []))),
         chatPermissionMode: targetChat.permissionMode || 'inherit',
         chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
         chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
         maxOutputTokens: targetChat.maxOutputTokens || null,
-        knowledgeConfig: {
-          ragEnabled: knowledgeStore.ragEnabled,
-          pineconeApiKey: knowledgeStore.pineconeApiKey,
-          pineconeIndexName: knowledgeStore.pineconeIndexName,
-          embeddingProvider: knowledgeStore.embeddingProvider,
-          embeddingModel: knowledgeStore.embeddingModel,
-          indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs))
-        },
+        knowledgeConfig: agentKnowledgeConfig ? JSON.parse(JSON.stringify(agentKnowledgeConfig)) : null,
       }
       chatsStore.storePlanRunParams(chatId, agentRunParams)
       const res = await window.electronAPI.runAgent(agentRunParams)
@@ -5876,7 +5392,7 @@ async function handleInterceptedFileDrop(url) {
   try {
     const results = await window.electronAPI.resolveDropPaths([url])
     if (results && results.length > 0) {
-      attachments.value.push(...results)
+      handleAttachResults(results)
     }
   } catch (err) {
     dbg(`Intercepted drop error: ${err.message}`, 'error')
@@ -8704,6 +8220,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+  z-index: 10;
 }
 .chat-sidebar-action-btn:hover {
   background: rgba(255, 255, 255, 0.15);
@@ -8721,6 +8238,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   pointer-events: none;
   transition: opacity 0.15s;
   flex-shrink: 0;
+  z-index: 20;
 }
 .chat-sidebar-item:hover .chat-sidebar-item-actions {
   opacity: 1;

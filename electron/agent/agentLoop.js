@@ -405,7 +405,7 @@ class AgentLoop {
    * @param {Array<string|{id:string, name:string, systemPrompt?:string}>} enabledSkills
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
-  buildSystemPrompt(enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, groupChatContext } = {}, userSoulContent, systemSoulContent, participantSouls) {
+  buildSystemPrompt(enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, groupChatContext, agentTone, agentVerbosityLevel, agentPersonalityTags } = {}, userSoulContent, systemSoulContent, participantSouls) {
     // When a named agent is active, use it as the opening identity (highest priority).
     // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
     let openingIdentity
@@ -415,6 +415,18 @@ class AgentLoop {
       line += '.'
       if (systemAgentPrompt) line += `\n\n${systemAgentPrompt}`
       line += `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${systemAgentName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant`
+      // Inject personality dimensions if any are configured
+      const hasDimensions = (agentTone?.length > 0) || (agentVerbosityLevel?.length > 0) || (agentPersonalityTags?.length > 0)
+      if (hasDimensions) {
+        line += `\n\n## PERSONALITY DIMENSIONS\n`
+        if (agentTone?.length > 0)
+          line += `- Communication Style: ${agentTone.join(', ')}\n`
+        if (agentVerbosityLevel?.length > 0)
+          line += `- Response Verbosity: ${agentVerbosityLevel.join(', ')}\n`
+        if (agentPersonalityTags?.length > 0)
+          line += `- Personality: ${agentPersonalityTags.join(', ')}\n`
+        line += `Express yourself through these dimensions consistently — let them shape your vocabulary, sentence rhythm, emotional register, and response length.`
+      }
       openingIdentity = line
     } else {
       openingIdentity = (this.config.systemPrompt || '').trim()
@@ -442,7 +454,8 @@ CORE TOOLS (always available):
     }
 
     // ── ClankAI Data Directory ──
-    const dataPath = process.env.CLANKAI_DATA_PATH || path.join(require('os').homedir(), '.clankai')
+    const _dataPath = process.env.CLANKAI_DATA_PATH
+    const dataPath = (_dataPath && _dataPath !== 'null') ? _dataPath : path.join(require('os').homedir(), '.clankai')
     const artifactPath = this.config.chatWorkingPath || this.config.artifactPath || path.join(dataPath, 'artifact')
     const skillsPath = this.config.skillsPath || ''
     const utilityModel = this.config.utilityModel || {}
