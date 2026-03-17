@@ -12,13 +12,14 @@
 const { logger } = require('../../logger')
 
 const MAX_TOKENS = 1024
+const COLLAB_MAX_TOKENS = 2048
 
 /**
  * Build the extraction prompt dynamically based on whether participants are provided.
  * When participants are present (group chat or named agent), the LLM can route
  * memories to specific agents by name instead of the generic "system" target.
  */
-function buildExtractionPrompt(participants) {
+function buildExtractionPrompt(participants, language) {
   const hasParticipants = participants && participants.length > 0
 
   let targetInstructions
@@ -75,6 +76,7 @@ Rules:
 - Choose the most appropriate section: Preferences, Communication, Technical, Projects, Agentl, Interaction Notes
 - Keep entries concise — one line each, written as bullet-point facts
 - If there is nothing worth remembering, return an empty array
+- LANGUAGE: Write all memory entries in ${language === 'zh' ? 'Chinese (简体中文)' : 'the same language the user is speaking in the conversation'}. Match the language of the conversation — if the user speaks Chinese, write memories in Chinese; if English, write in English.
 
 Respond with ONLY valid JSON (no markdown fences, no explanation):
 {"memories": [{"target": "${hasParticipants ? 'user|<agent_name>' : 'user|system'}", "section": "<section name>", "entry": "<the memory entry>", "confidence": 0.85}]}`
@@ -106,13 +108,14 @@ class MemoryExtractor {
    * @param {string} params.userAgentId
    * @param {string} params.systemAgentId
    * @param {Array<{id: string, name: string, type: string}>} [params.participants] — all AI agents in the conversation
+   * @param {string} [params.language] — language code ('en' | 'zh') for memory entry language
    * @returns {Promise<Array<{target: string, section: string, entry: string, confidence: number, agentId: string, agentType: string}>>}
    */
-  async extract({ lastUserMessage, lastAssistantMessage, userSoulContent, systemSoulContent, userAgentId, systemAgentId, participants }) {
+  async extract({ lastUserMessage, lastAssistantMessage, userSoulContent, systemSoulContent, userAgentId, systemAgentId, participants, language }) {
     if (!lastUserMessage || !lastAssistantMessage) return []
 
     const userContent = this._buildUserContent(lastUserMessage, lastAssistantMessage, userSoulContent, systemSoulContent, participants)
-    const systemPrompt = buildExtractionPrompt(participants)
+    const systemPrompt = buildExtractionPrompt(participants, language)
 
     try {
       let text
@@ -166,21 +169,133 @@ class MemoryExtractor {
     }
   }
 
+  /**
+   * Extract memories from an agent-to-agent collaboration transcript.
+   * Focuses on inter-agent relationship dynamics rather than user personal info.
+   *
+   * @param {object} params
+   * @param {string} params.transcript — "[AgentName]: text" formatted conversation
+   * @param {Array<{id: string, name: string, type: string}>} params.participants — agents involved
+   * @param {Object<string, string|null>} params.existingSouls — agentId → soul file content
+   * @param {string} [params.language] — language code ('en' | 'zh') for memory entry language
+   * @returns {Promise<Array<{target: string, section: string, entry: string, confidence: number, agentId: string, agentType: string}>>}
+   */
+  async extractFromCollaboration({ transcript, participants, existingSouls, language }) {
+    if (!transcript || !participants || participants.length < 2) return []
+
+    const nameList = participants.map(p => `"${p.name}"`).join(', ')
+
+    const systemPrompt = `You are a memory extraction assistant specialized in analyzing conversations BETWEEN AI agents.
+
+You will be given:
+1. A transcript of a conversation between AI agents (no human participant)
+2. Existing memory/soul content for each agent (if any)
+
+Agents in this conversation: ${nameList}
+
+WHAT TO EXTRACT (focus on inter-agent dynamics):
+- Relationship dynamics: respect, disagreement, trust, complementary strengths, tension, humor
+- Key consensus points: important conclusions or agreements they reached together
+- Key disagreements: unresolved differences of opinion or approach
+- Personality moments: how an agent's character was revealed through interaction (not just their configured personality, but how it manifested)
+- Important conclusions: decisions, insights, or creative ideas that emerged from the collaboration
+- Emotional interactions: moments of empathy, frustration, encouragement, or humor between agents
+- Collaboration patterns: who tends to lead, who synthesizes, who challenges
+
+WHAT TO IGNORE:
+- Generic pleasantries and turn-taking mechanics ("Sure, let me respond", "Thanks for sharing")
+- Information that is just restating the agent's configured system prompt or description
+- Facts already present in the existing soul files
+- Trivial exchanges with no lasting significance
+- The human user's original prompt/instruction that started the conversation
+
+For each memory, specify the target:
+- The exact agent name (one of: ${nameList}) for facts about or relevant to that specific agent
+- Use the agent name that the memory is ABOUT (e.g. if Alice showed empathy toward Bob, target is "Alice")
+
+CONFIDENCE SCORING:
+- 0.9–1.0: Clear, significant moment or dynamic explicitly demonstrated in the transcript
+- 0.7–0.8: Notable pattern observed across multiple exchanges
+- 0.5–0.6: Subtle or single-instance observation, worth noting but uncertain
+- Below 0.5: Skip entirely
+
+Choose appropriate sections: Relationships, Collaboration Style, Key Insights, Personality, Interaction Notes
+
+LANGUAGE: Write all memory entries in ${language === 'zh' ? 'Chinese (简体中文)' : 'the same language the agents are speaking in the transcript'}. Match the language of the conversation.
+
+Respond with ONLY valid JSON (no markdown fences, no explanation):
+{"memories": [{"target": "<agent_name>", "section": "<section name>", "entry": "<the memory entry>", "confidence": 0.85}]}`
+
+    const parts = ['## Agent Collaboration Transcript', transcript]
+    if (existingSouls) {
+      for (const p of participants) {
+        const soul = existingSouls[p.id]
+        if (soul) {
+          parts.push(`\n## Existing Memory for ${p.name}`)
+          parts.push(soul)
+        }
+      }
+    }
+    const userContent = parts.join('\n')
+
+    try {
+      let text
+      if (this.isOpenAI) {
+        text = await this._callOpenAI(systemPrompt, userContent, COLLAB_MAX_TOKENS)
+      } else {
+        text = await this._callAnthropic(systemPrompt, userContent, COLLAB_MAX_TOKENS)
+      }
+
+      const parsed = this._parseResponse(text)
+      if (!parsed || !Array.isArray(parsed.memories)) return []
+
+      const participantByName = new Map()
+      for (const p of participants) {
+        participantByName.set(p.name.toLowerCase(), p)
+      }
+
+      return parsed.memories
+        .filter(m => m.target && m.section && m.entry)
+        .filter(m => (m.confidence ?? 1) >= 0.5)
+        .map(m => {
+          const confidence = typeof m.confidence === 'number' ? m.confidence : 1.0
+          const matched = participantByName.get(m.target.toLowerCase())
+          if (matched) {
+            return { target: m.target, section: m.section, entry: m.entry, confidence, agentId: matched.id, agentType: matched.type || 'system' }
+          }
+          // Fallback: unrecognized name → route to first participant
+          logger.warn('MemoryExtractor.extractFromCollaboration: unrecognized target', { target: m.target })
+          return { target: m.target, section: m.section, entry: m.entry, confidence, agentId: participants[0].id, agentType: participants[0].type || 'system' }
+        })
+    } catch (err) {
+      logger.error('MemoryExtractor.extractFromCollaboration failed', err.message)
+      return []
+    }
+  }
+
   async _extractAnthropic(systemPrompt, userContent) {
+    return this._callAnthropic(systemPrompt, userContent, MAX_TOKENS)
+  }
+
+  async _extractOpenAI(systemPrompt, userContent) {
+    return this._callOpenAI(systemPrompt, userContent, MAX_TOKENS)
+  }
+
+  async _callAnthropic(systemPrompt, userContent, maxTokens) {
     const Anthropic = require('@anthropic-ai/sdk')
     const clientOpts = { apiKey: this.apiKey }
     if (this.baseURL) clientOpts.baseURL = this.baseURL.replace(/\/+$/, '')
     const client = new Anthropic(clientOpts)
     const response = await client.messages.create({
       model: this.model,
-      max_tokens: MAX_TOKENS,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
     })
     return response.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
   }
 
-  async _extractOpenAI(systemPrompt, userContent) {
+  async _callOpenAI(systemPrompt, userContent, maxTokens) {
     const { OpenAIClient } = require('./OpenAIClient')
     const cfg = {
       openaiApiKey: this.apiKey,
@@ -192,7 +307,7 @@ class MemoryExtractor {
     const client = new OpenAIClient(cfg).getClient()
     const response = await client.chat.completions.create({
       model: this.model,
-      max_tokens: MAX_TOKENS,
+      max_tokens: maxTokens,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },

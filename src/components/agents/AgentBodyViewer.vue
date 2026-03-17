@@ -1,5 +1,5 @@
 <template>
-  <Teleport to="body">
+  <Teleport to="body" :key="agentId">
     <div class="bv-backdrop">
       <div class="bv-modal">
 
@@ -51,7 +51,7 @@
                 <label class="bv-field-label">{{ t('agents.description') }}</label>
                 <AppButton v-if="!readOnly" size="compact" class="bv-ai-micro" :loading="aiWorking && aiWorkingMode === 'enhance-desc'" :disabled="aiWorking || !draftDescription.trim()" @click="enhanceDescription">
                   <svg v-if="!(aiWorking && aiWorkingMode === 'enhance-desc')" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                  {{ aiWorking && aiWorkingMode === 'enhance-desc' ? '...' : (locale.value === 'zh' ? 'AI 增强' : 'AI Enhance') }}
+                  {{ aiWorking && aiWorkingMode === 'enhance-desc' ? '...' : t('agents.aiEnhance') }}
                 </AppButton>
               </div>
               <div v-if="readOnly" class="bv-readonly-text bv-readonly-multiline">{{ draftDescription || '—' }}</div>
@@ -69,7 +69,7 @@
                 </label>
                 <AppButton v-if="!readOnly" size="compact" class="bv-ai-micro" :loading="aiWorking && aiWorkingMode === 'generate'" :disabled="aiWorking || !draftDescription.trim()" @click="generateFromDescription">
                   <svg v-if="!(aiWorking && aiWorkingMode === 'generate')" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                  {{ aiWorking && aiWorkingMode === 'generate' ? '...' : (locale.value === 'zh' ? '从描述生成' : 'Generate from DESC') }}
+                  {{ aiWorking && aiWorkingMode === 'generate' ? '...' : t('agents.rewriteFromDescription') }}
                 </AppButton>
               </div>
               <div v-if="readOnly" class="bv-readonly-text bv-readonly-multiline bv-readonly-grow">{{ draftPrompt || '—' }}</div>
@@ -176,7 +176,7 @@
                 <!-- ─ Hotspots ─ -->
 
                 <!-- MEMORY (left temple) -->
-                <g class="bv-hotspot" :class="{ active: activePanel === 'memory' }" @click="togglePanel('memory')">
+                <g :key="'memory-hotspot'" class="bv-hotspot" :class="{ active: activePanel === 'memory' }" @click="togglePanel('memory')">
                   <line x1="108" y1="70" x2="62" y2="54" class="bv-hs-line"/>
                   <rect x="2" y="40" width="62" height="24" rx="12" class="bv-hs-label-bg"/>
                   <text x="33" y="56" text-anchor="middle" class="bv-hs-label">{{ t('agents.memory') }}</text>
@@ -185,7 +185,7 @@
                 </g>
 
                 <!-- MODEL (right temple) -->
-                <g v-if="agentType === 'system'" class="bv-hotspot" :class="{ active: activePanel === 'model' }" @click="togglePanel('model')">
+                <g v-if="agentType === 'system'" :key="'model-hotspot'" class="bv-hotspot" :class="{ active: activePanel === 'model' }" @click="togglePanel('model')">
                   <line x1="212" y1="70" x2="258" y2="54" class="bv-hs-line"/>
                   <rect x="256" y="40" width="62" height="24" rx="12" class="bv-hs-label-bg"/>
                   <text x="287" y="56" text-anchor="middle" class="bv-hs-label">{{ t('agents.aiModel') }}</text>
@@ -194,7 +194,7 @@
                 </g>
 
                 <!-- VOICE (chin / mouth area) -->
-                <g v-if="agentType === 'system'" class="bv-hotspot" :class="{ active: activePanel === 'voice' }" @click="togglePanel('voice')">
+                <g v-if="agentType === 'system'" :key="'voice-hotspot'" class="bv-hotspot" :class="{ active: activePanel === 'voice' }" @click="togglePanel('voice')">
                   <line x1="178" y1="125" x2="232" y2="125" class="bv-hs-line"/>
                   <rect x="233" y="113" width="58" height="24" rx="12" class="bv-hs-label-bg"/>
                   <text x="262" y="129" text-anchor="middle" class="bv-hs-label">{{ t('agents.voice') }}</text>
@@ -272,7 +272,7 @@
                 <div v-if="activePanel === 'memory'" class="bv-detail-body">
                   <div v-if="memoryLoading" class="bv-detail-empty">{{ t('common.loading') }}...</div>
                   <template v-else>
-                    <div v-if="readOnly" class="bv-readonly-text bv-readonly-multiline bv-readonly-grow">{{ draftMemory || (locale.value === 'zh' ? '暂无记忆' : 'No memory yet') }}</div>
+                    <div v-if="readOnly" class="bv-readonly-text bv-readonly-multiline bv-readonly-grow">{{ draftMemory || t('agents.noMemory') }}</div>
                     <textarea v-else v-model="draftMemory" class="bv-textarea bv-textarea-grow" :placeholder="t('agents.memoryPlaceholder')" spellcheck="false"></textarea>
                   </template>
                 </div>
@@ -471,7 +471,7 @@
                 </div>
 
                 <!-- Personality -->
-                <div v-else-if="activePanel === 'personality'" class="bv-detail-body">
+                <div v-else-if="activePanel === 'personality'" class="bv-detail-body bv-detail-body--personality">
 
                   <!-- Readonly: just show selected values -->
                   <template v-if="readOnly">
@@ -500,79 +500,93 @@
 
                   <!-- Editable -->
                   <template v-else>
-                    <!-- 沟通风格 -->
-                    <div class="bv-panel-section">
-                      <div class="bv-panel-section-label-row">
-                        <span class="bv-panel-section-label">{{ t('agents.communicationStyle') }}</span>
-                        <button class="bv-chip-add-btn" @click="openCustomInput('tone')" :title="locale.value === 'zh' ? '添加自定义' : 'Add custom'">
-                          <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <div class="bv-personality-layout">
+                      <!-- Left sidebar - Section titles -->
+                      <div class="bv-personality-nav">
+                        <button class="bv-personality-nav-item" :class="{ active: personalityActiveTab === 'tone' }" @click="personalityActiveTab = 'tone'">
+                          {{ t('agents.communicationStyle') }}
+                        </button>
+                        <button class="bv-personality-nav-item" :class="{ active: personalityActiveTab === 'verbosity' }" @click="personalityActiveTab = 'verbosity'">
+                          {{ t('agents.verbosityLevel') }}
+                        </button>
+                        <button class="bv-personality-nav-item" :class="{ active: personalityActiveTab === 'tags' }" @click="personalityActiveTab = 'tags'">
+                          {{ t('agents.personalityTags') }}
                         </button>
                       </div>
-                      <div class="bv-chips">
-                        <button v-for="opt in communicationStyleOptions.slice(0, 20)" :key="opt.value" class="bv-chip" :class="{ active: draftTone.includes(opt.value) }" @click="togglePersonalityChip(draftTone, opt.value)">{{ t(opt.labelKey) }}</button>
-                        <span v-for="val in customTone" :key="'c-' + val" class="bv-chip bv-chip-custom" :class="{ active: draftTone.includes(val) }">
-                          <span class="bv-chip-label" @click="togglePersonalityChip(draftTone, val)">{{ val }}</span>
-                          <button class="bv-chip-remove" @click.stop="removeCustomChip('tone', val)" :title="locale.value === 'zh' ? '删除' : 'Remove'">
-                            <svg style="width:8px;height:8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                          </button>
-                        </span>
-                      </div>
-                    </div>
-                    <!-- 详细程度 -->
-                    <div class="bv-panel-section">
-                      <div class="bv-panel-section-label-row">
-                        <span class="bv-panel-section-label">{{ t('agents.verbosityLevel') }}</span>
-                        <button class="bv-chip-add-btn" @click="openCustomInput('verbosity')" :title="locale.value === 'zh' ? '添加自定义' : 'Add custom'">
-                          <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        </button>
-                      </div>
-                      <div class="bv-chips">
-                        <button v-for="opt in verbosityOptions" :key="opt.value" class="bv-chip" :class="{ active: draftVerbosityLevel.includes(opt.value) }" @click="togglePersonalityChip(draftVerbosityLevel, opt.value)">{{ t(opt.labelKey) }}</button>
-                        <span v-for="val in customVerbosity" :key="'c-' + val" class="bv-chip bv-chip-custom" :class="{ active: draftVerbosityLevel.includes(val) }">
-                          <span class="bv-chip-label" @click="togglePersonalityChip(draftVerbosityLevel, val)">{{ val }}</span>
-                          <button class="bv-chip-remove" @click.stop="removeCustomChip('verbosity', val)" :title="locale.value === 'zh' ? '删除' : 'Remove'">
-                            <svg style="width:8px;height:8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                          </button>
-                        </span>
-                      </div>
-                    </div>
-                    <!-- 性格标签 -->
-                    <div class="bv-panel-section">
-                      <div class="bv-panel-section-label-row">
-                        <span class="bv-panel-section-label">{{ t('agents.personalityTags') }}</span>
-                        <button class="bv-chip-add-btn" @click="openCustomInput('tags')" :title="locale.value === 'zh' ? '添加自定义' : 'Add custom'">
-                          <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        </button>
-                      </div>
-                      <div class="bv-chips">
-                        <button v-for="opt in personalityTagOptions.slice(0, 20)" :key="opt.value" class="bv-chip" :class="{ active: draftPersonalityTags.includes(opt.value) }" @click="togglePersonalityChip(draftPersonalityTags, opt.value)">{{ t(opt.labelKey) }}</button>
-                        <span v-for="val in customTags" :key="'c-' + val" class="bv-chip bv-chip-custom" :class="{ active: draftPersonalityTags.includes(val) }">
-                          <span class="bv-chip-label" @click="togglePersonalityChip(draftPersonalityTags, val)">{{ val }}</span>
-                          <button class="bv-chip-remove" @click.stop="removeCustomChip('tags', val)" :title="locale.value === 'zh' ? '删除' : 'Remove'">
-                            <svg style="width:8px;height:8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                          </button>
-                        </span>
+
+                      <!-- Right content - Section items -->
+                      <div class="bv-personality-content">
+                        <!-- 沟通风格 -->
+                        <div v-show="personalityActiveTab === 'tone'" class="bv-personality-section">
+                          <div class="bv-panel-section-label-row" style="margin-bottom: 0.75rem;">
+                            <button class="bv-chip-add-btn" @click="openCustomInput('tone')" :title="locale.value === 'zh' ? '添加自定义' : 'Add custom'">
+                              <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            </button>
+                          </div>
+                          <div class="bv-chips">
+                            <button v-for="opt in communicationStyleOptions" :key="opt.value" class="bv-chip" :class="{ active: draftTone.includes(opt.value) }" @click="togglePersonalityChip(draftTone, opt.value)">{{ t(opt.labelKey) }}</button>
+                            <span v-for="val in customTone" :key="'c-' + val" class="bv-chip bv-chip-custom" :class="{ active: draftTone.includes(val) }">
+                              <span class="bv-chip-label" @click="togglePersonalityChip(draftTone, val)">{{ val }}</span>
+                              <button class="bv-chip-remove" @click.stop="removeCustomChip('tone', val)" :title="locale.value === 'zh' ? '删除' : 'Remove'">
+                                <svg style="width:8px;height:8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                              </button>
+                            </span>
+                          </div>
+                          <div v-if="customInputTarget === 'tone'" class="bv-custom-input-popup">
+                            <input ref="customInputEl" v-model="customInputValue" class="bv-custom-input" :placeholder="locale.value === 'zh' ? '输入自定义值，回车确认' : 'Type custom value, Enter to add'" @keydown.enter.prevent="confirmCustomInput" @keydown.escape.prevent="customInputTarget = null" />
+                            <button class="bv-custom-input-confirm" @click="confirmCustomInput"><svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></button>
+                            <button class="bv-custom-input-cancel" @click="customInputTarget = null"><svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                          </div>
+                        </div>
+
+                        <!-- 详细程度 -->
+                        <div v-show="personalityActiveTab === 'verbosity'" class="bv-personality-section">
+                          <div class="bv-panel-section-label-row" style="margin-bottom: 0.75rem;">
+                            <button class="bv-chip-add-btn" @click="openCustomInput('verbosity')" :title="locale.value === 'zh' ? '添加自定义' : 'Add custom'">
+                              <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            </button>
+                          </div>
+                          <div class="bv-chips">
+                            <button v-for="opt in verbosityOptions" :key="opt.value" class="bv-chip" :class="{ active: draftVerbosityLevel.includes(opt.value) }" @click="selectVerbosity(opt.value)">{{ t(opt.labelKey) }}</button>
+                            <span v-for="val in customVerbosity" :key="'c-' + val" class="bv-chip bv-chip-custom" :class="{ active: draftVerbosityLevel.includes(val) }">
+                              <span class="bv-chip-label" @click="selectVerbosity(val)">{{ val }}</span>
+                              <button class="bv-chip-remove" @click.stop="removeCustomChip('verbosity', val)" :title="locale.value === 'zh' ? '删除' : 'Remove'">
+                                <svg style="width:8px;height:8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                              </button>
+                            </span>
+                          </div>
+                          <div v-if="customInputTarget === 'verbosity'" class="bv-custom-input-popup">
+                            <input ref="customInputEl" v-model="customInputValue" class="bv-custom-input" :placeholder="locale.value === 'zh' ? '输入自定义值，回车确认' : 'Type custom value, Enter to add'" @keydown.enter.prevent="confirmCustomInput" @keydown.escape.prevent="customInputTarget = null" />
+                            <button class="bv-custom-input-confirm" @click="confirmCustomInput"><svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></button>
+                            <button class="bv-custom-input-cancel" @click="customInputTarget = null"><svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                          </div>
+                        </div>
+
+                        <!-- 性格标签 -->
+                        <div v-show="personalityActiveTab === 'tags'" class="bv-personality-section">
+                          <div class="bv-panel-section-label-row" style="margin-bottom: 0.75rem;">
+                            <button class="bv-chip-add-btn" @click="openCustomInput('tags')" :title="locale.value === 'zh' ? '添加自定义' : 'Add custom'">
+                              <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            </button>
+                          </div>
+                          <div class="bv-chips">
+                            <button v-for="opt in personalityTagOptions" :key="opt.value" class="bv-chip" :class="{ active: draftPersonalityTags.includes(opt.value) }" @click="togglePersonalityChip(draftPersonalityTags, opt.value)">{{ t(opt.labelKey) }}</button>
+                            <span v-for="val in customTags" :key="'c-' + val" class="bv-chip bv-chip-custom" :class="{ active: draftPersonalityTags.includes(val) }">
+                              <span class="bv-chip-label" @click="togglePersonalityChip(draftPersonalityTags, val)">{{ val }}</span>
+                              <button class="bv-chip-remove" @click.stop="removeCustomChip('tags', val)" :title="locale.value === 'zh' ? '删除' : 'Remove'">
+                                <svg style="width:8px;height:8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                              </button>
+                            </span>
+                          </div>
+                          <div v-if="customInputTarget === 'tags'" class="bv-custom-input-popup">
+                            <input ref="customInputEl" v-model="customInputValue" class="bv-custom-input" :placeholder="locale.value === 'zh' ? '输入自定义值，回车确认' : 'Type custom value, Enter to add'" @keydown.enter.prevent="confirmCustomInput" @keydown.escape.prevent="customInputTarget = null" />
+                            <button class="bv-custom-input-confirm" @click="confirmCustomInput"><svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></button>
+                            <button class="bv-custom-input-cancel" @click="customInputTarget = null"><svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </template>
-
-                  <!-- Custom chip input popup -->
-                  <div v-if="customInputTarget" class="bv-custom-input-popup">
-                    <input
-                      ref="customInputEl"
-                      v-model="customInputValue"
-                      class="bv-custom-input"
-                      :placeholder="locale.value === 'zh' ? '输入自定义值，回车确认' : 'Type custom value, Enter to add'"
-                      @keydown.enter.prevent="confirmCustomInput"
-                      @keydown.escape.prevent="customInputTarget = null"
-                    />
-                    <button class="bv-custom-input-confirm" @click="confirmCustomInput">
-                      <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                    </button>
-                    <button class="bv-custom-input-cancel" @click="customInputTarget = null">
-                      <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                  </div>
                 </div>
 
               </div>
@@ -603,27 +617,52 @@
                   <svg v-if="!readOnly" class="bv-summary-chevron" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
                 </div>
 
-                <!-- Personality summary -->
-                <div class="bv-summary-row" :class="{ clickable: !readOnly }" @click="!readOnly && togglePanel('personality')">
+                <!-- Personality summary — 3 sub-rows -->
+                <div class="bv-summary-row" :class="{ clickable: !readOnly }" @click="!readOnly && openPersonalityTab('tone')">
+                  <span class="bv-summary-icon">🗣️</span>
+                  <div class="bv-summary-content">
+                    <span class="bv-summary-label">{{ t('agents.communicationStyle') }}</span>
+                    <span v-if="!draftTone.length" class="bv-summary-value muted">{{ locale.value === 'zh' ? '未设置' : 'Not set' }}</span>
+                    <div v-else class="bv-summary-chips">
+                      <span v-for="v in draftTone" :key="v" class="bv-summary-chip">{{ personalityChipLabel(v) }}</span>
+                    </div>
+                  </div>
+                  <svg v-if="!readOnly" class="bv-summary-chevron" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                </div>
+                <div class="bv-summary-row" :class="{ clickable: !readOnly }" @click="!readOnly && openPersonalityTab('verbosity')">
+                  <span class="bv-summary-icon">📊</span>
+                  <div class="bv-summary-content">
+                    <span class="bv-summary-label">{{ t('agents.verbosityLevel') }}</span>
+                    <span v-if="!draftVerbosityLevel.length" class="bv-summary-value muted">{{ locale.value === 'zh' ? '未设置' : 'Not set' }}</span>
+                    <div v-else class="bv-summary-chips">
+                      <span v-for="v in draftVerbosityLevel" :key="v" class="bv-summary-chip">{{ personalityChipLabel(v) }}</span>
+                    </div>
+                  </div>
+                  <svg v-if="!readOnly" class="bv-summary-chevron" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                </div>
+                <div class="bv-summary-row" :class="{ clickable: !readOnly }" @click="!readOnly && openPersonalityTab('tags')">
                   <span class="bv-summary-icon">✨</span>
                   <div class="bv-summary-content">
-                    <span class="bv-summary-label">{{ t('agents.personality') }}</span>
-                    <span v-if="!draftTone.length && !draftVerbosityLevel.length && !draftPersonalityTags.length" class="bv-summary-value muted">{{ locale.value === 'zh' ? '未设置' : 'Not set' }}</span>
+                    <span class="bv-summary-label">{{ t('agents.personalityTags') }}</span>
+                    <span v-if="!draftPersonalityTags.length" class="bv-summary-value muted">{{ locale.value === 'zh' ? '未设置' : 'Not set' }}</span>
                     <div v-else class="bv-summary-chips">
-                      <span v-for="v in [...draftTone, ...draftVerbosityLevel, ...draftPersonalityTags]" :key="v" class="bv-summary-chip">{{ personalityChipLabel(v) }}</span>
+                      <span v-for="v in draftPersonalityTags" :key="v" class="bv-summary-chip">{{ personalityChipLabel(v) }}</span>
                     </div>
                   </div>
                   <svg v-if="!readOnly" class="bv-summary-chevron" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
                 </div>
 
                 <!-- Memory -->
-                <div class="bv-summary-row" :class="{ clickable: !readOnly }" @click="!readOnly && togglePanel('memory')">
+                <div class="bv-summary-row clickable" @click="togglePanel('memory')">
                   <span class="bv-summary-icon">🧠</span>
                   <div class="bv-summary-content">
                     <span class="bv-summary-label">{{ t('agents.memory') }}</span>
-                    <span class="bv-summary-value muted">{{ locale.value === 'zh' ? '点击查看' : 'Click to view' }}</span>
+                    <span v-if="memoryLoading" class="bv-summary-value muted">{{ t('common.loading') }}...</span>
+                    <span v-else class="bv-summary-value" :class="{ muted: memoryLineCount === 0 }">
+                      {{ memoryLineCount === 0 ? (locale.value === 'zh' ? '暂无记忆' : 'None') : (locale.value === 'zh' ? memoryLineCount + ' 条' : memoryLineCount + ' entries') }}
+                    </span>
                   </div>
-                  <svg v-if="!readOnly" class="bv-summary-chevron" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                  <svg class="bv-summary-chevron" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
                 </div>
 
                 <!-- Tools -->
@@ -700,7 +739,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { useModelsStore } from '../../stores/models'
 import { useConfigStore } from '../../stores/config'
 import { useToolsStore } from '../../stores/tools'
@@ -751,6 +790,11 @@ function togglePanel(panel) {
   if (panel === 'memory' && activePanel.value === 'memory') loadMemory()
 }
 
+function openPersonalityTab(tab) {
+  personalityActiveTab.value = tab
+  activePanel.value = 'personality'
+}
+
 function panelLabel(panel) {
   const map = {
     avatar:      t('agents.changeAvatar'),
@@ -765,6 +809,8 @@ function panelLabel(panel) {
   }
   return map[panel] || panel
 }
+
+const personalityActiveTab = ref('tone')
 
 function panelIcon(panel) {
   const map = { avatar: '🖼️', memory: '🧠', model: '🤖', tools: '🔧', skills: '⚡', knowledge: '📚', mcp: '🌐', voice: '🎤', personality: '✨' }
@@ -786,6 +832,15 @@ const draftRequiredKnowledgeBaseIds = ref([...(props.agentRequiredKnowledgeBaseI
 const draftTone             = ref([...(props.agentTone || [])])
 const draftVerbosityLevel   = ref([...(props.agentVerbosityLevel || [])])
 const draftPersonalityTags  = ref([...(props.agentPersonalityTags || [])])
+
+function selectVerbosity(value) {
+  // single-select: deselect if already selected, otherwise replace
+  if (draftVerbosityLevel.value.length === 1 && draftVerbosityLevel.value[0] === value) {
+    draftVerbosityLevel.value.splice(0)
+  } else {
+    draftVerbosityLevel.value.splice(0, draftVerbosityLevel.value.length, value)
+  }
+}
 
 function togglePersonalityChip(arr, value) {
   const idx = arr.indexOf(value)
@@ -819,11 +874,17 @@ const communicationStyleOptions = [
   { value: 'academic',       labelKey: 'agents.style.academic' },
   { value: 'journalistic',   labelKey: 'agents.style.journalistic' },
   { value: 'motivational',   labelKey: 'agents.style.motivational' },
-  { value: 'neutral',        labelKey: 'agents.style.neutral' },
+  { value: 'charismatic',    labelKey: 'agents.style.charismatic' },
   { value: 'instructional',  labelKey: 'agents.style.instructional' },
   { value: 'socratic',       labelKey: 'agents.style.socratic' },
   { value: 'empathetic',     labelKey: 'agents.style.empathetic' },
   { value: 'playful',        labelKey: 'agents.style.playful' },
+  { value: 'fiery',          labelKey: 'agents.style.fiery' },
+  { value: 'contrarian',     labelKey: 'agents.style.contrarian' },
+  { value: 'ruthless',       labelKey: 'agents.style.ruthless' },
+  { value: 'swift',          labelKey: 'agents.style.swift' },
+  { value: 'dawdling',       labelKey: 'agents.style.dawdling' },
+  { value: 'dominant',       labelKey: 'agents.style.dominant' },
 ]
 const verbosityOptions = [
   { value: 'minimal',       labelKey: 'agents.verbosity.minimal' },
@@ -844,7 +905,7 @@ const personalityTagOptions = [
   { value: 'blunt',          labelKey: 'agents.tag.blunt' },
   { value: 'curious',        labelKey: 'agents.tag.curious' },
   { value: 'creative',       labelKey: 'agents.tag.creative' },
-  { value: 'pragmatic',      labelKey: 'agents.tag.pragmatic' },
+  { value: 'visionary',      labelKey: 'agents.tag.visionary' },
   { value: 'patient',        labelKey: 'agents.tag.patient' },
   { value: 'serious',        labelKey: 'agents.tag.serious' },
   { value: 'playful',        labelKey: 'agents.tag.playful' },
@@ -868,6 +929,19 @@ const personalityTagOptions = [
   { value: 'independent',    labelKey: 'agents.tag.independent' },
   { value: 'supportive',     labelKey: 'agents.tag.supportive' },
   { value: 'competitive',    labelKey: 'agents.tag.competitive' },
+  { value: 'timid',          labelKey: 'agents.tag.timid' },
+  { value: 'weakWilled',     labelKey: 'agents.tag.weakWilled' },
+  { value: 'domineering',    labelKey: 'agents.tag.domineering' },
+  { value: 'cold',           labelKey: 'agents.tag.cold' },
+  { value: 'selfish',        labelKey: 'agents.tag.selfish' },
+  { value: 'indecisive',     labelKey: 'agents.tag.indecisive' },
+  { value: 'fearful',        labelKey: 'agents.tag.fearful' },
+  { value: 'resigned',       labelKey: 'agents.tag.resigned' },
+  { value: 'loyal',          labelKey: 'agents.tag.loyal' },
+  { value: 'helpful',        labelKey: 'agents.tag.helpful' },
+  { value: 'moody',          labelKey: 'agents.tag.moody' },
+  { value: 'pessimistic',    labelKey: 'agents.tag.pessimistic' },
+  { value: 'volatile',       labelKey: 'agents.tag.volatile' },
 ]
 
 const _allPersonalityOptions = [...communicationStyleOptions, ...verbosityOptions, ...personalityTagOptions]
@@ -887,7 +961,11 @@ const customTags        = ref([])
 function openCustomInput(section) {
   customInputTarget.value = section
   customInputValue.value  = ''
-  nextTick(() => customInputEl.value?.focus())
+  nextTick(() => {
+    if (customInputEl.value) {
+      customInputEl.value.focus()
+    }
+  })
 }
 
 function removeCustomChip(section, val) {
@@ -968,6 +1046,7 @@ function onAvatarFileUpload(event) {
 const draftMemory   = ref('')
 const memoryLoading = ref(false)
 const memoryLoaded  = ref(false)
+const memoryLineCount = computed(() => draftMemory.value.split('\n').filter(l => l.trim()).length)
 
 async function loadMemory() {
   if (memoryLoaded.value || props.isNew) return
@@ -979,6 +1058,11 @@ async function loadMemory() {
   } catch { /* silent */ }
   memoryLoading.value = false
 }
+
+// Pre-load memory on mount in readonly mode so summary row can show a preview
+onMounted(() => {
+  if (props.readOnly) loadMemory()
+})
 
 // ── Voice options ──────────────────────────────────────────────────────────
 const voiceOptions = [
@@ -1067,6 +1151,58 @@ function detectLanguage() {
   return null
 }
 
+function getStructuredPromptSections(lang) {
+  if (lang === 'Chinese') {
+    return `### 身份开场
+以”你是 [姓名/称谓] — [一句话画像]”开头，自然呈现这个人是谁
+
+### 人物背景与身份
+- 是谁：身份定位（可以是职业、家庭角色、朋友、某种性格的人……）
+- 背景：成长经历、生活环境、或塑造这个人的关键事件
+- 与用户的关系：用户在这段关系中扮演什么角色
+
+### 心理动机与执念
+- 深层渴望：这个人骨子里最想要什么（被认可、掌控感、安全感、刺激……）
+- 恐惧与回避：什么让他们感到威胁或不安
+- 执念：反复出现的念头、行为模式或话题偏执
+
+### 内在矛盾
+描述这个人身上最有张力的矛盾之处——表面强硬内心脆弱、口是心非、自我欺骗、渴望却又排斥……这是让角色真实可信的核心
+
+### 价值观与立场
+- 在意什么、不在意什么
+- 对常见话题的态度或偏见
+- 底线与禁区（什么情况下会爆发或拒绝）
+
+### 互动模式
+描述这个角色如何应对不同类型的对话：赞美、冲突、求助、闲聊等；遇到触发点时的具体反应`
+  }
+
+  return `### Opening Identity
+Start with “You are [Name/Title] — [one-line portrait]” that naturally reveals who this person is
+
+### Background & Identity
+- Who they are: role definition (can be a job, family role, friend, a personality archetype, etc.)
+- Background: upbringing, life context, or key experiences that shaped them
+- Relationship to user: what role does the user play in this relationship
+
+### Psychological Drives & Obsessions
+- Core desire: what do they fundamentally want at the deepest level (recognition, control, safety, excitement…)
+- Fears & avoidances: what threatens or unsettles them
+- Obsessions: recurring fixations, behavioral loops, or topics they can't let go of
+
+### Inner Contradictions
+Describe the most tension-filled contradiction in this person — tough exterior but fragile inside, says one thing but means another, craves connection yet pushes people away… This is what makes a character feel real
+
+### Values & Stances
+- What they care about vs. don't care about
+- Opinions or biases on common topics
+- Hard limits — what triggers them or causes refusal
+
+### Interaction Patterns
+Describe how this character responds to different conversation types: praise, conflict, requests for help, small talk; describe their specific reaction when a trigger is hit`
+}
+
 function extractJSON(text) {
   const match = text.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (match) return match[1].trim()
@@ -1084,9 +1220,19 @@ async function surpriseMe() {
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const lang = detectLanguage()
-    const langInstruction = lang ? `\n\nIMPORTANT: Generate ALL fields (name, description, prompt) entirely in ${lang}.` : ''
+    const langInstruction = lang ? `\n\nIMPORTANT: Generate all fields entirely in ${lang}.` : ''
+    const sections = getStructuredPromptSections(lang)
+    const nameRequirement = lang === 'Chinese'
+      ? 'Name must be a realistic Chinese personal name (e.g., 李晓霖). Do NOT use titles or roles like "星空编织者".'
+      : 'Name must be a realistic personal name (e.g., Alex Chen). Do NOT use titles or roles like "Starlight Weaver".'
+
+    // Use existing name if provided, otherwise generate new one
+    const nameInstruction = draftName.value?.trim()
+      ? `You MUST use the exact agent name provided: "${draftName.value}". Do NOT change or modify it.`
+      : 'Generate a realistic personal name.'
+
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `Generate a completely random, creative, and surprising AI agent character. Be imaginative and unique. Return ONLY valid JSON:\n{"name":"character name","description":"one sentence who they are (max 15 words)","prompt":"200-400 word character system prompt starting with 'You are [name]...'"}${langInstruction}`,
+      prompt: `Generate a completely random, creative, and surprising character — they could be anyone: a friend, family member, colleague, stranger, a personality archetype, a fictional character type. Be imaginative and unexpected. Do NOT default to a workplace/professional role.\n\n${nameInstruction}\n${nameRequirement}\n\n## Output Format (CRITICAL - Must return ONLY valid JSON)\n{\n  "name": "realistic personal name",\n  "description": "one sentence who they are (max 15 words)",\n  "prompt": "Detailed 300-600 word system prompt following this structure:\n\n${sections}\n"\n}\n\nReturn ONLY valid JSON, no additional text.${langInstruction}`,
       config,
     })
     if (res.success && res.text) {
@@ -1096,7 +1242,10 @@ async function surpriseMe() {
         aiWorking.value = false
         return
       }
-      if (data.name)        draftName.value = data.name
+      // Preserve existing name if user provided it
+      if (!draftName.value?.trim() && data.name) {
+        draftName.value = data.name
+      }
       if (data.description) draftDescription.value = data.description
       if (data.prompt)      draftPrompt.value = data.prompt
       if (!draftAvatar.value) draftAvatar.value = `a${Math.floor(Math.random() * 36) + 1}`
@@ -1122,9 +1271,19 @@ async function generateFromDescription() {
       ? `The user wants an agent described as: "${desc}"\n\n`
       : 'Generate a completely random, creative, and surprising agent. Be imaginative.\n\n'
     const lang = detectLanguage()
-    const langInstruction = lang ? `\n\nIMPORTANT: Generate ALL fields (name, description, prompt) entirely in ${lang}.` : ''
+    const langInstruction = lang ? `\n\nIMPORTANT: Generate all fields entirely in ${lang}.` : ''
+    const sections = getStructuredPromptSections(lang)
+    const nameRequirement = lang === 'Chinese'
+      ? 'Name must be a realistic Chinese personal name (e.g., 李晓霖). Do NOT use titles or roles like "星空编织者".'
+      : 'Name must be a realistic personal name (e.g., Alex Chen). Do NOT use titles or roles like "Starlight Weaver".'
+
+    // Use existing name if provided, otherwise mark for generation
+    const nameInstruction = draftName.value?.trim() 
+      ? `You MUST use the exact agent name provided: "${draftName.value}". Do NOT change or modify it.`
+      : 'Generate a realistic personal name.'
+
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `${descLine}Create a detailed AI agent character. Return ONLY valid JSON:\n{"name":"character name","description":"one sentence who they are (max 15 words)","prompt":"200-400 word character system prompt starting with 'You are [name]...'"}${langInstruction}`,
+      prompt: `${descLine}You are an expert character designer. Expand the user's description into a vivid, multi-dimensional character portrait. The character can be ANY kind of person — a friend, family member, romantic partner, coworker, stranger, a personality archetype, etc. Do NOT force a professional/workplace framing unless the description explicitly calls for it. Capture personality, relationships, emotional patterns, and speech style.\n\n${nameInstruction}\n${nameRequirement}\n\n## Output Format (CRITICAL - Must return ONLY valid JSON)\n{\n  "name": "realistic personal name",\n  "description": "one sentence who they are (max 15 words)",\n  "prompt": "Detailed 300-600 word system prompt following this structure:\n\n${sections}\n"\n}\n\nReturn ONLY valid JSON, no additional text.${langInstruction}`,
       config,
     })
     if (res.success && res.text) {
@@ -1134,7 +1293,10 @@ async function generateFromDescription() {
         aiWorking.value = false
         return
       }
-      if (data.name)        draftName.value = data.name
+      // Preserve existing name if user provided it
+      if (!draftName.value?.trim() && data.name) {
+        draftName.value = data.name
+      }
       if (data.description) draftDescription.value = data.description
       if (data.prompt)      draftPrompt.value = data.prompt
       if (!draftAvatar.value) draftAvatar.value = `a${Math.floor(Math.random() * 36) + 1}`
@@ -1178,8 +1340,27 @@ async function enhancePrompt() {
   aiError.value = ''
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
+    const lang = detectLanguage() || 'English'
+    const sections = getStructuredPromptSections(lang)
+    const enhancementPrompt = `You are an expert AI system prompt designer. Your task is to enhance and restructure the provided agent prompt following best practices.
+
+## Target Structure (use the same language as the original prompt)
+${sections}
+
+## Enhancement Instructions
+- Maintain the original intent and personality traits (those will be managed separately in the UI)
+- Reorganize content to match the target structure above
+- Use Markdown formatting with headers and bullet points
+- Keep practical and action-oriented language
+- Preserve any specific domain knowledge or rules
+- Make it more specific, effective, and well-structured
+- Return ONLY the enhanced prompt text, nothing else
+
+Original Prompt:
+${draftPrompt.value}`
+
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `Enhance this AI system agent prompt. Make it more specific, effective, and well-structured while keeping the same intent. Respond in the SAME language as the original prompt. Return ONLY the enhanced prompt text, nothing else.\n\nOriginal:\n${draftPrompt.value}`,
+      prompt: enhancementPrompt,
       config,
     })
     if (res.success && res.text) {
@@ -1574,6 +1755,11 @@ function saveAll() {
   padding: 0.875rem 1rem;
   display: flex; flex-direction: column; gap: 0.625rem;
 }
+/* When body contains the personality split layout — strip padding so the layout fills edge-to-edge */
+.bv-detail-body--personality {
+  padding: 0;
+  overflow: hidden;
+}
 
 .bv-detail-empty { font-size: var(--fs-secondary); color: #6B7280; padding: 0.25rem 0; }
 
@@ -1656,23 +1842,87 @@ function saveAll() {
   font-size: var(--fs-caption); color: #9CA3AF; margin-bottom: 0.375rem;
   font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
 }
-.bv-chips { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.375rem; }
+.bv-chips { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.375rem; align-content: flex-start; }
+
+/* Personality Layout - Left sidebar + Right content */
+.bv-personality-layout {
+  display: flex;
+  gap: 0;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+}
+.bv-personality-nav {
+  flex: 0 0 9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 0.5rem;
+  overflow-y: auto;
+}
+.bv-personality-nav-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: none;
+  background: transparent;
+  color: #6B7280;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  text-align: left;
+  width: 100%;
+}
+.bv-personality-nav-item:hover {
+  color: #E5E5EA;
+  background: rgba(255,255,255,0.06);
+}
+.bv-personality-nav-item.active {
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+.bv-personality-content {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.bv-personality-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.bv-personality-section .bv-chips {
+  flex: 1;
+  overflow-y: auto;
+  max-height: none;
+  align-content: flex-start;
+}
+
 .bv-chip {
   padding: 0.25rem 0.625rem;
   border-radius: var(--radius-full);
-  border: 1px solid #3A3A3A;
-  background: transparent;
+  border: none;
+  background: rgba(255,255,255,0.06);
   color: #9CA3AF;
   font-size: var(--fs-small);
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
-.bv-chip:hover { border-color: #666; color: #E5E5EA; }
+.bv-chip:hover { background: rgba(255,255,255,0.1); color: #E5E5EA; }
 .bv-chip.active {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: transparent;
-  color: #fff;
+  background: #1A2A3A;
+  border: 1px solid #2A3A4A;
+  color: #7CB9FF;
+  font-weight: 600;
 }
 
 /* Summary row — clickable cursor only when interactive */
@@ -1817,7 +2067,8 @@ function saveAll() {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  margin-top: 0.5rem;
+  margin-top: 0.875rem;
+  flex-shrink: 0;
   padding: 0.5rem 0.625rem;
   background: #1A1A1A;
   border: 1px solid #3A3A3A;

@@ -218,6 +218,7 @@
     <!-- Folder create/rename modal -->
     <CategoryModal
       v-if="folderModal.visible"
+      :visible="folderModal.visible"
       :mode="folderModal.mode"
       :initial="folderModal.initial"
       noun="Folder"
@@ -1546,6 +1547,9 @@
     :agent-required-skill-ids="soulViewerTarget.agentRequiredSkillIds"
     :agent-required-mcp-server-ids="soulViewerTarget.agentRequiredMcpServerIds"
     :agent-required-knowledge-base-ids="soulViewerTarget.agentRequiredKnowledgeBaseIds"
+    :agent-tone="soulViewerTarget.agentTone"
+    :agent-verbosity-level="soulViewerTarget.agentVerbosityLevel"
+    :agent-personality-tags="soulViewerTarget.agentPersonalityTags"
     :from-chat="true"
     :read-only="true"
     @close="closeSoulViewer"
@@ -3527,6 +3531,9 @@ function openSoulViewer(agentId, agentType, agentName) {
     agentModelId: overrideModel || agent?.modelId || null,
     agentVoiceId: agent?.voiceId || null,
     agentAvatar: agent?.avatar || null,
+    agentTone: agent?.tone || [],
+    agentVerbosityLevel: agent?.verbosityLevel || [],
+    agentPersonalityTags: agent?.personalityTags || [],
   }
 }
 
@@ -3605,6 +3612,14 @@ const activeSystemAgentIds = computed(() => {
 
 // getAgentProviderLabel kept — also used in mention popup
 // Shows per-chat override when active, otherwise falls back to agent global settings.
+function resolveProviderName(providerId) {
+  if (!providerId) return 'anthropic'
+  const providers = configStore.config?.providers || []
+  const found = providers.find(p => p.id === providerId)
+  if (found) return found.name || found.type || providerId
+  return providerId
+}
+
 function getAgentProviderLabel(agentId) {
   const agent = agentsStore.getAgentById(agentId)
   if (!agent) return 'Default'
@@ -3612,15 +3627,16 @@ function getAgentProviderLabel(agentId) {
   const rawOverride = chat?.agentModelOverrides?.[agentId]
   const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
   const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
-  const provider = overrideProvider || agent.providerId || 'anthropic'
+  const rawProvider = overrideProvider || agent.providerId || 'anthropic'
+  const providerName = resolveProviderName(rawProvider)
   const model    = overrideModel    || agent.modelId    || ''
   if (model) {
     const short = model.split('/').pop().split(':')[0]
     return overrideProvider || overrideModel
-      ? `${provider} · ${short} (override)`
-      : `${provider} · ${short}`
+      ? `${providerName} · ${short} (override)`
+      : `${providerName} · ${short}`
   }
-  return provider
+  return providerName
 }
 
 // sortedSystemAgents kept — used in new chat agent picker
@@ -4077,6 +4093,48 @@ function handleChunk(cId, chunk) {
           msg.content = '_No response_'
           msg.segments = [{ type: 'text', content: '_No response_' }]
         }
+
+        // ── Post-processing: truncate multi-turn roleplay ──
+        // If the agent wrote dialogue for other participants after its own turn,
+        // trim everything after the first @OtherAgent mention (keeping the @mention itself
+        // so the collaboration loop can detect the turn-pass).
+        if (msg.content && msg.agentId) {
+          const thisAgentId = msg.agentId
+          const groupIds = (targetChat.groupPersonaIds || [])
+          if (groupIds.length > 1) {
+            const otherAgents = groupIds
+              .filter(id => id !== thisAgentId)
+              .map(id => agentsStore.getAgentById(id))
+              .filter(Boolean)
+            // Find the first @OtherAgent mention position
+            let firstMentionEnd = -1
+            for (const other of otherAgents) {
+              const escaped = other.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+              const regex = new RegExp(`@${escaped}(?=\\W|$)`, 'i')
+              const match = regex.exec(msg.content)
+              if (match) {
+                const end = match.index + match[0].length
+                if (firstMentionEnd === -1 || end < firstMentionEnd) firstMentionEnd = end
+              }
+            }
+            // If we found an @mention, allow a short tail (up to next double newline
+            // or 80 chars), then truncate. This keeps "..@张素琴，你来说说" intact
+            // but removes any follow-up dialogue the agent wrote for other participants.
+            if (firstMentionEnd > 0 && firstMentionEnd < msg.content.length - 5) {
+              const tail = msg.content.slice(firstMentionEnd)
+              const doubleNewline = tail.indexOf('\n\n')
+              const cutAt = doubleNewline >= 0 && doubleNewline <= 80
+                ? firstMentionEnd + doubleNewline
+                : firstMentionEnd + Math.min(tail.length, 80)
+              if (cutAt < msg.content.length - 5) {
+                const trimmed = msg.content.slice(0, cutAt).trimEnd()
+                dbg(`Truncated multi-turn roleplay for ${chunk.agentName}: ${msg.content.length} → ${trimmed.length} chars`)
+                msg.content = trimmed
+                msg.segments = [{ type: 'text', content: trimmed }]
+              }
+            }
+          }
+        }
       }
     }
     perChatStreamingMsgId.delete(agentKey)
@@ -4192,13 +4250,14 @@ function handleChatWindowSend(text) {
 function resolveProviderCreds(cfg, providerType) {
   // New structure: config.providers[] array
   if (cfg.providers && Array.isArray(cfg.providers)) {
-    const p = cfg.providers.find(p => p.type === providerType)
-    if (p) return { apiKey: p.apiKey || '', baseURL: p.baseURL || '', model: p.model || '' }
+    // Match by type string OR by UUID id (agents created with old UUID bug)
+    const p = cfg.providers.find(p => p.type === providerType || p.id === providerType)
+    if (p) return { apiKey: p.apiKey || '', baseURL: p.baseURL || '', model: p.model || '', type: p.type || providerType }
   }
   // Legacy flat structure fallback
   const legacy = cfg[providerType]
-  if (legacy) return { apiKey: legacy.apiKey || '', baseURL: legacy.baseURL || '', model: legacy.model || '' }
-  return { apiKey: '', baseURL: '', model: '' }
+  if (legacy) return { apiKey: legacy.apiKey || '', baseURL: legacy.baseURL || '', model: legacy.model || '', type: providerType }
+  return { apiKey: '', baseURL: '', model: '', type: providerType }
 }
 
 /**
@@ -4206,7 +4265,8 @@ function resolveProviderCreds(cfg, providerType) {
  */
 function isProviderActive(cfg, providerType) {
   if (cfg.providers && Array.isArray(cfg.providers)) {
-    return cfg.providers.some(p => p.type === providerType && p.isActive)
+    // Match by type string OR by UUID id (agents created with old UUID bug)
+    return cfg.providers.some(p => (p.type === providerType || p.id === providerType) && p.isActive)
   }
   // Legacy fallback
   return !!(cfg[providerType]?.isActive)
@@ -4218,7 +4278,9 @@ function isProviderActive(cfg, providerType) {
  * OpenAI-compatible (openaiApiKey+openaiBaseURL) providers.
  */
 function applyProviderCredsToConfig(cfg, providerType) {
-  const { apiKey, baseURL } = resolveProviderCreds(cfg, providerType)
+  const { apiKey, baseURL, type: resolvedType } = resolveProviderCreds(cfg, providerType)
+  // Use the actual provider type (handles UUID providerIds from old agent data)
+  providerType = resolvedType || providerType
   if (providerType === 'anthropic') {
     cfg.apiKey  = apiKey
     cfg.baseURL = baseURL
@@ -4311,13 +4373,18 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPromp
     if (!agent) return null
 
     const agentCfg = { ...cfg }
-    const resolvedProvider = agent.providerId || 'anthropic'
-    applyProviderCredsToConfig(agentCfg, resolvedProvider)
+    const resolvedProvider = agent.providerId || null
 
     // Model+provider override (chat-scoped): takes priority over agent settings
     const rawOverride = targetChat.agentModelOverrides?.[pid]
     const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
     const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
+    // Custom agents must have an explicit provider or a global active provider to fall back to.
+    const isAgentBuiltinOrDefault = agent.isBuiltin || agent.isDefault
+    const hasGlobalProvider = cfg.providers?.some(p => p.isActive)
+    if (!overrideProvider && !resolvedProvider && !isAgentBuiltinOrDefault && !hasGlobalProvider) return null
+    const effectiveAgentProvider = overrideProvider || resolvedProvider || cfg.defaultProvider || 'anthropic'
+    applyProviderCredsToConfig(agentCfg, effectiveAgentProvider)
     if (overrideProvider && overrideProvider !== resolvedProvider) {
       applyProviderCredsToConfig(agentCfg, overrideProvider)
     }
@@ -4346,16 +4413,45 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPromp
     const agentTools = filterByRequired(toolsStore.tools, agent.requiredToolIds ?? [])
     const agentKnowledgeConfig = buildAgentKnowledgeConfig(agent)
 
+    // Build a per-agent view of conversation history where other agents' messages
+    // are prefixed with "[AgentName]: " so the model can distinguish its own prior
+    // responses from other participants' — prevents identity confusion in group chat.
+    const otherNamesList = otherParticipants.map(p => p.name).join(', ')
+    const agentMessages = targetChat.messages
+      .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
+      .map(m => {
+        if (m.role === 'assistant' && m.agentId && m.agentId !== pid) {
+          const other = agentsStore.getAgentById(m.agentId)
+          const speakerName = other?.name || 'Agent'
+          return { role: 'assistant', content: `[${speakerName}]: ${m.content}` }
+        }
+        return { role: m.role, content: m.content }
+      })
+
+    // Structural safeguard: append a one-turn constraint to the last user message.
+    // This ensures the model writes ONLY its own single reply and never simulates
+    // a multi-turn dialogue — regardless of concurrent/sequential mode or user phrasing.
+    if (agentMessages.length > 0) {
+      const lastIdx = agentMessages.length - 1
+      if (agentMessages[lastIdx].role === 'user') {
+        agentMessages[lastIdx] = {
+          ...agentMessages[lastIdx],
+          content: agentMessages[lastIdx].content + `\n\n[SYSTEM: ${agent.name}, write ONLY your own single response. Do NOT write lines or dialogue for ${otherNamesList}. The other participants will reply in their own separate turns.]`
+        }
+      }
+    }
+
     return {
       agentId: pid,
       agentName: agent.name,
       config: JSON.parse(JSON.stringify(agentCfg)),
       enabledAgents: [],
       enabledSkills: JSON.parse(JSON.stringify(agentSkills)),
-      agentPrompts,
+      agentPrompts: JSON.parse(JSON.stringify(agentPrompts)),
       mcpServers: JSON.parse(JSON.stringify(agentMcp)),
       httpTools: JSON.parse(JSON.stringify(agentTools)),
       knowledgeConfig: agentKnowledgeConfig ? JSON.parse(JSON.stringify(agentKnowledgeConfig)) : null,
+      messages: agentMessages,
     }
   }).filter(Boolean)
 }
@@ -4435,10 +4531,19 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
 
   const groupAgents = groupIds.map(id => agentsStore.getAgentById(id)).filter(Boolean)
 
-  // Only examine messages added in the most recent runGroupAgents call
+  // Only examine messages added in the most recent runGroupAgents call.
+  // NOTE: Do NOT filter by !m.streaming — the invoke response and agent_end IPC
+  // events travel on different channels with no ordering guarantee. By the time
+  // triggerAgentCollaboration runs, all agents have finished (Promise.all resolved),
+  // so their content is already written into segments even if streaming=true hasn't
+  // been cleared yet. We check for content instead to exclude empty placeholders.
   const newMessages = targetChat.messages
     .slice(prevMessagesLength)
-    .filter(m => m.role === 'assistant' && m.agentId && groupIds.includes(m.agentId) && !m.streaming)
+    .filter(m => {
+      if (m.role !== 'assistant' || !m.agentId || !groupIds.includes(m.agentId)) return false
+      const text = m.content || (m.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
+      return !!text
+    })
 
   // For each new message, resolve which @mentioned agents are actually being
   // addressed (vs. merely referenced). Mirrors the user→agent routing logic.
@@ -4471,11 +4576,21 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
     }
 
     for (const id of addressees) {
-      // Only trigger this agent if they have NOT already responded after this message.
-      // This prevents double-runs when a agent ran in the initial group round and
-      // a peer @mentioned them as a courtesy — their reply already exists in newMessages.
-      const alreadyRepliedAfter = newMessages.slice(msgIdx + 1).some(m => m.agentId === id)
-      if (!alreadyRepliedAfter) nextRespondingSet.add(id)
+      // In iteration 0 (the concurrent first round), all agents in newMessages ran
+      // in parallel from the same base — their replies are independent responses to
+      // the user, NOT responses to each other. So we MUST NOT suppress here, even if
+      // the mentioned agent appears later in newMessages; she hasn't heard the
+      // mentioning agent yet and deserves a follow-up sequential round.
+      //
+      // In subsequent iterations (>0) the rounds are sequential: messages in
+      // newMessages are causally ordered, so we CAN skip an agent who already replied
+      // after the @mention — their reply was in response to that message.
+      if (iterationCount === 0) {
+        nextRespondingSet.add(id)
+      } else {
+        const alreadyRepliedAfter = newMessages.slice(msgIdx + 1).some(m => m.agentId === id)
+        if (!alreadyRepliedAfter) nextRespondingSet.add(id)
+      }
     }
   }
 
@@ -4506,9 +4621,13 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
     // Rebuild apiMessages before each agent so it sees prior agents' output.
     // Use segments text as fallback when content is empty (group chat agents
     // accumulate text in segments; content is synced by flushSegments but may lag).
+    // Other agents' messages are prefixed with "[AgentName]: " so this agent can
+    // distinguish its own prior responses from other participants' — prevents
+    // identity confusion when group chat history contains mixed voices.
     const seqApiMessages = targetChat.messages
       .filter(m => {
-        if (m.streaming) return false
+        // Do NOT filter by !m.streaming — same IPC timing issue as in newMessages
+        // filter above. Content is authoritative; streaming flag may not be cleared yet.
         if (m.role === 'user') return !!m.content
         if (m.role === 'assistant') {
           const text = m.content || (m.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
@@ -4516,10 +4635,15 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
         }
         return false
       })
-      .map(m => ({
-        role: m.role,
-        content: m.content || (m.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
-      }))
+      .map(m => {
+        const text = m.content || (m.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
+        if (m.role === 'assistant' && m.agentId && m.agentId !== pid) {
+          const other = agentsStore.getAgentById(m.agentId)
+          const speakerName = other?.name || 'Agent'
+          return { role: 'assistant', content: `[${speakerName}]: ${text}` }
+        }
+        return { role: m.role, content: text }
+      })
 
     // Ensure conversation ends with a user message (API requirement).
     // Include the last assistant message's content so the addressed agent has full context.
@@ -4527,11 +4651,16 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
       const lastMsg = seqApiMessages[seqApiMessages.length - 1]
       seqApiMessages.push({
         role: 'user',
-        content: `${lastMsg.content}\n\n[${agent.name}, you have been addressed above. Please respond now.]`
+        content: `${lastMsg.content}\n\n[${agent.name}, you have been addressed above. Write ONLY your own single reply — do NOT write dialogue or lines for any other participant. If you have a question for them or need their input, end your reply with @${groupAgents.filter(a => a.id !== pid).map(a => a.name).join(' or @')} to pass the turn. If the topic is concluded, you are giving a final answer, or there is nothing more to discuss, simply end your reply without any @mention — the conversation will close naturally.]`
       })
     }
 
     const agentRuns = buildAgentRuns([pid], groupIds, cfg, targetChat, userAgentPrompt, usrAgent)
+    // The collaboration loop builds its own seqApiMessages with speaker tags + the
+    // "you have been addressed" prompt. Drop run.messages from each agentRun so
+    // main.js uses seqApiMessages (passed as baseMessages) instead of the
+    // per-agent view built by buildAgentRuns (which lacks the prompt suffix).
+    for (const run of agentRuns) delete run.messages
     await runGroupAgents(chatId, targetChat, agentRuns, seqApiMessages, cfg, [])
     scrollToBottom(false, chatId)
   }
@@ -4688,15 +4817,32 @@ async function sendMessage() {
     : (targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id)
   const sysAgent = sysAgentId ? agentsStore.getAgentById(sysAgentId) : agentsStore.defaultSystemAgent
 
-  const chatProvider = sysAgent?.providerId || 'anthropic'
+  const chatProvider = sysAgent?.providerId || null
   const cfg = { ...configStore.config }
-
-  applyProviderCredsToConfig(cfg, chatProvider)
 
   // Model+provider override (chat-scoped): takes priority over agent settings
   const rawOverride = targetChat.agentModelOverrides?.[sysAgentId]
   const chatOverrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
   const chatOverrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
+
+  // Builtin/default agents have no providerId — they use the global default provider
+  const isBuiltinOrDefault = !sysAgent || sysAgent.isBuiltin || sysAgent.isDefault
+  const effectiveProvider = chatOverrideProvider || chatProvider || (isBuiltinOrDefault ? (cfg.defaultProvider || 'anthropic') : null)
+
+  // Guard: non-default custom agents must have a provider configured
+  if (!isGroup && !effectiveProvider) {
+    if (streamingTimer) { clearInterval(streamingTimer); streamingTimer = null; streamingSeconds.value = 0 }
+    const errContent = `⚠️ Agent **${sysAgent?.name || 'Unknown'}** has no provider configured. Go to **Agents** and set a provider and model.`
+    await chatsStore.updateLastAssistantMessage(chatId, errContent)
+    perChatStreamingMsgId.delete(chatId)
+    perChatStreamingSegments.delete(chatId)
+    targetChat.isRunning = false
+    await nextTick()
+    scrollToBottom()
+    return
+  }
+
+  applyProviderCredsToConfig(cfg, effectiveProvider)
   if (chatOverrideProvider && chatOverrideProvider !== chatProvider) {
     applyProviderCredsToConfig(cfg, chatOverrideProvider)
   }
@@ -4704,25 +4850,23 @@ async function sendMessage() {
   if (resolvedModel) cfg.customModel = resolvedModel
 
   // isActive guard
-  if (!isGroup && !isProviderActive(configStore.config, chatOverrideProvider || chatProvider)) {
-    // Remove the streaming placeholder before adding the error message
-    if (streamingMsgId && targetChat.messages) {
-      const idx = targetChat.messages.findIndex(m => m.id === streamingMsgId)
-      if (idx !== -1) targetChat.messages.splice(idx, 1)
-      perChatStreamingMsgId.delete(chatId)
-      perChatStreamingSegments.delete(chatId)
-    }
+  if (!isGroup && !isProviderActive(configStore.config, effectiveProvider)) {
     if (streamingTimer) { clearInterval(streamingTimer); streamingTimer = null; streamingSeconds.value = 0 }
-    await chatsStore.addMessage(chatId, {
-      role: 'assistant',
-      content: `⚠️ Provider **${chatOverrideProvider || chatProvider}** is not active. Go to **Configuration** and run Test Connection to activate it.`,
-    })
+    const errContent = `⚠️ Provider **${effectiveProvider}** is not active. Go to **Configuration** and run Test Connection to activate it.`
+    await chatsStore.updateLastAssistantMessage(chatId, errContent)
+    perChatStreamingMsgId.delete(chatId)
+    perChatStreamingSegments.delete(chatId)
     targetChat.isRunning = false
+    await nextTick()
+    scrollToBottom()
     return
   }
-  // Per-chat working path (artifact directory)
+  // Per-chat working path and coding mode
   if (targetChat.workingPath) {
     cfg.chatWorkingPath = targetChat.workingPath
+  }
+  if (targetChat.codingMode) {
+    cfg.codingMode = true
   }
   // Coding Mode: inject CLAUDE.md context into cfg.
   // Primary: use watcher-cached context (_codingModeContext) which updates automatically on file change.
@@ -4820,8 +4964,28 @@ async function sendMessage() {
       // Build agentRuns[]
       const agentRuns = buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPrompt, usrAgent)
 
-      // Dispatch: utility model extracts per-agent task assignments so each agent
-      // only sees its own task, preventing cross-contamination of the full message.
+      // Guard: if all responding agents were excluded (no provider), show error
+      if (agentRuns.length === 0) {
+        const skippedNames = respondingIds
+          .map(id => agentsStore.getAgentById(id)?.name || id)
+          .join(', ')
+        if (streamingTimer) { clearInterval(streamingTimer); streamingTimer = null; streamingSeconds.value = 0 }
+        const errContent = `⚠️ Agent(s) **${skippedNames}** have no provider configured. Go to **Agents** and set a provider and model.`
+        await chatsStore.updateLastAssistantMessage(chatId, errContent)
+        perChatStreamingMsgId.delete(chatId)
+        perChatStreamingSegments.delete(chatId)
+        targetChat.isRunning = false
+        await nextTick()
+        scrollToBottom()
+        return
+      }
+
+      // Dispatch: utility model extracts per-agent task assignments AND detects
+      // whether execution should be sequential (one speaks → other responds) or
+      // concurrent (all respond simultaneously). Execution mode is inferred from
+      // the user's prompt — no need to hardcode it.
+      let dispatchDependsOn = {}  // agentId → [dependentAgentIds]
+      let isSequential = false
       const lastUserContent = apiMessages.findLast(m => m.role === 'user')?.content || ''
       if (lastUserContent && window.electronAPI?.dispatchGroupTasks) {
         try {
@@ -4829,7 +4993,7 @@ async function sendMessage() {
             const p = agentsStore.getAgentById(id)
             return p ? { id, name: p.name } : null
           }).filter(Boolean)
-          const { dispatched } = await window.electronAPI.dispatchGroupTasks({
+          const { dispatched, executionMode } = await window.electronAPI.dispatchGroupTasks({
             message: typeof lastUserContent === 'string' ? lastUserContent : JSON.stringify(lastUserContent),
             agents: dispatchAgents,
             config: JSON.parse(JSON.stringify(cfg)),
@@ -4841,6 +5005,32 @@ async function sendMessage() {
                 run.agentPrompts = { ...run.agentPrompts, assignedTask: d.assignedTask }
                 dbg(`Dispatched task for ${run.agentName}: "${d.assignedTask.slice(0, 80)}"`)
               }
+              if (d?.dependsOn?.length > 0) {
+                dispatchDependsOn[run.agentId] = d.dependsOn
+              }
+            }
+          }
+          // Sequential mode: detected explicitly OR inferred from dependsOn presence
+          if (executionMode === 'sequential' || Object.keys(dispatchDependsOn).length > 0) {
+            isSequential = true
+            // In sequential mode, ensure every first-round agent (no dependencies) has
+            // an assignedTask that constrains them to ONE turn and tells them to pass
+            // the turn via @mention. This prevents the model from roleplaying both sides.
+            for (const run of agentRuns) {
+              if (!dispatchDependsOn[run.agentId]?.length) {
+                const others = groupIds
+                  .filter(id => id !== run.agentId)
+                  .map(id => agentsStore.getAgentById(id)?.name)
+                  .filter(Boolean)
+                  .map(n => `@${n}`)
+                  .join(', ')
+                if (!run.agentPrompts.assignedTask && others) {
+                  run.agentPrompts = {
+                    ...run.agentPrompts,
+                    assignedTask: `Speak only as yourself in ONE single turn. Do NOT write dialogue, lines, or responses for anyone else — not even as an example or in quotes. If you need input from others or want to continue the discussion, end your message with ${others} to pass the turn. If the topic is resolved or you are giving a final answer, simply end without any @mention.`,
+                  }
+                }
+              }
             }
           }
         } catch (err) {
@@ -4848,14 +5038,56 @@ async function sendMessage() {
         }
       }
 
-      dbg(`Group run: ${agentRuns.length} agent(s) responding: ${agentRuns.map(r => r.agentName).join(', ')}`)
+      // In sequential mode, only run agents with NO dependencies in the first round.
+      // Dependent agents will be triggered by the collaboration loop once the first
+      // speaker's message is available (via @mention detection).
+      const firstRoundRuns = isSequential
+        ? agentRuns.filter(r => !dispatchDependsOn[r.agentId]?.length)
+        : agentRuns
+
+      dbg(`Group run (${isSequential ? 'sequential' : 'concurrent'}): first round: ${firstRoundRuns.map(r => r.agentName).join(', ')}`)
 
       const msgCountBeforeRun = targetChat.messages.length
-      await runGroupAgents(chatId, targetChat, agentRuns, apiMessages, cfg, pendingAttachments)
+      await runGroupAgents(chatId, targetChat, firstRoundRuns, apiMessages, cfg, pendingAttachments)
 
       // After the initial group run, check for agent→agent @mentions and loop.
       // Pass the pre-run message count so we only scan THIS round's new messages.
       await triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt, usrAgent, 0, msgCountBeforeRun)
+
+      // ── Extract memories from agent-to-agent collaboration (fire-and-forget) ──
+      try {
+        const collabMessages = targetChat.messages.slice(msgCountBeforeRun)
+          .filter(m => m.role === 'assistant' && m.agentId && groupIds.includes(m.agentId))
+        if (collabMessages.length >= 2 && window.electronAPI?.memory?.extractCollaboration) {
+          const MAX_TRANSCRIPT_CHARS = 8000
+          let lines = collabMessages.map(m => {
+            const agent = agentsStore.getAgentById(m.agentId)
+            const name = agent?.name || 'Agent'
+            const text = m.content || (m.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
+            return `[${name}]: ${text}`
+          })
+          let transcript = lines.join('\n\n')
+          if (transcript.length > MAX_TRANSCRIPT_CHARS) {
+            // Keep the most recent messages, truncate older ones
+            while (transcript.length > MAX_TRANSCRIPT_CHARS && lines.length > 2) {
+              lines.shift()
+            }
+            transcript = '[earlier messages omitted]\n\n' + lines.join('\n\n')
+          }
+          const participants = groupIds
+            .map(id => agentsStore.getAgentById(id))
+            .filter(Boolean)
+            .map(a => ({ id: a.id, name: a.name, type: a.type || 'system' }))
+          window.electronAPI.memory.extractCollaboration({
+            chatId,
+            transcript,
+            participants,
+            config: cfg,
+          }).catch(err => dbg(`Collaboration memory extraction failed (non-fatal): ${err.message}`, 'warn'))
+        }
+      } catch (err) {
+        dbg(`Collaboration memory trigger error (non-fatal): ${err.message}`, 'warn')
+      }
 
     } else {
       // ── SINGLE AGENT PATH ──
@@ -4888,7 +5120,7 @@ async function sendMessage() {
         enabledAgents: [],
         enabledSkills: JSON.parse(JSON.stringify(filterByRequired(enabledSkillObjects.value, sysAgent?.requiredSkillIds ?? []))),
         ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
-        agentPrompts: resolvedAgentPrompts,
+        agentPrompts: JSON.parse(JSON.stringify(resolvedAgentPrompts)),
         mcpServers: JSON.parse(JSON.stringify(filterByRequired(mcpStore.servers, sysAgent?.requiredMcpServerIds ?? []))),
         httpTools: JSON.parse(JSON.stringify(filterByRequired(toolsStore.tools, sysAgent?.requiredToolIds ?? []))),
         chatPermissionMode: targetChat.permissionMode || 'inherit',

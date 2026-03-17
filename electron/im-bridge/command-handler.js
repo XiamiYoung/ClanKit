@@ -5,20 +5,24 @@ const path    = require('path')
 const os      = require('os')
 const { v4: uuidv4 } = require('uuid')
 
-const _dataDir = process.env.CLANKAI_DATA_PATH
-const DATA_DIR = (_dataDir && _dataDir !== 'null') ? _dataDir : path.join(os.homedir(), '.clankai')
-const CHATS_DIR   = path.join(DATA_DIR, 'chats')
-const CHATS_INDEX = path.join(CHATS_DIR, 'index.json')
-const AGENTS_FILE = path.join(DATA_DIR, 'agents.json')
+// Lazy: DATA_DIR is set by main.js via process.env after ensureDataDir()
+const { defaultDataPath } = require('../defaultDataPath')
+function getDataDir() {
+  const d = process.env.CLANKAI_DATA_PATH
+  return (d && d !== 'null') ? d : defaultDataPath()
+}
+function CHATS_DIR()   { return path.join(getDataDir(), 'chats') }
+function CHATS_INDEX() { return path.join(CHATS_DIR(), 'index.json') }
+function AGENTS_FILE() { return path.join(getDataDir(), 'agents.json') }
 const PAGE_SIZE   = 20
 
 function readIndex() {
-  try { return JSON.parse(fs.readFileSync(CHATS_INDEX, 'utf8')) } catch { return [] }
+  try { return JSON.parse(fs.readFileSync(CHATS_INDEX(), 'utf8')) } catch { return [] }
 }
 
 function readAgents() {
   try {
-    const data = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'))
+    const data = JSON.parse(fs.readFileSync(AGENTS_FILE(), 'utf8'))
     return Array.isArray(data) ? data : (data.agents || [])
   } catch { return [] }
 }
@@ -184,7 +188,7 @@ function formatAgentDetail(agent) {
 const HISTORY_SIZE = 10
 
 function formatHistory(chatId, count) {
-  const chatPath = path.join(CHATS_DIR, `${chatId}.json`)
+  const chatPath = path.join(CHATS_DIR(), `${chatId}.json`)
   const chat = readJSON(chatPath, null)
   if (!chat) return { reply: 'Chat not found.' }
   const msgs = chat.messages || []
@@ -311,10 +315,10 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
       agentModelOverrides: {},
     }
 
-    writeAtomic(path.join(CHATS_DIR, `${chatId}.json`), chat)
+    writeAtomic(path.join(CHATS_DIR(), `${chatId}.json`), chat)
     const index = readIndex()
     index.unshift(indexEntry)
-    writeAtomic(CHATS_INDEX, index)
+    writeAtomic(CHATS_INDEX(), index)
     sessionStore.setActiveChatId(platform, channelId, chatId, '@' + channelId)
     notifyRenderer()
     return { reply: `Created and switched to: ${title}`, newChatId: chatId }

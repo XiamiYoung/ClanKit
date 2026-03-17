@@ -9,9 +9,8 @@ const telegram         = require('./adapters/telegram')
 const whatsapp         = require('./adapters/whatsapp')
 const feishu           = require('./adapters/feishu')
 
-const _dataDir = process.env.CLANKAI_DATA_PATH
-const DATA_DIR = (_dataDir && _dataDir !== 'null') ? _dataDir : path.join(os.homedir(), '.clankai')
-
+// Lazy: DATA_DIR is set by main.js via process.env after ensureDataDir()
+const { defaultDataPath } = require('../defaultDataPath')
 let _mainWindow = null
 let _config     = {}  // full config from config.json
 
@@ -19,7 +18,7 @@ function getDataDir() {
   const envPath = process.env.CLANKAI_DATA_PATH
   let dataDir = envPath && envPath !== 'null' && envPath.trim() !== '' ? envPath : null
   if (!dataDir) {
-    dataDir = os.homedir ? path.join(os.homedir(), '.clankai') : null
+    dataDir = defaultDataPath()
   }
   if (!dataDir || dataDir === 'null' || !path.isAbsolute(dataDir)) {
     console.error('[im-bridge] Invalid DATA_DIR:', dataDir)

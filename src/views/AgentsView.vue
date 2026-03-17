@@ -222,7 +222,7 @@
               v-for="agent in visibleAgents"
               :key="agent.id"
               class="agent-card-wrap"
-              :class="{ 'select-mode': selectMode, 'is-selected': selectedAgentIds.has(agent.id) }"
+              :class="{ 'select-mode': selectMode, 'is-selected': selectedAgentIds.has(agent.id), 'newly-added': newlyAddedIds.has(agent.id) }"
               :draggable="!selectMode"
               @dragstart="onAgentDragStart($event, agent)"
               @dragend="onAgentDragEnd"
@@ -340,7 +340,7 @@
     <AgentGroupCreator
       v-if="showGroupCreator"
       @close="showGroupCreator = false"
-      @created="refreshAgents"
+      @created="onAgentsCreated"
     />
 
   </div>
@@ -375,6 +375,7 @@ const { t } = useI18n()
 const agentsStore = useAgentsStore()
 const tasksStore = useTasksStore()
 const refreshing = ref(false)
+const newlyAddedIds = ref(new Set())
 
 onMounted(async () => {
   await agentsStore.loadAgents()
@@ -387,6 +388,18 @@ async function refreshAgents() {
     await agentsStore.loadAgents()
   } finally {
     refreshing.value = false
+  }
+}
+
+async function onAgentsCreated(ids = []) {
+  await refreshAgents()
+  if (ids.length > 0) {
+    // Navigate to "All system agents" so new cards are visible
+    selectedView.type = 'all'
+    selectedView.agentType = 'system'
+    selectedView.categoryId = null
+    newlyAddedIds.value = new Set(ids)
+    setTimeout(() => { newlyAddedIds.value = new Set() }, 5000)
   }
 }
 
@@ -1277,6 +1290,14 @@ function isDeleteButtonDisabled(agent) {
 .agent-card-wrap:active { cursor: grabbing; }
 .agent-card-wrap.select-mode { cursor: pointer; }
 .agent-card-wrap.is-selected { outline: 2px solid #007AFF; outline-offset: 2px; }
+.agent-card-wrap.newly-added {
+  animation: agentNewlyAdded 5s ease-out forwards;
+}
+@keyframes agentNewlyAdded {
+  0%   { outline: 2px solid #10B981; outline-offset: 2px; box-shadow: 0 0 0 4px rgba(16,185,129,0.25); }
+  60%  { outline: 2px solid #10B981; outline-offset: 2px; box-shadow: 0 0 0 4px rgba(16,185,129,0.25); }
+  100% { outline: 2px solid transparent; outline-offset: 2px; box-shadow: none; }
+}
 
 /* Body View button: appears on card hover */
 .agent-card-inner-wrap {

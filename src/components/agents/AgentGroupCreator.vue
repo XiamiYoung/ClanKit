@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div class="agc-backdrop" @click.self="$emit('close')">
+    <div class="agc-backdrop">
       <div class="agc-modal">
         <div class="agc-header">
           <div class="agc-header-left">
@@ -135,7 +135,7 @@
             <div class="agc-dup-title">{{ t('agents.groupCreator.dupTitle', 'Already exists — skipped') }}</div>
             <div class="agc-dup-names">{{ dupSkipped.join(', ') }}</div>
           </div>
-          <button class="agc-dup-close" @click="dupSkipped = []; $emit('created'); $emit('close')">
+          <button class="agc-dup-close" @click="emit('created', lastCreatedIds); emit('close')">
             {{ t('common.confirm', 'OK') }}
           </button>
         </div>
@@ -184,6 +184,7 @@ const aiError = ref('')
 
 const agentType = ref('system')
 const dupSkipped = ref([])
+const lastCreatedIds = ref([])
 
 const placeholderText = computed(() => {
   return t('agents.groupCreator.placeholder', 'Describe what you need... e.g. I want to create an engineering department with frontend team (5 people), backend team (8 people), and QA team (3 people)')
@@ -321,8 +322,10 @@ async function createAgents() {
       }))
     }
 
-    const utilityProvider = configStore.config?.utilityModel?.provider || null
-    const utilityModel = configStore.config?.utilityModel?.model || null
+    const utilityProviderId = configStore.config?.utilityModel?.provider || null
+    const utilityModelId = configStore.config?.utilityModel?.model || null
+
+    const createdIds = []
 
     if (categoryId && agentsData) {
       const existingNames = new Set(agentsStore.agents.map(a => a.name?.toLowerCase()))
@@ -341,8 +344,8 @@ async function createAgents() {
           await agentsStore.saveAgent({
             ...agent,
             type: agentType.value,
-            providerId: utilityProvider,
-            modelId: utilityModel,
+            providerId: utilityProviderId,
+            modelId: utilityModelId,
             voiceId: null,
             requiredToolIds: [],
             requiredSkillIds: [],
@@ -354,15 +357,18 @@ async function createAgents() {
         const newAgents = agentsStore.agents.slice(existingCount)
         for (const agent of newAgents) {
           await agentsStore.assignToCategory(agent.id, categoryId)
+          createdIds.push(agent.id)
         }
       }
     }
 
     if (dupSkipped.value.length === 0) {
-      emit('created')
+      emit('created', createdIds)
       emit('close')
     }
     // If there were skips, stay open and show the message
+    // Store createdIds so the dup-warning OK button can pass them too
+    lastCreatedIds.value = createdIds
   } catch (err) {
     console.error('Failed to create agents:', err)
   }

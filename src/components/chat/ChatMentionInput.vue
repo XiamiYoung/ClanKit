@@ -40,7 +40,6 @@
             <div class="cmi-mention-popup-body">
               <div class="cmi-mention-popup-name-row">
                 <span class="cmi-mention-popup-name">{{ s.name }}</span>
-                <span v-if="getAgentProviderLabel(s)" class="cmi-mention-popup-meta">{{ getAgentProviderLabel(s) }}</span>
               </div>
               <span v-if="s.description" class="cmi-mention-popup-desc">{{ s.description }}</span>
             </div>
@@ -122,16 +121,6 @@ function getAvatarDataUriForAgent(agent) {
   return getAvatarDataUri(agent.avatar)
 }
 
-function getAgentProviderLabel(agent) {
-  if (!agent) return ''
-  const provider = agent.providerId || 'anthropic'
-  const model = agent.modelId || ''
-  if (model) {
-    const short = model.split('/').pop().split(':')[0]
-    return `${provider} · ${short}`
-  }
-  return provider
-}
 
 function checkMentionTrigger() {
   if (props.agentIds.length < 2) { showMentionPopup.value = false; return }

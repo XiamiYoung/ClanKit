@@ -409,12 +409,16 @@ class AgentLoop {
     // When a named agent is active, use it as the opening identity (highest priority).
     // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
     let openingIdentity
-    if (!groupChatContext && systemAgentName) {
-      let line = `You are "${systemAgentName}"`
-      if (systemAgentDescription) line += ` — ${systemAgentDescription}`
+    // Resolve agent name: top-level field (single-agent) or groupChatContext (group agent)
+    const effectiveName = systemAgentName || groupChatContext?.agentName || ''
+    const effectiveDescription = systemAgentDescription || groupChatContext?.agentDescription || ''
+
+    if (effectiveName) {
+      let line = `You are "${effectiveName}"`
+      if (effectiveDescription) line += ` — ${effectiveDescription}`
       line += '.'
       if (systemAgentPrompt) line += `\n\n${systemAgentPrompt}`
-      line += `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${systemAgentName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant`
+      line += `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${effectiveName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant`
       // Inject personality dimensions if any are configured
       const hasDimensions = (agentTone?.length > 0) || (agentVerbosityLevel?.length > 0) || (agentPersonalityTags?.length > 0)
       if (hasDimensions) {
@@ -427,6 +431,16 @@ class AgentLoop {
           line += `- Personality: ${agentPersonalityTags.join(', ')}\n`
         line += `Express yourself through these dimensions consistently — let them shape your vocabulary, sentence rhythm, emotional register, and response length.`
       }
+
+      // Group chat context: tell the agent about other participants
+      if (groupChatContext?.otherParticipants?.length > 0) {
+        const otherNames = groupChatContext.otherParticipants.map(p => `@${p.name}`).join(', ')
+        line += `\n\n## GROUP CHAT\nYou are in a group conversation with other participants.\n\n**ONE TURN RULE — CRITICAL:** Write ONLY your own single reply for this turn. NEVER write dialogue, lines, or responses on behalf of any other participant. Do NOT simulate a back-and-forth exchange in one message. Each participant speaks for themselves in their own separate turn.\n\n**Turn-passing rule:** If you want the conversation to continue, include @Name anywhere in your reply — that participant will read your message and respond next in their own turn. If you do NOT include any @mention, no one else will respond and the conversation ends.\n\n**WHEN TO STOP — end your reply WITHOUT any @mention when:**\n- The topic has been fully discussed or a consensus/conclusion has been reached\n- You are giving a summary, final answer, or farewell\n- You would just be repeating what has already been said\n- The other participant has clearly wrapped up or said goodbye\n- There is no genuine question or request that needs their input\n- The conversation has naturally come to a close\nDo NOT keep @mentioning just to be polite or to keep the conversation going artificially. End naturally when the exchange is complete.\n\nOther participants: ${otherNames}`
+        for (const p of groupChatContext.otherParticipants) {
+          line += `\n- @${p.name}${p.description ? `: ${p.description}` : ''}`
+        }
+      }
+
       openingIdentity = line
     } else {
       openingIdentity = (this.config.systemPrompt || '').trim()
@@ -454,9 +468,12 @@ CORE TOOLS (always available):
     }
 
     // ── ClankAI Data Directory ──
-    const _dataPath = process.env.CLANKAI_DATA_PATH
-    const dataPath = (_dataPath && _dataPath !== 'null') ? _dataPath : path.join(require('os').homedir(), '.clankai')
-    const artifactPath = this.config.chatWorkingPath || this.config.artifactPath || path.join(dataPath, 'artifact')
+    // dataPath is injected by main.js (DATA_DIR) — single source of truth
+    const dataPath = this.config.dataPath || require('../defaultDataPath').defaultDataPath()
+    // Artifact path priority: DoCPath (AI Doc folder) → explicit artifactPath → dataPath/artifact
+    const artifactPath = this.config.DoCPath || this.config.artifactPath || path.join(dataPath, 'artifact')
+    const codingPath = this.config.chatWorkingPath || ''
+    const isCodingMode = !!(this.config.codingMode && codingPath)
     const skillsPath = this.config.skillsPath || ''
     const utilityModel = this.config.utilityModel || {}
     const utilityProvider = utilityModel.provider || ''
@@ -471,10 +488,13 @@ This is the local data folder for the ClankAI desktop application. Its structure
   ├── knowledge.json       — RAG/Pinecone knowledge config
   ├── chats/               — Per-chat message history
   ├── souls/               — Persistent memory files (system/, users/)
-  └── artifact/            — AI-generated artifacts (see WORKING PATH below)
+  └── artifact/            — AI-generated artifacts
 
-WORKING PATH (this chat's default output directory): ${artifactPath}
-This is the default directory for ALL files you create during this chat. Whenever you generate files — markdown documents, reports, code scripts, exports, temp files, or any other output — ALWAYS write them here unless the user explicitly specifies a different location. Create subdirectories as needed (e.g. ${artifactPath}/docs/, ${artifactPath}/exports/). The directory is auto-created on first write.${skillsPath ? `
+ARTIFACT PATH (default output directory): ${artifactPath}
+This is the default directory for generated files — reports, exports, temp files, and other non-document output. Create subdirectories as needed (e.g. ${artifactPath}/exports/). The directory is auto-created on first write.${isCodingMode ? `
+
+CODING PROJECT PATH: ${codingPath}
+This chat is in CODING MODE. All code files (source code, configs, scripts, tests, etc.) MUST be created/edited within this project directory. Use this path as the root for any code-related file operations. Non-code output (documents, reports) still goes to the document path or artifact path above.` : ''}${skillsPath ? `
 
 SKILLS PATH: ${skillsPath}
 This is the directory where skill folders are stored on disk. Each skill is a folder containing a skill definition file. Use this path if the user asks to inspect, create, or modify skills on disk.` : ''}
@@ -498,33 +518,39 @@ DATA FILE ROUTING — when the user asks you to create or modify app configurati
 - Always read the file first to understand existing content before writing. Preserve all existing entries.
 - After writing, tell the user to click Refresh on the relevant page (MCP / Tools / Agents / Knowledge / Tasks) to reload.`
 
-    // ── Notes Vault Path + Markdown Placement ──
-    const vaultPath = process.env.DOC_PATH || this.config.obsidianVaultPath || this.config.DoCPath
-    if (vaultPath) {
+    // ── Document Path + File Placement Rules ──
+    const docPath = process.env.DOC_PATH || this.config.obsidianVaultPath || this.config.DoCPath
+    if (docPath) {
       let subfolders = []
       try {
-        const entries = fs.readdirSync(vaultPath, { withFileTypes: true })
+        const entries = fs.readdirSync(docPath, { withFileTypes: true })
         subfolders = entries.filter(e => e.isDirectory()).map(e => e.name).sort()
       } catch (err) {
-        logger.error('Failed to read notes vault subfolders', err.message)
+        logger.error('Failed to read doc path subfolders', err.message)
       }
 
       const subfolderList = subfolders.length > 0
         ? subfolders.map(f => `  - ${f}/`).join('\n')
         : '  (no subfolders)'
 
-      system += `\n\nNOTES VAULT PATH: ${vaultPath}
-This is the user's agentl notes folder (markdown files). Subfolders:
+      system += `\n\nDOCUMENT PATH (primary output for documents): ${docPath}
+This is the user's document folder. Subfolders:
 ${subfolderList}
 
-MARKDOWN FILE PLACEMENT:
-When generating .md markdown files (documents, reports, notes, summaries, analyses, etc.), ALWAYS ask the user where to save them by presenting these options:
-1. Notes vault: ${vaultPath} (with subfolder options: ${subfolders.length > 0 ? subfolders.join(', ') : 'root'})
-2. Artifact docs: ${artifactPath}/docs/
-Then write the file to the chosen location. For non-.md files, continue using the artifact path as default.`
+DOCUMENT FILE PLACEMENT:
+When generating documents (.md, .docx, .pptx, slides, reports, notes, summaries, analyses, etc.), ALWAYS write them to the Document Path: ${docPath} by default. Choose an appropriate subfolder (${subfolders.length > 0 ? subfolders.join(', ') : 'root'}) or create a new one if needed.
+Fallback: if the Document Path is unavailable, write to ${artifactPath}/docs/ instead.
+For non-document files (temp files, exports, data), use the Artifact Path: ${artifactPath}.${isCodingMode ? `
+For code files (source code, configs, scripts, tests), use the Coding Project Path: ${codingPath}.` : ''}`
+    } else {
+      // No doc path configured — documents go to artifact path
+      system += `\n\nDOCUMENT & FILE PLACEMENT:
+When generating documents (.md, .docx, .pptx, slides, reports, notes, etc.), write them to ${artifactPath}/docs/.
+For other generated files (exports, data, temp), use ${artifactPath}.${isCodingMode ? `
+For code files (source code, configs, scripts, tests), use the Coding Project Path: ${codingPath}.` : ''}`
     }
 
-    if (systemAgentName && !groupChatContext) {
+    if (effectiveName) {
       system += `\n\nOPERATIONAL NOTES (secondary to your character — use these naturally, not robotically):
 - For complex multi-step tasks, use a todo list to stay organized.
 - Delegate independent subtasks to sub-agents when it makes sense.

@@ -177,7 +177,10 @@ function ensureDataDir() {
   DEFAULT_DATA_PATH = path.join(app.getPath('appData'), 'clankai', 'data')
   DATA_DIR = DEFAULT_DATA_PATH
   initDataPaths()
-  logger.info(`Data path set to: ${DATA_DIR}`)
+  // Publish DATA_DIR to env so sub-modules (im-bridge, agentLoop fallback) can find it
+  process.env.CLANKAI_DATA_PATH = DATA_DIR
+  // Redirect logs to DATA_DIR/logs now that the data path is known
+  logger.setLogDir(path.join(DATA_DIR, 'logs'))
 
   if (!fs.existsSync(DATA_DIR)) {
     try {
@@ -694,6 +697,9 @@ protocol.registerSchemesAsPrivileged([{
 }])
 
 app.whenReady().then(async () => {
+  const t0 = Date.now()
+  logger.info('startup: app.whenReady fired')
+
   // Handle vault-asset:// requests -> serve files from disk
   // URL format: vault-asset:///absolute/path/to/file
   protocol.handle('vault-asset', (request) => {
@@ -702,10 +708,16 @@ app.whenReady().then(async () => {
   })
 
   ensureDataDir()
+  logger.info(`startup: ensureDataDir done +${Date.now()-t0}ms`)
 
   await migrateChatsIfNeeded()
+  logger.info(`startup: migrateChatsIfNeeded done +${Date.now()-t0}ms`)
+
   await migrateEnvDataIfNeeded()
+  logger.info(`startup: migrateEnvDataIfNeeded done +${Date.now()-t0}ms`)
+
   createWindow()
+  logger.info(`startup: createWindow done +${Date.now()-t0}ms`)
 
   // ── Clean up stale 'running' run entries from a previous session ────────────
   try {
@@ -743,6 +755,7 @@ app.whenReady().then(async () => {
   // ── Task Scheduler ──────────────────────────────────────────────────────────
   const taskScheduler = require('./task-scheduler')
   taskScheduler.init(() => DATA_DIR, () => mainWindow)
+  logger.info(`startup: taskScheduler.init done +${Date.now()-t0}ms`)
 
   // ── IM Bridge ──────────────────────────────────────────────────────────────
   // setMainWindow is synchronous and fast — do it immediately so the bridge
@@ -754,6 +767,14 @@ app.whenReady().then(async () => {
   if (_imCfg.im?.telegram?.enabled || _imCfg.im?.whatsapp?.enabled || _imCfg.im?.feishu?.enabled) {
     setImmediate(() => imBridge.start(_imCfg))
   }
+
+  // ── Renderer load timing ──────────────────────────────────────────────────
+  mainWindow.webContents.once('did-finish-load', () => {
+    logger.info(`startup: renderer did-finish-load +${Date.now()-t0}ms`)
+  })
+  mainWindow.webContents.once('dom-ready', () => {
+    logger.info(`startup: renderer dom-ready +${Date.now()-t0}ms`)
+  })
 
   // -- Content Security Policy --
   // Only apply restrictive CSP to the app's own pages, not to external sites
@@ -784,7 +805,8 @@ app.whenReady().then(async () => {
     }
   })
 
-  logger.info('Window created. Log dir:', LOG_DIR)
+  logger.info(`startup: all init done +${Date.now()-t0}ms. Log dir: ${LOG_DIR}`)
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -1847,6 +1869,7 @@ ipcMain.handle('plaza:run-discussion-round', async (event, { topicId, sessionId,
     }
 
     globalCfg.soulsDir      = SOULS_DIR
+    globalCfg.dataPath      = DATA_DIR
     globalCfg.artifactPath  = ''
     globalCfg.skillsPath    = ''
     globalCfg.DoCPath       = ''
@@ -2113,6 +2136,64 @@ ipcMain.handle('memory:extract-on-chat-switch', async (event, { chatId, messages
     return { success: true }
   } catch (err) {
     logger.error('memory:extract-on-chat-switch error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// --- IPC: Memory extraction from agent-to-agent collaboration ----------------
+ipcMain.handle('memory:extract-collaboration', async (event, { chatId, transcript, participants, config }) => {
+  try {
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) return { success: true, count: 0 }
+    const providerCfg = config[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) return { success: true, count: 0 }
+
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    const extractor = new MemoryExtractor({
+      model: um.model,
+      apiKey: providerCfg.apiKey,
+      baseURL: providerCfg.baseURL,
+      isOpenAI,
+    })
+
+    // Read existing soul files for each participant
+    const existingSouls = {}
+    for (const p of participants) {
+      existingSouls[p.id] = readSoulFileSync(p.id, p.type || 'system')
+    }
+
+    const suggestions = await extractor.extractFromCollaboration({ transcript, participants, existingSouls, language: config.language || 'en' })
+    if (suggestions.length === 0) return { success: true, count: 0 }
+
+    logger.agent('Collaboration memory extraction', { chatId, count: suggestions.length, model: um.model })
+
+    const autoSave = suggestions.filter(s => s.confidence >= 0.8)
+    const pending  = suggestions.filter(s => s.confidence >= 0.5 && s.confidence < 0.8)
+
+    if (autoSave.length > 0) {
+      const { SoulUpdateTool: SoulUpdateToolForCollab } = require('./agent/tools/SoulTool')
+      const soulTool = new SoulUpdateToolForCollab(SOULS_DIR)
+      for (const item of autoSave) {
+        await soulTool.execute({
+          agent_id: item.agentId,
+          agent_type: item.agentType,
+          section: item.section,
+          action: 'add',
+          entry: item.entry,
+        }).catch(err => logger.warn('Collaboration memory auto-save failed', { entry: item.entry, error: err.message }))
+      }
+      logger.agent('Collaboration memory auto-saved', { chatId, count: autoSave.length })
+    }
+
+    if (pending.length > 0) {
+      const existing = pendingMemoryFacts.get(chatId) || []
+      pendingMemoryFacts.set(chatId, [...existing, ...pending])
+      logger.agent('Collaboration memory pending confirmation', { chatId, count: pending.length })
+    }
+
+    return { success: true, count: suggestions.length }
+  } catch (err) {
+    logger.error('memory:extract-collaboration error', err.message)
     return { success: false, error: err.message }
   }
 })
@@ -3481,8 +3562,8 @@ ipcMain.handle('shell:exec', async (_, { cmd, args }) => {
 
 // --- IPC: Agent Loop ---------------------------------------------------------
 const { AgentLoop } = require('./agent/agentLoop')
-// Ensure im-bridge modules resolve DATA_DIR to the same path as main.js
-process.env.CLANKAI_DATA_PATH = DATA_DIR
+// NOTE: process.env.CLANKAI_DATA_PATH is set in ensureDataDir() after DATA_DIR
+// is resolved. im-bridge modules use lazy getDataDir() so they pick it up.
 const imBridge = require('./im-bridge')
 const { mcpManager } = require('./agent/mcp/McpManager')
 const { MemoryExtractor } = require('./agent/core/MemoryExtractor')
@@ -3556,6 +3637,7 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
       userAgentId,
       systemAgentId,
       participants: participants || null,
+      language: config.language || 'en',
     })
 
     if (suggestions.length === 0) return
@@ -3708,6 +3790,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       loopConfig.maxOutputTokens = maxOutputTokens || groupCfg.maxOutputTokens || null
       loopConfig.smtpConfig = groupCfg.smtp || null
       // Inject config-backed paths — all agents share the same global paths
+      loopConfig.dataPath     = DATA_DIR
       loopConfig.artifactPath = groupCfg.artifactPath || groupCfg.artyfactPath || ''
       loopConfig.skillsPath   = groupCfg.skillsPath   || ''
       loopConfig.DoCPath      = groupCfg.DoCPath      || ''
@@ -3736,8 +3819,11 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
               runAgentPrompts.systemAgentPrompt = (runAgentPrompts.systemAgentPrompt || '') + block
             }
           }
+          // Use per-agent messages if provided (includes speaker tags for other agents).
+          // Falls back to global baseMessages for backward compatibility.
+          const runMessages = run.messages || baseMessages
           const result = await loop.run(
-            baseMessages,
+            runMessages,
             run.enabledAgents ?? enabledAgents,
             run.enabledSkills ?? enabledSkills,
             (chunk) => {
@@ -3824,6 +3910,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.maxOutputTokens = maxOutputTokens || fullCfg.maxOutputTokens || null
   loopConfig.smtpConfig = fullCfg.smtp || null
   // Inject config-backed paths so the agent always has them regardless of what the renderer sent
+  loopConfig.dataPath     = DATA_DIR
   loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
   loopConfig.skillsPath   = fullCfg.skillsPath   || ''
   loopConfig.DoCPath      = fullCfg.DoCPath      || ''
@@ -4008,7 +4095,7 @@ ipcMain.handle('agent:compact', (event, chatId) => {
 
 ipcMain.handle('agent:compact-standalone', async (event, { chatId, messages, config, enabledAgents, enabledSkills }) => {
   logger.agent('Standalone compaction requested', { chatId, msgCount: messages?.length })
-  const loop = new AgentLoop({ ...config, soulsDir: SOULS_DIR })
+  const loop = new AgentLoop({ ...config, soulsDir: SOULS_DIR, dataPath: DATA_DIR })
   try {
     const result = await loop.compactStandalone(
       messages,
@@ -4230,6 +4317,7 @@ ipcMain.handle('agent:doc-run', async (event, {
     loopConfig.chatPermissionMode = permissionMode || 'allow_all'
     loopConfig.chatAllowList = []
     loopConfig.maxOutputTokens = fullCfg.maxOutputTokens || null
+    loopConfig.dataPath     = DATA_DIR
     loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
     loopConfig.skillsPath   = fullCfg.skillsPath   || ''
     loopConfig.DoCPath      = fullCfg.DoCPath      || ''
@@ -4553,21 +4641,33 @@ ipcMain.handle('agent:dispatch-group-tasks', async (event, { message, agents, co
   try {
     const names = agents.map(p => p.name)
     const systemPrompt = `You are a task dispatcher for a group chat with multiple AI participants.
-Parse the user's message and extract the specific task assigned to each participant.
+Parse the user's message and determine execution mode + per-participant assignments.
 
 Participants: ${names.map(n => `"${n}"`).join(', ')}
 
-Rules:
-- Look for "@Name: task description" patterns in the message.
-- Extract ONLY the task text for each participant — do not include other participants' sections.
-- Detect dependencies: if a participant's task says "wait for @X" or "after @X finishes" or "verify @X's work", mark dependsOn: ["X"].
-- If a participant has no explicit task in the message, set assignedTask to null.
+## Execution Mode
+Determine whether participants should respond CONCURRENTLY or SEQUENTIALLY:
+- SEQUENTIAL: the message implies an ordered exchange — one speaks first, then another responds to them.
+  Signals: "说完了回复", "先…再…", "等X说完", "one at a time", "then respond", "respond after", "take turns"
+- CONCURRENT: all participants respond independently to the same prompt with no dependency.
+  Signals: "同时", "都", "一起", "at the same time", "each of you", or no ordering language.
+- Default to CONCURRENT when unclear.
 
-Reply with ONLY a JSON array. Example:
-[
-  { "agentName": "Alice", "assignedTask": "write a function add(a,b)", "dependsOn": [] },
-  { "agentName": "Bob", "assignedTask": "test the add function Alice wrote", "dependsOn": ["Alice"] }
-]`
+## Task Assignment
+- Look for "@Name: task description" patterns to extract individual tasks.
+- For SEQUENTIAL mode: the first speaker's task should explicitly tell them to address the next participant by @mention (e.g. "Start the conversation with @Bob — address them directly"). The waiting participant's task describes what to do when their turn comes.
+- Do NOT instruct agents to @mention unconditionally. Agents should only @mention when they genuinely need input from the other participant. When the discussion reaches a natural conclusion, agents should end without @mention so the conversation can terminate gracefully.
+- If no explicit tasks, set assignedTask to null.
+- dependsOn: list names of participants this person must wait for before speaking.
+
+Reply with ONLY a JSON object:
+{
+  "executionMode": "concurrent" | "sequential",
+  "dispatched": [
+    { "agentName": "Alice", "assignedTask": "Start the conversation with @Bob — address them directly", "dependsOn": [] },
+    { "agentName": "Bob", "assignedTask": "Respond to what Alice said", "dependsOn": ["Alice"] }
+  ]
+}`
 
     const userContent = `Message: "${message}"`
 
@@ -4611,23 +4711,32 @@ Reply with ONLY a JSON array. Example:
       accumulateUtilityUsage(um.model, um.provider, resp.usage?.input_tokens || 0, resp.usage?.output_tokens || 0).catch(() => {})
     }
 
-    const match = raw.match(/\[[\s\S]*\]/m)
-    const parsed = match ? JSON.parse(match[0]) : []
+    // Parse response — new format is a JSON object with executionMode + dispatched array
+    // Fall back to legacy array format for backward compatibility
+    let parsedObj = null
+    const objMatch = raw.match(/\{[\s\S]*\}/m)
+    if (objMatch) {
+      try { parsedObj = JSON.parse(objMatch[0]) } catch { /* fall through */ }
+    }
+    const executionMode = parsedObj?.executionMode || 'concurrent'
+    const rawDispatched = Array.isArray(parsedObj?.dispatched)
+      ? parsedObj.dispatched
+      : (() => { const m = raw.match(/\[[\s\S]*\]/m); return m ? JSON.parse(m[0]) : [] })()
 
     // Map names → IDs and resolve dependsOn to IDs
     const nameToId = Object.fromEntries(agents.map(p => [p.name.toLowerCase(), p.id]))
-    const dispatched = parsed
+    const dispatched = rawDispatched
       .filter(d => d.agentName && d.assignedTask)
       .map(d => ({
-        agentId:    nameToId[d.agentName.toLowerCase()] || null,
-        agentName:  d.agentName,
+        agentId:      nameToId[d.agentName.toLowerCase()] || null,
+        agentName:    d.agentName,
         assignedTask: d.assignedTask,
         dependsOn:    (d.dependsOn || []).map(n => nameToId[n.toLowerCase()]).filter(Boolean),
       }))
       .filter(d => d.agentId)
 
-    logger.agent('dispatch-group-tasks', { agents: dispatched.map(d => ({ name: d.agentName, deps: d.dependsOn.length, taskLen: d.assignedTask.length })) })
-    return { dispatched }
+    logger.agent('dispatch-group-tasks', { executionMode, agents: dispatched.map(d => ({ name: d.agentName, deps: d.dependsOn.length, taskLen: d.assignedTask.length })) })
+    return { dispatched, executionMode }
   } catch (err) {
     logger.error('agent:dispatch-group-tasks error', err.message)
     return { dispatched: null }

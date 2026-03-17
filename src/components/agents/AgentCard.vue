@@ -26,12 +26,13 @@
       <p class="agent-card-desc">{{ agent.description || t('agents.noDescription') }}</p>
 
       <!-- Provider + Model metadata — only shown for system agents -->
-      <div v-if="agent.type !== 'user' && (agent.providerId || agent.modelId)" class="pc-model-meta">
-        <span v-if="agentProviderLabel" class="pc-provider-badge">
-          {{ agentProviderLabel }}
-        </span>
-        <span v-if="agent.modelId" class="pc-model-id">{{ agent.modelId }}</span>
-        <span v-if="isProviderInactive" class="pc-inactive-warn">&#9888; {{ t('agents.providerInactive') }}</span>
+      <div v-if="agent.type !== 'user'" class="pc-model-meta">
+        <template v-if="agent.providerId || agent.modelId">
+          <span v-if="agentProviderLabel" class="pc-provider-badge">{{ agentProviderLabel }}</span>
+          <span v-if="agent.modelId" class="pc-model-id">{{ agent.modelId }}</span>
+          <span v-if="isProviderInactive" class="pc-inactive-warn">&#9888; {{ t('agents.providerInactive') }}</span>
+        </template>
+        <span v-else-if="isNoProviderConfigured" class="pc-no-provider-warn">&#9888; {{ t('agents.noProviderConfigured') }}</span>
       </div>
 
       <!-- Footer -->
@@ -130,6 +131,17 @@ const isProviderInactive = computed(() => {
   const provider = configStore.config.providers?.find(p => p.id === props.agent.providerId)
   return !provider?.isActive
 })
+
+// Show "no provider" warning when an agent has no provider/model set.
+// For custom agents: always warn (they must have an explicit provider).
+// For builtin/default agents: warn only when no active providers exist at all.
+const isNoProviderConfigured = computed(() => {
+  if (props.agent.providerId || props.agent.modelId) return false
+  if (props.agent.isBuiltin || props.agent.isDefault) {
+    return !(configStore.config.providers?.some(p => p.isActive))
+  }
+  return true
+})
 </script>
 
 <style scoped>
@@ -211,6 +223,11 @@ const isProviderInactive = computed(() => {
   max-width: 11.25rem;
 }
 .pc-inactive-warn {
+  font-size: var(--fs-small);
+  color: #EF4444;
+  font-weight: 600;
+}
+.pc-no-provider-warn {
   font-size: var(--fs-small);
   color: #EF4444;
   font-weight: 600;

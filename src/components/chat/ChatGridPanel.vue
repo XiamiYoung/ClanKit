@@ -443,6 +443,7 @@ async function onMentionSend(text) {
         const pModel = pOverrideModel || agent.modelId || targetChat.model || null
         if (pModel) singleCfg.customModel = pModel
         if (targetChat.workingPath) singleCfg.chatWorkingPath = targetChat.workingPath
+        if (targetChat.codingMode) singleCfg.codingMode = true
 
         const usrAgent = targetChat.userAgentId ? agentsStore.getAgentById(targetChat.userAgentId) : agentsStore.defaultUserAgent
         const agentPrompts = { systemAgentId: agentId, userAgentId: usrAgent?.id || '__default_user__' }
@@ -531,6 +532,7 @@ async function onSend(text, pendingAttachments = []) {
   else if (chatProvider === 'openai') { cfg.openaiApiKey = cfg.openai?.apiKey || ''; cfg.openaiBaseURL = cfg.openai?.baseURL || ''; cfg._resolvedProvider = 'openai'; cfg.defaultProvider = 'openai' }
   if (targetChat.model) cfg.customModel = targetChat.model
   if (targetChat.workingPath) cfg.chatWorkingPath = targetChat.workingPath
+  if (targetChat.codingMode) cfg.codingMode = true
   const sysAgent = targetChat.systemAgentId ? agentsStore.getAgentById(targetChat.systemAgentId) : agentsStore.defaultSystemAgent
   const usrAgent = targetChat.userAgentId ? agentsStore.getAgentById(targetChat.userAgentId) : agentsStore.defaultUserAgent
   const agentPrompts = {}

@@ -615,6 +615,7 @@ export const useChatsStore = defineStore('chats', () => {
     if (last) {
       last.content = content
       last.streaming = false
+      last.segments = [{ type: 'text', content }]
     }
     debouncedPersistChat(chatId)
   }

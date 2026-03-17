@@ -304,6 +304,11 @@ export const useConfigStore = defineStore('config', () => {
     if (!window.electronAPI?.getEnvPaths) return
     const paths = await window.electronAPI.getEnvPaths()
     config.value = { ...config.value, ...paths }
+    // Also load the canonical data directory so UI can reference it (e.g. artifact path fallback)
+    if (window.electronAPI?.getDataPath) {
+      const { dataPath } = await window.electronAPI.getDataPath()
+      if (dataPath) config.value.dataPath = dataPath
+    }
   }
 
   async function saveEnvPath(key, value) {

@@ -4,9 +4,13 @@ const fs   = require('fs')
 const path = require('path')
 const os   = require('os')
 
-const _dataDir = process.env.CLANKAI_DATA_PATH
-const DATA_DIR = (_dataDir && _dataDir !== 'null') ? _dataDir : path.join(os.homedir(), '.clankai')
-const SESSIONS_FILE = path.join(DATA_DIR, 'im-sessions.json')
+// Lazy: DATA_DIR is set by main.js via process.env after ensureDataDir()
+const { defaultDataPath } = require('../defaultDataPath')
+function getDataDir() {
+  const d = process.env.CLANKAI_DATA_PATH
+  return (d && d !== 'null') ? d : defaultDataPath()
+}
+function SESSIONS_FILE() { return path.join(getDataDir(), 'im-sessions.json') }
 
 /** In-memory state: Map<`${platform}:${channelId}`, { clankChatId, displayName }> */
 let _sessions = new Map()
@@ -15,7 +19,7 @@ let _activeChats = new Map()
 
 function _load() {
   try {
-    const raw = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8'))
+    const raw = JSON.parse(fs.readFileSync(SESSIONS_FILE(), 'utf8'))
     _sessions   = new Map(Object.entries(raw.sessions   || {}))
     _activeChats = new Map(Object.entries(raw.activeChats || {}))
   } catch {
@@ -25,14 +29,15 @@ function _load() {
 
 function _save() {
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true })
+    fs.mkdirSync(getDataDir(), { recursive: true })
     const data = {
       sessions:    Object.fromEntries(_sessions),
       activeChats: Object.fromEntries(_activeChats),
     }
-    const tmp = SESSIONS_FILE + '.tmp'
+    const file = SESSIONS_FILE()
+    const tmp = file + '.tmp'
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2))
-    fs.renameSync(tmp, SESSIONS_FILE)
+    fs.renameSync(tmp, file)
   } catch (err) {
     console.error('[im-bridge] session-store save error:', err.message)
   }

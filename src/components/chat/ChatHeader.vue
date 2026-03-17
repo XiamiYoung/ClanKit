@@ -234,7 +234,7 @@
                 :key="p.id"
                 class="ch-modal-item"
                 :class="{ selected: resolvedUserAgentId === p.id }"
-                @click="selectAgent('user', p.isDefault ? null : p.id)"
+                @click="selectAgent('user', p.id)"
               >
                 <div class="ch-modal-item-avatar">
                   <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
@@ -262,7 +262,7 @@
                 :key="p.id"
                 class="ch-modal-item"
                 :class="{ selected: resolvedUserAgentId === p.id }"
-                @click="selectAgent('user', p.isDefault ? null : p.id)"
+                @click="selectAgent('user', p.id)"
               >
                 <div class="ch-modal-item-avatar">
                   <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
@@ -751,8 +751,10 @@ const effectiveProviderLabel = computed(() => {
   const agentId = activeSystemAgentIds.value[0]
   if (!agentId) return '—'
   const agent = agentsStore.getAgentById(agentId)
-  const labels = { anthropic: 'Anthropic', openrouter: 'OpenRouter', openai: 'OpenAI', deepseek: 'DeepSeek' }
-  return labels[agent?.providerId] || '—'
+  if (!agent?.providerId) return '—'
+  const providers = configStore.config?.providers || []
+  const found = providers.find(p => p.id === agent.providerId || p.type === agent.providerId)
+  return found?.name || found?.type || agent.providerId
 })
 
 const effectiveModelLabel = computed(() => {
