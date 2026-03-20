@@ -27,6 +27,7 @@ const MAX_CONTEXT_TURNS = 20  // max user/assistant turn pairs sent to LLM
 const FLUSH_INTERVAL    = 20  // flush every N completed assistant turns
 
 const { MemoryFlush } = require('./core/MemoryFlush')
+const { ChatIndex }   = require('../memory/ChatIndex')
 
 // No hardcoded skill prompts — they arrive dynamically from the UI store
 
@@ -636,7 +637,7 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
     }
 
     // ── Memory context injection ──
-    const { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd } = memoryContext
+    const { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, historicalContext } = memoryContext
 
     if (userMd) {
       system += `\n\n## User Profile\n${prepareSoulContent(userMd)}`
@@ -651,6 +652,10 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
     if (todayLogMd)     logSections.push(`### Today\n${todayLogMd.trim()}`)
     if (logSections.length > 0) {
       system += `\n\n## Recent Session Logs\n${logSections.join('\n\n')}`
+    }
+
+    if (historicalContext) {
+      system += `\n\n## Relevant Past Context\n_Retrieved from conversation history_\n\n${historicalContext}`
     }
 
     return system
@@ -828,10 +833,31 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
       userMd = readFileIfExists(path.join(memoryDir, 'users', userId, 'USER.md'))
     }
 
+    // ── Search historical chats for relevant context ──
+    let historicalContext = null
+    if (memoryDir && agentPrompts?.systemAgentId) {
+      try {
+        const agentMemoryDir = path.join(memoryDir, 'agents')
+        const chatIdx = new ChatIndex(agentMemoryDir)
+        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
+        const query = typeof lastUserMsg?.content === 'string'
+          ? lastUserMsg.content.slice(0, 500)
+          : ''
+        if (query.trim().length > 10) {
+          const results = chatIdx.search(query, agentPrompts.systemAgentId, 4)
+          if (results.length > 0) {
+            historicalContext = results.join('\n\n---\n\n')
+          }
+        }
+      } catch (err) {
+        logger.error('[AgentLoop] history search error (non-fatal)', err.message)
+      }
+    }
+
     const systemPrompt = this.buildSystemPrompt(
       enabledAgents, enabledSkills, agentPrompts,
       userSoulContent, systemSoulContent, participantSouls,
-      { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd }
+      { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, historicalContext }
     )
 
     // If a per-agent assigned task was dispatched, replace the last user message
@@ -1139,18 +1165,25 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
         }
 
         // ── Context-exhaustion check ──
-        // If we're above 90% of the context window even after previous
-        // compaction attempts, stop gracefully rather than hitting an API error.
+        // Emergency flush + compact instead of stopping — conversations never interrupted.
         if (this.contextManager.isExhausted()) {
-          logger.warn('AgentLoop: context window exhausted, stopping', {
+          logger.warn('AgentLoop: context window exhausted, triggering emergency flush+compact', {
             iteration,
             inputTokens: this.contextManager.inputTokens
           })
-          onChunk({
-            type: 'text',
-            text: '\n\n[Context window is nearly full. Please start a new conversation to continue.]'
-          })
-          break
+          await runFlushIfNeeded('exhausted')
+          if (!this.isOpenAI) {
+            Object.assign(createParams, this.contextManager.applyCompaction(createParams))
+            this.contextManager.compactionCount++
+          } else {
+            createParams.messages = this.contextManager.localTrim(
+              createParams.messages, this.contextManager.inputTokens
+            )
+            conversationMessages.length = 0
+            conversationMessages.push(...createParams.messages)
+          }
+          onChunk({ type: 'compaction', message: 'Context compacted to continue conversation' })
+          this.contextManager.inputTokens = Math.floor(this.contextManager.inputTokens * 0.4)
         }
 
         // ── Manual compaction request from UI ──

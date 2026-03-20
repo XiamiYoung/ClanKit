@@ -861,6 +861,13 @@ app.whenReady().then(async () => {
     setImmediate(() => imBridge.start(_imCfg))
   }
 
+  // Background: index any chats not yet in the search index
+  setImmediate(() => {
+    _runStartupIndexRecovery().catch(err =>
+      logger.error('[Startup] index recovery error', err.message)
+    )
+  })
+
   // ── Renderer load timing ──────────────────────────────────────────────────
   mainWindow.webContents.once('did-finish-load', () => {
     logger.info(`startup: renderer did-finish-load +${Date.now()-t0}ms`)
@@ -2248,6 +2255,16 @@ ipcMain.handle('memory:extract-on-chat-switch', async (event, { chatId, messages
             logger.error('[memory:extract-on-chat-switch] flush error', err.message)
           )
         }
+      }
+    }
+
+    // Index this chat for keyword search
+    if (agentId && messages && messages.length > 0) {
+      try {
+        const idx = new ChatIndex(AGENT_MEMORY_DIR)
+        idx.indexChat(chatId, messages, agentId)
+      } catch (err) {
+        logger.error('[ChatIndex] indexing on switch failed', err.message)
       }
     }
 
@@ -4135,6 +4152,7 @@ const imBridge = require('./im-bridge')
 const { mcpManager } = require('./agent/mcp/McpManager')
 const { MemoryExtractor } = require('./agent/core/MemoryExtractor')
 const { MemoryFlush }    = require('./agent/core/MemoryFlush')
+const { ChatIndex }      = require('./memory/ChatIndex')
 const activeLoops = new Map()          // chatId -> AgentLoop
 const activeLoopMeta = new Map()       // same key as activeLoops → { chatId, agentId, agentName, isGroup }
 const lastContextSnapshots = new Map() // chatId -> snapshot
@@ -4275,6 +4293,43 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
     }
   } catch (err) {
     logger.error('Memory extraction failed (non-fatal)', { chatId, error: err.message })
+  }
+}
+
+async function _runStartupIndexRecovery() {
+  try {
+    if (!fs.existsSync(CHATS_INDEX_FILE)) return
+    const chatsIndex = JSON.parse(fs.readFileSync(CHATS_INDEX_FILE, 'utf8'))
+    if (!Array.isArray(chatsIndex)) return
+
+    logger.debug('[Startup] checking for unindexed chats', { total: chatsIndex.length })
+
+    for (const meta of chatsIndex) {
+      const agentId = meta.systemAgentId
+      if (!agentId) continue
+
+      const chatIndexer = new ChatIndex(AGENT_MEMORY_DIR)
+      const indexed     = chatIndexer.getIndexedChatIds(agentId)
+      if (indexed.has(meta.id)) continue
+
+      // Yield to event loop between each chat to stay non-blocking
+      await new Promise(resolve => setImmediate(resolve))
+
+      try {
+        const chatFile = path.join(CHATS_DIR, `${meta.id}.json`)
+        if (!fs.existsSync(chatFile)) continue
+        const chat = JSON.parse(fs.readFileSync(chatFile, 'utf8'))
+        if (chat.messages && chat.messages.length > 0) {
+          chatIndexer.indexChat(meta.id, chat.messages, agentId)
+        }
+      } catch (err) {
+        logger.error('[Startup] failed to index chat', { chatId: meta.id, error: err.message })
+      }
+    }
+
+    logger.debug('[Startup] index recovery complete')
+  } catch (err) {
+    logger.error('[Startup] index recovery failed (non-fatal)', err.message)
   }
 }
 
