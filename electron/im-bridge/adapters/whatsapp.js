@@ -48,6 +48,11 @@ async function _createSocket() {
     logger: pino({ level: 'silent' }),
   })
 
+  // Increase max listeners to prevent EventEmitter warnings
+  if (_sock.ev?.setMaxListeners) {
+    _sock.ev.setMaxListeners(20)
+  }
+
   _sock.ev.on('creds.update', saveCreds)
 
   _sock.ev.on('connection.update', async (update) => {
@@ -81,58 +86,68 @@ async function _createSocket() {
   _sock.ev.on('messages.upsert', async (upsert) => {
     if (upsert.type !== 'notify') return
     for (const msg of upsert.messages ?? []) {
-      const remoteJid = msg.key?.remoteJid
-      if (!remoteJid) continue
-      // Only accept agentl 1:1 chats — skip groups, channels, status, broadcasts
-      if (!remoteJid.endsWith('@s.whatsapp.net') && !remoteJid.endsWith('@lid')) continue
+      try {
+        const remoteJid = msg.key?.remoteJid
+        if (!remoteJid) continue
+        // Only accept agentl 1:1 chats — skip groups, channels, status, broadcasts
+        if (!remoteJid.endsWith('@s.whatsapp.net') && !remoteJid.endsWith('@lid')) continue
 
-      const fromMe = msg.key?.fromMe || false
-      const username = msg.pushName || remoteJid.split('@')[0]
-      const chatId   = remoteJid
-      const body = extractText(msg.message)
+        const fromMe = msg.key?.fromMe || false
+        const username = msg.pushName || remoteJid.split('@')[0]
+        const chatId   = remoteJid
+        const body = extractText(msg.message)
 
-      // Only process self-messages (fromMe) - skip messages from other people
-      if (!fromMe) continue
+        // Only process self-messages (fromMe) - skip messages from other people
+        if (!fromMe) continue
 
-      const allowed = _opts.allowedUsers || []
-      if (allowed.length > 0 && !allowed.includes(username) && !allowed.includes(chatId.split('@')[0])) continue
+        const allowed = _opts.allowedUsers || []
+        if (allowed.length > 0 && !allowed.includes(username) && !allowed.includes(chatId.split('@')[0])) continue
 
-      // Voice / audio message
-      const audioMsg = msg.message?.audioMessage
-      if (audioMsg && _onVoice) {
-        try {
-          const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
-          const buffer = await downloadMediaMessage(msg, 'buffer', {}, {
-            reuploadRequest: _sock.updateMediaMessage,
-            logger: _sock.logger,
-          })
-          await _onVoice(chatId, username, Buffer.from(buffer))
-        } catch (err) {
-          console.error('[whatsapp] voice download error:', err.message)
+        // Voice / audio message
+        const audioMsg = msg.message?.audioMessage
+        if (audioMsg && _onVoice) {
+          try {
+            const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
+            const buffer = await downloadMediaMessage(msg, 'buffer', {}, {
+              reuploadRequest: _sock.updateMediaMessage,
+              logger: _sock.logger,
+            })
+            await _onVoice(chatId, username, Buffer.from(buffer))
+          } catch (err) {
+            console.error('[whatsapp] voice download error:', err.message)
+          }
+          continue
         }
-        continue
-      }
 
-      // Image message
-      const imageMsg = msg.message?.imageMessage
-      if (imageMsg && _onImage) {
-        try {
-          const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
-          const buffer = await downloadMediaMessage(msg, 'buffer', {}, {
-            reuploadRequest: _sock.updateMediaMessage,
-            logger: _sock.logger,
-          })
-          const caption = imageMsg.caption || ''
-          await _onImage(chatId, username, Buffer.from(buffer), caption)
-        } catch (err) {
-          console.error('[whatsapp] image download error:', err.message)
+        // Image message
+        const imageMsg = msg.message?.imageMessage
+        if (imageMsg && _onImage) {
+          try {
+            const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
+            const buffer = await downloadMediaMessage(msg, 'buffer', {}, {
+              reuploadRequest: _sock.updateMediaMessage,
+              logger: _sock.logger,
+            })
+            const caption = imageMsg.caption || ''
+            await _onImage(chatId, username, Buffer.from(buffer), caption)
+          } catch (err) {
+            console.error('[whatsapp] image download error:', err.message)
+          }
+          continue
         }
-        continue
+
+        if (!body) continue
+
+        _onMessage(chatId, username, body)
+      } catch (err) {
+        // Catch Bad MAC errors and other decryption failures
+        if (err.message?.includes('Bad MAC') || err.message?.includes('decrypt')) {
+          console.error('[whatsapp] Session error:', err.message, '- skipping message')
+          // Don't crash, just skip this message. Session might recover on next message.
+        } else {
+          console.error('[whatsapp] Message processing error:', err)
+        }
       }
-
-      if (!body) continue
-
-      _onMessage(chatId, username, body)
     }
   })
 }

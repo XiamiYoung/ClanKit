@@ -282,9 +282,6 @@
       :agent-required-skill-ids="bodyViewerAgent.requiredSkillIds || []"
       :agent-required-mcp-server-ids="bodyViewerAgent.requiredMcpServerIds || []"
       :agent-required-knowledge-base-ids="bodyViewerAgent.requiredKnowledgeBaseIds || []"
-      :agent-tone="bodyViewerAgent.tone || []"
-      :agent-verbosity-level="bodyViewerAgent.verbosityLevel || []"
-      :agent-personality-tags="bodyViewerAgent.personalityTags || []"
       :is-new="!!bodyViewerAgent.isNew"
       @close="bodyViewerAgent = null"
       @update-agent="onBodyViewerUpdate"
@@ -332,6 +329,7 @@
       :mode="categoryModal.mode"
       :type="categoryModal.catType"
       :initial="categoryModal.initial"
+      :existingCategories="agentsStore.categories"
       @confirm="onCategoryModalConfirm"
       @close="categoryModal.open = false"
     />
@@ -510,9 +508,6 @@ function createNew(type) {
     requiredSkillIds: [],
     requiredMcpServerIds: [],
     requiredKnowledgeBaseIds: [],
-    tone: [],
-    verbosityLevel: [],
-    personalityTags: [],
     isNew: true,
   }
 }

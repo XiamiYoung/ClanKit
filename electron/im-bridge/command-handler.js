@@ -285,7 +285,6 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
       codingMode: false,
       codingProvider: 'claude-code',
       maxOutputTokens: null,
-      agentModelOverrides: {},
     }
 
     // Index entry mirrors persisted metadata (no messages/runtime fields)
@@ -312,7 +311,6 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
       codingMode: false,
       codingProvider: 'claude-code',
       maxOutputTokens: null,
-      agentModelOverrides: {},
     }
 
     writeAtomic(path.join(CHATS_DIR(), `${chatId}.json`), chat)

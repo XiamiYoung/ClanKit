@@ -58,6 +58,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── OpenAI ─────────────────────────────────────────────────────────────
   fetchOpenAIModels: (params) => ipcRenderer.invoke('openai:fetch-models', params),
 
+  // ── Google ──────────────────────────────────────────────────────────────
+  fetchGoogleModels: (params) => ipcRenderer.invoke('google:fetch-models', params),
+
   // ── Skills (filesystem-based) ───────────────────────────────────────────
   skills: {
     scanDir:        (dirPath)   => ipcRenderer.invoke('skills:scan-dir', dirPath),
@@ -65,11 +68,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readFile:       (filePath)  => ipcRenderer.invoke('skills:read-file', filePath),
     writeFile:      (filePath, content) => ipcRenderer.invoke('skills:write-file', filePath, content),
     loadAllPrompts: (dirPath)   => ipcRenderer.invoke('skills:load-all-prompts', dirPath),
+    fetchRemote:    (sourceId, options) => ipcRenderer.invoke('skills:fetch-remote', sourceId, options),
+    installRemote:  (sourceId, skillId, skillUrl, skillsPath) => ipcRenderer.invoke('skills:install-remote', sourceId, skillId, skillUrl, skillsPath),
+    deleteSkill:    (skillPath) => ipcRenderer.invoke('skills:delete-skill', skillPath),
   },
 
   // ── Agent Loop ────────────────────────────────────────────────────────────
   runAgent: (params) => ipcRenderer.invoke('agent:run', params),
+  runAgentAdditional: (params) => ipcRenderer.invoke('agent:run-additional', params),
   stopAgent: (chatId) => ipcRenderer.invoke('agent:stop', chatId),
+  getRunningAgents: () => ipcRenderer.invoke('agent:get-running'),
   accumulateVoiceUsage: (chatId, usage) => ipcRenderer.invoke('agent:accumulate-voice-usage', { chatId, usage }),
   permissionResponse: (chatId, payload) => ipcRenderer.invoke('agent:permission-response', chatId, payload),
   updatePermissionMode: (chatId, payload) => ipcRenderer.invoke('agent:update-permission-mode', chatId, payload),

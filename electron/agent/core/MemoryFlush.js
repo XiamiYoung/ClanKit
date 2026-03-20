@@ -25,11 +25,12 @@ const FLUSH_SYSTEM = [
 ].join(' ')
 
 class MemoryFlush {
-  constructor({ model, apiKey, baseURL, isOpenAI }) {
-    this.model    = model
-    this.apiKey   = apiKey
-    this.baseURL  = baseURL
-    this.isOpenAI = isOpenAI
+  constructor({ model, apiKey, baseURL, isOpenAI, directAuth = false }) {
+    this.model      = model
+    this.apiKey     = apiKey
+    this.baseURL    = baseURL
+    this.isOpenAI   = isOpenAI
+    this.directAuth = directAuth
   }
 
   /**
@@ -37,9 +38,10 @@ class MemoryFlush {
    * @param {Array}  messages  Conversation messages to summarize
    * @param {string} agentId   The active system agent's ID
    * @param {string} logsDir   Path to the agent's memory/logs directory
+   * @param {object} [meta]    Optional metadata: { chatId, chatTitle }
    * @returns {boolean} true if flush succeeded
    */
-  async run(messages, agentId, logsDir) {
+  async run(messages, agentId, logsDir, meta = {}) {
     if (!this.model || !this.apiKey || !this.baseURL) {
       logger.debug('[MemoryFlush] skip: utility model not configured', { agentId })
       return false
@@ -70,7 +72,7 @@ class MemoryFlush {
         return false
       }
 
-      this._appendToLog(logsDir, summary, agentId)
+      this._appendToLog(logsDir, summary, agentId, meta)
       logger.agent('[MemoryFlush] flushed', { agentId, lines: summary.split('\n').length })
       return true
 
@@ -82,7 +84,10 @@ class MemoryFlush {
 
   async _callAnthropic(messages) {
     const Anthropic = require('@anthropic-ai/sdk')
-    const client = new Anthropic.default({ apiKey: this.apiKey, baseURL: this.baseURL })
+    const client = new Anthropic.default({
+      apiKey:  this.apiKey,
+      baseURL: this.baseURL.replace(/\/+$/, ''),
+    })
     const response = await client.messages.create({
       model: this.model,
       max_tokens: 512,
@@ -96,8 +101,16 @@ class MemoryFlush {
   }
 
   async _callOpenAI(messages) {
-    const OpenAI = require('openai')
-    const client = new OpenAI.default({ apiKey: this.apiKey, baseURL: this.baseURL })
+    const { OpenAIClient } = require('./OpenAIClient')
+    const cfg = {
+      openaiApiKey:      this.apiKey,
+      openaiBaseURL:     this.baseURL.replace(/\/+$/, ''),
+      customModel:       this.model,
+      _resolvedProvider: 'openai',
+      defaultProvider:   'openai',
+      _directAuth:       this.directAuth,
+    }
+    const client = new OpenAIClient(cfg).getClient()
     const response = await client.chat.completions.create({
       model: this.model,
       max_tokens: 512,
@@ -110,19 +123,27 @@ class MemoryFlush {
     return response.choices?.[0]?.message?.content || null
   }
 
-  _appendToLog(logsDir, summary, agentId) {
+  _appendToLog(logsDir, summary, agentId, meta = {}) {
     const today     = new Date().toISOString().slice(0, 10)
     const timeStamp = new Date().toTimeString().slice(0, 5)
     const logPath   = path.join(logsDir, `${today}.md`)
 
     fs.mkdirSync(logsDir, { recursive: true })
 
-    const heading = `\n## Session ${timeStamp}\n`
-    const content = heading + summary.trim().split('\n')
+    // Build header: time + optional chatId + readable title from first bullet
+    const bullets = summary.trim().split('\n').filter(l => l.trim())
+    const firstBullet = bullets[0]
+      ? bullets[0].replace(/^[-*]\s*/, '').slice(0, 60).trim()
+      : ''
+    const chatTag  = meta.chatId    ? ` | chat:${meta.chatId.slice(0, 8)}` : ''
+    const titleTag = firstBullet    ? ` | "${firstBullet}"` : ''
+    const heading  = `\n## Session ${timeStamp}${chatTag}${titleTag}\n`
+
+    const body = bullets
       .map(l => l.startsWith('-') ? l : `- ${l}`)
       .join('\n') + '\n'
 
-    fs.appendFileSync(logPath, content, 'utf8')
+    fs.appendFileSync(logPath, heading + body, 'utf8')
   }
 }
 

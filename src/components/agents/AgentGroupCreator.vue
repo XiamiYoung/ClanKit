@@ -304,7 +304,13 @@ async function createAgents() {
 
     if (activeTab.value === 'templates' && selectedTemplate.value) {
       const tmpl = selectedTemplate.value
-      categoryId = await agentsStore.addCategory(tmpl.category.name, tmpl.category.emoji, agentType.value)
+      const existingCat = agentsStore.categories.find(c =>
+        c.type === agentType.value &&
+        c.name?.trim().toLowerCase() === tmpl.category.name?.trim().toLowerCase()
+      )
+      categoryId = existingCat
+        ? existingCat.id
+        : await agentsStore.addCategory(tmpl.category.name, tmpl.category.emoji, agentType.value)
       agentsData = tmpl.agents.map(a => ({
         name: a.name,
         description: a.description,
@@ -313,7 +319,13 @@ async function createAgents() {
       }))
     } else if (generatedProposal.value) {
       const prop = generatedProposal.value
-      categoryId = await agentsStore.addCategory(prop.category.name, prop.category.emoji, agentType.value)
+      const existingCat = agentsStore.categories.find(c =>
+        c.type === agentType.value &&
+        c.name?.trim().toLowerCase() === prop.category.name?.trim().toLowerCase()
+      )
+      categoryId = existingCat
+        ? existingCat.id
+        : await agentsStore.addCategory(prop.category.name, prop.category.emoji, agentType.value)
       agentsData = prop.agents.map(a => ({
         name: a.name,
         description: a.description,

@@ -215,6 +215,11 @@ import ChatMentionInput from './ChatMentionInput.vue'
 import { parseMentions } from '../../utils/mentions'
 import { useI18n } from '../../i18n/useI18n'
 
+function filterByRequired(items, requiredIds) {
+  if (!requiredIds || requiredIds.length === 0) return []
+  return items.filter(item => requiredIds.includes(item.id))
+}
+
 const props = defineProps({
   chatId: { type: String, required: true },
   gridChatIds: { type: Array, default: () => [] }
@@ -432,15 +437,12 @@ async function onMentionSend(text) {
           streamingStartedAt: Date.now(), segments: [], agentId, agentName: agent.name,
         })
         const singleCfg = { ...cfg }
-        const rawPOverride = targetChat.agentModelOverrides?.[agentId]
-        const pOverrideModel    = rawPOverride ? (typeof rawPOverride === 'object' ? rawPOverride.model    : rawPOverride) : null
-        const pOverrideProvider = rawPOverride && typeof rawPOverride === 'object' ? rawPOverride.provider : null
-        const pProvider = pOverrideProvider || agent.providerId || chatProvider
+        const pProvider = agent.providerId || chatProvider
         if (pProvider === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
         else if (pProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
         else if (pProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai'; delete singleCfg._directAuth }
         else if (pProvider === 'deepseek') { singleCfg.openaiApiKey = cfg.deepseek?.apiKey || ''; singleCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, ''); singleCfg._resolvedProvider = 'openai'; singleCfg._directAuth = true; singleCfg.defaultProvider = 'openai' }
-        const pModel = pOverrideModel || agent.modelId || targetChat.model || null
+        const pModel = agent.modelId || targetChat.model || null
         if (pModel) singleCfg.customModel = pModel
         if (targetChat.workingPath) singleCfg.chatWorkingPath = targetChat.workingPath
         if (targetChat.codingMode) singleCfg.codingMode = true
@@ -454,10 +456,11 @@ async function onMentionSend(text) {
           const res = await window.electronAPI.runAgent({
             chatId, messages: JSON.parse(JSON.stringify(apiMessages)),
             config: JSON.parse(JSON.stringify(singleCfg)),
-            enabledAgents: [], enabledSkills: JSON.parse(JSON.stringify(skillsStore.allSkillObjects)),
+            enabledAgents: [], enabledSkills: JSON.parse(JSON.stringify(filterByRequired(skillsStore.allSkillObjects, agent.requiredSkillIds ?? []))),
             agentPrompts,
-            mcpServers: (targetChat.enabledMcpIds ? mcpStore.servers.filter(s => targetChat.enabledMcpIds.includes(s.id)) : mcpStore.servers).map(s => JSON.parse(JSON.stringify(s))),
-            httpTools: (targetChat.enabledToolIds ? toolsStore.tools.filter(t => targetChat.enabledToolIds.includes(t.id)) : toolsStore.tools).map(t => JSON.parse(JSON.stringify(t))),
+            mcpServers: JSON.parse(JSON.stringify(filterByRequired(mcpStore.servers, agent.requiredMcpServerIds ?? []))),
+            httpTools: JSON.parse(JSON.stringify(filterByRequired(toolsStore.tools, agent.requiredToolIds ?? []))),
+
             knowledgeConfig: { ragEnabled: knowledgeStore.ragEnabled, pineconeApiKey: knowledgeStore.pineconeApiKey, pineconeIndexName: knowledgeStore.pineconeIndexName, embeddingProvider: knowledgeStore.embeddingProvider, embeddingModel: knowledgeStore.embeddingModel, indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs)) },
           })
           const currentChat = chatsStore.chats.find(c => c.id === chatId)
@@ -545,30 +548,15 @@ async function onSend(text, pendingAttachments = []) {
   if (agentProvider === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || '' }
   else if (agentProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || '' }
   else if (agentProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai' }
-  const rawOverrideSingle = targetChat.agentModelOverrides?.[sysAgent?.id]
-  const overrideModelSingle    = rawOverrideSingle ? (typeof rawOverrideSingle === 'object' ? rawOverrideSingle.model    : rawOverrideSingle) : null
-  const overrideProviderSingle = rawOverrideSingle && typeof rawOverrideSingle === 'object' ? rawOverrideSingle.provider : null
-  if (overrideProviderSingle && overrideProviderSingle !== agentProvider) {
-    if (overrideProviderSingle === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
-    else if (overrideProviderSingle === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
-    else if (overrideProviderSingle === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai'; delete singleCfg._directAuth }
-    else if (overrideProviderSingle === 'deepseek') { singleCfg.openaiApiKey = cfg.deepseek?.apiKey || ''; singleCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, ''); singleCfg._resolvedProvider = 'openai'; singleCfg._directAuth = true; singleCfg.defaultProvider = 'openai' }
-  }
-  const agentModel = overrideModelSingle || sysAgent?.modelId || targetChat.model || null
+  const agentModel = sysAgent?.modelId || targetChat.model || null
   if (agentModel) singleCfg.customModel = agentModel
   try {
     const res = await window.electronAPI.runAgent({
       chatId, messages: JSON.parse(JSON.stringify(apiMessages)), config: JSON.parse(JSON.stringify(singleCfg)),
-      enabledAgents: [], enabledSkills: JSON.parse(JSON.stringify(skillsStore.allSkillObjects)), agentPrompts,
+      enabledAgents: [], enabledSkills: JSON.parse(JSON.stringify(filterByRequired(skillsStore.allSkillObjects, sysAgent?.requiredSkillIds ?? []))), agentPrompts,
       ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
-      mcpServers: (targetChat.enabledMcpIds
-        ? mcpStore.servers.filter(s => targetChat.enabledMcpIds.includes(s.id))
-        : mcpStore.servers
-      ).map(s => JSON.parse(JSON.stringify(s))),
-      httpTools: (targetChat.enabledToolIds
-        ? toolsStore.tools.filter(t => targetChat.enabledToolIds.includes(t.id))
-        : toolsStore.tools
-      ).map(t => JSON.parse(JSON.stringify(t))),
+      mcpServers: JSON.parse(JSON.stringify(filterByRequired(mcpStore.servers, sysAgent?.requiredMcpServerIds ?? []))),
+      httpTools: JSON.parse(JSON.stringify(filterByRequired(toolsStore.tools, sysAgent?.requiredToolIds ?? []))),
       knowledgeConfig: { ragEnabled: knowledgeStore.ragEnabled, pineconeApiKey: knowledgeStore.pineconeApiKey, pineconeIndexName: knowledgeStore.pineconeIndexName, embeddingProvider: knowledgeStore.embeddingProvider, embeddingModel: knowledgeStore.embeddingModel, indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs)) },
     })
     if (targetChat.messages) {

@@ -106,9 +106,11 @@ class ChatIndex {
 
   /**
    * Search indexed chats for an agent by keyword query.
-   * Returns top-K relevant snippets.
+   * Returns top-K relevant snippets as { text, chatId, updatedAt } objects.
+   * Options:
+   *   excludeChatId — skip results from this chat (e.g. the current active chat)
    */
-  search(query, agentId, topK = 5) {
+  search(query, agentId, topK = 5, { excludeChatId } = {}) {
     try {
       const indexDir = this._indexDir(agentId)
       if (!fs.existsSync(indexDir)) return []
@@ -122,6 +124,7 @@ class ChatIndex {
       for (const file of files) {
         try {
           const entry = JSON.parse(fs.readFileSync(path.join(indexDir, file), 'utf8'))
+          if (excludeChatId && entry.chatId === excludeChatId) continue
           for (const snippet of entry.snippets) {
             let score = 0
             for (const kw of keywords) {
@@ -142,7 +145,21 @@ class ChatIndex {
       // Sort by score desc, then recency desc
       scored.sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt)
 
-      return scored.slice(0, topK).map(s => s.text)
+      // Deduplicate by chatId — keep the highest-scoring snippet per chat
+      const seen = new Set()
+      const deduped = []
+      for (const s of scored) {
+        if (!seen.has(s.chatId)) {
+          seen.add(s.chatId)
+          deduped.push(s)
+        }
+      }
+
+      return deduped.slice(0, topK).map(s => ({
+        text:      s.text,
+        chatId:    s.chatId,
+        updatedAt: s.updatedAt,
+      }))
     } catch (err) {
       logger.error('[ChatIndex] search error', err.message)
       return []

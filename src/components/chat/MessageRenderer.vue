@@ -23,7 +23,7 @@
 
     <!-- ── Assistant message ────────────────────────────────────────────────── -->
     <template v-else>
-    <!-- ── Todo List Panel (single, live, top of message) ──────────────────── -->
+    <!-- ── Todo List Panel (single, live) ───────────────────────────────────────── -->
     <div v-if="latestTodos.length > 0" class="mb-3 rounded-xl overflow-hidden" style="border:1px solid #d4e4d4; background:#f8faf7;">
       <!-- Header -->
       <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none" style="background:#eaf3ea; border-bottom:1px solid #d4e4d4;" @click="todoCollapsed = !todoCollapsed">
@@ -68,8 +68,14 @@
     <!-- ── Segments loop ────────────────────────────────────────────────────── -->
     <template v-for="(seg, i) in message.segments" :key="i">
 
-      <!-- Text segment -->
-      <div v-if="seg.type === 'text'" class="prose-clankai" style="max-width:none;" v-html="renderMarkdown(seg.content)" @click="handleContentClick" />
+      <!-- Text segment: always show if there's content -->
+      <div v-if="seg.type === 'text' && seg.content && !isIntermediateText(i)" 
+           class="prose-clankai" 
+           style="max-width:none;" 
+           v-html="renderMarkdown(seg.content)" 
+           @click="handleContentClick"
+           :data-segment-index="i"
+           :data-content-length="seg.content.length" />
 
       <!-- File diff (file_operation write/append) -->
       <div v-else-if="seg.type === 'tool' && isFileWrite(seg)" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #d1d5db; font-size:0.78rem;">
@@ -139,10 +145,11 @@
           <span style="font-size:0.85rem;">
             <span v-if="seg.name === 'dispatch_subagent'">🤖</span>
             <span v-else-if="seg.name === 'background_task'">⚙️</span>
+            <span v-else-if="seg.name === 'update_soul_memory' || seg.name === 'read_soul_memory'">🧠</span>
             <span v-else>🔧</span>
           </span>
           <!-- Tool name -->
-          <span style="font-size:0.78rem; font-weight:600; color:#374151;">{{ seg.name }}</span>
+          <span style="font-size:0.78rem; font-weight:600; color:#374151;">{{ toolDisplayName(seg) }}</span>
           <!-- Summary label -->
           <span class="flex-1 truncate" style="font-size:0.75rem; color:#6b7280;">
             {{ toolSummary(seg) }}
@@ -207,13 +214,27 @@
           <span v-if="seg.source" style="font-size:0.7rem; color:#9CA3AF; margin-left:6px;">{{ t('chats.from') }} {{ seg.source }}</span>
         </div>
         <div class="inline-images-grid p-3">
-          <img
+          <div
             v-for="(img, imgIdx) in seg.images"
             :key="imgIdx"
-            :src="resolveImageSrc(img)"
-            class="inline-image"
-            @click="openImageFullscreen(resolveImageSrc(img))"
-          />
+            class="inline-image-wrap"
+          >
+            <img
+              :src="resolveImageSrc(img)"
+              class="inline-image"
+              @click="openImageFullscreen(resolveImageSrc(img), img)"
+            />
+            <button
+              class="inline-image-quote-btn"
+              :title="t('chats.quoteImage')"
+              @click.stop="emit('quote-image', { img, src: resolveImageSrc(img) })"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
+              </svg>
+              {{ t('chats.quoteImage') }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -222,25 +243,66 @@
       <!-- 3D models detected in assistant message -->
       <BabylonViewer v-for="url in modelUrls" :key="url" :src="url" />
 
-      <!-- Wave bar + duration: outside segments block so it shows even with no content yet -->
-      <div v-if="message.streaming && !hasPendingPermission" class="flex items-end gap-0.5 h-5 mt-1 pl-1">
-        <span v-for="n in 5" :key="n" class="wave-bar" :style="`--bar-color:#4c8446; --bar-glow:#4c844680; animation-delay:${(n-1)*0.13}s;`" />
+      <!-- Wave bar: outside segments block so it shows even with no content yet -->
+      <div v-if="message.streaming && !hasPendingPermission" class="flex items-center gap-3 mt-1 pl-1">
+        <div class="flex items-end gap-0.5 h-5">
+          <span v-for="n in 5" :key="n" class="wave-bar" :style="`--bar-color:#4c8446; --bar-glow:#4c844680; animation-delay:${(n-1)*0.13}s;`" />
+        </div>
+        <div v-if="cachedTokens" class="flex items-center gap-1.5" style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:#6b9e65;">
+          <span>in {{ formatTokenCount(cachedTokens.input) }}</span>
+          <span style="opacity:0.5;">·</span>
+          <span>out {{ formatTokenCount(cachedTokens.output) }}</span>
+          <span style="opacity:0.5;">·</span>
+          <span style="color:#4c8446; font-weight:600;">total {{ formatTokenCount(cachedTokens.total) }}</span>
+        </div>
       </div>
-      <!-- Duration label: live while streaming, final when done -->
-      <div v-if="message.streaming && message.streamingStartedAt && !hasPendingPermission" class="flex items-center gap-1 mt-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
-        <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span>{{ t('chats.cookingFor') }} {{ formatDuration(elapsedMs) }}…</span>
+
+    <!-- ── Agent Progress Panel (single row) - HIDDEN ────────────────────────── -->
+    <!-- <div v-if="agentSteps.length > 0 && message.streaming" class="mt-3 rounded-lg overflow-hidden" style="background: linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%); box-shadow: 0 4px 16px rgba(5, 150, 105, 0.25);">
+      <div class="flex items-center justify-between px-3 py-2" style="font-size:0.72rem; font-family:monospace;">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span v-if="currentAgentStep?.details?.iteration !== undefined">
+            <span style="color:#fbbf24;">{{ t('chats.agentIter') }}</span>
+            <span style="color:#fdf6b2; margin-left:3px;">{{ currentAgentStep.details.iteration }}</span>
+          </span>
+          <span v-if="currentAgentStep?.details?.tools !== undefined">
+            <span style="color:#fbbf24;">Tools</span>
+            <span style="color:#fdf6b2; margin-left:3px;">{{ currentAgentStep.details.tools }}</span>
+          </span>
+          <span v-if="currentAgentStep?.details?.msgs !== undefined">
+            <span style="color:#fbbf24;">Msgs</span>
+            <span style="color:#fdf6b2; margin-left:3px;">{{ currentAgentStep.details.msgs }}</span>
+          </span>
+          <span v-if="currentAgentStep?.details?.thinking !== undefined">
+            <span style="color:#fbbf24;">Thinking</span>
+            <span style="margin-left:3px;" :style="currentAgentStep.details.thinking ? 'color:#fde68a;' : 'color:#fbbf24a0;'">{{ currentAgentStep.details.thinking ? 'on' : 'off' }}</span>
+          </span>
+          <span v-if="currentAgentStep?.details?.currentTools">
+            <span style="color:#fbbf24a0;">↳ </span><span style="color:#f1faee;">{{ currentAgentStep.details.currentTools }}</span>
+          </span>
+        </div>
       </div>
-      <div v-else-if="!message.streaming && message.durationMs" class="flex items-center gap-1 mt-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
-        <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span>{{ t('chats.cookedFor') }} {{ formatDuration(message.durationMs) }}</span>
-      </div>
-  </template>
+    </div> -->
+
+    <!-- Duration label: live while streaming, final when done -->
+    <div v-if="message.streaming && message.streamingStartedAt && !hasPendingPermission" class="flex items-center gap-2 mt-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
+      <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>{{ t('chats.cookingFor') }} {{ formatDuration(elapsedMs) }}…</span>
+    </div>
+    <div v-else-if="!message.streaming && message.durationMs" class="flex items-center gap-2 mt-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
+      <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>{{ t('chats.cookedFor') }} {{ formatDuration(message.durationMs) }}</span>
+      <template v-if="finalTokens">
+        <span style="opacity:0.4;">·</span>
+        <span style="font-family:'JetBrains Mono',monospace; color:#9CA3AF;">in {{ formatTokenCount(finalTokens.input) }} · out {{ formatTokenCount(finalTokens.output) }} · <span style="font-weight:600;">total {{ formatTokenCount(finalTokens.total) }}</span></span>
+      </template>
+    </div>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch, onBeforeUnmount, toRaw } from 'vue'
+import { ref, computed, reactive, watch, watchEffect, onBeforeUnmount, toRaw } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import BabylonViewer from './BabylonViewer.vue'
@@ -258,6 +320,8 @@ const { t } = useI18n()
 const props = defineProps({
   message: { type: Object, required: true }
 })
+
+const emit = defineEmits(['quote-image'])
 
 // ── Image attachments (from clipboard paste / file attach) ────────────────────
 const imageAttachments = computed(() =>
@@ -484,6 +548,85 @@ async function handlePermissionReject(seg) {
 // ── Todo panel state ─────────────────────────────────────────────────────────
 const todoCollapsed = ref(false)
 
+// ── Agent Progress state ──────────────────────────────────────────────────────
+const agentSteps = computed(() => {
+  const segs = props.message.segments || []
+  const steps = []
+  for (const seg of segs) {
+    if (seg.type === 'agent_step') {
+      steps.push({
+        id: seg.id || `step-${steps.length}`,
+        title: seg.title || 'Processing...',
+        status: seg.status || 'pending', // completed, in_progress, pending
+        duration: seg.duration || 0,
+        details: seg.details || {},
+        timestamp: seg.timestamp,
+      })
+    }
+  }
+  return steps
+})
+
+// 只返回最新的一条步骤（当前正在执行的或最后一条）
+const currentAgentStep = computed(() => {
+  const steps = agentSteps.value
+  if (steps.length === 0) return null
+  
+  // 优先找正在执行的步骤
+  const inProgress = steps.find(s => s.status === 'in_progress')
+  if (inProgress) return inProgress
+  
+  // 否则返回最后一条
+  return steps[steps.length - 1]
+})
+
+const currentAgentStepIndex = computed(() => {
+  const steps = agentSteps.value
+  const step = currentAgentStep.value
+  if (!step) return -1
+  return steps.findIndex(s => s.id === step.id)
+})
+
+// Token usage for current message (live during streaming)
+const currentTokens = computed(() => {
+  // First priority: message.tokenUsage (set from step-complete)
+  const tu = props.message.tokenUsage
+  if (tu && (tu.input || tu.output)) {
+    return { input: tu.input || 0, output: tu.output || 0, total: (tu.input || 0) + (tu.output || 0) }
+  }
+  // Fall back to agent step details (available in step-tools events)
+  const step = currentAgentStep.value
+  if (!step?.details) return null
+  const input = step.details.inputTokens || 0
+  const output = step.details.outputTokens || 0
+  if (input === 0 && output === 0) return null
+  return { input, output, total: input + output }
+})
+
+// Cached tokens: once set, never goes back to null (prevents flicker when streaming ends)
+const cachedTokens = ref(null)
+watchEffect(() => {
+  const t = currentTokens.value
+  if (t) cachedTokens.value = t
+})
+
+// Token usage after streaming ends (persisted on message)
+const finalTokens = computed(() => {
+  const t = props.message.tokenUsage
+  if (!t) return null
+  const input = t.input || 0
+  const output = t.output || 0
+  if (input === 0 && output === 0) return null
+  return { input, output, total: input + output }
+})
+
+function formatTokenCount(count) {
+  if (!count) return '0'
+  if (count < 1000) return count.toString()
+  if (count < 1000000) return (count / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+  return (count / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M'
+}
+
 const latestTodos = computed(() => {
   const segs = props.message.segments || []
   const map = new Map()
@@ -532,6 +675,16 @@ const expandedDiffs   = reactive({})
 const diffCache       = reactive({})
 const copiedBlock     = ref(null)
 
+/**
+ * Returns true if this text segment is "intermediate narration" — i.e. the model
+ * said something like "Let me read the file:" right before calling a tool.
+ * Currently disabled to ensure all messages are shown.
+ */
+function isIntermediateText(i) {
+  // Disabled: always show all text segments
+  return false
+}
+
 // A tool is expanded if:
 //  - output is undefined (still running) => always expanded
 //  - user manually toggled it open
@@ -561,6 +714,12 @@ function isHiddenTool(seg) {
 function isFileWrite(seg) {
   return seg.name === 'file_operation' &&
     seg.input && ['write', 'append'].includes(seg.input.operation)
+}
+
+function toolDisplayName(seg) {
+  if (seg.name === 'update_soul_memory') return t('chats.toolUpdateMemory')
+  if (seg.name === 'read_soul_memory') return t('chats.toolReadMemory')
+  return seg.name
 }
 
 function toolSummary(seg) {
@@ -608,17 +767,23 @@ function resolveImageSrc(img) {
   return ''
 }
 
-// Open image in a new window for fullscreen viewing
-function openImageFullscreen(dataUri) {
+// Open image with the OS default image viewer (or fallback to a new browser window)
+function openImageFullscreen(dataUri, imgObj) {
+  if (window.electronAPI?.openImageDataUri) {
+    const ext = imgObj?.mimeType?.split('/')[1] || 'png'
+    window.electronAPI.openImageDataUri(dataUri, `image.${ext}`)
+    return
+  }
+  // Fallback for non-Electron environments
   const win = window.open('', '_blank')
   if (!win) return
   const style = win.document.createElement('style')
   style.textContent = 'body{margin:0;background:#1A1A1A;display:flex;align-items:center;justify-content:center;min-height:100vh;}img{max-width:100%;max-height:100vh;object-fit:contain;}'
   win.document.head.appendChild(style)
-  win.document.title = 'MCP Image'
-  const img = win.document.createElement('img')
-  img.src = dataUri
-  win.document.body.appendChild(img)
+  win.document.title = 'Image'
+  const imgEl = win.document.createElement('img')
+  imgEl.src = dataUri
+  win.document.body.appendChild(imgEl)
 }
 
 // ── File diff ────────────────────────────────────────────────────────────────
@@ -750,6 +915,36 @@ function diffMarker(type) {
 .inline-image:hover {
   opacity: 0.9;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.inline-image-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.inline-image-quote-btn {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  z-index: 10;
+}
+.inline-image-wrap:hover .inline-image-quote-btn {
+  opacity: 1;
+}
+.inline-image-quote-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 
 .wave-bar {

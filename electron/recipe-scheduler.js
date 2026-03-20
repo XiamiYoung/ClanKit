@@ -76,8 +76,23 @@ function buildAgentConfig(agent, globalCfg) {
   delete cfg.openaiBaseURL
   delete cfg._directAuth
   delete cfg._resolvedProvider
+  delete cfg.provider
 
-  const provider = agent.providerId || globalCfg.defaultProvider || 'anthropic'
+  const providerId = agent.providerId || globalCfg.defaultProvider || 'anthropic'
+
+  // Check if providerId is a UUID referencing config.providers[]
+  const customProvider = (globalCfg.providers || []).find(p => p.id === providerId)
+  if (customProvider) {
+    // New provider config structure — AgentLoop handles it via config.provider
+    cfg.provider = {
+      ...customProvider,
+      model: agent.modelId || customProvider.model,
+    }
+    return cfg
+  }
+
+  // Legacy string-based provider
+  const provider = providerId
 
   if (provider === 'anthropic') {
     cfg.apiKey  = globalCfg.anthropic?.apiKey  || ''
@@ -100,10 +115,10 @@ function buildAgentConfig(agent, globalCfg) {
 
   // Apply agent model override if set
   if (agent.modelId) {
-    if (provider === 'anthropic') cfg.anthropic = { ...cfg.anthropic, activeModel: agent.modelId }
+    if (provider === 'anthropic')       cfg.anthropic  = { ...cfg.anthropic,  activeModel:  agent.modelId }
     else if (provider === 'openrouter') cfg.openrouter = { ...cfg.openrouter, defaultModel: agent.modelId }
-    else if (provider === 'openai') cfg.openai = { ...cfg.openai, model: agent.modelId }
-    else if (provider === 'deepseek') cfg.deepseek = { ...cfg.deepseek, model: agent.modelId }
+    else if (provider === 'openai')     cfg.openai     = { ...cfg.openai,     model:        agent.modelId }
+    else if (provider === 'deepseek')   cfg.deepseek   = { ...cfg.deepseek,   model:        agent.modelId }
   }
 
   return cfg
@@ -229,9 +244,9 @@ async function _executeRecipe(recipe, triggeredBy = 'schedule') {
       agentCfg.artifactPath       = globalCfg.artifactPath || globalCfg.artyfactPath || ''
       agentCfg.skillsPath         = globalCfg.skillsPath   || ''
       agentCfg.DoCPath            = globalCfg.DoCPath       || ''
-      agentCfg.chatPermissionMode = 'allow_all'
+      agentCfg.chatPermissionMode = 'all_permissions'
       agentCfg.chatAllowList      = []
-      agentCfg.sandboxConfig      = globalCfg.sandboxConfig || { defaultMode: 'allow_all', sandboxAllowList: [], dangerBlockList: [] }
+      agentCfg.sandboxConfig      = globalCfg.sandboxConfig || { defaultMode: 'all_permissions', sandboxAllowList: [], dangerBlockList: [] }
 
       // Build name→output map for {{output:Name}} token resolution
       const nameToOutput = {}

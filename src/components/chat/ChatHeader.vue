@@ -758,15 +758,8 @@ const effectiveProviderLabel = computed(() => {
 })
 
 const effectiveModelLabel = computed(() => {
-  const c = chat.value
-  if (!c) return '—'
   const agentId = activeSystemAgentIds.value[0]
   if (!agentId) return '—'
-  const override = c.agentModelOverrides?.[agentId]
-  if (override) {
-    const m = typeof override === 'object' ? override.model : override
-    return `${m} (override)`
-  }
   return agentsStore.getAgentById(agentId)?.modelId || '—'
 })
 

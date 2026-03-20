@@ -15,6 +15,16 @@
           <span class="ai-magic-context-text">{{ contextLabel }}</span>
           <span v-if="hasSelection" class="ai-magic-context-preview">{{ selectionPreview }}</span>
         </div>
+        <button
+          v-if="hasSelection"
+          class="ai-magic-context-clear"
+          @click="$emit('clear-selection')"
+          :title="t('notes.clearSelection')"
+        >
+          <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
 
       <!-- Conversation area -->
@@ -51,7 +61,7 @@
             <div class="ai-magic-ai-content" v-html="renderAiContent(msg.content)"></div>
             <!-- Tool calls + Permission prompts -->
             <div v-if="msg.toolCalls && msg.toolCalls.length > 0" class="ai-magic-tools">
-              <template v-for="tc in msg.toolCalls" :key="tc.id || tc.blockId">
+              <template v-for="tc in msg.toolCalls" :key="tc._localKey || tc.id || tc.blockId">
                 <!-- Permission gate block -->
                 <div v-if="tc._permBlock" class="ai-magic-perm-block" :class="{ 'ai-magic-perm-resolved': tc.status !== 'pending' }">
                   <div class="ai-magic-perm-header">
@@ -179,7 +189,7 @@ const props = defineProps({
   permissionMode: { type: String, default: 'allow_all' },
 })
 
-const emit = defineEmits(['close', 'send', 'stop', 'apply', 'revert', 'permission-respond'])
+const emit = defineEmits(['close', 'send', 'stop', 'apply', 'revert', 'permission-respond', 'clear-selection'])
 
 function onPermAllow(tc, decision) {
   if (tc.status !== 'pending') return
@@ -360,6 +370,26 @@ defineExpose({ focusInput })
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.4;
+}
+
+.ai-magic-context-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 1px;
+  border: 1px solid rgba(217, 119, 6, 0.3);
+  border-radius: 9999px;
+  background: rgba(217, 119, 6, 0.08);
+  color: #D97706;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.ai-magic-context-clear:hover {
+  background: rgba(217, 119, 6, 0.18);
+  border-color: rgba(217, 119, 6, 0.5);
 }
 
 /* Conversation area */

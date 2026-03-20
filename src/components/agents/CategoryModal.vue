@@ -57,11 +57,14 @@
                 ref="nameRef"
                 v-model="localName"
                 class="cat-input"
+                :class="{ 'cat-input--error': nameError }"
                 type="text"
                 maxlength="40"
                 :placeholder="t('categoryModal.namePlaceholder')"
                 @keydown.enter="submit"
+                @input="nameError = ''"
               />
+              <span v-if="nameError" class="cat-name-error">{{ nameError }}</span>
             </div>
           </div>
         </div>
@@ -98,14 +101,15 @@ defineOptions({ inheritAttrs: false })
 const { t } = useI18n()
 
 const props = defineProps({
-  visible:          { type: Boolean, default: false },
-  category:         { type: Object,  default: null },
-  mode:             { type: String,  default: null },  // 'create' | 'rename' | null (auto-detect)
-  type:             { type: String,  default: 'system' },  // 'system' | 'user'
-  initial:          { type: Object,  default: () => ({ name: '', emoji: '📁' }) },
-  noun:             { type: String,  default: 'Category' }, // e.g. 'Category' | 'Folder'
-  renameTitle:      { type: String,  default: '' },          // override rename mode title
-  showTypeSelector: { type: Boolean, default: true },
+  visible:             { type: Boolean, default: false },
+  category:            { type: Object,  default: null },
+  mode:                { type: String,  default: null },  // 'create' | 'rename' | null (auto-detect)
+  type:                { type: String,  default: 'system' },  // 'system' | 'user'
+  initial:             { type: Object,  default: () => ({ name: '', emoji: '📁' }) },
+  noun:                { type: String,  default: 'Category' }, // e.g. 'Category' | 'Folder'
+  renameTitle:         { type: String,  default: '' },          // override rename mode title
+  showTypeSelector:    { type: Boolean, default: true },
+  existingCategories:  { type: Array,   default: () => [] },   // for duplicate check
 })
 
 const emit = defineEmits(['confirm', 'close', 'saved'])
@@ -118,6 +122,7 @@ const localEmoji     = ref(props.initial?.emoji || '📁')
 const localType      = ref(props.type || 'system')
 const showEmojiPicker = ref(false)
 const nameRef        = ref(null)
+const nameError      = ref('')
 
 // Re-sync local state whenever the modal opens (props may differ between opens)
 watch(() => props.visible, (val) => {
@@ -126,6 +131,7 @@ watch(() => props.visible, (val) => {
     localEmoji.value = props.initial?.emoji || '📁'
     localType.value  = props.type || 'system'
     showEmojiPicker.value = false
+    nameError.value = ''
   }
 })
 
@@ -152,6 +158,19 @@ function onEmojiSelect(emoji) {
 function submit() {
   const name = localName.value.trim()
   if (!name) return
+  nameError.value = ''
+  // Duplicate check: same type, exclude self when renaming
+  const editId = props.category?.id
+  const activeType = detectedMode.value === 'create' ? localType.value : (props.type || 'system')
+  const duplicate = props.existingCategories.find(c =>
+    c.type === activeType &&
+    c.name?.trim().toLowerCase() === name.toLowerCase() &&
+    c.id !== editId
+  )
+  if (duplicate) {
+    nameError.value = `A category named "${duplicate.name}" already exists.`
+    return
+  }
   const data = { name, emoji: localEmoji.value || '📁', type: localType.value }
   emit('confirm', data)
   emit('saved', data)
@@ -334,6 +353,15 @@ function submit() {
 }
 .cat-input::placeholder { color: #4B5563; }
 .cat-input:focus { border-color: #4B5563; }
+.cat-input--error { border-color: #EF4444 !important; }
+.cat-name-error {
+  display: block;
+  margin-top: 0.25rem;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption, 0.8125rem);
+  font-weight: 600;
+  color: #EF4444;
+}
 
 .cat-modal-footer {
   display: flex;

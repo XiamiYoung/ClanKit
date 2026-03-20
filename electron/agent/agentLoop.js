@@ -16,6 +16,8 @@ const path = require('path')
 const { logger } = require('../logger')
 const { AnthropicClient }  = require('./core/AnthropicClient')
 const { OpenAIClient }     = require('./core/OpenAIClient')
+const { GeminiClient }       = require('./core/GeminiClient')
+const { GenerateImageTool }  = require('./tools/GenerateImageTool')
 const { ContextManager }   = require('./core/ContextManager')
 const { ToolRegistry }     = require('./tools/ToolRegistry')
 const { SubAgentManager }  = require('./managers/SubAgentManager')
@@ -24,7 +26,7 @@ const { mcpManager }       = require('./mcp/McpManager')
 const { PermissionGate }   = require('./tools/PermissionGate')
 
 const MAX_CONTEXT_TURNS = 20  // max user/assistant turn pairs sent to LLM
-const FLUSH_INTERVAL    = 20  // flush every N completed assistant turns
+const FLUSH_INTERVAL    = 10  // flush every N completed assistant turns
 
 const { MemoryFlush } = require('./core/MemoryFlush')
 const { ChatIndex }   = require('../memory/ChatIndex')
@@ -174,7 +176,7 @@ class AgentLoop {
     if (config.provider && config.provider.type) {
       const pType = config.provider.type
       isOpenAIProvider = (pType === 'openai' || pType === 'deepseek' || pType === 'minimax')
-      
+
       // Normalize config for clients
       if (isOpenAIProvider) {
         config.openaiApiKey = config.provider.apiKey
@@ -187,11 +189,26 @@ class AgentLoop {
         config.customModel = config.provider.model
       }
     }
-    
-    if (isOpenAIProvider) {
+
+    if (config.provider?.type === 'google') {
+      this.geminiClient = new GeminiClient(config)
+      this.isGoogle = true
+      this.isOpenAI = false
+      // Provide a minimal resolveModel stub so downstream code that calls
+      // this.anthropicClient.resolveModel() (e.g. contextManager) doesn't crash.
+      this.anthropicClient = {
+        resolveModel: () => this.geminiClient.resolveModel(),
+        isOpus46: () => false,
+        supportsThinking: () => false,
+        getClient: () => null,
+        countTokens: async () => 0,
+      }
+    } else if (isOpenAIProvider) {
+      this.isGoogle = false
       this.anthropicClient = new OpenAIClient(config)
       this.isOpenAI = true
     } else {
+      this.isGoogle = false
       this.anthropicClient = new AnthropicClient(config)
       this.isOpenAI = false
     }
@@ -439,7 +456,7 @@ class AgentLoop {
    * @param {Array<string|{id:string, name:string, systemPrompt?:string}>} enabledSkills
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
-  buildSystemPrompt(enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, groupChatContext, agentTone, agentVerbosityLevel, agentPersonalityTags } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}) {
+  buildSystemPrompt(enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, groupChatContext } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}) {
     // When a named agent is active, use it as the opening identity (highest priority).
     // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
     let openingIdentity
@@ -452,19 +469,10 @@ class AgentLoop {
       if (effectiveDescription) line += ` — ${effectiveDescription}`
       line += '.'
       if (systemAgentPrompt) line += `\n\n${systemAgentPrompt}`
-      line += `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${effectiveName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant`
-      // Inject personality dimensions if any are configured
-      const hasDimensions = (agentTone?.length > 0) || (agentVerbosityLevel?.length > 0) || (agentPersonalityTags?.length > 0)
-      if (hasDimensions) {
-        line += `\n\n## PERSONALITY DIMENSIONS\n`
-        if (agentTone?.length > 0)
-          line += `- Communication Style: ${agentTone.join(', ')}\n`
-        if (agentVerbosityLevel?.length > 0)
-          line += `- Response Verbosity: ${agentVerbosityLevel.join(', ')}\n`
-        if (agentPersonalityTags?.length > 0)
-          line += `- Personality: ${agentPersonalityTags.join(', ')}\n`
-        line += `Express yourself through these dimensions consistently — let them shape your vocabulary, sentence rhythm, emotional register, and response length.`
-      }
+
+      // CHARACTER ENFORCEMENT
+      const enforcementBlock = `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${effectiveName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant`
+      line += enforcementBlock
 
       // Group chat context: tell the agent about other participants
       if (groupChatContext?.otherParticipants?.length > 0) {
@@ -481,6 +489,9 @@ class AgentLoop {
         || 'You are a versatile AI assistant running in a desktop application. You help users with a wide range of tasks including research, writing, analysis, coding, creative work, file management, and general knowledge.'
     }
 
+    const imageCfgForPrompt = this.config.imageProvider
+    const hasImageTool = !!(imageCfgForPrompt?.apiKey && imageCfgForPrompt?.baseURL && imageCfgForPrompt?.model)
+
     let system = `${openingIdentity}
 
 CORE TOOLS (always available):
@@ -489,7 +500,7 @@ CORE TOOLS (always available):
 - todo_manager: Plan complex tasks with structured todo lists
 - dispatch_subagent: Delegate a single focused subtask to a specialized sub-agent
 - dispatch_subagents: Dispatch MULTIPLE sub-agents in parallel at once (preferred for 2+ independent tasks)
-- background_task: Run long operations in the background`
+- background_task: Run long operations in the background${hasImageTool ? '\n- generate_image: Generate an image from a text prompt and display it directly in the chat. IMAGE GENERATION RULE: ALWAYS use generate_image for ANY image request. NEVER use execute_shell, Python scripts, or any other method for image generation. Call generate_image ONCE per user request — no draft/iterate/final workflow.' : ''}`
 
     // List active skills — minimal format for cache efficiency
     const skillIds = (enabledSkills || [])
@@ -765,13 +776,15 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
       if (!providerCfg?.apiKey || !providerCfg?.baseURL) return
 
       const flusher = new MemoryFlush({
-        model:    um.model,
-        apiKey:   providerCfg.apiKey,
-        baseURL:  providerCfg.baseURL,
-        isOpenAI: um.provider === 'openai' || um.provider === 'deepseek',
+        model:      um.model,
+        apiKey:     providerCfg.apiKey,
+        baseURL:    providerCfg.baseURL,
+        isOpenAI:   um.provider === 'openai' || um.provider === 'deepseek',
+        directAuth: um.provider === 'deepseek',
       })
       logger.agent(`[AgentLoop] memory flush triggered (${reason})`, { agentId })
-      await flusher.run(conversationMessages, agentId, logsDir).catch(err =>
+      const flushMeta = this.config.chatId ? { chatId: this.config.chatId } : {}
+      await flusher.run(conversationMessages, agentId, logsDir, flushMeta).catch(err =>
         logger.error('[AgentLoop] flush error (non-fatal)', err.message)
       )
       turnsSinceFlush = 0
@@ -779,6 +792,11 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
 
     // Load tools for enabled agents
     this.toolRegistry.loadForAgents(enabledAgents || [])
+
+    // Register memory log tool for this agent (agent-specific, needs agentId)
+    if (this.config.memoryDir && agentPrompts?.systemAgentId) {
+      this.toolRegistry.registerMemoryLogTool(this.config.memoryDir, agentPrompts.systemAgentId)
+    }
 
     // Store full skill prompts for lazy loading via load_skill tool
     this.skillPrompts = new Map()
@@ -844,9 +862,16 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
           ? lastUserMsg.content.slice(0, 500)
           : ''
         if (query.trim().length > 10) {
-          const results = chatIdx.search(query, agentPrompts.systemAgentId, 4)
+          const results = chatIdx.search(
+            query, agentPrompts.systemAgentId, 4,
+            { excludeChatId: this.config.chatId }
+          )
           if (results.length > 0) {
-            historicalContext = results.join('\n\n---\n\n')
+            // Format text for system prompt injection
+            historicalContext = results.map(r => r.text).join('\n\n---\n\n')
+            // Emit sources to UI so user can jump to original chat
+            const sources = results.map(r => ({ chatId: r.chatId, snippet: r.text.slice(0, 120) }))
+            onChunk({ type: 'history_context', sources })
           }
         }
       } catch (err) {
@@ -884,6 +909,13 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
       this.subAgentManager.getBatchToolDefinition(),
       this.taskManager.getToolDefinition()
     ]
+
+    // Add generate_image tool if an image provider is configured
+    const imageCfg = this.config.imageProvider  // { apiKey, baseURL, model }
+    if (imageCfg?.apiKey && imageCfg?.baseURL && imageCfg?.model) {
+      const genImgTool = new GenerateImageTool()
+      allToolsAnthropic.push(genImgTool.definition)
+    }
 
     // Add load_skill tool when skills are available
     if (this.skillPrompts.size > 0) {
@@ -1066,9 +1098,11 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
     const model  = this.anthropicClient.resolveModel()
     const isOpus46 = this.anthropicClient.isOpus46()
     const supportsThinking = this.anthropicClient.supportsThinking()
-    const provider = this.config._directAuth
-      ? (this.config.provider?.type || 'deepseek')
-      : (this.isOpenAI ? 'openai' : 'anthropic')
+    const provider = this.isGoogle
+      ? 'google'
+      : (this.config._directAuth
+          ? (this.config.provider?.type || 'deepseek')
+          : (this.isOpenAI ? 'openai' : 'anthropic'))
 
     // Emit initial context metrics
     onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
@@ -1079,7 +1113,16 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
       id: 'step-init', 
       title: '🤖 Initializing Agent...', 
       status: 'in_progress',
-      details: { iteration: 0, model, provider, tools: 0, thinking: false, msgs: 0 }
+      details: {
+        iteration: 0,
+        model,
+        provider,
+        tools: 0,
+        thinking: false,
+        msgs: 0,
+        inputTokens: this.contextManager.inputTokens || 0,
+        outputTokens: this.contextManager.outputTokens || 0,
+      }
     })
 
     // Resolve configured output token limit: per-chat → global config → hardcoded default
@@ -1248,7 +1291,9 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
             provider,
             tools: allTools.length,
             thinking: isOpus46 ? true : supportsThinking,
-            msgs: createParams.messages.length
+            msgs: createParams.messages.length,
+            inputTokens: this.contextManager.inputTokens || 0,
+            outputTokens: this.contextManager.outputTokens || 0,
           },
           timestamp: new Date().toISOString()
         })
@@ -1259,10 +1304,58 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
           msgs: createParams.messages.length,
           tools: allTools.length,
           thinking: isOpus46 ? 'adaptive' : (supportsThinking ? 'enabled' : 'none'),
-          provider: this.config._directAuth ? 'deepseek' : (this.isOpenAI ? 'openai-compat' : 'anthropic')
+          provider: this.isGoogle ? 'google' : (this.config._directAuth ? 'deepseek' : (this.isOpenAI ? 'openai-compat' : 'anthropic'))
         })
 
-        if (this.isOpenAI) {
+        if (this.isGoogle) {
+          // ── Google Gemini native API (non-streaming, supports inline image output) ──
+          const gc = this.geminiClient.getClient()
+          const contents = this._toGeminiContents(systemPrompt, conversationMessages)
+          let geminiResponse
+          try {
+            geminiResponse = await gc.models.generateContent({ model, contents })
+          } catch (geminiErr) {
+            logger.error('Gemini generateContent FAILED', geminiErr.message)
+            throw geminiErr
+          }
+
+          const parts = geminiResponse.candidates?.[0]?.content?.parts || []
+          const responseImages = []
+
+          for (const part of parts) {
+            if (part.text) {
+              finalText += part.text
+              onChunk({ type: 'text', text: part.text })
+            } else if (part.inlineData) {
+              responseImages.push({
+                data: part.inlineData.data,
+                mimeType: part.inlineData.mimeType || 'image/png'
+              })
+            }
+          }
+
+          if (responseImages.length > 0) {
+            onChunk({
+              type: 'tool_result',
+              name: '_image',
+              result: `[${responseImages.length} image(s) generated]`,
+              images: responseImages
+            })
+          }
+
+          // Gemini image models don't support tool use — always end here
+          stopReason = 'end_turn'
+          assistantContent = [{ type: 'text', text: finalText }]
+          conversationMessages.push({ role: 'assistant', content: finalText || '(image generated)' })
+
+          // Rough token estimate for context tracking
+          const estTokens = JSON.stringify(contents).length / 4
+          this.contextManager.inputTokens = Math.ceil(estTokens)
+          onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
+
+          logger.agent('Gemini response end', { iteration, parts: parts.length, images: responseImages.length })
+
+        } else if (this.isOpenAI) {
           // ── OpenAI-format streaming ──
           const openaiMessages = this._toOpenAIMessages(systemPrompt, conversationMessages)
           // DeepSeek has a per-model cap (default 8192); use configured limit or fall back to 8192
@@ -1284,13 +1377,33 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
               signal: this._abortController.signal
             })
           } catch (streamErr) {
-            logger.error(`${this.config._directAuth ? 'DeepSeek' : 'OpenAI'} stream open FAILED`, streamErr.message)
-            throw streamErr
+            // Some models (e.g. OpenRouter image-generation models) don't support tool use.
+            // If the error says so, retry once without tools so image generation can proceed.
+            const noToolSupport = streamErr.message?.includes('tool use') ||
+                                  streamErr.message?.includes('tool_use') ||
+                                  streamErr.status === 404
+            if (noToolSupport && openaiParams.tools?.length > 0) {
+              logger.warn('Model does not support tool use — retrying without tools', streamErr.message)
+              const paramsNoTools = { ...openaiParams }
+              delete paramsNoTools.tools
+              try {
+                stream = await client.chat.completions.create(paramsNoTools, {
+                  signal: this._abortController.signal
+                })
+              } catch (retryErr) {
+                logger.error('Retry without tools also FAILED', retryErr.message)
+                throw retryErr
+              }
+            } else {
+              logger.error(`${this.config._directAuth ? 'DeepSeek' : 'OpenAI'} stream open FAILED`, streamErr.message)
+              throw streamErr
+            }
           }
 
           // Accumulate streamed tool calls: index → { id, name, arguments }
           const toolCallAccumulators = new Map()
           let streamedReasoningContent = ''
+          const responseImages = []
 
           for await (const chunk of stream) {
             if (this.stopped) break
@@ -1304,8 +1417,27 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
               streamedReasoningContent += delta.reasoning_content
             }
 
-            // Text content
-            if (delta.content) {
+            // Text content — handle both plain string and multimodal array (e.g. OpenRouter Gemini)
+            if (Array.isArray(delta.content)) {
+              for (const part of delta.content) {
+                if (part.type === 'text' && part.text) {
+                  currentTextBlock += part.text
+                  finalText += part.text
+                  onChunk({ type: 'text', text: part.text })
+                } else if (part.type === 'image_url') {
+                  const url = part.image_url?.url || ''
+                  if (url.startsWith('data:')) {
+                    const commaIdx = url.indexOf(',')
+                    const meta = url.slice(0, commaIdx)           // "data:image/png;base64"
+                    const b64  = url.slice(commaIdx + 1)
+                    const mimeType = meta.replace('data:', '').replace(';base64', '')
+                    responseImages.push({ data: b64, mimeType })
+                  } else if (url) {
+                    responseImages.push({ url })
+                  }
+                }
+              }
+            } else if (delta.content) {
               currentTextBlock += delta.content
               finalText += delta.content
               onChunk({ type: 'text', text: delta.content })
@@ -1360,6 +1492,16 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
               id: acc.id,
               type: 'function',
               function: { name: acc.name, arguments: acc.arguments || '{}' }
+            })
+          }
+
+          // Emit any images collected from multimodal delta.content arrays
+          if (responseImages.length > 0) {
+            onChunk({
+              type: 'tool_result',
+              name: '_image',
+              result: `[${responseImages.length} image(s) generated]`,
+              images: responseImages
             })
           }
 
@@ -1470,6 +1612,9 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
                   } else if (promptToolMap.has(toolName)) {
                     const promptTool = promptToolMap.get(toolName)
                     result = { success: true, data: promptTool.promptText || '' }
+                  } else if (toolName === 'generate_image') {
+                    const genImgTool = new GenerateImageTool()
+                    result = await genImgTool.execute(toolInput, this.config.imageProvider || {})
                   } else if (toolName === 'submit_plan') {
                     onChunk({ type: 'plan_submitted', plan: toolInput })
                     result = { success: true, status: 'awaiting_approval' }
@@ -1483,8 +1628,9 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
                       result = await this.toolRegistry.execute(toolName, toolInput, block.id)
                     }
                   }
-                  const mcpImages = result?._mcpImages
-                  if (mcpImages) delete result._mcpImages
+                  const mcpImages = result?._mcpImages || result?.details?.images
+                  if (result?._mcpImages) delete result._mcpImages
+                  if (result?.details?.images) delete result.details.images  // prevent uiResult from double-spreading images
                   onChunk({ type: 'tool_result', name: toolName, result: uiResult(result), ...(mcpImages ? { images: mcpImages } : {}) })
                   return { tool_call_id: block.id, content: serializeToolResult(result, toolName) }
                 })
@@ -1542,9 +1688,27 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
                 })
               }
             } catch (streamErr) {
-              logger.error('stream open FAILED', streamErr.message, streamErr.status)
-              if (streamAttempt > MAX_STREAM_RETRIES) throw streamErr
-              continue
+              // Some models (e.g. OpenRouter image-generation models) reject tool use with 404.
+              // Retry once without tools so image generation can proceed.
+              const noToolSupport = streamErr.status === 404 &&
+                (streamErr.message?.includes('tool use') || streamErr.message?.includes('tool_use'))
+              if (noToolSupport && createParams.tools?.length > 0) {
+                logger.warn('Model does not support tool use — retrying without tools', streamErr.message)
+                const paramsNoTools = { ...createParams }
+                delete paramsNoTools.tools
+                try {
+                  stream = await client.messages.stream(paramsNoTools, {
+                    signal: this._abortController.signal
+                  })
+                } catch (retryErr) {
+                  logger.error('Retry without tools also FAILED', retryErr.message)
+                  throw retryErr
+                }
+              } else {
+                logger.error('stream open FAILED', streamErr.message, streamErr.status)
+                if (streamAttempt > MAX_STREAM_RETRIES) throw streamErr
+                continue
+              }
             }
 
             // Try reading the stream — "no chunks" error surfaces here
@@ -1558,6 +1722,10 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
             if (this.stopped) break
 
             if (event.type === 'content_block_start') {
+              // Log unexpected block types to discover image response format
+              if (!['text','thinking','tool_use'].includes(event.content_block.type)) {
+                logger.agent('UNKNOWN content_block_start type', { type: event.content_block.type, block: JSON.stringify(event.content_block).slice(0, 200) })
+              }
               if (event.content_block.type === 'text') {
                 currentTextBlock = ''
               } else if (event.content_block.type === 'thinking') {
@@ -1576,6 +1744,9 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
               }
 
             } else if (event.type === 'content_block_delta') {
+              if (!['text_delta','thinking_delta','input_json_delta','image_delta'].includes(event.delta.type)) {
+                logger.agent('UNKNOWN content_block_delta type', { type: event.delta.type, delta: JSON.stringify(event.delta).slice(0, 200) })
+              }
               if (event.delta.type === 'text_delta') {
                 currentTextBlock += event.delta.text
                 finalText += event.delta.text
@@ -1584,6 +1755,12 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
                 onChunk({ type: 'thinking', text: event.delta.thinking })
               } else if (event.delta.type === 'input_json_delta' && currentToolUse) {
                 currentToolUse.input += event.delta.partial_json
+              } else if (event.delta.type === 'image_delta' && event.delta.image) {
+                // OpenRouter may stream image data via Anthropic SDK (non-standard extension)
+                const img = event.delta.image
+                if (img.source?.data) {
+                  onChunk({ type: 'tool_result', name: '_image', result: '[image generated]', images: [{ data: img.source.data, mimeType: img.source.media_type || 'image/png' }] })
+                }
               }
 
             } else if (event.type === 'content_block_stop') {
@@ -1623,6 +1800,32 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
               if (finalMessage) {
                 this.contextManager.updateUsage(finalMessage)
                 onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
+
+                // Debug: log finalMessage content block types to understand image response format
+                if (Array.isArray(finalMessage.content)) {
+                  logger.agent('finalMessage content blocks', finalMessage.content.map(b => ({
+                    type: b.type,
+                    hasData: b.type === 'image' ? !!b.source?.data : undefined,
+                    dataLen: b.type === 'image' ? b.source?.data?.length : undefined,
+                    textLen: b.type === 'text' ? b.text?.length : undefined,
+                    textPreview: b.type === 'text' ? b.text?.slice(0, 80) : undefined,
+                  })))
+                }
+
+                // Extract any image blocks from finalMessage (OpenRouter image models may
+                // return images in the final message rather than as streaming deltas)
+                if (Array.isArray(finalMessage.content)) {
+                  for (const block of finalMessage.content) {
+                    if (block.type === 'image' && block.source?.data) {
+                      onChunk({
+                        type: 'tool_result',
+                        name: '_image',
+                        result: '[image generated]',
+                        images: [{ data: block.source.data, mimeType: block.source.media_type || 'image/png' }]
+                      })
+                    }
+                  }
+                }
 
                 if (isOpus46 && finalMessage.content) {
                   this.contextManager.appendAssistantContent(conversationMessages, finalMessage.content)
@@ -1740,6 +1943,9 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
                   } else if (promptToolMap.has(toolName)) {
                     const promptTool = promptToolMap.get(toolName)
                     result = { success: true, data: promptTool.promptText || '' }
+                  } else if (toolName === 'generate_image') {
+                    const genImgTool = new GenerateImageTool()
+                    result = await genImgTool.execute(toolInput, this.config.imageProvider || {})
                   } else if (toolName === 'submit_plan') {
                     onChunk({ type: 'plan_submitted', plan: toolInput })
                     result = { success: true, status: 'awaiting_approval' }
@@ -1754,8 +1960,9 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
                     }
                   }
 
-                  const mcpImages = result?._mcpImages
-                  if (mcpImages) delete result._mcpImages
+                  const mcpImages = result?._mcpImages || result?.details?.images
+                  if (result?._mcpImages) delete result._mcpImages
+                  if (result?.details?.images) delete result.details.images  // prevent uiResult from double-spreading images
                   onChunk({ type: 'tool_result', name: toolName, result: uiResult(result), ...(mcpImages ? { images: mcpImages } : {}) })
                   return { type: 'tool_result', tool_use_id: block.id, content: serializeToolResult(result, toolName) }
                 })
@@ -2229,6 +2436,36 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
       }
     }
     return out
+  }
+
+  /**
+   * Convert Anthropic-style messages to Gemini `contents` format.
+   * System prompt is injected as a user/model turn pair (Gemini has no system role).
+   */
+  _toGeminiContents(systemPrompt, messages) {
+    const contents = []
+    if (systemPrompt) {
+      contents.push({ role: 'user', parts: [{ text: systemPrompt }] })
+      contents.push({ role: 'model', parts: [{ text: 'Understood.' }] })
+    }
+    for (const msg of messages) {
+      const role = msg.role === 'assistant' ? 'model' : 'user'
+      const parts = []
+      if (typeof msg.content === 'string') {
+        if (msg.content) parts.push({ text: msg.content })
+      } else if (Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === 'text' && block.text) {
+            parts.push({ text: block.text })
+          } else if (block.type === 'image' && block.source) {
+            parts.push({ inlineData: { mimeType: block.source.media_type, data: block.source.data } })
+          }
+          // tool_result / tool_use blocks are skipped — Gemini image models don't support tool use
+        }
+      }
+      if (parts.length > 0) contents.push({ role, parts })
+    }
+    return contents
   }
 }
 

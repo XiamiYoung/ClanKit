@@ -44,11 +44,26 @@
           :key="msg.id"
           :class="[
             'flex gap-3 cw-animate-fade-in',
-            msg.role === 'system' ? 'justify-center' : msg.role === 'user' ? 'justify-end' : 'justify-start'
+            (msg.isWaitingIndicator || msg.role === 'system') ? 'justify-center' : msg.role === 'user' ? 'justify-end' : 'justify-start'
           ]"
         >
+          <!-- Pre-response waiting row (between user bubble and first assistant bubble) -->
+          <div v-if="msg.isWaitingIndicator" class="cw-pre-response-row" :class="msg.waitingState === 'error' ? 'cw-pre-response-row--error' : ''">
+            <div class="cw-pre-response-wave">
+              <span
+                v-for="n in 5"
+                :key="n"
+                class="cw-wave-bar"
+                :style="`--bar-color:${msg.waitingState === 'error' ? '#ef4444' : '#4c8446'}; --bar-glow:${msg.waitingState === 'error' ? '#ef444480' : '#4c844680'}; animation-delay:${(n-1)*0.13}s;`"
+              />
+            </div>
+            <span v-if="msg.waitingState === 'error'" class="cw-pre-response-error">
+              {{ msg.waitingError || t('chats.preResponseFailed') }}
+            </span>
+          </div>
+
           <!-- System info banner (stop/resume/compaction notifications) -->
-          <div v-if="msg.role === 'system'" class="cw-system-banner"
+          <div v-else-if="msg.role === 'system'" class="cw-system-banner"
             :class="msg.compaction ? 'cw-system-banner--compact' : msg.interruptType === 'stop' ? 'cw-system-banner--stop' : msg.interruptType === 'pause' ? 'cw-system-banner--pause' : ''">
             <!-- Compaction icon -->
             <svg v-if="msg.compaction" style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -99,12 +114,25 @@
 
           <!-- Message bubble (not rendered for system banners) -->
           <div
-            v-if="msg.role !== 'system'"
+            v-if="!msg.isWaitingIndicator && msg.role !== 'system'"
             :class="[
               'relative group/bubble max-w-[75%]',
               msg.role === 'assistant' ? 'min-w-[50%]' : ''
             ]"
           >
+            <!-- Resend button shown when pre-response failed for this user message -->
+            <button
+              v-if="msg.role === 'user' && hasFailedWaitingAfter(msg.id)"
+              class="cw-user-resend-btn"
+              @click="$emit('resend-message', msg)"
+              :title="getWaitingErrorForUser(msg.id)"
+            >
+              <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
+              </svg>
+              <span>{{ t('chats.resend') }}</span>
+            </button>
+
             <!-- Hover action buttons -->
             <div
               v-if="!msg.streaming"
@@ -160,11 +188,15 @@
               class="cw-msg-bubble"
               :class="[msg.role === 'user' ? 'cw-msg-bubble-user' : 'cw-msg-bubble-assistant', shakingIds.has(msg.id) ? 'bubble-shake' : '']"
             >
-              <div v-if="msg.streaming && (!msg.content && (!msg.segments || msg.segments.length === 0))" class="cw-thinking">
+              <div v-if="msg.isWaitingIndicator" class="cw-thinking">
+                <span style="font-size:0.75rem; color:#6B7280; margin-right:8px;">{{ t('chats.waitingForResponse') }}</span>
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+              </div>
+              <div v-else-if="msg.streaming && (!msg.content && (!msg.segments || msg.segments.length === 0))" class="cw-thinking">
                 <span class="dot"></span><span class="dot"></span><span class="dot"></span>
               </div>
               <div :class="msg.role === 'user' ? 'user-content' : 'prose-clankai'">
-                <MessageRenderer :message="msg" />
+                <MessageRenderer :message="msg" @quote-image="emit('quote-image', $event)" />
               </div>
               <PlanCard
                 v-if="msg.planData"
@@ -200,6 +232,7 @@
           </div>
         </div>
       </template>
+
     </div>
 
     <!-- Input area: use default slot for custom input, or built-in basic input -->
@@ -311,7 +344,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useChatsStore } from '../../stores/chats'
 import { useAgentsStore } from '../../stores/agents'
 import { useI18n } from '../../i18n/useI18n'
@@ -328,7 +361,7 @@ const props = defineProps({
   onRefinePlan:  { type: Function, default: null },
 })
 
-const emit = defineEmits(['send', 'stop', 'quote', 'delete-message', 'send-with-attachments'])
+const emit = defineEmits(['send', 'stop', 'quote', 'delete-message', 'send-with-attachments', 'resend-message', 'quote-image'])
 
 const chatsStore = useChatsStore()
 const agentsStore = useAgentsStore()
@@ -469,6 +502,25 @@ watch(visibleMessages, (msgs) => {
   }
 }, { deep: true, flush: 'post' })
 
+function getFailedWaitingForUser(userMsgId) {
+  const msgs = chat.value?.messages || []
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i]
+    if (m?.isWaitingIndicator && m?.sourceUserMessageId === userMsgId && m?.waitingState === 'error') {
+      return m
+    }
+  }
+  return null
+}
+
+function hasFailedWaitingAfter(userMsgId) {
+  return !!getFailedWaitingForUser(userMsgId)
+}
+
+function getWaitingErrorForUser(userMsgId) {
+  return getFailedWaitingForUser(userMsgId)?.waitingError || t('chats.preResponseFailed')
+}
+
 // ── Time formatter ──
 function formatTime(ts) {
   if (!ts) return ''
@@ -533,8 +585,11 @@ function scrollToBottom(force = false) {
       if (messagesEl.value) {
         messagesEl.value.scrollTop = messagesEl.value.scrollHeight
       }
+      // Use requestAnimationFrame twice to ensure the scroll has been applied
       requestAnimationFrame(() => {
-        programmaticScrollCount = Math.max(0, programmaticScrollCount - 1)
+        requestAnimationFrame(() => {
+          programmaticScrollCount = Math.max(0, programmaticScrollCount - 1)
+        })
       })
     })
   })
@@ -575,16 +630,94 @@ watch(() => chat.value?.messages, (msgs, oldMsgs) => {
 })
 
 // Reset scroll state when chatId changes
-watch(() => props.chatId, () => {
+watch(() => props.chatId, async () => {
   userScrolled.value = false
   visibleLimit.value = 25
+  // Ensure messages are loaded before scrolling
+  await chatsStore.ensureMessages(props.chatId)
+  // Wait for DOM to fully render after switching chats
+  await new Promise(resolve => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve)
+    })
+  })
+  scrollToBottom(true)
+}, { flush: 'post' })
+
+// External scroll-to-bottom request (e.g. minibar chat section click)
+watch(() => chatsStore.scrollToBottomSignal, () => {
   scrollToBottom(true)
 })
+
+// ── Visibility detection for scroll-to-bottom on view switch ──
+let visibilityUnsubscribe = null
+let resizeObserver = null
+
+function setupVisibilityDetection() {
+  if (!messagesEl.value) return
+  
+  // Use IntersectionObserver to detect when the scroll container becomes visible
+  if (typeof IntersectionObserver !== 'undefined') {
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && entry.intersectionRatio > 0) {
+          // Component is now visible - scroll to bottom
+          scrollToBottom(true)
+        }
+      }
+    }, { threshold: 0.1 })
+    
+    observer.observe(messagesEl.value)
+    
+    // Also watch for ResizeObserver to catch when the container size changes (view switch)
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        // When container is resized (e.g., coming back from another view)
+        // and there are messages, scroll to bottom
+        if (chat.value?.messages?.length > 0) {
+          scrollToBottom(true)
+        }
+      })
+      resizeObserver.observe(messagesEl.value)
+    }
+    
+    visibilityUnsubscribe = () => {
+      observer.disconnect()
+      if (resizeObserver) resizeObserver.disconnect()
+    }
+  }
+}
+
+function cleanupVisibilityDetection() {
+  if (visibilityUnsubscribe) {
+    visibilityUnsubscribe()
+    visibilityUnsubscribe = null
+  }
+}
 
 // ── Lifecycle ──
 onMounted(async () => {
   await chatsStore.ensureMessages(props.chatId)
+  // Wait for DOM to fully render after mount
+  await new Promise(resolve => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve)
+    })
+  })
   scrollToBottom(true)
+  setupVisibilityDetection()
+})
+
+onUnmounted(() => {
+  cleanupVisibilityDetection()
+})
+
+// Also setup visibility detection when messagesEl becomes available
+watch(() => messagesEl.value, (el) => {
+  if (el) {
+    cleanupVisibilityDetection()
+    setupVisibilityDetection()
+  }
 })
 
 // ── File attachment ──
@@ -849,6 +982,7 @@ defineExpose({ scrollToBottom })
   display: block;
 }
 
+
 /* ── Hover action buttons ── */
 .cw-msg-action-btn {
   width: 1.75rem;
@@ -872,6 +1006,27 @@ defineExpose({ scrollToBottom })
 }
 .cw-msg-action-btn:hover { background: #374151; }
 .cw-msg-action-btn-delete:hover { background: #DC2626; }
+
+.cw-user-resend-btn {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.625rem;
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #dc2626;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.cw-user-resend-btn:hover {
+  background: #ffe4e6;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
 
 /* ── Message bubbles ── */
 .cw-msg-bubble {
@@ -921,6 +1076,49 @@ defineExpose({ scrollToBottom })
   font-size: var(--fs-secondary);
   color: #9CA3AF;
   margin-top: 0.1875rem;
+}
+
+/* ── Pre-response waiting row ── */
+.cw-pre-response-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  background: rgba(76, 132, 70, 0.08);
+  border: 1px solid rgba(76, 132, 70, 0.2);
+}
+.cw-pre-response-row--error {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.28);
+}
+.cw-pre-response-wave {
+  display: flex;
+  align-items: end;
+  gap: 0.125rem;
+  height: 1rem;
+}
+.cw-wave-bar {
+  width: 0.1875rem;
+  border-radius: 9999px;
+  background: var(--bar-color);
+  box-shadow: 0 0 0.375rem var(--bar-glow);
+  height: 0.35rem;
+  animation: cw-wave-pulse 0.85s ease-in-out infinite;
+}
+.cw-pre-response-row--error .cw-wave-bar {
+  animation-duration: 0.55s;
+}
+.cw-pre-response-error {
+  color: #dc2626;
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+@keyframes cw-wave-pulse {
+  0%, 100% { height: 0.3rem; opacity: 0.6; }
+  50% { height: 0.95rem; opacity: 1; }
 }
 
 /* ── Thinking dots ── */

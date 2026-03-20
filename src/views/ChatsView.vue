@@ -791,6 +791,54 @@
           </div>
         </div>
 
+        <!-- ── History context banner ──────────────────────────────────────── -->
+        <div
+          v-if="historyContextSources.get(chatsStore.activeChatId)?.length"
+          class="shrink-0 flex items-start gap-3 px-4 py-2.5"
+          style="background:#FFF9E6; border-bottom:1px solid #F3E1A0;"
+        >
+          <svg class="shrink-0 mt-0.5" style="width:15px;height:15px;color:#B45309;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <div class="flex-1 min-w-0">
+            <p style="font-size:var(--fs-small);color:#92400E;font-weight:600;margin:0 0 0.25rem;">
+              {{ t('chats.historyContextFound') }}
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="src in historyContextSources.get(chatsStore.activeChatId)"
+                :key="src.chatId"
+                @click="chatsStore.setActiveChat(src.chatId)"
+                class="flex items-center gap-1.5 px-2.5 py-1 rounded-md cursor-pointer"
+                style="background:linear-gradient(135deg,#0F0F0F 0%,#1A1A1A 40%,#374151 100%);color:#fff;font-size:var(--fs-small);font-weight:600;border:none;box-shadow:0 2px 8px rgba(0,0,0,0.12),0 1px 3px rgba(0,0,0,0.08);"
+              >
+                <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+                {{ chatsStore.chats.find(c => c.id === src.chatId)?.title || t('chats.jumpToChat') }}
+              </button>
+            </div>
+          </div>
+          <div class="shrink-0 flex items-center gap-1.5">
+            <span
+              v-if="historyContextCountdown > 0"
+              style="font-size:var(--fs-small);color:#B45309;font-variant-numeric:tabular-nums;min-width:1.5rem;text-align:right;"
+            >{{ historyContextCountdown }}s</span>
+            <button
+              @click="_clearHistoryCountdown(); historyContextSources.delete(chatsStore.activeChatId)"
+              class="cursor-pointer"
+              style="color:#B45309;opacity:0.6;"
+              @mouseenter="e => e.currentTarget.style.opacity='1'"
+              @mouseleave="e => e.currentTarget.style.opacity='0.6'"
+              :title="t('common.close')"
+            >
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
         <!-- ── Messages (shared ChatWindow) + Input ────────────────────────── -->
         <ChatWindow
           ref="chatWindowRef"
@@ -798,8 +846,10 @@
           :showQuote="true"
           :showDelete="true"
           @send="handleChatWindowSend"
+          @resend-message="handleResendMessage"
           @stop="stopAgent(chatsStore.activeChatId)"
           @quote="quoteMessage"
+          @quote-image="handleQuoteImage"
           @delete-message="requestDeleteMessage"
           :on-approve-plan="approvePlan"
           :on-reject-plan="rejectPlan"
@@ -826,6 +876,7 @@
               >
                 <span class="shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#fff; font-size:10px; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);">{{ idx + 1 }}</span>
                 <span class="flex-1 truncate">{{ item.text.slice(0, 80) }}{{ item.text.length > 80 ? '…' : '' }}</span>
+                <span v-if="item._targetAgent" class="shrink-0" style="opacity:0.6; font-size:10px;">→ {{ item._targetAgent }}</span>
                 <span v-if="item.attachments?.length" style="opacity:0.7;">{{ item.attachments.length }} file{{ item.attachments.length !== 1 ? 's' : '' }}</span>
                 <button
                   @click="removeFromQueue(idx)"
@@ -973,9 +1024,31 @@
                 </button>
               </div>
               <div class="flex items-center justify-between mt-1.5 px-1">
-                <div class="flex items-center gap-2 text-xs" style="color:#9CA3AF;">
-                  <span>{{ enabledSkills.length }} skill{{ enabledSkills.length !== 1 ? 's' : '' }} active</span>
-                  <span v-if="attachments.length > 0" style="color:#1A1A1A; font-weight:500;">{{ attachments.length }} file{{ attachments.length !== 1 ? 's' : '' }} attached</span>
+                <!-- Permission Mode Selector & Status (left) -->
+                <div class="flex items-center gap-1.5">
+                  <!-- Permission Mode Label & Selector -->
+                  <div class="flex items-center gap-1">
+                    <label class="text-xs font-medium" style="color:#6B7280; white-space:nowrap;">
+                      {{ t('chats.permissionMode') }}:
+                    </label>
+                    <select
+                      :value="chatPermissionMode"
+                      @change="(e) => updateChatPermissionMode(e.target.value)"
+                      class="permission-mode-select"
+                      :title="permissionModeTitle"
+                    >
+                      <option value="inherit">{{ t('chats.inherit') }}</option>
+                      <option value="chat_only">{{ t('chats.chatOnly') }}</option>
+                      <option value="all_permissions">{{ t('chats.allPermissions') }}</option>
+                    </select>
+                  </div>
+                  <!-- Status Info -->
+                  <span class="text-xs" style="color:#9CA3AF; white-space:nowrap;">
+                    {{ enabledSkills.length }} skill{{ enabledSkills.length !== 1 ? 's' : '' }} active
+                  </span>
+                  <span v-if="attachments.length > 0" style="color:#1A1A1A; font-weight:500; font-size:0.75rem;">
+                    {{ attachments.length }} file{{ attachments.length !== 1 ? 's' : '' }} attached
+                  </span>
                   <span v-if="isGroupChat && stickyTargetLabel" class="sticky-target-indicator">
                     <span class="sticky-target-label">Talking to <strong>{{ stickyTargetLabel }}</strong></span>
                     <button class="sticky-target-clear" @click="clearStickyTarget" title="Reset to all">
@@ -984,7 +1057,7 @@
                   </span>
                 </div>
                 <p class="text-xs" style="color:#9CA3AF;">
-                  Enter to send · Shift+Enter for newline · Ctrl+Shift+A attach
+                  {{ t('chats.keyboardHintsEnterToSend') }}
                 </p>
               </div>
             </div>
@@ -1547,9 +1620,6 @@
     :agent-required-skill-ids="soulViewerTarget.agentRequiredSkillIds"
     :agent-required-mcp-server-ids="soulViewerTarget.agentRequiredMcpServerIds"
     :agent-required-knowledge-base-ids="soulViewerTarget.agentRequiredKnowledgeBaseIds"
-    :agent-tone="soulViewerTarget.agentTone"
-    :agent-verbosity-level="soulViewerTarget.agentVerbosityLevel"
-    :agent-personality-tags="soulViewerTarget.agentPersonalityTags"
     :from-chat="true"
     :read-only="true"
     @close="closeSoulViewer"
@@ -2549,6 +2619,8 @@ function showGridToast(msg) {
   gridToastTimer = setTimeout(() => { gridToastMsg.value = '' }, 2500)
 }
 
+// ── Memory saved notification ──────────────────────────────────────────────
+
 async function gridNewChat() {
   const chat = await chatsStore.createChat('New Chat')
   if (chat) {
@@ -2707,16 +2779,14 @@ const activeChatUsage = computed(() => {
   }
 })
 
-// Resolved model for the active chat: per-chat override → agent modelId → chat.model → contextSnapshot
+// Resolved model for the active chat: agent modelId → chat.model → contextSnapshot
 const activeChatModel = computed(() => {
   const chat = chatsStore.activeChat
   if (!chat) return ''
   const agentId = (chat.groupAgentIds?.length > 0 ? chat.groupAgentIds[0] : null)
     || chat.systemAgentId
-  const override = agentId ? chat.agentModelOverrides?.[agentId] : null
-  const overrideModel = override ? (typeof override === 'object' ? override.model : override) : null
   const agent = agentId ? agentsStore.getAgentById(agentId) : null
-  return overrideModel || agent?.modelId || chat.model || contextSnapshot.value?.model || ''
+  return agent?.modelId || chat.model || contextSnapshot.value?.model || ''
 })
 
 // Agent info for the inspector — prefers snapshot data (has prompts), falls back to store (has names)
@@ -2781,8 +2851,40 @@ watch(() => inspectorSections.debugLog, (open) => { if (open) scrollDebugToBotto
 // Auto-scroll debug log: when inspector dialog opens (if section is already open)
 watch(showContextInspector, (open) => { if (open && inspectorSections.debugLog) scrollDebugToBottom() })
 
-const perChatQueue = reactive(new Map()) // chatId → [{text, attachments}]
-const pendingQueue = computed(() => perChatQueue.get(chatsStore.activeChatId) ?? [])
+const perChatQueue = reactive(new Map()) // chatId → [{text, attachments}]  (or chatId:agentId → [...] for per-agent queues)
+const pendingQueue = computed(() => {
+  const cid = chatsStore.activeChatId
+  if (!cid) return []
+  const items = []
+  for (const [key, queue] of perChatQueue) {
+    if (key === cid || key.startsWith(cid + ':')) {
+      const agentId = key.includes(':') ? key.split(':').slice(1).join(':') : null
+      const agentName = agentId ? agentsStore.getAgentById(agentId)?.name : null
+      for (const item of queue) {
+        items.push({ ...item, _queueKey: key, _targetAgent: agentName })
+      }
+    }
+  }
+  return items
+})
+
+const perChatDrafts = new Map() // chatId → { text, attachments }
+
+function _saveDraftForChat(chatId) {
+  if (!chatId) return
+  if (!inputText.value && attachments.value.length === 0) {
+    perChatDrafts.delete(chatId)
+    return
+  }
+  perChatDrafts.set(chatId, { text: inputText.value, attachments: [...attachments.value] })
+}
+
+function _restoreDraftForChat(chatId) {
+  const draft = perChatDrafts.get(chatId)
+  inputText.value = draft?.text || ''
+  attachments.value = draft?.attachments ? [...draft.attachments] : []
+}
+
 const isCompacting = ref(false)
 
 // ── Resizable sidebar ────────────────────────────────────────────────────────
@@ -2903,9 +3005,18 @@ function getMsgAssistantName(msg) {
 
 const isGroupChat = computed(() => chatsStore.activeChat?.isGroupChat ?? false)
 
-// Sticky @mention target: persists across messages until explicitly changed
+// Sticky @mention target: persists across messages until explicitly changed.
+// Backed by chat.stickyTarget so it survives reloads and chat switches.
 // null = all agents, string[] = specific agent IDs
-const stickyTarget = ref(null)
+const stickyTarget = computed({
+  get() {
+    return chatsStore.activeChat?.stickyTarget ?? null
+  },
+  set(val) {
+    const chat = chatsStore.activeChat
+    if (chat) chat.stickyTarget = val
+  }
+})
 
 function clearStickyTarget() {
   stickyTarget.value = null
@@ -3096,6 +3207,34 @@ const debugModelId = computed(() => {
   const a = configStore.config.anthropic || {}
   return a.utilityModel || a.sonnetModel || '(unset)'
 })
+
+// ── Permission mode for quick selector in status bar ──
+const chatPermissionMode = computed({
+  get: () => chatsStore.activeChat?.permissionMode || 'inherit'
+})
+
+const permissionModeTitle = computed(() => {
+  const mode = chatPermissionMode.value
+  if (mode === 'inherit') return t('chats.permissionModeInherit')
+  if (mode === 'chat_only') return t('chats.permissionModeChatOnly')
+  return t('chats.permissionModeAllPermissions')
+})
+
+function updateChatPermissionMode(newMode) {
+  const chatId = chatsStore.activeChatId
+  if (!chatId || !newMode) return
+  chatsStore.setChatSettings(chatId, {
+    permissionMode: newMode
+  })
+  // If the agent is currently running, push the new permission mode immediately
+  const runningChat = chatsStore.chats.find(c => c.id === chatId && c.isRunning)
+  if (runningChat && window.electronAPI?.updatePermissionMode) {
+    window.electronAPI.updatePermissionMode(chatId, {
+      chatMode: newMode,
+      chatAllowList: chatsStore.activeChat?.chatAllowList || []
+    })
+  }
+}
 
 // Visible messages: show last N messages, but always include the final user+assistant pair
 const visibleMessages = computed(() => {
@@ -3512,11 +3651,6 @@ const soulViewerTarget = ref(null) // { agentId, agentType, agentName, agentDesc
 
 function openSoulViewer(agentId, agentType, agentName) {
   const agent = agentsStore.getAgentById(agentId)
-  // Per-chat override takes priority over global agent model for display
-  const chat = chatsStore.activeChat
-  const rawOverride = chat?.agentModelOverrides?.[agentId]
-  const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
-  const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model : rawOverride) : null
   soulViewerTarget.value = {
     agentId,
     agentType,
@@ -3527,13 +3661,10 @@ function openSoulViewer(agentId, agentType, agentName) {
     agentName: agent?.name || agentName || 'Agent',
     agentDescription: agent?.description || '',
     agentPrompt: agent?.prompt || '',
-    agentProviderId: overrideProvider || agent?.providerId || null,
-    agentModelId: overrideModel || agent?.modelId || null,
+    agentProviderId: agent?.providerId || null,
+    agentModelId: agent?.modelId || null,
     agentVoiceId: agent?.voiceId || null,
     agentAvatar: agent?.avatar || null,
-    agentTone: agent?.tone || [],
-    agentVerbosityLevel: agent?.verbosityLevel || [],
-    agentPersonalityTags: agent?.personalityTags || [],
   }
 }
 
@@ -3541,26 +3672,14 @@ function closeSoulViewer() {
   soulViewerTarget.value = null
 }
 
+
 async function handleSoulViewerUpdateAgent(updates) {
   if (!soulViewerTarget.value) return
   const pid = soulViewerTarget.value.agentId
   const agent = agentsStore.getAgentById(pid)
   if (!agent) return
-  const chatId = chatsStore.activeChatId
 
-  // ── Model/provider changes → per-chat override (not global) ──
-  if (chatId && (updates.providerId !== undefined || updates.modelId !== undefined)) {
-    const newProvider = updates.providerId ?? agent.providerId ?? null
-    const newModel    = updates.modelId ?? agent.modelId ?? null
-    chatsStore.setChatAgentModelOverride(chatId, pid, newProvider, newModel)
-    // Update the soul viewer target so it shows the new override
-    if (soulViewerTarget.value) {
-      if (updates.providerId !== undefined) soulViewerTarget.value.agentProviderId = newProvider
-      if (updates.modelId !== undefined) soulViewerTarget.value.agentModelId = newModel
-    }
-  }
-
-  // ── Other fields (name, avatar, description, prompt, voice) → global agent ──
+  // ── All fields → global agent (providerId/modelId changes are ignored in chat context) ──
   const globalUpdates = { ...updates }
   delete globalUpdates.providerId
   delete globalUpdates.modelId
@@ -3623,18 +3742,12 @@ function resolveProviderName(providerId) {
 function getAgentProviderLabel(agentId) {
   const agent = agentsStore.getAgentById(agentId)
   if (!agent) return 'Default'
-  const chat = chatsStore.activeChat
-  const rawOverride = chat?.agentModelOverrides?.[agentId]
-  const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
-  const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
-  const rawProvider = overrideProvider || agent.providerId || 'anthropic'
+  const rawProvider = agent.providerId || 'anthropic'
   const providerName = resolveProviderName(rawProvider)
-  const model    = overrideModel    || agent.modelId    || ''
+  const model = agent.modelId || ''
   if (model) {
     const short = model.split('/').pop().split(':')[0]
-    return overrideProvider || overrideModel
-      ? `${providerName} · ${short} (override)`
-      : `${providerName} · ${short}`
+    return `${providerName} · ${short}`
   }
   return providerName
 }
@@ -3866,12 +3979,24 @@ function removeAttachment(id) {
 }
 
 function removeFromQueue(idx) {
+  const items = pendingQueue.value
+  if (idx < 0 || idx >= items.length) return
+  const item = items[idx]
+  const queueKey = item._queueKey
+  if (!queueKey) return
+  const queue = perChatQueue.get(queueKey)
+  if (!queue) return
+  // Compute offset: count items from matching queue keys that precede this one
   const cid = chatsStore.activeChatId
-  if (!cid) return
-  const queue = perChatQueue.get(cid)
-  if (queue) {
-    queue.splice(idx, 1)
-    if (queue.length === 0) perChatQueue.delete(cid)
+  let offset = 0
+  for (const [key, q] of perChatQueue) {
+    if (key === queueKey) break
+    if (key === cid || key.startsWith(cid + ':')) offset += q.length
+  }
+  const innerIdx = idx - offset
+  if (innerIdx >= 0 && innerIdx < queue.length) {
+    queue.splice(innerIdx, 1)
+    if (queue.length === 0) perChatQueue.delete(queueKey)
   }
 }
 
@@ -3937,6 +4062,27 @@ function quoteMessage(msg) {
   nextTick(() => mentionInputRef.value?.focus())
 }
 
+function handleQuoteImage({ img, src }) {
+  const mediaType = img.mimeType || 'image/png'
+  const base64 = img.data
+    || (src.startsWith('data:') ? src.split(',')[1] : null)
+
+  if (!base64) return  // URL-only images not supported
+
+  attachments.value.push({
+    id: uuidv4(),
+    name: t('chats.quotedImage'),
+    type: 'image',
+    base64,
+    mediaType,
+    preview: src,
+    size: Math.round(base64.length * 0.75),
+    path: null,
+    _quoted: true,
+  })
+  nextTick(() => mentionInputRef.value?.focus())
+}
+
 function getQuotedSenderName(q) {
   if (!q) return 'Assistant'
   const ac = chatsStore.activeChat
@@ -3981,8 +4127,36 @@ function formatTokenCount(n) {
 // ── Send / Agent Loop ─────────────────────────────────────────────────────────
 const perChatStreamingMsgId = new Map()    // chatId → string
 const perChatStreamingSegments = new Map() // chatId → segment[]
+
+// ── History context banner ─────────────────────────────────────────────────
+// chatId → [{ chatId, snippet }] sources from historical search
+const historyContextSources = reactive(new Map())
+const historyContextCountdown = ref(0)
+let _historyCountdownTimer = null
+
+function _startHistoryCountdown(chatId) {
+  if (_historyCountdownTimer) clearInterval(_historyCountdownTimer)
+  historyContextCountdown.value = 15
+  _historyCountdownTimer = setInterval(() => {
+    historyContextCountdown.value--
+    if (historyContextCountdown.value <= 0) {
+      clearInterval(_historyCountdownTimer)
+      _historyCountdownTimer = null
+      historyContextSources.delete(chatId)
+    }
+  }, 1000)
+}
+
+function _clearHistoryCountdown() {
+  if (_historyCountdownTimer) { clearInterval(_historyCountdownTimer); _historyCountdownTimer = null }
+  historyContextCountdown.value = 0
+}
+
 const streamingSeconds = ref(0)
 let streamingTimer = null
+const collaborationCancelled = ref(false)
+const runningAgentKeys = reactive(new Set()) // "chatId:agentId" — tracks which agents are currently running
+const isInCollaborationLoop = ref(false)    // true while triggerAgentCollaboration is executing
 
 // Helper: get or create last text segment for a chat
 function lastTextSeg(chatId) {
@@ -4042,12 +4216,22 @@ function handleChunk(cId, chunk) {
     return
   }
 
+  if (chunk.type === 'history_context') {
+    if (Array.isArray(chunk.sources) && chunk.sources.length > 0) {
+      historyContextSources.set(cId, chunk.sources)
+      _startHistoryCountdown(cId)
+    }
+    return
+  }
+
   const targetChat = chatsStore.chats.find(c => c.id === cId)
   if (!targetChat || !targetChat.messages) return
 
   // ── Group chat: agent_start / agent_end bracket each agent's response ──
   if (chunk.type === 'agent_start') {
     const agentKey = `${cId}:${chunk.agentId}`
+    const waitingIdx = targetChat.messages.findIndex(m => m.isWaitingIndicator && m.waitingState === 'running')
+    if (waitingIdx >= 0) targetChat.messages.splice(waitingIdx, 1)
     // Guard: skip if a streaming message already exists for this agent (prevent duplicates)
     if (perChatStreamingMsgId.has(agentKey)) {
       dbg(`agent_start DUPLICATE skipped: ${chunk.agentName} (${chunk.agentId})`, 'warn')
@@ -4100,7 +4284,7 @@ function handleChunk(cId, chunk) {
         // so the collaboration loop can detect the turn-pass).
         if (msg.content && msg.agentId) {
           const thisAgentId = msg.agentId
-          const groupIds = (targetChat.groupPersonaIds || [])
+          const groupIds = (targetChat.groupAgentIds || targetChat.groupPersonaIds || [])
           if (groupIds.length > 1) {
             const otherAgents = groupIds
               .filter(id => id !== thisAgentId)
@@ -4139,8 +4323,40 @@ function handleChunk(cId, chunk) {
     }
     perChatStreamingMsgId.delete(agentKey)
     perChatStreamingSegments.delete(agentKey)
+    runningAgentKeys.delete(agentKey)
     dbg(`agent_end: ${chunk.agentName}`, 'info')
     scrollToBottom(false, cId)
+
+    // Per-agent dequeue: if a user message was queued for this specific agent, fire it now
+    // via runAgentAdditional (which does NOT stop existing loops).
+    // Skip dequeue during collaboration loop — those rounds are managed by triggerAgentCollaboration.
+    if (!isInCollaborationLoop.value) {
+      const qKey = `${cId}:${chunk.agentId}`
+      const queue = perChatQueue.get(qKey)
+      if (queue?.length > 0) {
+        const queued = queue.shift()
+        if (queue.length === 0) perChatQueue.delete(qKey)
+        dbg(`Dequeuing for agent ${chunk.agentName}: "${queued.text.slice(0,30)}…"`, 'info')
+        nextTick(() => _fireGroupAgentsDirect(cId, targetChat, queued.text, [chunk.agentId], queued.attachments)
+          .catch(err => dbg(`_fireGroupAgentsDirect dequeue error: ${err.message}`, 'error')))
+      } else {
+        // No more queued work for this agent. Check if ALL agents for this chat are now idle
+        // — if so, clear isRunning (the primary run's finally block may have already exited).
+        const anyStillRunning = [...runningAgentKeys].some(k => k.startsWith(cId + ':'))
+        const anyQueued = [...perChatQueue.keys()].some(k => k.startsWith(cId + ':') && perChatQueue.get(k)?.length > 0)
+        if (!anyStillRunning && !anyQueued) {
+          const fc = chatsStore.chats.find(c => c.id === cId)
+          if (fc && fc.isRunning) {
+            dbg(`Last side-fired agent done — isRunning → false for ${cId}`)
+            fc.isRunning = false
+            fc.isThinking = false
+            fc.isCallingTool = false
+            fc.currentToolCall = null
+            if (cId !== chatsStore.activeChatId) chatsStore.markCompleted(cId)
+          }
+        }
+      }
+    }
     return
   }
 
@@ -4152,6 +4368,34 @@ function handleChunk(cId, chunk) {
     lastTextSeg(routeKey).content += chunk.text
     flushSegments(routeKey)
     scrollToBottom(false, cId)
+  } else if (chunk.type === 'agent_step') {
+    // Agent progress step - replace existing or add new (only keep current step)
+    const segments = perChatStreamingSegments.get(routeKey) || []
+    const existingStepIndex = segments.findIndex(s => s.type === 'agent_step')
+    const newStep = {
+      type: 'agent_step',
+      id: chunk.id,
+      title: chunk.title,
+      status: chunk.status,
+      duration: chunk.duration,
+      details: chunk.details || {},
+      timestamp: chunk.timestamp,
+    }
+    
+    if (existingStepIndex >= 0) {
+      segments[existingStepIndex] = newStep
+    } else {
+      segments.push(newStep)
+    }
+    perChatStreamingSegments.set(routeKey, segments)
+    flushSegments(routeKey)
+    // Save latest token counts directly on the streaming message for persistence after stream ends
+    const d = chunk.details || {}
+    if ((d.inputTokens || d.outputTokens) && targetChat) {
+      const msgId = perChatStreamingMsgId.get(routeKey)
+      const streamMsg = msgId ? targetChat.messages?.find(m => m.id === msgId) : targetChat.messages?.slice().reverse().find(m => m.role === 'assistant' && m.streaming)
+      if (streamMsg) streamMsg.tokenUsage = { input: d.inputTokens || 0, output: d.outputTokens || 0 }
+    }
   } else if (chunk.type === 'tool_call') {
     dbg(`tool_call: ${chunk.name} input=${JSON.stringify(chunk.input).slice(0,80)}`, 'warn')
     if (targetChat) {
@@ -4215,6 +4459,16 @@ function handleChunk(cId, chunk) {
   } else if (chunk.type === 'context_update') {
     if (chunk.metrics) {
       targetChat.contextMetrics = { ...chunk.metrics }
+      const msgId = perChatStreamingMsgId.get(routeKey)
+      const streamMsg = msgId
+        ? targetChat.messages?.find(m => m.id === msgId)
+        : targetChat.messages?.slice().reverse().find(m => m.role === 'assistant' && m.streaming)
+      if (streamMsg && ((chunk.metrics.inputTokens || 0) > 0 || (chunk.metrics.outputTokens || 0) > 0)) {
+        streamMsg.tokenUsage = {
+          input: chunk.metrics.inputTokens || 0,
+          output: chunk.metrics.outputTokens || 0,
+        }
+      }
     }
     dbg(`context: ${chunk.metrics?.percentage ?? 0}% used (${chunk.metrics?.inputTokens ?? 0} in / ${chunk.metrics?.outputTokens ?? 0} out) compactions=${chunk.metrics?.compactionCount ?? 0}`, 'info')
   } else if (chunk.type === 'thinking_start') {
@@ -4237,6 +4491,22 @@ function handleChunk(cId, chunk) {
 // Bridge for ChatWindow's send event (only fires if default input is used)
 function handleChatWindowSend(text) {
   if (text) inputText.value = text
+  sendMessage()
+}
+
+function handleResendMessage(msg) {
+  const chatId = chatsStore.activeChatId
+  if (!chatId || !msg) return
+  const chat = chatsStore.chats.find(c => c.id === chatId)
+  if (!chat?.messages) return
+
+  const waitIdx = chat.messages.findIndex(m => m.isWaitingIndicator && m.sourceUserMessageId === msg.id)
+  if (waitIdx >= 0) chat.messages.splice(waitIdx, 1)
+
+  inputText.value = msg.content || ''
+  attachments.value = Array.isArray(msg.attachments)
+    ? JSON.parse(JSON.stringify(msg.attachments))
+    : []
   sendMessage()
 }
 
@@ -4367,6 +4637,7 @@ function buildAgentKnowledgeConfig(agent) {
   }
 }
 
+
 function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPrompt, usrAgent) {
   return respondingIds.map(pid => {
     const agent = agentsStore.getAgentById(pid)
@@ -4375,20 +4646,13 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPromp
     const agentCfg = { ...cfg }
     const resolvedProvider = agent.providerId || null
 
-    // Model+provider override (chat-scoped): takes priority over agent settings
-    const rawOverride = targetChat.agentModelOverrides?.[pid]
-    const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
-    const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
     // Custom agents must have an explicit provider or a global active provider to fall back to.
     const isAgentBuiltinOrDefault = agent.isBuiltin || agent.isDefault
     const hasGlobalProvider = cfg.providers?.some(p => p.isActive)
-    if (!overrideProvider && !resolvedProvider && !isAgentBuiltinOrDefault && !hasGlobalProvider) return null
-    const effectiveAgentProvider = overrideProvider || resolvedProvider || cfg.defaultProvider || 'anthropic'
+    if (!resolvedProvider && !isAgentBuiltinOrDefault && !hasGlobalProvider) return null
+    const effectiveAgentProvider = resolvedProvider || cfg.defaultProvider || 'anthropic'
     applyProviderCredsToConfig(agentCfg, effectiveAgentProvider)
-    if (overrideProvider && overrideProvider !== resolvedProvider) {
-      applyProviderCredsToConfig(agentCfg, overrideProvider)
-    }
-    const resolvedModel = overrideModel || agent.modelId || null
+    const resolvedModel = agent.modelId || null
     if (resolvedModel) agentCfg.customModel = resolvedModel
 
     const otherParticipants = groupIds
@@ -4403,9 +4667,6 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPromp
       systemAgentId: pid,
       userAgentId: usrAgent?.id || '__default_user__',
       groupChatContext: { agentName: agent.name, agentDescription: agent.description || '', otherParticipants },
-      agentTone:            agent.tone ?? [],
-      agentVerbosityLevel:  agent.verbosityLevel ?? [],
-      agentPersonalityTags: agent.personalityTags ?? [],
     }
 
     const agentSkills = filterByRequired(enabledSkillObjects.value, agent.requiredSkillIds ?? [])
@@ -4525,6 +4786,9 @@ function injectCollaborationSummary(targetChat, iterationCount) {
 async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt, usrAgent, iterationCount, prevMessagesLength) {
   const targetChat = chatsStore.chats.find(c => c.id === chatId)
   if (!targetChat || !targetChat.messages) return
+  if (collaborationCancelled.value || !targetChat.isRunning) return
+
+  isInCollaborationLoop.value = true
 
   // Per-chat limit; fall back to 10 if not set. Hard cap at 100.
   const MAX_ITERATIONS = Math.min(100, Math.max(1, targetChat.maxAgentRounds ?? 10))
@@ -4541,7 +4805,8 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
     .slice(prevMessagesLength)
     .filter(m => {
       if (m.role !== 'assistant' || !m.agentId || !groupIds.includes(m.agentId)) return false
-      const text = m.content || (m.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
+      // Use text-only content for @mention scanning (tool results aren't addressees)
+      const text = m.content || (m.segments || []).filter(s => s.type === 'text').map(s => s.content || s.text || '').join('')
       return !!text
     })
 
@@ -4550,7 +4815,8 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
   const nextRespondingSet = new Set()
   for (let msgIdx = 0; msgIdx < newMessages.length; msgIdx++) {
     const msg = newMessages[msgIdx]
-    const msgText = msg.content || (msg.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
+    // Scan text-only segments for @mentions (tool calls don't contain @mentions)
+    const msgText = msg.content || (msg.segments || []).filter(s => s.type === 'text').map(s => s.content || s.text || '').join('')
     const { mentions } = parseMentions(msgText, groupAgents)
     // Exclude the sender itself
     const others = mentions.filter(id => id !== msg.agentId)
@@ -4594,7 +4860,7 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
     }
   }
 
-  if (nextRespondingSet.size === 0) return  // No more collaboration needed
+  if (nextRespondingSet.size === 0) { isInCollaborationLoop.value = false; return }  // No more collaboration needed
 
   dbg(`Agent collaboration round ${iterationCount + 1}: [${[...nextRespondingSet].join(', ')}] are the addressees`)
 
@@ -4602,6 +4868,7 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
     injectCollaborationSummary(targetChat, iterationCount)
     scrollToBottom(false, chatId)
     await chatsStore.persist?.()
+    isInCollaborationLoop.value = false
     return
   }
 
@@ -4614,6 +4881,7 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
   const nextLength = targetChat.messages.length
 
   for (let i = 0; i < respondingIds.length; i++) {
+    if (collaborationCancelled.value || !targetChat.isRunning) { isInCollaborationLoop.value = false; return }
     const pid = respondingIds[i]
     const agent = agentsStore.getAgentById(pid)
     if (!agent) continue
@@ -4629,21 +4897,45 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
         // Do NOT filter by !m.streaming — same IPC timing issue as in newMessages
         // filter above. Content is authoritative; streaming flag may not be cleared yet.
         if (m.role === 'user') return !!m.content
-        if (m.role === 'assistant') {
-          const text = m.content || (m.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
-          return !!text
-        }
+        if (m.role === 'assistant') return !!(m.content || m.segments?.length)
         return false
       })
       .map(m => {
-        const text = m.content || (m.segments || []).filter(s => s.type === 'text').map(s => s.content).join('')
         if (m.role === 'assistant' && m.agentId && m.agentId !== pid) {
           const other = agentsStore.getAgentById(m.agentId)
           const speakerName = other?.name || 'Agent'
-          return { role: 'assistant', content: `[${speakerName}]: ${text}` }
+          return { role: 'assistant', content: `[${speakerName}]: ${m.content}` }
         }
-        return { role: m.role, content: text }
+        return { role: m.role, content: m.content }
       })
+
+    // ── Convergence guidance: inject staged hints based on round count ──
+    if (iterationCount >= 2 && seqApiMessages.length > 0) {
+      const originalPrompt = targetChat.messages.find(m => m.role === 'user')?.content?.slice(0, 500) || ''
+      let guidance
+      if (iterationCount >= MAX_ITERATIONS - 2) {
+        // Strong guidance — approaching hard limit
+        guidance = [
+          `[WRAP-UP — Round ${iterationCount + 1}/${MAX_ITERATIONS}]`,
+          `Original request: "${originalPrompt}"`,
+          `You are approaching the collaboration limit.`,
+          `Provide your FINAL answer or summary now.`,
+          `Only @mention another agent if there is a critical unresolved blocker — otherwise END without @mention.`,
+          `Do NOT introduce new topics or expand scope.`,
+        ].join('\n')
+      } else {
+        // Soft guidance — checkpoint
+        guidance = [
+          `[CHECKPOINT — Round ${iterationCount + 1}/${MAX_ITERATIONS}]`,
+          `Original request: "${originalPrompt}"`,
+          `Evaluate: is the original task complete?`,
+          `If YES — provide final summary, end WITHOUT @mention.`,
+          `If something specific remains — state what, @mention the relevant agent for ONLY that item.`,
+          `Do NOT expand scope beyond the original request.`,
+        ].join('\n')
+      }
+      seqApiMessages[seqApiMessages.length - 1].content += `\n\n${guidance}`
+    }
 
     // Ensure conversation ends with a user message (API requirement).
     // Include the last assistant message's content so the addressed agent has full context.
@@ -4661,6 +4953,7 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
     // main.js uses seqApiMessages (passed as baseMessages) instead of the
     // per-agent view built by buildAgentRuns (which lacks the prompt suffix).
     for (const run of agentRuns) delete run.messages
+    runningAgentKeys.add(`${chatId}:${pid}`)
     await runGroupAgents(chatId, targetChat, agentRuns, seqApiMessages, cfg, [])
     scrollToBottom(false, chatId)
   }
@@ -4673,7 +4966,97 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Fire additional group agents via the `runAgentAdditional` IPC — this does NOT
+ * stop existing loops in the main process, enabling true parallel agent execution.
+ */
+async function _fireGroupAgentsDirect(chatId, targetChat, text, agentIds, pendingAttachments, opts = {}) {
+  if (!window.electronAPI?.runAgentAdditional) {
+    dbg('runAgentAdditional not available — skipping parallel fire', 'warn')
+    return
+  }
+  const cfg = { ...configStore.config }
+  const groupIds = targetChat.groupAgentIds || targetChat.groupPersonaIds || []
+
+  // Add user message (skip if caller already added it, e.g. idle/busy split in sendMessage)
+  if (!opts.skipUserMessage) {
+    await chatsStore.addMessage(chatId, {
+      role: 'user',
+      content: text,
+      ...(pendingAttachments?.length > 0 ? { attachments: pendingAttachments } : {}),
+    })
+  }
+
+  // Build api messages from the full conversation
+  const apiMessages = targetChat.messages
+    .filter(m => {
+      if (m.role === 'user') return !!m.content
+      if (m.role === 'assistant' && !m.streaming) return !!(m.content || m.segments?.length)
+      return false
+    })
+    .map(m => ({ role: m.role, content: m.content }))
+    .filter(m => !!m.content)
+
+  // Resolve user agent
+  const usrAgentId = targetChat.userAgentId
+  const usrAgent = usrAgentId
+    ? agentsStore.getAgentById(usrAgentId)
+    : agentsStore.defaultUserAgent
+  const userAgentPrompt = usrAgent?.prompt || null
+
+  const agentRuns = buildAgentRuns(agentIds, groupIds, cfg, targetChat, userAgentPrompt, usrAgent)
+  if (agentRuns.length === 0) {
+    dbg('_fireGroupAgentsDirect: no valid agent runs', 'warn')
+    return
+  }
+
+  for (const run of agentRuns) runningAgentKeys.add(`${chatId}:${run.agentId}`)
+
+  dbg(`_fireGroupAgentsDirect: firing ${agentRuns.map(r => r.agentName).join(', ')} via runAgentAdditional`)
+  try {
+    const res = await window.electronAPI.runAgentAdditional({
+      chatId,
+      messages: JSON.parse(JSON.stringify(apiMessages)),
+      config: JSON.parse(JSON.stringify(cfg)),
+      enabledAgents: [],
+      enabledSkills: [],
+      currentAttachments: pendingAttachments?.length > 0 ? JSON.parse(JSON.stringify(pendingAttachments)) : [],
+      agentRuns,
+      mcpServers: [],
+      httpTools: [],
+      chatPermissionMode: targetChat.permissionMode || 'inherit',
+      chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
+      chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
+      maxOutputTokens: targetChat.maxOutputTokens || null,
+      knowledgeConfig: null,
+    })
+    dbg(`_fireGroupAgentsDirect returned: success=${res?.success} results=${res?.results?.length ?? 0}`)
+
+    if (res?.results) {
+      for (const r of res.results) {
+        if (!r.success) {
+          const msg = targetChat.messages.findLast(m => m.agentId === r.agentId && m.role === 'assistant')
+          if (msg && !msg.content) {
+            msg.content = `Error: ${r.error}`
+            msg.segments = [{ type: 'text', content: `Error: ${r.error}` }]
+          }
+        }
+      }
+    }
+  } catch (err) {
+    dbg(`_fireGroupAgentsDirect IPC error: ${err.message}`, 'error')
+    // Clean up running keys — agent_end chunks may not have fired
+    for (const run of agentRuns) runningAgentKeys.delete(`${chatId}:${run.agentId}`)
+  }
+  scrollToBottom(false, chatId)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function sendMessage() {
+  collaborationCancelled.value = false
+  // Clear any history context banner when user sends a new message
+  if (chatsStore.activeChatId) { _clearHistoryCountdown(); historyContextSources.delete(chatsStore.activeChatId) }
   const rawText = inputText.value.trim()
   const hasAttachments = attachments.value.length > 0
   dbg(`sendMessage called: text="${rawText.slice(0,30)}" attachments=${attachments.value.length} isRunning=${activeRunning.value} activeChatId=${chatsStore.activeChatId}`)
@@ -4696,10 +5079,69 @@ async function sendMessage() {
   const thisChat = chatsStore.chats.find(c => c.id === cid)
   if (thisChat?.isRunning) {
     if (!cid) return
+    const groupIds = activeSystemAgentIds.value
+    const isGroup = groupIds.length > 1
+
+    if (isGroup) {
+      // ── Group chat: per-agent queue logic ──
+      const groupAgents = groupIds.map(id => agentsStore.getAgentById(id)).filter(Boolean)
+      const { mentions, mentionAll } = parseMentions(text, groupAgents)
+      let targetIds
+      if (mentionAll) {
+        targetIds = [...groupIds]
+      } else if (mentions.length > 0) {
+        targetIds = [...new Set(mentions)]
+      } else if (stickyTarget.value?.length > 0) {
+        targetIds = stickyTarget.value.filter(id => groupIds.includes(id))
+        if (targetIds.length === 0) targetIds = [...groupIds]
+      } else {
+        targetIds = [...groupIds]
+      }
+
+      // Capture attachments before clearing UI
+      const capturedAttachments = [...attachments.value]
+
+      // Split targets into idle (fire immediately) vs busy (queue for later)
+      const idleTargets = targetIds.filter(id => !runningAgentKeys.has(`${cid}:${id}`))
+      const busyTargets = targetIds.filter(id => runningAgentKeys.has(`${cid}:${id}`))
+
+      // Queue messages for busy agents (per-agent key)
+      for (const id of busyTargets) {
+        const qKey = `${cid}:${id}`
+        if (!perChatQueue.has(qKey)) perChatQueue.set(qKey, [])
+        perChatQueue.get(qKey).push({ text, attachments: [...capturedAttachments] })
+        dbg(`Queued for busy agent ${agentsStore.getAgentById(id)?.name || id}: "${text.slice(0,30)}…"`, 'info')
+      }
+
+      // Fire idle agents immediately via runAgentAdditional (does NOT stop existing loops)
+      if (idleTargets.length > 0) {
+        // Add user message once, then fire with skipUserMessage
+        await chatsStore.addMessage(cid, {
+          role: 'user',
+          content: text,
+          ...(capturedAttachments.length > 0 ? { attachments: capturedAttachments } : {}),
+        })
+        dbg(`Firing idle agents: ${idleTargets.map(id => agentsStore.getAgentById(id)?.name || id).join(', ')}`)
+        _fireGroupAgentsDirect(cid, thisChat, text, idleTargets, capturedAttachments, { skipUserMessage: true })
+          .catch(err => dbg(`_fireGroupAgentsDirect idle fire error: ${err.message}`, 'error'))
+      }
+
+      // Clear UI immediately
+      inputText.value = ''
+      attachments.value = []
+      perChatDrafts.delete(cid)
+      mentionInputRef.value?.resetHeight()
+      userScrolled.value = false
+      scrollToBottom(true, cid)
+      return
+    }
+
+    // ── Single agent: queue as before ──
     if (!perChatQueue.has(cid)) perChatQueue.set(cid, [])
     perChatQueue.get(cid).push({ text, attachments: [...attachments.value] })
     inputText.value = ''
     attachments.value = []
+    perChatDrafts.delete(cid)
     mentionInputRef.value?.resetHeight()
     // Resume auto-scroll: user sent a new prompt, so re-engage scrolling for the current stream
     userScrolled.value = false
@@ -4730,7 +5172,30 @@ async function sendMessage() {
   const pendingAttachments = [...attachments.value]
   attachments.value = []
   inputText.value = ''
+  perChatDrafts.delete(cid)
   mentionInputRef.value?.resetHeight()
+
+  let waitingMsgId = null
+  let userMsgId = null
+
+  const clearWaitingIndicator = () => {
+    const c = chatsStore.chats.find(x => x.id === chatId)
+    if (!c?.messages) return
+    const idx = c.messages.findIndex(m => m.id === waitingMsgId || (m.isWaitingIndicator && m.waitingState === 'running'))
+    if (idx >= 0) c.messages.splice(idx, 1)
+  }
+
+  const failWaitingIndicator = (errorText) => {
+    const c = chatsStore.chats.find(x => x.id === chatId)
+    if (!c?.messages) return
+    const idx = c.messages.findIndex(m => m.id === waitingMsgId || (m.isWaitingIndicator && m.sourceUserMessageId === userMsgId))
+    if (idx < 0) return
+    const wait = c.messages[idx]
+    wait.waitingState = 'error'
+    wait.waitingError = errorText || t('chats.preResponseFailed')
+    wait.streaming = false
+    if (wait.streamingStartedAt) wait.durationMs = Date.now() - wait.streamingStartedAt
+  }
 
   try {
   // Reset scroll-lock for this new answer
@@ -4751,17 +5216,34 @@ async function sendMessage() {
 
   // Add user message
   dbg('adding user message…')
+  userMsgId = uuidv4()
   await chatsStore.addMessage(chatId, {
+    id: userMsgId,
     role: 'user',
     content: displayContent,
     ...(attachmentMeta.length > 0 ? { attachments: attachmentMeta } : {})
   })
 
+  // Add temporary "waiting for response" indicator
+  waitingMsgId = uuidv4()
+  await chatsStore.addMessage(chatId, {
+    id: waitingMsgId,
+    role: 'assistant',
+    content: '',
+    streaming: true,
+    isWaitingIndicator: true,
+    waitingState: 'running',
+    sourceUserMessageId: userMsgId,
+    streamingStartedAt: Date.now()
+  })
+  await nextTick()
+  scrollToBottom(true)
+
   // Clear any stale streaming flags from previous runs that didn't finish cleanly
   const currentChat = chatsStore.chats.find(c => c.id === chatId)
   if (currentChat) {
     for (const m of currentChat.messages) {
-      if (m.streaming) m.streaming = false
+      if (m.streaming && !m.isWaitingIndicator) m.streaming = false
     }
   }
 
@@ -4775,6 +5257,7 @@ async function sendMessage() {
   // ── Single-agent mode: add streaming placeholder as before ──
   let streamingMsgId = null
   if (!isGroup) {
+    clearWaitingIndicator()
     streamingMsgId = uuidv4()
     perChatStreamingMsgId.set(chatId, streamingMsgId)
     streamingSeconds.value = 0
@@ -4804,12 +5287,17 @@ async function sendMessage() {
 
   targetChat.isRunning = true
 
-  // Build messages for API (only user/assistant, no tool indicators)
+  // Build messages for API (user/assistant + tool call summaries in text)
   dbg(`targetChat=${targetChat.id} messages=${targetChat.messages?.length ?? 'N/A'}`)
 
   const apiMessages = targetChat.messages
-    .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
+    .filter(m => {
+      if (m.role === 'user') return !!m.content
+      if (m.role === 'assistant' && !m.streaming) return !!(m.content || m.segments?.length)
+      return false
+    })
     .map(m => ({ role: m.role, content: m.content }))
+    .filter(m => !!m.content)
 
   // Resolve agent for this run
   const sysAgentId = isGroup
@@ -4820,14 +5308,9 @@ async function sendMessage() {
   const chatProvider = sysAgent?.providerId || null
   const cfg = { ...configStore.config }
 
-  // Model+provider override (chat-scoped): takes priority over agent settings
-  const rawOverride = targetChat.agentModelOverrides?.[sysAgentId]
-  const chatOverrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
-  const chatOverrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
-
   // Builtin/default agents have no providerId — they use the global default provider
   const isBuiltinOrDefault = !sysAgent || sysAgent.isBuiltin || sysAgent.isDefault
-  const effectiveProvider = chatOverrideProvider || chatProvider || (isBuiltinOrDefault ? (cfg.defaultProvider || 'anthropic') : null)
+  const effectiveProvider = chatProvider || (isBuiltinOrDefault ? (cfg.defaultProvider || 'anthropic') : null)
 
   // Guard: non-default custom agents must have a provider configured
   if (!isGroup && !effectiveProvider) {
@@ -4843,10 +5326,7 @@ async function sendMessage() {
   }
 
   applyProviderCredsToConfig(cfg, effectiveProvider)
-  if (chatOverrideProvider && chatOverrideProvider !== chatProvider) {
-    applyProviderCredsToConfig(cfg, chatOverrideProvider)
-  }
-  const resolvedModel = chatOverrideModel || sysAgent?.modelId || null
+  const resolvedModel = sysAgent?.modelId || null
   if (resolvedModel) cfg.customModel = resolvedModel
 
   // isActive guard
@@ -4970,8 +5450,7 @@ async function sendMessage() {
           .map(id => agentsStore.getAgentById(id)?.name || id)
           .join(', ')
         if (streamingTimer) { clearInterval(streamingTimer); streamingTimer = null; streamingSeconds.value = 0 }
-        const errContent = `⚠️ Agent(s) **${skippedNames}** have no provider configured. Go to **Agents** and set a provider and model.`
-        await chatsStore.updateLastAssistantMessage(chatId, errContent)
+        failWaitingIndicator(`⚠️ Agent(s) ${skippedNames} have no provider configured. Go to Agents and set a provider and model.`)
         perChatStreamingMsgId.delete(chatId)
         perChatStreamingSegments.delete(chatId)
         targetChat.isRunning = false
@@ -5047,8 +5526,15 @@ async function sendMessage() {
 
       dbg(`Group run (${isSequential ? 'sequential' : 'concurrent'}): first round: ${firstRoundRuns.map(r => r.agentName).join(', ')}`)
 
+      // Mark responding agents as running
+      for (const run of firstRoundRuns) runningAgentKeys.add(`${chatId}:${run.agentId}`)
+
       const msgCountBeforeRun = targetChat.messages.length
       await runGroupAgents(chatId, targetChat, firstRoundRuns, apiMessages, cfg, pendingAttachments)
+
+      // Scroll after initial group run completes
+      await nextTick()
+      scrollToBottom()
 
       // After the initial group run, check for agent→agent @mentions and loop.
       // Pass the pre-run message count so we only scan THIS round's new messages.
@@ -5104,11 +5590,6 @@ async function sendMessage() {
       // Pass agent IDs for soul memory system
       resolvedAgentPrompts.systemAgentId = sysAgent?.id || '__default_system__'
       resolvedAgentPrompts.userAgentId = usrAgent?.id || '__default_user__'
-      // Pass personality dimensions for system prompt injection
-      resolvedAgentPrompts.agentTone            = sysAgent?.tone ?? []
-      resolvedAgentPrompts.agentVerbosityLevel  = sysAgent?.verbosityLevel ?? []
-      resolvedAgentPrompts.agentPersonalityTags = sysAgent?.personalityTags ?? []
-
       // cfg already has provider creds + customModel resolved above
 
       dbg('Invoking window.electronAPI.runAgent…')
@@ -5173,6 +5654,7 @@ async function sendMessage() {
     scrollToBottom()
   } catch (err) {
     dbg(`EXCEPTION in runAgent: ${err.message}`, 'error')
+    failWaitingIndicator(err.message)
     const chat = chatsStore.chats.find(c => c.id === chatId)
     if (chat && chat.messages) {
       if (streamingMsgId) {
@@ -5189,40 +5671,69 @@ async function sendMessage() {
       }
     }
   } finally {
-    dbg('Agent loop done. isRunning → false')
     if (streamingTimer) { clearInterval(streamingTimer); streamingTimer = null; streamingSeconds.value = 0 }
+
+    // Check if side-fired agents (via runAgentAdditional) are still running for this chat
+    const hasActiveAgents = [...runningAgentKeys].some(k => k.startsWith(chatId + ':'))
+    dbg(`Agent loop done. Side-fired agents still active: ${hasActiveAgents}`)
 
     // Use fresh lookup to guarantee we clear the live reactive object
     // (targetChat ref could theoretically become stale if the array was mutated)
     const finChat = chatsStore.chats.find(c => c.id === chatId)
-    if (finChat) {
-      finChat.isRunning = false
-      finChat.isThinking = false
-      finChat.isCallingTool = false
-      finChat.currentToolCall = null
-    }
-    targetChat.isRunning = false
-    targetChat.isThinking = false
-    targetChat.isCallingTool = false
-    targetChat.currentToolCall = null
 
-    // If this chat is not active, show a "Completed" chip (and stop the unread pulse)
-    if (chatId !== chatsStore.activeChatId) {
-      chatsStore.markCompleted(chatId)
+    // Only clear isRunning if no side-fired agents remain — otherwise the chat
+    // should stay in "running" state until ALL agents finish.
+    if (!hasActiveAgents) {
+      if (finChat) {
+        finChat.isRunning = false
+        finChat.isThinking = false
+        finChat.isCallingTool = false
+        finChat.currentToolCall = null
+      }
+      targetChat.isRunning = false
+      targetChat.isThinking = false
+      targetChat.isCallingTool = false
+      targetChat.currentToolCall = null
+
+      // If this chat is not active, show a "Completed" chip (and stop the unread pulse)
+      if (chatId !== chatsStore.activeChatId) {
+        chatsStore.markCompleted(chatId)
+      }
+    } else {
+      // Still clear thinking/tool state for the primary run — the side-fired agent(s)
+      // will manage their own flags via their own IPC flow
+      if (finChat) {
+        finChat.isThinking = false
+        finChat.isCallingTool = false
+        finChat.currentToolCall = null
+      }
+      targetChat.isThinking = false
+      targetChat.isCallingTool = false
+      targetChat.currentToolCall = null
     }
 
     perChatStreamingMsgId.delete(chatId)
     perChatStreamingSegments.delete(chatId)
-    // Clean up any group agent keys
+    // Clean up streaming maps for this primary run's group agent keys
+    // (but NOT runningAgentKeys — those are managed by agent_end for side-fired agents)
     for (const key of [...perChatStreamingMsgId.keys()]) {
       if (key.startsWith(chatId + ':')) {
         perChatStreamingMsgId.delete(key)
         perChatStreamingSegments.delete(key)
       }
     }
+    // Only clear runningAgentKeys if no side-fired agents remain
+    if (!hasActiveAgents) {
+      for (const key of [...runningAgentKeys]) {
+        if (key.startsWith(chatId + ':')) runningAgentKeys.delete(key)
+      }
+    }
+    isInCollaborationLoop.value = false
 
-    // Also clear streaming flag on any remaining streaming messages (safety net)
-    if (finChat?.messages) {
+    // Also clear streaming flag on any remaining streaming messages (safety net).
+    // But only if no side-fired agents are still running — otherwise their streaming
+    // messages would be incorrectly terminated.
+    if (!hasActiveAgents && finChat?.messages) {
       for (const m of finChat.messages) {
         if (m.streaming) {
           m.streaming = false
@@ -5251,23 +5762,43 @@ async function sendMessage() {
       } catch {}
     }
 
-    // Pick up next queued prompt for this chat if any
-    const queue = perChatQueue.get(chatId)
-    if (queue && queue.length > 0) {
-      const queued = queue.shift()
-      if (queue.length === 0) perChatQueue.delete(chatId)
-      dbg(`Picking up queued prompt (#${(queue?.length ?? 0) + 1} remaining): "${queued.text.slice(0,30)}…"`, 'info')
-      // Reset scroll-lock so the new round auto-scrolls
-      userScrolled.value = false
-      inputText.value = queued.text
-      attachments.value = queued.attachments || []
-      await nextTick()
-      sendMessage()
+    // Pick up next queued prompt.
+    // Per-agent dequeue (group chat) is now handled in agent_end via _fireGroupAgentsDirect.
+    // The finally block only handles:
+    // 1. Per-agent queues that remain when ALL agents are done (safety net)
+    // 2. Chat-level (single agent) queue dequeue
+    if (!hasActiveAgents) {
+      let dequeued = false
+      for (const [key, agentQueue] of [...perChatQueue.entries()]) {
+        if (!key.startsWith(chatId + ':') || agentQueue.length === 0) continue
+        const agentId = key.split(':').slice(1).join(':')
+        const queued = agentQueue.shift()
+        if (agentQueue.length === 0) perChatQueue.delete(key)
+        dbg(`Finally: picking up remaining per-agent queued prompt for ${agentId}: "${queued.text.slice(0,30)}…"`, 'info')
+        nextTick(() => _fireGroupAgentsDirect(chatId, finChat || targetChat, queued.text, [agentId], queued.attachments)
+          .catch(err => dbg(`_fireGroupAgentsDirect finally dequeue error: ${err.message}`, 'error')))
+        dequeued = true
+        break // One at a time; agent_end will pick up the next
+      }
+      if (!dequeued) {
+        const queue = perChatQueue.get(chatId)
+        if (queue && queue.length > 0) {
+          const queued = queue.shift()
+          if (queue.length === 0) perChatQueue.delete(chatId)
+          dbg(`Picking up queued prompt (#${(queue?.length ?? 0) + 1} remaining): "${queued.text.slice(0,30)}…"`, 'info')
+          userScrolled.value = false
+          inputText.value = queued.text
+          attachments.value = queued.attachments || []
+          await nextTick()
+          sendMessage()
+        }
+      }
     }
   }
   } catch (outerErr) {
     // Catch errors from addMessage, activeChat access, etc.
     dbg(`OUTER EXCEPTION: ${outerErr.message}\n${outerErr.stack?.split('\n').slice(0,3).join(' | ')}`, 'error')
+    failWaitingIndicator(outerErr.message)
     // Clear running state on the target chat
     const errChat = chatsStore.chats.find(c => c.id === chatId)
     if (errChat) {
@@ -5287,6 +5818,13 @@ async function sendMessage() {
     }
     perChatStreamingMsgId.delete(chatId)
     perChatStreamingSegments.delete(chatId)
+    // Also clean up group agent keys (chatId:agentId) that the outer catch path misses
+    for (const key of [...perChatStreamingMsgId.keys()]) {
+      if (key.startsWith(chatId + ':')) {
+        perChatStreamingMsgId.delete(key)
+        perChatStreamingSegments.delete(key)
+      }
+    }
   } finally {
     // Last-resort safety net: always ensure isRunning is cleared for this chat
     const safetyChat = chatsStore.chats.find(c => c.id === chatId)
@@ -5347,7 +5885,16 @@ function _applyInterrupt(chat, msg, type) {
 // Stop (hard stop): clear the queue first, then interrupt — nothing auto-runs afterwards.
 async function stopAgent(chatId) {
   if (!chatId) chatId = chatsStore.activeChatId
-  perChatQueue.delete(chatId)
+  // Clear all queues for this chat (both chat-level and per-agent keys)
+  for (const key of [...perChatQueue.keys()]) {
+    if (key === chatId || key.startsWith(chatId + ':')) perChatQueue.delete(key)
+  }
+  // Cancel collaboration loop and clear running agent tracking
+  collaborationCancelled.value = true
+  isInCollaborationLoop.value = false
+  for (const key of [...runningAgentKeys]) {
+    if (key.startsWith(chatId + ':')) runningAgentKeys.delete(key)
+  }
   if (window.electronAPI?.stopAgent) await window.electronAPI.stopAgent(chatId)
   const { chat, msg } = getLastActiveMessage(chatId)
   _applyInterrupt(chat, msg, 'stop')
@@ -5466,8 +6013,7 @@ async function compactContext() {
     const chatProvider = sysAgent?.providerId || 'anthropic'
     const cfg = { ...raw }
     applyProviderCredsToConfig(cfg, chatProvider)
-    const rawOvr = targetChat.agentModelOverrides?.[sysAgentId]
-    const resolvedModel = (rawOvr ? (typeof rawOvr === 'object' ? rawOvr.model : rawOvr) : null) || sysAgent?.modelId || null
+    const resolvedModel = sysAgent?.modelId || null
     if (resolvedModel) cfg.customModel = resolvedModel
 
     const res = await window.electronAPI.compactContextStandalone({
@@ -5558,19 +6104,21 @@ async function refreshContextSnapshot() {
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
-watch(() => chatsStore.activeChatId, () => {
+watch(() => chatsStore.activeChatId, (newId, oldId) => {
+  // Save input draft for the chat we're leaving, restore for the one we're entering
+  _saveDraftForChat(oldId)
+  _restoreDraftForChat(newId)
+
   userScrolled.value = false
   visibleLimit.value = 25
   showContextInspector.value = false
   inspectorUsage.value = null
   quotedMessage.value = null
-  stickyTarget.value = null
+  // stickyTarget is now backed by chat.stickyTarget — switching chats automatically reads the new chat's value
 
   // Reload per-chat tool/MCP/workingPath draft state from the new chat
   _loadDraftFromChat()
 
-  // Scroll after messages are rendered (handles both already-loaded and lazy-loaded cases)
-  scrollToBottom(true)
   nextTick(() => {
     mentionInputRef.value?.focus()
   })
@@ -5701,6 +6249,33 @@ onMounted(async () => {
     handleChunk(cId, chunk)
   })
 
+  // Reconnect to any agent loops that survived a page refresh.
+  // setUiChunkCallback is registered BEFORE this await so chunks arriving
+  // during ensureMessages calls go through handleChunk (the full UI path).
+  const reconnected = await chatsStore.reconnectRunningAgents()
+  for (const { chatId, entries } of reconnected) {
+    const chat = chatsStore.chats.find(c => c.id === chatId)
+    if (!chat?.messages) continue
+    for (const entry of entries) {
+      const routeKey = entry.isGroup ? `${chatId}:${entry.agentId}` : chatId
+      if (perChatStreamingMsgId.has(routeKey)) continue  // already registered
+      const msgId = uuidv4()
+      perChatStreamingMsgId.set(routeKey, msgId)
+      perChatStreamingSegments.set(routeKey, [])
+      chat.messages.push({
+        id: msgId,
+        role: 'assistant',
+        content: '',
+        streaming: true,
+        streamingStartedAt: Date.now(),
+        agentId: entry.isGroup ? entry.agentId : undefined,
+        agentName: entry.isGroup ? entry.agentName : undefined,
+        segments: [],
+      })
+    }
+    scrollToBottom(false, chatId)
+  }
+
   // Mark current chat as read on mount
   if (chatsStore.activeChatId) chatsStore.markAsRead(chatsStore.activeChatId)
 
@@ -5744,6 +6319,7 @@ onMounted(async () => {
   if (window.electronAPI?.onFileDropped) {
     fileDropUnsubscribe = window.electronAPI.onFileDropped(handleInterceptedFileDrop)
   }
+
 })
 
 // Stop speech recognition and TTS when call ends (from any source)
@@ -8576,5 +9152,46 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
 .newchat-ftree-item[data-active] {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
+}
+
+/* ── Permission mode selector in status bar ─── */
+.permission-mode-select {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.375rem;
+  min-height: 1.375rem;
+  border-radius: 0.375rem;
+  border: 1px solid #D1D5DB;
+  background-color: #FFFFFF;
+  color: #1A1A1A;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%231A1A1A' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.375rem center;
+  padding-right: 1.5rem;
+  max-width: 110px;
+  min-width: 90px;
+  vertical-align: middle;
+}
+
+.permission-mode-select:hover {
+  border-color: #60A5FA;
+  background-color: #F3F4F6;
+}
+
+.permission-mode-select:focus {
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.permission-mode-select option {
+  background-color: #FFFFFF;
+  color: #1A1A1A;
+  padding: 0.375rem 0.5rem;
+  font-weight: normal;
 }
 </style>

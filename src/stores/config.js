@@ -78,6 +78,27 @@ export const useConfigStore = defineStore('config', () => {
     defaultMcpServerIds: null,
     newsFeeds: [],
     feedSelection: [],
+    skillHubSources: [
+      {
+        id: 'clawhub',
+        name: 'ClawHub',
+        url: 'https://clawhub.ai/skills?sort=downloads&nonSuspicious=true',
+        apiUrl: 'https://api.clawhub.ai/v1/skills',
+        type: 'clawhub',
+        enabled: true,
+        description: 'Community skill library with curated skills'
+      },
+      {
+        id: 'tencent',
+        name: 'Tencent SkillHub',
+        url: 'https://skillhub.tencent.com/',
+        apiUrl: 'https://skillhub.tencent.com/api/v1/skills',
+        type: 'tencent',
+        enabled: true,
+        description: 'Tencent official skill repository'
+      }
+    ],
+    remoteSkills: [],
     sandboxConfig: {
       defaultMode: 'sandbox',
       sandboxAllowList: [],

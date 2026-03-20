@@ -20,6 +20,11 @@ export const useModelsStore = defineStore('models', () => {
   const deepseekLoading = ref(false)
   const deepseekCached = ref(false)
 
+  // ── Google ───────────────────────────────────────────────────────────────
+  const googleModels = ref([])
+  const googleLoading = ref(false)
+  const googleCached = ref(false)
+
   // ── Anthropic (derived from config) ─────────────────────────────────────
   const anthropicModels = computed(() => {
     const providers = configStore.config.providers || []
@@ -108,12 +113,31 @@ export const useModelsStore = defineStore('models', () => {
     }
   }
 
+  async function fetchGoogleModels() {
+    if (!window.electronAPI?.fetchGoogleModels) return
+    const provider = getProviderConfigByType('google')
+    if (!provider?.apiKey) return
+    googleLoading.value = true
+    try {
+      const result = await window.electronAPI.fetchGoogleModels({ apiKey: provider.apiKey })
+      if (result.success) {
+        googleModels.value = result.models
+        googleCached.value = true
+      }
+    } catch (err) {
+      console.error('Failed to fetch Google models:', err)
+    } finally {
+      googleLoading.value = false
+    }
+  }
+
   // ── Helpers ─────────────────────────────────────────────────────────────
 
   function getModelsForProvider(provider) {
     if (provider === 'openrouter') return openrouterModels.value
     if (provider === 'openai') return openaiModels.value
     if (provider === 'deepseek') return deepseekModels.value
+    if (provider === 'google') return googleModels.value
     return anthropicModels.value
   }
 
@@ -127,10 +151,14 @@ export const useModelsStore = defineStore('models', () => {
     deepseekModels,
     deepseekLoading,
     deepseekCached,
+    googleModels,
+    googleLoading,
+    googleCached,
     anthropicModels,
     fetchOpenRouterModels,
     fetchOpenAIModels,
     fetchDeepSeekModels,
+    fetchGoogleModels,
     getModelsForProvider,
   }
 })

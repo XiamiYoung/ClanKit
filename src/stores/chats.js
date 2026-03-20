@@ -69,6 +69,14 @@ export const useChatsStore = defineStore('chats', () => {
   // Minibar quick-send signal: set by MinibarOverlay, consumed by ChatsView
   const pendingMinibarSend = ref(null) // { text, chatId } | null
 
+  // Scroll-to-bottom signal: increment to request ChatWindow to scroll to bottom
+  const scrollToBottomSignal = ref(0)
+  function requestScrollToBottom() { scrollToBottomSignal.value++ }
+
+  // File refresh signal for DocsView: increment to request file content refresh
+  const fileRefreshSignal = ref(0)
+  function requestFileRefresh() { fileRefreshSignal.value++ }
+
   // UI chunk callback — set by ChatsView when mounted, cleared on unmount
   let _uiChunkCallback = null
   // Task chunk callback — set by TaskEngineView when a plan is running manually
@@ -123,7 +131,6 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.codingMode === undefined) chat.codingMode = false
     if (chat.maxAgentRounds === undefined) chat.maxAgentRounds = null  // null = use default (10)
     if (chat.codingProvider === undefined) chat.codingProvider = 'claude-code'
-    if (chat.agentModelOverrides === undefined) chat.agentModelOverrides = {}
     if (chat.usage === undefined) chat.usage = null  // null = no usage data yet
     // messages === null means "not loaded yet" (lazy)
     if (chat.messages) {
@@ -187,7 +194,14 @@ export const useChatsStore = defineStore('chats', () => {
         if (full && full.messages) {
           chat.messages = full.messages
           for (const msg of chat.messages) {
-            if (msg.streaming) msg.streaming = false
+            if (msg.streaming) {
+              msg.streaming = false
+              // If the message was mid-stream with no content, mark it clearly
+              if (msg.role === 'assistant' && !msg.content && (!msg.segments || msg.segments.length === 0)) {
+                msg.content = '_No response_'
+                msg.segments = [{ type: 'text', content: '_No response_' }]
+              }
+            }
           }
           if (full.segmentCount) {
             chat.segmentCount = full.segmentCount
@@ -341,7 +355,6 @@ export const useChatsStore = defineStore('chats', () => {
       codingMode: false,
       codingProvider: 'claude-code',
       maxOutputTokens: null,    // null = use global default from config
-      agentModelOverrides: {},
     }
     if (agentConfig && agentConfig.length === 1) {
       chat.systemAgentId = agentConfig[0]
@@ -396,7 +409,6 @@ export const useChatsStore = defineStore('chats', () => {
       workingPath: source.workingPath || null,
       codingMode: source.codingMode || false,
       codingProvider: source.codingProvider || 'claude-code',
-      agentModelOverrides: {},  // overrides are not copied — intentional
     }
     // Override agents if provided
     if (agentOverride && agentOverride.length > 0) {
@@ -648,19 +660,6 @@ export const useChatsStore = defineStore('chats', () => {
     await persistIndex()
   }
 
-  function setChatAgentModelOverride(chatId, agentId, providerId, modelId) {
-    const chat = chats.value.find(c => c.id === chatId)
-    if (!chat) return
-    if (!chat.agentModelOverrides) chat.agentModelOverrides = {}
-    if (providerId === null && modelId === null) {
-      delete chat.agentModelOverrides[agentId]
-    } else {
-      chat.agentModelOverrides[agentId] = { provider: providerId, model: modelId }
-    }
-    chat.updatedAt = Date.now()
-    debouncedPersistChat(chatId)
-  }
-
   async function setGroupAgents(chatId, agentIds) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
@@ -902,7 +901,13 @@ export const useChatsStore = defineStore('chats', () => {
 
   function _applyChunk(chatId, chunk) {
     const chat = chats.value.find(c => c.id === chatId)
-    if (!chat || chat.messages === null) return
+    if (!chat) return
+    if (chat.messages === null) {
+      // Messages not loaded yet — trigger lazy load then replay this chunk.
+      // Handles chunks that arrive before ChatsView mounts after a page refresh.
+      ensureMessages(chatId).then(() => _applyChunk(chatId, chunk)).catch(() => {})
+      return
+    }
 
     // Group agent chunks (tagged with agentId) are handled exclusively by
     // ChatsView.handleChunk via the perChatStreamingMsgId keying system.
@@ -941,6 +946,31 @@ export const useChatsStore = defineStore('chats', () => {
       }
     } else if (chunk.type === 'context_update' && chunk.metrics) {
       chat.contextMetrics = { ...chunk.metrics }
+    } else if (chunk.type === 'agent_step') {
+      // Add agent progress step to segments
+      const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
+      if (msg) {
+        if (!msg.segments) msg.segments = []
+        // 只保留最新的一条步骤，不要堆积
+        const existingStepIndex = msg.segments.findIndex(s => s.type === 'agent_step')
+        const newStep = {
+          type: 'agent_step',
+          id: chunk.id,
+          title: chunk.title,
+          status: chunk.status, // 'in_progress', 'completed', 'pending'
+          duration: chunk.duration,
+          details: chunk.details || {},
+          timestamp: chunk.timestamp,
+        }
+        
+        if (existingStepIndex >= 0) {
+          // 替换已存在的步骤
+          msg.segments[existingStepIndex] = newStep
+        } else {
+          // 添加新步骤
+          msg.segments.push(newStep)
+        }
+      }
     } else if (chunk.type === 'max_tokens_reached') {
       const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
       if (msg) {
@@ -1064,14 +1094,7 @@ export const useChatsStore = defineStore('chats', () => {
 
     applyProviderCredsToConfig(cfg, chatProvider)
 
-    // Per-chat model override
-    const rawOverride = targetChat.agentModelOverrides?.[sysAgentId]
-    const overrideModel    = rawOverride ? (typeof rawOverride === 'object' ? rawOverride.model    : rawOverride) : null
-    const overrideProvider = rawOverride && typeof rawOverride === 'object' ? rawOverride.provider : null
-    if (overrideProvider && overrideProvider !== chatProvider) {
-      applyProviderCredsToConfig(cfg, overrideProvider)
-    }
-    const resolvedModel = overrideModel || sysAgent?.modelId || null
+    const resolvedModel = sysAgent?.modelId || null
     if (resolvedModel) cfg.customModel = resolvedModel
     if (targetChat.workingPath) cfg.chatWorkingPath = targetChat.workingPath
 
@@ -1132,12 +1155,38 @@ export const useChatsStore = defineStore('chats', () => {
     }
   }
 
+  async function reconnectRunningAgents() {
+    if (!window.electronAPI?.getRunningAgents) return []
+    try {
+      const running = await window.electronAPI.getRunningAgents()
+      if (!running?.length) return []
+      // Group entries by chatId
+      const byChatId = {}
+      for (const entry of running) {
+        if (!byChatId[entry.chatId]) byChatId[entry.chatId] = []
+        byChatId[entry.chatId].push(entry)
+      }
+      const reconnected = []
+      for (const [chatId, entries] of Object.entries(byChatId)) {
+        const chat = chats.value.find(c => c.id === chatId)
+        if (!chat) continue
+        chat.isRunning = true
+        await ensureMessages(chatId)   // idempotent, deduped via _loadingPromises
+        reconnected.push({ chatId, entries })
+      }
+      return reconnected
+    } catch (err) {
+      console.warn('[chats] reconnectRunningAgents failed:', err.message)
+      return []
+    }
+  }
+
   return {
     chatTree, chats, activeChatId, activeFolderId, activeChat, isLoading,
     unreadChatIds, completedChatIds, pendingPermissionChatIds,
     loadChats, createChat, createChatFromHistory, removeChat, renameChat,
     setActiveChat, clearActiveChat, addMessage, updateLastAssistantMessage, setChatAgent,
-    setChatProvider, setChatModel, setChatAgentModelOverride, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
+    setChatProvider, setChatModel, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
     loadOlderSegments, hasOlderSegments,
     setGroupAgents, toggleGroupMode, setGroupAgentOverride,
     removeGroupAgent, addGroupAgent, reorderChats,
@@ -1148,5 +1197,7 @@ export const useChatsStore = defineStore('chats', () => {
     markPermissionPending, clearPermissionPending,
     setPlanState, storePlanRunParams, getPlanRunParams,
     pendingMinibarSend, triggerMinibarSend, clearMinibarSend, sendMinibarMessage,
+    scrollToBottomSignal, requestScrollToBottom,
+    reconnectRunningAgents,
   }
 })

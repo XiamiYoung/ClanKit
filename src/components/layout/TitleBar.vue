@@ -23,7 +23,7 @@
     <div style="flex:1;" />
 
     <!-- Center minibar strip — 30% of titlebar width, absolutely centered -->
-    <div class="tb-minibar" @mousedown.stop @dblclick.stop>
+    <div class="tb-minibar" @mousedown="onMinibarDragStart" @dblclick.stop>
       <MinibarContent />
     </div>
 
@@ -110,6 +110,20 @@ async function onDragStart(e) {
   document.addEventListener('mousemove', onDragMove)
   document.addEventListener('mouseup', onDragEnd)
 }
+
+async function onMinibarDragStart(e) {
+  if (isMaximized.value) return
+  const pos = await window.electronAPI?.windowGetPosition()
+  if (!pos) return
+  isDragging = true
+  dragOffsetX = e.screenX - pos[0]
+  dragOffsetY = e.screenY - pos[1]
+  window.electronAPI?.windowDragStart()
+  document.addEventListener('mousemove', onDragMove)
+  document.addEventListener('mouseup', onDragEnd)
+  e.stopPropagation()
+}
+
 function onDragMove(e) { if (!isDragging) return; window.electronAPI?.windowMoveTo(e.screenX - dragOffsetX, e.screenY - dragOffsetY) }
 function onDragEnd() {
   isDragging = false

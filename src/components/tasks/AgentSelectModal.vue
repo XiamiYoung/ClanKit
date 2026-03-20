@@ -136,6 +136,9 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useAgentsStore } from '../../stores/agents'
 import { getAvatarDataUri } from '../agents/agentAvatars'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   visible: { type: Boolean, default: false },

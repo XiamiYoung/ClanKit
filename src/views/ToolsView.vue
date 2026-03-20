@@ -82,7 +82,7 @@
           @click="typeFilter = 'smtp'"
         >
           <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-          SMTP
+          {{ t('tools.smtp') }}
           <span class="catalog-filter-tab-count">{{ smtpCount }}</span>
         </button>
       </div>
@@ -100,10 +100,10 @@
           </svg>
         </div>
         <h2 style="font-family:'Inter',sans-serif; font-size:var(--fs-section); font-weight:700; color:#1A1A1A; margin:0 0 8px;">
-          No tools configured
+          {{ t('tools.noTools') }}
         </h2>
         <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; line-height:1.6; margin:0;">
-          Add HTTP endpoints, code snippets, or prompt templates to give the AI agent access to external APIs, reference code, and reusable instructions.
+          {{ t('tools.noToolsDesc') }}
         </p>
       </div>
     </div>
@@ -114,9 +114,9 @@
         <svg class="mx-auto" style="width:40px;height:40px;color:#9CA3AF;margin-bottom:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
         </svg>
-        <p v-if="searchQuery" style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#6B7280; margin:0 0 4px;">No tools match "{{ searchQuery }}"</p>
-        <p v-else style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#6B7280; margin:0 0 4px;">No {{ typeFilter }} tools</p>
-        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF; margin:0;">Try a different search term or filter.</p>
+        <p v-if="searchQuery" style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#6B7280; margin:0 0 4px;">{{ t('tools.noToolsMatch', { query: searchQuery }) }}</p>
+        <p v-else style="font-family:'Inter',sans-serif; font-size:var(--fs-body); font-weight:600; color:#6B7280; margin:0 0 4px;">{{ t('tools.noTypeTools', { type: typeFilter }) }}</p>
+        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF; margin:0;">{{ t('tools.tryDifferentFilter') }}</p>
       </div>
     </div>
 
@@ -134,15 +134,6 @@
             <div class="tools-card-accent"></div>
 
             <div class="tools-card-body">
-              <!-- Default row — top of card body -->
-              <div class="tools-card-default-row" @click.stop>
-                <span class="tools-default-label">{{ isToolDefault(tool.id) ? 'Default' : 'Not default' }}</span>
-                <label class="default-toggle" :title="isToolDefault(tool.id) ? 'Remove from defaults' : 'Add to defaults'">
-                  <input type="checkbox" :checked="isToolDefault(tool.id)" @change="toggleToolDefault(tool.id)" />
-                  <span class="default-toggle-track"><span class="default-toggle-thumb"></span></span>
-                </label>
-              </div>
-
               <!-- Icon + title row -->
               <div class="tools-card-title-row">
                 <div class="tools-card-icon">
@@ -173,7 +164,7 @@
               </div>
 
               <!-- Description -->
-              <p class="tools-card-desc">{{ tool.description || 'No description' }}</p>
+              <p class="tools-card-desc">{{ tool.description || t('tools.noDescription') }}</p>
 
               <!-- Footer — adapts by type -->
               <div class="tools-card-footer">
@@ -193,13 +184,13 @@
                       {{ (tool.language || 'javascript').toUpperCase().slice(0, 4) }}
                     </span>
                     <span class="tools-card-endpoint">
-                      {{ (tool.code || '').split('\n').length }} lines
+                      {{ t('tools.lines', { n: (tool.code || '').split('\n').length }) }}
                     </span>
                   </template>
                   <!-- SMTP footer -->
                   <template v-else-if="tool.type === 'smtp'">
                     <span class="tools-card-method">SMTP</span>
-                    <span class="tools-card-endpoint">via Config → Email</span>
+                    <span class="tools-card-endpoint">{{ t('tools.viaConfigEmail') }}</span>
                   </template>
                   <!-- Prompt footer -->
                   <template v-else>
@@ -207,7 +198,7 @@
                       TMPL
                     </span>
                     <span class="tools-card-endpoint">
-                      {{ (tool.promptText || '').length }} chars
+                      {{ t('tools.chars', { n: (tool.promptText || '').length }) }}
                     </span>
                   </template>
                 </div>
@@ -250,44 +241,44 @@
           <!-- Modal body -->
           <div class="tools-modal-body">
             <div class="form-group">
-              <label class="form-label">Name *</label>
+              <label class="form-label">{{ t('tools.name') }} *</label>
               <input v-model="form.name" type="text" class="form-input" placeholder="e.g. Weather API" />
-              <p class="form-hint">Display name for the tool (also used as the tool name for the agent)</p>
+              <p class="form-hint">{{ t('tools.nameHint') }}</p>
             </div>
 
             <div class="form-group">
-              <label class="form-label">Description</label>
-              <input v-model="form.description" type="text" class="form-input" placeholder="What this tool does — shown to the AI agent" />
+              <label class="form-label">{{ t('tools.description') }}</label>
+              <input v-model="form.description" type="text" class="form-input" :placeholder="t('tools.descriptionHint')" />
             </div>
 
             <!-- Type selector -->
             <div class="form-group">
-              <label class="form-label">Type *</label>
+              <label class="form-label">{{ t('tools.type') }} *</label>
               <select v-model="form.type" class="form-input">
-                <option value="http">HTTP Endpoint</option>
-                <option value="code">Code Snippet</option>
-                <option value="prompt">Prompt Template</option>
-                <option value="smtp">SMTP Email</option>
+                <option value="http">{{ t('tools.httpEndpoint') }}</option>
+                <option value="code">{{ t('tools.codeSnippet') }}</option>
+                <option value="prompt">{{ t('tools.promptTemplate') }}</option>
+                <option value="smtp">{{ t('tools.smtpEmail') }}</option>
               </select>
               <p class="form-hint">
-                <template v-if="form.type === 'http'">API endpoint the agent can call directly</template>
-                <template v-else-if="form.type === 'code'">Code shown to the agent as a reference — agent uses execute_shell to run</template>
-                <template v-else-if="form.type === 'smtp'">Email tool using SMTP credentials from Config → Email</template>
-                <template v-else>Text template returned to the agent on demand when it calls this tool</template>
+                <template v-if="form.type === 'http'">{{ t('tools.typeHintHttp') }}</template>
+                <template v-else-if="form.type === 'code'">{{ t('tools.typeHintCode') }}</template>
+                <template v-else-if="form.type === 'smtp'">{{ t('tools.typeHintSmtp') }}</template>
+                <template v-else>{{ t('tools.typeHintPrompt') }}</template>
               </p>
             </div>
 
             <!-- ── HTTP-specific fields ─────────────────────────── -->
             <template v-if="form.type === 'http'">
               <div class="form-group">
-                <label class="form-label">Category</label>
+                <label class="form-label">{{ t('tools.category') }}</label>
                 <input v-model="form.category" type="text" class="form-input" placeholder="HTTP, Search, Data, etc." />
-                <p class="form-hint">Used for filtering in the chat tool selector</p>
+                <p class="form-hint">{{ t('tools.categoryHint') }}</p>
               </div>
 
               <div class="form-row">
                 <div class="form-group" style="width:140px;flex-shrink:0;">
-                  <label class="form-label">Method *</label>
+                  <label class="form-label">{{ t('tools.method') }} *</label>
                   <select v-model="form.method" class="form-input">
                     <option value="GET">GET</option>
                     <option value="POST">POST</option>
@@ -296,7 +287,7 @@
                   </select>
                 </div>
                 <div class="form-group" style="flex:1;">
-                  <label class="form-label">Endpoint URL *</label>
+                  <label class="form-label">{{ t('tools.endpointUrl') }} *</label>
                   <input v-model="form.endpoint" type="text" class="form-input" placeholder="https://api.example.com/v1/resource" />
                 </div>
               </div>
@@ -304,15 +295,15 @@
               <!-- Headers -->
               <div class="env-section">
                 <div class="env-header">
-                  <h3 class="env-title">Headers</h3>
+                  <h3 class="env-title">{{ t('tools.headers') }}</h3>
                   <button class="env-add-btn" @click="addHeader">
                     <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Add
+                    {{ t('tools.add') }}
                   </button>
                 </div>
 
                 <div v-if="form.headers.length === 0" class="env-empty">
-                  <p>No custom headers. Add if the endpoint requires authentication or special headers.</p>
+                  <p>{{ t('tools.headersEmpty') }}</p>
                 </div>
 
                 <div v-for="(h, idx) in form.headers" :key="idx" class="env-row">
@@ -326,21 +317,21 @@
 
               <!-- Body Template -->
               <div class="form-group" style="margin-top:16px;">
-                <label class="form-label">Body Template</label>
+                <label class="form-label">{{ t('tools.bodyTemplate') }}</label>
                 <textarea
                   v-model="form.bodyTemplate"
                   class="form-textarea"
                   rows="4"
                   placeholder='{"query": "{{input}}"}'
                 ></textarea>
-                <p class="form-hint">JSON body template. The agent can override or merge fields at runtime.</p>
+                <p class="form-hint">{{ t('tools.bodyTemplateHint') }}</p>
               </div>
             </template>
 
             <!-- ── Code Snippet fields ──────────────────────────── -->
             <template v-else-if="form.type === 'code'">
               <div class="form-group">
-                <label class="form-label">Language *</label>
+                <label class="form-label">{{ t('tools.language') }} *</label>
                 <select v-model="form.language" class="form-input">
                   <option value="javascript">JavaScript</option>
                   <option value="python">Python</option>
@@ -349,14 +340,14 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label">Code *</label>
+                <label class="form-label">{{ t('tools.codeLabel') }} *</label>
                 <textarea
                   v-model="form.code"
                   class="form-textarea form-textarea-code"
                   rows="12"
                   placeholder="// Paste your reference code here..."
                 ></textarea>
-                <p class="form-hint">This code is shown to the agent as a reference. The agent will use execute_shell to run similar code.</p>
+                <p class="form-hint">{{ t('tools.codeHint') }}</p>
               </div>
             </template>
 
@@ -366,9 +357,8 @@
                 <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;">
                   <svg style="width:16px;height:16px;color:#0284C7;flex-shrink:0;margin-top:1px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                   <div style="font-size:var(--fs-secondary);color:#0369A1;line-height:1.5;">
-                    SMTP credentials (host, port, username, password) are read from
-                    <strong>Config → Email</strong>. This tool will send email using those settings.
-                    <br/>The agent can specify: <code>to</code>, <code>subject</code>, <code>body</code>, <code>html</code>, <code>cc</code>, <code>bcc</code>, <code>from_name</code>, <code>attachments</code>.
+                    {{ t('tools.smtpInfo', { config: t('tools.smtpInfoConfig') }) }}
+                    <br/>{{ t('tools.smtpAgentFields', { fields: 'to, subject, body, html, cc, bcc, from_name, attachments' }) }}
                   </div>
                 </div>
               </div>
@@ -377,14 +367,14 @@
             <!-- ── Prompt Template fields ───────────────────────── -->
             <template v-else>
               <div class="form-group">
-                <label class="form-label">Prompt Text *</label>
+                <label class="form-label">{{ t('tools.promptText') }} *</label>
                 <textarea
                   v-model="form.promptText"
                   class="form-textarea"
                   rows="8"
                   placeholder="Write your prompt template or instructions here..."
                 ></textarea>
-                <p class="form-hint">This prompt is returned to the agent when it calls this tool. Use it for reusable instructions or templates.</p>
+                <p class="form-hint">{{ t('tools.promptTextHint') }}</p>
               </div>
             </template>
           </div>
@@ -400,11 +390,11 @@
             <div v-if="editingTool" style="flex:1;">
               <AppButton variant="danger-ghost" @click="confirmDelete">
                 <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-                Delete
+                {{ t('common.delete') }}
               </AppButton>
             </div>
-            <AppButton variant="secondary" size="modal" @click="closeModal">Cancel</AppButton>
-            <AppButton size="modal" @click="saveForm" :disabled="!canSave">Save</AppButton>
+            <AppButton variant="secondary" size="modal" @click="closeModal">{{ t('common.cancel') }}</AppButton>
+            <AppButton size="modal" @click="saveForm" :disabled="!canSave">{{ t('common.save') }}</AppButton>
           </div>
         </div>
       </div>
@@ -416,7 +406,7 @@
       :visible="showConfirmDelete && editingTool"
       :title="t('tools.deleteTool')"
       :message="t('tools.deleteToolConfirm', { name: editingTool.name })"
-      confirm-text="Delete"
+      :confirm-text="t('common.delete')"
       confirm-class="danger"
       @confirm="executeDelete"
       @close="showConfirmDelete = false"
@@ -438,34 +428,12 @@ const configStore = useConfigStore()
 const { t } = useI18n()
 const refreshing = ref(false)
 
-function isToolDefault(toolId) {
-  const ids = configStore.config.defaultToolIds
-  if (!ids) return true // null = all default
-  return ids.includes(toolId)
-}
-
-function toggleToolDefault(toolId) {
-  const allIds = toolsStore.tools.map(t => t.id)
-  let current = configStore.config.defaultToolIds
-  if (!current) {
-    // null = all default → removing one means explicit list of all minus this one
-    current = allIds.filter(id => id !== toolId)
-  } else if (current.includes(toolId)) {
-    current = current.filter(id => id !== toolId)
-  } else {
-    current = [...current, toolId]
-  }
-  // If all are selected, store null
-  const isAll = current.length === allIds.length && allIds.every(id => current.includes(id))
-  configStore.saveConfig({ defaultToolIds: isAll ? null : current })
-}
-
-const typeLabelMap = {
-  http: 'HTTP',
-  code: 'Code',
-  prompt: 'Prompt',
-  smtp: 'SMTP',
-}
+const typeLabelMap = computed(() => ({
+  http: t('tools.http'),
+  code: t('tools.code'),
+  prompt: t('tools.prompt'),
+  smtp: t('tools.smtp'),
+}))
 
 async function refreshTools() {
   refreshing.value = true
@@ -647,7 +615,7 @@ async function saveForm() {
   try {
     await toolsStore.saveTool(toolData)
   } catch (err) {
-    saveError.value = err.message || 'Failed to save tool'
+    saveError.value = err.message || t('common.errorOccurred')
     return
   }
   closeModal()
@@ -811,11 +779,12 @@ function truncateEndpoint(ep) {
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
 .tools-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 1.25rem;
 }
-@media (min-width: 1920px) { .tools-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (min-width: 2560px) { .tools-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 1800px) { .tools-grid { grid-template-columns: repeat(5, 1fr); } }
+@media (max-width: 1400px) { .tools-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 1100px) { .tools-grid { grid-template-columns: repeat(3, 1fr); } }
 
 /* ── Card ──────────────────────────────────────────────────────────────────── */
 .tools-card {
@@ -843,24 +812,6 @@ function truncateEndpoint(ep) {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
 }
 .tools-card-body { padding: 1.25rem 1.25rem 1rem; display: flex; flex-direction: column; flex: 1; }
-
-/* ── Default row — top of card body ───────────────────────────────────────── */
-.tools-card-default-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 0 0.75rem;
-  margin-bottom: 0.875rem;
-  border-bottom: 1px solid #E5E5EA;
-}
-.tools-default-label {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-caption);
-  font-weight: 600;
-  color: #9CA3AF;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
 
 .tools-card-title-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.875rem; }
 .tools-card-icon {
@@ -1075,46 +1026,11 @@ select.form-input { appearance: auto; cursor: pointer; }
 }
 .env-remove-btn:hover { background: rgba(239,68,68,0.15); color: #EF4444; }
 
-/* ── Default toggle switch ──────────────────────────────────────────────────── */
-.default-toggle {
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.default-toggle input { display: none; }
-.default-toggle-track {
-  position: relative;
-  width: 2.125rem;
-  height: 1.25rem;
-  border-radius: 0.625rem;
-  background: #D1D1D6;
-  transition: background 0.2s;
-}
-.default-toggle input:checked + .default-toggle-track {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-}
-.default-toggle-thumb {
-  position: absolute;
-  top: 0.125rem;
-  left: 0.125rem;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-  background: #FFFFFF;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-  transition: transform 0.2s;
-}
-.default-toggle input:checked + .default-toggle-track .default-toggle-thumb {
-  transform: translateX(0.875rem);
-}
-
 /* ── Reduced motion ─────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .tools-card { transition: none; }
   .tools-card:hover { transform: none; }
   .tools-backdrop, .tools-modal { animation: none; }
-  .default-toggle-track, .default-toggle-thumb { transition: none; }
 }
 
 </style>

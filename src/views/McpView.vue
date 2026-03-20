@@ -87,15 +87,6 @@
             <div class="mcp-card-accent" :style="{ background: cardGradient(idx) }"></div>
 
             <div class="mcp-card-body">
-              <!-- Default row — top of card body -->
-              <div class="mcp-card-default-row" @click.stop>
-                <span class="mcp-default-label">{{ isMcpDefault(server.id) ? 'Default' : 'Not default' }}</span>
-                <label class="default-toggle" :title="isMcpDefault(server.id) ? 'Remove from defaults' : 'Add to defaults'">
-                  <input type="checkbox" :checked="isMcpDefault(server.id)" @change="toggleMcpDefault(server.id)" />
-                  <span class="default-toggle-track"><span class="default-toggle-thumb"></span></span>
-                </label>
-              </div>
-
               <!-- Icon + title row -->
               <div class="mcp-card-title-row">
                 <div class="mcp-card-icon" :style="{ background: cardGradient(idx) }">
@@ -164,8 +155,10 @@
 
             <div class="form-group">
               <label class="form-label">Description</label>
-              <input v-model="form.description" type="text" class="form-input" placeholder="What this MCP server does" />
             </div>
+            <section class="mcp-modal-desc-section">
+              <textarea v-model="form.description" class="form-textarea mcp-modal-desc-textarea" placeholder="What this MCP server does"></textarea>
+            </section>
 
             <!-- Transport type toggle -->
             <div class="form-group">
@@ -326,26 +319,6 @@ const { t } = useI18n()
 const mcpStore = useMcpStore()
 const configStore = useConfigStore()
 const refreshing = ref(false)
-
-function isMcpDefault(serverId) {
-  const ids = configStore.config.defaultMcpServerIds
-  if (!ids) return true // null = all default
-  return ids.includes(serverId)
-}
-
-function toggleMcpDefault(serverId) {
-  const allIds = mcpStore.servers.map(s => s.id)
-  let current = configStore.config.defaultMcpServerIds
-  if (!current) {
-    current = allIds.filter(id => id !== serverId)
-  } else if (current.includes(serverId)) {
-    current = current.filter(id => id !== serverId)
-  } else {
-    current = [...current, serverId]
-  }
-  const isAll = current.length === allIds.length && allIds.every(id => current.includes(id))
-  configStore.saveConfig({ defaultMcpServerIds: isAll ? null : current })
-}
 
 async function refreshServers() {
   refreshing.value = true
@@ -670,11 +643,12 @@ function cardGradient() {
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
 .mcp-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 1.25rem;
 }
-@media (min-width: 1920px) { .mcp-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (min-width: 2560px) { .mcp-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 1800px) { .mcp-grid { grid-template-columns: repeat(5, 1fr); } }
+@media (max-width: 1400px) { .mcp-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 1100px) { .mcp-grid { grid-template-columns: repeat(3, 1fr); } }
 
 /* ── Card ──────────────────────────────────────────────────────────────────── */
 .mcp-card {
@@ -699,24 +673,6 @@ function cardGradient() {
 .mcp-card:active { transform: translateY(-0.0625rem); transition-duration: 0.1s; }
 .mcp-card-accent { height: 4px; width: 100%; flex-shrink: 0; }
 .mcp-card-body { padding: 1.25rem 1.25rem 1rem; display: flex; flex-direction: column; flex: 1; }
-
-/* ── Default row — top of card body ───────────────────────────────────────── */
-.mcp-card-default-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 0 0.75rem;
-  margin-bottom: 0.875rem;
-  border-bottom: 1px solid #E5E5EA;
-}
-.mcp-default-label {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-caption);
-  font-weight: 600;
-  color: #9CA3AF;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
 
 .mcp-card-title-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.875rem; }
 .mcp-card-icon {
@@ -772,10 +728,27 @@ function cardGradient() {
   line-height: 1.55;
   margin: 0 0 0.875rem;
   flex: 1;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+}
+
+.mcp-modal-desc-section {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+.mcp-modal-desc-textarea {
+  flex: 1;
+  min-height: 42vh;
+  resize: vertical;
+  font-size: var(--fs-body);
+  background: #18181A;
+  color: #fff;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  box-sizing: border-box;
+  overflow-y: auto;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.6;
 }
 .mcp-card-footer {
   border-top: 1px solid #E5E5EA;
@@ -804,10 +777,11 @@ function cardGradient() {
 }
 @keyframes mcp-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 .mcp-modal {
-  width: min(40rem, 95vw); max-height: 85vh;
+  width: min(40rem, 95vw); height: 85vh; max-height: 85vh;
   background: #0F0F0F; border: 1px solid #2A2A2A; border-radius: 1.25rem;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
   display: flex; flex-direction: column; overflow: hidden;
+  position: relative;
   animation: mcp-modal-in 0.2s ease-out;
 }
 @keyframes mcp-modal-in {
@@ -837,7 +811,7 @@ function cardGradient() {
 }
 .mcp-modal-close:hover { background: #1F1F1F; color: #FFFFFF; }
 .mcp-modal-body {
-  flex: 1; overflow-y: auto; padding: 1.5rem;
+  flex: 1; min-height: 0; overflow-y: auto; padding: 1.5rem;
   scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
 .save-error {
@@ -847,6 +821,7 @@ function cardGradient() {
   color: #FF6B6B; font-size: var(--fs-secondary, 0.875rem); font-family: 'Inter', sans-serif;
 }
 .mcp-modal-footer {
+  flex-shrink: 0;
   display: flex; align-items: center; justify-content: flex-end; gap: 0.625rem;
   padding: 1rem 1.5rem; border-top: 1px solid #1F1F1F; background: #0A0A0A;
 }
@@ -980,47 +955,12 @@ function cardGradient() {
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
 
-/* ── Default toggle switch ──────────────────────────────────────────────────── */
-.default-toggle {
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.default-toggle input { display: none; }
-.default-toggle-track {
-  position: relative;
-  width: 2.125rem;
-  height: 1.25rem;
-  border-radius: 0.625rem;
-  background: #D1D1D6;
-  transition: background 0.2s;
-}
-.default-toggle input:checked + .default-toggle-track {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-}
-.default-toggle-thumb {
-  position: absolute;
-  top: 0.125rem;
-  left: 0.125rem;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-  background: #FFFFFF;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-  transition: transform 0.2s;
-}
-.default-toggle input:checked + .default-toggle-track .default-toggle-thumb {
-  transform: translateX(0.875rem);
-}
-
 /* ── Reduced motion ─────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .mcp-card { transition: none; }
   .mcp-card:hover { transform: none; }
   .spin { animation: none; }
   .mcp-backdrop, .mcp-modal { animation: none; }
-  .default-toggle-track, .default-toggle-thumb { transition: none; }
 }
 </style>
 

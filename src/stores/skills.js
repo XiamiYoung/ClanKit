@@ -5,8 +5,12 @@ const isElectron = () => typeof window !== 'undefined' && !!window.electronAPI
 
 export const useSkillsStore = defineStore('skills', () => {
   const skills = ref([])        // [{ id, name, summary, path, systemPrompt? }]
+  const remoteSkills = ref({})  // { sourceId: [skills...] }
   const loading = ref(false)
+  const remoteFetching = ref({}) // { sourceId: boolean }
+  const remoteError = ref({})    // { sourceId: errorMessage }
   const error = ref(null)
+  const installingSkills = ref({}) // { skillId: { sourceId, progress, status, error } }
 
   // All skills are always "enabled" — return all as skill objects for agent loop
   const allSkillObjects = computed(() =>
@@ -14,6 +18,20 @@ export const useSkillsStore = defineStore('skills', () => {
       .filter(s => s.systemPrompt)
       .map(s => ({ id: s.id, name: s.name, summary: s.summary || '', systemPrompt: s.systemPrompt }))
   )
+
+  // Combined remote skills (flatten by sourceId)
+  const allRemoteSkills = computed(() => {
+    const all = []
+    for (const [sourceId, skillList] of Object.entries(remoteSkills.value)) {
+      all.push(...(skillList || []))
+    }
+    return all
+  })
+
+  // Check if a skill is installed locally
+  function isSkillInstalled(skillId) {
+    return skills.value.some(s => s.id === skillId)
+  }
 
   async function loadSkills(skillsPath) {
     if (!isElectron()) return
@@ -46,5 +64,103 @@ export const useSkillsStore = defineStore('skills', () => {
     }
   }
 
-  return { skills, loading, error, allSkillObjects, loadSkills, loadSkillPrompts }
+  async function fetchRemoteSkills(sourceId, options = {}) {
+    if (!isElectron()) return
+    
+    remoteFetching.value[sourceId] = true
+    remoteError.value[sourceId] = null
+    try {
+      const result = await window.electronAPI.skills.fetchRemote(sourceId, options)
+      if (result.error) {
+        throw new Error(result.error)
+      }
+      
+      // Mark installed skills
+      const skillList = result.map(s => ({
+        ...s,
+        installed: isSkillInstalled(s.id)
+      }))
+      
+      remoteSkills.value[sourceId] = skillList
+    } catch (err) {
+      remoteError.value[sourceId] = `Failed to fetch from ${sourceId}: ${err.message}`
+      remoteSkills.value[sourceId] = []
+    } finally {
+      remoteFetching.value[sourceId] = false
+    }
+  }
+
+  async function installRemoteSkill(sourceId, skillId, skillUrl, skillsPath = '') {
+    if (!isElectron()) return
+    
+    installingSkills.value[skillId] = {
+      sourceId,
+      progress: 0,
+      status: 'installing',
+      error: null
+    }
+    
+    try {
+      const result = await window.electronAPI.skills.installRemote(sourceId, skillId, skillUrl, skillsPath)
+      
+      if (result.success) {
+        // Mark as installed in remote list
+        if (remoteSkills.value[sourceId]) {
+          const remote = remoteSkills.value[sourceId].find(s => s.id === skillId)
+          if (remote) remote.installed = true
+        }
+        
+        // Reload local skills using the same skillsPath
+        await loadSkills(skillsPath)
+        await loadSkillPrompts(skillsPath)
+        
+        installingSkills.value[skillId].status = 'completed'
+        installingSkills.value[skillId].progress = 100
+      } else {
+        throw new Error(result.error || 'Installation failed')
+      }
+    } catch (err) {
+      installingSkills.value[skillId].status = 'error'
+      installingSkills.value[skillId].error = err.message
+    }
+  }
+
+  async function uninstallRemoteSkill(skillId) {
+    if (!isElectron()) return
+    const localSkill = skills.value.find(s => s.id === skillId)
+    if (localSkill?.path) {
+      try {
+        await window.electronAPI.skills.deleteSkill(localSkill.path)
+      } catch (err) {
+        console.error('[Skills] delete failed:', err)
+      }
+    }
+    // Remove from local list
+    skills.value = skills.value.filter(s => s.id !== skillId)
+    // Mark not installed in all remote source lists
+    for (const skillList of Object.values(remoteSkills.value)) {
+      const remote = skillList?.find(s => s.id === skillId)
+      if (remote) remote.installed = false
+    }
+    // Clean up installing state
+    delete installingSkills.value[skillId]
+  }
+
+  return { 
+    skills, 
+    remoteSkills,
+    allRemoteSkills,
+    loading, 
+    remoteFetching,
+    remoteError,
+    installingSkills,
+    error,
+    isSkillInstalled,
+    allSkillObjects, 
+    loadSkills, 
+    loadSkillPrompts,
+    fetchRemoteSkills,
+    installRemoteSkill,
+    uninstallRemoteSkill
+  }
 })

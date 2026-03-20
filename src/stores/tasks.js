@@ -118,8 +118,22 @@ export const useTasksStore = defineStore('tasks', () => {
     delete cfg.openaiBaseURL
     delete cfg._directAuth
     delete cfg._resolvedProvider
+    delete cfg.provider
 
-    const provider = agent.providerId || raw.defaultProvider || 'anthropic'
+    const providerId = agent.providerId || raw.defaultProvider || 'anthropic'
+
+    // Check if providerId is a UUID referencing config.providers[]
+    const customProvider = (raw.providers || []).find(p => p.id === providerId)
+    if (customProvider) {
+      cfg.provider = {
+        ...customProvider,
+        model: agent.modelId || customProvider.model,
+      }
+      return JSON.parse(JSON.stringify(cfg))
+    }
+
+    // Legacy string-based provider
+    const provider = providerId
 
     if (provider === 'anthropic') {
       cfg.apiKey  = raw.anthropic?.apiKey  || ''

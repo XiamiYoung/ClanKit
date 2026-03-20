@@ -398,7 +398,7 @@ const allRows = computed(() => {
       return {
         id:                  r.id,
         planId:              r.planId,
-        planName:            plan?.name || r.planId || '—',
+        planName:            plan?.name || r.planName || r.planId || '—',
         planIcon:            plan?.icon || '📋',
         planColor:           props.planColors[r.planId] || '#6B7280',
         planCategoryEmoji:   category?.emoji || null,

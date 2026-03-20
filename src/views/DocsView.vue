@@ -458,6 +458,7 @@
           @apply="onAiDocApply"
           @revert="onAiDocRevert"
           @permission-respond="onDocPermissionRespond"
+          @clear-selection="onAiDocClearSelection"
         />
         <!-- Resize handles — all 8 edges/corners -->
         <div class="ai-doc-float-resize-r"  @mousedown="startPanelResize('r',  $event)"></div>
@@ -886,8 +887,73 @@ function hideAgentPillTooltip() {
 // Permission mode for AI Doc (default: allow_all for backwards compat)
 const aiDocPermissionMode = ref('allow_all')
 
+function _normalizeDocPath(p) {
+  return String(p || '')
+    .replace(/\\/g, '/')
+    .replace(/\/+/g, '/')
+    .toLowerCase()
+}
+
+function _currentFileChangedByToolRun(newMessages) {
+  const currentPath = store.activeFile?.path
+  if (!currentPath) return false
+  const currentNorm = _normalizeDocPath(currentPath)
+
+  for (const msg of newMessages || []) {
+    if (msg?.role !== 'ai' || !Array.isArray(msg.toolCalls)) continue
+    for (const tc of msg.toolCalls) {
+      if (!tc || tc._permBlock) continue
+      if (tc.name !== 'file_operation') continue
+      const op = tc.input?.operation
+      if (!['edit', 'write', 'append'].includes(op)) continue
+
+      // Primary signal: tool targeted the currently open file path.
+      const inputPath = tc.input?.path
+      if (inputPath && _normalizeDocPath(inputPath) === currentNorm) {
+        const resultText = String(tc.result?.text || '')
+        // If we have a definitive error, skip reload.
+        if (/^Error:/i.test(resultText)) continue
+        return true
+      }
+
+      const resultPath = tc.result?.path
+      const resultText = String(tc.result?.text || '')
+      const succeeded = !!resultPath && (
+        tc.result?.replaced === true
+        || /^Edited:\s/i.test(resultText)
+        || /^Written:\s/i.test(resultText)
+        || /^Appended:\s/i.test(resultText)
+      )
+      if (!succeeded) continue
+
+      if (_normalizeDocPath(resultPath) === currentNorm) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+async function _reloadActiveTextFileFromDisk() {
+  if (!store.activeFile?.path || store.activeFile?.binary) return
+  const readRes = await window.electronAPI.obsidian.readFile(store.activeFile.path)
+  if (readRes?.error || typeof readRes?.content !== 'string') return
+
+  // Keep store + local editor in sync without re-marking dirty.
+  store.activeFile.content = readRes.content
+  store.activeFile.dirty = false
+  editorContent.value = readRes.content
+  updateAiDocFileContent(readRes.content)
+
+  if (isMarkdown.value && !editMode.value) {
+    await nextTick()
+    await refreshFormattedHtml()
+  }
+}
+
 /** Wrap sendAiDoc to inject agent config from stores. */
-function sendAiDoc(userText) {
+async function sendAiDoc(userText) {
+  const beforeMsgCount = aiDocMessages.value.length
   const agent = agentsStore.getAgentById(selectedAgentId.value)
   const agentConfig = {
     agentPrompt: agent?.prompt || '',
@@ -902,13 +968,47 @@ function sendAiDoc(userText) {
     },
     permissionMode: aiDocPermissionMode.value,
   }
-  _sendAiDocRaw(userText, agentConfig)
+  await _sendAiDocRaw(userText, agentConfig)
+
+  // Auto-apply the latest generated replacement so users can edit directly.
+  const latestEdit = [...aiDocMessages.value]
+    .reverse()
+    .find(m => m.role === 'ai' && m.type === 'edit' && m.replacement && !m.applied)
+  if (latestEdit) onAiDocApply(latestEdit.id)
+
+  // If the agent edited the current file via file_operation, reload it so
+  // the latest on-disk content is visible in this window immediately.
+  const runMessages = aiDocMessages.value.slice(beforeMsgCount)
+  if (_currentFileChangedByToolRun(runMessages)) {
+    await _reloadActiveTextFileFromDisk()
+  }
 }
 
 /** Handle permission response from AiMagicPanel PermissionPrompt buttons. */
 function onDocPermissionRespond({ blockId, decision, command }) {
   if (!aiDocRequestId.value) return
   window.electronAPI.docPermissionResponse(aiDocRequestId.value, { blockId, decision, pattern: command })
+}
+
+function onAiDocClearSelection() {
+  _cachedSel.text = ''
+  _cachedSel.range = null
+  _cachedSel.rect = null
+  _cachedSel.taStart = -1
+  _cachedSel.taEnd = -1
+  hasSelection.value = false
+
+  // Clear browser selection highlight if present.
+  try { window.getSelection()?.removeAllRanges?.() } catch {}
+
+  // Collapse textarea selection (markdown source mode).
+  const ta = sourceTextareaRef.value
+  if (ta && typeof ta.selectionStart === 'number') {
+    ta.selectionEnd = ta.selectionStart
+  }
+
+  // Revert AI context to whole-file mode.
+  updateAiDocSelection('')
 }
 
 // AI Doc switch (golden toggle) — controls panel visibility

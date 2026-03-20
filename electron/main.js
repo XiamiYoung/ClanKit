@@ -50,6 +50,35 @@ function buildProviderClientConfig(provider, model = null) {
   return cfg
 }
 
+/**
+ * Resolve the image generation provider from config.
+ * Looks for a provider with type 'openrouter' or 'google' that has imageModel set,
+ * or falls back to any active OpenRouter provider (which supports Gemini image models).
+ * Returns { apiKey, baseURL, model } or null.
+ */
+function _resolveImageProvider(cfg) {
+  const providers = cfg?.providers || []
+  // Prefer a provider that has an explicit imageModel field
+  const withImageModel = providers.find(p => p.imageModel && p.apiKey)
+  if (withImageModel) {
+    return {
+      apiKey:   withImageModel.apiKey,
+      baseURL:  withImageModel.baseURL || '',
+      model:    withImageModel.imageModel,
+    }
+  }
+  // Fall back to first active OpenRouter provider (can route to any Gemini image model)
+  const or = providers.find(p => p.type === 'openrouter' && p.isActive && p.apiKey)
+  if (or && or.settings?.imageModel) {
+    return {
+      apiKey:  or.apiKey,
+      baseURL: or.baseURL || 'https://openrouter.ai/api/v1',
+      model:   or.settings.imageModel,
+    }
+  }
+  return null
+}
+
 // Suppress libsignal verbose warnings — they use console.warn internally
 const originalWarn = console.warn
 console.warn = function (...args) {
@@ -2246,10 +2275,11 @@ ipcMain.handle('memory:extract-on-chat-switch', async (event, { chatId, messages
         if (providerCfg?.apiKey && providerCfg?.baseURL) {
           const { logsDir } = ensureAgentMemoryDirs(agentId)
           const flusher = new MemoryFlush({
-            model:    um.model,
-            apiKey:   providerCfg.apiKey,
-            baseURL:  providerCfg.baseURL,
-            isOpenAI: um.provider === 'openai' || um.provider === 'deepseek',
+            model:      um.model,
+            apiKey:     providerCfg.apiKey,
+            baseURL:    providerCfg.baseURL,
+            isOpenAI:   um.provider === 'openai' || um.provider === 'deepseek',
+            directAuth: um.provider === 'deepseek',
           })
           flusher.run(messages, agentId, logsDir).catch(err =>
             logger.error('[memory:extract-on-chat-switch] flush error', err.message)
@@ -3251,6 +3281,30 @@ ipcMain.handle('openai:fetch-models', async (_, { apiKey, baseURL }) => {
   }
 })
 
+// --- IPC: Google Model Fetching ----------------------------------------------
+ipcMain.handle('google:fetch-models', async (_, { apiKey }) => {
+  if (!apiKey) return { success: false, error: 'Google API key not configured', models: [] }
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+    )
+    if (!resp.ok) {
+      const errText = await resp.text()
+      return { success: false, error: `HTTP ${resp.status}: ${errText}`, models: [] }
+    }
+    const data = await resp.json()
+    const models = (data.models || []).map(m => ({
+      id: m.name.replace('models/', ''),
+      name: m.displayName || m.name.replace('models/', ''),
+    }))
+    logger.info('google:fetch-models', { count: models.length })
+    return { success: true, models }
+  } catch (err) {
+    logger.error('google:fetch-models error', err.message)
+    return { success: false, error: err.message, models: [] }
+  }
+})
+
 // --- IPC: News RSS Feed Fetching ---------------------------------------------
 ipcMain.handle('news:fetch-feeds', async (_, feedConfigs) => {
   if (!Array.isArray(feedConfigs) || feedConfigs.length === 0) {
@@ -3466,7 +3520,13 @@ ipcMain.handle('skills:scan-dir', async (_, dirPath) => {
               summary = extractSummary(content)
             } catch {}
           }
-          return { id: entry.name, name: entry.name, displayName, description, summary, path: skillDir }
+          // Get installation time (directory mtime)
+          let installedAt = null
+          try {
+            const stats = await fs.promises.stat(skillDir)
+            installedAt = stats.mtimeMs ? new Date(stats.mtimeMs).toISOString() : null
+          } catch {}
+          return { id: entry.name, name: entry.name, displayName, description, summary, path: skillDir, installedAt }
         })
     )
     return skills
@@ -4454,6 +4514,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       loopConfig.skillsPath   = groupCfg.skillsPath   || ''
       loopConfig.DoCPath      = groupCfg.DoCPath      || ''
       loopConfig.memoryDir    = MEMORY_DIR
+      loopConfig.chatId       = chatId
       const loop = new AgentLoop(loopConfig)
       activeLoops.set(loopKey, loop)
       activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
@@ -4577,6 +4638,9 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.skillsPath   = fullCfg.skillsPath   || ''
   loopConfig.DoCPath      = fullCfg.DoCPath      || ''
   loopConfig.memoryDir    = MEMORY_DIR
+  loopConfig.chatId       = chatId
+  // Inject image provider config so generate_image tool can call image generation APIs
+  loopConfig.imageProvider = _resolveImageProvider(fullCfg)
   const loop = new AgentLoop(loopConfig)
   activeLoops.set(chatId, loop)
   activeLoopMeta.set(chatId, { chatId, agentId: agentPrompts?.systemAgentId || null, agentName: null, isGroup: false })
@@ -4736,6 +4800,7 @@ ipcMain.handle('agent:run-additional', async (event, { chatId, messages, config,
     loopConfig.skillsPath   = groupCfg.skillsPath   || ''
     loopConfig.DoCPath      = groupCfg.DoCPath      || ''
     loopConfig.memoryDir    = MEMORY_DIR
+    loopConfig.chatId       = chatId
     const loop = new AgentLoop(loopConfig)
     activeLoops.set(loopKey, loop)
     activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
@@ -5234,7 +5299,7 @@ If you use tools to read or write files, use the exact file path above: ${fPath}
         } else if (chunk.type === 'tool_call') {
           event.sender.send('agent:edit-chunk', { requestId, type: 'tool_call', name: chunk.name, input: chunk.input, id: chunk.id })
         } else if (chunk.type === 'tool_result') {
-          event.sender.send('agent:edit-chunk', { requestId, type: 'tool_result', id: chunk.id, result: chunk.result })
+          event.sender.send('agent:edit-chunk', { requestId, type: 'tool_result', name: chunk.name, id: chunk.id, result: chunk.result })
         } else if (chunk.type === 'permission_request') {
           event.sender.send('agent:edit-chunk', { requestId, type: 'permission_request', blockId: chunk.blockId, toolName: chunk.toolName, command: chunk.command, toolInput: chunk.toolInput })
         }
@@ -5550,8 +5615,25 @@ Reply with ONLY a JSON object:
 
 ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, utilityModel }) => {
   try {
-    if (!apiKey || !baseURL || !utilityModel) {
-      return { success: false, error: 'Missing required fields (apiKey, baseURL, utilityModel)' }
+    if (!apiKey || !utilityModel) {
+      return { success: false, error: 'Missing required fields (apiKey, utilityModel)' }
+    }
+
+    if (provider === 'google') {
+      const { GoogleGenAI } = require('@google/genai')
+      const gc = new GoogleGenAI({ apiKey })
+      const start = Date.now()
+      const resp = await gc.models.generateContent({
+        model: utilityModel,
+        contents: 'hi',
+      })
+      const ms = Date.now() - start
+      const text = resp.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      return { success: true, ms, preview: text.slice(0, 40) }
+    }
+
+    if (!baseURL) {
+      return { success: false, error: 'Missing required field: baseURL' }
     }
 
     const isOpenAI = provider === 'openai' || provider === 'deepseek'
@@ -6421,9 +6503,14 @@ ipcMain.handle('files:open-image-data-uri', async (_, { dataUri, name }) => {
     const match = dataUri.match(/^data:(image\/[^;]+);base64,(.+)$/s)
     if (!match) return { error: 'Invalid data URI' }
     const ext = match[1].split('/')[1] || 'png'
-    const safeName = (name || `image.${ext}`).replace(/[^a-zA-Z0-9._-]/g, '_')
-    const tmpPath = path.join(os.tmpdir(), safeName)
-    fs.writeFileSync(tmpPath, Buffer.from(match[2], 'base64'))
+    // Use a short hash of the image data as filename so each unique image gets its own file
+    // and re-clicking never re-writes the same content
+    const crypto = require('crypto')
+    const hash = crypto.createHash('md5').update(match[2]).digest('hex').slice(0, 10)
+    const tmpPath = path.join(os.tmpdir(), `clankai-img-${hash}.${ext}`)
+    if (!fs.existsSync(tmpPath)) {
+      fs.writeFileSync(tmpPath, Buffer.from(match[2], 'base64'))
+    }
     if (isWSL()) {
       const { execSync } = require('child_process')
       execSync('explorer.exe "' + toWindowsPath(tmpPath) + '"')

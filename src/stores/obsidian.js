@@ -32,6 +32,30 @@ export const useObsidianStore = defineStore('obsidian', () => {
     if (config.vaultPath) {
       vaultPath.value = normalizePath(config.vaultPath)
       await loadTree()
+      if (config.lastOpenedDoc) {
+        const { path: filePath, name: fileName } = config.lastOpenedDoc
+        _expandParentsOf(filePath)
+        await openFile(filePath, fileName)
+      }
+    }
+  }
+
+  // Expand all ancestor folders of a file path so it's visible in the tree
+  function _expandParentsOf(filePath) {
+    if (!vaultPath.value) return
+    const sep = filePath.includes('/') ? '/' : '\\'
+    // Build list of all ancestor folder paths between vaultPath and the file
+    let dir = filePath
+    const ancestors = []
+    while (true) {
+      const lastSep = Math.max(dir.lastIndexOf('/'), dir.lastIndexOf('\\'))
+      if (lastSep <= 0) break
+      dir = dir.slice(0, lastSep)
+      if (dir === vaultPath.value || dir.length <= vaultPath.value.length) break
+      ancestors.push(dir)
+    }
+    for (const ancestor of ancestors) {
+      expandedFolders.value[ancestor] = true
     }
   }
 
@@ -48,7 +72,7 @@ export const useObsidianStore = defineStore('obsidian', () => {
 
   async function setVault(folder) {
     vaultPath.value = folder
-    await window.electronAPI.obsidian.saveConfig({ vaultPath: folder })
+    await window.electronAPI.obsidian.saveConfig({ vaultPath: folder, lastOpenedDoc: null })
     activeFile.value = null
     expandedFolders.value = {}
     await loadTree()
@@ -101,12 +125,14 @@ export const useObsidianStore = defineStore('obsidian', () => {
     const result = await _withTimeout(window.electronAPI.obsidian.readFile(filePath), OPEN_TIMEOUT)
     if (result.error) throw new Error(result.error)
     activeFile.value = { path: filePath, name: fileName, content: result.content, dirty: false }
+    window.electronAPI.obsidian.saveConfig({ lastOpenedDoc: { path: filePath, name: fileName } })
   }
 
   async function _openBinary(filePath, fileName) {
     const result = await _withTimeout(window.electronAPI.obsidian.readFileBinary(filePath), OPEN_TIMEOUT)
     if (result.error) throw new Error(result.error)
     activeFile.value = { path: filePath, name: fileName, base64: result.base64, binary: true, dirty: false }
+    window.electronAPI.obsidian.saveConfig({ lastOpenedDoc: { path: filePath, name: fileName } })
   }
 
   async function openBinaryFile(filePath, fileName) {

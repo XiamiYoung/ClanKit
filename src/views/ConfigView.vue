@@ -262,7 +262,7 @@
                       @blur="form.maxOutputTokens = Math.min(98304, Math.max(1024, Number(form.maxOutputTokens) || 32768))"
                     />
                     <p class="hint">
-                      Maximum tokens the model can generate per turn. Default: 32768. Hard limit: 98304 (96k).
+                      {{ t('config.maxOutputTokensHint') }}
                     </p>
                   </div>
                 </div>
@@ -392,7 +392,7 @@
                       </button>
                     </div>
                   </div>
-                  <div class="form-group">
+                  <div v-if="selectedProvider.type !== 'google'" class="form-group">
                     <label class="form-label">{{ t('config.baseURL') }}</label>
                     <input v-model="selectedProvider.baseURL" type="url" :placeholder="configStore.PROVIDER_PRESETS[selectedProvider.type]?.defaultBaseURL || 'https://...'" class="field" />
                   </div>
@@ -461,6 +461,18 @@
                       <svg v-if="testResultNew.ok" class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                       <svg v-else class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                       <span>{{ testResultNew.message }}</span>
+                    </div>
+                  </template>
+
+                  <!-- Image Model (OpenRouter / Google) -->
+                  <template v-if="['openrouter','google'].includes(selectedProvider.type)">
+                    <div class="form-divider"></div>
+                    <div class="form-group compact">
+                      <label class="form-label">Image Generation Model <span class="form-label-hint">optional</span></label>
+                      <input v-model="selectedProvider.imageModel" type="text" class="field font-mono"
+                        :placeholder="selectedProvider.type === 'openrouter' ? 'google/gemini-3-pro-image-preview' : 'gemini-3-pro-image-preview'"
+                      />
+                      <p class="hint">Used by the <code>generate_image</code> tool. Must be a model that supports image output.</p>
                     </div>
                   </template>
 
@@ -2413,6 +2425,9 @@ const canTestNew = computed(() => {
   if (selectedProvider.value.type === 'anthropic') {
     return !!(selectedProvider.value.apiKey && selectedProvider.value.baseURL && selectedTestModel.value)
   }
+  if (selectedProvider.value.type === 'google') {
+    return !!(selectedProvider.value.apiKey && selectedProvider.value.model)
+  }
   return !!(selectedProvider.value.apiKey && selectedProvider.value.baseURL && selectedProvider.value.model)
 })
 
@@ -2422,6 +2437,7 @@ const selectedProviderModels = computed(() => {
   if (type === 'openrouter') return modelsStore.openrouterModels
   if (type === 'openai') return modelsStore.openaiModels
   if (type === 'deepseek') return modelsStore.deepseekModels
+  if (type === 'google') return modelsStore.googleModels
   return []
 })
 
@@ -2507,14 +2523,19 @@ async function testProviderNew() {
 }
 
 async function fetchProviderModels() {
-  if (!selectedProvider.value || !selectedProvider.value.apiKey || !selectedProvider.value.baseURL) {
+  if (!selectedProvider.value || !selectedProvider.value.apiKey) {
+    providerModelsFetchError.value = 'Enter API key first.'
+    return
+  }
+  const type = selectedProvider.value.type
+  // Non-Google providers also need a baseURL
+  if (type !== 'google' && !selectedProvider.value.baseURL) {
     providerModelsFetchError.value = 'Enter API key and Base URL first.'
     return
   }
   providerModelsFetching.value = true
   providerModelsFetchError.value = ''
   try {
-    const type = selectedProvider.value.type
     if (type === 'openrouter') {
       const result = await window.electronAPI.fetchOpenRouterModels({ apiKey: selectedProvider.value.apiKey, baseURL: selectedProvider.value.baseURL })
       if (result.success) { modelsStore.openrouterModels = result.models; modelsStore.openrouterCached = true }
@@ -2529,6 +2550,10 @@ async function fetchProviderModels() {
       configStore.config.deepseek.baseURL = selectedProvider.value.baseURL
       await modelsStore.fetchDeepSeekModels()
       if (!modelsStore.deepseekCached) { providerModelsFetchError.value = 'Fetch failed — check API key and Base URL.' }
+    } else if (type === 'google') {
+      const result = await window.electronAPI.fetchGoogleModels({ apiKey: selectedProvider.value.apiKey })
+      if (result.success) { modelsStore.googleModels = result.models; modelsStore.googleCached = true }
+      else { providerModelsFetchError.value = result.error || 'Unknown error' }
     } else {
       providerModelsFetchError.value = 'Model fetching not supported for this provider type.'
     }

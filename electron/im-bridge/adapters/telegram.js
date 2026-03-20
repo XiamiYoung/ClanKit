@@ -56,6 +56,11 @@ function start(token, onMessage, onVoice, onCallbackQuery, onImage) {
   }
 
   _bot.on('polling_error', (err) => {
+    // Don't spam on connection resets - these are normal network issues
+    if (err.code === 'EFATAL' || err.code === 'ECONNRESET') {
+      console.error('[telegram] polling error:', err.code, '- will auto-reconnect')
+      return
+    }
     console.error('[telegram] polling error:', err.message)
   })
 }

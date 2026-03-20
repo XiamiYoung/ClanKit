@@ -1,6 +1,7 @@
 <template>
   <div class="h-full flex flex-col overflow-hidden" style="background:#F2F2F7;">
 
+
     <!-- ════════════════════════════════════════════════════════════════════════
          LEVEL 1 — Skills Grid Catalog
          ════════════════════════════════════════════════════════════════════════ -->
@@ -11,21 +12,52 @@
           <div>
             <div style="display:flex; align-items:center; gap:0.5rem;">
               <h1 style="font-family:'Inter',sans-serif; font-size:var(--fs-page-title); font-weight:700; color:#1A1A1A; margin:0;">{{ t('skills.title') }}</h1>
-              <span class="catalog-count-badge">{{ filteredSkills.length }}</span>
+              <span class="catalog-count-badge">{{ activeTab === 'local' ? filteredSkills.length : activeTab === 'tencent' ? tencentDisplaySkills.length : filteredClawhubSkills.length }}</span>
             </div>
             <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#6B7280; margin:0.25rem 0 0 0;">
               {{ t('skills.subtitle') }}
             </p>
           </div>
           <div class="flex items-center gap-2">
-            <AppButton size="icon" @click="refresh" :title="t('skills.refreshSkills')">
+            <AppButton v-if="activeTab === 'local'" size="icon" @click="refresh" :title="t('skills.refreshSkills')">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </AppButton>
+            <AppButton v-else size="icon" @click="refreshRemote(activeTab)" :title="t('skills.refreshSkills')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </AppButton>
           </div>
         </div>
 
-        <!-- Search bar -->
-        <div class="catalog-search-wrap">
+        <!-- Tabs -->
+        <div class="catalog-tabs">
+          <button
+            class="catalog-tab"
+            :class="{ 'catalog-tab--active': activeTab === 'local' }"
+            @click="switchTab('local')"
+          >
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0h6"/></svg>
+            {{ t('skills.localSkills') }}
+          </button>
+          <button
+            class="catalog-tab"
+            :class="{ 'catalog-tab--active': activeTab === 'tencent' }"
+            @click="switchTab('tencent')"
+          >
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            {{ t('skills.tencentHub') }}
+          </button>
+          <button
+            class="catalog-tab"
+            :class="{ 'catalog-tab--active': activeTab === 'clawhub' }"
+            @click="switchTab('clawhub')"
+          >
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            {{ t('skills.clawHub') }}
+          </button>
+        </div>
+
+        <!-- Search bar — local tab -->
+        <div v-if="activeTab === 'local'" class="catalog-search-wrap">
           <svg class="catalog-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
           </svg>
@@ -41,9 +73,16 @@
         </div>
       </div>
 
+
+      <!-- ── LOCAL TAB ── -->
+      <div v-if="activeTab === 'local'" class="flex-1 flex flex-col overflow-hidden">
       <!-- Loading -->
-      <div v-if="skillsStore.loading" class="flex-1 flex items-center justify-center">
-        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">{{ t('common.loading') }}</p>
+      <div v-if="skillsStore.loading" class="flex-1 overflow-y-auto skill-grid-bg">
+        <div class="skills-grid-spinner-overlay">
+          <svg class="skills-spinner" viewBox="0 0 50 50">
+            <circle cx="25" cy="25" r="20" fill="none" stroke-width="4" stroke="#1C1C1E" stroke-linecap="round" stroke-dasharray="90 60"/>
+          </svg>
+        </div>
       </div>
 
       <!-- Error -->
@@ -53,7 +92,7 @@
           <button
             @click="refresh"
             class="mt-3 px-4 py-2 rounded-lg cursor-pointer"
-            style="background:#007AFF; color:#fff; border:none; font-family:'Inter',sans-serif;"
+            style="background:linear-gradient(135deg,#0F0F0F 0%,#1A1A1A 40%,#374151 100%); color:#fff; border:none; font-family:'Inter',sans-serif; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.12);"
           >{{ t('skills.retry') }}</button>
         </div>
       </div>
@@ -63,7 +102,7 @@
         <div class="text-center" style="max-width:26.25rem;">
           <div
             class="mx-auto mb-5 w-20 h-20 rounded-2xl flex items-center justify-center"
-            style="background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
+            style="margin-top:2rem; background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
           >
             <svg style="width:40px;height:40px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
@@ -76,7 +115,7 @@
             {{ t('skills.skillFolderHint') }}
           </p>
           <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">
-            Default path: <code style="background:#F5F5F5; padding:0.125rem 0.375rem; border-radius:0.25rem; font-size:0.875em;">~/.claude/skills</code>
+            Skills path: <code style="background:#F5F5F5; padding:0.125rem 0.375rem; border-radius:0.25rem; font-size:0.875em;">{{ configStore.config.skillsPath || '~/.claude/skills' }}</code>
           </p>
         </div>
       </div>
@@ -97,7 +136,7 @@
         <div v-else style="padding:1.5rem 2rem;">
           <div class="skill-grid">
             <div
-              v-for="(skill, idx) in filteredSkills"
+              v-for="(skill, idx) in sortedLocalSkills"
               :key="skill.id"
               @click="selectSkill(skill)"
               class="skill-card"
@@ -119,41 +158,345 @@
                 <!-- Description -->
                 <p class="skill-card-desc">{{ skillDescription(skill) }}</p>
 
-                <!-- Footer -->
+                <!-- Meta and actions -->
                 <div class="skill-card-footer">
-                  <span class="skill-card-file">
-                    <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                    SKILL.md
-                  </span>
-                  <span class="skill-card-open">
-                    Open
-                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-                  </span>
+                  <!-- Installed date row -->
+                  <div v-if="skill.installedAt" style="display:flex;align-items:center;gap:0.375rem;width:100%;font-size:var(--fs-caption);color:#D1D5DB;">
+                    <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    {{ new Date(skill.installedAt).toISOString().split('T')[0] }}
+                  </div>
+
+                  <!-- Uninstall button row -->
+                  <div style="display:flex;justify-content:flex-end;width:100%;margin-top:0.5rem;">
+                    <button
+                      class="remote-uninstall-btn"
+                      @click.stop="confirmUninstall(skill)"
+                    >{{ t('skills.uninstall') }}</button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </template>
+      </div>
 
-    <!-- ════════════════════════════════════════════════════════════════════════
-         LEVEL 2 — Skill Detail (file explorer + content viewer)
-         ════════════════════════════════════════════════════════════════════════ -->
+
+      <!-- ── TENCENT HUB TAB ── -->
+      <div v-else-if="activeTab === 'tencent'" class="flex-1 flex flex-col overflow-hidden">
+
+          <!-- Tencent sub-tab bar -->
+          <div class="tencent-subtab-bar">
+            <button class="tencent-subtab" :class="{ 'tencent-subtab--active': tencentSubTab === 'top50' }" @click="switchTencentSubTab('top50')">
+              <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              Top 50
+            </button>
+            <button class="tencent-subtab" :class="{ 'tencent-subtab--active': tencentSubTab === 'all' }" @click="switchTencentSubTab('all')">
+              <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              All Skills
+            </button>
+          </div>
+
+          <!-- Search/sort row (All Skills only) -->
+          <div v-if="tencentSubTab === 'all'" class="tencent-search-row" style="display:flex;align-items:center;gap:0.75rem;margin:0.75rem 2rem 0;">
+            <div class="tencent-search-wrap" style="flex:1;display:flex;align-items:center;position:relative;">
+              <svg class="catalog-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              <input
+                v-model="tencentSearchQuery"
+                type="text"
+                :placeholder="t('skills.searchSkills')"
+                class="catalog-search-input"
+                @keydown.enter="onTencentSearch"
+              />
+              <span v-if="tencentSearchQuery" class="catalog-search-clear" @click="tencentSearchQuery = ''; onTencentSearch()">
+                <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </span>
+            </div>
+            <div class="tencent-sort-wrap" style="flex-shrink:0;margin-right:0;display:flex;align-items:center;">
+              <select v-model="tencentSortBy" class="tencent-sort-select" @change="onTencentSearch">
+                <option value="downloads">下载量</option>
+                <option value="stars">收藏</option>
+                <option value="installs">安装量</option>
+                <option value="name">名称</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Category bar — All Skills only -->
+          <div v-if="tencentSubTab === 'all'" class="tencent-category-bar">
+            <div class="tencent-category-grid tencent-category-center" style="display:flex;justify-content:center;flex-wrap:wrap;gap:0.75rem;padding:0.75rem 2rem;">
+              <button
+                v-for="cat in tencentCategories"
+                :key="cat.slug"
+                class="tencent-cat-btn"
+                :class="{ 'tencent-cat-btn--active': tencentSelectedCategory === cat.slug }"
+                @click="selectTencentCategory(cat.slug)"
+                style="min-width:90px;max-width:120px;"
+              >
+                <div class="tencent-cat-icon-wrap" style="background:#fff;border:1.5px solid #E5E5EA;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                  <span style="color:#1A1A1E;font-weight:700;font-size:20px;line-height:1;">{{ cat.name[0] }}</span>
+                </div>
+                <span class="tencent-cat-label" style="color:#1A1A1E;margin-top:4px;font-size:12px;text-align:center;white-space:nowrap;">{{ cat.name }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Error (not fetching) -->
+          <div v-if="tencentFetchError && !tencentFetching" class="flex-1 flex items-center justify-center">
+            <div class="text-center">
+              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#dc2626;">{{ tencentFetchError }}</p>
+              <button @click="refreshRemote('tencent')" class="mt-3 px-4 py-2 rounded-lg cursor-pointer" style="background:linear-gradient(135deg,#0F0F0F 0%,#1A1A1A 40%,#374151 100%); color:#fff; border:none; font-family:'Inter',sans-serif; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.12);">{{ t('skills.retry') }}</button>
+            </div>
+          </div>
+          <!-- Not yet fetched -->
+          <div v-else-if="!tencentFetched && !tencentFetching" class="flex-1 flex items-center justify-center">
+            <div class="text-center" style="max-width:26.25rem;">
+              <div class="mx-auto mb-5 w-20 h-20 rounded-2xl flex items-center justify-center" style="background:linear-gradient(135deg,#0F0F0F 0%,#1A1A1A 40%,#374151 100%);box-shadow:0 2px 8px rgba(0,0,0,0.12);">
+                <svg style="width:40px;height:40px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              </div>
+              <h2 style="font-family:'Inter',sans-serif;font-size:var(--fs-section);font-weight:700;color:#1A1A1A;margin:0 0 0.5rem;">Tencent Hub</h2>
+              <p style="font-family:'Inter',sans-serif;font-size:var(--fs-body);color:#9CA3AF;line-height:1.6;margin:0 0 1rem;">{{ t('skills.tencentDesc') }}</p>
+              <button @click="refreshRemote('tencent')" class="px-4 py-2 rounded-lg cursor-pointer" style="background:linear-gradient(135deg,#0F0F0F 0%,#1A1A1A 40%,#374151 100%);color:#fff;border:none;font-family:'Inter',sans-serif;font-weight:600;">{{ t('skills.browseSkills') }}</button>
+            </div>
+          </div>
+          <!-- Grid area: spinner + content -->
+          <div v-else class="flex-1 overflow-y-auto skill-grid-bg">
+            <!-- Non-blocking spinner -->
+            <div v-if="tencentFetching" class="skills-grid-spinner-overlay">
+              <svg class="skills-spinner" viewBox="0 0 50 50">
+                <circle cx="25" cy="25" r="20" fill="none" stroke-width="4" stroke="#1C1C1E" stroke-linecap="round" stroke-dasharray="90 60"/>
+              </svg>
+            </div>
+            <!-- Empty results -->
+            <div v-if="tencentDisplaySkills.length === 0 && !tencentFetching" class="flex items-center justify-center" style="padding:3.75rem 2rem; min-height:200px;">
+              <div class="text-center">
+                <svg class="mx-auto" style="width:40px;height:40px;color:#9CA3AF;margin-bottom:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+                <p style="font-family:'Inter',sans-serif;font-size:var(--fs-body);font-weight:600;color:#6B7280;margin:0 0 0.25rem;">{{ t('common.noResults') }}</p>
+                <p style="font-family:'Inter',sans-serif;font-size:var(--fs-secondary);color:#9CA3AF;margin:0;">{{ t('skills.clearSearch') }}</p>
+              </div>
+            </div>
+            <!-- Grid -->
+            <div v-if="tencentDisplaySkills.length > 0" style="padding:1.5rem 2rem;">
+              <div class="skill-grid">
+                <div
+                  v-for="(skill, idx) in tencentDisplaySkills"
+                  :key="skill.id"
+                  class="skill-card remote-skill-card"
+                  @click="openRemoteDetail(skill)"
+                >
+                  <div class="skill-card-accent" :style="{ background: cardGradient(idx) }"></div>
+                  <div class="skill-card-body">
+                    <div class="skill-card-title-row">
+                      <div class="skill-card-icon" :style="{ background: cardGradient(idx) }" style="display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;font-family:'Inter',sans-serif;">
+                        {{ (skill.name || skill.id || '?')[0].toUpperCase() }}
+                      </div>
+                      <h3 class="skill-card-name">{{ skill.name || skill.id }}</h3>
+                    </div>
+                    <p class="skill-card-desc">{{ skill.description || t('skills.noSkillsHint') }}</p>
+                    <div class="skill-card-footer">
+                      <div class="remote-skill-meta">
+                        <span v-if="skill.author" class="remote-skill-author">
+                          <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                          {{ skill.author }}
+                        </span>
+                        <span v-if="skill.stars" class="remote-skill-stat">
+                          <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                          {{ skill.stars }}
+                        </span>
+                        <span v-if="skill.downloads" class="remote-skill-stat">
+                          <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          {{ skill.downloads.toLocaleString() }}
+                        </span>
+                      </div>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgb(242, 242, 247); margin-top: 0.5rem;">
+                      <button
+                        class="rsd-icon-btn"
+                        style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0;border:none;background:none;cursor:pointer;color:#6B7280;transition:color 0.2s;"
+                        title="Open in browser"
+                        @click.stop="openExternal(skill.homepage, skill.sourceId, skill.id)"
+                        @mouseenter="e => e.currentTarget.style.color='#1C1C1E'"
+                        @mouseleave="e => e.currentTarget.style.color='#6B7280'"
+                      >
+                        <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                      </button>
+                      <button
+                        v-if="!skill.installed && !skillsStore.installingSkills[skill.id]"
+                        class="remote-install-btn"
+                        @click.stop="installSkill('tencent', skill)"
+                      >{{ t('skills.install') }}</button>
+                      <button
+                        v-else-if="skill.installed || skillsStore.installingSkills[skill.id]?.status === 'completed'"
+                        class="remote-uninstall-btn"
+                        @click.stop="confirmUninstall(skill)"
+                      >{{ t('skills.uninstall') }}</button>
+                      <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'installing'" class="remote-installing-badge" @click.stop>
+                        <svg class="animate-spin" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#E5E5EA" stroke-width="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#1C1C1E" stroke-width="3" stroke-linecap="round"/></svg>
+                      </span>
+                      <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'error'" class="remote-error-badge" :title="skillsStore.installingSkills[skill.id]?.error" @click.stop>
+                        ✕ Error
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+      </div>
+
+
+      <!-- ── CLAWHUB TAB ── -->
+      <div v-else-if="activeTab === 'clawhub'" class="flex-1 flex flex-col overflow-hidden">
+
+        <!-- Search row (always visible) -->
+        <div class="tencent-search-row" style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 2rem 0;">
+          <div class="tencent-search-wrap" style="flex:1;display:flex;align-items:center;position:relative;">
+            <svg class="catalog-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input
+              v-model="clawhubSearchQuery"
+              type="text"
+              :placeholder="t('skills.searchSkills')"
+              class="catalog-search-input"
+              @keydown.enter="onClawhubSearch(clawhubSearchQuery)"
+            />
+            <span v-if="clawhubSearchQuery" class="catalog-search-clear" @click="clawhubSearchQuery = ''; onClawhubSearch('')">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <!-- Error -->
+        <div v-if="skillsStore.remoteError['clawhub'] && !skillsStore.remoteFetching['clawhub']" class="flex-1 flex items-center justify-center">
+          <div class="text-center">
+            <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#dc2626;">{{ skillsStore.remoteError['clawhub'] }}</p>
+            <button @click="refreshRemote('clawhub')" class="mt-3 px-4 py-2 rounded-lg cursor-pointer" style="background:linear-gradient(135deg,#0F0F0F 0%,#1A1A1A 40%,#374151 100%); color:#fff; border:none; font-family:'Inter',sans-serif; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.12);">{{ t('skills.retry') }}</button>
+          </div>
+        </div>
+
+        <!-- Grid area: spinner + content -->
+        <div v-else class="flex-1 overflow-y-auto skill-grid-bg">
+          <!-- Non-blocking spinner -->
+          <div v-if="skillsStore.remoteFetching['clawhub']" class="skills-grid-spinner-overlay">
+            <svg class="skills-spinner" viewBox="0 0 50 50">
+              <circle cx="25" cy="25" r="20" fill="none" stroke-width="4" stroke="#1C1C1E" stroke-linecap="round" stroke-dasharray="90 60"/>
+            </svg>
+          </div>
+          <!-- Empty results -->
+          <div v-if="filteredClawhubSkills.length === 0 && !skillsStore.remoteFetching['clawhub']" class="flex items-center justify-center" style="padding:3.75rem 2rem; min-height:200px;">
+            <div class="text-center">
+              <svg class="mx-auto" style="width:40px;height:40px;color:#9CA3AF;margin-bottom:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              <p style="font-family:'Inter',sans-serif;font-size:var(--fs-body);font-weight:600;color:#6B7280;margin:0 0 0.25rem;">{{ t('common.noResults') }}</p>
+              <p style="font-family:'Inter',sans-serif;font-size:var(--fs-secondary);color:#9CA3AF;margin:0;">{{ t('skills.clearSearch') }}</p>
+            </div>
+          </div>
+          <!-- Grid -->
+          <div v-if="filteredClawhubSkills.length > 0" style="padding:1.5rem 2rem;">
+            <div class="skill-grid">
+              <div
+                v-for="(skill, idx) in filteredClawhubSkills"
+                :key="skill.id"
+                class="skill-card remote-skill-card"
+                @click="openRemoteDetail(skill)"
+              >
+                <div class="skill-card-accent" :style="{ background: cardGradient(idx) }"></div>
+                <div class="skill-card-body">
+                  <div class="skill-card-title-row">
+                    <div class="skill-card-icon" :style="{ background: cardGradient(idx) }">
+                      <svg style="width:18px;height:18px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                      </svg>
+                    </div>
+                    <h3 class="skill-card-name">{{ skill.name || skill.id }}</h3>
+                  </div>
+                  <p class="skill-card-desc">{{ skill.description || t('skills.noSkillsHint') }}</p>
+                  <div class="skill-card-footer">
+                    <div class="remote-skill-meta">
+                      <span v-if="skill.author" class="remote-skill-author">
+                        <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        {{ skill.author }}
+                      </span>
+                      <span v-if="skill.stars" class="remote-skill-stat">
+                        <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        {{ skill.stars }}
+                      </span>
+                      <span v-if="skill.downloads" class="remote-skill-stat">
+                        <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        {{ skill.downloads }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgb(242, 242, 247); margin-top: 0.5rem;">
+                    <button
+                      class="rsd-icon-btn"
+                      style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0;border:none;background:none;cursor:pointer;color:#6B7280;transition:color 0.2s;"
+                      title="Open in browser"
+                      @click.stop="openExternal(skill.homepage, skill.sourceId, skill.id)"
+                      @mouseenter="e => e.currentTarget.style.color='#1C1C1E'"
+                      @mouseleave="e => e.currentTarget.style.color='#6B7280'"
+                    >
+                      <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    </button>
+                    <button
+                      v-if="!skill.installed && !skillsStore.installingSkills[skill.id]"
+                      class="remote-install-btn"
+                      @click.stop="installSkill('clawhub', skill)"
+                    >{{ t('skills.install') }}</button>
+                    <button
+                      v-else-if="skill.installed || skillsStore.installingSkills[skill.id]?.status === 'completed'"
+                      class="remote-uninstall-btn"
+                      @click.stop="confirmUninstall(skill)"
+                    >{{ t('skills.uninstall') }}</button>
+                    <span
+                      v-else-if="skillsStore.installingSkills[skill.id]?.status === 'installing'"
+                      class="remote-installing-badge"
+                      @click.stop
+                    >
+                      <svg class="animate-spin" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#E5E5EA" stroke-width="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#1C1C1E" stroke-width="3" stroke-linecap="round"/></svg>
+                    </span>
+                    <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'error'" class="remote-error-badge" :title="skillsStore.installingSkills[skill.id]?.error" @click.stop>
+                      ✕ Error
+                    </span>
+                  </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+    </template>
     <template v-else>
-      <!-- Header with back button -->
+      <!-- Row 1: back button + refresh (right) -->
       <div class="detail-header">
         <button @click="goBack" class="detail-back-btn">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
         </button>
+        <button
+          @click="refreshTree"
+          class="ml-auto p-1.5 rounded-lg transition-all duration-150 cursor-pointer"
+          style="color:#fff; border:none; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
+          @mouseenter="e => e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'"
+          @mouseleave="e => e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
+          :title="t('common.refresh')"
+        >
+          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
       </div>
 
-      <!-- File explorer + content viewer -->
-      <div class="flex-1 flex overflow-hidden" style="flex-direction:column;">
-        <!-- Skill title row -->
-        <div class="detail-title-row">
+      <!-- Row 2: icon + title (left) + path (right) -->
+      <div class="detail-title-row">
+        <div style="display:flex;align-items:center;gap:0.625rem;min-width:0;">
           <div class="detail-icon">
             <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
@@ -161,7 +504,11 @@
           </div>
           <h1 class="detail-title">{{ skillDisplayName(selectedSkill) }}</h1>
         </div>
-        <div class="flex-1 flex overflow-hidden">
+        <span class="detail-title-path" :title="selectedSkill.path">{{ selectedSkill.path }}</span>
+      </div>
+
+      <!-- File explorer + content viewer -->
+      <div class="flex-1 flex overflow-hidden">
 
         <!-- LEFT: File tree sidebar (resizable) -->
         <div class="detail-sidebar" :style="{ width: skillsSidebarWidth + 'px' }">
@@ -170,28 +517,6 @@
             class="skills-resize-handle"
             @mousedown="startSkillsResize"
           ></div>
-          <!-- Tree header -->
-          <div class="detail-sidebar-header">
-            <span class="detail-sidebar-label">Files</span>
-            <span class="detail-sidebar-path" :title="selectedSkill.path">
-              {{ selectedSkill.path }}
-            </span>
-          </div>
-
-          <!-- Tree toolbar -->
-          <div class="px-3 py-2 flex items-center gap-1 shrink-0" style="border-bottom:1px solid #E5E5EA;">
-            <button
-              @click="refreshTree"
-              class="ml-auto p-1.5 rounded-lg transition-all duration-150 cursor-pointer"
-              style="color:#fff; border:none; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
-              @mouseenter="e => e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'"
-              @mouseleave="e => e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
-              :title="t('common.refresh')"
-            >
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            </button>
-          </div>
-
           <!-- File tree -->
           <div class="flex-1 overflow-y-auto py-1.5" style="scrollbar-width:thin;">
             <div v-if="fileTree.length === 0" class="px-4 py-8 text-center">
@@ -226,7 +551,7 @@
           </div>
 
           <!-- File open -->
-          <template v-else>
+          <div v-else>
             <!-- File header bar -->
             <div
               class="px-4 py-2.5 shrink-0 flex items-center gap-3"
@@ -334,31 +659,155 @@
             <div v-else class="detail-content-scroll">
               <pre class="detail-raw-code">{{ fileContent }}</pre>
             </div>
-          </template>
-        </div>
+          </div>
         </div>
       </div>
     </template>
 
     <!-- ── Skills file tree context menu ── -->
     <Teleport to="body">
-      <div v-if="skillCtxMenu.visible" class="skill-ctx-overlay" @click="closeSkillCtxMenu" @contextmenu.prevent="closeSkillCtxMenu" />
-      <div
-        v-if="skillCtxMenu.visible"
-        class="skill-ctx-menu"
-        :style="{ top: skillCtxMenu.y + 'px', left: skillCtxMenu.x + 'px' }"
-        @click.stop
-      >
-        <button class="skill-ctx-item" @click="copySkillPath">
-          <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          {{ skillCtxPathCopied ? 'Copied!' : 'Copy Path' }}
-        </button>
-        <button class="skill-ctx-item" @click="revealSkillInExplorer(skillCtxMenu.path)">
-          <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-          Open in Explorer
-        </button>
+      <div v-if="skillCtxMenu.visible">
+        <div class="skill-ctx-overlay" @click="closeSkillCtxMenu" @contextmenu.prevent="closeSkillCtxMenu"></div>
+        <div
+          class="skill-ctx-menu"
+          :style="{ top: skillCtxMenu.y + 'px', left: skillCtxMenu.x + 'px' }"
+          @click.stop
+        >
+          <button class="skill-ctx-item" @click="copySkillPath">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            {{ skillCtxPathCopied ? 'Copied!' : 'Copy Path' }}
+          </button>
+          <button class="skill-ctx-item" @click="revealSkillInExplorer(skillCtxMenu.path)">
+            <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Open in Explorer
+          </button>
+        </div>
       </div>
     </Teleport>
+
+    <!-- ── Remote Skill Detail Modal ── -->
+    <Teleport to="body">
+      <Transition name="rsd-fade">
+        <div v-if="remoteDetailSkill" class="rsd-overlay" @keydown.esc="remoteDetailSkill = null">
+          <Transition name="rsd-slide">
+            <div v-if="remoteDetailSkill" class="rsd-modal" role="dialog">
+              <!-- drag handle -->
+              <div style="display:flex;justify-content:center;padding:10px 0 4px;"><div style="width:36px;height:4px;border-radius:2px;background:rgba(60,60,67,0.15);"></div></div>
+
+              <!-- sticky header -->
+              <div class="rsd-header">
+                <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                  <div class="rsd-avatar">{{ (remoteDetailSkill.name || remoteDetailSkill.id || '?')[0].toUpperCase() }}</div>
+                  <div style="min-width:0;">
+                    <div style="display:flex;align-items:center;gap:7px;">
+                      <h2 class="rsd-title">{{ remoteDetailSkill.name || remoteDetailSkill.id }}</h2>
+                      <span v-if="remoteDetailSkill.category" class="rsd-category-badge">{{ remoteDetailSkill.category }}</span>
+                    </div>
+                    <span class="rsd-slug">{{ remoteDetailSkill.id }}</span>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                  <!-- Open homepage -->
+                  <button class="rsd-icon-btn" title="Open in browser" @click="openExternal(remoteDetailSkill.homepage, remoteDetailSkill.sourceId, remoteDetailSkill.id)">
+                    <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  </button>
+                  <!-- Close -->
+                  <button class="rsd-icon-btn" @click="remoteDetailSkill = null">
+                    <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- body -->
+              <div class="rsd-body">
+
+                <!-- tags row -->
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <span v-if="remoteDetailSkill.version" class="rsd-tag rsd-tag--black">
+                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/><path d="m7.5 4.27 9 5.15"/></svg>
+                    v{{ remoteDetailSkill.version }}
+                  </span>
+                  <span v-if="remoteDetailSkill.sourceId" class="rsd-tag rsd-tag--black">
+                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    {{ remoteDetailSkill.sourceId === 'tencent' || remoteDetailSkill.sourceId === 'tencent-top' ? 'Tencent Hub' : 'ClawHub' }}
+                  </span>
+                  <span v-if="remoteDetailSkill.author" class="rsd-tag rsd-tag--black">
+                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    {{ remoteDetailSkill.author }}
+                  </span>
+                </div>
+
+                <!-- description -->
+                <div v-if="remoteDetailSkill.description">
+                  <p class="rsd-desc">{{ remoteDetailSkill.description }}</p>
+                  <div v-if="remoteDetailSkill.homepage" style="margin-top:10px;">
+                    <span class="rsd-source-hint">详情查看：<button class="rsd-link-btn" @click="openExternal(remoteDetailSkill.homepage)">{{ remoteDetailSkill.homepage }}<span style="display:inline-block;margin-left:2px;font-size:10px;">↗</span></button></span>
+                  </div>
+                </div>
+
+                <!-- stats grid -->
+                <div class="rsd-stats-grid">
+                  <div class="rsd-stat-cell">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <div class="rsd-stat-value">{{ remoteDetailSkill.downloads ? remoteDetailSkill.downloads.toLocaleString() : '—' }}</div>
+                    <div class="rsd-stat-label">下载量</div>
+                  </div>
+                  <div class="rsd-stat-cell">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <div class="rsd-stat-value">{{ remoteDetailSkill.stars ? remoteDetailSkill.stars.toLocaleString() : '—' }}</div>
+                    <div class="rsd-stat-label">收藏</div>
+                  </div>
+                  <div class="rsd-stat-cell">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <div class="rsd-stat-value">{{ remoteDetailSkill.installs ? remoteDetailSkill.installs.toLocaleString() : '—' }}</div>
+                    <div class="rsd-stat-label">安装量</div>
+                  </div>
+                </div>
+
+
+              </div>
+
+              <!-- sticky footer: error left, action right -->
+              <div class="rsd-footer">
+                <div class="rsd-footer-left">
+                  <span v-if="skillsStore.installingSkills[remoteDetailSkill.id]?.status === 'error'" class="rsd-error-hint">
+                    <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    {{ skillsStore.installingSkills[remoteDetailSkill.id]?.error }}
+                  </span>
+                </div>
+                <div class="rsd-footer-right">
+                  <span v-if="skillsStore.installingSkills[remoteDetailSkill.id]?.status === 'installing'" class="rsd-state-chip rsd-state-chip--loading">
+                    <svg class="animate-spin" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
+                    {{ t('skills.installing') }}
+                  </span>
+                  <span v-else-if="remoteDetailSkill.installed || skillsStore.installingSkills[remoteDetailSkill.id]?.status === 'completed'" class="rsd-state-chip rsd-state-chip--done">
+                    <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    {{ t('skills.installed') }}
+                  </span>
+                  <span v-else-if="skillsStore.installingSkills[remoteDetailSkill.id]?.status === 'error'" class="rsd-state-chip rsd-state-chip--error">
+                    <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    {{ t('skills.installError') }}
+                  </span>
+                </div>
+              </div>
+
+            </div>
+          </Transition>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Uninstall Confirm Dialog -->
+    <div v-if="showUninstallDialog" class="uninstall-dialog-backdrop">
+      <div class="uninstall-dialog">
+        <div class="uninstall-dialog-title">{{ t('skills.uninstallConfirmTitle') }}</div>
+        <div class="uninstall-dialog-desc">{{ uninstallSkill ? (uninstallSkill.name || uninstallSkill.id) : '' }}</div>
+        <div class="uninstall-dialog-actions">
+          <button class="uninstall-cancel-btn" @click="cancelUninstall">{{ t('common.cancel') }}</button>
+          <button class="uninstall-confirm-btn" @click="doUninstall">{{ t('skills.uninstall') }}</button>
+        </div>
+      </div>
+    </div>
 
   </div>
 </template>
@@ -377,6 +826,29 @@ import AppButton from '../components/common/AppButton.vue'
 const { t } = useI18n()
 const skillsStore = useSkillsStore()
 const configStore = useConfigStore()
+
+// ── Uninstall dialog state (must be after skillsStore) ──
+const showUninstallDialog = ref(false)
+const uninstallSkill = ref(null)
+
+function confirmUninstall(skill) {
+  uninstallSkill.value = skill
+  showUninstallDialog.value = true
+}
+
+function doUninstall() {
+  if (uninstallSkill.value) {
+    console.debug('[Skills] doUninstall:', uninstallSkill.value.id)
+    skillsStore.uninstallRemoteSkill(uninstallSkill.value.id)
+  }
+  showUninstallDialog.value = false
+  uninstallSkill.value = null
+}
+
+function cancelUninstall() {
+  showUninstallDialog.value = false
+  uninstallSkill.value = null
+}
 
 function cardGradient() {
   return 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'
@@ -438,18 +910,262 @@ function skillDisplayName(skill) {
   return formatName(skill.name)
 }
 
+// ── Tabs: local / tencent / clawhub ──
+const activeTab = ref('local') // 'local' | 'tencent' | 'clawhub'
+
+// ── Tencent sub-tabs & categories ──
+const tencentSubTab = ref('top50') // 'top50' | 'all'
+const tencentSelectedCategory = ref('')
+const tencentSearchQuery = ref('')
+const tencentSortBy = ref('downloads')
+
+const tencentCategories = [
+  { name: 'AI 智能',  slug: 'ai-intelligence',   bg: 'rgba(0, 122, 255, 0.1)',   border: 'rgba(0, 122, 255, 0.133)',  color: '#007AFF' },
+  { name: '开发工具', slug: 'development-tools',  bg: 'rgba(88, 86, 214, 0.1)',  border: 'rgba(88, 86, 214, 0.133)', color: '#5856D6' },
+  { name: '效率提升', slug: 'productivity',        bg: 'rgba(52, 199, 89, 0.1)',  border: 'rgba(52, 199, 89, 0.133)', color: '#34C759' },
+  { name: '数据分析', slug: 'data-analytics',      bg: 'rgba(255, 149, 0, 0.1)', border: 'rgba(255, 149, 0, 0.133)', color: '#FF9500' },
+  { name: '内容创作', slug: 'content-creation',    bg: 'rgba(255, 45, 85, 0.1)', border: 'rgba(255, 45, 85, 0.133)', color: '#FF2D55' },
+  { name: '安全合规', slug: 'security-compliance', bg: 'rgba(50, 173, 230, 0.1)',border: 'rgba(50, 173, 230, 0.133)',color: '#32ADE6' },
+  { name: '通讯协作', slug: 'communication',        bg: 'rgba(48, 209, 88, 0.1)', border: 'rgba(48, 209, 88, 0.133)', color: '#30D158' },
+]
+
+function categoryIconSvg(slug, color) {
+  const icons = {
+    'ai-intelligence': `<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/>`,
+    'development-tools': `<path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/>`,
+    'productivity': `<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>`,
+    'data-analytics': `<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>`,
+    'content-creation': `<path d="M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z"/><path d="m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18"/><path d="m2.3 2.3 7.286 7.286"/><circle cx="11" cy="11" r="2"/>`,
+    'security-compliance': `<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>`,
+    'communication': `<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>`,
+  }
+  const paths = icons[slug] || ''
+  return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`
+}
+
+function switchTencentSubTab(sub) {
+  tencentSubTab.value = sub
+  if (sub === 'top50' && !skillsStore.remoteSkills['tencent-top']) {
+    skillsStore.fetchRemoteSkills('tencent-top')
+  }
+  if (sub === 'all' && !skillsStore.remoteSkills['tencent']) {
+    skillsStore.fetchRemoteSkills('tencent')
+  }
+}
+
+function selectTencentCategory(slug) {
+  if (tencentSelectedCategory.value === slug) {
+    tencentSelectedCategory.value = ''
+  } else {
+    tencentSelectedCategory.value = slug
+  }
+  onTencentSearch()
+}
+
+function switchTab(tab) {
+  console.debug('[Skills] switchTab:', tab)
+  activeTab.value = tab
+  if (tab === 'local') {
+    console.debug('[Skills] local tab selected, auto-refreshing')
+    refresh()
+  }
+  if (tab === 'tencent' && !skillsStore.remoteSkills['tencent-top']) {
+    skillsStore.fetchRemoteSkills('tencent-top')
+  }
+  if (tab === 'clawhub' && !skillsStore.remoteSkills['clawhub']) {
+    skillsStore.fetchRemoteSkills('clawhub')
+  }
+}
+
+// ── Remote search queries ──
+// Already declared above
+const clawhubSearchQuery = ref('')
+let clawhubSearchTimer = null
+
+function onClawhubSearch(val) {
+  if (clawhubSearchTimer) clearTimeout(clawhubSearchTimer)
+  clawhubSearchTimer = setTimeout(() => {
+    console.debug('[Skills] clawhub search keyword:', val)
+    skillsStore.fetchRemoteSkills('clawhub', val.trim() ? { keyword: val.trim() } : {})
+  }, 400)
+}
+
+watch(clawhubSearchQuery, (val) => onClawhubSearch(val))
+
+const filteredTencentTopSkills = computed(() => {
+  const list = skillsStore.remoteSkills['tencent-top'] || []
+  const q = tencentSearchQuery.value.trim().toLowerCase()
+  if (!q) return list
+  return list.filter(s => (s.name || '').toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q))
+})
+
+const filteredTencentSkills = computed(() => {
+  const list = skillsStore.remoteSkills['tencent'] || []
+  const q = tencentSearchQuery.value.trim().toLowerCase()
+  if (!q) return list
+  return list.filter(s => (s.name || '').toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q))
+})
+
+// Unified helpers for tencent tab (shared between top50/all sub-tabs)
+const tencentDisplaySkills = computed(() => {
+  const list = tencentSubTab.value === 'top50' ? filteredTencentTopSkills.value : filteredTencentSkills.value
+  return list.map(skill => ({
+    ...skill,
+    icon: skill.name ? skill.name[0] : ''
+  }))
+})
+
+function onTencentSearch() {
+  fetchTencentSkills()
+}
+
+let tencentSearchTimer = null
+watch(tencentSearchQuery, () => {
+  if (tencentSearchTimer) clearTimeout(tencentSearchTimer)
+  tencentSearchTimer = setTimeout(() => { fetchTencentSkills() }, 350)
+})
+
+async function fetchTencentSkills() {
+  const params = {
+    sortBy: tencentSortBy.value,
+    order: 'desc',
+    page: 1,
+    pageSize: 24,
+  }
+  if (tencentSearchQuery.value.trim()) params.keyword = tencentSearchQuery.value.trim()
+  if (tencentSelectedCategory.value) params.category = tencentSelectedCategory.value
+  await skillsStore.fetchRemoteSkills('tencent', params)
+}
+const tencentFetching = computed(() =>
+  !!skillsStore.remoteFetching[tencentSubTab.value === 'top50' ? 'tencent-top' : 'tencent']
+)
+const tencentFetchError = computed(() =>
+  skillsStore.remoteError[tencentSubTab.value === 'top50' ? 'tencent-top' : 'tencent'] || null
+)
+const tencentFetched = computed(() =>
+  !!skillsStore.remoteSkills[tencentSubTab.value === 'top50' ? 'tencent-top' : 'tencent']
+)
+
+const filteredClawhubSkills = computed(() => {
+  return skillsStore.remoteSkills['clawhub'] || []
+})
+
+// Sort local skills by installed date (newest first)
+const sortedLocalSkills = computed(() => {
+  console.debug('[SkillsView] sortedLocalSkills computed - filteredSkills.value:', filteredSkills.value)
+  const sorted = [...filteredSkills.value].sort((a, b) => {
+    const dateA = a.installedAt ? new Date(a.installedAt).getTime() : 0
+    const dateB = b.installedAt ? new Date(b.installedAt).getTime() : 0
+    return dateB - dateA
+  })
+  console.debug('[SkillsView] sortedLocalSkills result:', sorted)
+  return sorted
+})
+
+// Format date for display
+function formatDate(dateStr) {
+  try {
+    return new Date(dateStr).toISOString().split('T')[0]
+  } catch {
+    return 'Unknown'
+  }
+}
+
+async function refreshRemote(sourceId) {
+  if (sourceId === 'tencent') {
+    if (tencentSubTab.value === 'top50') {
+      await skillsStore.fetchRemoteSkills('tencent-top')
+    } else {
+      const cat = tencentSelectedCategory.value
+      await skillsStore.fetchRemoteSkills('tencent', cat ? { category: cat } : {})
+    }
+    return
+  }
+  const query = clawhubSearchQuery.value
+  await skillsStore.fetchRemoteSkills(sourceId, query.trim() ? { keyword: query.trim() } : {})
+}
+
+// ── Install success toast ──
+const installToast = ref('')
+let installToastTimer = null
+
+function showInstallToast(msg) {
+  installToast.value = msg
+  if (installToastTimer) clearTimeout(installToastTimer)
+  installToastTimer = setTimeout(() => { installToast.value = '' }, 3000)
+}
+
+watch(() => skillsStore.installingSkills, (map) => {
+  for (const [skillId, state] of Object.entries(map)) {
+    if (state.status === 'completed' && !state._toasted) {
+      state._toasted = true
+      const skill = skillsStore.allRemoteSkills.find(s => s.id === skillId)
+      const name = skill?.name || skillId
+      console.debug('[Skills] install completed:', skillId, name)
+      showInstallToast(`${name} — ${t('skills.installSuccess')}`)
+      // Note: no auto tab switch – user switches to local tab manually and it auto-refreshes
+    }
+  }
+}, { deep: true })
+
+function installSkill(sourceId, skill) {
+  if (!skill.downloadUrl) {
+    console.warn('[Skills] installSkill: no downloadUrl for', skill.id)
+    return
+  }
+  console.debug('[Skills] installSkill:', sourceId, skill.id, skill.downloadUrl)
+  skillsStore.installRemoteSkill(sourceId, skill.id, skill.downloadUrl, configStore.config.skillsPath)
+}
+
+// ── Remote skill detail modal ──
+const remoteDetailSkill = ref(null)
+
+function openRemoteDetail(skill) {
+  remoteDetailSkill.value = skill
+}
+
+function installFromModal() {
+  const skill = remoteDetailSkill.value
+  if (!skill || !skill.downloadUrl) return
+  const sourceId = (skill.sourceId === 'tencent-top' || skill.sourceId === 'tencent') ? 'tencent' : 'clawhub'
+  skillsStore.installRemoteSkill(sourceId, skill.id, skill.downloadUrl, configStore.config.skillsPath)
+}
+
+function openExternal(url, sourceId, skillId) {
+  let finalUrl = url
+  
+  // If no URL but we have sourceId and skillId, construct the appropriate hub URL
+  if (!url && sourceId && skillId) {
+    if (sourceId === 'tencent' || sourceId === 'tencent-top') {
+      // Tencent hub URL format
+      finalUrl = `https://lightmake.site/skill/${skillId}`
+    } else if (sourceId === 'clawhub') {
+      // ClawHub URL format - needs owner info, fallback to main site
+      finalUrl = `https://clawhub.ai/skills/${skillId}`
+    }
+  }
+  
+  if (finalUrl) window.electronAPI?.openExternal(finalUrl)
+}
+
 const searchQuery = ref('')
 
 const filteredSkills = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return skillsStore.skills
-  return skillsStore.skills.filter(skill => {
+  console.debug('[SkillsView] filteredSkills computed - skillsStore.skills.length:', skillsStore.skills.length, 'query:', q)
+  if (!q) {
+    console.debug('[SkillsView] no query, returning all skills:', skillsStore.skills)
+    return skillsStore.skills
+  }
+  const filtered = skillsStore.skills.filter(skill => {
     const name = (skill.displayName || skill.name || '').toLowerCase()
     const desc = skillDescription(skill).toLowerCase()
     const summary = (skill.summary || '').toLowerCase()
     const prompt = (skill.systemPrompt || '').toLowerCase()
     return name.includes(q) || desc.includes(q) || summary.includes(q) || prompt.includes(q)
   })
+  console.debug('[SkillsView] filtered results:', filtered)
+  return filtered
 })
 
 const selectedSkill = ref(null)
@@ -558,6 +1274,7 @@ watch(editorContent, (val) => {
 onBeforeUnmount(() => {
   if (autoSaveTimer) clearTimeout(autoSaveTimer)
   if (copiedTimer) clearTimeout(copiedTimer)
+  if (clawhubSearchTimer) clearTimeout(clawhubSearchTimer)
 })
 
 function onFormattedInput(e) {
@@ -576,8 +1293,11 @@ function copySource() {
 }
 
 async function refresh() {
+  console.debug('[SkillsView] refresh() called, skillsPath:', configStore.config.skillsPath)
   await skillsStore.loadSkills(configStore.config.skillsPath)
+  console.debug('[SkillsView] after loadSkills, skills.length:', skillsStore.skills.length)
   await skillsStore.loadSkillPrompts(configStore.config.skillsPath)
+  console.debug('[SkillsView] after loadSkillPrompts, skills:', skillsStore.skills)
   if (selectedSkill.value && !skillsStore.skills.find(s => s.id === selectedSkill.value.id)) {
     goBack()
   }
@@ -914,19 +1634,166 @@ const SkillTreeNode = defineComponent({
   color: #6B7280;
 }
 
+/* ── Catalog Tabs ──────────────────────────────────────────────────────── */
+.catalog-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.875rem;
+  border-bottom: 1.5px solid #E5E5EA;
+  padding-bottom: 0;
+}
+.catalog-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  border: none;
+  background: transparent;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  color: #9CA3AF;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1.5px;
+  border-radius: 0.375rem 0.375rem 0 0;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.catalog-tab:hover {
+  color: #374151;
+  background: rgba(0,0,0,0.03);
+}
+.catalog-tab--active {
+  color: #1A1A1A;
+  font-weight: 600;
+  border-bottom-color: #1A1A1A;
+}
+
+/* ── Tencent sub-tab bar ──────────────────────────────────────────────── */
+.tencent-subtab-bar {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 1.5rem;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5EA;
+  flex-shrink: 0;
+}
+.tencent-subtab {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.875rem;
+  border: 1.5px solid transparent;
+  border-radius: 0.5rem;
+  background: transparent;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  color: #9CA3AF;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tencent-subtab:hover {
+  background: rgba(0,0,0,0.04);
+  color: #374151;
+}
+.tencent-subtab--active {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* ── Tencent category bar ─────────────────────────────────────────────── */
+.tencent-category-bar {
+  flex-shrink: 0;
+  padding: 0.875rem 1.5rem;
+  background: #F2F2F7;
+  border-bottom: 1px solid #E5E5EA;
+  overflow-y: auto;
+  max-height: 40vh;
+  scrollbar-width: thin;
+  scrollbar-color: #D1D1D6 transparent;
+}
+.tencent-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 0.625rem;
+}
+.tencent-cat-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.375rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  box-shadow: rgba(255,255,255,0.95) 0px 1px 0px inset, rgba(0,0,0,0.05) 0px 2px 10px;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s, border-color 0.2s;
+}
+.tencent-cat-btn:hover {
+  transform: scale(1.06);
+  box-shadow: rgba(255,255,255,0.95) 0px 1px 0px inset, rgba(0,0,0,0.10) 0px 4px 16px;
+}
+.tencent-cat-btn--active {
+  border-color: #1A1A1A;
+  background: rgba(255, 255, 255, 1);
+  box-shadow: rgba(255,255,255,0.95) 0px 1px 0px inset, rgba(0,0,0,0.15) 0px 4px 16px;
+}
+.tencent-cat-icon-wrap {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.tencent-cat-btn:hover .tencent-cat-icon-wrap {
+  transform: scale(1.1);
+}
+.tencent-cat-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #3A3A3C;
+  font-family: 'Inter', sans-serif;
+  text-align: center;
+  line-height: 1.3;
+}
+
 /* ── Grid background: flat iOS style ──────────────────────────────────── */
 .skill-grid-bg {
   background: #F2F2F7;
+  scrollbar-width: thin;
+  scrollbar-color: #D1D5DB transparent;
+}
+.skill-grid-bg::-webkit-scrollbar {
+  width: 6px;
+}
+.skill-grid-bg::-webkit-scrollbar-track {
+  background: transparent;
+}
+.skill-grid-bg::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 3px;
+}
+.skill-grid-bg::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
 }
 
 /* ── Skills Grid ───────────────────────────────────────────────────────────── */
 .skill-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1.25rem;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1rem;
 }
-@media (min-width: 1920px) { .skill-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (min-width: 2560px) { .skill-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 1800px) { .skill-grid { grid-template-columns: repeat(5, 1fr); } }
+@media (max-width: 1400px) { .skill-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 1100px) { .skill-grid { grid-template-columns: repeat(3, 1fr); } }
 
 /* ── Skill Card — iOS Minimalist ─────────────────────────────────────── */
 .skill-card {
@@ -1011,6 +1878,7 @@ const SkillTreeNode = defineComponent({
   flex: 1;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1028,6 +1896,14 @@ const SkillTreeNode = defineComponent({
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
   color: #9CA3AF;
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+}
+.skill-card-date {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  color: #D1D5DB;
   display: flex;
   align-items: center;
   gap: 0.3125rem;
@@ -1058,6 +1934,99 @@ const SkillTreeNode = defineComponent({
   }
 }
 
+/* ── Remote skill card enhancements ──────────────────────────────────── */
+.remote-skill-card {
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.remote-skill-card:hover {
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+  transform: translateY(-1px);
+}
+.remote-skill-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.remote-skill-author {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  color: #9CA3AF;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 7.5rem;
+}
+.remote-skill-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  color: #9CA3AF;
+  white-space: nowrap;
+}
+.remote-install-btn {
+  flex-shrink: 0;
+  padding: 0.3125rem 0.875rem;
+  border-radius: 0.5rem;
+  border: none;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.remote-install-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+}
+.remote-install-btn:active {
+  transform: scale(0.97);
+}
+.remote-installing-badge {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3125rem 0.5rem;
+  border-radius: 0.5rem;
+  background: transparent;
+}
+.remote-installed-badge {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.3125rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(16,185,129,0.08);
+  color: #059669;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+.remote-error-badge {
+  flex-shrink: 0;
+  padding: 0.3125rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(220,38,38,0.08);
+  color: #dc2626;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  cursor: help;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    LEVEL 2 — Skill Detail Page
    ══════════════════════════════════════════════════════════════════════════ */
@@ -1073,13 +2042,26 @@ const SkillTreeNode = defineComponent({
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
 .detail-title-row {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-  flex-shrink: 0;
-  padding: 0.625rem 1.25rem;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 1.25rem;
   background: #FFFFFF;
   border-bottom: 1px solid #E5E5EA;
+}
+.detail-title-path {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: var(--fs-small);
+  color: #9CA3AF;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 50%;
+  text-align: right;
 }
 .detail-back-btn {
   display: flex;
@@ -1110,23 +2092,13 @@ const SkillTreeNode = defineComponent({
 .detail-icon {
   width: 2rem;
   height: 2rem;
-  border-radius: 0.5625rem;
+  flex-shrink: 0;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.detail-title {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-section);
-  font-weight: 700;
-  color: #1A1A1A;
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
 .detail-description {
   font-family: 'Inter', sans-serif;
@@ -1170,11 +2142,12 @@ const SkillTreeNode = defineComponent({
   background: #007AFF;
 }
 .detail-sidebar-header {
-  padding: 0.625rem 0.875rem;
+  padding: 0.5rem 0.875rem;
   flex-shrink: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
   border-bottom: 1px solid #E5E5EA;
 }
 .detail-sidebar-label {
@@ -1192,7 +2165,8 @@ const SkillTreeNode = defineComponent({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 8.75rem;
+  width: 100%;
+  display: block;
 }
 
 /* ── Content area ──────────────────────────────────────────────────────── */
@@ -1404,4 +2378,459 @@ const SkillTreeNode = defineComponent({
   transition: background 0.1s;
 }
 .skill-ctx-item:hover { background: #1F1F1F; color: #FFFFFF; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Remote Skill Detail Modal
+   ══════════════════════════════════════════════════════════════════════════ */
+.rsd-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+.rsd-modal {
+  position: relative;
+  width: 50vw;
+  height: 50vh;
+  min-width: 340px;
+  min-height: 340px;
+  max-width: 90vw;
+  max-height: 90vh;
+  background: #FFFFFF;
+  border-radius: 1.25rem;
+  border: 1px solid #E5E5EA;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.18), 0 1px 0px rgba(255,255,255,0.9) inset;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* sticky header */
+.rsd-header {
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(20px);
+  z-index: 10;
+  padding: 0.75rem 1.25rem 0.875rem;
+  border-bottom: 0.5px solid #E5E5EA;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.rsd-avatar {
+  width: 2.625rem;
+  height: 2.625rem;
+  border-radius: 0.875rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #FFFFFF;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+}
+.rsd-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: #1C1C1E;
+  letter-spacing: -0.02em;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rsd-category-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.4375rem;
+  border-radius: 0.375rem;
+  background: rgba(0,0,0,0.06);
+  color: #374151;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+}
+.rsd-slug {
+  font-family: 'JetBrains Mono','Fira Code',monospace;
+  font-size: 0.6875rem;
+  color: #8E8E93;
+}
+.rsd-icon-btn {
+  width: 2.125rem;
+  height: 2.125rem;
+  border-radius: 9999px;
+  background: rgba(255,255,255,0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid #E5E5EA;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #8E8E93;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.rsd-icon-btn:hover {
+  background: #F5F5F5;
+  color: #1A1A1A;
+  border-color: #D1D1D6;
+}
+/* body */
+.rsd-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: #E5E5EA transparent;
+}
+/* tags */
+.rsd-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  font-family: 'JetBrains Mono','Fira Code',monospace;
+}
+.rsd-tag--green { background: rgba(52,199,89,0.1); color: #34C759; border: 1px solid rgba(52,199,89,0.15); }
+.rsd-tag--blue  { background: rgba(0,122,255,0.08); color: #007AFF; border: 1px solid rgba(0,122,255,0.12); }
+.rsd-tag--gray  { background: rgba(116,116,128,0.08); color: #6B7280; border: 1px solid rgba(116,116,128,0.12); }
+.rsd-tag--black { background: rgba(15,15,15,0.07); color: #1C1C1E; border: 1px solid rgba(15,15,15,0.12); }
+/* description */
+.rsd-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  color: #3A3A3C;
+  line-height: 1.65;
+  margin: 0;
+  min-height: 4rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  flex: 1;
+}
+.rsd-source-hint {
+  font-size: 0.75rem;
+  color: #8E8E93;
+  font-family: 'Inter', sans-serif;
+}
+.rsd-link {
+  color: #007AFF;
+  text-decoration: none;
+  font-weight: 500;
+}
+.rsd-link:hover { text-decoration: underline; }
+.rsd-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: #1C1C1E;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(28,28,30,0.35);
+  text-underline-offset: 2px;
+  transition: opacity 0.15s;
+}
+.rsd-link-btn:hover { opacity: 0.65; }
+/* stats */
+.rsd-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.625rem;
+}
+.rsd-stat-cell {
+  padding: 0.875rem 0.625rem;
+  border-radius: 0.875rem;
+  background: #F9F9F9;
+  border: 1px solid #E5E5EA;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  color: #1C1C1E;
+}
+.rsd-stat-cell svg {
+  margin-bottom: 0.375rem;
+  color: #1C1C1E;
+  stroke: #1C1C1E;
+}
+.rsd-stat-value {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #1C1C1E;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.rsd-stat-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.625rem;
+  color: #AEAEB2;
+  margin-top: 0.125rem;
+}
+/* footer */
+.rsd-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem 1rem;
+  border-top: 0.5px solid #E5E5EA;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 0 0 1.25rem 1.25rem;
+}
+.rsd-footer-left {
+  flex: 1;
+  min-width: 0;
+}
+.rsd-footer-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.rsd-error-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.6875rem;
+  color: #dc2626;
+  line-height: 1.4;
+}
+.rsd-install-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: none;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.rsd-install-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.24);
+}
+.rsd-install-btn:active { transform: scale(0.97); }
+.rsd-state-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.4375rem 0.875rem;
+  border-radius: 0.5rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rsd-state-chip--loading {
+  background: rgba(28,28,30,0.08);
+  color: #1C1C1E;
+}
+.rsd-state-chip--done {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  transition: all 0.15s ease;
+}
+.rsd-state-chip--done:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.24);
+}
+.rsd-state-chip--error {
+  background: rgba(220,38,38,0.08);
+  color: #dc2626;
+}
+/* transitions */
+.rsd-fade-enter-active, .rsd-fade-leave-active { transition: opacity 0.2s ease; }
+.rsd-fade-enter-from, .rsd-fade-leave-to { opacity: 0; }
+.rsd-slide-enter-active { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease; }
+.rsd-slide-leave-active { transition: transform 0.2s ease, opacity 0.15s ease; }
+.rsd-slide-enter-from { transform: translateY(24px) scale(0.97); opacity: 0; }
+.rsd-slide-leave-to { transform: translateY(12px) scale(0.98); opacity: 0; }
+/* ── Uninstall dialog ─────────────────────────────────────────────────── */
+.uninstall-dialog-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.32);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.uninstall-dialog {
+  background: #18181b;
+  color: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 4px 32px rgba(0,0,0,0.18);
+  padding: 2rem 2.5rem 1.5rem 2.5rem;
+  min-width: 320px;
+  max-width: 90vw;
+  text-align: center;
+}
+.uninstall-dialog-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+.uninstall-dialog-desc {
+  font-size: 1rem;
+  color: #d1d5db;
+  margin-bottom: 1.5rem;
+}
+.uninstall-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+.uninstall-cancel-btn {
+  background: #232326;
+  color: #fff;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1.5rem;
+  font-size: 1rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.uninstall-cancel-btn:hover { background: #35353a; }
+.uninstall-confirm-btn {
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1.5rem;
+  font-size: 1rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.uninstall-confirm-btn:hover { background: #b91c1c; }
+.remote-uninstall-btn {
+  flex-shrink: 0;
+  padding: 0.3125rem 0.875rem;
+  border-radius: 0.5rem;
+  border: none;
+  background: #232326;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.remote-uninstall-btn:hover { background: #dc2626; box-shadow: 0 2px 12px rgba(220,38,38,0.25); }
+.remote-uninstall-btn:active { transform: scale(0.97); }
+.skill-open-btn {
+  flex-shrink: 0;
+  padding: 0.3125rem 0.875rem;
+  border-radius: 0.5rem;
+  border: 1.5px solid #D1D5DB;
+  background: #fff;
+  color: #1A1A1A;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.skill-open-btn:hover { background: #F9FAFB; border-color: #9CA3AF; }
+.skill-open-btn:active { transform: scale(0.97); }
+/* ── Tencent sort select ──────────────────────────────────────────────── */
+.tencent-sort-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #F2F2F7 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 0.65rem center;
+  color: #1C1C1E;
+  border: 1px solid #E5E5EA;
+  border-radius: 0.5rem;
+  padding: 0.4rem 2rem 0.4rem 0.75rem;
+  font-size: var(--fs-secondary, 0.875rem);
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  transition: border-color 0.15s, background 0.15s;
+}
+.tencent-sort-select:hover { border-color: #D1D1D6; background-color: #EBEBF0; }
+.tencent-sort-select:focus { border-color: #9CA3AF; background-color: #EBEBF0; }
+
+/* ── Grid-area spinner ───────────────────────────────────────────────── */
+.skills-grid-spinner-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 0;
+  pointer-events: none;
+}
+.skills-spinner {
+  width: 48px;
+  height: 48px;
+  animation: skills-spin 0.9s linear infinite;
+}
+@keyframes skills-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Install success toast */
+.skill-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1C1C1E;
+  color: #fff;
+  padding: 0.625rem 1rem;
+  border-radius: 0.625rem;
+  font-size: 0.875rem;
+  font-family: 'Inter', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  z-index: 9999;
+  white-space: nowrap;
+}
+.skill-toast-fade-enter-active,
+.skill-toast-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.skill-toast-fade-enter-from,
+.skill-toast-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(0.5rem);
+}
+
 </style>

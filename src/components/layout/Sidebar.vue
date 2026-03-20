@@ -92,12 +92,11 @@
         </div>
         <!-- Agent capabilities submenu -->
         <div v-if="agentCapabilitiesOpen && !isCollapsed" class="agent-submenu">
-          <NavItem to="/tools"     :icon="IconTools"     :label="t('nav.tools')"         :isCollapsed="isCollapsed" />
           <NavItem to="/skills"    :icon="IconSkills"    :label="t('nav.skills')"        :isCollapsed="isCollapsed" />
+          <NavItem to="/tools"     :icon="IconTools"     :label="t('nav.tools')"         :isCollapsed="isCollapsed" />
           <NavItem to="/mcp"       :icon="IconMcp"       :label="t('nav.mcp')"  :isCollapsed="isCollapsed" />
           <NavItem to="/knowledge" :icon="IconKnowledge" :label="t('nav.knowledge')"     :isCollapsed="isCollapsed" />
         </div>
-        <NavItem to="/ai-tasks" :icon="IconAiTasks" :label="t('nav.agentTasks')" :isCollapsed="isCollapsed" />
       </div>
 
       <!-- ── Workspace ── -->
@@ -106,6 +105,7 @@
           <span class="nav-section-label">{{ t('nav.workspace') }}</span>
         </div>
         <NavItem to="/tasks"     :icon="IconTaskEngine" :label="t('tasks.title')" :isCollapsed="isCollapsed" />
+        <NavItem to="/ai-tasks" :icon="IconAiTasks" :label="t('nav.agentTasks')" :isCollapsed="isCollapsed" />
       </div>
 
     </div>

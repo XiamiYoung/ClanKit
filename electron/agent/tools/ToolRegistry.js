@@ -8,6 +8,7 @@
 const { logger } = require('../../logger')
 const { TodoTool }    = require('./TodoTool')
 const { SoulUpdateTool, SoulReadTool } = require('./SoulTool')
+const { MemoryLogTool } = require('./MemoryLogTool')
 
 // Map agent IDs → tool class (lazy — not instantiated until enabled)
 const TOOL_CLASS_MAP = {
@@ -33,6 +34,17 @@ function initSoulTools(soulsDir) {
     soulUpdateTool = new SoulUpdateTool(soulsDir)
     soulReadTool = new SoulReadTool(soulsDir)
   }
+}
+
+// MemoryLogTool — keyed by agentId since each instance is agent-specific
+const memoryLogToolCache = new Map() // agentId → MemoryLogTool
+
+function getMemoryLogTool(memoryDir, agentId) {
+  if (!memoryDir || !agentId) return null
+  if (!memoryLogToolCache.has(agentId)) {
+    memoryLogToolCache.set(agentId, new MemoryLogTool(memoryDir, agentId))
+  }
+  return memoryLogToolCache.get(agentId)
 }
 
 class ToolRegistry {
@@ -78,7 +90,7 @@ class ToolRegistry {
     this.tools.clear()
     // Always have todo
     this.registerTool('todo_manager', todoTool)
-    // Always have soul tools
+      // Always have soul tools
     if (soulUpdateTool) {
       this.registerTool('update_soul_memory', soulUpdateTool)
       this.registerTool('read_soul_memory', soulReadTool)
@@ -86,7 +98,7 @@ class ToolRegistry {
     // Always have core tools (shell + file)
     this._loadAlwaysOnTools()
 
-    for (const entry of enabledAgents) {
+    for (const entry of (enabledAgents || [])) {
       const agentId = typeof entry === 'string' ? entry : entry.id
       // Skip if already loaded as always-on
       if (ALWAYS_ON_AGENTS.includes(agentId)) continue
@@ -105,13 +117,23 @@ class ToolRegistry {
     }
 
     logger.agent('ToolRegistry loaded', {
-      agents: enabledAgents.map(e => typeof e === 'string' ? e : e.id),
+      agents: (enabledAgents || []).map(e => typeof e === 'string' ? e : e.id),
       tools: [...this.tools.keys()]
     })
   }
 
   registerTool(name, tool) {
     this.tools.set(name, tool)
+  }
+
+  /**
+   * Register (or re-register) the MemoryLogTool for a specific agent.
+   * Called by AgentLoop.run() once systemAgentId is known.
+   */
+  registerMemoryLogTool(memoryDir, agentId) {
+    if (!memoryDir || !agentId) return
+    const tool = getMemoryLogTool(memoryDir, agentId)
+    if (tool) this.registerTool('read_memory_log', tool)
   }
 
   /** Get tool definitions array for the API request */

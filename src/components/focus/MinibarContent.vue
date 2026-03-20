@@ -126,7 +126,7 @@
         </div>
         <div class="mbc-kit-divider" />
         <template v-if="runningChats.length">
-          <div v-for="chat in runningChats" :key="chat.id" class="mbc-kit-row">
+          <div v-for="chat in runningChats" :key="chat.id" class="mbc-kit-row" @click="onChatKitRowClick(chat.id)" style="cursor:pointer;">
             <svg v-if="chat.isRunning" class="mbc-kit-spin" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="9" stroke="rgba(96,165,250,0.2)" stroke-width="2.5"/>
               <path d="M12 3a9 9 0 0 1 9 9" stroke="#60A5FA" stroke-width="2.5" stroke-linecap="round"/>
@@ -371,7 +371,15 @@ function _exitMinibarIfActive() {
 function onChatSectionClick() {
   _exitMinibarIfActive()
   const chatId = lastActiveTickerChatId.value || chatsStore.activeChatId
-  if (chatId) chatsStore.activeChatId = chatId
+  if (chatId) chatsStore.setActiveChat(chatId)
+  chatsStore.requestScrollToBottom()
+  router.push('/chats')
+}
+
+function onChatKitRowClick(chatId) {
+  _exitMinibarIfActive()
+  if (chatId) chatsStore.setActiveChat(chatId)
+  chatsStore.requestScrollToBottom()
   router.push('/chats')
 }
 

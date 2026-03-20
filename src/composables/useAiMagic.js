@@ -98,6 +98,7 @@ export function useAiMagic() {
     messages.value.push(aiMsg)
 
     const rid = uuidv4()
+    let toolSeq = 0
     requestId.value = rid
     streaming.value = true
 
@@ -109,12 +110,32 @@ export function useAiMagic() {
       if (data.type === 'delta') {
         msg.content += data.text
       } else if (data.type === 'tool_call') {
-        msg.toolCalls.push({ name: data.name, input: data.input, id: data.id })
+        // Deduplicate repeated tool_call chunks when upstream retries emit the same id.
+        if (data.id && msg.toolCalls.some(t => t.id === data.id)) return
+        msg.toolCalls.push({
+          _localKey: `${rid}-tool-${++toolSeq}`,
+          name: data.name,
+          input: data.input,
+          id: data.id || null,
+          result: null,
+          _expanded: false,
+        })
       } else if (data.type === 'tool_result') {
-        const tc = msg.toolCalls.find(t => t.id === data.id)
+        // Prefer strict id match; fall back to latest unresolved call by name.
+        let tc = null
+        if (data.id) {
+          tc = msg.toolCalls.find(t => t.id === data.id)
+        }
+        if (!tc && data.name) {
+          tc = [...msg.toolCalls].reverse().find(t => !t._permBlock && !t.result && t.name === data.name)
+        }
+        if (!tc) {
+          tc = [...msg.toolCalls].reverse().find(t => !t._permBlock && !t.result)
+        }
         if (tc) tc.result = data.result
       } else if (data.type === 'permission_request') {
         msg.toolCalls.push({
+          _localKey: `${rid}-perm-${++toolSeq}`,
           _permBlock: true,
           blockId: data.blockId,
           toolName: data.toolName,
@@ -196,13 +217,26 @@ export function useAiMagic() {
 
   function _parseReplacement(msg) {
     const content = msg.content
-    const match = content.match(/<replacement>([\s\S]*?)<\/replacement>/)
-    if (match) {
+    const tagged = content.match(/<replacement>([\s\S]*?)<\/replacement>/)
+    if (tagged) {
       msg.type = 'edit'
-      msg.replacement = match[1]
+      msg.replacement = tagged[1]
       const before = content.slice(0, content.indexOf('<replacement>')).trim()
       const after = content.slice(content.indexOf('</replacement>') + '</replacement>'.length).trim()
       msg.content = [before, after].filter(Boolean).join('\n\n') || 'Here is the edited version:'
+      return
+    }
+
+    // Fallback: accept a single fenced code block as replacement payload.
+    const codeBlocks = [...content.matchAll(/```(?:[\w.+-]+)?\n([\s\S]*?)```/g)]
+    if (codeBlocks.length === 1) {
+      const fullBlock = codeBlocks[0][0]
+      const blockBody = codeBlocks[0][1]
+      if (!blockBody) return
+      msg.type = 'edit'
+      msg.replacement = blockBody
+      const note = content.replace(fullBlock, '').trim()
+      msg.content = note || 'Here is the edited version:'
     }
   }
 
