@@ -85,6 +85,7 @@ let CHATS_FILE, CHATS_DIR, CHATS_INDEX_FILE, CONFIG_FILE, AGENTS_FILE,
     UTILITY_USAGE_FILE, TASKS_FILE, PLANS_FILE, TASK_RUNS_DIR, TASK_RUNS_INDEX,
     TASK_CATEGORIES_FILE, PLAN_CATEGORIES_FILE, AI_TASK_TREE_FILE,
     PLAZA_TOPICS_FILE, PLAZA_SESSIONS_DIR
+let MEMORY_DIR, AGENT_MEMORY_DIR, USER_MEMORY_DIR
 
 function initDataPaths() {
   if (!DATA_DIR) {
@@ -113,8 +114,60 @@ function initDataPaths() {
   AI_TASK_TREE_FILE    = path.join(DATA_DIR, 'ai-task-tree.json')
   PLAZA_TOPICS_FILE    = path.join(DATA_DIR, 'plaza-topics.json')
   PLAZA_SESSIONS_DIR   = path.join(DATA_DIR, 'plaza-sessions')
+  MEMORY_DIR           = path.join(DATA_DIR, 'memory')
+  AGENT_MEMORY_DIR     = path.join(MEMORY_DIR, 'agents')
+  USER_MEMORY_DIR      = path.join(MEMORY_DIR, 'users')
 }
 
+
+// --- Memory directory helpers ------------------------------------------------
+
+/** Ensure per-agent memory directories exist. Returns { memDir, logsDir }. */
+function ensureAgentMemoryDirs(agentId) {
+  const memDir  = path.join(AGENT_MEMORY_DIR, agentId)
+  const logsDir = path.join(memDir, 'memory')
+  fs.mkdirSync(logsDir, { recursive: true })
+  return { memDir, logsDir }
+}
+
+/** Ensure user memory directory exists. Returns userDir path. */
+function ensureUserMemoryDir(userId) {
+  const userDir = path.join(USER_MEMORY_DIR, userId)
+  fs.mkdirSync(userDir, { recursive: true })
+  return userDir
+}
+
+/** Read a memory file. Returns null if missing. */
+function readMemoryFile(filePath) {
+  try {
+    if (fs.existsSync(filePath)) return fs.readFileSync(filePath, 'utf8')
+  } catch (err) {
+    logger.error('readMemoryFile error', err.message)
+  }
+  return null
+}
+
+/** Append text to a memory file (creates if missing). */
+function appendMemoryFile(filePath, text) {
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    fs.appendFileSync(filePath, text, 'utf8')
+  } catch (err) {
+    logger.error('appendMemoryFile error', err.message)
+  }
+}
+
+/** Get today's and yesterday's dated log paths for an agent. */
+function getAgentLogPaths(agentId) {
+  const { logsDir } = ensureAgentMemoryDirs(agentId)
+  const now   = new Date()
+  const today = now.toISOString().slice(0, 10)
+  const yest  = new Date(now - 86400000).toISOString().slice(0, 10)
+  return {
+    todayPath:     path.join(logsDir, `${today}.md`),
+    yesterdayPath: path.join(logsDir, `${yest}.md`),
+  }
+}
 
 // --- Env-backed path accessors -----------------------------------------------
 // These three paths are stored in config.json under CLANKAI_DATA_PATH.
@@ -209,6 +262,11 @@ function ensureDataDir() {
       }
     }
   }
+
+  // Ensure memory directories exist
+  fs.mkdirSync(MEMORY_DIR,       { recursive: true })
+  fs.mkdirSync(AGENT_MEMORY_DIR, { recursive: true })
+  fs.mkdirSync(USER_MEMORY_DIR,  { recursive: true })
 }
 
 function readJSON(file, fallback) {
@@ -821,6 +879,7 @@ app.on('before-quit', async (e) => {
   for (const [key, loop] of activeLoops) {
     try { loop.stop() } catch {}
     activeLoops.delete(key)
+    activeLoopMeta.delete(key)
   }
 
   // Stop MCP subprocesses and IM bridge
@@ -2120,7 +2179,7 @@ const { SoulUpdateTool: SoulUpdateToolForMemory } = require('./agent/tools/SoulT
 ipcMain.handle('memory:accept', async (_, { agentId, agentType, section, entry }) => {
   try {
     const tool = new SoulUpdateToolForMemory(SOULS_DIR)
-    return await tool.execute({ agent_id: agentId, agent_type: agentType, section, action: 'add', entry })
+    return await tool.execute('memory-accept', { agent_id: agentId, agent_type: agentType, section, action: 'add', entry })
   } catch (err) {
     logger.error('memory:accept error', err.message)
     return { success: false, error: err.message }
@@ -2174,7 +2233,7 @@ ipcMain.handle('memory:extract-collaboration', async (event, { chatId, transcrip
       const { SoulUpdateTool: SoulUpdateToolForCollab } = require('./agent/tools/SoulTool')
       const soulTool = new SoulUpdateToolForCollab(SOULS_DIR)
       for (const item of autoSave) {
-        await soulTool.execute({
+        await soulTool.execute('memory-auto', {
           agent_id: item.agentId,
           agent_type: item.agentType,
           section: item.section,
@@ -3399,6 +3458,15 @@ ipcMain.handle('skills:write-file', (_, rawPath, content) => {
   }
 })
 
+ipcMain.handle('skills:delete-skill', async (_, skillPath) => {
+  try {
+    await fs.promises.rm(skillPath, { recursive: true, force: true })
+    return { success: true }
+  } catch (err) {
+    return { error: err.message }
+  }
+})
+
 ipcMain.handle('skills:load-all-prompts', async (_, dirPath) => {
   const dir = resolveSkillsPath(dirPath)
   try {
@@ -3422,6 +3490,446 @@ ipcMain.handle('skills:load-all-prompts', async (_, dirPath) => {
   } catch (err) {
     logger.error('skills:load-all-prompts error', err.message)
     return []
+  }
+})
+
+// ── Remote SkillHub Support ────────────────────────────────────────────────────
+/**
+ * Fetch remote skills from a skillhub source
+ * ClawHub uses Convex backend: POST https://wry-manatee-359.convex.cloud/api/query
+ */
+ipcMain.handle('skills:fetch-remote', async (_, sourceId, options = {}) => {
+  try {
+    const sources = {
+      clawhub: async () => {
+        try {
+          const keyword = options.keyword || ''
+          const limit = Math.min(Math.max(options.limit || 50, 1), 200)
+          
+          if (keyword.trim()) {
+            // 如果有关键词，使用搜索 API
+            logger.info(`[Skills] Fetching ClawHub skills using search API with keyword: "${keyword}"`)
+            
+            const url = 'https://wry-manatee-359.convex.cloud/api/v1/search'
+            const searchUrl = new URL(url)
+            searchUrl.searchParams.set('q', keyword)
+            searchUrl.searchParams.set('limit', String(limit))
+            searchUrl.searchParams.set('nonSuspiciousOnly', 'true')
+            
+            console.log(`\n========== ClawHub Search API REQUEST ==========`)
+            console.log(`URL: ${searchUrl.toString()}`)
+            console.log(`METHOD: GET`)
+            console.log(`==========================================\n`)
+            
+            logger.info(`[ClawHub API] SEARCH REQUEST - URL: ${searchUrl.toString()}`)
+            
+            const response = await fetch(searchUrl.toString(), {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json'
+              }
+            })
+            
+            const responseText = await response.text()
+            
+            console.log(`\n========== ClawHub Search API RESPONSE ==========`)
+            console.log(`Status: ${response.status} ${response.statusText}`)
+            console.log(`Response Body:`)
+            console.log(responseText.substring(0, 1000))
+            console.log(`==========================================\n`)
+            
+            logger.info(`[ClawHub API] SEARCH RESPONSE - Status: ${response.status}`)
+            logger.info(`[ClawHub API] SEARCH RESPONSE - Body: ${responseText}`)
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
+            
+            const data = JSON.parse(responseText)
+            const results = data.results || []
+            
+            logger.info(`[ClawHub API] ✅ Search found ${results.length} results`)
+            
+            return results.map(item => ({
+              id: item.slug || item.displayName?.toLowerCase().replace(/\s+/g, '-'),
+              name: item.displayName || '',
+              description: item.summary || '',
+              category: 'general',
+              author: 'ClawHub',
+              downloadUrl: `https://wry-manatee-359.convex.site/api/v1/download?slug=${item.slug}`,
+              rating: item.score || 0,
+              downloads: 0,
+              stars: 0,
+              installs: 0,
+              homepage: `https://clawhub.ai/skills/${item.slug}`,
+              sourceId: 'clawhub',
+              installed: false
+            }))
+          } else {
+            // 否则使用浏览 API
+            logger.info(`[Skills] Fetching ClawHub skills from browse API (limit: ${limit})`)
+            
+            const url = 'https://wry-manatee-359.convex.cloud/api/query'
+            
+            const payload = {
+              path: 'skills:listPublicPageV4',
+              format: 'convex_encoded_json',
+              args: [{
+                dir: 'desc',
+                highlightedOnly: false,
+                nonSuspiciousOnly: true,
+                numItems: limit,
+                sort: 'downloads'
+              }]
+            }
+            
+            const headers = {
+              'Content-Type': 'application/json',
+              'Accept': '*/*',
+              'User-Agent': 'PostmanRuntime/7.51.0',
+              'Accept-Encoding': 'gzip, deflate, br',
+              'Connection': 'keep-alive'
+            }
+            
+            const body = JSON.stringify(payload)
+            
+            console.log(`\n========== ClawHub Browse API REQUEST ==========`)
+            console.log(`URL: ${url}`)
+            console.log(`METHOD: POST`)
+            console.log(`HEADERS:`)
+            console.log(JSON.stringify(headers, null, 2))
+            console.log(`BODY:`)
+            console.log(body)
+            console.log(`==========================================\n`)
+            
+            logger.info(`[ClawHub API] BROWSE REQUEST - URL: ${url}`)
+            logger.info(`[ClawHub API] BROWSE REQUEST - BODY: ${body}`)
+            
+            const response = await fetch(url, {
+              method: 'POST',
+              headers,
+              body
+            })
+            
+            const responseText = await response.text()
+            
+            console.log(`\n========== ClawHub Browse API RESPONSE ==========`)
+            console.log(`Status: ${response.status} ${response.statusText}`)
+            console.log(`Response Body (first 1000 chars):`)
+            console.log(responseText.substring(0, 1000))
+            console.log(`==========================================\n`)
+            
+            logger.info(`[ClawHub API] BROWSE RESPONSE - Status: ${response.status}`)
+            logger.info(`[ClawHub API] BROWSE RESPONSE - Body: ${responseText}`)
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
+            
+            const data = JSON.parse(responseText)
+            
+            // Check for Convex errors
+            if (data.status === 'error' || data.errorMessage) {
+              logger.error(`[ClawHub API] Convex Error:`, data.errorMessage)
+              throw new Error(`Convex API Error: ${data.errorMessage || 'Unknown error'}`)
+            }
+            
+            // Parse Convex response: {status: "success", value: {page: [...], hasMore, nextCursor}}
+            let skillsData = []
+            
+            if (data.value && data.value.page && Array.isArray(data.value.page)) {
+              skillsData = data.value.page
+              logger.info(`[ClawHub API] Found ${skillsData.length} skills`)
+            } else {
+              logger.warn(`[ClawHub API] Unexpected response structure, keys:`, Object.keys(data || {}))
+              return []
+            }
+            
+            logger.info(`[ClawHub API] ✅ Successfully parsed ${skillsData.length} skills`)
+            
+            // Each item has structure: {skill: {...}, owner: {...}, ...}
+            return skillsData.map(item => {
+              const skillData = item.skill || {}
+              const ownerData = item.owner || {}
+              const stats = skillData.stats || {}
+              
+              return {
+                id: skillData.slug || skillData._id || skillData.displayName?.toLowerCase().replace(/\s+/g, '-'),
+                name: skillData.displayName || '',
+                description: skillData.summary || '',
+                category: skillData.tags ? Object.keys(skillData.tags)[0] : 'general',
+                author: ownerData.handle || ownerData.displayName || 'Unknown',
+                downloadUrl: `https://wry-manatee-359.convex.site/api/v1/download?slug=${skillData.slug}`,
+                rating: stats.stars || 0,
+                downloads: stats.downloads || 0,
+                stars: stats.stars || 0,
+                installs: stats.installsAllTime || stats.installsCurrent || 0,
+                homepage: `https://clawhub.ai/${ownerData.handle || 'user'}/${skillData.slug}`,
+                sourceId: 'clawhub',
+                installed: false
+              }
+            })
+          }
+        } catch (e) {
+          logger.error(`[ClawHub API] ❌ Final Error:`, e.message)
+          throw e
+        }
+      },
+      
+      'tencent-top': async () => {
+        try {
+          logger.info(`[Skills] Fetching Tencent Top 50 skills from lightmake.site/api/skills/top`)
+          const response = await fetch('https://lightmake.site/api/skills/top', {
+            headers: { 'Accept': 'application/json' }
+          })
+          if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          const data = await response.json()
+          let skills = []
+          if (data.data && data.data.skills && Array.isArray(data.data.skills)) skills = data.data.skills
+          else if (data.data && Array.isArray(data.data)) skills = data.data
+          else if (data.skills && Array.isArray(data.skills)) skills = data.skills
+          else if (Array.isArray(data)) skills = data
+          logger.info(`[Skills] Parsed ${skills.length} top skills from Tencent`)
+          return skills.map(s => ({
+            id: s.slug || s.id || s.name?.toLowerCase().replace(/\s+/g, '-'),
+            name: s.name || '',
+            description: s.description_zh || s.description || '',
+            category: s.category || 'general',
+            author: s.ownerName || s.author || 'Tencent',
+            downloadUrl: s.packageUrl || s.downloadUrl || s.homepage || '',
+            rating: s.score || 0,
+            downloads: s.downloads || 0,
+            stars: s.stars || 0,
+            installs: s.installs || 0,
+            homepage: s.homepage || '',
+            version: s.version || '',
+            sourceId: 'tencent-top',
+            installed: false
+          }))
+        } catch (e) {
+          logger.error(`[Skills] Tencent Top API error:`, e.message)
+          throw e
+        }
+      },
+
+      tencent: async () => {
+        try {
+          logger.info(`[Skills] Fetching Tencent SkillHub skills from lightmake.site`)
+          
+          const url = new URL('https://lightmake.site/api/skills')
+          url.searchParams.append('page', String(options.page || 1))
+          url.searchParams.append('pageSize', String(options.pageSize || 24))
+          url.searchParams.append('sortBy', options.sortBy || 'score')
+          url.searchParams.append('order', options.order || 'desc')
+          if (options.category) {
+            url.searchParams.append('category', options.category)
+          }
+          if (options.keyword && options.keyword.trim()) {
+            url.searchParams.append('keyword', options.keyword.trim())
+          }
+          
+          const requestUrl = url.toString()
+          logger.info(`[Skills] Tencent API REQUEST URL: ${requestUrl}`)
+          console.log(`\n========== Tencent API REQUEST ==========`)
+          console.log(`URL: ${requestUrl}`)
+          console.log(`OPTIONS: ${JSON.stringify(options)}`)
+          console.log(`==========================================\n`)
+          const response = await fetch(requestUrl, { 
+            timeout: 10000,
+            headers: { 'Accept': 'application/json' }
+          })
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+          
+          const data = await response.json()
+          logger.info(`[Skills] Tencent raw response:`, JSON.stringify(data).substring(0, 300))
+          
+          let skills = []
+          
+          // Handle nested response: {code: 0, data: {skills: [...]}}
+          if (data.data && data.data.skills && Array.isArray(data.data.skills)) {
+            skills = data.data.skills
+          } else if (data.data && Array.isArray(data.data)) {
+            skills = data.data
+          } else if (data.skills && Array.isArray(data.skills)) {
+            skills = data.skills
+          } else if (Array.isArray(data)) {
+            skills = data
+          } else {
+            logger.warn(`[Skills] Unexpected Tencent response format:`, JSON.stringify(data).substring(0, 200))
+            return []
+          }
+          
+          logger.info(`[Skills] Parsed ${skills.length} skills from Tencent`)
+          
+          return skills.map(s => ({
+            id: s.slug || s.id || s.name?.toLowerCase().replace(/\s+/g, '-'),
+            name: s.name || '',
+            description: s.description_zh || s.description || '',
+            category: s.category || 'general',
+            author: s.ownerName || s.author || 'Tencent',
+            downloadUrl: s.packageUrl || s.downloadUrl || s.homepage || '',
+            rating: s.score || 0,
+            downloads: s.downloads || 0,
+            stars: s.stars || 0,
+            installs: s.installs || 0,
+            homepage: s.homepage || '',
+            version: s.version || '',
+            sourceId: 'tencent',
+            installed: false
+          }))
+        } catch (e) {
+          logger.error(`[Skills] Tencent API error:`, e.message)
+          logger.error(`[Skills] Stack:`, e.stack)
+          throw e
+        }
+      }
+    }
+
+    const fetcher = sources[sourceId]
+    if (!fetcher) throw new Error(`Unknown skillhub source: ${sourceId}`)
+    
+    const result = await fetcher()
+    return result
+  } catch (err) {
+    logger.error(`[Skills] skills:fetch-remote error for ${sourceId}:`, err.message)
+    logger.error(`[Skills] Stack:`, err.stack)
+    return { error: err.message, skills: [] }
+  }
+})
+
+/**
+ * Install a remote skill from a skillhub source
+ * Downloads, extracts, and validates the skill package
+ */
+ipcMain.handle('skills:install-remote', async (_, sourceId, skillId, skillUrl, skillsPath) => {
+  // Use provided skillsPath, or fallback to default
+  const skillsDir = skillsPath || path.join(app.getPath('userData'), 'skills')
+  const tempDir = path.join(os.tmpdir(), `skill-${skillId}-${Date.now()}`)
+
+  // Normalize clawhub web page URLs → actual zip download endpoint
+  // Pattern: https://clawhub.ai/{handle}/{slug} → https://wry-manatee-359.convex.site/api/v1/download?slug={slug}
+  if (skillUrl && /^https:\/\/clawhub\.ai\/[^/]+\/[^/?#]+$/.test(skillUrl)) {
+    const slug = skillUrl.split('/').pop()
+    skillUrl = `https://wry-manatee-359.convex.site/api/v1/download?slug=${slug}`
+    logger.info(`[Skills] Normalized clawhub web URL to download URL: ${skillUrl}`)
+  }
+
+  try {
+    // Ensure skillsDir exists
+    await fs.promises.mkdir(skillsDir, { recursive: true })
+    
+    // 1. Download skill package
+    logger.info(`[Skills] Downloading ${sourceId}/${skillId} from ${skillUrl}`)
+    const response = await fetch(skillUrl)
+    if (!response.ok) throw new Error(`Download failed: ${response.status}`)
+
+    const arrayBuf = await response.arrayBuffer()
+    const buffer = Buffer.from(arrayBuf)
+    if (!buffer || buffer.length === 0) throw new Error('Empty package downloaded')
+    
+    // 2. Determine format by magic bytes, default to ZIP
+    await fs.promises.mkdir(tempDir, { recursive: true })
+
+    const isGzip = buffer[0] === 0x1f && buffer[1] === 0x8b
+    const isZip  = !isGzip && (buffer[0] === 0x50 && buffer[1] === 0x4b)
+    // Unknown magic bytes → default to ZIP (most common from web downloads)
+    const useZip = isZip || (!isGzip)
+
+    logger.info(`[Skills] Format detect: bytes=[0x${buffer[0].toString(16)},0x${buffer[1].toString(16)}] isGzip=${isGzip} useZip=${useZip} size=${buffer.length}`)
+
+    // 3. Extract package
+    if (useZip) {
+      const AdmZip = require('adm-zip')
+      try {
+        const zip = new AdmZip(buffer)
+        zip.extractAllTo(tempDir, true)
+      } catch (zipErr) {
+        // ZIP failed — last resort: try tar.gz
+        logger.warn(`[Skills] ZIP extract failed (${zipErr.message}), retrying as tar.gz`)
+        const tar = require('tar')
+        const zlib = require('zlib')
+        const { Readable } = require('stream')
+        await fs.promises.rm(tempDir, { recursive: true })
+        await fs.promises.mkdir(tempDir, { recursive: true })
+        const stream = Readable.from([buffer])
+        await new Promise((resolve, reject) => {
+          stream.pipe(zlib.createGunzip()).pipe(tar.x({ cwd: tempDir })).on('finish', resolve).on('error', reject)
+        })
+      }
+    } else {
+      // Confirmed gzip magic bytes
+      const tar = require('tar')
+      const zlib = require('zlib')
+      const { Readable } = require('stream')
+      const stream = Readable.from([buffer])
+      await new Promise((resolve, reject) => {
+        stream.pipe(zlib.createGunzip()).pipe(tar.x({ cwd: tempDir })).on('finish', resolve).on('error', reject)
+      })
+    }
+    
+    // 4. Validate: check for SKILL.md
+    let skillMdPath = path.join(tempDir, 'SKILL.md')
+    if (!fs.existsSync(skillMdPath)) {
+      // Try to find SKILL.md in subdirectories (common in nested archives)
+      const entries = fs.readdirSync(tempDir)
+      for (const entry of entries) {
+        const subPath = path.join(tempDir, entry, 'SKILL.md')
+        if (fs.existsSync(subPath)) {
+          skillMdPath = subPath
+          // Move contents up one level — use cp+rm to handle cross-device
+          const contentDir = path.dirname(skillMdPath)
+          const tempDir2 = path.join(os.tmpdir(), `skill-${skillId}-flatten`)
+          if (fs.existsSync(tempDir2)) await fs.promises.rm(tempDir2, { recursive: true })
+          await fs.promises.cp(contentDir, tempDir2, { recursive: true })
+          await fs.promises.rm(tempDir, { recursive: true })
+          await fs.promises.cp(tempDir2, tempDir, { recursive: true })
+          await fs.promises.rm(tempDir2, { recursive: true })
+          skillMdPath = path.join(tempDir, 'SKILL.md')
+          break
+        }
+      }
+    }
+    
+    if (!fs.existsSync(skillMdPath)) {
+      throw new Error('Invalid skill package: missing SKILL.md')
+    }
+    
+    // 5. Copy to target directory (use cp+rm instead of rename to support cross-device moves)
+    const targetDir = path.join(skillsDir, skillId)
+    if (fs.existsSync(targetDir)) {
+      await fs.promises.rm(targetDir, { recursive: true })
+    }
+    
+    await fs.promises.mkdir(skillsDir, { recursive: true })
+    await fs.promises.cp(tempDir, targetDir, { recursive: true })
+    await fs.promises.rm(tempDir, { recursive: true })
+    
+    logger.info(`[Skills] Successfully installed ${sourceId}/${skillId} to ${targetDir}`)
+    return { 
+      success: true, 
+      path: targetDir,
+      message: `Skill "${skillId}" installed successfully`
+    }
+  } catch (err) {
+    logger.error(`[Skills] install-remote error for ${sourceId}/${skillId}:`, err.message)
+    // Cleanup temp directory
+    try {
+      if (fs.existsSync(tempDir)) {
+        await fs.promises.rm(tempDir, { recursive: true })
+      }
+    } catch {}
+    // Strip internal paths from error message before returning to renderer
+    const cleanMessage = err.message
+      .replace(/\nRequire stack:[\s\S]*/m, '')
+      .replace(/Cannot find module '([^']+)'/g, "Missing required module: '$1'")
+      .trim()
+    return { 
+      success: false, 
+      error: cleanMessage 
+    }
   }
 })
 
@@ -3568,6 +4076,7 @@ const imBridge = require('./im-bridge')
 const { mcpManager } = require('./agent/mcp/McpManager')
 const { MemoryExtractor } = require('./agent/core/MemoryExtractor')
 const activeLoops = new Map()          // chatId -> AgentLoop
+const activeLoopMeta = new Map()       // same key as activeLoops → { chatId, agentId, agentName, isGroup }
 const lastContextSnapshots = new Map() // chatId -> snapshot
 const lastExtractedMsgCount = new Map() // chatId -> message count at last extraction
 const pendingMemoryFacts = new Map()    // chatId -> Array of pending fact objects (medium-confidence)
@@ -3596,9 +4105,17 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
   try {
     // Use the globally configured utility model — supports all providers.
     const um = config.utilityModel
-    if (!um?.provider || !um?.model) return  // utility model not configured, skip silently
+    if (!um?.provider || !um?.model) {
+      logger.debug('[Memory] skip: utility model not configured', { chatId })
+      return
+    }
     const providerCfg = config[um.provider]
-    if (!providerCfg?.apiKey || !providerCfg?.baseURL) return
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
+      logger.debug('[Memory] skip: provider missing apiKey/baseURL', { chatId, provider: um.provider })
+      return
+    }
+
+    logger.debug('[Memory] start', { chatId, provider: um.provider, model: um.model, msgCount: messages?.length })
 
     const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
     const extractor = new MemoryExtractor({
@@ -3612,7 +4129,10 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
     const reversed = [...messages].reverse()
     const lastUser = reversed.find(m => m.role === 'user')
     const lastAssistant = reversed.find(m => m.role === 'assistant')
-    if (!lastUser || !lastAssistant) return
+    if (!lastUser || !lastAssistant) {
+      logger.debug('[Memory] skip: no user+assistant pair', { chatId })
+      return
+    }
 
     const lastUserText = typeof lastUser.content === 'string'
       ? lastUser.content
@@ -3621,10 +4141,16 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
       ? lastAssistant.content
       : (Array.isArray(lastAssistant.content) ? lastAssistant.content.filter(b => b.type === 'text').map(b => b.text).join(' ') : '')
 
-    if (!lastUserText.trim() || !lastAssistantText.trim()) return
+    if (!lastUserText.trim() || !lastAssistantText.trim()) {
+      logger.debug('[Memory] skip: empty text', { chatId })
+      return
+    }
 
     const userAgentId = agentPrompts?.userAgentId || '__default_user__'
     const systemAgentId = agentPrompts?.systemAgentId || '__default_system__'
+
+    logger.debug('[Memory] agentIds + soulsDir', { chatId, userAgentId, systemAgentId, soulsDir: SOULS_DIR })
+    logger.debug('[Memory] userText preview', { chatId, text: lastUserText.slice(0, 100) })
 
     const userSoulContent = readSoulFileSync(userAgentId, 'users')
     const systemSoulContent = readSoulFileSync(systemAgentId, 'system')
@@ -3640,6 +4166,8 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
       language: config.language || 'en',
     })
 
+    logger.debug('[Memory] suggestions', { chatId, count: suggestions.length, items: suggestions.map(s => ({ target: s.target, agentType: s.agentType, section: s.section, confidence: s.confidence, entry: s.entry?.slice(0, 80) })) })
+
     if (suggestions.length === 0) return
 
     logger.agent('Memory extraction', { chatId, count: suggestions.length, model: um.model, provider: um.provider })
@@ -3647,12 +4175,16 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
     const autoSave = suggestions.filter(s => s.confidence >= 0.8)
     const pending  = suggestions.filter(s => s.confidence >= 0.5 && s.confidence < 0.8)
 
+    logger.debug('[Memory] confidence split', { chatId, autoSave: autoSave.length, pending: pending.length })
+
     // Auto-save high-confidence facts directly to soul files
     if (autoSave.length > 0) {
       const { SoulUpdateTool: SoulUpdateToolForMemory } = require('./agent/tools/SoulTool')
       const soulTool = new SoulUpdateToolForMemory(SOULS_DIR)
       for (const item of autoSave) {
-        await soulTool.execute({
+        const filePath = require('path').join(SOULS_DIR, item.agentType, `${item.agentId}.md`)
+        logger.debug('[Memory] writing', { filePath, section: item.section, entry: item.entry?.slice(0, 80) })
+        await soulTool.execute('memory-auto', {
           agent_id: item.agentId,
           agent_type: item.agentType,
           section: item.section,
@@ -3796,6 +4328,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       loopConfig.DoCPath      = groupCfg.DoCPath      || ''
       const loop = new AgentLoop(loopConfig)
       activeLoops.set(loopKey, loop)
+      activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
 
       return (async () => {
         try {
@@ -3856,6 +4389,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
             lastContextSnapshots.set(loopKey, activeLoops.get(loopKey).getContextSnapshot())
           }
           activeLoops.delete(loopKey)
+          activeLoopMeta.delete(loopKey)
           // Persist cumulative usage
           const _pMetrics  = loop.contextManager.getMetrics()
           const _pProvider = (run.config || config).defaultProvider || 'anthropic'
@@ -3916,6 +4450,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.DoCPath      = fullCfg.DoCPath      || ''
   const loop = new AgentLoop(loopConfig)
   activeLoops.set(chatId, loop)
+  activeLoopMeta.set(chatId, { chatId, agentId: agentPrompts?.systemAgentId || null, agentName: null, isGroup: false })
 
   logger.agent('run start', { chatId, model: config.anthropic?.activeModel || config.activeModel, msgCount: messages.length, agents: enabledAgents?.length || 0, skills: (enabledSkills || []).map(s => s.id) })
 
@@ -3981,12 +4516,146 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       lastContextSnapshots.set(chatId, activeLoops.get(chatId).getContextSnapshot())
     }
     activeLoops.delete(chatId)
+    activeLoopMeta.delete(chatId)
   }
 })
 
 ipcMain.handle('agent:accumulate-voice-usage', async (_, { chatId, usage }) => {
   await accumulateUsage(chatId, usage)
   return true
+})
+
+// ── Run additional agents for a chat WITHOUT stopping existing loops ──────────
+// Used by the renderer to fire idle agents in a group chat while other agents
+// are already running (per-agent parallel queue feature). Only the group-chat
+// path is supported; agentRuns must be provided.
+ipcMain.handle('agent:run-additional', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, agentPrompts, mcpServers, httpTools, agentRuns, knowledgeConfig, chatPermissionMode, chatAllowList, chatDangerOverrides, maxOutputTokens }) => {
+  if (!agentRuns || agentRuns.length === 0) return { success: false, error: 'agentRuns required' }
+  logger.agent('IPC agent:run-additional received', { chatId, agentCount: agentRuns.length, agents: agentRuns.map(r => r.agentName) })
+
+  // Skip agents that already have a running loop (safety guard)
+  const filteredRuns = agentRuns.filter(run => {
+    const loopKey = `${chatId}:${run.agentId}`
+    if (activeLoops.has(loopKey)) {
+      logger.agent('Skipping already-running agent', { chatId, agentId: run.agentId, agentName: run.agentName })
+      return false
+    }
+    return true
+  })
+  if (filteredRuns.length === 0) return { success: true, results: [] }
+
+  // -- RAG retrieval helper (same as in agent:run) --
+  async function queryRagContext(kCfg, msgs) {
+    if (!kCfg) return null
+    const fileCfg = readJSON(KNOWLEDGE_FILE, {})
+    const filePineconeKey = readJSON(CONFIG_FILE, {}).pineconeApiKey || ''
+    if (!kCfg.pineconeApiKey && filePineconeKey) kCfg.pineconeApiKey = filePineconeKey
+    if (!kCfg.indexConfigs || Object.keys(kCfg.indexConfigs).length === 0) {
+      kCfg.indexConfigs = fileCfg.indexConfigs || {}
+    }
+    if (kCfg.ragEnabled === undefined) kCfg.ragEnabled = fileCfg.ragEnabled !== false
+    if (!kCfg.ragEnabled || !kCfg.pineconeApiKey) return null
+    try {
+      const lastUserMsg = [...msgs].reverse().find(m => m.role === 'user')
+      const queryText = typeof lastUserMsg?.content === 'string'
+        ? lastUserMsg.content
+        : (Array.isArray(lastUserMsg?.content)
+          ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text).join(' ')
+          : '')
+      if (!queryText.trim()) return null
+      const idxConfigs = kCfg.indexConfigs || {}
+      const enabledIndexes = Object.entries(idxConfigs)
+        .filter(([, cfg]) => cfg.enabled)
+        .map(([name, cfg]) => ({ name, embeddingProvider: cfg.embeddingProvider, embeddingModel: cfg.embeddingModel }))
+      if (enabledIndexes.length === 0 && kCfg.pineconeIndexName) {
+        enabledIndexes.push({ name: kCfg.pineconeIndexName, embeddingProvider: 'openai', embeddingModel: 'text-embedding-3-small' })
+      }
+      if (enabledIndexes.length === 0) return null
+      const allMatches = []
+      for (const idx of enabledIndexes) {
+        try {
+          const ragResult = await queryRAG({ query: queryText, pineconeApiKey: kCfg.pineconeApiKey, pineconeIndexName: idx.name, topK: 5, embeddingProvider: idx.embeddingProvider, embeddingModel: idx.embeddingModel })
+          if (ragResult.success && ragResult.matches.length > 0) allMatches.push(...ragResult.matches)
+        } catch (idxErr) { logger.error('RAG index query error (non-fatal)', { index: idx.name, error: idxErr.message }) }
+      }
+      if (allMatches.length > 0) { allMatches.sort((a, b) => (b.score || 0) - (a.score || 0)); return allMatches.slice(0, 5) }
+      return null
+    } catch (err) { logger.error('RAG retrieval error (non-fatal)', { chatId, error: err.message }); return null }
+  }
+
+  const baseMessages = [...messages]
+  const groupCfg = readJSON(CONFIG_FILE, {})
+
+  // Emit agent_start events
+  for (const run of filteredRuns) {
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('agent:chunk', { chatId, chunk: { type: 'agent_start', agentId: run.agentId, agentName: run.agentName } })
+    }
+  }
+
+  // Launch agent loops concurrently
+  const promises = filteredRuns.map(run => {
+    const loopKey = `${chatId}:${run.agentId}`
+    const loopConfig = { ...(run.config || config), soulsDir: SOULS_DIR }
+    loopConfig.sandboxConfig = groupCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
+    loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
+    loopConfig.chatAllowList = chatAllowList || []
+    loopConfig.maxOutputTokens = maxOutputTokens || groupCfg.maxOutputTokens || null
+    loopConfig.smtpConfig = groupCfg.smtp || null
+    loopConfig.dataPath     = DATA_DIR
+    loopConfig.artifactPath = groupCfg.artifactPath || groupCfg.artyfactPath || ''
+    loopConfig.skillsPath   = groupCfg.skillsPath   || ''
+    loopConfig.DoCPath      = groupCfg.DoCPath      || ''
+    const loop = new AgentLoop(loopConfig)
+    activeLoops.set(loopKey, loop)
+    activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
+
+    return (async () => {
+      try {
+        const runRagContext = await queryRagContext(run.knowledgeConfig ? { ...run.knowledgeConfig } : null, baseMessages)
+        const runAgentPrompts = run.agentPrompts || agentPrompts
+        const runMessages = run.messages || baseMessages
+        const result = await loop.run(
+          runMessages,
+          run.enabledAgents ?? enabledAgents,
+          run.enabledSkills ?? enabledSkills,
+          (chunk) => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send('agent:chunk', { chatId, chunk: { ...chunk, agentId: run.agentId, agentName: run.agentName } })
+            }
+          },
+          currentAttachments,
+          runAgentPrompts,
+          run.mcpServers ?? mcpServers,
+          run.httpTools ?? httpTools,
+          runRagContext
+        )
+        return { agentId: run.agentId, agentName: run.agentName, success: true, result }
+      } catch (err) {
+        logger.error('agent:run-additional agent error', { chatId, agentId: run.agentId, error: err.message })
+        return { agentId: run.agentId, agentName: run.agentName, success: false, error: err.message }
+      } finally {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('agent:chunk', { chatId, chunk: { type: 'agent_end', agentId: run.agentId, agentName: run.agentName } })
+        }
+        if (activeLoops.has(loopKey)) lastContextSnapshots.set(loopKey, activeLoops.get(loopKey).getContextSnapshot())
+        activeLoops.delete(loopKey)
+        activeLoopMeta.delete(loopKey)
+        const _pMetrics  = loop.contextManager.getMetrics()
+        const _pProvider = (run.config || config).defaultProvider || 'anthropic'
+        const _pModel    = loop.anthropicClient.resolveModel()
+        accumulateUsage(chatId, {
+          inputTokens:         _pMetrics.inputTokens         || 0,
+          outputTokens:        _pMetrics.outputTokens        || 0,
+          cacheCreationTokens: _pMetrics.cacheCreationInputTokens || 0,
+          cacheReadTokens:     _pMetrics.cacheReadInputTokens     || 0,
+        }, _pProvider, _pModel).catch(() => {})
+      }
+    })()
+  })
+
+  const results = await Promise.all(promises)
+  return { success: true, results }
 })
 
 ipcMain.handle('agent:stop', (event, chatId) => {
@@ -3997,6 +4666,7 @@ ipcMain.handle('agent:stop', (event, chatId) => {
       if (key === chatId || key.startsWith(chatId + ':')) {
         loop.stop()
         activeLoops.delete(key)
+        activeLoopMeta.delete(key)
         stopped = true
       }
     }
@@ -4011,6 +4681,10 @@ ipcMain.handle('agent:stop', (event, chatId) => {
     return true
   }
   return false
+})
+
+ipcMain.handle('agent:get-running', () => {
+  return [...activeLoopMeta.values()]
 })
 
 ipcMain.handle('agent:permission-response', (event, chatId, { blockId, decision, pattern }) => {
@@ -5046,11 +5720,15 @@ function toLinuxPath(p) {
 // Config persistence -- DoCPath stored in config.json
 ipcMain.handle('obsidian:get-config', async () => {
   const cfg = await readJSONAsync(CONFIG_FILE, {})
-  return { vaultPath: cfg.DoCPath || '' }
+  return { vaultPath: cfg.DoCPath || '', lastOpenedDoc: cfg.docsLastOpenedDoc || null }
 })
 ipcMain.handle('obsidian:save-config', async (_, config) => {
   const existing = readJSON(CONFIG_FILE, {})
-  existing.DoCPath = config.vaultPath || ''
+  if ('vaultPath' in config) existing.DoCPath = config.vaultPath || ''
+  if ('lastOpenedDoc' in config) {
+    if (config.lastOpenedDoc) existing.docsLastOpenedDoc = config.lastOpenedDoc
+    else delete existing.docsLastOpenedDoc
+  }
   writeJSON(CONFIG_FILE, existing)
   return true
 })

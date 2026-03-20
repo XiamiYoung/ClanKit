@@ -23,6 +23,8 @@ const { TaskManager }      = require('./managers/TaskManager')
 const { mcpManager }       = require('./mcp/McpManager')
 const { PermissionGate }   = require('./tools/PermissionGate')
 
+const MAX_CONTEXT_TURNS = 20  // max user/assistant turn pairs sent to LLM
+
 // No hardcoded skill prompts — they arrive dynamically from the UI store
 
 // ── Tool result helpers ──────────────────────────────────────────────────────
@@ -123,6 +125,22 @@ function prepareSoulContent(content) {
   if (size < 4096) return content
   if (size < 16384) return extractKeySections(content)
   return extractKeySections(content) + '\n\n(Warning: Soul memory is large. Consider pruning old entries.)'
+}
+
+/**
+ * Slice messages to the last N conversation turns.
+ * A "turn" = one user message + all following assistant/tool messages until next user.
+ * Always preserves the full last N user messages and their responses.
+ */
+function sliceToLastNTurns(messages, n) {
+  if (!messages || messages.length === 0) return messages
+  const userIndices = []
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i].role === 'user') userIndices.push(i)
+  }
+  if (userIndices.length <= n) return messages
+  const startIdx = userIndices[userIndices.length - n]
+  return messages.slice(startIdx)
 }
 
 class AgentLoop {
@@ -335,7 +353,7 @@ class AgentLoop {
    * For OpenAI-compat providers: falls back to local message trimming.
    */
   async compactStandalone(messages, enabledAgents, enabledSkills, onChunk, agentPrompts) {
-    this.toolRegistry.loadForAgents(enabledAgents)
+    this.toolRegistry.loadForAgents(enabledAgents || [])
 
     this.skillPrompts = new Map()
     for (const skill of enabledSkills || []) {
@@ -697,7 +715,7 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
     this.httpTools = httpTools || []
 
     // Load tools for enabled agents
-    this.toolRegistry.loadForAgents(enabledAgents)
+    this.toolRegistry.loadForAgents(enabledAgents || [])
 
     // Store full skill prompts for lazy loading via load_skill tool
     this.skillPrompts = new Map()
@@ -743,7 +761,8 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
       }
     }
 
-    const conversationMessages = this._buildConversationMessages(effectiveMessages, currentAttachments)
+    const slicedMessages = sliceToLastNTurns(effectiveMessages, MAX_CONTEXT_TURNS)
+    const conversationMessages = this._buildConversationMessages(slicedMessages, currentAttachments)
     let finalText = ''
 
     // Gather all tool definitions: registry + subagent + background tasks
@@ -935,9 +954,21 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
     const model  = this.anthropicClient.resolveModel()
     const isOpus46 = this.anthropicClient.isOpus46()
     const supportsThinking = this.anthropicClient.supportsThinking()
+    const provider = this.config._directAuth
+      ? (this.config.provider?.type || 'deepseek')
+      : (this.isOpenAI ? 'openai' : 'anthropic')
 
     // Emit initial context metrics
     onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
+
+    // Emit agent start signal
+    onChunk({ 
+      type: 'agent_step', 
+      id: 'step-init', 
+      title: '🤖 Initializing Agent...', 
+      status: 'in_progress',
+      details: { iteration: 0, model, provider, tools: 0, thinking: false, msgs: 0 }
+    })
 
     // Resolve configured output token limit: per-chat → global config → hardcoded default
     const DEFAULT_MAX_TOKENS = 32768
@@ -1047,6 +1078,14 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
           }
         }
 
+        // ── Prune tool results to reduce context ──
+        const prunedMessages = this.contextManager.pruneToolResults(conversationMessages)
+        if (prunedMessages !== conversationMessages) {
+          conversationMessages.length = 0
+          conversationMessages.push(...prunedMessages)
+          createParams.messages = conversationMessages
+        }
+
         // ── Compaction (Anthropic providers, when context is large) ──
         if (!this.isOpenAI && this.contextManager.shouldCompact()) {
           logger.agent('Applying compaction', { inputTokens: this.contextManager.inputTokens })
@@ -1071,6 +1110,23 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
         let currentTextBlock = ''
         let currentToolUse = null
         let stopReason = null
+
+        // Emit step event for LLM call
+        onChunk({ 
+          type: 'agent_step', 
+          id: `step-llm-${iteration}`, 
+          title: `📡 Calling ${model}...`, 
+          status: 'in_progress',
+          details: {
+            iteration,
+            model,
+            provider,
+            tools: allTools.length,
+            thinking: isOpus46 ? true : supportsThinking,
+            msgs: createParams.messages.length
+          },
+          timestamp: new Date().toISOString()
+        })
 
         logger.agent('stream start', {
           iteration,
@@ -1202,6 +1258,25 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
 
           // ── Handle tool_calls stop reason ──
           if ((stopReason === 'tool_calls' || stopReason === 'stop' && openaiToolCalls.length > 0) && !this.stopped) {
+            onChunk({ 
+              type: 'agent_step', 
+              id: `step-tools-${iteration}`, 
+              title: `🔧 Executing tools (${openaiToolCalls.length})...`, 
+              status: 'in_progress',
+              details: { 
+                iteration,
+                model,
+                provider,
+                tools: openaiToolCalls.length,
+                currentTools: openaiToolCalls.map(tc => tc.name).join(', '),
+                thinking: false,
+                msgs: createParams.messages.length,
+                inputTokens: this.contextManager.inputTokens,
+                outputTokens: this.contextManager.outputTokens
+              },
+              timestamp: new Date().toISOString()
+            })
+
             const toolResults = await Promise.race([
               Promise.all(
               assistantContent
@@ -1448,6 +1523,25 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
 
           // ── Handle tool_use stop reason ──
           if (stopReason === 'tool_use' && !this.stopped) {
+            const toolUseBlocks = assistantContent.filter(b => b.type === 'tool_use')
+            onChunk({
+              type: 'agent_step',
+              id: `step-tools-${iteration}`,
+              title: `🔧 Executing tools (${toolUseBlocks.length})...`,
+              status: 'in_progress',
+              details: {
+                iteration,
+                model,
+                provider,
+                tools: toolUseBlocks.length,
+                currentTools: toolUseBlocks.map(b => b.name).join(', '),
+                thinking: isOpus46 ? true : supportsThinking,
+                msgs: conversationMessages.length,
+                inputTokens: this.contextManager.inputTokens,
+                outputTokens: this.contextManager.outputTokens
+              },
+              timestamp: new Date().toISOString()
+            })
             const toolResults = await Promise.race([
               Promise.all(
               assistantContent
@@ -1568,6 +1662,24 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
 
       // Final context metrics
       onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
+
+      // Emit completion step
+      onChunk({ 
+        type: 'agent_step', 
+        id: 'step-complete', 
+        title: '✅ Agent Complete', 
+        status: 'completed',
+        details: {
+          iteration,
+          model,
+          provider,
+          msgs: conversationMessages.length,
+          totalTokens: this.contextManager.inputTokens + this.contextManager.outputTokens,
+          inputTokens: this.contextManager.inputTokens,
+          outputTokens: this.contextManager.outputTokens
+        },
+        timestamp: new Date().toISOString()
+      })
 
       return finalText
     } catch (err) {

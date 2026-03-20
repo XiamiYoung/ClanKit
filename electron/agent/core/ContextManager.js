@@ -81,6 +81,94 @@ class ContextManager {
   }
 
   /**
+   * Two-stage tool result pruning to reduce context before compaction.
+   * Stage 1 (soft trim): large tool results → keep head + tail, remove middle.
+   * Stage 2 (hard clear): if still too big → replace old tool results with placeholder.
+   * Protects last KEEP_LAST_ASSISTANTS assistant messages from any pruning.
+   */
+  pruneToolResults(messages) {
+    const SOFT_TRIM_THRESHOLD_CHARS = 4000
+    const HEAD_CHARS = 1500
+    const TAIL_CHARS = 1500
+    const HARD_CLEAR_RATIO = 0.5
+    const KEEP_LAST_ASSISTANTS = 3
+    const CHARS_PER_TOKEN = 4
+
+    if (!messages || messages.length === 0) return messages
+
+    // Find cutoff: protect last N assistant messages
+    let assistantCount = 0
+    let cutoffIdx = messages.length
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') {
+        assistantCount++
+        if (assistantCount >= KEEP_LAST_ASSISTANTS) {
+          cutoffIdx = i
+          break
+        }
+      }
+    }
+
+    const msgs = messages.slice()
+
+    // Stage 1: soft trim large tool results before cutoff
+    for (let i = 0; i < cutoffIdx; i++) {
+      const msg = msgs[i]
+      if (msg.role !== 'tool' && !(msg.role === 'user' && Array.isArray(msg.content))) continue
+
+      // Anthropic tool_result format
+      if (msg.role === 'user' && Array.isArray(msg.content)) {
+        const toolResultBlock = msg.content.find(b => b.type === 'tool_result')
+        if (toolResultBlock && typeof toolResultBlock.content === 'string') {
+          const content = toolResultBlock.content
+          if (content.length > SOFT_TRIM_THRESHOLD_CHARS) {
+            const trimmed = content.slice(0, HEAD_CHARS) +
+              `\n...\n[Tool result trimmed: kept first ${HEAD_CHARS} and last ${TAIL_CHARS} chars of ${content.length} chars]\n...\n` +
+              content.slice(-TAIL_CHARS)
+            const newContent = msg.content.map(b =>
+              b.type === 'tool_result' ? { ...b, content: trimmed } : b
+            )
+            msgs[i] = { ...msg, content: newContent }
+          }
+        }
+      }
+      // OpenAI tool format
+      if (msg.role === 'tool' && typeof msg.content === 'string') {
+        const content = msg.content
+        if (content.length > SOFT_TRIM_THRESHOLD_CHARS) {
+          msgs[i] = { ...msg, content:
+            content.slice(0, HEAD_CHARS) +
+            `\n...\n[Tool result trimmed: kept first ${HEAD_CHARS} and last ${TAIL_CHARS} chars]\n...\n` +
+            content.slice(-TAIL_CHARS)
+          }
+        }
+      }
+    }
+
+    // Stage 2: hard clear if total chars still over threshold
+    const totalChars = msgs.reduce((sum, m) => sum + JSON.stringify(m).length, 0)
+    const maxChars = MAX_CONTEXT_TOKENS * CHARS_PER_TOKEN
+    if (totalChars / maxChars < HARD_CLEAR_RATIO) return msgs
+
+    for (let i = 0; i < cutoffIdx; i++) {
+      const msg = msgs[i]
+      if (msg.role === 'user' && Array.isArray(msg.content)) {
+        const hasToolResult = msg.content.some(b => b.type === 'tool_result')
+        if (hasToolResult) {
+          msgs[i] = { ...msg, content: msg.content.map(b =>
+            b.type === 'tool_result' ? { ...b, content: '[Old tool result cleared]' } : b
+          )}
+        }
+      }
+      if (msg.role === 'tool') {
+        msgs[i] = { ...msg, content: '[Old tool result cleared]' }
+      }
+    }
+
+    return msgs
+  }
+
+  /**
    * Local truncation for non-Opus models: trim older messages keeping
    * the system context and the last N messages.
    */
