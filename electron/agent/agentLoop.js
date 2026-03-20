@@ -24,6 +24,9 @@ const { mcpManager }       = require('./mcp/McpManager')
 const { PermissionGate }   = require('./tools/PermissionGate')
 
 const MAX_CONTEXT_TURNS = 20  // max user/assistant turn pairs sent to LLM
+const FLUSH_INTERVAL    = 20  // flush every N completed assistant turns
+
+const { MemoryFlush } = require('./core/MemoryFlush')
 
 // No hardcoded skill prompts — they arrive dynamically from the UI store
 
@@ -125,6 +128,18 @@ function prepareSoulContent(content) {
   if (size < 4096) return content
   if (size < 16384) return extractKeySections(content)
   return extractKeySections(content) + '\n\n(Warning: Soul memory is large. Consider pruning old entries.)'
+}
+
+/**
+ * Read a file if it exists. Returns null if missing or on error.
+ */
+function readFileIfExists(filePath) {
+  try {
+    if (fs.existsSync(filePath)) return fs.readFileSync(filePath, 'utf8')
+  } catch (err) {
+    logger.error('readFileIfExists error', err.message)
+  }
+  return null
 }
 
 /**
@@ -423,7 +438,7 @@ class AgentLoop {
    * @param {Array<string|{id:string, name:string, systemPrompt?:string}>} enabledSkills
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
-  buildSystemPrompt(enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, groupChatContext, agentTone, agentVerbosityLevel, agentPersonalityTags } = {}, userSoulContent, systemSoulContent, participantSouls) {
+  buildSystemPrompt(enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, groupChatContext, agentTone, agentVerbosityLevel, agentPersonalityTags } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}) {
     // When a named agent is active, use it as the opening identity (highest priority).
     // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
     let openingIdentity
@@ -620,6 +635,24 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
       system += `\nSMTP TOOLS: ${toolIds}`
     }
 
+    // ── Memory context injection ──
+    const { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd } = memoryContext
+
+    if (userMd) {
+      system += `\n\n## User Profile\n${prepareSoulContent(userMd)}`
+    }
+
+    if (agentMemoryMd) {
+      system += `\n\n## My Knowledge Base\n${prepareSoulContent(agentMemoryMd)}`
+    }
+
+    const logSections = []
+    if (yesterdayLogMd) logSections.push(`### Yesterday\n${yesterdayLogMd.trim()}`)
+    if (todayLogMd)     logSections.push(`### Today\n${todayLogMd.trim()}`)
+    if (logSections.length > 0) {
+      system += `\n\n## Recent Session Logs\n${logSections.join('\n\n')}`
+    }
+
     return system
   }
 
@@ -714,6 +747,31 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
     // Store HTTP tools for injection
     this.httpTools = httpTools || []
 
+    // ── Memory flush state ──
+    let turnsSinceFlush = 0
+
+    const runFlushIfNeeded = async (reason) => {
+      const agentId = agentPrompts?.systemAgentId
+      if (!agentId || !this.config.memoryDir) return
+      const logsDir = path.join(this.config.memoryDir, 'agents', agentId, 'memory')
+      const um = this.config.utilityModel
+      if (!um?.provider || !um?.model) return
+      const providerCfg = this.config[um.provider]
+      if (!providerCfg?.apiKey || !providerCfg?.baseURL) return
+
+      const flusher = new MemoryFlush({
+        model:    um.model,
+        apiKey:   providerCfg.apiKey,
+        baseURL:  providerCfg.baseURL,
+        isOpenAI: um.provider === 'openai' || um.provider === 'deepseek',
+      })
+      logger.agent(`[AgentLoop] memory flush triggered (${reason})`, { agentId })
+      await flusher.run(conversationMessages, agentId, logsDir).catch(err =>
+        logger.error('[AgentLoop] flush error (non-fatal)', err.message)
+      )
+      turnsSinceFlush = 0
+    }
+
     // Load tools for enabled agents
     this.toolRegistry.loadForAgents(enabledAgents || [])
 
@@ -746,7 +804,35 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
       }
     }
 
-    const systemPrompt = this.buildSystemPrompt(enabledAgents, enabledSkills, agentPrompts, userSoulContent, systemSoulContent, participantSouls)
+    // ── Load per-agent memory files ──
+    const memoryDir    = this.config.memoryDir
+    let agentMemoryMd  = null
+    let userMd         = null
+    let todayLogMd     = null
+    let yesterdayLogMd = null
+
+    if (memoryDir && agentPrompts?.systemAgentId) {
+      const agentId   = agentPrompts.systemAgentId
+      const agentDir  = path.join(memoryDir, 'agents', agentId)
+      const logsDir   = path.join(agentDir, 'memory')
+      const now       = new Date()
+      const today     = now.toISOString().slice(0, 10)
+      const yesterday = new Date(now - 86400000).toISOString().slice(0, 10)
+
+      agentMemoryMd   = readFileIfExists(path.join(agentDir, 'MEMORY.md'))
+      todayLogMd      = readFileIfExists(path.join(logsDir, `${today}.md`))
+      yesterdayLogMd  = readFileIfExists(path.join(logsDir, `${yesterday}.md`))
+    }
+    if (memoryDir && agentPrompts?.userAgentId) {
+      const userId = agentPrompts.userAgentId
+      userMd = readFileIfExists(path.join(memoryDir, 'users', userId, 'USER.md'))
+    }
+
+    const systemPrompt = this.buildSystemPrompt(
+      enabledAgents, enabledSkills, agentPrompts,
+      userSoulContent, systemSoulContent, participantSouls,
+      { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd }
+    )
 
     // If a per-agent assigned task was dispatched, replace the last user message
     // with just that task so the LLM never sees other agents' task sections.
@@ -1071,11 +1157,17 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
         if (this._compactionRequested) {
           this._compactionRequested = false
           if (!this.isOpenAI) {
+            await runFlushIfNeeded('manual-compact')
             logger.agent('Manual compaction requested', { inputTokens: this.contextManager.inputTokens })
             Object.assign(createParams, this.contextManager.applyCompaction(createParams))
             this.contextManager.compactionCount++
             onChunk({ type: 'compaction', message: 'Manual compaction applied' })
           }
+        }
+
+        // ── Memory flush before compaction ──
+        if (this.contextManager.shouldCompact()) {
+          await runFlushIfNeeded('pre-compaction')
         }
 
         // ── Prune tool results to reduce context ──
@@ -1649,6 +1741,12 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
           } else {
             if (stopReason === 'max_tokens') {
               onChunk({ type: 'max_tokens_reached', limit: configuredMaxTokens })
+            } else if (stopReason === 'end_turn') {
+              // Increment turn counter; trigger periodic flush
+              turnsSinceFlush++
+              if (turnsSinceFlush >= FLUSH_INTERVAL) {
+                await runFlushIfNeeded('interval')
+              }
             }
             break
           }

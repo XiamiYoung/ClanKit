@@ -4326,6 +4326,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       loopConfig.artifactPath = groupCfg.artifactPath || groupCfg.artyfactPath || ''
       loopConfig.skillsPath   = groupCfg.skillsPath   || ''
       loopConfig.DoCPath      = groupCfg.DoCPath      || ''
+      loopConfig.memoryDir    = MEMORY_DIR
       const loop = new AgentLoop(loopConfig)
       activeLoops.set(loopKey, loop)
       activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
@@ -4448,6 +4449,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
   loopConfig.skillsPath   = fullCfg.skillsPath   || ''
   loopConfig.DoCPath      = fullCfg.DoCPath      || ''
+  loopConfig.memoryDir    = MEMORY_DIR
   const loop = new AgentLoop(loopConfig)
   activeLoops.set(chatId, loop)
   activeLoopMeta.set(chatId, { chatId, agentId: agentPrompts?.systemAgentId || null, agentName: null, isGroup: false })
@@ -4606,6 +4608,7 @@ ipcMain.handle('agent:run-additional', async (event, { chatId, messages, config,
     loopConfig.artifactPath = groupCfg.artifactPath || groupCfg.artyfactPath || ''
     loopConfig.skillsPath   = groupCfg.skillsPath   || ''
     loopConfig.DoCPath      = groupCfg.DoCPath      || ''
+    loopConfig.memoryDir    = MEMORY_DIR
     const loop = new AgentLoop(loopConfig)
     activeLoops.set(loopKey, loop)
     activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
@@ -4995,6 +4998,7 @@ ipcMain.handle('agent:doc-run', async (event, {
     loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
     loopConfig.skillsPath   = fullCfg.skillsPath   || ''
     loopConfig.DoCPath      = fullCfg.DoCPath      || ''
+    loopConfig.memoryDir    = MEMORY_DIR
 
     const loop = new AgentLoop(loopConfig)
     _activeDocLoops.set(requestId, loop)
