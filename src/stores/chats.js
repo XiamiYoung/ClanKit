@@ -788,6 +788,15 @@ export const useChatsStore = defineStore('chats', () => {
     if (!chat) return
     chat.groupAgentIds = chat.groupAgentIds.filter(id => id !== agentId)
     if (chat.groupAgentOverrides) delete chat.groupAgentOverrides[agentId]
+    // Auto-downgrade to single mode when only 1 agent remains
+    if (chat.groupAgentIds.length <= 1) {
+      chat.isGroupChat = false
+      if (chat.groupAgentIds.length === 1) {
+        chat.systemAgentId = chat.groupAgentIds[0]
+      }
+      chat.groupAgentIds = []
+      chat.groupAgentOverrides = {}
+    }
     chat.updatedAt = Date.now()
     await persistChat(chatId)
     await persistIndex()
@@ -1156,8 +1165,9 @@ export const useChatsStore = defineStore('chats', () => {
     await ensureMessages(chatId)
     activeChatId.value = chatId
 
-    // Add user message
-    await addMessage(chatId, { role: 'user', content: text })
+    // Add user message (stamp userAgentId for agent-switch tracking)
+    const stampUsrId = targetChat.userAgentId || agentsStore.defaultUserAgent?.id || null
+    await addMessage(chatId, { role: 'user', content: text, ...(stampUsrId ? { userAgentId: stampUsrId } : {}) })
 
     // Streaming placeholder
     const streamingMsgId = uuidv4()
@@ -1165,13 +1175,10 @@ export const useChatsStore = defineStore('chats', () => {
 
     targetChat.isRunning = true
 
-    // Build API messages (history before this send)
-    const apiMessages = (targetChat.messages || [])
-      .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
-      .map(m => ({ role: m.role, content: m.content }))
-
-    // Resolve agent + provider
-    const sysAgentId = targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id
+    // Resolve agent + provider — prefer groupAgentIds[0] over systemAgentId
+    // because after agent switches the persisted systemAgentId may be stale.
+    const sysAgentId = (targetChat.groupAgentIds?.length > 0 ? targetChat.groupAgentIds[0] : null)
+      || targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id
     const sysAgent   = sysAgentId ? agentsStore.getAgentById(sysAgentId) : agentsStore.defaultSystemAgent
     const chatProvider = sysAgent?.providerId || 'anthropic'
     const cfg = { ...configStore.config }
@@ -1184,7 +1191,60 @@ export const useChatsStore = defineStore('chats', () => {
 
     const usrAgentId = targetChat.userAgentId
     const usrAgent   = usrAgentId ? agentsStore.getAgentById(usrAgentId) : agentsStore.defaultUserAgent
-    const userAgentPrompt = usrAgent?.prompt || null
+
+    // Scan for previous agents first (needed for both prefixes and handover note)
+    const currentSysId = sysAgent?.id || null
+    const currentUsrId = usrAgent?.id || null
+    const prevSysIds = new Set()
+    const prevUsrIds = new Set()
+    for (const m of (targetChat.messages || [])) {
+      if (m.role === 'assistant' && m.agentId && m.agentId !== currentSysId) prevSysIds.add(m.agentId)
+      if (m.role === 'user' && m.userAgentId && m.userAgentId !== currentUsrId) prevUsrIds.add(m.userAgentId)
+    }
+    const hasSysSwitch = prevSysIds.size > 0
+    const hasUsrSwitch = prevUsrIds.size > 0
+
+    // Build API messages with identity-aware prefixes for agent switches
+    const apiMessages = (targetChat.messages || [])
+      .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
+      .map(m => {
+        let content = m.content
+        if (m.role === 'assistant') {
+          if (m.agentId && m.agentId !== currentSysId) {
+            const prev = agentsStore.getAgentById(m.agentId)
+            content = `[${prev?.name || 'Previous Assistant'}]: ${content}`
+          } else if (!m.agentId && hasSysSwitch) {
+            content = `[Previous Assistant]: ${content}`
+          }
+        } else if (m.role === 'user') {
+          if (m.userAgentId && m.userAgentId !== currentUsrId) {
+            const prev = agentsStore.getAgentById(m.userAgentId)
+            content = `[${prev?.name || 'Previous User'}]: ${content}`
+          } else if (!m.userAgentId && hasUsrSwitch) {
+            content = `[Previous User]: ${content}`
+          }
+        }
+        return { role: m.role, content }
+      })
+    let chatHandoverNote = null
+    if (prevSysIds.size > 0 || prevUsrIds.size > 0) {
+      const parts = []
+      for (const id of prevSysIds) {
+        const a = agentsStore.getAgentById(id)
+        if (a) parts.push(`Previous assistant "${a.name}" (messages prefixed with [${a.name}]:) is no longer active.`)
+      }
+      for (const id of prevUsrIds) {
+        const a = agentsStore.getAgentById(id)
+        if (a) parts.push(`Previous user "${a.name}" (messages prefixed with [${a.name}]:) is no longer in this conversation.`)
+      }
+      if (parts.length > 0) chatHandoverNote = parts.join(' ')
+    }
+
+    // Build userAgentPrompt with name+description prefix (same as main sendMessage path)
+    const userAgentPromptParts = []
+    if (usrAgent?.name) userAgentPromptParts.push(`User: ${usrAgent.name}${usrAgent.description ? ` — ${usrAgent.description}` : ''}.`)
+    if (usrAgent?.prompt) userAgentPromptParts.push(usrAgent.prompt)
+    const fullUserAgentPrompt = userAgentPromptParts.length > 0 ? userAgentPromptParts.join('\n\n') : null
 
     const agentPrompts = {
       systemAgentPrompt:       sysAgent?.prompt || null,
@@ -1192,7 +1252,10 @@ export const useChatsStore = defineStore('chats', () => {
       systemAgentDescription:  sysAgent?.description || null,
       systemAgentId:           sysAgent?.id || '__default_system__',
       userAgentId:             usrAgent?.id || '__default_user__',
-      userAgentPrompt: userAgentPrompt,
+      userAgentName:           usrAgent?.name || null,
+      userAgentDescription:    usrAgent?.description || null,
+      userAgentPrompt:         fullUserAgentPrompt,
+      ...(chatHandoverNote ? { chatHandoverNote } : {}),
     }
 
     try {

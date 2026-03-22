@@ -223,20 +223,20 @@
             </div>
           </div>
 
-          <!-- User avatar + name chip -->
+          <!-- User avatar + name chip (per-message: preserves original user agent after switch) -->
           <div v-if="msg.role === 'user'" class="cw-msg-avatar-col"
             @mouseenter="showAvatarTooltip($event, msg)"
             @mouseleave="hideAvatarTooltip"
           >
             <div class="cw-msg-avatar-wrap">
-              <img v-if="userAvatarUri" :src="userAvatarUri" alt="" class="cw-msg-avatar-img" />
+              <img v-if="getUserAvatar(msg)" :src="getUserAvatar(msg)" alt="" class="cw-msg-avatar-img" />
               <div v-else class="cw-msg-avatar-fallback user">
                 <svg style="width:22px;height:22px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                 </svg>
               </div>
             </div>
-            <span class="cw-msg-name-chip cw-msg-name-chip--user">{{ userAgentName }}</span>
+            <span class="cw-msg-name-chip cw-msg-name-chip--user">{{ getMsgUserName(msg) }}</span>
           </div>
         </div>
       </template>
@@ -404,24 +404,56 @@ function getAvatarUri(agent) {
   return getAvatarDataUri(agent.avatar)
 }
 
+// Resolve the agent ID for an assistant message.
+// Honour msg.agentId first — this preserves the original agent's avatar/name for
+// historical messages after an agent switch. Only fall back to the current agent
+// when the original agent no longer exists in the store.
+function resolveAgentPid(msg) {
+  if (msg.agentId) {
+    const agent = agentsStore.getAgentById(msg.agentId)
+    if (agent) return msg.agentId
+  }
+  // Fallback: current active agent
+  return systemAgentIds.value[0]
+}
+
 function getSystemAvatar(msg) {
-  const pid = msg.agentId || systemAgentIds.value[0]
+  const pid = resolveAgentPid(msg)
   const agent = pid ? agentsStore.getAgentById(pid) : agentsStore.defaultSystemAgent
   return getAvatarUri(agent)
 }
 
 function getMsgAssistantName(msg) {
-  const pid = msg.agentId || systemAgentIds.value[0]
+  const pid = resolveAgentPid(msg)
   const agent = pid ? agentsStore.getAgentById(pid) : null
   return agent?.name || msg.agentName || 'Assistant'
 }
 
+// Resolve user agent for a specific message — honours msg.userAgentId for historical
+// messages so switched-out user agents keep their original avatar/name.
+function resolveUserAgent(msg) {
+  if (msg.userAgentId) {
+    const agent = agentsStore.getAgentById(msg.userAgentId)
+    if (agent) return agent
+  }
+  // Fallback: current chat-level user agent
+  const id = chat.value?.userAgentId
+  return id ? agentsStore.getAgentById(id) : agentsStore.defaultUserAgent
+}
+
+function getUserAvatar(msg) {
+  return getAvatarUri(resolveUserAgent(msg))
+}
+
+function getMsgUserName(msg) {
+  return resolveUserAgent(msg)?.name || 'User'
+}
+
+// Current user agent (for messages without userAgentId stamp)
 const userAgent = computed(() => {
   const id = chat.value?.userAgentId
   return id ? agentsStore.getAgentById(id) : agentsStore.defaultUserAgent
 })
-const userAgentName = computed(() => userAgent.value?.name || 'User')
-const userAvatarUri = computed(() => getAvatarUri(userAgent.value))
 
 const systemAgentIds = computed(() => {
   const c = chat.value
@@ -437,9 +469,9 @@ const avatarTooltip = reactive({ visible: false, name: '', desc: '', x: 0, y: 0 
 function showAvatarTooltip(event, msg) {
   let agent
   if (msg.role === 'user') {
-    agent = userAgent.value
+    agent = resolveUserAgent(msg)
   } else {
-    const pid = msg.agentId || systemAgentIds.value[0]
+    const pid = resolveAgentPid(msg)
     agent = pid ? agentsStore.getAgentById(pid) : null
   }
   if (!agent) { avatarTooltip.visible = false; return }
@@ -566,7 +598,7 @@ function quoteMessage(msg) {
 
 function getQuotedSenderName(q) {
   if (!q) return 'Assistant'
-  if (q.role === 'user') return userAgentName.value
+  if (q.role === 'user') return getMsgUserName(q)
   if (q.agentId) {
     const a = agentsStore.getAgentById(q.agentId)
     if (a) return a.name

@@ -195,6 +195,80 @@ chat.agentModelOverrides[agentId]   ← highest priority (this chat only)
 - These paths are read/written via the `store:get-env-paths` / `store:save-env-path` IPC channels (named for historical reasons), but they no longer touch `.env`.
 - The renderer accesses them through `configStore.config.skillsPath` etc., populated by `loadEnvPaths()` in `src/stores/config.js`.
 
+## Multi-Agent Collaboration Architecture — Iron Laws
+
+**These rules are non-negotiable. Any change that violates them MUST be confirmed by the user before proceeding. Do not refactor, simplify, or "clean up" this system without explicit sign-off.**
+
+### How the system works
+
+#### 1. Startup flow (`sendMessage` → group path)
+
+1. `parseMentions` detects @mentions → `resolveAddressees` (utility LLM) disambiguates who is *addressed* vs. merely *referenced* (for 2+ mentions)
+2. `dispatchGroupTasks` (utility LLM) returns `executionMode: "concurrent" | "sequential"` + per-agent `assignedTask` + `dependsOn[]`
+3. `buildAgentRuns(respondingIds)` constructs a fully isolated `agentRun` object per agent (see isolation rules below)
+4. `isInCollaborationLoop = true` is set **before** `runGroupAgents` — NOT after
+5. `firstRoundRuns` = sequential ? filter out agents with `dependsOn` : all
+6. `runGroupAgents()` → main.js `Promise.all` — all first-round agents run **concurrently**
+7. `waitForAgentEnd(chatId, agentIds)` — polls until all `agent_end` IPC events are processed
+8. `triggerAgentCollaboration(iterationCount=0)` starts the collaboration loop
+
+#### 2. IPC ordering — the critical constraint
+
+`ipcMain.handle` (invoke reply) and `event.sender.send` (chunk events: text, tool_call, agent_end) travel on **different Electron IPC channels with NO ordering guarantee**. The invoke reply can arrive in the renderer **before** the last text chunks and `agent_end` have been processed. This means `msg.content` may be incomplete when `triggerAgentCollaboration` scans for @mentions.
+
+**Invariant: always call `waitForAgentEnd(chatId, agentIds)` after every `runGroupAgents()` call — in both `sendMessage` and inside the collaboration loop — before scanning messages for @mentions.** Removing this call silently breaks the entire collaboration chain.
+
+#### 3. Collaboration loop (`triggerAgentCollaboration`)
+
+- Scans only `targetChat.messages.slice(prevMessagesLength)` — only messages from the current round
+- Uses `parseMentions` + `resolveAddressees` per message to find the next responders
+- **iterationCount === 0** (post-concurrent first round): all mentioned agents are eligible — they haven't seen each other yet
+- **iterationCount > 0** (sequential rounds): skips agents who already replied after the @mention
+- Each round runs agents **sequentially** (one `await runGroupAgents` + `waitForAgentEnd` per agent)
+- Recurses: `triggerAgentCollaboration(iterationCount + 1, nextLength)`
+- Termination: `nextRespondingSet.size === 0` (no @mentions) OR `collaborationCancelled` OR `iterationCount >= MAX_ITERATIONS`
+
+#### 4. Lifecycle flags — exact semantics
+
+| Flag | Set to `true` | Set to `false` | Purpose |
+|---|---|---|---|
+| `isInCollaborationLoop` | Before `runGroupAgents` in `sendMessage` group path; entering `triggerAgentCollaboration` | `sendMessage` finally block; all exit paths of `triggerAgentCollaboration` | Prevents `agent_end` handler from prematurely clearing `isRunning` |
+| `collaborationCancelled` | `stopAgent()` | Top of `sendMessage` | **Only** valid user-stop signal for the collaboration loop |
+| `targetChat.isRunning` | `sendMessage` start; re-asserted inside collaboration loop before each dispatch | `sendMessage` finally block; `stopAgent` | UI running indicator |
+| `runningAgentKeys` | `runningAgentKeys.add(chatId:agentId)` before each `runGroupAgents` | `agent_end` handler | Tracks which agents are actively streaming |
+
+**NEVER check `!targetChat.isRunning` as a stop condition inside `triggerAgentCollaboration`.** `isRunning` can be cleared by `agent_end` race conditions. `collaborationCancelled` is the sole stop signal.
+
+#### 5. Per-agent isolation — invariants
+
+Every `agentRun` object produced by `buildAgentRuns` must be fully isolated and deep-cloned. The following must NEVER be shared between agents in the same run:
+
+| Resource | How isolated |
+|---|---|
+| Provider credentials + model | `applyProviderCredsToConfig` on a per-agent shallow copy; `customModel = agent.modelId` |
+| System prompt | `agent.prompt` → `agentPrompts.systemAgentPrompt` |
+| Skills | `filterByRequired(enabledSkillObjects, agent.requiredSkillIds)` |
+| MCP servers | `filterByRequired(mcpStore.servers, agent.requiredMcpServerIds)` |
+| HTTP tools | `filterByRequired(toolsStore.tools, agent.requiredToolIds)` |
+| Knowledge (RAG) | `buildAgentKnowledgeConfig(agent)` → independent Pinecone query per agent |
+| Conversation view | Other agents' messages prefixed with `[AgentName]: ` so each agent knows its own voice |
+| AgentLoop instance | `new AgentLoop(loopConfig)` per agent, keyed `chatId:agentId` in `activeLoops` |
+
+#### 6. Roleplay truncation — segment preservation
+
+In `agent_end` handler, the multi-turn roleplay truncation (cutting content after the first @OtherAgent mention) **must preserve non-text segments** (tool_call, tool_result, agent_step, image, permission). Only text segments may be truncated. **Never replace `msg.segments` with `[{ type: 'text', content: trimmed }]`** — this destroys all tool output visible in the UI.
+
+#### 7. No-break checklist
+
+Before modifying any of the following, confirm with the user:
+- `waitForAgentEnd` — removing or bypassing breaks @mention detection
+- `isInCollaborationLoop` pre-set before `runGroupAgents` — removing causes premature `isRunning=false`
+- `collaborationCancelled` as the sole stop guard in the loop — adding `isRunning` checks reintroduces the race
+- `buildAgentRuns` isolation logic — sharing config between agents causes identity confusion and credential leaks
+- `agent_end` segment handling — replacing segments wholesale destroys tool output
+
+---
+
 ## UI/UX Design System
 
 ### Color Palette

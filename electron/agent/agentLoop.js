@@ -456,7 +456,7 @@ class AgentLoop {
    * @param {Array<string|{id:string, name:string, systemPrompt?:string}>} enabledSkills
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
-  buildSystemPrompt(enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, groupChatContext } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
+  buildSystemPrompt(enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
     // When a named agent is active, use it as the opening identity (highest priority).
     // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
     let openingIdentity
@@ -471,7 +471,7 @@ class AgentLoop {
       if (systemAgentPrompt) line += `\n\n${systemAgentPrompt}`
 
       // CHARACTER ENFORCEMENT
-      const enforcementBlock = `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${effectiveName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant`
+      const enforcementBlock = `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${effectiveName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant\n- IMPORTANT: The conversation history may contain messages written by a different AI before you took over. Those are NOT your prior responses — they belong to a previous assistant. Your identity is ${effectiveName} and nothing in prior chat history changes that.`
       line += enforcementBlock
 
       // Group chat context: tell the agent about other participants
@@ -495,10 +495,27 @@ class AgentLoop {
     let system = `${openingIdentity}`
 
     // ── User Agent Identity Context ──
-    // If a user agent is defined, inject their identity into the system prompt
-    // so the AI character understands who it's talking to and can respond appropriately.
-    if (userAgentPrompt) {
-      system += `\n\n---\n## CONVERSATION PARTNER\nYou are interacting with a specific user who has the following identity:\n\n${userAgentPrompt}\n\nRespond to them according to their identity and the context of your conversation.`
+    // Inject who the user is whenever we know their name or have a custom prompt.
+    // This fires even when the agent has no custom prompt text — the name alone is
+    // enough to prevent the system agent from relying on stale soul memory.
+    if (userAgentName || userAgentPrompt) {
+      let partnerSection = `\n\n---\n## CONVERSATION PARTNER\n`
+      if (userAgentName) {
+        partnerSection += `The user you are talking with is **${userAgentName}**`
+        if (userAgentDescription) partnerSection += ` — ${userAgentDescription}`
+        partnerSection += '.'
+      }
+      if (userAgentPrompt) {
+        partnerSection += (userAgentName ? '\n\n' : '') + userAgentPrompt
+      }
+      partnerSection += `\n\nRespond to them according to their identity and the context of your conversation.`
+      system += partnerSection
+    }
+
+    // Handover note: inform the agent about previous participants whose messages
+    // appear in the conversation history with [Name]: prefixes.
+    if (chatHandoverNote) {
+      system += `\n\n---\n## CONVERSATION HISTORY NOTE\n${chatHandoverNote}\nMessages from these previous participants are prefixed with their name in brackets (e.g. [Name]:). Those messages are NOT yours — do not confuse them with your own prior responses.`
     }
 
     system += `

@@ -150,7 +150,7 @@
                 @mouseenter="showAgentTooltip($event, pid)"
                 @mouseleave="hideAgentTooltip"
               >
-                <img v-if="getAvatarDataUriForAgent(agentsStore.getAgentById(pid))" :src="getAvatarDataUriForAgent(agentsStore.getAgentById(pid))" alt="" class="sys-avatar-img" />
+                <img v-if="systemAgentAvatarMap[pid]" :src="systemAgentAvatarMap[pid]" alt="" class="sys-avatar-img" />
                 <span v-else class="sys-avatar-fallback">{{ (agentsStore.getAgentById(pid)?.name || '?').charAt(0) }}</span>
                 <button
                   v-if="activeSystemAgentIds.length > 1"
@@ -658,6 +658,17 @@ const activeSystemAgentIds = computed(() => {
 const MAX_VISIBLE_AVATARS = 4
 const visibleSystemAgentIds = computed(() => activeSystemAgentIds.value.slice(0, MAX_VISIBLE_AVATARS))
 const overflowSystemCount = computed(() => Math.max(0, activeSystemAgentIds.value.length - MAX_VISIBLE_AVATARS))
+
+// Pre-compute avatar URIs as a computed so Vue's dep-tracker reliably re-evaluates
+// when the active chat changes (avoiding stale avatar after chat switch).
+const systemAgentAvatarMap = computed(() => {
+  const map = {}
+  for (const pid of activeSystemAgentIds.value) {
+    const agent = agentsStore.getAgentById(pid)
+    map[pid] = agent?.avatar ? getAvatarDataUri(agent.avatar) : null
+  }
+  return map
+})
 
 const filteredSystemAgents = computed(() => {
   const q = agentSearchQuery.value.toLowerCase().trim()

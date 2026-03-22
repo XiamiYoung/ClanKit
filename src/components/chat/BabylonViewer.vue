@@ -33,13 +33,72 @@ const canvasEl = ref(null)
 const loading = ref(true)
 const error = ref(null)
 
-let engine = null
-let scene = null
-let camera = null
-let initialCameraState = null
+let activeInstance = null
+let initVersion = 0
+
+function createInstance() {
+  return {
+    engine: null,
+    scene: null,
+    camera: null,
+    initialCameraState: null,
+    loadPromise: null,
+    disposePromise: null,
+    disposed: false,
+    disposeRequested: false
+  }
+}
+
+function disposeInstance(instance) {
+  if (!instance || instance.disposed) return
+
+  instance.disposed = true
+
+  try {
+    instance.camera?.detachControl(canvasEl.value)
+  } catch {}
+
+  try {
+    instance.engine?.stopRenderLoop()
+  } catch {}
+
+  try {
+    instance.scene?.dispose()
+  } catch {}
+
+  try {
+    instance.engine?.dispose()
+  } catch {}
+
+  instance.engine = null
+  instance.scene = null
+  instance.camera = null
+  instance.initialCameraState = null
+}
+
+function scheduleDispose(instance) {
+  if (!instance) return Promise.resolve()
+  if (instance.disposePromise) return instance.disposePromise
+
+  instance.disposeRequested = true
+
+  const finalize = () => {
+    disposeInstance(instance)
+    if (activeInstance === instance) activeInstance = null
+  }
+
+  instance.disposePromise = Promise.resolve(instance.loadPromise)
+    .catch(() => {})
+    .then(finalize)
+
+  return instance.disposePromise
+}
 
 async function initScene() {
-  if (!canvasEl.value) return
+  if (!canvasEl.value || !props.src) return
+
+  const version = ++initVersion
+  let instance = null
 
   loading.value = true
   error.value = null
@@ -48,29 +107,34 @@ async function initScene() {
     const BABYLON = await import('@babylonjs/core')
     await import('@babylonjs/loaders')
 
-    engine = new BABYLON.Engine(canvasEl.value, true, {
+    if (version !== initVersion || !canvasEl.value) return
+
+    instance = createInstance()
+    activeInstance = instance
+
+    instance.engine = new BABYLON.Engine(canvasEl.value, true, {
       preserveDrawingBuffer: true,
       stencil: true
     })
 
-    scene = new BABYLON.Scene(engine)
-    scene.clearColor = new BABYLON.Color4(0.96, 0.96, 0.96, 1)
+    instance.scene = new BABYLON.Scene(instance.engine)
+    instance.scene.clearColor = new BABYLON.Color4(0.96, 0.96, 0.96, 1)
 
     // Camera
-    camera = new BABYLON.ArcRotateCamera(
+    instance.camera = new BABYLON.ArcRotateCamera(
       'cam', Math.PI / 4, Math.PI / 3, 10,
-      BABYLON.Vector3.Zero(), scene
+      BABYLON.Vector3.Zero(), instance.scene
     )
-    camera.attachControl(canvasEl.value, true)
-    camera.wheelPrecision = 30
-    camera.minZ = 0.01
-    camera.lowerRadiusLimit = 0.5
-    camera.panningSensibility = 80
+    instance.camera.attachControl(canvasEl.value, true)
+    instance.camera.wheelPrecision = 30
+    instance.camera.minZ = 0.01
+    instance.camera.lowerRadiusLimit = 0.5
+    instance.camera.panningSensibility = 80
 
     // Lights
-    const hemi = new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, 0), scene)
+    const hemi = new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, 0), instance.scene)
     hemi.intensity = 0.8
-    const dir = new BABYLON.DirectionalLight('dir', new BABYLON.Vector3(-1, -2, 1), scene)
+    const dir = new BABYLON.DirectionalLight('dir', new BABYLON.Vector3(-1, -2, 1), instance.scene)
     dir.intensity = 0.6
 
     // Load model
@@ -85,7 +149,15 @@ async function initScene() {
       fileName = url
     }
 
-    const result = await BABYLON.SceneLoader.ImportMeshAsync('', rootUrl, fileName, scene)
+    instance.loadPromise = BABYLON.SceneLoader.ImportMeshAsync('', rootUrl, fileName, instance.scene)
+    const result = await instance.loadPromise
+
+    if (instance.disposed || version !== initVersion || activeInstance !== instance) {
+      if (activeInstance !== instance) {
+        disposeInstance(instance)
+      }
+      return
+    }
 
     // Frame the loaded model
     if (result.meshes.length > 0) {
@@ -102,63 +174,76 @@ async function initScene() {
       }
       const center = BABYLON.Vector3.Center(min, max)
       const size = max.subtract(min).length()
-      camera.target = center
-      camera.radius = size * 1.5
-      camera.alpha = Math.PI / 4
-      camera.beta = Math.PI / 3
+      instance.camera.target = center
+      instance.camera.radius = size * 1.5
+      instance.camera.alpha = Math.PI / 4
+      instance.camera.beta = Math.PI / 3
     }
 
     // Save initial camera state
-    initialCameraState = {
-      alpha: camera.alpha,
-      beta: camera.beta,
-      radius: camera.radius,
-      target: camera.target.clone()
+    instance.initialCameraState = {
+      alpha: instance.camera.alpha,
+      beta: instance.camera.beta,
+      radius: instance.camera.radius,
+      target: instance.camera.target.clone()
     }
 
-    engine.runRenderLoop(() => scene.render())
+    instance.engine.runRenderLoop(() => {
+      if (!instance.disposed && !instance.scene?.isDisposed) {
+        instance.scene.render()
+      }
+    })
 
     loading.value = false
   } catch (e) {
+    if (version !== initVersion) return
+    if (instance) {
+      disposeInstance(instance)
+      if (activeInstance === instance) activeInstance = null
+    }
     console.error('BabylonViewer load error:', e)
     error.value = 'Failed to load 3D model'
     loading.value = false
+  } finally {
+    if (instance?.disposeRequested) {
+      void scheduleDispose(instance)
+    }
   }
 }
 
 function resetCamera() {
-  if (!camera || !initialCameraState) return
-  camera.alpha = initialCameraState.alpha
-  camera.beta = initialCameraState.beta
-  camera.radius = initialCameraState.radius
-  camera.target = initialCameraState.target.clone()
+  const instance = activeInstance
+  if (!instance?.camera || !instance.initialCameraState) return
+  instance.camera.alpha = instance.initialCameraState.alpha
+  instance.camera.beta = instance.initialCameraState.beta
+  instance.camera.radius = instance.initialCameraState.radius
+  instance.camera.target = instance.initialCameraState.target.clone()
 }
 
 function handleResize() {
-  engine?.resize()
+  activeInstance?.engine?.resize()
 }
 
 onMounted(() => {
-  initScene()
+  void initScene()
   window.addEventListener('resize', handleResize)
 })
 
 onBeforeUnmount(() => {
+  initVersion += 1
   window.removeEventListener('resize', handleResize)
-  engine?.stopRenderLoop()
-  scene?.dispose()
-  engine?.dispose()
-  engine = null
-  scene = null
-  camera = null
+  void scheduleDispose(activeInstance)
+  activeInstance = null
 })
 
-watch(() => props.src, () => {
-  if (scene) {
-    scene.dispose()
-    engine?.stopRenderLoop()
-  }
-  initScene()
+watch(() => props.src, async (newSrc, oldSrc) => {
+  if (!newSrc || newSrc === oldSrc) return
+
+  initVersion += 1
+  const previousInstance = activeInstance
+  activeInstance = null
+  await scheduleDispose(previousInstance)
+  await initScene()
 })
 </script>
 

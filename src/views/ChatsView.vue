@@ -2586,7 +2586,13 @@ function setupVoiceListeners() {
 function addVoiceMessageToChat(role, content) {
   const chatId = voiceStore.activeChatId
   if (!chatId || !content) return
-  chatsStore.addMessage(chatId, { role, content, fromVoice: true })
+  const extra = {}
+  if (role === 'user') {
+    const chat = chatsStore.chats.find(c => c.id === chatId)
+    const uid = chat?.userAgentId || agentsStore.defaultUserAgent?.id
+    if (uid) extra.userAgentId = uid
+  }
+  chatsStore.addMessage(chatId, { role, content, fromVoice: true, ...extra })
   // If the call's chat isn't the one currently visible, switch to it
   if (chatsStore.activeChatId !== chatId) {
     chatsStore.setActiveChat(chatId)
@@ -4924,12 +4930,30 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPromp
         const p = agentsStore.getAgentById(id)
         return { id, name: p?.name || 'Unknown', description: p?.description || '', prompt: p?.prompt || '' }
       })
+    // Build handover note for user agent switches in group chat
+    const prevUsrIdsGroup = new Set()
+    const curUsrId = usrAgent?.id || null
+    for (const m of targetChat.messages) {
+      if (m.role === 'user' && m.userAgentId && m.userAgentId !== curUsrId) prevUsrIdsGroup.add(m.userAgentId)
+    }
+    let groupHandoverNote = null
+    if (prevUsrIdsGroup.size > 0) {
+      const notes = []
+      for (const id of prevUsrIdsGroup) {
+        const a = agentsStore.getAgentById(id)
+        if (a) notes.push(`Previous user "${a.name}" (messages prefixed with [${a.name}]:) is no longer in this conversation.`)
+      }
+      if (notes.length > 0) groupHandoverNote = notes.join(' ')
+    }
     const agentPrompts = {
       systemAgentPrompt: agent.prompt || '',
       userAgentPrompt: userAgentPrompt || '',
       systemAgentId: pid,
       userAgentId: usrAgent?.id || '__default_user__',
+      userAgentName: usrAgent?.name || null,
+      userAgentDescription: usrAgent?.description || null,
       groupChatContext: { agentName: agent.name, agentDescription: agent.description || '', otherParticipants },
+      ...(groupHandoverNote ? { chatHandoverNote: groupHandoverNote } : {}),
     }
 
     const agentSkills = filterByRequired(enabledSkillObjects.value, agent.requiredSkillIds ?? [])
@@ -4941,6 +4965,7 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPromp
     // are prefixed with "[AgentName]: " so the model can distinguish its own prior
     // responses from other participants' — prevents identity confusion in group chat.
     const otherNamesList = otherParticipants.map(p => p.name).join(', ')
+    const currentUsrId = usrAgent?.id || null
     const agentMessages = targetChat.messages
       .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
       .map(m => {
@@ -4948,6 +4973,11 @@ function buildAgentRuns(respondingIds, groupIds, cfg, targetChat, userAgentPromp
           const other = agentsStore.getAgentById(m.agentId)
           const speakerName = other?.name || 'Agent'
           return { role: 'assistant', content: `[${speakerName}]: ${m.content}` }
+        }
+        if (m.role === 'user' && m.userAgentId && m.userAgentId !== currentUsrId) {
+          const prev = agentsStore.getAgentById(m.userAgentId)
+          const name = prev?.name || 'Previous User'
+          return { role: 'user', content: `[${name}]: ${m.content}` }
         }
         return { role: m.role, content: m.content }
       })
@@ -5165,6 +5195,7 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
     // Other agents' messages are prefixed with "[AgentName]: " so this agent can
     // distinguish its own prior responses from other participants' — prevents
     // identity confusion when group chat history contains mixed voices.
+    const seqCurrentUsrId = usrAgent?.id || null
     const seqApiMessages = targetChat.messages
       .filter(m => {
         // Do NOT filter by !m.streaming — same IPC timing issue as in newMessages
@@ -5178,6 +5209,10 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
           const other = agentsStore.getAgentById(m.agentId)
           const speakerName = other?.name || 'Agent'
           return { role: 'assistant', content: `[${speakerName}]: ${m.content}` }
+        }
+        if (m.role === 'user' && m.userAgentId && m.userAgentId !== seqCurrentUsrId) {
+          const prev = agentsStore.getAgentById(m.userAgentId)
+          return { role: 'user', content: `[${prev?.name || 'Previous User'}]: ${m.content}` }
         }
         return { role: m.role, content: m.content }
       })
@@ -5255,9 +5290,11 @@ async function _fireGroupAgentsDirect(chatId, targetChat, text, agentIds, pendin
 
   // Add user message (skip if caller already added it, e.g. idle/busy split in sendMessage)
   if (!opts.skipUserMessage) {
+    const stampUid = targetChat.userAgentId || agentsStore.defaultUserAgent?.id || null
     await chatsStore.addMessage(chatId, {
       role: 'user',
       content: text,
+      ...(stampUid ? { userAgentId: stampUid } : {}),
       ...(pendingAttachments?.length > 0 ? { attachments: pendingAttachments } : {}),
     })
   }
@@ -5277,7 +5314,12 @@ async function _fireGroupAgentsDirect(chatId, targetChat, text, agentIds, pendin
   const usrAgent = usrAgentId
     ? agentsStore.getAgentById(usrAgentId)
     : agentsStore.defaultUserAgent
-  const userAgentPrompt = usrAgent?.prompt || null
+  // Always include name+description so CONVERSATION PARTNER is injected even
+  // when the user agent has no custom prompt text (works with old agentLoop too).
+  const userAgentPromptParts = []
+  if (usrAgent?.name) userAgentPromptParts.push(`User: ${usrAgent.name}${usrAgent.description ? ` — ${usrAgent.description}` : ''}.`)
+  if (usrAgent?.prompt) userAgentPromptParts.push(usrAgent.prompt)
+  const userAgentPrompt = userAgentPromptParts.length > 0 ? userAgentPromptParts.join('\n\n') : null
 
   const agentRuns = buildAgentRuns(agentIds, groupIds, cfg, targetChat, userAgentPrompt, usrAgent)
   if (agentRuns.length === 0) {
@@ -5492,13 +5534,16 @@ async function sendMessage() {
   // that would otherwise re-enable the scroll lock before scrollToBottom runs.
   programmaticScrollCount++
 
-  // Add user message
+  // Add user message (stamp userAgentId so we can track agent switches in history)
   dbg('adding user message…')
   userMsgId = uuidv4()
+  const stampChat = chatsStore.chats.find(c => c.id === chatId)
+  const stampUserAgentId = stampChat?.userAgentId || agentsStore.defaultUserAgent?.id || null
   await chatsStore.addMessage(chatId, {
     id: userMsgId,
     role: 'user',
     content: displayContent,
+    ...(stampUserAgentId ? { userAgentId: stampUserAgentId } : {}),
     ...(attachmentMeta.length > 0 ? { attachments: attachmentMeta } : {})
   })
 
@@ -5570,23 +5615,34 @@ async function sendMessage() {
 
   targetChat.isRunning = true
 
-  // Build messages for API (user/assistant + tool call summaries in text)
+  // Build messages for API — keep _agentId/_userAgentId metadata so the single-agent
+  // path can prefix messages from previous agents (identity-aware history).
   dbg(`targetChat=${targetChat.id} messages=${targetChat.messages?.length ?? 'N/A'}`)
 
-  const apiMessages = targetChat.messages
+  const apiMessagesRaw = targetChat.messages
     .filter(m => {
       if (m.role === 'user') return !!m.content
       if (m.role === 'assistant' && !m.streaming) return !!(m.content || m.segments?.length)
       return false
     })
-    .map(m => ({ role: m.role, content: m.content }))
+    .map(m => ({ role: m.role, content: m.content, _agentId: m.agentId || null, _userAgentId: m.userAgentId || null }))
     .filter(m => !!m.content)
 
-  // Resolve agent for this run
+  // Resolve agent for this run — use activeSystemAgentIds (honours groupAgentIds fallback)
+  // instead of targetChat.systemAgentId directly, because after agent switches the
+  // persisted systemAgentId may still point to the old agent.
   const sysAgentId = isGroup
     ? null  // group path resolves per-agent below
-    : (targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id)
+    : (activeSystemAgentIds.value[0] || targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id)
   const sysAgent = sysAgentId ? agentsStore.getAgentById(sysAgentId) : agentsStore.defaultSystemAgent
+
+  // Stamp agentId on the single-agent streaming placeholder now that sysAgent is known.
+  // Without this, persisted messages have no agentId, so mid-chat agent switches cannot
+  // detect which AI wrote earlier turns and prevent identity confusion.
+  if (!isGroup && streamingMsgId && sysAgent?.id) {
+    const streamingMsg = targetChat.messages.find(m => m.id === streamingMsgId)
+    if (streamingMsg) streamingMsg.agentId = sysAgent.id
+  }
 
   const chatProvider = sysAgent?.providerId || null
   const cfg = { ...configStore.config }
@@ -5665,7 +5721,7 @@ async function sendMessage() {
       console.warn('[CodingMode] Failed to load CLAUDE.md context:', err)
     }
   }
-  dbg(`runAgent → chatId=${chatId} provider=${chatProvider} model=${resolvedModel || '(default)'} msgs=${apiMessages.length} skills=[${enabledSkills.value.join(',')||'none'}] group=${isGroup}`)
+  dbg(`runAgent → chatId=${chatId} provider=${chatProvider} model=${resolvedModel || '(default)'} msgs=${apiMessagesRaw.length} skills=[${enabledSkills.value.join(',')||'none'}] group=${isGroup}`)
   dbg(`config → baseURL=${cfg.baseURL} apiKey=${cfg.apiKey ? cfg.apiKey.slice(0,8)+'…' : '(empty)'}  openaiApiKey=${cfg.openaiApiKey ? cfg.openaiApiKey.slice(0,8)+'…' : '(empty)'}`)
 
   // Chunks are handled by the persistent handleChunk listener registered in onMounted
@@ -5676,7 +5732,12 @@ async function sendMessage() {
     const usrAgent = usrAgentId
       ? agentsStore.getAgentById(usrAgentId)
       : agentsStore.defaultUserAgent
-    const userAgentPrompt = usrAgent?.prompt || null
+    // Always include name+description so CONVERSATION PARTNER is injected even
+    // when the user agent has no custom prompt text (works with old agentLoop too).
+    const userAgentPromptParts = []
+    if (usrAgent?.name) userAgentPromptParts.push(`User: ${usrAgent.name}${usrAgent.description ? ` — ${usrAgent.description}` : ''}.`)
+    if (usrAgent?.prompt) userAgentPromptParts.push(usrAgent.prompt)
+    const userAgentPrompt = userAgentPromptParts.length > 0 ? userAgentPromptParts.join('\n\n') : null
 
     if (isGroup) {
       // ── GROUP CHAT PATH ──
@@ -5765,7 +5826,7 @@ async function sendMessage() {
       // the user's prompt — no need to hardcode it.
       let dispatchDependsOn = {}  // agentId → [dependentAgentIds]
       let isSequential = false
-      const lastUserContent = apiMessages.findLast(m => m.role === 'user')?.content || ''
+      const lastUserContent = apiMessagesRaw.findLast(m => m.role === 'user')?.content || ''
       if (lastUserContent && window.electronAPI?.dispatchGroupTasks) {
         try {
           const dispatchAgents = respondingIds.map(id => {
@@ -5840,7 +5901,7 @@ async function sendMessage() {
       isInCollaborationLoop.value = true
 
       const msgCountBeforeRun = targetChat.messages.length
-      await runGroupAgents(chatId, targetChat, firstRoundRuns, apiMessages, cfg, pendingAttachments)
+      await runGroupAgents(chatId, targetChat, firstRoundRuns, apiMessagesRaw.map(m => ({ role: m.role, content: m.content })), cfg, pendingAttachments)
 
       // Wait for all agent_end IPC events to arrive before scanning for @mentions.
       // The invoke reply and event.sender.send chunks use different IPC channels —
@@ -5903,12 +5964,66 @@ async function sendMessage() {
       // Pass agent identity for system prompt injection
       resolvedAgentPrompts.systemAgentName = sysAgent?.name || null
       resolvedAgentPrompts.systemAgentDescription = sysAgent?.description || null
+      // Pass user agent identity so the system prompt always names the current user
+      // (fires even when the user agent has no custom prompt, preventing stale soul memory)
+      resolvedAgentPrompts.userAgentName = usrAgent?.name || null
+      resolvedAgentPrompts.userAgentDescription = usrAgent?.description || null
       // Pass agent IDs for soul memory system
       resolvedAgentPrompts.systemAgentId = sysAgent?.id || '__default_system__'
       resolvedAgentPrompts.userAgentId = usrAgent?.id || '__default_user__'
-      // cfg already has provider creds + customModel resolved above
+
+      // Build handover note when history contains messages from different agents.
+      // This tells the current agent about previous participants in the chat.
+      const prevSysIds = new Set()
+      const prevUsrIds = new Set()
+      const currentSysCheck = sysAgent?.id || null
+      const currentUsrCheck = usrAgent?.id || null
+      for (const m of targetChat.messages) {
+        if (m.role === 'assistant' && m.agentId && m.agentId !== currentSysCheck) prevSysIds.add(m.agentId)
+        if (m.role === 'user' && m.userAgentId && m.userAgentId !== currentUsrCheck) prevUsrIds.add(m.userAgentId)
+      }
+      if (prevSysIds.size > 0 || prevUsrIds.size > 0) {
+        const parts = []
+        for (const id of prevSysIds) {
+          const a = agentsStore.getAgentById(id)
+          if (a) parts.push(`Previous assistant "${a.name}" (messages prefixed with [${a.name}]:) is no longer active.`)
+        }
+        for (const id of prevUsrIds) {
+          const a = agentsStore.getAgentById(id)
+          if (a) parts.push(`Previous user "${a.name}" (messages prefixed with [${a.name}]:) is no longer in this conversation.`)
+        }
+        if (parts.length > 0) resolvedAgentPrompts.chatHandoverNote = parts.join(' ')
+      }
 
       dbg('Invoking window.electronAPI.runAgent…')
+      // Apply identity-aware prefixes: messages from previous agents get [Name]: prefix
+      // so the current agent knows they came from someone else, not itself.
+      const currentSysId = sysAgent?.id || null
+      const currentUsrId = usrAgent?.id || null
+      const hasSysSwitch = prevSysIds.size > 0  // agent was switched at some point
+      const hasUsrSwitch = prevUsrIds.size > 0
+      const apiMessages = apiMessagesRaw.map(m => {
+        let content = m.content
+        if (m.role === 'assistant') {
+          if (m._agentId && m._agentId !== currentSysId) {
+            // Known previous agent — prefix with their name
+            const prev = agentsStore.getAgentById(m._agentId)
+            content = `[${prev?.name || 'Previous Assistant'}]: ${content}`
+          } else if (!m._agentId && hasSysSwitch) {
+            // No agentId stamp (old message) but we know a switch happened —
+            // treat as previous assistant to prevent identity confusion
+            content = `[Previous Assistant]: ${content}`
+          }
+        } else if (m.role === 'user') {
+          if (m._userAgentId && m._userAgentId !== currentUsrId) {
+            const prev = agentsStore.getAgentById(m._userAgentId)
+            content = `[${prev?.name || 'Previous User'}]: ${content}`
+          } else if (!m._userAgentId && hasUsrSwitch) {
+            content = `[Previous User]: ${content}`
+          }
+        }
+        return { role: m.role, content }
+      })
       const agentKnowledgeConfig = buildAgentKnowledgeConfig(sysAgent)
       const agentRunParams = {
         chatId,
