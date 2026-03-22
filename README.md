@@ -1,107 +1,134 @@
 # ClankAI
 
-Multi-LLM desktop chat application with agentic tool use, built with Electron and Vue 3.
+ClankAI is a multi-LLM desktop chat application built with Electron and Vue 3. It combines chat, agent collaboration, MCP tools, knowledge retrieval, skills, notes, and task orchestration in a single local-first desktop app.
 
-## Features
+## Highlights
 
-- **Streaming chat** with Claude models (Sonnet, Opus, Haiku) via the Anthropic API
-- **Agentic tool loop** — the AI can read/write files, execute shell commands, manage git repos, fetch web pages, and analyze data
-- **Sub-agent delegation** for parallel or focused subtasks
-- **Background tasks** for long-running operations (builds, test suites)
-- **Todo/task planning** for complex multi-step work
-- **File attachments** — drag-drop or pick files, images, and folders
-- **Obsidian vault integration** — browse and edit markdown files
-- **Agent system** — configurable system and user agents per chat
-- **Skills system** — extend the AI with filesystem-based markdown skill files
-- **Context management** — automatic compaction when the context window fills up
-- **WSL2-native** — Windows file picker, path conversion, emoji font support
+- Multi-provider model support through a dynamic providers array (Anthropic, OpenRouter, OpenAI-compatible, DeepSeek, Google, and extensible custom providers)
+- Streaming chat with per-chat and per-agent model selection/override
+- Multi-agent system with distinct system agents and user agents, so each agent represents a specific role, collaborator, or working persona
+- Group chat support, including multi-agent collaboration in the same conversation
+- Per-agent isolation for prompt/definition, skills, tools, MCP servers, and RAG/knowledge context
+- Agentic tool-use loop (filesystem, shell, git, web, data processing, planning)
+- Mention routing between agents during collaborative conversations
+- MCP server integration and HTTP tools management
+- Knowledge (RAG) workflows with Pinecone-backed indexing/querying
+- Skills system (filesystem and remote skill hub sources)
+- AI docs workspace with markdown plus office/drawing helpers
+- AI news view with configurable feed aggregation and reading workflows
+- Task engine and AI task execution views
+- Voice call pipeline (STT/TTS + usage accounting)
+- Built-in i18n with English and Chinese locale support
+
+## Tech Stack
+
+- Electron 31 (main process in CommonJS)
+- Vue 3.4 (Composition API with script setup)
+- Pinia 2, Vue Router 4 (hash history)
+- Vite 5
+- Tailwind CSS 3.4 + CSS variables
+- Marked + highlight.js + DOMPurify
+- TipTap (rich text)
+- Babylon.js (3D viewer)
 
 ## Prerequisites
 
 - Node.js 18+
 - npm
-- An [Anthropic API key](https://console.anthropic.com/)
 
-## Setup
+## Quick Start
 
-```bash
-npm install
-```
+1. Install dependencies.
 
-Create `.env.development` in the project root:
+   npm install
 
-```env
-ANTHROPIC_API_KEY=sk-ant-...
-```
+2. Start development mode.
 
-Optional settings:
+   npm run dev
 
-```env
-ANTHROPIC_BASE_URL=https://api.anthropic.com
-ANTHROPIC_DEFAULT_SONNET_MODEL=claude-sonnet-4-5
-ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-4-6
-ANTHROPIC_DEFAULT_HAIKU_MODEL=claude-haiku-3-5
-OBSIDIAN_VAULT_PATH=/path/to/vault
-```
+This starts Vite and then launches Electron.
 
-## Development
+Important: the full app behavior only works in the Electron window. Browser-only Vite preview does not include Electron IPC features.
 
-```bash
-npm run dev
-```
+## Scripts
 
-This starts the Vite dev server on port 5173 and launches Electron.
+- npm run dev: start Vite + Electron
+- npm run build: build renderer into dist/
+- npm run preview: preview built renderer
+- npm run electron: run Electron against current build/dev server setup
+- npm run dist:win: package Windows installer output to dist-release/
+- npm run dist:mac: package macOS dmg output to dist-release/
+- npm run dist:all: package win + mac
+- npm run bundle:mcporter: rebuild bundled MCP transporter module
 
-> **Note**: The agent loop only works in the Electron window, not in a browser at `localhost:5173`.
+## Routing
 
-## Build
+Router uses hash history for Electron compatibility.
 
-```bash
-npm run build
-```
+- /chats
+- /agents
+- /skills
+- /knowledge
+- /mcp
+- /tools
+- /notes
+- /tasks
+- /ai-tasks
+- /news
+- /auth
+- /config
 
-Produces a production build in `dist/`.
+## Data and Configuration
 
-## Package / Distribution
+Default data directory:
 
-```bash
-# Windows installer (.exe via NSIS)
-npm run dist:win
+- Windows: C:\Users\<user>\AppData\Roaming\clankai\data
+- macOS: ~/Library/Application Support/clankai/data
 
-# macOS disk image (.dmg)
-npm run dist:mac
+Data location can be overridden via CLANKAI_DATA_PATH.
 
-# Linux
-npm run dist:linux
-```
+Config model notes:
 
-Output is written to `dist-release/`.
+- Runtime settings are stored in config.json inside the data directory.
+- Provider credentials and model defaults are managed through config providers.
+- skillsPath, DoCPath, and artifactPath are stored in config.json.
+- CLANKAI_DATA_PATH is the only path setting that lives in .env.
+
+Typical data files include:
+
+- config.json
+- agents.json
+- tools.json
+- mcp-servers.json
+- knowledge.json
+- chats/index.json and chats/<id>.json
 
 ## Project Structure
 
-```
-electron/              Electron main process
-  main.js              App entry, window, IPC handlers
-  preload.js           contextBridge API surface
-  agent/               Agent loop subsystem
-    agentLoop.js       Streaming agentic loop
-    core/              AnthropicClient, ContextManager
-    managers/          SubAgentManager, TaskManager
-    tools/             FileTool, ShellTool, GitTool, WebTool, DataTool, TodoTool
+ClankAI/
+- electron/
+  - main.js: app bootstrap, IPC handlers, persistence orchestration
+  - preload.js: contextBridge API surface exposed to renderer
+  - agent/: agent loop, model clients, managers, tools, MCP integration
+  - im-bridge/: IM bridge message routing and agent model flow
+  - memory/: memory indexing utilities
+  - task-scheduler.js and recipe-scheduler.js: scheduler runners
+- src/
+  - views/: chats, agents, config, mcp, tools, knowledge, docs, tasks, news, auth
+  - components/: chat UI, layout, common controls, agent/voice components
+  - stores/: Pinia stores for chats, config, agents, models, tools, mcp, skills, tasks, voice, and more
+  - i18n/: locale dictionaries and composables
+  - services/storage.js: renderer storage abstraction via Electron IPC
+- build/icons/: app icon assets for packaging
+- scripts/run-electron.js: Electron launcher used by dev and electron scripts
 
-src/                   Vue renderer
-  views/               ChatsView, ConfigView, AgentsView, SkillsView, ObsidianView
-  components/          MessageRenderer, RichTextEditor, Sidebar, TitleBar, Agent components
-  stores/              Pinia stores (chats, config, agents, skills, obsidian)
-  services/storage.js  Storage abstraction (Electron IPC / localStorage fallback)
-```
+## Development Notes
 
-See [CLANKAI_ARCHITECTURE.md](./CLANKAI_ARCHITECTURE.md) for full architectural documentation.
-
-## Tech Stack
-
-Electron | Vue 3 | Pinia | Vite | Tailwind CSS | Anthropic SDK | marked | DOMPurify | TipTap
+- Renderer changes support Vite HMR.
+- Changes under electron/ require restarting the app process.
+- Keep UI strings i18n-ready when adding features.
+- Use hash routes for any new renderer routes.
 
 ## License
 
-Private.
+GPL-3.0-only

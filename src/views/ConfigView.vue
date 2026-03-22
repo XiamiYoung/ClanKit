@@ -503,30 +503,6 @@
                       style="max-width: 160px;"
                     />
                   </div>
-                  <div class="form-group">
-                    <label class="form-label">{{ t('config.temperature') }}</label>
-                    <input
-                      v-model.number="selectedProvider.settings.temperature"
-                      type="number"
-                      min="0"
-                      max="2"
-                      step="0.1"
-                      class="field font-mono"
-                      style="max-width: 100px;"
-                    />
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Top P</label>
-                    <input
-                      v-model.number="selectedProvider.settings.topP"
-                      type="number"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      class="field font-mono"
-                      style="max-width: 100px;"
-                    />
-                  </div>
                 </div>
               </template>
             </div>
@@ -675,6 +651,15 @@
               </label>
               <input id="whisperBaseURL" v-model="form.voiceCall.whisperBaseURL" type="url" placeholder="https://api.openai.com" class="field font-mono" />
               <p class="hint">{{ t('config.baseURLHint') }}</p>
+            </div>
+
+            <!-- Direct Auth Mode -->
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="form.voiceCall.whisperDirectAuth" class="checkbox" />
+                <span>{{ t('config.directAuthMode') }}</span>
+              </label>
+              <p class="hint">{{ t('config.directAuthModeHint') }}</p>
             </div>
 
             <!-- STT Language -->
@@ -2346,6 +2331,7 @@ const form = reactive({
   voiceCall: {
     whisperApiKey:  '',
     whisperBaseURL: '',
+    whisperDirectAuth: false,
     ttsMode: 'browser',
     language: '',
     vadAmplitude:      0.018,
@@ -2828,9 +2814,9 @@ async function testWhisperConnection() {
   try {
     // Send a tiny silent WAV to Whisper to verify credentials
     const baseURL = (form.voiceCall.whisperBaseURL || 'https://api.openai.com').replace(/\/+$/, '')
-    const isStandard = baseURL.includes('api.openai.com')
-    const url = isStandard ? `${baseURL}/v1/models` : `${baseURL}/proxy/openai/v1/models`
-    const authHeader = isStandard ? { 'Authorization': `Bearer ${key}` } : { 'x-api-key': key }
+    const directAuth = form.voiceCall.whisperDirectAuth === true
+    const url = directAuth ? `${baseURL}/v1/models` : `${baseURL}/proxy/openai/v1/models`
+    const authHeader = directAuth ? { 'Authorization': `Bearer ${key}` } : { 'x-api-key': key }
     const resp = await fetch(url, { headers: authHeader })
     if (resp.ok) {
       testResultWhisper.value = { ok: true, message: 'Connected — Whisper API key is valid' }
@@ -2870,9 +2856,9 @@ async function demoTts(mode) {
       if (!key) return
       const ttsModel = mode === 'openai-hd' ? 'tts-1-hd' : 'tts-1'
       const baseURL = (form.voiceCall.whisperBaseURL || 'https://api.openai.com').replace(/\/+$/, '')
-      const isStandard = baseURL.includes('api.openai.com')
-      const url = isStandard ? `${baseURL}/v1/audio/speech` : `${baseURL}/proxy/openai/v1/audio/speech`
-      const authHeader = isStandard ? { 'Authorization': `Bearer ${key}` } : { 'x-api-key': key }
+      const directAuth = form.voiceCall.whisperDirectAuth === true
+      const url = directAuth ? `${baseURL}/v1/audio/speech` : `${baseURL}/proxy/openai/v1/audio/speech`
+      const authHeader = directAuth ? { 'Authorization': `Bearer ${key}` } : { 'x-api-key': key }
       const resp = await fetch(url, {
         method: 'POST',
         headers: { ...authHeader, 'Content-Type': 'application/json' },

@@ -1167,9 +1167,22 @@ ipcMain.handle('store:save-chats', async (_, chats) => {
 
 ipcMain.handle('store:get-config', () => {
   const saved = readJSON(CONFIG_FILE, {})
+
+  const sanitizeProvider = (provider) => {
+    const settings = { ...(provider?.settings || {}) }
+    delete settings.temperature
+    delete settings.topP
+    if (settings.maxOutputTokens == null) {
+      settings.maxOutputTokens = 32768
+    }
+    return { ...provider, settings }
+  }
   
   // Migration: convert legacy providers to new providers array
   let providers = saved.providers || []
+  if (providers.length > 0) {
+    providers = providers.map(sanitizeProvider)
+  }
   if (providers.length === 0) {
     // Try to migrate from legacy structure
     const { v4: uuidv4 } = require('uuid')
@@ -1183,7 +1196,7 @@ ipcMain.handle('store:get-config', () => {
         apiKey: saved.anthropic.apiKey,
         baseURL: saved.anthropic.baseURL || 'https://api.anthropic.com',
         model: saved.anthropic.sonnetModel || 'claude-sonnet-4-5',
-        settings: { temperature: 1, topP: 1, maxOutputTokens: 32768 },
+        settings: { maxOutputTokens: 32768 },
         isActive: saved.anthropic.isActive || false,
         testedAt: saved.anthropic.testedAt || null,
       })
@@ -1196,7 +1209,7 @@ ipcMain.handle('store:get-config', () => {
         apiKey: saved.openrouter.apiKey,
         baseURL: saved.openrouter.baseURL || 'https://openrouter.ai/api',
         model: '',
-        settings: { temperature: 1, topP: 1, maxOutputTokens: 32768 },
+        settings: { maxOutputTokens: 32768 },
         isActive: saved.openrouter.isActive || false,
         testedAt: saved.openrouter.testedAt || null,
       })
@@ -1209,7 +1222,7 @@ ipcMain.handle('store:get-config', () => {
         apiKey: saved.openai.apiKey,
         baseURL: saved.openai.baseURL || '',
         model: '',
-        settings: { temperature: 1, topP: 1, maxOutputTokens: 32768 },
+        settings: { maxOutputTokens: 32768 },
         isActive: saved.openai.isActive || false,
         testedAt: saved.openai.testedAt || null,
       })
@@ -1222,7 +1235,7 @@ ipcMain.handle('store:get-config', () => {
         apiKey: saved.deepseek.apiKey,
         baseURL: saved.deepseek.baseURL || 'https://api.deepseek.com',
         model: 'deepseek-chat',
-        settings: { temperature: 1, topP: 1, maxOutputTokens: saved.deepseek.maxTokens || 8192 },
+        settings: { maxOutputTokens: saved.deepseek.maxTokens || 8192 },
         isActive: saved.deepseek.isActive || false,
         testedAt: saved.deepseek.testedAt || null,
       })
@@ -3644,7 +3657,7 @@ ipcMain.handle('skills:fetch-remote', async (_, sourceId, options = {}) => {
           const limit = Math.min(Math.max(options.limit || 50, 1), 200)
           
           if (keyword.trim()) {
-            // 搜索模式：使用 Convex Action search:searchSkills（与网站 WebSocket 行为一致）
+            // Search mode: use Convex Action search:searchSkills (matches website WebSocket behavior).
             logger.info(`[Skills] Fetching ClawHub skills via search:searchSkills action, keyword: "${keyword}"`)
 
             const payload = {
@@ -3673,7 +3686,7 @@ ipcMain.handle('skills:fetch-remote', async (_, sourceId, options = {}) => {
               throw new Error(`Convex error: ${data.errorMessage || 'Unknown error'}`)
             }
 
-            // value 是 SkillSearchEntry[]，每项含 skill / owner / score 字段
+            // value is SkillSearchEntry[]; each item includes skill / owner / score fields.
             const results = Array.isArray(data.value) ? data.value : []
             logger.info(`[ClawHub API] ✅ Search found ${results.length} results`)
 
@@ -3699,7 +3712,7 @@ ipcMain.handle('skills:fetch-remote', async (_, sourceId, options = {}) => {
               }
             })
           } else {
-            // 否则使用浏览 API
+            // Otherwise use the browse API.
             logger.info(`[Skills] Fetching ClawHub skills from browse API (limit: ${limit})`)
             
             const url = 'https://wry-manatee-359.convex.cloud/api/query'

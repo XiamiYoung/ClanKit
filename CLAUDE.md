@@ -17,25 +17,25 @@ ClankAI is a multi-LLM desktop chat application built with **Electron + Vue 3 + 
 - **IDs:** `uuid` v9
 - **i18n:** Custom lightweight solution (`src/i18n/`)
 
-## i18n 多语言支持 (Prerequisite for All Development)
+## i18n Multilingual Support (Prerequisite for All Development)
 
-**所有新功能开发必须支持多语言。** 这不是可选特性，而是架构前提。
+**All new feature development must support multiple languages.** This is not optional; it is an architectural prerequisite.
 
-### 配置层
+### Configuration Layer
 
-- 语言设置存储在 `config.json` 的 `language` 字段 (`'en'` | `'zh'`)
-- 通过 `configStore.language` 访问（computed，自动响应配置变化）
-- 语言变更立即生效，无需重启
+- Language settings are stored in the `language` field of `config.json` (`'en'` | `'zh'`)
+- Access through `configStore.language` (computed, automatically reacts to config changes)
+- Language changes take effect immediately without restart
 
-### 翻译文件结构
+### Translation File Structure
 
 ```
 src/i18n/
-├── index.js      # 翻译词条对象 (en, zh)
-└── useI18n.js    # composable: useI18n() 返回 { t, locale }
+├── index.js      # Translation dictionary object (en, zh)
+└── useI18n.js    # Composable: useI18n() returns { t, locale }
 ```
 
-### 使用方式
+### Usage
 
 ```vue
 <script setup>
@@ -50,28 +50,28 @@ const { t, locale } = useI18n()
 </template>
 ```
 
-### 词条命名规范
+### Key Naming Conventions
 
-- `app.*` - 应用级（名称、标语）
-- `nav.*` - 导航项
-- `common.*` - 通用按钮/标签（Save, Cancel, Delete, Add, Search 等）
-- `config.*` - 配置页面
-- `agents.*` - 智能体相关
-- `chats.*` - 对话相关
-- `skills.*`, `knowledge.*`, `mcp.*`, `tools.*` - 各功能模块
+- `app.*` - Application-level (name, slogan)
+- `nav.*` - Navigation items
+- `common.*` - Common buttons/labels (Save, Cancel, Delete, Add, Search, etc.)
+- `config.*` - Configuration pages
+- `agents.*` - Agent-related
+- `chats.*` - Chat-related
+- `skills.*`, `knowledge.*`, `mcp.*`, `tools.*` - Feature modules
 
-### AI 语言
+### AI Language
 
-- `config.language` 作为 AI 的**默认语言**
-- 创建新 agent 时，name、description 等字段应使用当前语言生成
-- 对话级别可覆盖：`chat.languageOverride` 允许单对话内切换 AI 语言
+- `config.language` is the AI **default language**
+- When creating a new agent, fields such as name and description should be generated in the current language
+- Chat-level override: `chat.languageOverride` allows switching AI language within a single chat
 
-### 迁移指南
+### Migration Guide
 
-现有硬编码文本需要逐个改造为 `t('key')` 调用。优先处理：
-1. 高频使用组件（NavItem, AppButton, 表单标签）
-2. 主要页面（ConfigView, AgentsView, ChatsView）
-3. 低频组件后续处理
+Existing hardcoded text should be migrated one by one to `t('key')` calls. Prioritize:
+1. High-frequency components (NavItem, AppButton, form labels)
+2. Main pages (ConfigView, AgentsView, ChatsView)
+3. Low-frequency components afterward
 
 ## Repository Structure
 
@@ -539,6 +539,7 @@ Config page inner content is capped to prevent fields from stretching uncomforta
 - Never store sensitive keys in the renderer; they live in `.env` or `config.json` on disk
 - WSL2 compatibility: fontconfig for emoji, path handling in preload
 - Chat persistence is debounced (300ms) — don't call `persistChat` in tight loops
+- **Language policy:** In code files, configuration files, and source code comments, use English only. Chinese is not allowed.
 - **Restart notification:** When any change touches files that require an app restart to take effect (anything under `electron/` — `main.js`, `preload.js`, `agent/`, etc.), end your message to the user with a **red-colored** notice: <span style="color:#EF4444;">**⟳ This change requires restarting the app to take effect.**</span>
 
 ## Core Principles
@@ -546,7 +547,7 @@ Config page inner content is capped to prevent fields from stretching uncomforta
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
-- **No hardcoded provider endpoints**: Never use `|| 'https://api.anthropic.com'`, `|| 'https://openrouter.ai/api'`, `|| 'https://mlaas.virtuosgames.com'`, or any other provider URL as a fallback in source code. All endpoints must come from user configuration (`config.anthropic.baseURL`, `config.openrouter.baseURL`, `config.openai.baseURL`). If a baseURL is missing at runtime, throw an error or return early — do not silently fall back to an official URL. Placeholder text in `<input placeholder="...">` UI fields is exempt (display only, not used for requests).
+- **No hardcoded provider endpoints**: Never use `|| 'https://api.anthropic.com'`, `|| 'https://openrouter.ai/api'`, or any other provider URL as a fallback in source code. All endpoints must come from user configuration (`config.anthropic.baseURL`, `config.openrouter.baseURL`, `config.openai.baseURL`). If a baseURL is missing at runtime, throw an error or return early — do not silently fall back to an official URL. Placeholder text in `<input placeholder="...">` UI fields is exempt (display only, not used for requests).
 
 ## Workflow Orchestration
 
@@ -625,6 +626,10 @@ Do NOT write task state to files on disk — it conflicts across concurrent term
 
 - **2026-03-16**: Delete buttons in sidebar and message bubbles were not working — clicking triggered the click handler but the ConfirmModal dialog never appeared. Root cause: The buttons were rendered inside a container with `opacity: 0` and `pointer-events: none` (used for hover effects), but without sufficient `z-index`. When opacity transitioned to 1 on hover, the click events were being intercepted by an overlapping element. **Rule: When using opacity/pointer-events for hover effects, always ensure buttons have explicit `z-index` AND the parent container has proper z-index stacking context. For sidebar action buttons use `z-index: 10-20`, for message action buttons use `z-index: 100`.**
 
+- **2026-03-22**: Applied Chinese-to-English replacement too broadly without first separating functional multilingual content from replaceable text. **Rule: before replacing non-English text, classify occurrences into (1) functional/required multilingual data to keep (i18n dictionaries, language-sensitive parsing examples, CJK stopwords/regex, hallucination blocklists) and (2) non-functional comments or hardcoded UI copy that can be translated without logic changes.**
+
+- **2026-03-22**: Replaced multilingual literals with hardcoded English/Unicode escapes in runtime logic and view templates (e.g., `\u65b0\u5efa\u5bf9\u8bdd`, inline labels in Config/Skills). **Rule: never hardcode translatable UI text or language-dependent title checks in views/stores; always source them from `src/i18n/index.js` via `t('...')` in components and shared i18n constants in stores.**
+
 ## App Icon
 
 ### Icon Design
@@ -660,9 +665,3 @@ build/icons/
 - **BrowserWindow icon:** `path.join(__dirname, '../public/icon.png')` in `electron/main.js`
 - **Electron Builder** (`package.json`): `appId: "com.clankai.app"`, `productName: "ClankAI"`, icon path `build/icons/icon.png` for win/mac/linux targets
 - **Sidebar logo:** `<img src="/icon.png">`, 32px expanded / 28px collapsed, `border-radius:8px`/`6px`
-
-### Regenerating Icons
-
-```bash
-node scripts/generate-icons.js
-```

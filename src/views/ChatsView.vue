@@ -2148,6 +2148,7 @@ async function handleStartCall(chatId) {
   const whisperConfig = {
     apiKey: vc.whisperApiKey || '',
     baseURL: vc.whisperBaseURL || 'https://api.openai.com',
+    directAuth: vc.whisperDirectAuth === true,
     language: vc.language || '',
   }
 
@@ -4460,7 +4461,7 @@ function handleChunk(cId, chunk) {
               }
             }
             // If we found an @mention, allow a short tail (up to next double newline
-            // or 80 chars), then truncate. This keeps "..@张素琴，你来说说" intact
+            // or 80 chars), then truncate. This keeps "..@OtherAgent, your turn" intact
             // but removes any follow-up dialogue the agent wrote for other participants.
             if (firstMentionEnd > 0 && firstMentionEnd < msg.content.length - 5) {
               const tail = msg.content.slice(firstMentionEnd)
@@ -4713,6 +4714,21 @@ function handleResendMessage(msg) {
 }
 
 // ── Provider credential helpers ─────────────────────────────────────────────
+
+/**
+ * Infers the required provider type from a model ID string.
+ * Returns null for unknown/ambiguous models (no warning for those).
+ * OpenRouter models are excluded — they support any model prefix.
+ */
+function detectModelProviderType(modelId) {
+  if (!modelId) return null
+  const m = modelId.toLowerCase()
+  if (m.includes('deepseek')) return 'deepseek'
+  if (m.includes('claude') || m.startsWith('anthropic/')) return 'anthropic'
+  if (m.includes('gemini') || m.startsWith('google/')) return 'google'
+  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('openai/')) return 'openai'
+  return null
+}
 
 /**
  * Look up a provider's credentials from config.providers[] by provider type.
@@ -5551,6 +5567,23 @@ async function sendMessage() {
     scrollToBottom()
     return
   }
+
+  // Provider/model mismatch guard — catches e.g. deepseek-chat on an Anthropic provider
+  if (!isGroup && resolvedModel) {
+    const { type: resolvedProviderType } = resolveProviderCreds(configStore.config, effectiveProvider)
+    const detectedModelType = detectModelProviderType(resolvedModel)
+    const PROVIDER_DISPLAY = { anthropic: 'Anthropic', openai: 'OpenAI', deepseek: 'DeepSeek', openrouter: 'OpenRouter', google: 'Google' }
+    if (detectedModelType && resolvedProviderType !== 'openrouter' && detectedModelType !== resolvedProviderType) {
+      const detected = PROVIDER_DISPLAY[detectedModelType] || detectedModelType
+      const provider = PROVIDER_DISPLAY[resolvedProviderType] || resolvedProviderType
+      failWaitingIndicator(`⚠️ Provider/model mismatch — model "${resolvedModel}" is a ${detected} model but agent "${sysAgent?.name || 'Unknown'}" uses ${provider}. Fix in Agents settings.`)
+      targetChat.isRunning = false
+      await nextTick()
+      scrollToBottom()
+      return
+    }
+  }
+
   // Per-chat working path and coding mode
   if (targetChat.workingPath) {
     cfg.chatWorkingPath = targetChat.workingPath

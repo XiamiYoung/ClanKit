@@ -551,7 +551,7 @@
           </div>
 
           <!-- File open -->
-          <div v-else>
+          <div v-else class="flex-1 flex flex-col overflow-hidden min-h-0">
             <!-- File header bar -->
             <div
               class="px-4 py-2.5 shrink-0 flex items-center gap-3"
@@ -564,16 +564,6 @@
                 {{ activeFileName }}
               </span>
               <div class="ml-auto flex items-center gap-2">
-                <!-- Auto-save indicator -->
-                <span
-                  v-if="saving"
-                  class="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
-                  style="background:rgba(0,122,255,0.1); color:#007AFF; font-family:'Inter',sans-serif;"
-                >
-                  <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
-                  saving
-                </span>
-
                 <!-- Copy source (markdown files only) -->
                 <button
                   v-if="isMarkdownFile"
@@ -587,30 +577,6 @@
                   <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                   {{ copied ? 'Copied' : 'Copy' }}
                 </button>
-
-                <!-- Mode toggle (markdown files only) -->
-                <div
-                  v-if="isMarkdownFile"
-                  class="flex rounded-lg overflow-hidden"
-                  style="border:1px solid #E5E5EA;"
-                >
-                  <button
-                    @click="editMode = false"
-                    class="px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
-                    :style="!editMode
-                      ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#fff; border:none; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
-                      : 'background:#fff; color:#9CA3AF; border:none;'"
-                    style="font-family:'Inter',sans-serif;"
-                  >Formatted</button>
-                  <button
-                    @click="editMode = true"
-                    class="px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer"
-                    :style="editMode
-                      ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#fff; border:none; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
-                      : 'background:#fff; color:#9CA3AF; border:none;'"
-                    style="font-family:'Inter',sans-serif;"
-                  >Source</button>
-                </div>
               </div>
             </div>
 
@@ -626,33 +592,17 @@
               </div>
             </template>
 
-            <!-- Markdown: Formatted mode (editable rich preview) -->
+            <!-- Markdown: Read-only preview -->
             <div
-              v-else-if="isMarkdownFile && !editMode"
+              v-else-if="isMarkdownFile"
               class="flex-1 overflow-y-auto py-6"
               style="scrollbar-width:thin; display:flex; justify-content:center;"
             >
               <div
-                ref="formattedEl"
-                contenteditable="true"
                 class="prose-skills"
-                style="outline:none; cursor:text;"
+                style="outline:none;"
                 v-html="formattedHtml"
-                @input="onFormattedInput"
               ></div>
-            </div>
-
-            <!-- Markdown: Source mode (textarea) -->
-            <div
-              v-else-if="isMarkdownFile && editMode"
-              class="flex-1 overflow-y-auto"
-              style="scrollbar-width:thin; display:flex; justify-content:center;"
-            >
-              <textarea
-                v-model="editorContent"
-                class="skills-source-editor"
-                spellcheck="false"
-              ></textarea>
             </div>
 
             <!-- Non-markdown: read-only raw view -->
@@ -816,8 +766,6 @@
 import { ref, computed, reactive, watch, onBeforeUnmount, defineComponent, h, Teleport } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import TurndownService from 'turndown'
-import { gfm } from 'turndown-plugin-gfm'
 import { useSkillsStore } from '../stores/skills'
 import { useConfigStore } from '../stores/config'
 import { useI18n } from '../i18n/useI18n'
@@ -1204,25 +1152,9 @@ const isMarkdownFile = computed(() => {
 
 // ── Editing state ──
 const editorContent = ref('')
-const editMode = ref(false)
-const saving = ref(false)
 const copied = ref(false)
 let copiedTimer = null
-const formattedEl = ref(null)
 const formattedHtml = ref('')
-let autoSaveTimer = null
-let editingFormatted = false
-
-// Turndown: HTML → Markdown converter (with GFM tables, strikethrough, etc.)
-const turndown = new TurndownService({
-  headingStyle: 'atx',
-  codeBlockStyle: 'fenced',
-  bulletListMarker: '-',
-  emDelimiter: '*',
-  strongDelimiter: '**',
-  hr: '---',
-})
-turndown.use(gfm)
 
 marked.use({ gfm: true, breaks: true })
 
@@ -1234,45 +1166,17 @@ function refreshFormattedHtml() {
   } catch { formattedHtml.value = '' }
 }
 
-const renderedMarkdown = computed(() => {
-  return formattedHtml.value
-})
-
-// Auto-save (800ms debounce)
-function scheduleAutoSave() {
-  if (autoSaveTimer) clearTimeout(autoSaveTimer)
-  autoSaveTimer = setTimeout(async () => {
-    if (!activeFilePath.value || !window.electronAPI?.skills?.writeFile) return
-    saving.value = true
-    try {
-      await window.electronAPI.skills.writeFile(activeFilePath.value, editorContent.value)
-    } catch {}
-    saving.value = false
-  }, 800)
-}
-
-// Sync editorContent changes → auto-save + re-render
 watch(editorContent, (val) => {
   if (val !== fileContent.value) {
     fileContent.value = val
-    scheduleAutoSave()
   }
-  if (!editingFormatted) refreshFormattedHtml()
+  refreshFormattedHtml()
 })
 
 onBeforeUnmount(() => {
-  if (autoSaveTimer) clearTimeout(autoSaveTimer)
   if (copiedTimer) clearTimeout(copiedTimer)
   if (clawhubSearchTimer) clearTimeout(clawhubSearchTimer)
 })
-
-function onFormattedInput(e) {
-  editingFormatted = true
-  const html = e.target.innerHTML
-  const md = turndown.turndown(html)
-  editorContent.value = md
-  editingFormatted = false
-}
 
 function copySource() {
   navigator.clipboard.writeText(editorContent.value).catch(() => {})
@@ -1327,7 +1231,6 @@ async function openFile(filePath, fileName) {
   editorContent.value = ''
   fileError.value = null
   loadingFile.value = true
-  editMode.value = false
   if (!window.electronAPI?.skills?.readFile) return
   try {
     const result = await window.electronAPI.skills.readFile(filePath)

@@ -17,11 +17,6 @@
           <path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
         </svg>
       </button>
-      <button @click="toggleWireframe" title="Toggle wireframe" class="babylon-tool-btn">
-        <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="3" x2="12" y2="21"/>
-        </svg>
-      </button>
     </div>
   </div>
 </template>
@@ -42,7 +37,6 @@ let engine = null
 let scene = null
 let camera = null
 let initialCameraState = null
-let wireframeOn = false
 
 async function initScene() {
   if (!canvasEl.value) return
@@ -138,16 +132,6 @@ function resetCamera() {
   camera.beta = initialCameraState.beta
   camera.radius = initialCameraState.radius
   camera.target = initialCameraState.target.clone()
-}
-
-function toggleWireframe() {
-  if (!scene) return
-  wireframeOn = !wireframeOn
-  for (const mesh of scene.meshes) {
-    if (mesh.material) {
-      mesh.material.wireframe = wireframeOn
-    }
-  }
 }
 
 function handleResize() {

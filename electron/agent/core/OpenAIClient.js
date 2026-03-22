@@ -1,7 +1,6 @@
 /**
  * OpenAIClient — wrapper around the OpenAI SDK that provides a similar
  * interface to AnthropicClient.  Used for OpenAI-compatible endpoints
- * (e.g. MLaaS / Virtuos, or any OpenAI-compatible API).
  *
  * Auth: x-api-key header — the SDK's own Authorization header is
  *       set to a dummy value so it doesn't complain.
@@ -17,7 +16,6 @@ class OpenAIClient {
     const baseURL = resolvedBaseURL.replace(/\/+$/, '')
     const apiKey = config.openaiApiKey || config.openai?.apiKey || config.apiKey || ''
     // _directAuth: use standard Bearer auth (DeepSeek, direct OpenAI endpoints).
-    // Default proxy mode: Virtuos MLaaS uses x-api-key + /proxy/openai/v1 path.
     if (config._directAuth) {
       this.client = new OpenAI({ baseURL: baseURL + '/v1', apiKey })
     } else {

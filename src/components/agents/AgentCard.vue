@@ -31,6 +31,7 @@
           <span v-if="agentProviderLabel" class="pc-provider-badge">{{ agentProviderLabel }}</span>
           <span v-if="agent.modelId" class="pc-model-id">{{ agent.modelId }}</span>
           <span v-if="isProviderInactive" class="pc-inactive-warn">&#9888; {{ t('agents.providerInactive') }}</span>
+          <span v-else-if="isProviderModelMismatch" class="pc-mismatch-warn">&#9888; {{ t('agents.providerModelMismatch') }}</span>
         </template>
         <span v-else-if="isNoProviderConfigured" class="pc-no-provider-warn">&#9888; {{ t('agents.noProviderConfigured') }}</span>
       </div>
@@ -135,6 +136,26 @@ const isProviderInactive = computed(() => {
 // Show "no provider" warning when an agent has no provider/model set.
 // For custom agents: always warn (they must have an explicit provider).
 // For builtin/default agents: warn only when no active providers exist at all.
+function detectModelProviderType(modelId) {
+  if (!modelId) return null
+  const m = modelId.toLowerCase()
+  if (m.includes('deepseek')) return 'deepseek'
+  if (m.includes('claude') || m.startsWith('anthropic/')) return 'anthropic'
+  if (m.includes('gemini') || m.startsWith('google/')) return 'google'
+  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('openai/')) return 'openai'
+  return null
+}
+
+const isProviderModelMismatch = computed(() => {
+  if (!props.agent.providerId || !props.agent.modelId) return false
+  const provider = configStore.config.providers?.find(p => p.id === props.agent.providerId)
+  if (!provider) return false
+  // OpenRouter can host any model — never a mismatch
+  if (provider.type === 'openrouter') return false
+  const detectedType = detectModelProviderType(props.agent.modelId)
+  return detectedType !== null && detectedType !== provider.type
+})
+
 const isNoProviderConfigured = computed(() => {
   if (props.agent.providerId || props.agent.modelId) return false
   if (props.agent.isBuiltin || props.agent.isDefault) {
@@ -225,6 +246,11 @@ const isNoProviderConfigured = computed(() => {
 .pc-inactive-warn {
   font-size: var(--fs-small);
   color: #EF4444;
+  font-weight: 600;
+}
+.pc-mismatch-warn {
+  font-size: var(--fs-small);
+  color: #F59E0B;
   font-weight: 600;
 }
 .pc-no-provider-warn {

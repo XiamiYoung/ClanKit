@@ -33,6 +33,7 @@ class VoiceSession {
       this.stt = new WhisperSTT({
         apiKey: opts.whisperConfig.apiKey,
         baseURL: opts.whisperConfig.baseURL,
+        directAuth: opts.whisperConfig.directAuth === true,
       })
     }
   }

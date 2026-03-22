@@ -129,6 +129,7 @@ export const useConfigStore = defineStore('config', () => {
     voiceCall: {
       whisperApiKey: '',
       whisperBaseURL: '',
+      whisperDirectAuth: false,
       ttsMode: 'browser',
       isActive: false,
     },
@@ -148,8 +149,6 @@ export const useConfigStore = defineStore('config', () => {
   function createProvider(presetType, name = null) {
     const preset = PROVIDER_PRESETS[presetType] || PROVIDER_PRESETS.custom
     const settings = {
-      temperature: 1,
-      topP: 1,
       maxOutputTokens: config.value.maxOutputTokens,
     }
     if (presetType === 'anthropic') {
@@ -173,6 +172,19 @@ export const useConfigStore = defineStore('config', () => {
     const provider = createProvider(presetType, name)
     config.value.providers.push(provider)
     return provider
+  }
+
+  function sanitizeProviderSettings(provider) {
+    const sanitizedSettings = { ...(provider?.settings || {}) }
+    delete sanitizedSettings.temperature
+    delete sanitizedSettings.topP
+    if (sanitizedSettings.maxOutputTokens == null) {
+      sanitizedSettings.maxOutputTokens = config.value.maxOutputTokens
+    }
+    return {
+      ...provider,
+      settings: sanitizedSettings,
+    }
   }
 
   function removeProvider(providerId) {
@@ -211,7 +223,7 @@ export const useConfigStore = defineStore('config', () => {
       config.value = {
         ...defaults,
         ...saved,
-        providers: saved.providers,
+        providers: saved.providers.map(sanitizeProviderSettings),
       }
     } else {
       const migratedProviders = migrateLegacyConfig(saved)
@@ -266,7 +278,7 @@ export const useConfigStore = defineStore('config', () => {
         apiKey: saved.anthropic.apiKey,
         baseURL: saved.anthropic.baseURL || 'https://api.anthropic.com',
         model: saved.anthropic.sonnetModel || 'claude-sonnet-latest',
-        settings: { temperature: 1, topP: 1, maxOutputTokens: config.value.maxOutputTokens },
+        settings: { maxOutputTokens: config.value.maxOutputTokens },
         isActive: saved.anthropic.isActive || false,
         testedAt: saved.anthropic.testedAt || null,
       })
@@ -280,7 +292,7 @@ export const useConfigStore = defineStore('config', () => {
         apiKey: saved.openrouter.apiKey,
         baseURL: saved.openrouter.baseURL || 'https://openrouter.ai/api',
         model: '',
-        settings: { temperature: 1, topP: 1, maxOutputTokens: config.value.maxOutputTokens },
+        settings: { maxOutputTokens: config.value.maxOutputTokens },
         isActive: saved.openrouter.isActive || false,
         testedAt: saved.openrouter.testedAt || null,
       })
@@ -294,7 +306,7 @@ export const useConfigStore = defineStore('config', () => {
         apiKey: saved.openai.apiKey,
         baseURL: saved.openai.baseURL || '',
         model: '',
-        settings: { temperature: 1, topP: 1, maxOutputTokens: config.value.maxOutputTokens },
+        settings: { maxOutputTokens: config.value.maxOutputTokens },
         isActive: saved.openai.isActive || false,
         testedAt: saved.openai.testedAt || null,
       })
@@ -308,10 +320,8 @@ export const useConfigStore = defineStore('config', () => {
         apiKey: saved.deepseek.apiKey,
         baseURL: saved.deepseek.baseURL || 'https://api.deepseek.com',
         model: 'deepseek-chat',
-        settings: { 
-          temperature: 1, 
-          topP: 1, 
-          maxOutputTokens: saved.deepseek.maxTokens || 8192 
+        settings: {
+          maxOutputTokens: saved.deepseek.maxTokens || 8192
         },
         isActive: saved.deepseek.isActive || false,
         testedAt: saved.deepseek.testedAt || null,

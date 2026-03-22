@@ -4,14 +4,14 @@
 const FormData = require('form-data')
 
 class WhisperSTT {
-  constructor({ apiKey, baseURL, model }) {
+  constructor({ apiKey, baseURL, model, directAuth = false }) {
     if (!apiKey) throw new Error('WhisperSTT: apiKey is required')
     this.apiKey = apiKey
     this.baseURL = (baseURL || 'https://api.openai.com').replace(/\/+$/, '')
     this.model = model || 'whisper-1'
-    // Proxy mode: only for the internal mlaas proxy — all other endpoints
-    // (OpenAI, Groq, Deepgram-compatible, etc.) use standard OpenAI format.
-    this.isProxy = this.baseURL.includes('mlaas.virtuosgames.com')
+    // directAuth: true → standard OpenAI format (Bearer auth, /v1 path)
+    // directAuth: false → proxy format (x-api-key header, /proxy/openai/v1 path)
+    this.directAuth = directAuth
   }
 
   /**
@@ -35,13 +35,13 @@ class WhisperSTT {
     // A prompt biases the decoder toward real speech and away from hallucinated filler.
     if (opts.prompt) form.append('prompt', opts.prompt)
 
-    const url = this.isProxy
-      ? `${this.baseURL}/proxy/openai/v1/audio/transcriptions`
-      : `${this.baseURL}/v1/audio/transcriptions`
+    const url = this.directAuth
+      ? `${this.baseURL}/v1/audio/transcriptions`
+      : `${this.baseURL}/proxy/openai/v1/audio/transcriptions`
 
-    const authHeader = this.isProxy
-      ? { 'x-api-key': this.apiKey }
-      : { 'Authorization': `Bearer ${this.apiKey}` }
+    const authHeader = this.directAuth
+      ? { 'Authorization': `Bearer ${this.apiKey}` }
+      : { 'x-api-key': this.apiKey }
 
     // Abort if the API takes more than 10s — prevents _voiceBusy from getting stuck forever.
     // Normal Whisper: 1–3s. Slow but valid: 4–8s. Hung connection: never resolves.
@@ -85,8 +85,8 @@ class WhisperSTT {
     // ── trivial-output filter ─────────────────────────────────────────────────
     // Drop punctuation-only, very short, or bracketed noise placeholders
     // like "[BLANK_AUDIO]", "[Music]", "[Applause]".
-    // CJK characters (Chinese/Japanese/Korean) are semantically dense — a 2-char
-    // word like "继续" (continue) or "好的" (okay) is a complete valid utterance.
+    // CJK characters (Chinese/Japanese/Korean) are semantically dense — a two-character
+    // CJK word can be a complete valid utterance.
     // Only apply the length guard to Latin/ASCII text, not CJK.
     const hasCJK = /[\u3000-\u9FFF\uAC00-\uD7FF\uF900-\uFAFF]/.test(text)
     if (text && (/^[.,!?…\s。！？、，]+$/.test(text) || /^\[.*\]$/.test(text) || (!hasCJK && text.length < 3))) {

@@ -292,6 +292,11 @@
                         <button v-for="p in activeProviderOptions" :key="p.id" class="bv-provider-option" :class="{ active: draftProvider === p.id }" @click="selectProvider(p.id)">{{ p.label }}</button>
                       </div>
                     </div>
+                    <!-- Mismatch warning -->
+                    <div v-if="providerModelMismatch" class="bv-mismatch-warn">
+                      <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      <span>{{ t('agents.providerModelMismatchDetail', providerModelMismatch) }}</span>
+                    </div>
                     <div class="bv-model-section bv-model-section-grow" v-if="draftProvider">
                       <label class="bv-field-label">
                         {{ t('agents.model') }}
@@ -798,6 +803,24 @@ const modelFilter   = ref('')
 const draftProviderType = computed(() => {
   const provider = configStore.config.providers.find(p => p.id === draftProvider.value)
   return provider?.type || 'anthropic'
+})
+
+function _detectModelProviderType(modelId) {
+  if (!modelId) return null
+  const m = modelId.toLowerCase()
+  if (m.includes('deepseek')) return 'deepseek'
+  if (m.includes('claude') || m.startsWith('anthropic/')) return 'anthropic'
+  if (m.includes('gemini') || m.startsWith('google/')) return 'google'
+  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('openai/')) return 'openai'
+  return null
+}
+
+const providerModelMismatch = computed(() => {
+  if (!draftModelId.value || draftProviderType.value === 'openrouter') return null
+  const detectedType = _detectModelProviderType(draftModelId.value)
+  if (!detectedType || detectedType === draftProviderType.value) return null
+  const LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', deepseek: 'DeepSeek', openrouter: 'OpenRouter', google: 'Google' }
+  return { model: draftModelId.value, detected: LABELS[detectedType] || detectedType, provider: LABELS[draftProviderType.value] || draftProviderType.value }
 })
 
 const modelsLoading = computed(() => {
@@ -1947,6 +1970,23 @@ function saveAll() {
   font-size: var(--fs-caption);
   color: #EF4444;
   font-weight: 500;
+}
+
+/* ── Provider/model mismatch warning ─────────────────────────────────────── */
+.bv-mismatch-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-sm);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  color: #92400E;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-top: 0.5rem;
 }
 
 /* ── Required field highlight ────────────────────────────────────────────── */

@@ -2,6 +2,12 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { storage } from '../services/storage'
+import { en, zh } from '../i18n'
+
+const NEW_CHAT_TITLES = new Set([
+  en.chats.newChat,
+  zh.chats.newChat,
+])
 
 /**
  * Look up a provider's credentials from config.providers[] by provider type.
@@ -123,7 +129,7 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.provider === undefined) chat.provider = null
     if (chat.model === undefined) chat.model = null
     if (chat.icon === undefined) chat.icon = ''
-    if (chat.autoTitleEligible === undefined) chat.autoTitleEligible = chat.title === 'New Chat' || chat.title === '新建对话'
+    if (chat.autoTitleEligible === undefined) chat.autoTitleEligible = NEW_CHAT_TITLES.has(chat.title)
     if (chat.autoTitleLocked === undefined) chat.autoTitleLocked = false
     if (chat.autoTitleAttemptCount === undefined) chat.autoTitleAttemptCount = 0
     if (chat.groupAgentIds === undefined) chat.groupAgentIds = []
@@ -274,7 +280,7 @@ export const useChatsStore = defineStore('chats', () => {
           ensureMessages(firstChat.id)  // fire-and-forget, non-blocking
         }
       } else {
-        await createChat('New Chat')
+        await createChat(en.chats.newChat)
       }
     } finally {
       isLoading.value = false
@@ -337,12 +343,12 @@ export const useChatsStore = defineStore('chats', () => {
     return parts.join('/')
   }
 
-  async function createChat(title = 'New Chat', agentConfig = null, folderId = null, options = null) {
+  async function createChat(title = en.chats.newChat, agentConfig = null, folderId = null, options = null) {
     const normalizedIcon = typeof options?.icon === 'string' ? options.icon.trim() : ''
     const normalizedUserAgentId = options?.userAgentId ? String(options.userAgentId) : null
     const autoTitleEligible = options?.autoTitleEligible !== undefined
       ? !!options.autoTitleEligible
-      : (title === 'New Chat' || title === '新建对话')
+      : NEW_CHAT_TITLES.has(title)
     const chat = {
       type: 'chat',
       id: uuidv4(),
@@ -387,7 +393,7 @@ export const useChatsStore = defineStore('chats', () => {
     return chat
   }
 
-  async function createChatFromHistory(sourceChatId, title = 'New Chat', agentOverride = null) {
+  async function createChatFromHistory(sourceChatId, title = en.chats.newChat, agentOverride = null) {
     const source = chats.value.find(c => c.id === sourceChatId)
     if (!source) return createChat(title)
     // Ensure messages are loaded
@@ -1029,7 +1035,7 @@ export const useChatsStore = defineStore('chats', () => {
       const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
       if (msg) {
         if (!msg.segments) msg.segments = []
-        // 只保留最新的一条步骤，不要堆积
+        // Keep only the latest step segment to avoid accumulation.
         const existingStepIndex = msg.segments.findIndex(s => s.type === 'agent_step')
         const newStep = {
           type: 'agent_step',
@@ -1042,10 +1048,10 @@ export const useChatsStore = defineStore('chats', () => {
         }
         
         if (existingStepIndex >= 0) {
-          // 替换已存在的步骤
+          // Replace the existing step segment.
           msg.segments[existingStepIndex] = newStep
         } else {
-          // 添加新步骤
+          // Append a new step segment.
           msg.segments.push(newStep)
         }
       }

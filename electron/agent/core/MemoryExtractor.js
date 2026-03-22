@@ -76,7 +76,7 @@ Rules:
 - Choose the most appropriate section: Preferences, Communication, Technical, Projects, Agentl, Interaction Notes
 - Keep entries concise — one line each, written as bullet-point facts
 - If there is nothing worth remembering, return an empty array
-- LANGUAGE: Write all memory entries in ${language === 'zh' ? 'Chinese (简体中文)' : 'the same language the user is speaking in the conversation'}. Match the language of the conversation — if the user speaks Chinese, write memories in Chinese; if English, write in English.
+- LANGUAGE: Write all memory entries in ${language === 'zh' ? 'Chinese (Simplified)' : 'the same language the user is speaking in the conversation'}. Match the language of the conversation — if the user speaks Chinese, write memories in Chinese; if English, write in English.
 
 Respond with ONLY valid JSON (no markdown fences, no explanation):
 {"memories": [{"target": "${hasParticipants ? 'user|<agent_name>' : 'user|system'}", "section": "<section name>", "entry": "<the memory entry>", "confidence": 0.85}]}`
@@ -223,7 +223,7 @@ CONFIDENCE SCORING:
 
 Choose appropriate sections: Relationships, Collaboration Style, Key Insights, Personality, Interaction Notes
 
-LANGUAGE: Write all memory entries in ${language === 'zh' ? 'Chinese (简体中文)' : 'the same language the agents are speaking in the transcript'}. Match the language of the conversation.
+LANGUAGE: Write all memory entries in ${language === 'zh' ? 'Chinese (Simplified)' : 'the same language the agents are speaking in the transcript'}. Match the language of the conversation.
 
 Respond with ONLY valid JSON (no markdown fences, no explanation):
 {"memories": [{"target": "<agent_name>", "section": "<section name>", "entry": "<the memory entry>", "confidence": 0.85}]}`

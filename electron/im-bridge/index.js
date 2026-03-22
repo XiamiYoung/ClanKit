@@ -35,7 +35,11 @@ function getDataDir() {
 function resolveSTT() {
   const vc = _config.voiceCall || {}
   if (vc.whisperApiKey) {
-    return { apiKey: vc.whisperApiKey, baseURL: vc.whisperBaseURL || '' }
+    return { 
+      apiKey: vc.whisperApiKey, 
+      baseURL: vc.whisperBaseURL || '',
+      directAuth: vc.whisperDirectAuth === true
+    }
   }
   return null
 }
@@ -48,7 +52,11 @@ async function transcribeAudio(audioBuffer) {
   const stt = resolveSTT()
   if (!stt) return { text: null, error: 'no-key' }
   const WhisperSTT = require('../agent/voice/WhisperSTT')
-  const engine = new WhisperSTT(stt)
+  const engine = new WhisperSTT({
+    apiKey: stt.apiKey,
+    baseURL: stt.baseURL,
+    directAuth: stt.directAuth
+  })
   const result = await engine.transcribe(audioBuffer, 'audio/ogg')
   return { text: result.text || null, error: null }
 }
@@ -65,13 +73,13 @@ async function textToSpeech(text) {
   const base = (vc.whisperBaseURL || '').replace(/\/+$/, '')
   if (!base) return null
 
-  const isProxy = base.includes('mlaas.virtuosgames.com')
-  const url = isProxy
-    ? `${base}/proxy/openai/v1/audio/speech`
-    : `${base}/v1/audio/speech`
-  const authHeader = isProxy
-    ? { 'x-api-key': apiKey }
-    : { 'Authorization': `Bearer ${apiKey}` }
+  const directAuth = vc.whisperDirectAuth === true
+  const url = directAuth
+    ? `${base}/v1/audio/speech`
+    : `${base}/proxy/openai/v1/audio/speech`
+  const authHeader = directAuth
+    ? { 'Authorization': `Bearer ${apiKey}` }
+    : { 'x-api-key': apiKey }
   const ttsModel = vc.ttsMode === 'openai-hd' ? 'tts-1-hd' : 'tts-1'
 
   const resp = await fetch(url, {
