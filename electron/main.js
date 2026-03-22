@@ -1,6 +1,8 @@
 const path = require('path')
 const fs = require('fs')
 const { v4: uuidv4 } = require('uuid')
+const pdfParse = require('pdf-parse')
+const mammoth = require('mammoth')
 
 // Helper to get provider config by type from the new providers array
 function getProviderByType(config, type) {
@@ -643,6 +645,11 @@ const DEFAULT_CONFIG = {
 // --- Main Window ------------------------------------------------------------
 let mainWindow
 
+// Manual maximize state — required because Electron's isMaximized() is unreliable
+// on secondary monitors when the window was moved there via custom setBounds dragging.
+let _isMaximizedManual = false
+let _preMaximizeBounds = null
+
 function createWindow() {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize
   const winW = Math.round(screenW * 4 / 5)
@@ -684,11 +691,19 @@ function createWindow() {
   }
   mainWindow.on('closed', () => { mainWindow = null })
 
-  // Double-click titlebar to resize to 70% screen
-  mainWindow.on('maximize', () => mainWindow?.webContents.send('window:maximized', true))
-  mainWindow.on('unmaximize', () => mainWindow?.webContents.send('window:maximized', false))
-  mainWindow.on('enter-full-screen', () => mainWindow?.webContents.send('window:maximized', true))
-  mainWindow.on('leave-full-screen', () => mainWindow?.webContents.send('window:maximized', false))
+  // Window maximize state — tracked manually because Electron's isMaximized()
+  // returns false on secondary monitors when moved there via custom setBounds drag.
+  mainWindow.on('maximize', () => {
+    _isMaximizedManual = true
+    mainWindow?.webContents.send('window:maximized', true)
+  })
+  mainWindow.on('unmaximize', () => {
+    _isMaximizedManual = false
+    _preMaximizeBounds = null
+    mainWindow?.webContents.send('window:maximized', false)
+  })
+  mainWindow.on('enter-full-screen', () => { mainWindow?.webContents.send('window:maximized', true) })
+  mainWindow.on('leave-full-screen', () => { mainWindow?.webContents.send('window:maximized', false) })
   
   // Custom titlebar double-click handler - resize to 70%
   const titleBarHeight = 40
@@ -2704,7 +2719,7 @@ ipcMain.handle('knowledge:pick-files', async () => {
       properties: ['openFile', 'multiSelections'],
       title: 'Select files to upload to Knowledge Base',
       filters: [
-        { name: 'Documents', extensions: ['txt', 'md', 'pdf', 'json', 'csv', 'html', 'xml', 'yaml', 'yml'] },
+        { name: 'Documents', extensions: ['txt', 'md', 'pdf', 'docx', 'json', 'csv', 'html', 'xml', 'yaml', 'yml'] },
         { name: 'All Files', extensions: ['*'] }
       ]
     })
@@ -2752,26 +2767,53 @@ ipcMain.handle('knowledge:upload-files', async (_, { apiKey, indexName, filePath
       try {
         const stat = fs.statSync(resolvedPath)
         size = stat.size
-        if (size > 10 * 1024 * 1024) {
-          results.push({ name, error: 'File too large (max 10MB)' })
+        if (size > 100 * 1024 * 1024) {
+          results.push({ name, error: 'File too large (max 100MB)' })
           continue
         }
-        content = fs.readFileSync(resolvedPath, 'utf8')
+        if (ext === 'pdf') {
+          const buffer = fs.readFileSync(resolvedPath)
+          const pdfData = await pdfParse(buffer)
+          content = pdfData.text || ''
+        } else if (ext === 'docx') {
+          const buffer = fs.readFileSync(resolvedPath)
+          const docResult = await mammoth.extractRawText({ buffer })
+          content = docResult.value || ''
+        } else if (ext === 'doc') {
+          results.push({ name, error: 'Legacy .doc format is not supported. Please save the file as .docx first.' })
+          continue
+        } else {
+          content = fs.readFileSync(resolvedPath, 'utf8')
+        }
       } catch (err) {
         results.push({ name, error: err.message })
         continue
       }
 
-      // Split into chunks (simple chunking by paragraphs/lines)
+      if (!content.trim()) {
+        results.push({ name, error: 'No text content could be extracted from this file' })
+        continue
+      }
+
+      // Split into chunks (paragraphs, max 1000 chars per chunk, hard cap at 3000 chars)
+      const MAX_CHUNK = 1000
+      const HARD_CHUNK_CAP = 3000
       const chunks = []
       const paragraphs = content.split(/\n\n+/)
       let currentChunk = ''
       for (const para of paragraphs) {
-        if ((currentChunk + para).length > 1000) {
-          if (currentChunk.trim()) chunks.push(currentChunk.trim())
-          currentChunk = para
-        } else {
-          currentChunk += (currentChunk ? '\n\n' : '') + para
+        // Hard-cap overly long paragraphs by splitting them further
+        const pieces = []
+        for (let pi = 0; pi < para.length; pi += HARD_CHUNK_CAP) {
+          pieces.push(para.slice(pi, pi + HARD_CHUNK_CAP))
+        }
+        for (const piece of pieces) {
+          if ((currentChunk + piece).length > MAX_CHUNK) {
+            if (currentChunk.trim()) chunks.push(currentChunk.trim())
+            currentChunk = piece
+          } else {
+            currentChunk += (currentChunk ? '\n\n' : '') + piece
+          }
         }
       }
       if (currentChunk.trim()) chunks.push(currentChunk.trim())
@@ -6476,6 +6518,17 @@ ipcMain.handle('window:get-position', () => mainWindow ? mainWindow.getPosition(
 let _dragPinnedSize = null
 ipcMain.on('window:drag-start', () => {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize()
+  } else if (_isMaximizedManual) {
+    // Manually maximized via setBounds — restore to pre-maximize bounds for drag
+    _isMaximizedManual = false
+    if (_preMaximizeBounds) {
+      mainWindow.setBounds(_preMaximizeBounds)
+      _preMaximizeBounds = null
+    }
+    mainWindow.webContents.send('window:maximized', false)
+  }
   const { width, height } = mainWindow.getBounds()
   _dragPinnedSize = { width, height }
 })
@@ -6491,16 +6544,43 @@ ipcMain.on('window:move-to', (_, x, y) => {
 ipcMain.handle('window:minimize', () => { mainWindow?.minimize() })
 ipcMain.handle('window:maximize', () => {
   if (!mainWindow) return false
-  if (mainWindow.isMaximized()) mainWindow.unmaximize()
-  else mainWindow.maximize()
-  return mainWindow.isMaximized()
+  const { screen } = require('electron')
+  const bounds = mainWindow.getBounds()
+  const display = screen.getDisplayMatching(bounds)
+  const wa = display.workArea
+  if (_isMaximizedManual || mainWindow.isMaximized()) {
+    // Restore
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize()
+    } else {
+      // Manually maximized — restore to saved pre-maximize bounds, or default 70%
+      const restore = _preMaximizeBounds || {
+        x: Math.round(wa.x + wa.width * 0.15),
+        y: Math.round(wa.y + wa.height * 0.1),
+        width: Math.round(wa.width * 0.7),
+        height: Math.round(wa.height * 0.8)
+      }
+      mainWindow.setBounds(restore)
+      _preMaximizeBounds = null
+      _isMaximizedManual = false
+      mainWindow.webContents.send('window:maximized', false)
+    }
+    return false
+  } else {
+    // Maximize to current display work area via setBounds (reliable on all monitors)
+    _preMaximizeBounds = { ...bounds }
+    mainWindow.setBounds({ x: wa.x, y: wa.y, width: wa.width, height: wa.height })
+    _isMaximizedManual = true
+    mainWindow.webContents.send('window:maximized', true)
+    return true
+  }
 })
 ipcMain.handle('window:close', () => {
   // Force exit after a short grace period in case cleanup hangs
   setTimeout(() => { process.exit(0) }, 3000)
   app.quit()
 })
-ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false)
+ipcMain.handle('window:is-maximized', () => _isMaximizedManual || (mainWindow?.isMaximized() ?? false))
 
 const MINIBAR_DEFAULT_W = 230
 let _minibarIntendedW = MINIBAR_DEFAULT_W

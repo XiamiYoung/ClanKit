@@ -637,14 +637,25 @@ async function pickAndUploadFiles() {
     if (!filePaths || filePaths.length === 0) return
     const result = await knowledgeStore.uploadFiles(filePaths)
     if (result.success) {
-      uploadResult.value = { success: true, message: `Successfully uploaded ${filePaths.length} file(s)` }
+      const perFile = result.results || []
+      const succeeded = perFile.filter(r => r.success)
+      const failed = perFile.filter(r => r.error)
+      if (failed.length === 0) {
+        uploadResult.value = { success: true, message: `Successfully uploaded ${succeeded.length} file(s)` }
+      } else if (succeeded.length === 0) {
+        const errMsg = failed.map(r => `${r.name}: ${r.error}`).join('; ')
+        uploadResult.value = { success: false, message: `Upload failed — ${errMsg}` }
+      } else {
+        const errMsg = failed.map(r => `${r.name}: ${r.error}`).join('; ')
+        uploadResult.value = { success: false, message: `${succeeded.length} uploaded, ${failed.length} failed — ${errMsg}` }
+      }
     } else {
       uploadResult.value = { success: false, message: result.error || 'Upload failed' }
     }
-    setTimeout(() => { uploadResult.value = null }, 4000)
+    setTimeout(() => { uploadResult.value = null }, 6000)
   } catch (err) {
     uploadResult.value = { success: false, message: err.message }
-    setTimeout(() => { uploadResult.value = null }, 4000)
+    setTimeout(() => { uploadResult.value = null }, 6000)
   }
 }
 

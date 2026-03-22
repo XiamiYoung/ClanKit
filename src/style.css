@@ -1,11 +1,3 @@
-/* Explicitly load Segoe UI Emoji so Chromium/Electron on WSL2 can render emoji.
-   fontconfig has no Windows fonts registered, so naming the family alone won't work. */
-@font-face {
-  font-family: 'Segoe UI Emoji';
-  src: url('/fonts/seguiemj.ttf') format('truetype');
-  font-display: swap;
-}
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

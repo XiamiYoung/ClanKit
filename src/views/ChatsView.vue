@@ -2018,14 +2018,14 @@ const ChatTreeNodeView = defineComponent({
             paddingLeft: indent + 'px',
             paddingTop: '0px',
             paddingBottom: '0px',
-            background: rowBg,
+            background: 'transparent',
             color: isDark ? '#fff' : '#1A1A1A',
-            boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            isolation: 'isolate',
             borderRadius: '0.625rem',
             margin: '0px 2px',
             fontFamily: "'Inter',sans-serif",
             fontSize: 'var(--fs-caption)',
-            transition: 'background 0.15s, color 0.15s',
+            transition: 'color 0.15s',
             // Individual border properties — never mix with shorthand to avoid height shifts
             borderTop: dragOver.value === 'top' ? '2px solid #fff' : '2px solid transparent',
             borderRight: '0px solid transparent',
@@ -2045,6 +2045,8 @@ const ChatTreeNodeView = defineComponent({
           onMouseleave: () => { hovered.value = false; treeTooltip.value.visible = false },
           ...dragAttrs,
         }, [
+          // Background layer — vertically inset so adjacent items don't visually overlap
+          h('div', { 'aria-hidden': 'true', style: { position: 'absolute', top: '1px', bottom: '0', left: '0', right: '0', background: rowBg, boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none', borderRadius: '0.5rem', transition: 'background 0.15s', pointerEvents: 'none', zIndex: '-1' } }),
           // Spacer matching folder chevron width for vertical alignment
           h('span', { style: 'width:14px;display:inline-block;flex-shrink:0;' }),
           // Chat icon (custom icon fallback to bubble)
@@ -4362,6 +4364,29 @@ function flushSegments(key) {
   msg.streaming = true
 }
 
+/**
+ * Wait for all agent_end IPC events to be processed for the given agent keys.
+ *
+ * The invoke reply (`runGroupAgents` promise) and `event.sender.send` chunks travel
+ * on different Electron IPC channels with NO ordering guarantee. The invoke can
+ * resolve BEFORE the renderer has processed the last text chunks + agent_end events.
+ * If we scan messages before agent_end fires, msg.content is incomplete and @mentions
+ * at the end of a response are missed → collaboration loop silently exits.
+ *
+ * This function polls `perChatStreamingMsgId` — agent_end deletes the key, so absence
+ * means the agent's message has been fully finalized (content + segments synced).
+ */
+async function waitForAgentEnd(chatId, agentIds, timeoutMs = 10000) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    const pending = agentIds.filter(id => perChatStreamingMsgId.has(`${chatId}:${id}`))
+    if (pending.length === 0) return
+    // Yield to let IPC event handlers run
+    await new Promise(r => setTimeout(r, 50))
+  }
+  dbg(`waitForAgentEnd timed out after ${timeoutMs}ms — proceeding with potentially incomplete messages`, 'warn')
+}
+
 function handleChunk(cId, chunk) {
   if (chunk.type === 'plan_submitted') {
     const chat = chatsStore.chats.find(c => c.id === cId)
@@ -4473,7 +4498,27 @@ function handleChunk(cId, chunk) {
                 const trimmed = msg.content.slice(0, cutAt).trimEnd()
                 dbg(`Truncated multi-turn roleplay for ${chunk.agentName}: ${msg.content.length} → ${trimmed.length} chars`)
                 msg.content = trimmed
-                msg.segments = [{ type: 'text', content: trimmed }]
+                // Preserve non-text segments (tool calls, tool results, images, etc.);
+                // only truncate the text portion to match the trimmed content.
+                let textConsumed = 0
+                const newSegs = []
+                for (const seg of msg.segments) {
+                  if (seg.type !== 'text') {
+                    newSegs.push(seg)
+                    continue
+                  }
+                  if (textConsumed >= trimmed.length) continue
+                  const segText = seg.content || ''
+                  const remaining = trimmed.length - textConsumed
+                  if (segText.length <= remaining) {
+                    newSegs.push(seg)
+                    textConsumed += segText.length
+                  } else {
+                    newSegs.push({ ...seg, content: segText.slice(0, remaining) })
+                    textConsumed += remaining
+                  }
+                }
+                msg.segments = newSegs
               }
             }
           }
@@ -5004,7 +5049,12 @@ function injectCollaborationSummary(targetChat, iterationCount) {
 async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt, usrAgent, iterationCount, prevMessagesLength) {
   const targetChat = chatsStore.chats.find(c => c.id === chatId)
   if (!targetChat || !targetChat.messages) return
-  if (collaborationCancelled.value || !targetChat.isRunning) return
+  // Only check collaborationCancelled — do NOT check !targetChat.isRunning here.
+  // agent_end IPC events can clear isRunning via a race condition when they arrive
+  // between runGroupAgents resolving and this function being called, even with
+  // isInCollaborationLoop=true (before the flag was set, or if HMR reloaded state).
+  // User stop is fully handled by collaborationCancelled (set by stopAgent).
+  if (collaborationCancelled.value) return
 
   isInCollaborationLoop.value = true
 
@@ -5096,10 +5146,15 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
   const respondingIds = [...nextRespondingSet]
   dbg(`Collaboration run (sequential): ${respondingIds.length} agent(s): ${respondingIds.map(id => agentsStore.getAgentById(id)?.name).join(', ')}`)
 
+  // Re-assert isRunning in case agent_end cleared it via a race condition.
+  // The collaboration loop owns lifecycle during its execution; the sendMessage
+  // finally block will do the final cleanup when the entire chain completes.
+  targetChat.isRunning = true
+
   const nextLength = targetChat.messages.length
 
   for (let i = 0; i < respondingIds.length; i++) {
-    if (collaborationCancelled.value || !targetChat.isRunning) { isInCollaborationLoop.value = false; return }
+    if (collaborationCancelled.value) { isInCollaborationLoop.value = false; return }
     const pid = respondingIds[i]
     const agent = agentsStore.getAgentById(pid)
     if (!agent) continue
@@ -5173,6 +5228,8 @@ async function triggerAgentCollaboration(chatId, groupIds, cfg, userAgentPrompt,
     for (const run of agentRuns) delete run.messages
     runningAgentKeys.add(`${chatId}:${pid}`)
     await runGroupAgents(chatId, targetChat, agentRuns, seqApiMessages, cfg, [])
+    // Wait for agent_end to be processed before scanning for @mentions in next iteration
+    await waitForAgentEnd(chatId, [pid])
     scrollToBottom(false, chatId)
   }
 
@@ -5772,8 +5829,24 @@ async function sendMessage() {
       // Mark responding agents as running
       for (const run of firstRoundRuns) runningAgentKeys.add(`${chatId}:${run.agentId}`)
 
+      // Set flag BEFORE the initial run so agent_end IPC events cannot prematurely
+      // clear isRunning while we are still between runGroupAgents and
+      // triggerAgentCollaboration. Without this, agent_end fires during the
+      // await nextTick() below (isInCollaborationLoop still false at that point),
+      // sees an empty runningAgentKeys, and sets isRunning=false — causing
+      // triggerAgentCollaboration to bail out immediately and the next agent
+      // (e.g. @Ding Yifei) never runs.
+      // triggerAgentCollaboration and the finally block both reset this flag.
+      isInCollaborationLoop.value = true
+
       const msgCountBeforeRun = targetChat.messages.length
       await runGroupAgents(chatId, targetChat, firstRoundRuns, apiMessages, cfg, pendingAttachments)
+
+      // Wait for all agent_end IPC events to arrive before scanning for @mentions.
+      // The invoke reply and event.sender.send chunks use different IPC channels —
+      // without this, the invoke resolves before agent_end fires, msg.content is
+      // incomplete, and @mentions at the end of responses are silently missed.
+      await waitForAgentEnd(chatId, firstRoundRuns.map(r => r.agentId))
 
       // Scroll after initial group run completes
       await nextTick()
