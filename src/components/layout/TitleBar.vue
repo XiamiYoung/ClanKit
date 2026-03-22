@@ -7,17 +7,31 @@
   >
     <!-- Left group -->
     <div class="flex items-center gap-1" style="padding-left:0.5rem;" @mousedown.stop @dblclick.stop>
-      <button @click.stop="$emit('toggle-sidebar')" class="tb-btn" :title="t('titlebar.toggleSidebar')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button
+        @click.stop="$emit('toggle-sidebar')"
+        class="tb-btn"
+        :title="t('titlebar.toggleSidebar')"
+        @mouseenter="onSidebarBtnHover"
+        @mouseleave="onSidebarBtnLeave"
+      >
+        <svg :class="['tb-btn-glyph', sidebarBtnAnimClass]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>
         </svg>
       </button>
-      <button @click.stop="toggleMinibar" class="tb-btn" :class="{ 'tb-btn-active': isMinibar }" :title="t('titlebar.minibarMode')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button
+        @click.stop="toggleMinibar"
+        class="tb-btn"
+        :class="{ 'tb-btn-active': isMinibar }"
+        :title="t('titlebar.minibarMode')"
+        @mouseenter="onMinibarBtnHover"
+        @mouseleave="onMinibarBtnLeave"
+      >
+        <svg :class="['tb-btn-glyph', minibarBtnAnimClass]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/>
           <rect x="3" y="3" width="18" height="7" rx="2" fill="currentColor" stroke="none"/>
         </svg>
       </button>
+      <div id="titlebar-focus-slot" class="tb-focus-slot"></div>
     </div>
 
     <div style="flex:1;" />
@@ -76,6 +90,55 @@ const tasksStore = useTasksStore()
 const { t } = useI18n()
 
 const isMinibar = computed(() => focusModeStore.isMinibarMode)
+
+const TITLE_BTN_HOVER_ANIMS = [
+  'tb-anim-wiggle',
+  'tb-anim-bounce',
+  'tb-anim-tilt',
+  'tb-anim-pop',
+  'tb-anim-jello',
+]
+
+const sidebarBtnAnimClass = ref('')
+const minibarBtnAnimClass = ref('')
+let sidebarBtnAnimTimer = null
+let minibarBtnAnimTimer = null
+
+function pickTitleBtnAnim() {
+  return TITLE_BTN_HOVER_ANIMS[Math.floor(Math.random() * TITLE_BTN_HOVER_ANIMS.length)]
+}
+
+function onSidebarBtnHover() {
+  clearTimeout(sidebarBtnAnimTimer)
+  sidebarBtnAnimClass.value = pickTitleBtnAnim()
+  sidebarBtnAnimTimer = setTimeout(() => { sidebarBtnAnimClass.value = '' }, 700)
+  window.dispatchEvent(new CustomEvent('titlebar:logo-hint-enter', {
+    detail: { text: t('titlebar.toggleSidebar') }
+  }))
+}
+
+function onSidebarBtnLeave() {
+  clearTimeout(sidebarBtnAnimTimer)
+  sidebarBtnAnimTimer = setTimeout(() => { sidebarBtnAnimClass.value = '' }, 120)
+  window.dispatchEvent(new CustomEvent('titlebar:logo-hint-leave'))
+}
+
+function onMinibarBtnHover() {
+  clearTimeout(minibarBtnAnimTimer)
+  minibarBtnAnimClass.value = pickTitleBtnAnim()
+  minibarBtnAnimTimer = setTimeout(() => { minibarBtnAnimClass.value = '' }, 700)
+  window.dispatchEvent(new CustomEvent('titlebar:logo-hint-enter', {
+    detail: {
+      text: focusModeStore.isMinibarMode ? t('titlebar.exitMinibar') : t('titlebar.minibarMode')
+    }
+  }))
+}
+
+function onMinibarBtnLeave() {
+  clearTimeout(minibarBtnAnimTimer)
+  minibarBtnAnimTimer = setTimeout(() => { minibarBtnAnimClass.value = '' }, 120)
+  window.dispatchEvent(new CustomEvent('titlebar:logo-hint-leave'))
+}
 
 function toggleMinibar() {
   if (focusModeStore.isMinibarMode) {
@@ -140,6 +203,8 @@ onMounted(async () => {
 })
 onUnmounted(() => {
   unsubMaximized?.()
+  clearTimeout(sidebarBtnAnimTimer)
+  clearTimeout(minibarBtnAnimTimer)
   document.removeEventListener('mousemove', onDragMove)
   document.removeEventListener('mouseup', onDragEnd)
 })
@@ -148,7 +213,7 @@ onUnmounted(() => {
 <style scoped>
 .tb-btn {
   display:flex; align-items:center; justify-content:center;
-  width:2rem; height:2rem; flex-shrink:0;
+  width:1.75rem; height:1.75rem; flex-shrink:0;
   border:none; background:transparent; color:#6B7280;
   cursor:pointer; border-radius:0.375rem;
   transition:background 0.15s,color 0.15s;
@@ -156,6 +221,58 @@ onUnmounted(() => {
 .tb-btn:hover { background:#F5F5F5; color:#1A1A1A; }
 .tb-btn-active { color:#007AFF; }
 .tb-btn-active:hover { background:rgba(0,122,255,0.08); color:#007AFF; }
+
+.tb-btn-glyph {
+  transform-origin: center;
+}
+
+.tb-focus-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+}
+
+.tb-anim-wiggle { animation: tb-wiggle 0.55s ease-in-out; }
+.tb-anim-bounce { animation: tb-bounce 0.5s ease-in-out; }
+.tb-anim-tilt { animation: tb-tilt 0.45s ease-in-out; }
+.tb-anim-pop { animation: tb-pop 0.4s cubic-bezier(.175,.885,.32,1.275); }
+.tb-anim-jello { animation: tb-jello 0.65s ease-in-out; }
+
+@keyframes tb-wiggle {
+  0% { transform: rotate(0deg); }
+  20% { transform: rotate(-10deg); }
+  40% { transform: rotate(8deg); }
+  60% { transform: rotate(-6deg); }
+  80% { transform: rotate(4deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes tb-bounce {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-3px); }
+  60% { transform: translateY(1px); }
+}
+
+@keyframes tb-tilt {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  35% { transform: rotate(-8deg) scale(1.03); }
+  70% { transform: rotate(6deg) scale(0.98); }
+}
+
+@keyframes tb-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+
+@keyframes tb-jello {
+  0%, 100% { transform: skew(0deg, 0deg); }
+  25% { transform: skew(-7deg, -3deg); }
+  50% { transform: skew(5deg, 2deg); }
+  75% { transform: skew(-3deg, -1deg); }
+}
 
 .tb-minibar {
   position: absolute;

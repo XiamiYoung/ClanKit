@@ -60,6 +60,14 @@
             <span v-if="msg.waitingState === 'error'" class="cw-pre-response-error">
               {{ msg.waitingError || t('chats.preResponseFailed') }}
             </span>
+            <button
+              v-if="msg.waitingState === 'error'"
+              class="cw-retry-btn"
+              @click="emit('retry-waiting-indicator', msg)"
+            >
+              <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              {{ t('chats.retry') }}
+            </button>
           </div>
 
           <!-- System info banner (stop/resume/compaction notifications) -->
@@ -361,7 +369,7 @@ const props = defineProps({
   onRefinePlan:  { type: Function, default: null },
 })
 
-const emit = defineEmits(['send', 'stop', 'quote', 'delete-message', 'send-with-attachments', 'resend-message', 'quote-image'])
+const emit = defineEmits(['send', 'stop', 'quote', 'delete-message', 'send-with-attachments', 'resend-message', 'quote-image', 'retry-waiting-indicator'])
 
 const chatsStore = useChatsStore()
 const agentsStore = useAgentsStore()
@@ -1115,6 +1123,26 @@ defineExpose({ scrollToBottom })
   color: #dc2626;
   font-size: var(--fs-small);
   font-weight: 600;
+}
+.cw-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.cw-retry-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.22);
 }
 @keyframes cw-wave-pulse {
   0%, 100% { height: 0.3rem; opacity: 0.6; }

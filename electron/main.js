@@ -2319,6 +2319,7 @@ ipcMain.handle('memory:extract-collaboration', async (event, { chatId, transcrip
       apiKey: providerCfg.apiKey,
       baseURL: providerCfg.baseURL,
       isOpenAI,
+      directAuth: um.provider === 'deepseek',
     })
 
     // Read existing soul files for each participant
@@ -3643,64 +3644,60 @@ ipcMain.handle('skills:fetch-remote', async (_, sourceId, options = {}) => {
           const limit = Math.min(Math.max(options.limit || 50, 1), 200)
           
           if (keyword.trim()) {
-            // 如果有关键词，使用搜索 API
-            logger.info(`[Skills] Fetching ClawHub skills using search API with keyword: "${keyword}"`)
-            
-            const url = 'https://wry-manatee-359.convex.cloud/api/v1/search'
-            const searchUrl = new URL(url)
-            searchUrl.searchParams.set('q', keyword)
-            searchUrl.searchParams.set('limit', String(limit))
-            searchUrl.searchParams.set('nonSuspiciousOnly', 'true')
-            
-            console.log(`\n========== ClawHub Search API REQUEST ==========`)
-            console.log(`URL: ${searchUrl.toString()}`)
-            console.log(`METHOD: GET`)
-            console.log(`==========================================\n`)
-            
-            logger.info(`[ClawHub API] SEARCH REQUEST - URL: ${searchUrl.toString()}`)
-            
-            const response = await fetch(searchUrl.toString(), {
-              method: 'GET',
-              headers: {
-                'Accept': 'application/json'
-              }
+            // 搜索模式：使用 Convex Action search:searchSkills（与网站 WebSocket 行为一致）
+            logger.info(`[Skills] Fetching ClawHub skills via search:searchSkills action, keyword: "${keyword}"`)
+
+            const payload = {
+              path: 'search:searchSkills',
+              format: 'convex_encoded_json',
+              args: [{
+                query: keyword.trim(),
+                highlightedOnly: false,
+                nonSuspiciousOnly: true,
+                limit
+              }]
+            }
+
+            const response = await fetch('https://wry-manatee-359.convex.cloud/api/action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': '*/*' },
+              body: JSON.stringify(payload)
             })
-            
-            const responseText = await response.text()
-            
-            console.log(`\n========== ClawHub Search API RESPONSE ==========`)
-            console.log(`Status: ${response.status} ${response.statusText}`)
-            console.log(`Response Body:`)
-            console.log(responseText.substring(0, 1000))
-            console.log(`==========================================\n`)
-            
-            logger.info(`[ClawHub API] SEARCH RESPONSE - Status: ${response.status}`)
-            logger.info(`[ClawHub API] SEARCH RESPONSE - Body: ${responseText}`)
-            
+
             if (!response.ok) {
               throw new Error(`HTTP ${response.status}: ${response.statusText}`)
             }
-            
-            const data = JSON.parse(responseText)
-            const results = data.results || []
-            
+
+            const data = await response.json()
+            if (data.status === 'error' || data.errorMessage) {
+              throw new Error(`Convex error: ${data.errorMessage || 'Unknown error'}`)
+            }
+
+            // value 是 SkillSearchEntry[]，每项含 skill / owner / score 字段
+            const results = Array.isArray(data.value) ? data.value : []
             logger.info(`[ClawHub API] ✅ Search found ${results.length} results`)
-            
-            return results.map(item => ({
-              id: item.slug || item.displayName?.toLowerCase().replace(/\s+/g, '-'),
-              name: item.displayName || '',
-              description: item.summary || '',
-              category: 'general',
-              author: 'ClawHub',
-              downloadUrl: `https://wry-manatee-359.convex.site/api/v1/download?slug=${item.slug}`,
-              rating: item.score || 0,
-              downloads: 0,
-              stars: 0,
-              installs: 0,
-              homepage: `https://clawhub.ai/skills/${item.slug}`,
-              sourceId: 'clawhub',
-              installed: false
-            }))
+
+            return results.map(item => {
+              const skillData = item.skill || item
+              const ownerData = item.owner || {}
+              const stats = skillData.stats || {}
+              const slug = skillData.slug || ''
+              return {
+                id: slug || skillData._id || skillData.displayName?.toLowerCase().replace(/\s+/g, '-'),
+                name: skillData.displayName || '',
+                description: skillData.summary || '',
+                category: 'general',
+                author: ownerData.handle || ownerData.displayName || 'ClawHub',
+                downloadUrl: `https://wry-manatee-359.convex.site/api/v1/download?slug=${slug}`,
+                rating: item.score || stats.stars || 0,
+                downloads: stats.downloads || 0,
+                stars: stats.stars || 0,
+                installs: stats.installsAllTime || stats.installsCurrent || 0,
+                homepage: `https://clawhub.ai/${ownerData.handle || 'user'}/${slug}`,
+                sourceId: 'clawhub',
+                installed: false
+              }
+            })
           } else {
             // 否则使用浏览 API
             logger.info(`[Skills] Fetching ClawHub skills from browse API (limit: ${limit})`)
@@ -3729,18 +3726,6 @@ ipcMain.handle('skills:fetch-remote', async (_, sourceId, options = {}) => {
             
             const body = JSON.stringify(payload)
             
-            console.log(`\n========== ClawHub Browse API REQUEST ==========`)
-            console.log(`URL: ${url}`)
-            console.log(`METHOD: POST`)
-            console.log(`HEADERS:`)
-            console.log(JSON.stringify(headers, null, 2))
-            console.log(`BODY:`)
-            console.log(body)
-            console.log(`==========================================\n`)
-            
-            logger.info(`[ClawHub API] BROWSE REQUEST - URL: ${url}`)
-            logger.info(`[ClawHub API] BROWSE REQUEST - BODY: ${body}`)
-            
             const response = await fetch(url, {
               method: 'POST',
               headers,
@@ -3748,15 +3733,6 @@ ipcMain.handle('skills:fetch-remote', async (_, sourceId, options = {}) => {
             })
             
             const responseText = await response.text()
-            
-            console.log(`\n========== ClawHub Browse API RESPONSE ==========`)
-            console.log(`Status: ${response.status} ${response.statusText}`)
-            console.log(`Response Body (first 1000 chars):`)
-            console.log(responseText.substring(0, 1000))
-            console.log(`==========================================\n`)
-            
-            logger.info(`[ClawHub API] BROWSE RESPONSE - Status: ${response.status}`)
-            logger.info(`[ClawHub API] BROWSE RESPONSE - Body: ${responseText}`)
             
             if (!response.ok) {
               throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -4261,6 +4237,7 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
       apiKey: providerCfg.apiKey,
       baseURL: providerCfg.baseURL,
       isOpenAI,
+      directAuth: um.provider === 'deepseek',
     })
 
     // Extract last user message + last assistant response
@@ -5361,6 +5338,9 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       return { success: false, error: `Utility model provider "${um.provider}" is missing apiKey or baseURL.` }
     }
+    // Use the global maxOutputTokens from config, capped at 4096 for utility calls.
+    // The global setting reflects what models the user's providers actually support.
+    const maxTokens = Math.min(config.maxOutputTokens || 4096, 4096)
     const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
     if (isOpenAI) {
       const { OpenAIClient } = require('./agent/core/OpenAIClient')
@@ -5375,7 +5355,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
       const client = new OpenAIClient(cfg).getClient()
       const response = await client.chat.completions.create({
         model: um.model,
-        max_tokens: 1024,
+        max_tokens: maxTokens,
         messages: [{ role: 'user', content: prompt }],
       })
       const text = response.choices?.[0]?.message?.content || ''
@@ -5392,7 +5372,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
       const client = new AnthropicClient(cfg).getClient()
       const response = await client.messages.create({
         model: um.model,
-        max_tokens: 1024,
+        max_tokens: maxTokens,
         messages: [{ role: 'user', content: prompt }],
       })
       const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
@@ -5610,6 +5590,121 @@ Reply with ONLY a JSON object:
   } catch (err) {
     logger.error('agent:dispatch-group-tasks error', err.message)
     return { dispatched: null }
+  }
+})
+
+/**
+ * Suggest chat title using utility model.
+ *
+ * Input:  { chatId, messages: [{role, content}], attempt }
+ * Output: { success: boolean, clear: boolean, title?: string }
+ */
+ipcMain.handle('agent:suggest-chat-title', async (_event, { chatId, messages, attempt }) => {
+  try {
+    const cfg = readJSON(CONFIG_FILE, {})
+    const um = cfg.utilityModel
+    if (!um?.provider || !um?.model) {
+      logger.warn('agent:suggest-chat-title: utility model not configured', { chatId })
+      return { success: false, clear: false, error: 'utility model not configured' }
+    }
+
+    const providerCfg = cfg[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
+      logger.warn('agent:suggest-chat-title: utility provider missing credentials', { chatId, provider: um.provider })
+      return { success: false, clear: false, error: 'utility model credentials missing' }
+    }
+
+    const strictness = Number(attempt || 1) <= 1
+      ? 'VERY_STRICT'
+      : Number(attempt || 1) === 2
+        ? 'BALANCED'
+        : 'LENIENT'
+
+    const systemPrompt = `You generate concise chat titles.
+
+Task:
+1) Decide whether user intent is clear enough to assign a stable title.
+2) If clear, generate one title.
+3) If unclear, return clear=false and empty title.
+
+Rules:
+- Output ONLY valid JSON with shape: {"clear": boolean, "title": string}
+- Title must be 4-30 characters
+- No quotes, no punctuation suffix, no emoji
+- Prefer concrete intent over generic wording
+- Use the conversation language
+- If confidence is low, return clear=false
+- Strictness mode: ${strictness}`
+
+    const convo = (messages || [])
+      .map(m => `${m.role === 'assistant' ? 'Assistant' : 'User'}: ${String(m.content || '').trim()}`)
+      .filter(Boolean)
+      .join('\n')
+
+    const userContent = `Conversation:\n${convo}`
+
+    let raw = ''
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    if (isOpenAI) {
+      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const clientCfg = {
+        openaiApiKey: providerCfg.apiKey,
+        openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+        _resolvedProvider: 'openai',
+        defaultProvider: 'openai',
+        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+      }
+      const resp = await new OpenAIClient(clientCfg).getClient().chat.completions.create({
+        model: um.model,
+        max_tokens: 120,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+      })
+      raw = resp.choices?.[0]?.message?.content || ''
+      accumulateUtilityUsage(um.model, um.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
+    } else {
+      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const clientCfg = {
+        apiKey: providerCfg.apiKey,
+        baseURL: providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+      }
+      const resp = await new AnthropicClient(clientCfg).getClient().messages.create({
+        model: um.model,
+        max_tokens: 120,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }],
+      })
+      raw = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
+      accumulateUtilityUsage(um.model, um.provider, resp.usage?.input_tokens || 0, resp.usage?.output_tokens || 0).catch(() => {})
+    }
+
+    const match = raw.match(/\{[\s\S]*\}/m)
+    const parsed = match ? JSON.parse(match[0]) : null
+    const clear = !!parsed?.clear
+    const title = String(parsed?.title || '').trim().replace(/[\n\r\t]+/g, ' ')
+
+    if (!clear || !title) {
+      return { success: true, clear: false }
+    }
+
+    const sanitized = title
+      .replace(/["'`]+/g, '')
+      .replace(/[.!?。！？]+$/g, '')
+      .trim()
+
+    if (!sanitized || sanitized.length < 2) {
+      return { success: true, clear: false }
+    }
+
+    logger.agent('suggest-chat-title', { chatId, attempt, title: sanitized })
+    return { success: true, clear: true, title: sanitized }
+  } catch (err) {
+    logger.error('agent:suggest-chat-title error', err.message)
+    return { success: false, clear: false, error: err.message }
   }
 })
 

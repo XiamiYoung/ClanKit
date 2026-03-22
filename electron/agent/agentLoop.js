@@ -456,7 +456,7 @@ class AgentLoop {
    * @param {Array<string|{id:string, name:string, systemPrompt?:string}>} enabledSkills
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
-  buildSystemPrompt(enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, groupChatContext } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}) {
+  buildSystemPrompt(enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, groupChatContext } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
     // When a named agent is active, use it as the opening identity (highest priority).
     // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
     let openingIdentity
@@ -492,7 +492,16 @@ class AgentLoop {
     const imageCfgForPrompt = this.config.imageProvider
     const hasImageTool = !!(imageCfgForPrompt?.apiKey && imageCfgForPrompt?.baseURL && imageCfgForPrompt?.model)
 
-    let system = `${openingIdentity}
+    let system = `${openingIdentity}`
+
+    // ── User Agent Identity Context ──
+    // If a user agent is defined, inject their identity into the system prompt
+    // so the AI character understands who it's talking to and can respond appropriately.
+    if (userAgentPrompt) {
+      system += `\n\n---\n## CONVERSATION PARTNER\nYou are interacting with a specific user who has the following identity:\n\n${userAgentPrompt}\n\nRespond to them according to their identity and the context of your conversation.`
+    }
+
+    system += `
 
 CORE TOOLS (always available):
 - execute_shell: Run shell commands (command + args separated, e.g. command:"ls" args:["/home"])
@@ -620,31 +629,43 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
       system += `\n\nMCP SERVERS: ${mcpIds}`
     }
 
-    // Append user-defined tools info if any are enabled (minimal format for cache efficiency)
+    // Append user-defined tools as a rich capabilities block
     const allUserTools = this.httpTools || []
-    const httpToolsList = allUserTools.filter(t => (t.type || 'http') === 'http')
-    const codeToolsList = allUserTools.filter(t => t.type === 'code')
+    const httpToolsList   = allUserTools.filter(t => (t.type || 'http') === 'http')
+    const codeToolsList   = allUserTools.filter(t => t.type === 'code')
     const promptToolsList = allUserTools.filter(t => t.type === 'prompt')
-    const smtpToolsList = allUserTools.filter(t => t.type === 'smtp')
+    const smtpToolsList   = allUserTools.filter(t => t.type === 'smtp')
 
-    if (httpToolsList.length > 0) {
-      const toolIds = httpToolsList.map(t => t.id).join(', ')
-      system += `\nHTTP TOOLS: ${toolIds}`
-    }
+    if (allUserTools.length > 0) {
+      system += `\n\n## Your Assigned Tools\nThe following tools have been assigned to you. Use them proactively when relevant — especially for real-time or external data, **never answer from memory when a tool is available**.`
 
-    if (codeToolsList.length > 0) {
-      const toolIds = codeToolsList.map(t => t.id).join(', ')
-      system += `\nCODE TOOLS: ${toolIds}`
-    }
+      if (httpToolsList.length > 0) {
+        system += `\n\n**HTTP Tools** (call these for real-time/live data — never guess or use training knowledge):`
+        for (const t of httpToolsList) {
+          system += `\n- \`http_${t.id}\` — ${t.name}${t.description ? `: ${t.description}` : ''}`
+        }
+      }
 
-    if (promptToolsList.length > 0) {
-      const toolIds = promptToolsList.map(t => t.id).join(', ')
-      system += `\nPROMPT TOOLS: ${toolIds}`
-    }
+      if (codeToolsList.length > 0) {
+        system += `\n\n**Code Tools** (reference implementations — use execute_shell to run):`
+        for (const t of codeToolsList) {
+          system += `\n- \`code_${t.id}\` — ${t.name}${t.description ? `: ${t.description}` : ''}`
+        }
+      }
 
-    if (smtpToolsList.length > 0) {
-      const toolIds = smtpToolsList.map(t => t.id).join(', ')
-      system += `\nSMTP TOOLS: ${toolIds}`
+      if (promptToolsList.length > 0) {
+        system += `\n\n**Prompt Tools** (call to retrieve reusable instructions or templates):`
+        for (const t of promptToolsList) {
+          system += `\n- \`prompt_${t.id}\` — ${t.name}${t.description ? `: ${t.description}` : ''}`
+        }
+      }
+
+      if (smtpToolsList.length > 0) {
+        system += `\n\n**Email Tools** (send email via SMTP):`
+        for (const t of smtpToolsList) {
+          system += `\n- \`smtp_${t.id}\` — ${t.name}${t.description ? `: ${t.description}` : ''}`
+        }
+      }
     }
 
     // ── Memory context injection ──
@@ -667,6 +688,14 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
 
     if (historicalContext) {
       system += `\n\n## Relevant Past Context\n_Retrieved from conversation history_\n\n${historicalContext}`
+    }
+
+    // ── RAG / Knowledge Context injection ──
+    if (ragContext && ragContext.results && ragContext.results.length > 0) {
+      const chunks = ragContext.results
+        .map((r, i) => `### Source ${i + 1}${r.source ? ` (${r.source})` : ''}\n${r.text || r.content || ''}`)
+        .join('\n\n')
+      system += `\n\n## Knowledge Context\n_Retrieved from your assigned knowledge base_\n\n${chunks}`
     }
 
     return system
@@ -882,7 +911,8 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
     const systemPrompt = this.buildSystemPrompt(
       enabledAgents, enabledSkills, agentPrompts,
       userSoulContent, systemSoulContent, participantSouls,
-      { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, historicalContext }
+      { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, historicalContext },
+      this.ragContext
     )
 
     // If a per-agent assigned task was dispatched, replace the last user message
@@ -1075,14 +1105,20 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
           // HTTP (default)
           const fullName = `http_${tool.id}`
           httpToolMap.set(fullName, tool)
+          // Extract {param} placeholders from endpoint URL
+          const urlParamNames = [...(tool.endpoint || '').matchAll(/\{(\w+)\}/g)].map(m => m[1])
+          const httpProps = {}
+          urlParamNames.forEach(p => {
+            httpProps[p] = { type: 'string', description: `URL parameter: ${p}` }
+          })
+          httpProps.body = { type: 'object', description: 'Request body (JSON). Merged with the tool\'s body template.' }
           allToolsAnthropic.push({
             name: fullName,
             description: `[HTTP: ${tool.category || 'HTTP'}] ${tool.description || tool.name}`,
             input_schema: {
               type: 'object',
-              properties: {
-                body: { type: 'object', description: 'Request body (JSON). Merged with the tool\'s body template.' }
-              }
+              properties: httpProps,
+              ...(urlParamNames.length > 0 ? { required: urlParamNames } : {})
             }
           })
         }
@@ -1193,7 +1229,10 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
               fullContent: raw
             }
           }),
-          tools: allTools.map(t => ({ name: t.name, description: t.description || '' })),
+          tools: allTools.map(t => ({
+            name: t.function?.name ?? t.name ?? '',
+            description: t.function?.description ?? t.description ?? ''
+          })),
           model,
           metrics: this.contextManager.getMetrics()
         }
@@ -2170,8 +2209,13 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
 
     try {
       const method = (tool.method || 'GET').toUpperCase()
-      const url = tool.endpoint
-      if (!url) return { success: false, error: 'No endpoint URL configured for this tool' }
+      // Substitute {param} placeholders in endpoint URL with LLM-provided values
+      const rawUrl = tool.endpoint
+      if (!rawUrl) return { success: false, error: 'No endpoint URL configured for this tool' }
+      const url = rawUrl.replace(/\{(\w+)\}/g, (_, key) => {
+        const val = input?.[key]
+        return val !== undefined ? encodeURIComponent(String(val)) : key
+      })
 
       const headers = { ...tool.headers }
       if (!headers['Content-Type'] && (method === 'POST' || method === 'PUT')) {

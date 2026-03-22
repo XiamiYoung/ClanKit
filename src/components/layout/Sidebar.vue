@@ -6,18 +6,6 @@
   >
     <!-- Logo / Header -->
     <div :style="{ position: 'relative', padding: isCollapsed ? '1.25rem 0' : '1rem 1.25rem', borderBottom: '1px solid #F0F0F0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', pointerEvents: focusModeStore.justExited ? 'none' : undefined }">
-      <!-- Floating focus lightbulb — top-right corner, expanded only -->
-      <button
-        v-if="!isCollapsed"
-        class="focus-bulb"
-        :class="{ 'focus-bulb-active': focusModeStore.isFocusMode }"
-        @click="toggleFocusMode"
-        @mouseenter="onFocusBulbHover"
-        @mouseleave="onFocusBulbLeave"
-      >
-        <span :class="[focusBulbAnimClass, { 'focus-bulb-spin': focusModeStore.isFocusMode }]" class="focus-bulb-emoji">📑</span>
-      </button>
-
       <div ref="logoWrapRef" class="logo-wrap" @mouseenter="onLogoHover" @mouseleave="onLogoLeave" @mousemove="onLogoMouseMove" @click="onLogoClick">
         <img
           src="/icon.png"
@@ -135,12 +123,27 @@
       </div>
     </Teleport>
 
+    <!-- Focus lightbulb moved to title bar via slot mount -->
+    <Teleport v-if="titlebarFocusTarget" :to="titlebarFocusTarget">
+      <button
+        class="focus-bulb focus-bulb-titlebar"
+        :class="{ 'focus-bulb-active': focusModeStore.isFocusMode }"
+        :style="{ pointerEvents: focusModeStore.justExited ? 'none' : undefined }"
+        :title="focusModeStore.isFocusMode ? t('focusMode.exitFocusMode') : t('focusMode.enterFocusMode')"
+        @click="toggleFocusMode"
+        @mouseenter="onFocusBulbHover"
+        @mouseleave="onFocusBulbLeave"
+      >
+        <span :class="[focusBulbAnimClass, { 'focus-bulb-spin': focusModeStore.isFocusMode }]" class="focus-bulb-emoji">📑</span>
+      </button>
+    </Teleport>
+
 
   </nav>
 </template>
 
 <script setup>
-import { defineComponent, h, ref, nextTick, watch, onMounted, onUnmounted, computed } from 'vue'
+import { defineComponent, h, ref, nextTick, watch, onMounted, onUnmounted, onUpdated, computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useVoiceStore } from '../../stores/voice'
 import { useFocusModeStore } from '../../stores/focusMode'
@@ -198,6 +201,11 @@ function hideNavTooltip() {
 const isCollapsed = ref(false)
 const userOverride = ref(null) // null = auto mode, true/false = user locked
 const agentCapabilitiesOpen = ref(false)
+const titlebarFocusTarget = ref(null)
+
+function refreshTitlebarFocusTarget() {
+  titlebarFocusTarget.value = document.getElementById('titlebar-focus-slot') || null
+}
 
 // Auto-open agent capabilities when navigating to those routes
 watch(() => route.path, (path) => {
@@ -249,14 +257,24 @@ function stopLogoIdleInterval() {
 }
 
 onMounted(() => {
+  refreshTitlebarFocusTarget()
+  requestAnimationFrame(refreshTitlebarFocusTarget)
   applyAutoCollapse()
+  window.addEventListener('titlebar:logo-hint-enter', onTitlebarLogoHintEnter)
+  window.addEventListener('titlebar:logo-hint-leave', onTitlebarLogoHintLeave)
   window.addEventListener('resize', onResize)
   window.addEventListener('keydown', onKeyDown)
   setTimeout(() => triggerLogoMoment('load'), 800)
   startLogoIdleInterval()
 })
 
+onUpdated(() => {
+  if (!titlebarFocusTarget.value) refreshTitlebarFocusTarget()
+})
+
 onUnmounted(() => {
+  window.removeEventListener('titlebar:logo-hint-enter', onTitlebarLogoHintEnter)
+  window.removeEventListener('titlebar:logo-hint-leave', onTitlebarLogoHintLeave)
   window.removeEventListener('resize', onResize)
   window.removeEventListener('keydown', onKeyDown)
   stopLogoIdleInterval()
@@ -661,15 +679,30 @@ function onFocusBulbHover() {
   focusBulbAnimClass.value = LOGO_HOVER_ANIMS[Math.floor(Math.random() * LOGO_HOVER_ANIMS.length)]
   focusBulbAnimTimer = setTimeout(() => { focusBulbAnimClass.value = '' }, 700)
   // speech from robot
+  showLogoHintBubble(focusModeStore.isFocusMode ? t('focusMode.exitFocusMode') : t('focusMode.enterFocusMode'))
+}
+
+function showLogoHintBubble(text) {
+  if (logoDancing.value || !logoWrapRef.value) return
   clearTimeout(logoBubbleTimer)
   const rect = logoWrapRef.value.getBoundingClientRect()
-  logoBubbleText.value = focusModeStore.isFocusMode ? t('focusMode.exitFocusMode') : t('focusMode.enterFocusMode')
+  logoBubbleText.value = text
   logoBubbleStyle.value = bubbleStyle(rect.left + rect.width / 2, rect.bottom + 12)
   logoBubbleVisible.value = true
 }
 function onFocusBulbLeave() {
   clearTimeout(logoBubbleTimer)
   logoBubbleTimer = setTimeout(() => { logoBubbleVisible.value = false }, 150)
+}
+
+function onTitlebarLogoHintEnter(e) {
+  const text = e?.detail?.text
+  if (!text) return
+  showLogoHintBubble(text)
+}
+
+function onTitlebarLogoHintLeave() {
+  onFocusBulbLeave()
 }
 
 // ── SVG Icon Components ──────────────────────────────────────────────────────
@@ -893,9 +926,6 @@ const NavItem = defineComponent({
 
 /* ── Focus lightbulb button ── */
 .focus-bulb {
-  position: absolute;
-  top: 0.875rem;
-  right: 0.625rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -907,11 +937,17 @@ const NavItem = defineComponent({
   cursor: pointer;
   z-index: 1;
 }
+.focus-bulb-titlebar {
+  position: static;
+  top: auto;
+  right: auto;
+  z-index: auto;
+}
 .focus-bulb-active {
   background: transparent;
 }
 .focus-bulb-emoji {
-  font-size: 1.125rem;
+  font-size: 1rem;
   line-height: 1;
   filter: grayscale(1);
   transition: filter 0.2s ease;

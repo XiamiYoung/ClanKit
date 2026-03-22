@@ -103,6 +103,8 @@ export const useChatsStore = defineStore('chats', () => {
   const activeChat = computed(() => chats.value.find(c => c.id === activeChatId.value) || null)
 
   const defaultContextMetrics = () => ({ inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 200000, percentage: 0, compactionCount: 0, voiceInputTokens: 0, voiceOutputTokens: 0, whisperCalls: 0, whisperSecs: 0 })
+  const AUTO_TITLE_CHECKPOINTS = [1, 3, 5]
+  const _autoTitleInFlight = new Set()
 
   // ── Debounce timers ────────────────────────────────────────────────────────
   const _chatTimers = {}      // { [chatId]: timeoutId }
@@ -120,6 +122,10 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.userAgentId === undefined) chat.userAgentId = null
     if (chat.provider === undefined) chat.provider = null
     if (chat.model === undefined) chat.model = null
+    if (chat.icon === undefined) chat.icon = ''
+    if (chat.autoTitleEligible === undefined) chat.autoTitleEligible = chat.title === 'New Chat' || chat.title === '新建对话'
+    if (chat.autoTitleLocked === undefined) chat.autoTitleLocked = false
+    if (chat.autoTitleAttemptCount === undefined) chat.autoTitleAttemptCount = 0
     if (chat.groupAgentIds === undefined) chat.groupAgentIds = []
     if (chat.isGroupChat === undefined) chat.isGroupChat = false
     if (chat.groupAgentOverrides === undefined) chat.groupAgentOverrides = {}
@@ -331,11 +337,17 @@ export const useChatsStore = defineStore('chats', () => {
     return parts.join('/')
   }
 
-  async function createChat(title = 'New Chat', agentConfig = null, folderId = null) {
+  async function createChat(title = 'New Chat', agentConfig = null, folderId = null, options = null) {
+    const normalizedIcon = typeof options?.icon === 'string' ? options.icon.trim() : ''
+    const normalizedUserAgentId = options?.userAgentId ? String(options.userAgentId) : null
+    const autoTitleEligible = options?.autoTitleEligible !== undefined
+      ? !!options.autoTitleEligible
+      : (title === 'New Chat' || title === '新建对话')
     const chat = {
       type: 'chat',
       id: uuidv4(),
       title,
+      icon: normalizedIcon,
       messages: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -345,7 +357,10 @@ export const useChatsStore = defineStore('chats', () => {
       currentToolCall: null,
       contextMetrics: defaultContextMetrics(),
       systemAgentId: null,
-      userAgentId: null,
+      userAgentId: normalizedUserAgentId,
+      autoTitleEligible,
+      autoTitleLocked: false,
+      autoTitleAttemptCount: 0,
       provider: null,
       model: null,
       isGroupChat: false,
@@ -390,6 +405,7 @@ export const useChatsStore = defineStore('chats', () => {
       type: 'chat',
       id: uuidv4(),
       title,
+      icon: source.icon || '',
       messages: copiedMessages,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -401,6 +417,9 @@ export const useChatsStore = defineStore('chats', () => {
       contextMetrics: defaultContextMetrics(),
       systemAgentId: source.systemAgentId,
       userAgentId: source.userAgentId,
+      autoTitleEligible: false,
+      autoTitleLocked: true,
+      autoTitleAttemptCount: source.autoTitleAttemptCount || 0,
       provider: source.provider,
       model: source.model,
       isGroupChat: source.isGroupChat,
@@ -451,6 +470,8 @@ export const useChatsStore = defineStore('chats', () => {
     const chat = chats.value.find(c => c.id === id)
     if (chat) {
       chat.title = title
+      chat.autoTitleEligible = false
+      chat.autoTitleLocked = true
       chat.updatedAt = Date.now()
       await persistIndex()
     }
@@ -605,17 +626,74 @@ export const useChatsStore = defineStore('chats', () => {
 
   // ── Message operations (unchanged) ────────────────────────────────────────
 
+  function _messageToPlainText(msg) {
+    if (!msg) return ''
+    if (typeof msg.content === 'string') return msg.content
+    if (Array.isArray(msg.content)) {
+      return msg.content
+        .filter(part => part && (part.type === 'text' || part.type === 'input_text'))
+        .map(part => part.text || part.content || '')
+        .join('\n')
+    }
+    if (Array.isArray(msg.segments)) {
+      return msg.segments
+        .filter(seg => seg?.type === 'text')
+        .map(seg => seg.content || '')
+        .join('\n')
+    }
+    return ''
+  }
+
+  async function _tryAutoTitle(chat) {
+    if (!chat || chat.autoTitleLocked || !chat.autoTitleEligible) return
+    const chatId = chat.id
+    if (_autoTitleInFlight.has(chatId)) return
+    const userMessages = (chat.messages || []).filter(m => m.role === 'user')
+    const userTurns = userMessages.length
+    const attemptCount = chat.autoTitleAttemptCount || 0
+    if (attemptCount >= AUTO_TITLE_CHECKPOINTS.length) return
+    const targetTurns = AUTO_TITLE_CHECKPOINTS[attemptCount]
+    if (userTurns < targetTurns) return
+    if (!window.electronAPI?.suggestChatTitle) return
+
+    chat.autoTitleAttemptCount = attemptCount + 1
+    debouncedPersistChat(chatId)
+    debouncedPersistIndex()
+
+    const recent = (chat.messages || [])
+      .slice(-12)
+      .map(m => ({ role: m.role, content: _messageToPlainText(m).trim() }))
+      .filter(m => m.content)
+
+    _autoTitleInFlight.add(chatId)
+    try {
+      const res = await window.electronAPI.suggestChatTitle({
+        chatId,
+        messages: recent,
+        attempt: chat.autoTitleAttemptCount,
+      })
+      if (res?.success && res?.title && chat.autoTitleEligible && !chat.autoTitleLocked) {
+        chat.title = String(res.title).trim()
+        chat.updatedAt = Date.now()
+        chat.autoTitleLocked = true
+        chat.autoTitleEligible = false
+        await persistChat(chatId)
+        await persistIndex()
+      }
+    } catch (err) {
+      console.warn('[chats] suggestChatTitle failed:', err?.message || err)
+    } finally {
+      _autoTitleInFlight.delete(chatId)
+    }
+  }
+
   async function addMessage(chatId, message) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
     if (chat.messages === null) await ensureMessages(chatId)
     chat.messages.push({ timestamp: Date.now(), ...message, id: message.id || uuidv4() })
     chat.updatedAt = Date.now()
-    // Auto-title from first user message
-    if (chat.messages.length === 1 && message.role === 'user' && chat.title === 'New Chat') {
-      chat.title = message.content.substring(0, 40) + (message.content.length > 40 ? '…' : '')
-      debouncedPersistIndex()
-    }
+    if (message.role === 'user') _tryAutoTitle(chat)
     debouncedPersistChat(chatId)
   }
 

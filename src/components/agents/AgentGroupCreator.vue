@@ -14,7 +14,7 @@
             </div>
             <div>
               <h2 class="agc-title">{{ t('agents.groupCreator.title', 'Add Multiple Agents') }}</h2>
-              <span class="agc-meta">{{ t('agents.groupCreator.subtitle', 'Quickly add a team of agents') }}</span>
+              <span class="agc-meta">{{ t('agents.groupCreator.subtitle', 'Quickly add categories and agents') }}</span>
             </div>
           </div>
           <button class="agc-close-btn" @click="$emit('close')" aria-label="Close">
@@ -23,17 +23,17 @@
         </div>
 
         <div class="agc-tabs">
-          <button class="agc-tab" :class="{ active: activeTab === 'templates' }" @click="activeTab = 'templates'">
-            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-            </svg>
-            {{ t('agents.groupCreator.templates', 'Templates') }}
-          </button>
           <button class="agc-tab" :class="{ active: activeTab === 'custom' }" @click="activeTab = 'custom'">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
             </svg>
             {{ t('agents.groupCreator.custom', 'AI Generate') }}
+          </button>
+          <button class="agc-tab" :class="{ active: activeTab === 'templates' }" @click="activeTab = 'templates'">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            {{ t('agents.groupCreator.templates', 'Templates') }}
           </button>
         </div>
 
@@ -69,6 +69,20 @@
           <!-- Custom Tab -->
           <div v-if="activeTab === 'custom'" class="agc-custom">
             <div class="agc-custom-input-wrap">
+              <div class="agc-custom-top-row">
+                <div></div>
+                <AppButton
+                  size="compact"
+                  class="bv-ai-micro"
+                  :disabled="generatingProposal"
+                  @click="generateSurpriseProposal"
+                >
+                  <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                  </svg>
+                  {{ t('agents.surpriseMe', 'Surprise me') }}
+                </AppButton>
+              </div>
               <textarea
                 v-model="customDescription"
                 class="agc-custom-textarea"
@@ -76,18 +90,25 @@
                 rows="4"
                 autofocus
               ></textarea>
+              <div v-if="aiError && !generatedProposal" class="agc-ai-error">{{ aiError }}</div>
               <div class="agc-custom-actions">
-                <button
-                  class="agc-generate-btn"
-                  :disabled="!customDescription.trim() || generating"
-                  @click="generateFromAI"
+                <div class="agc-count-picker">
+                  <button class="agc-count-btn" @click="agentCount = Math.max(1, agentCount - 1)" :disabled="agentCount <= 1 || generatingProposal">−</button>
+                  <span class="agc-count-val">{{ agentCount }}</span>
+                  <button class="agc-count-btn" @click="agentCount = Math.min(5, agentCount + 1)" :disabled="agentCount >= 5 || generatingProposal">+</button>
+                </div>
+                <AppButton
+                  size="compact"
+                  class="bv-ai-micro"
+                  :loading="generatingProposal"
+                  :disabled="!customDescription.trim() || generatingProposal"
+                  @click="generateFromAI()"
                 >
-                  <svg v-if="!generating" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <svg v-if="!generatingProposal" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                   </svg>
-                  <span v-if="generating" class="agc-spinner"></span>
-                  {{ generating ? t('agents.groupCreator.generating', 'Generating...') : t('agents.groupCreator.generate', 'Generate Proposal') }}
-                </button>
+                  {{ generatingProposal ? t('agents.groupCreator.generating', 'Generating...') : t('agents.groupCreator.generate', 'Generate') }}
+                </AppButton>
               </div>
             </div>
 
@@ -95,7 +116,7 @@
             <div v-if="generatedProposal" class="agc-proposal">
               <div class="agc-proposal-header">
                 <h3 class="agc-proposal-title">{{ t('agents.groupCreator.proposal', 'Proposed Setup') }}</h3>
-                <button class="agc-proposal-regen" :disabled="generating" @click="generateFromAI">
+                <button class="agc-proposal-regen" :disabled="generatingProposal" @click="generateFromAI()">
                   <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
                   </svg>
@@ -109,7 +130,14 @@
               </div>
 
               <div class="agc-proposal-agents">
-                <div v-for="(agent, idx) in generatedProposal.agents" :key="idx" class="agc-proposal-agent">
+                <div
+                  v-for="(agent, idx) in generatedProposal.agents"
+                  :key="idx"
+                  class="agc-proposal-agent"
+                  @mouseenter="showAgentHover(agent, $event)"
+                  @mousemove="updateAgentHover($event)"
+                  @mouseleave="hideAgentHover"
+                >
                   <span class="agc-proposal-agent-icon">👤</span>
                   <div class="agc-proposal-agent-info">
                     <span class="agc-proposal-agent-name">{{ agent.name }}</span>
@@ -118,29 +146,19 @@
                 </div>
               </div>
 
+              <div v-if="aiWarning" class="agc-ai-warning">{{ aiWarning }}</div>
               <div v-if="aiError" class="agc-ai-error">{{ aiError }}</div>
             </div>
 
-            <div v-if="!generatedProposal && !generating && customTabAttempted" class="agc-custom-hint">
-              {{ t('agents.groupCreator.hint', 'Describe your needs above and click Generate to create a proposal') }}
+            <div v-if="!generatedProposal && !generatingProposal && customTabAttempted" class="agc-custom-hint">
+              {{ t('agents.groupCreator.hint', 'Describe any category and agent setup you want, then click Generate.') }}
             </div>
           </div>
         </div>
 
-        <div v-if="dupSkipped.length > 0" class="agc-dup-warning">
-          <svg style="width:14px;height:14px;flex-shrink:0;margin-top:1px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-          <div>
-            <div class="agc-dup-title">{{ t('agents.groupCreator.dupTitle', 'Already exists — skipped') }}</div>
-            <div class="agc-dup-names">{{ dupSkipped.join(', ') }}</div>
-          </div>
-          <button class="agc-dup-close" @click="emit('created', lastCreatedIds); emit('close')">
-            {{ t('common.confirm', 'OK') }}
-          </button>
-        </div>
-
         <div class="agc-footer">
+          <div v-if="aiWarning" class="agc-footer-warning">{{ aiWarning }}</div>
+          <div class="agc-footer-actions">
           <button class="agc-btn agc-btn-cancel" @click="$emit('close')">
             {{ t('common.cancel', 'Cancel') }}
           </button>
@@ -152,18 +170,51 @@
             <span v-if="creating" class="agc-spinner"></span>
             {{ creating ? t('agents.groupCreator.creating', 'Creating...') : t('agents.groupCreator.create', 'Create {count} Agents', { count: createCount }) }}
           </button>
+          </div>
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="hoverAgent"
+        ref="hoverCardRef"
+        class="agc-agent-hover-card"
+        :style="hoverCardStyle"
+        @mouseenter="holdAgentHover"
+        @mouseleave="hideAgentHoverNow"
+      >
+        <div class="agc-hover-row">
+          <span class="agc-hover-label">{{ t('agents.agentName', 'Agent Name') }}</span>
+          <span class="agc-hover-value" v-html="formatInlineHtml(hoverAgent.name)"></span>
+        </div>
+        <div class="agc-hover-row">
+          <span class="agc-hover-label">{{ t('agents.agentDescription', 'Description') }}</span>
+          <span class="agc-hover-value" v-html="formatInlineHtml(hoverAgent.description)"></span>
+        </div>
+        <div class="agc-hover-row">
+          <span class="agc-hover-label">{{ t('agents.agentDefinition', 'Definition') }}</span>
+          <span class="agc-hover-value agc-hover-definition" v-html="formatDefinitionHtml(getAgentDefinition(hoverAgent))"></span>
+        </div>
+      </div>
+    </Teleport>
   </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
 import { getAgentTemplates } from '../../data/agentTemplates'
+import AppButton from '../common/AppButton.vue'
+
+const props = defineProps({
+  agentType: {
+    type: String,
+    default: 'system'
+  }
+})
 
 const emit = defineEmits(['close', 'created'])
 
@@ -173,21 +224,138 @@ const configStore = useConfigStore()
 
 const templates = computed(() => getAgentTemplates(locale.value))
 
-const activeTab = ref('templates')
+const activeTab = ref('custom')
 const selectedTemplate = ref(null)
 const customDescription = ref('')
-const generating = ref(false)
+const generatingSurprise = ref(false)
+const generatingProposal = ref(false)
 const creating = ref(false)
+const agentCount = ref(3)
 const customTabAttempted = ref(false)
 const generatedProposal = ref(null)
 const aiError = ref('')
+const aiWarning = ref('')
 
-const agentType = ref('system')
-const dupSkipped = ref([])
-const lastCreatedIds = ref([])
+const hoverAgent = ref(null)
+const hoverCardRef = ref(null)
+const hoverCardStyle = ref({})
+const hoverHideTimer = ref(null)
 
+function clearHoverHideTimer() {
+  if (hoverHideTimer.value) {
+    clearTimeout(hoverHideTimer.value)
+    hoverHideTimer.value = null
+  }
+}
+
+function scheduleHideHover() {
+  clearHoverHideTimer()
+  hoverHideTimer.value = setTimeout(() => {
+    hoverAgent.value = null
+    hoverHideTimer.value = null
+  }, 140)
+}
+
+onBeforeUnmount(() => {
+  clearHoverHideTimer()
+})
+
+// ── Surprise Me phrase pools ─────────────────────────────────────────────
+// Pre-curated so JS controls variety — no LLM convergence risk.
+// Mix: named fictional characters, real historical figures, pop-culture types, internet archetypes.
+const EN_SURPRISE_PHRASES = [
+  // Named fictional characters
+  "The Avengers but they're all passive-aggressive middle managers",
+  'Breaking Bad crew running a startup: Walter White, Jesse, Saul Goodman, Gus Fring',
+  'Sherlock Holmes, Moriarty, Irene Adler, and Watson as rival consulting agency',
+  'Marvel antiheroes as life coaches: Loki, Deadpool, Magneto, Doctor Strange',
+  'Disney villains at a mandatory team-building retreat: Scar, Ursula, Maleficent, Jafar',
+  'Game of Thrones power players in a modern corporate boardroom',
+  'The Joker, Harley Quinn, Riddler, and Penguin as a dysfunctional marketing agency',
+  'Groot, Rocket Raccoon, Drax, and Star-Lord running a daily standup meeting',
+  'Famous fictional detectives on the same cold case: Sherlock, Poirot, Columbo, Miss Marple',
+  'The Lord of the Rings fellowship reimagined as a startup founding team',
+  'Hannibal Lecter, Patrick Bateman, Amy Dunne, and Tom Ripley as corporate high-performers',
+  'Harry Potter cast as adult coworkers: Harry, Hermione, Draco, Dumbledore, Snape',
+  'The Godfather family running a modern consulting firm',
+  'Star Wars strategists as rival consultants: Yoda, Darth Vader, Obi-Wan, Palpatine',
+  // Historical / public figures
+  'Napoleon, Genghis Khan, Cleopatra, and Caesar in a modern strategy war room',
+  'Tesla, Edison, Newton, and Curie competing to pitch at a startup demo day',
+  "History's most ruthless rulers: Caligula, Ivan the Terrible, Nero, Qin Shi Huang",
+  'Great philosophers as podcast hosts: Socrates, Nietzsche, Freud, Confucius',
+  'Steve Jobs, Elon Musk, Jeff Bezos, and Bill Gates as co-founders of the same startup',
+  // Pop culture / archetypes
+  'The most insufferable coworker personalities from every department',
+  'Iconic horror movie monsters as customer service representatives',
+  'Every type of gym personality fighting for the squat rack',
+  'Extreme hobbyist stereotypes: the sourdough obsessive, the vinyl collector, the marathon evangelist',
+  'Social media personality types: the LinkedIn thought leader, the Instagram aesthetic, the conspiracy TikToker',
+  'Reality TV archetypes: the villain, the crier, the strategic player, the delusional one, the fan favourite',
+  'Legendary rock icons stuck in a tour bus breakdown: Jimi Hendrix, Freddie Mercury, Kurt Cobain, David Bowie',
+  'Famous chefs with wildly clashing food philosophies trapped in one kitchen',
+  'The most difficult hotel guests and their impossibly specific complaints',
+  'Classic therapist types: the Freudian, the radical-honesty coach, the astrology-believer, the journaling fanatic',
+  'Late-night talk show hosts debating the meaning of life',
+  'Different eras of tech CEOs pitching to the same VC: 1990s, 2010s, 2020s vibes',
+]
+
+const ZH_SURPRISE_PHRASES = [
+  // 动漫角色
+  '哆啦A梦、大雄、胖虎、小夫、静香同在一家公司打工',
+  '西游记师徒四人在现代互联网公司的职场日常',
+  '《海贼王》草帽一伙入职同一家初创企业',
+  '七龙珠经典角色：孙悟空、贝吉塔、弗利萨、比克的职场版',
+  '《名侦探柯南》的经典角色集体在同一间办公室办案',
+  '《进击的巨人》里的角色组成创业公司争夺话语权',
+  '《鬼灭之刃》柱们在一家猎头公司共事',
+  '《火影忍者》三代目弟子们在现代咨询公司角力：鸣人、佐助、小樱、卡卡西',
+  // 古装剧/历史人物
+  '《甄嬛传》后宫众人搬到现代职场争夺总裁青睐',
+  '《延禧攻略》魏璎珞和众嫔妃在商场里的权谋角逐',
+  '三国顶级谋士同台竞技：诸葛亮、郭嘉、司马懿、周瑜',
+  '水浒好汉在现代快递公司打工：宋江、武松、鲁智深、李逵',
+  '中国古代最强帝王在同一间会议室：秦始皇、武则天、汉武帝、乾隆',
+  '《琅琊榜》梅长苏和众公子哥在创投公司里博弈',
+  '四大名著的反派合伙开公司：西门庆、王熙凤、曹操、宋江',
+  '金庸武侠高手在现代公司竞岗：令狐冲、郭靖、张无忌、杨过、韦小宝',
+  // 历史名人
+  '鲁迅、胡适、林语堂、郭沫若在今天的互联网上battle',
+  '慈禧、孝庄、武则天、吕后在一家家族企业争夺话语权',
+  '三国枭雄：曹操、刘备、孙权的现代版商战',
+  // 网络/现实类型
+  '各大平台的典型网红：抖音带货主播、B站UP主、小红书博主、知乎大V',
+  '奇葩办公室生态：甩锅大师、邀功惯犯、摸鱼专家、职场哭包',
+  '中式家长的六种经典操作：比较型、哭穷型、画饼型、催婚型、报喜不报忧型、控制型',
+  '饭圈文化的经典人格：大粉、控评女孩、撕番位专家、数据哥、脱粉回踩玩家',
+  '每个宿舍都有的几种室友世界线',
+  '高考前的各方势力：鸡娃家长、摆烂学生、内卷同学、神奇班主任、佛系老师',
+  '各地捍卫美食的死忠粉：四川火锅卫道士、广东早茶拥趸、北京烤鸭传教士、湖南辣椒狂信者',
+  '不同段位的麻将玩家：老烟枪老手、运气型新手、眼神杀手、报牌刺客',
+  '传说中相亲市场上的各路奇人类型',
+  '上海弄堂、北京胡同里的邻里众生相',
+  '职场新人的四种极端生存策略',
+]
+
+// Tracks recently used indices per language to prevent immediate repeats
+const _surpriseUsedEN = []
+const _surpriseUsedZH = []
+
+function generateDynamicSurpriseIdea() {
+  const appLang = configStore.config?.language || 'en'
+  const isZh = appLang.startsWith('zh')
+  const pool = isZh ? ZH_SURPRISE_PHRASES : EN_SURPRISE_PHRASES
+  const used = isZh ? _surpriseUsedZH : _surpriseUsedEN
+  const recentLimit = Math.min(10, Math.floor(pool.length / 2))
+  const available = pool.map((_, i) => i).filter(i => !used.includes(i))
+  const candidates = available.length > 0 ? available : pool.map((_, i) => i)
+  const idx = candidates[Math.floor(Math.random() * candidates.length)]
+  used.push(idx)
+  if (used.length > recentLimit) used.shift()
+  return pool[idx]
+}
 const placeholderText = computed(() => {
-  return t('agents.groupCreator.placeholder', 'Describe what you need... e.g. I want to create an engineering department with frontend team (5 people), backend team (8 people), and QA team (3 people)')
+  return t('agents.groupCreator.placeholder', 'Describe what you need... e.g. Build a category of quirky neighbors, anime-style heroes, or aliens with clashing personalities.')
 })
 
 const canCreate = computed(() => {
@@ -218,99 +386,566 @@ function detectLanguage() {
   return appLang.startsWith('zh') ? 'Chinese (中文)' : 'English'
 }
 
-async function generateFromAI() {
-  const desc = customDescription.value.trim()
+function getCharacterPromptSections(lang) {
+  if (lang === 'Chinese (中文)') {
+    return `### 身份定位
+以"你是 [姓名/称谓] — [一句话核心特征]"开头，说明这个角色最本质的一点
+
+### 核心限制
+写一条这个角色绝对无法违反的行为规则——这是让角色有辨识度的灵魂
+要求：必须是可观察的行为（不是内心感受），必须是无条件的（不能出现"通常"、"倾向于"等词）
+参考格式（不要照抄，根据角色写专属的）：
+"你只能用[具体方式]表达，绝无例外，哪怕对方要求你[极端情况]"
+"你绝不会[具体行为]，每一次[相关动作]都必须包含[必要元素]"
+"无论发生什么，你都必须[具体行为]，哪怕[极端情况]也不例外"
+
+### 说话方式
+根据这个角色的表达媒介，定义可直接操作的语言机制——不是性格描述，是执行规则：
+- **必用句式**：2-3个每次都会出现的固定开场词或口头禅（用引号写出原话）
+- **情绪编码对照表**：用什么符号/重复/停顿表达不同情绪，写成查表格式
+- **禁用内容**：至少2条这个角色绝对不会说的具体话或词
+
+### 触发规则
+写6条覆盖完全不同场景的 IF→THEN 规则
+每条写"策略描述"而不是固定台词——描述这个角色会采取什么行动/态度：
+当被夸奖时 →
+当被反驳或挑战时 →
+当对方向自己求助时 →
+当话题冷场或对方沉默时 →
+当对方想结束对话时 →
+当触碰到角色的敏感点时 →
+
+### 示例对话
+3组对话，每组展示不同的触发场景，每组至少2个来回
+示例必须体现上面定义的口头禅、情绪编码和触发规则
+
+### 铁律
+一句话锁死这个角色最不可妥协的特征：
+格式："永远[做什么]。哪怕[极端情况]，也绝不例外。"`
+  }
+  return `### Core Identity
+Start with "You are [Name/Title] — [one defining trait]" — the single most essential thing about this character
+
+### The Core Constraint
+Write ONE absolute behavioral rule this character can NEVER violate — this is what makes them recognizable
+Requirements: must be an OBSERVABLE BEHAVIOR (not an internal feeling); must be UNCONDITIONAL (no "tends to", "usually", "often")
+Reference formats (don't copy — write one specific to this character):
+"You can ONLY [specific method of expression]. No exceptions, not even if [extreme situation]"
+"You NEVER [specific behavior] — every [related action] must contain [required element]"
+"No matter what, you always [specific behavior]. Even if [extreme situation], no exceptions"
+
+### How You Speak
+Don't describe personality — define executable language mechanics:
+- **Signature phrases**: 2-3 fixed openers or catchphrases used in EVERY conversation (write them in quotes)
+- **Emotion encoding**: A reference table — how punctuation/repetition/pauses encode different emotions
+- **Forbidden content**: At least 2 specific things this character would NEVER say
+
+### Trigger Rules
+Write 6 IF→THEN rules — each covering a completely different scenario
+Each rule describes a STRATEGY or APPROACH, not a fixed line:
+When complimented →
+When contradicted or challenged →
+When someone asks for help →
+When the conversation goes silent →
+When someone tries to end the conversation →
+When a sensitive topic is hit →
+
+### Example Exchanges
+3 exchanges, each showing a DIFFERENT trigger scenario, at least 2 turns each
+Must demonstrate the signature phrases, emotion encoding, and trigger rules
+
+### The One Rule
+One sentence locking in this character's most non-negotiable trait:
+Format: "Always [do what]. Even if [extreme situation], no exceptions."`
+}
+function getProfessionalPromptSections(lang) {
+  if (lang === 'Chinese (中文)') {
+    return `### 核心定位
+以"你是 [名字]，[一句话定位]"开头，清晰说明这个Agent的专业身份和服务范围
+
+### 专业能力
+列出具体技能、工具、技术栈和细分领域（使用具体名称，不用泛称）；说明各项能力的深度和侧重点
+
+### 工作规则
+针对这个Agent实际会遇到的具体场景，写3-5条 IF→THEN 行为规则
+格式："当[这个Agent真实会遇到的场景]时，[具体做什么]——不允许[错误替代做法]"
+规则必须专属于这个Agent的工作领域，不能写成通用套话
+
+### 输出格式
+定义这个Agent最常见输出类型的具体结构模板
+根据这个Agent的实际工作产出写，不要写通用格式
+
+### 边界约束
+明确列出：不做什么 / 什么时候拒绝 / 什么时候必须追问才能继续
+必须是这个Agent领域专属的限制，不是"遵循高标准"这种废话`
+  }
+  return `### Core Role
+Start with "You are [Name], [one-line positioning]" — clearly state this agent's professional identity and scope
+
+### Expertise & Tools
+List specific skills, tools, tech stack, and sub-disciplines by name (no vague terms); describe the depth and focus of each area
+
+### Working Rules
+3-5 IF→THEN behavioral rules specific to THIS agent's actual work scenarios
+Format: "When [a real scenario this agent faces], [do what] — never [wrong alternative]"
+Rules must be domain-specific — no generic filler
+
+### Output Format
+Define the exact structural template for this agent's most common deliverable(s)
+Write based on what this agent actually produces — not a generic format
+
+### Hard Constraints
+Explicit list of: what you won't do / when you refuse / what must be clarified before you proceed
+Must be domain-specific — not generic quality platitudes`
+}
+function normalizeName(value) {
+  return (value || '').trim().toLowerCase()
+}
+
+function extractJSON(text) {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fenced) return fenced[1].trim()
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start >= 0 && end > start) return text.slice(start, end + 1)
+  return text.trim()
+}
+
+function parseProposalJSON(rawText) {
+  const extracted = extractJSON(rawText)
+  const candidates = [
+    extracted,
+    extracted
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/,\s*([}\]])/g, '$1')
+      .replace(/\r\n/g, '\n')
+  ]
+
+  let lastError = null
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate)
+    } catch (err) {
+      lastError = err
+    }
+  }
+
+  throw lastError || new Error('Invalid JSON')
+}
+
+function resolveDefaultProviderModel() {
+  const cfg = configStore.config || {}
+  const providers = Array.isArray(cfg.providers) ? cfg.providers : []
+  const active = providers.filter(p => p?.isActive)
+
+  const preferredProvider = cfg.utilityModel?.provider || ''
+  const preferredModel = cfg.utilityModel?.model || ''
+
+  // preferredProvider is stored as type (e.g., 'anthropic'), not UUID
+  const provider = (preferredProvider && active.find(p => p.type === preferredProvider)) || active[0] || null
+  if (!provider) return { providerId: null, modelId: null }
+
+  const modelId = preferredModel
+    || provider.model
+    || provider.settings?.sonnetModel
+    || provider.settings?.opusModel
+    || provider.settings?.haikuModel
+    || null
+
+  return { providerId: provider.id, modelId }
+}
+
+async function repairProposalJSON(rawText, config, langInstruction = '') {
+  const repairRes = await window.electronAPI.enhancePrompt({
+    prompt: `Convert the following content into valid JSON only. Do not add explanations.
+
+Target schema:
+{
+  "category": { "name": "Category Name", "emoji": "emoji" },
+  "agents": [
+    {
+      "name": "Agent Name",
+      "role": "brief role (3-8 words)",
+      "description": "keyword-style summary, max 100 characters",
+      "prompt": "full agent definition prompt text"
+    }
+  ]
+}
+
+Rules:
+- Keep original meaning
+- Ensure strict valid JSON
+- Keep all strings escaped correctly${langInstruction}
+
+Source content:
+${rawText}`,
+    config,
+  })
+
+  if (!repairRes?.success || !repairRes?.text) {
+    throw new Error(repairRes?.error || 'JSON repair failed')
+  }
+  return parseProposalJSON(repairRes.text)
+}
+
+function buildFallbackPrompt(agent, lang) {
+  const name = (agent?.name || '').trim() || 'Agent'
+  const role = (agent?.role || '').trim() || (lang === 'Chinese (中文)' ? '通用助手' : 'General Assistant')
+  const desc = (agent?.description || '').trim() || (lang === 'Chinese (中文)' ? '专注于提供清晰、实用、有趣的帮助。' : 'Focused on clear, practical, engaging help.')
+  const isLikelyCharacter = /朋友|邻居|同事|孩子|侦探|名人|魔法|幻想|角色|persona|character|friend|neighbor|colleague|kid|wizard|detective/i.test(`${role} ${desc}`)
+
+  if (lang === 'Chinese (中文)') {
+    if (isLikelyCharacter) {
+      return `### 核心身份\n你是 ${name} — ${role}\n\n### 核心限制\n保持角色一致，不提供危险或误导内容。\n\n### 说话方式\n语气鲜明但友好，表达简洁，优先可执行建议。\n\n### 触发规则\nIF 用户求助 THEN 给出分步骤建议\nIF 用户质疑 THEN 解释依据并给替代方案\nIF 对话冷场 THEN 主动抛出一个相关有趣问题\nIF 对话结束 THEN 总结一句并友好收尾\n\n### 铁律\n始终在有趣与实用之间保持平衡。`
+    }
+    return `### 核心定位\n你是 ${name}，${role}。\n\n### 专业能力\n${desc}\n\n### 工作规则\nIF 需求不清晰 THEN 先追问关键约束\nIF 需要方案 THEN 提供可执行步骤与优先级\nIF 方案存在风险 THEN 明确风险并给备选\n\n### 输出格式\n先结论，再步骤，最后补充可选优化项。\n\n### 边界约束\n不编造事实，不提供违规建议，信息不足时先澄清。`
+  }
+
+  if (isLikelyCharacter) {
+    return `### Core Identity\nYou are ${name} — ${role}.\n\n### Core Constraint\nStay in character and avoid unsafe or misleading content.\n\n### Speaking Style\nDistinct but friendly tone, concise wording, actionable suggestions first.\n\n### Trigger Rules\nIF user asks for help THEN provide step-by-step guidance\nIF user challenges you THEN explain rationale and offer alternatives\nIF conversation stalls THEN ask one relevant playful question\nIF conversation ends THEN close with a short summary\n\n### One Rule\nBalance personality and practical value in every reply.`
+  }
+  return `### Core Role\nYou are ${name}, ${role}.\n\n### Expertise & Tools\n${desc}\n\n### Working Rules\nIF requirements are unclear THEN ask clarifying questions first\nIF a solution is requested THEN provide prioritized actionable steps\nIF risks exist THEN state risks and suggest alternatives\n\n### Output Format\nConclusion first, then steps, then optional improvements.\n\n### Hard Constraints\nNo fabricated facts, no policy-violating guidance, clarify when context is missing.`
+}
+
+async function requestCompactProposal({
+  desc,
+  config,
+  langInstruction = '',
+  existingAgentNames = [],
+  existingCategoryNames = [],
+}) {
+  const compactRes = await window.electronAPI.enhancePrompt({
+    prompt: `Return STRICT valid JSON only. No markdown. No explanation.
+
+User description: "${desc}"
+
+Schema:
+{
+  "category": { "name": "Category Name", "emoji": "emoji" },
+  "agents": [
+    {
+      "name": "Agent Name",
+      "role": "brief role",
+      "description": "short summary"
+    }
+  ]
+}
+
+Hard rules:
+- Exactly 3 agents
+- Keep each string short
+- Do not include a "prompt" field
+- Agent names must not duplicate existing names: ${JSON.stringify(existingAgentNames)}
+- Category name must not duplicate existing category names: ${JSON.stringify(existingCategoryNames)}
+- Keep output compact and parseable JSON${langInstruction}`,
+    config,
+  })
+
+  if (!compactRes?.success || !compactRes?.text) {
+    throw new Error(compactRes?.error || 'Compact proposal generation failed')
+  }
+
+  return parseProposalJSON(compactRes.text)
+}
+
+function makeUniqueName(baseName, usedNames) {
+  const safeBase = (baseName || '').trim() || 'Agent'
+  let candidate = safeBase
+  let i = 2
+  while (usedNames.has(normalizeName(candidate))) {
+    candidate = `${safeBase} (${i})`
+    i += 1
+  }
+  usedNames.add(normalizeName(candidate))
+  return candidate
+}
+
+function uniqueCategoryName(baseName, existingCategoryNames) {
+  const safeBase = (baseName || '').trim() || 'Category'
+  let candidate = safeBase
+  let i = 2
+  while (existingCategoryNames.has(normalizeName(candidate))) {
+    candidate = `${safeBase} (${i})`
+    i += 1
+  }
+  return candidate
+}
+
+function getAgentDefinition(agent) {
+  const prompt = (agent?.prompt || '').trim()
+  if (prompt) return prompt
+  const role = (agent?.role || '').trim()
+  const desc = (agent?.description || '').trim()
+  if (role && desc) return `${role}. ${desc}`
+  if (role) return role
+  if (desc) return desc
+  return 'General assistant profile.'
+}
+
+function escapeHtml(input) {
+  return String(input || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function formatInlineHtml(input) {
+  return escapeHtml(input || '')
+}
+
+function formatDefinitionHtml(input) {
+  const escaped = escapeHtml(input || '')
+  return escaped
+    .replace(/^###\s*(.+)$/gm, '<span class="agc-hover-sec">$1</span>')
+    .replace(/\n/g, '<br>')
+}
+
+function isRichPrompt(prompt) {
+  if (typeof prompt !== 'string') return false
+  const text = prompt.trim()
+  if (!text) return false
+  // Full templates have 6 sections (Character) or 5 sections (Professional),
+  // must have substantial content to avoid using truncated/skeleton prompts
+  const sectionCount = (text.match(/^###/gm) || []).length
+  if (sectionCount < 3) return false
+  if (text.length < 200) return false
+  return true
+}
+
+function positionHoverCard(anchorRect) {
+  const modalRect = document.querySelector('.agc-modal')?.getBoundingClientRect()
+  if (!modalRect) return
+
+  const padding = 12
+  const cardRect = hoverCardRef.value?.getBoundingClientRect()
+  const cardWidth = cardRect?.width || 360
+  const cardHeight = cardRect?.height || 260
+
+  let left = anchorRect.left + anchorRect.width / 2 - cardWidth / 2
+  left = Math.max(modalRect.left + padding, Math.min(left, modalRect.right - cardWidth - padding))
+
+  let top = anchorRect.top - cardHeight - 8
+  if (top < modalRect.top + padding) {
+    top = Math.min(anchorRect.bottom + 8, modalRect.bottom - cardHeight - padding)
+  }
+
+  hoverCardStyle.value = {
+    left: `${left}px`,
+    top: `${top}px`,
+  }
+}
+
+function showAgentHover(agent, event) {
+  clearHoverHideTimer()
+  hoverAgent.value = agent
+  const rect = event.currentTarget.getBoundingClientRect()
+  hoverCardStyle.value = {
+    left: `${rect.left}px`,
+    top: `${rect.top}px`,
+  }
+  nextTick(() => positionHoverCard(rect))
+}
+
+function updateAgentHover(event) {
+  if (!hoverAgent.value) return
+  const rect = event.currentTarget.getBoundingClientRect()
+  positionHoverCard(rect)
+}
+
+function hideAgentHover() {
+  scheduleHideHover()
+}
+
+function holdAgentHover() {
+  clearHoverHideTimer()
+}
+
+function hideAgentHoverNow() {
+  clearHoverHideTimer()
+  hoverAgent.value = null
+}
+
+async function generateFromAI(descriptionOverride = null) {
+  const descInput = typeof descriptionOverride === 'string'
+    ? descriptionOverride
+    : customDescription.value
+  const desc = String(descInput || '').trim()
   if (!desc) return
 
-  generating.value = true
+  generatingProposal.value = true
+  generatedProposal.value = null
   aiError.value = ''
+  aiWarning.value = ''
   customTabAttempted.value = true
 
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const lang = detectLanguage()
+    const charSections = getCharacterPromptSections(lang)
+    const profSections = getProfessionalPromptSections(lang)
+    const existingAgentNames = agentsStore.agents.map(a => a.name).filter(Boolean)
+    const existingCategoryNames = agentsStore.categories
+      .filter(c => c.type === props.agentType)
+      .map(c => c.name)
+      .filter(Boolean)
     const langInstruction = lang ? `\n\nIMPORTANT: Respond entirely in ${lang}.` : ''
 
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `You are an AI agent that helps create team structures and agent configurations.
-Based on the user's description, generate a proposal for a team of AI agents.
+      prompt: `You are an AI assistant that creates vivid, opinionated, personality-rich agent personas.
+The agents you create must feel like real people the user has actually met or knows from culture — full of quirks, conflict potential, and strong opinions.
+Based on the user's description, generate one proposal.
 
 User description: "${desc}"
 
-Return ONLY valid JSON (no markdown, no code blocks, no explanation) with this structure:
+Existing agent names (must avoid): ${JSON.stringify(existingAgentNames)}
+Existing category names (must avoid): ${JSON.stringify(existingCategoryNames)}
+
+Each agent must be one of:
+- TYPE A (Character/Persona — PREFERRED for grounded themes): vivid personality, conflict style, strong opinions. Use the Character section style:
+${charSections}
+
+- TYPE B (Professional with a twist): has expertise BUT also a defining personality flaw or extreme trait. Use the Professional section style:
+${profSections}
+
+The "prompt" field must be a plain string with markdown section headers.
+
+Return ONLY valid JSON — no markdown, no code fences, no explanation:
 {
   "category": { "name": "Category Name", "emoji": "emoji" },
   "agents": [
-    { "name": "Agent Name", "role": "brief role (3-8 words)", "description": "one sentence description" }
+    {
+      "name": "Agent Name",
+      "role": "brief role (3-8 words)",
+      "description": "keyword-style summary, max 100 characters",
+      "prompt": "full agent definition prompt text"
+    }
   ]
+}
 
 Rules:
-- Group related roles under one category
-- Include team leads and individual contributors
-- Use realistic team compositions
-- Pick appropriate emoji for the category
-- Include 3-15 agents total
-- Each agent should have a distinct name and role${langInstruction}`,
+- MOST IMPORTANT: each agent must have a strong, immediately recognizable personality — conflict, humor, drama, or cultural familiarity. No bland functionaries.
+- Agents can be real-world archetypes (PUA boss, passive-aggressive coworker, gossip cleaner), famous historical figures (Yongzheng, Napoleon), or iconic fictional characters (Sheldon Cooper, Groot) if the theme implies them
+- Default to grounded real-world relatable when the description is ambiguous; only go sci-fi/fantasy if explicitly asked
+- Avoid generic "professional helper" personalities — every agent must have a memorable edge
+- Group under one category with a suitable emoji
+- Include EXACTLY ${agentCount.value} agents — no more, no fewer
+- Each agent must have a distinct name and role
+- Agent names must not duplicate existing names
+- Category name must not duplicate existing category names
+- The "prompt" field MUST follow the COMPLETE chosen section template above — all sections, full instructions, full detail. Do NOT abbreviate or shorten.
+- Use ALL sections defined in the chosen template — do not skip any section
+- Do NOT write fixed dialogue lines in trigger rules — write strategy descriptions instead${langInstruction}`,
       config,
     })
 
     if (res.success && res.text) {
       let data
       try {
-        const jsonMatch = res.text.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          data = JSON.parse(jsonMatch[0])
-        } else {
-          throw new Error('No JSON found')
-        }
+        data = parseProposalJSON(res.text)
       } catch (e) {
-        aiError.value = 'AI returned invalid response. Try again.'
-        generating.value = false
-        return
+        console.error('[AGC] invalid AI response (raw):', res.text)
+        try {
+          data = await repairProposalJSON(res.text, config, langInstruction)
+        } catch {
+          try {
+            data = await requestCompactProposal({
+              desc,
+              config,
+              langInstruction,
+              existingAgentNames,
+              existingCategoryNames,
+            })
+          } catch {
+            generatedProposal.value = null
+            aiError.value = 'AI returned invalid response. Try again.'
+            generatingProposal.value = false
+            return
+          }
+        }
       }
 
       if (data.category && Array.isArray(data.agents)) {
+        const usedNames = new Set(agentsStore.agents.map(a => normalizeName(a.name)))
+        const dedupedAgents = []
+        const skippedNames = []
+        for (let idx = 0; idx < data.agents.length; idx++) {
+          const a = data.agents[idx]
+          const name = (a.name || `Agent ${idx + 1}`).trim()
+          const key = normalizeName(name)
+          if (usedNames.has(key)) { skippedNames.push(name); continue }
+          usedNames.add(key)
+          dedupedAgents.push({
+            name,
+            role: a.role || 'General Specialist',
+            description: a.description || 'Domain-focused AI assistant',
+            prompt: isRichPrompt(a.prompt)
+              ? a.prompt.trim()
+              : buildFallbackPrompt(a, lang)
+          })
+        }
         generatedProposal.value = {
           category: {
-            name: data.category.name || 'Team',
+            name: data.category.name || 'Category',
             emoji: data.category.emoji || '📂'
           },
-          agents: data.agents.map(a => ({
-            name: a.name || 'Agent',
-            role: a.role || 'Team Member',
-            description: a.description || 'Team member agent'
-          }))
+          agents: dedupedAgents
+        }
+        if (skippedNames.length > 0) {
+          const lang = detectLanguage()
+          aiWarning.value = lang === 'Chinese (中文)'
+            ? `以下 agent 已存在，已从本次预览中移除：${skippedNames.join('、')}`
+            : `The following agents already exist and were removed from this preview: ${skippedNames.join(', ')}`
         }
       } else {
+        generatedProposal.value = null
         aiError.value = 'Invalid response format. Try again.'
       }
     } else {
+      generatedProposal.value = null
       aiError.value = res.error || t('agents.groupCreator.error', 'Generation failed. Make sure your utility model is configured in Config → AI → Models.')
     }
   } catch (err) {
     aiError.value = err.message || 'Generation failed.'
   }
 
-  generating.value = false
+  generatingProposal.value = false
+}
+
+function generateSurpriseProposal() {
+  if (generatingProposal.value) return
+  aiError.value = ''
+  aiWarning.value = ''
+  generatedProposal.value = null
+  customDescription.value = generateDynamicSurpriseIdea()
 }
 
 async function createAgents() {
   creating.value = true
-  dupSkipped.value = []
 
   try {
     let categoryId
     let agentsData
+    const existingCategoryNames = new Set(
+      agentsStore.categories
+        .filter(c => c.type === props.agentType)
+        .map(c => normalizeName(c.name))
+    )
 
     if (activeTab.value === 'templates' && selectedTemplate.value) {
       const tmpl = selectedTemplate.value
       const existingCat = agentsStore.categories.find(c =>
-        c.type === agentType.value &&
-        c.name?.trim().toLowerCase() === tmpl.category.name?.trim().toLowerCase()
+        c.type === props.agentType &&
+        normalizeName(c.name) === normalizeName(tmpl.category.name)
       )
-      categoryId = existingCat
-        ? existingCat.id
-        : await agentsStore.addCategory(tmpl.category.name, tmpl.category.emoji, agentType.value)
+      if (existingCat) {
+        categoryId = existingCat.id
+      } else {
+        const catName = uniqueCategoryName(tmpl.category.name, existingCategoryNames)
+        categoryId = await agentsStore.addCategory(catName, tmpl.category.emoji, props.agentType)
+      }
       agentsData = tmpl.agents.map(a => ({
         name: a.name,
         description: a.description,
@@ -320,34 +955,36 @@ async function createAgents() {
     } else if (generatedProposal.value) {
       const prop = generatedProposal.value
       const existingCat = agentsStore.categories.find(c =>
-        c.type === agentType.value &&
-        c.name?.trim().toLowerCase() === prop.category.name?.trim().toLowerCase()
+        c.type === props.agentType &&
+        normalizeName(c.name) === normalizeName(prop.category.name)
       )
-      categoryId = existingCat
-        ? existingCat.id
-        : await agentsStore.addCategory(prop.category.name, prop.category.emoji, agentType.value)
+      if (existingCat) {
+        categoryId = existingCat.id
+      } else {
+        const catName = uniqueCategoryName(prop.category.name, existingCategoryNames)
+        categoryId = await agentsStore.addCategory(catName, prop.category.emoji, props.agentType)
+      }
       agentsData = prop.agents.map(a => ({
         name: a.name,
         description: a.description,
-        prompt: `You are **${a.name}**, ${a.role}.\n\n## Your Role\n${a.description}\n\n## How You Work\n- Stay in character as ${a.name} — bring your expertise and personality to every response\n- Be specific and actionable, not generic\n- Ask clarifying questions when requirements are ambiguous\n- Collaborate with other team members when tasks overlap your domain`,
+        prompt: a.prompt,
         avatar: `a${Math.floor(Math.random() * 36) + 1}`
       }))
     }
 
-    const utilityProviderId = configStore.config?.utilityModel?.provider || null
-    const utilityModelId = configStore.config?.utilityModel?.model || null
+    const { providerId: utilityProviderId, modelId: utilityModelId } = resolveDefaultProviderModel()
 
     const createdIds = []
+    let skippedAtCreate = []
 
     if (categoryId && agentsData) {
-      const existingNames = new Set(agentsStore.agents.map(a => a.name?.toLowerCase()))
+      const existingNames = new Set(agentsStore.agents.map(a => normalizeName(a.name)))
       const toCreate = []
       for (const agent of agentsData) {
-        if (existingNames.has(agent.name?.toLowerCase())) {
-          dupSkipped.value.push(agent.name)
-        } else {
-          toCreate.push(agent)
-        }
+        const key = normalizeName(agent.name)
+        if (existingNames.has(key)) { skippedAtCreate.push(agent.name); continue }
+        existingNames.add(key)
+        toCreate.push(agent)
       }
 
       if (toCreate.length > 0) {
@@ -355,7 +992,7 @@ async function createAgents() {
         for (const agent of toCreate) {
           await agentsStore.saveAgent({
             ...agent,
-            type: agentType.value,
+            type: props.agentType,
             providerId: utilityProviderId,
             modelId: utilityModelId,
             voiceId: null,
@@ -374,13 +1011,19 @@ async function createAgents() {
       }
     }
 
-    if (dupSkipped.value.length === 0) {
-      emit('created', createdIds)
-      emit('close')
+    if (skippedAtCreate.length > 0) {
+      const lang = detectLanguage()
+      aiWarning.value = lang === 'Chinese (中文)'
+        ? `以下 agent 已存在，已跳过创建：${skippedAtCreate.join('、')}`
+        : `The following agents already exist and were skipped: ${skippedAtCreate.join(', ')}`
+      if (createdIds.length > 0) {
+        emit('created', createdIds)
+      }
+      creating.value = false
+      return
     }
-    // If there were skips, stay open and show the message
-    // Store createdIds so the dup-warning OK button can pass them too
-    lastCreatedIds.value = createdIds
+    emit('created', createdIds)
+    emit('close')
   } catch (err) {
     console.error('Failed to create agents:', err)
   }
@@ -408,9 +1051,12 @@ async function createAgents() {
 }
 
 .agc-modal {
-  width: 90%;
-  max-width: 640px;
-  max-height: 90vh;
+  width: 70vw;
+  height: 70vh;
+  max-width: 1100px;
+  max-height: 900px;
+  min-width: 700px;
+  min-height: 560px;
   background: #0F0F0F;
   border-radius: 20px;
   border: 1px solid #2A2A2A;
@@ -419,6 +1065,15 @@ async function createAgents() {
   flex-direction: column;
   overflow: hidden;
   animation: agcSlideIn 0.2s ease-out;
+}
+
+@media (max-width: 900px) {
+  .agc-modal {
+    width: 92vw;
+    height: 92vh;
+    min-width: 0;
+    min-height: 0;
+  }
 }
 
 @keyframes agcSlideIn {
@@ -638,6 +1293,63 @@ async function createAgents() {
 .agc-custom-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.agc-count-picker {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.agc-count-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  line-height: 1;
+}
+
+.agc-count-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.agc-count-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.agc-count-val {
+  min-width: 1.25rem;
+  text-align: center;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: #fff;
+  user-select: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0 0.1rem;
+  line-height: 1.625rem;
+}
+
+.agc-custom-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .agc-generate-btn {
@@ -750,6 +1462,76 @@ async function createAgents() {
   padding: 0.375rem 0.625rem;
   background: #2A2A2A;
   border-radius: 0.5rem;
+  position: relative;
+}
+
+.agc-agent-hover-card {
+  position: fixed;
+  width: 22rem;
+  max-height: min(55vh, 30rem);
+  overflow: auto;
+  padding: 0.625rem;
+  border-radius: 0.625rem;
+  background: #111111;
+  border: 1px solid #2A2A2A;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.22), 0 4px 12px rgba(0,0,0,0.12);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  z-index: 260;
+}
+
+.agc-agent-hover-card::-webkit-scrollbar {
+  width: 6px;
+}
+
+.agc-agent-hover-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agc-agent-hover-card::-webkit-scrollbar-thumb {
+  background: #3A3A3A;
+  border-radius: 9999px;
+}
+
+.agc-agent-hover-card::-webkit-scrollbar-thumb:hover {
+  background: #5A5A5A;
+}
+
+.agc-hover-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.agc-hover-row + .agc-hover-row {
+  margin-top: 0.5rem;
+}
+
+.agc-hover-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255,255,255,0.45);
+}
+
+.agc-hover-value {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+  color: #FFFFFF;
+  line-height: 1.4;
+}
+
+.agc-hover-definition {
+  color: rgba(255,255,255,0.85);
+}
+
+:deep(.agc-hover-sec) {
+  display: block;
+  margin: 0.25rem 0 0.125rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.95);
 }
 
 .agc-proposal-agent-icon {
@@ -785,6 +1567,17 @@ async function createAgents() {
   font-size: var(--fs-small);
 }
 
+.agc-ai-warning {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 0.5rem;
+  color: #F59E0B;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+}
+
 .agc-custom-hint {
   margin-top: 1.25rem;
   text-align: center;
@@ -793,57 +1586,53 @@ async function createAgents() {
   font-size: var(--fs-secondary);
 }
 
-.agc-dup-warning {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.625rem;
-  margin: 0 1.5rem 0;
-  padding: 0.75rem 1rem;
-  background: rgba(251, 191, 36, 0.08);
-  border: 1px solid rgba(251, 191, 36, 0.25);
-  border-radius: 0.625rem;
-  color: #FCD34D;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-small);
+/* Match AgentBodyViewer's amber surprise button style */
+:deep(.bv-ai-micro) {
+  padding: 0.1875rem 0.5rem !important;
+  font-size: 0.6875rem !important;
+  border-radius: 0.375rem !important;
+  gap: 0.25rem !important;
+  background: linear-gradient(135deg, #92400E 0%, #B45309 40%, #D97706 100%) !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(180,83,9,0.35), 0 1px 3px rgba(180,83,9,0.2) !important;
 }
 
-.agc-dup-title {
-  font-weight: 600;
-  margin-bottom: 0.1875rem;
+:deep(.bv-ai-micro):hover:not(:disabled) {
+  background: linear-gradient(135deg, #78350F 0%, #92400E 40%, #B45309 100%) !important;
+  box-shadow: 0 2px 10px rgba(180,83,9,0.45) !important;
 }
 
-.agc-dup-names {
-  color: rgba(252, 211, 77, 0.75);
-  word-break: break-word;
-}
-
-.agc-dup-close {
-  margin-left: auto;
-  flex-shrink: 0;
-  background: rgba(251, 191, 36, 0.15);
-  border: 1px solid rgba(251, 191, 36, 0.3);
-  border-radius: 0.375rem;
-  color: #FCD34D;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-small);
-  font-weight: 600;
-  padding: 0.25rem 0.625rem;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.agc-dup-close:hover {
-  background: rgba(251, 191, 36, 0.25);
+:deep(.bv-ai-micro):disabled {
+  opacity: 0.4 !important;
+  box-shadow: none !important;
 }
 
 .agc-footer {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
   gap: 0.625rem;
   padding: 1rem 1.5rem;
   border-top: 1px solid #2A2A2A;
   background: #0A0A0A;
   flex-shrink: 0;
+}
+
+.agc-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.625rem;
+}
+
+.agc-footer-warning {
+  padding: 0.4rem 0.75rem;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 0.5rem;
+  color: #F59E0B;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+  line-height: 1.5;
 }
 
 .agc-btn {

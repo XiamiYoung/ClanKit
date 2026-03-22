@@ -121,7 +121,7 @@ function selectProvider(type) {
   // Find the first active provider with this type
   const provider = configStore.config.providers.find(p => p.type === type && p.isActive && p.apiKey)
   if (provider) {
-    emit('update:provider', provider.id)
+    emit('update:provider', type)
     emit('update:model', null)
   }
   showProviderMenu.value = false

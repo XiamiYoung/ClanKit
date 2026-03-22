@@ -89,12 +89,14 @@ class MemoryExtractor {
    * @param {string} opts.apiKey — API key
    * @param {string} opts.baseURL — provider base URL
    * @param {boolean} [opts.isOpenAI] — use OpenAI-compatible API (openai, deepseek, openrouter with OAI compat)
+   * @param {boolean} [opts.directAuth] — use standard Bearer auth for direct OpenAI-compatible providers (e.g. DeepSeek)
    */
-  constructor({ model, apiKey, baseURL, isOpenAI = false }) {
+  constructor({ model, apiKey, baseURL, isOpenAI = false, directAuth = false }) {
     this.model = model
     this.apiKey = apiKey
     this.baseURL = baseURL
     this.isOpenAI = isOpenAI
+    this.directAuth = directAuth
   }
 
   /**
@@ -303,6 +305,7 @@ Respond with ONLY valid JSON (no markdown fences, no explanation):
       customModel: this.model,
       _resolvedProvider: 'openai',
       defaultProvider: 'openai',
+      _directAuth: this.directAuth,
     }
     const client = new OpenAIClient(cfg).getClient()
     const response = await client.chat.completions.create({

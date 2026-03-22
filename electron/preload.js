@@ -97,6 +97,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   resolveAddressees: (params) => ipcRenderer.invoke('agent:resolve-addressees', params),
   dispatchGroupTasks: (params) => ipcRenderer.invoke('agent:dispatch-group-tasks', params),
+  suggestChatTitle: (params) => ipcRenderer.invoke('agent:suggest-chat-title', params),
   testProvider: (params) => ipcRenderer.invoke('agent:test-provider', params),
   onAgentChunk: (callback) => {
     ipcRenderer.removeAllListeners('agent:chunk')

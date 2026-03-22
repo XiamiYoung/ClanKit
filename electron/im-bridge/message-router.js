@@ -64,9 +64,30 @@ function readAgents() {
   return Array.isArray(data) ? data : (data.agents || [])
 }
 
+/**
+ * Resolve a provider ID (either a legacy type string or a UUID from config.providers)
+ * to { type, apiKey, baseURL }.
+ */
+function resolveProviderConfig(providerId, baseConfig) {
+  // New provider objects are stored in config.providers[] with UUID ids
+  if (Array.isArray(baseConfig.providers)) {
+    const found = baseConfig.providers.find(p => p.id === providerId)
+    if (found) {
+      return { type: found.type, apiKey: found.apiKey || '', baseURL: found.baseURL || '' }
+    }
+  }
+  // Legacy: providerId is the type string (e.g. 'anthropic', 'deepseek')
+  const type = providerId
+  return {
+    type,
+    apiKey:  baseConfig[type]?.apiKey  || '',
+    baseURL: baseConfig[type]?.baseURL || '',
+  }
+}
+
 function buildLoopConfig(baseConfig, agent) {
   const cfg = { ...baseConfig }
-  const resolvedProvider = agent.providerId || baseConfig.defaultProvider || 'anthropic'
+  const rawProviderId = agent.providerId || baseConfig.defaultProvider || 'anthropic'
 
   delete cfg.apiKey
   delete cfg.baseURL
@@ -75,20 +96,22 @@ function buildLoopConfig(baseConfig, agent) {
   delete cfg._directAuth
   delete cfg._resolvedProvider
 
-  if (resolvedProvider === 'anthropic') {
-    cfg.apiKey  = baseConfig.anthropic?.apiKey  || ''
-    cfg.baseURL = baseConfig.anthropic?.baseURL || ''
-  } else if (resolvedProvider === 'openrouter') {
-    cfg.apiKey  = baseConfig.openrouter?.apiKey  || ''
-    cfg.baseURL = baseConfig.openrouter?.baseURL || ''
-  } else if (resolvedProvider === 'openai') {
-    cfg.openaiApiKey  = baseConfig.openai?.apiKey  || ''
-    cfg.openaiBaseURL = baseConfig.openai?.baseURL || ''
+  const { type: providerType, apiKey, baseURL } = resolveProviderConfig(rawProviderId, baseConfig)
+
+  if (providerType === 'anthropic') {
+    cfg.apiKey  = apiKey
+    cfg.baseURL = baseURL
+  } else if (providerType === 'openrouter') {
+    cfg.apiKey  = apiKey
+    cfg.baseURL = baseURL
+  } else if (providerType === 'openai') {
+    cfg.openaiApiKey  = apiKey
+    cfg.openaiBaseURL = baseURL
     cfg._resolvedProvider = 'openai'
     cfg.defaultProvider   = 'openai'
-  } else if (resolvedProvider === 'deepseek') {
-    cfg.openaiApiKey  = baseConfig.deepseek?.apiKey  || ''
-    cfg.openaiBaseURL = (baseConfig.deepseek?.baseURL || '').replace(/\/+$/, '')
+  } else if (providerType === 'deepseek') {
+    cfg.openaiApiKey  = apiKey
+    cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')
     cfg._resolvedProvider = 'openai'
     cfg._directAuth       = true
     cfg.defaultProvider   = 'openai'

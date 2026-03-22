@@ -6,6 +6,10 @@
       <div class="agents-title-row">
         <h1 class="agents-title">{{ t('nav.agents') }}</h1>
         <span class="catalog-count-badge">{{ agentsStore.agents.length }}</span>
+        <div style="flex: 1;"></div>
+        <AppButton size="icon" @click="refreshAgents" :loading="refreshing" :title="t('common.refresh')">
+          <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </AppButton>
       </div>
       <p class="agents-subtitle">{{ t('agents.pageDescription') }}</p>
     </div>
@@ -43,9 +47,6 @@
           </button>
         </div>
         <div class="content-header-right">
-          <AppButton size="icon" @click="refreshAgents" :loading="refreshing" :title="t('common.refresh')">
-            <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-          </AppButton>
           <template v-if="selectedView.type === 'category'">
             <AppButton v-if="selectMode && selectedAgentIds.size > 0" size="compact" variant="danger" @click="unassignSelected">
               {{ t('agents.remove', 'Unassign') }}
@@ -337,6 +338,7 @@
     <!-- Agent Group Creator Modal -->
     <AgentGroupCreator
       v-if="showGroupCreator"
+      :agent-type="selectedView.agentType"
       @close="showGroupCreator = false"
       @created="onAgentsCreated"
     />
@@ -359,6 +361,7 @@ import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { useAgentsStore } from '../stores/agents'
 import { useTasksStore } from '../stores/tasks'
+import { useConfigStore } from '../stores/config'
 import { AGENT_AVATARS } from '../components/agents/agentAvatars'
 import AgentCard from '../components/agents/AgentCard.vue'
 import AgentBodyViewer from '../components/agents/AgentBodyViewer.vue'
@@ -372,8 +375,33 @@ const { t } = useI18n()
 
 const agentsStore = useAgentsStore()
 const tasksStore = useTasksStore()
+const configStore = useConfigStore()
 const refreshing = ref(false)
 const newlyAddedIds = ref(new Set())
+
+function resolveDefaultProviderModel() {
+  const cfg = configStore.config || {}
+  const providers = Array.isArray(cfg.providers) ? cfg.providers : []
+  const active = providers.filter(p => p?.isActive)
+
+  const preferredProvider = cfg.utilityModel?.provider || ''
+  const preferredModel = cfg.utilityModel?.model || ''
+
+  // preferredProvider is stored as type (e.g., 'anthropic'), not UUID
+  const provider = (preferredProvider && active.find(p => p.type === preferredProvider))
+    || active[0]
+    || null
+  if (!provider) return { providerId: null, modelId: null }
+
+  const modelId = preferredModel
+    || provider.model
+    || provider.settings?.sonnetModel
+    || provider.settings?.opusModel
+    || provider.settings?.haikuModel
+    || null
+
+  return { providerId: provider.id, modelId }
+}
 
 onMounted(async () => {
   await agentsStore.loadAgents()
@@ -494,6 +522,7 @@ function openBodyViewer(agent) {
 }
 
 function createNew(type) {
+  const { providerId, modelId } = resolveDefaultProviderModel()
   bodyViewerAgent.value = {
     id: uuidv4(),
     name: '',
@@ -501,8 +530,8 @@ function createNew(type) {
     description: '',
     prompt: '',
     avatar: null,
-    providerId: null,
-    modelId: null,
+    providerId,
+    modelId,
     voiceId: null,
     requiredToolIds: [],
     requiredSkillIds: [],
@@ -754,7 +783,7 @@ function isDeleteButtonDisabled(agent) {
 .agents-title-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 .agents-title {
   font-family: 'Inter', sans-serif;
@@ -773,6 +802,7 @@ function isDeleteButtonDisabled(agent) {
   border-radius: 9999px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
   line-height: 1.4;
+  flex-shrink: 0;
 }
 .agents-subtitle {
   font-family: 'Inter', sans-serif;

@@ -324,13 +324,24 @@
                   <!-- Editable -->
                   <template v-else>
                     <div v-if="availableTools.length === 0" class="bv-detail-empty">{{ t('agents.noToolsAvailable') }}</div>
-                    <div class="bv-cap-list">
-                      <label v-for="tool in availableTools" :key="tool.id" class="bv-cap-item">
-                        <input type="checkbox" :value="tool.id" v-model="draftRequiredToolIds" />
-                        <span class="bv-cap-name">{{ tool.name }}</span>
-                        <span class="bv-cap-desc">{{ tool.description || tool.category || '' }}</span>
-                      </label>
-                    </div>
+                    <template v-else>
+                      <div class="bv-cap-toolbar">
+                        <button class="bv-cap-toggle-btn" @click="toggleSelectAll('tools')">
+                          {{ draftRequiredToolIds.length === availableTools.length ? t('common.deselectAll') : t('common.selectAll') }}
+                        </button>
+                      </div>
+                      <div v-if="draftRequiredToolIds.length > CAP_LIMITS.tools" class="bv-cap-warning">
+                        <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        {{ locale.value === 'zh' ? `已选 ${draftRequiredToolIds.length} 个工具，超过建议上限 ${CAP_LIMITS.tools}，可能影响准确度并增加 cost` : `${draftRequiredToolIds.length} tools selected — over the recommended limit of ${CAP_LIMITS.tools}. This may reduce accuracy and increase cost.` }}
+                      </div>
+                      <div class="bv-cap-list">
+                        <label v-for="tool in availableTools" :key="tool.id" class="bv-cap-item">
+                          <input type="checkbox" :value="tool.id" v-model="draftRequiredToolIds" />
+                          <span class="bv-cap-name">{{ tool.name }}</span>
+                          <span class="bv-cap-desc">{{ tool.description || tool.category || '' }}</span>
+                        </label>
+                      </div>
+                    </template>
                   </template>
                 </div>
 
@@ -347,13 +358,24 @@
                   </template>
                   <template v-else>
                     <div v-if="availableSkills.length === 0" class="bv-detail-empty">{{ t('agents.noSkillsAvailable') }}</div>
-                    <div class="bv-cap-list">
-                      <label v-for="skill in availableSkills" :key="skill.id" class="bv-cap-item">
-                        <input type="checkbox" :value="skill.id" v-model="draftRequiredSkillIds" />
-                        <span class="bv-cap-name">{{ skill.name }}</span>
-                        <span class="bv-cap-desc">{{ skill.summary || '' }}</span>
-                      </label>
-                    </div>
+                    <template v-else>
+                      <div class="bv-cap-toolbar">
+                        <button class="bv-cap-toggle-btn" @click="toggleSelectAll('skills')">
+                          {{ draftRequiredSkillIds.length === availableSkills.length ? t('common.deselectAll') : t('common.selectAll') }}
+                        </button>
+                      </div>
+                      <div v-if="draftRequiredSkillIds.length > CAP_LIMITS.skills" class="bv-cap-warning">
+                        <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        {{ locale.value === 'zh' ? `已选 ${draftRequiredSkillIds.length} 个技能，超过建议上限 ${CAP_LIMITS.skills}，可能影响准确度并增加 cost` : `${draftRequiredSkillIds.length} skills selected — over the recommended limit of ${CAP_LIMITS.skills}. This may reduce accuracy and increase cost.` }}
+                      </div>
+                      <div class="bv-cap-list">
+                        <label v-for="skill in availableSkills" :key="skill.id" class="bv-cap-item">
+                          <input type="checkbox" :value="skill.id" v-model="draftRequiredSkillIds" />
+                          <span class="bv-cap-name">{{ skill.name }}</span>
+                          <span class="bv-cap-desc">{{ skill.summary || '' }}</span>
+                        </label>
+                      </div>
+                    </template>
                   </template>
                 </div>
 
@@ -369,13 +391,24 @@
                   </template>
                   <template v-else>
                     <div v-if="availableKnowledgeBases.length === 0" class="bv-detail-empty">{{ t('agents.noKnowledgeBases') }}</div>
-                    <div class="bv-cap-list">
-                      <label v-for="kb in availableKnowledgeBases" :key="kb.id" class="bv-cap-item">
-                        <input type="checkbox" :value="kb.id" v-model="draftRequiredKnowledgeBaseIds" />
-                        <span class="bv-cap-name">{{ kb.name }}</span>
-                        <span class="bv-cap-desc">{{ kb.description || '' }}</span>
-                      </label>
-                    </div>
+                    <template v-else>
+                      <div class="bv-cap-toolbar">
+                        <button class="bv-cap-toggle-btn" @click="toggleSelectAll('knowledge')">
+                          {{ draftRequiredKnowledgeBaseIds.length === availableKnowledgeBases.length ? t('common.deselectAll') : t('common.selectAll') }}
+                        </button>
+                      </div>
+                      <div v-if="draftRequiredKnowledgeBaseIds.length > CAP_LIMITS.knowledge" class="bv-cap-warning">
+                        <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        {{ locale.value === 'zh' ? `已选 ${draftRequiredKnowledgeBaseIds.length} 个知识库，超过建议上限 ${CAP_LIMITS.knowledge}，可能影响准确度并增加 cost` : `${draftRequiredKnowledgeBaseIds.length} knowledge bases selected — over the recommended limit of ${CAP_LIMITS.knowledge}. This may reduce accuracy and increase cost.` }}
+                      </div>
+                      <div class="bv-cap-list">
+                        <label v-for="kb in availableKnowledgeBases" :key="kb.id" class="bv-cap-item">
+                          <input type="checkbox" :value="kb.id" v-model="draftRequiredKnowledgeBaseIds" />
+                          <span class="bv-cap-name">{{ kb.name }}</span>
+                          <span class="bv-cap-desc">{{ kb.description || '' }}</span>
+                        </label>
+                      </div>
+                    </template>
                   </template>
                 </div>
 
@@ -392,13 +425,24 @@
                   </template>
                   <template v-else>
                     <div v-if="availableMcpServers.length === 0" class="bv-detail-empty">{{ t('agents.noMcpServers') }}</div>
-                    <div class="bv-cap-list">
-                      <label v-for="srv in availableMcpServers" :key="srv.id" class="bv-cap-item">
-                        <input type="checkbox" :value="srv.id" v-model="draftRequiredMcpServerIds" />
-                        <span class="bv-cap-name">{{ srv.name }}</span>
-                        <span class="bv-cap-desc">{{ srv.description || '' }}</span>
-                      </label>
-                    </div>
+                    <template v-else>
+                      <div class="bv-cap-toolbar">
+                        <button class="bv-cap-toggle-btn" @click="toggleSelectAll('mcp')">
+                          {{ draftRequiredMcpServerIds.length === availableMcpServers.length ? t('common.deselectAll') : t('common.selectAll') }}
+                        </button>
+                      </div>
+                      <div v-if="draftRequiredMcpServerIds.length > CAP_LIMITS.mcp" class="bv-cap-warning">
+                        <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        {{ locale.value === 'zh' ? `已选 ${draftRequiredMcpServerIds.length} 个 MCP 服务器，超过建议上限 ${CAP_LIMITS.mcp}，可能影响准确度并增加 cost` : `${draftRequiredMcpServerIds.length} MCP servers selected — over the recommended limit of ${CAP_LIMITS.mcp}. This may reduce accuracy and increase cost.` }}
+                      </div>
+                      <div class="bv-cap-list">
+                        <label v-for="srv in availableMcpServers" :key="srv.id" class="bv-cap-item">
+                          <input type="checkbox" :value="srv.id" v-model="draftRequiredMcpServerIds" />
+                          <span class="bv-cap-name">{{ srv.name }}</span>
+                          <span class="bv-cap-desc">{{ srv.description || '' }}</span>
+                        </label>
+                      </div>
+                    </template>
                   </template>
                 </div>
 
@@ -789,6 +833,8 @@ const currentModelLabel = computed(() => {
 })
 
 // ── Capabilities data ──────────────────────────────────────────────────────
+const CAP_LIMITS = { tools: 20, skills: 50, mcp: 5, knowledge: 3 }
+
 const availableTools = computed(() => toolsStore.tools || [])
 const availableSkills = computed(() => skillsStore.skills || [])
 const availableMcpServers = computed(() => mcpStore.servers || [])
@@ -798,6 +844,18 @@ const availableKnowledgeBases = computed(() => {
     id: name, name, description: cfg.enabled ? 'Enabled' : 'Disabled',
   }))
 })
+
+function toggleSelectAll(panel) {
+  const map = {
+    tools:     { draft: draftRequiredToolIds,          items: availableTools },
+    skills:    { draft: draftRequiredSkillIds,         items: availableSkills },
+    knowledge: { draft: draftRequiredKnowledgeBaseIds, items: availableKnowledgeBases },
+    mcp:       { draft: draftRequiredMcpServerIds,     items: availableMcpServers },
+  }
+  const { draft, items } = map[panel]
+  const allIds = items.value.map(i => i.id)
+  draft.value = draft.value.length === allIds.length ? [] : allIds
+}
 
 // ── AI generation helpers ──────────────────────────────────────────────────
 const aiWorking     = ref(false)
@@ -1545,6 +1603,29 @@ function saveAll() {
 }
 
 /* Capabilities */
+.bv-cap-toolbar {
+  display: flex; gap: 0.375rem; margin-bottom: 0.375rem;
+}
+.bv-cap-toggle-btn {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption); font-weight: 600;
+  padding: 0.1875rem 0.625rem; border-radius: 0.375rem;
+  background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.7);
+  border: 1px solid rgba(255,255,255,0.12); cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.bv-cap-toggle-btn:hover {
+  background: rgba(255,255,255,0.14); color: #FFFFFF;
+}
+.bv-cap-warning {
+  display: flex; align-items: flex-start; gap: 0.375rem;
+  padding: 0.4375rem 0.625rem; margin-bottom: 0.375rem;
+  border-radius: 0.375rem;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #FCD34D;
+  font-size: var(--fs-caption); line-height: 1.4;
+}
 .bv-cap-list { display: flex; flex-direction: column; gap: 0.1875rem; }
 
 .bv-cap-item {

@@ -101,7 +101,8 @@
             class="chat-sidebar-item group"
             :class="{ active: chat.id === chatsStore.activeChatId }"
           >
-            <svg style="width:16px;height:16px;color:#9CA3AF;opacity:0.7;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <span v-if="chat.icon" class="chat-sidebar-item-icon">{{ chat.icon }}</span>
+            <svg v-else style="width:16px;height:16px;color:#9CA3AF;opacity:0.7;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
             <span v-if="((chat.isRunning && chat.id !== chatsStore.activeChatId) || chatsStore.unreadChatIds.has(chat.id)) && !chatsStore.completedChatIds.has(chat.id) && !chatsStore.pendingPermissionChatIds.has(chat.id)" class="chat-unread-spinner"></span>
@@ -306,105 +307,20 @@
           <span style="color:#9CA3AF; font-size:var(--fs-small); white-space:nowrap;">
             {{ formatTokenCount(activeContextMetrics.inputTokens) }} in / {{ formatTokenCount(activeContextMetrics.outputTokens) }} out
           </span>
-          <!-- Cost + Inspect button -->
-          <div style="position:relative; display:flex; align-items:center; gap:0.25rem;"
-               @mouseenter="showInspectTooltip = true; refreshCostOnHover()"
-               @mouseleave="showInspectTooltip = false">
-            <span v-if="activeChatCost" class="ict-inline-cost">{{ formatCost(activeChatCost.usd) }}</span>
-            <button
-              @click="inspectContext"
-              :disabled="!hasContextData"
-              class="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
-              :style="hasContextData
-                ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
-                : 'background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
-              @mouseenter="e => { if (hasContextData) e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }"
-              @mouseleave="e => { if (hasContextData) e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }"
-            >
-              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-              </svg>
-              <span style="font-size:var(--fs-small);">Inspect</span>
-            </button>
-
-            <!-- Cost breakdown tooltip -->
-            <div v-if="showInspectTooltip" class="inspect-cost-tooltip">
-              <!-- Header: model + total cost badge (badge only when there's cost data) -->
-              <div class="ict-header">
-                <div class="ict-header-left">
-                  <svg style="width:11px;height:11px;flex-shrink:0;opacity:0.5;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                  <span class="ict-model-name">{{ activeChatModel || 'Unknown model' }}</span>
-                </div>
-                <span v-if="activeChatCost" class="ict-total-badge">{{ formatCost(activeChatCost.all?.USD ?? 0, 'USD') }}</span>
-              </div>
-
-              <!-- LLM section -->
-              <div class="ict-section">
-                <div class="ict-section-label">LLM Cost</div>
-                <template v-if="activeChatCost?.hasPricing">
-                  <div class="ict-row">
-                    <span>Input tokens</span>
-                    <span>{{ formatCost(activeChatCost.inputUsd) }}</span>
-                  </div>
-                  <div class="ict-row">
-                    <span>Output tokens</span>
-                    <span>{{ formatCost(activeChatCost.outputUsd) }}</span>
-                  </div>
-                  <div v-if="(activeChatCost.cacheWriteUsd ?? 0) > 0" class="ict-row">
-                    <span>Cache write</span>
-                    <span>{{ formatCost(activeChatCost.cacheWriteUsd) }}</span>
-                  </div>
-                  <div v-if="(activeChatCost.cacheReadUsd ?? 0) > 0" class="ict-row">
-                    <span>Cache read</span>
-                    <span>{{ formatCost(activeChatCost.cacheReadUsd) }}</span>
-                  </div>
-                  <div class="ict-row ict-row-sub">
-                    <span>Subtotal</span>
-                    <span>{{ formatCost(activeChatCost.llmUsd) }}</span>
-                  </div>
-                </template>
-                <template v-else-if="activeChatCost && !activeChatCost.hasPricing">
-                  <div class="ict-row">
-                    <span style="font-style:italic; opacity:0.5;">Price not configured</span>
-                  </div>
-                </template>
-                <template v-else>
-                  <!-- no messages yet: blank rows -->
-                  <div class="ict-row">
-                    <span>Input tokens</span><span class="ict-blank">—</span>
-                  </div>
-                  <div class="ict-row">
-                    <span>Output tokens</span><span class="ict-blank">—</span>
-                  </div>
-                </template>
-              </div>
-
-              <!-- Voice / Whisper section — always shown -->
-              <div class="ict-section">
-                <div class="ict-section-label">Voice · Whisper</div>
-                <div class="ict-row">
-                  <span>{{ activeChatUsage?.whisperCalls ? `${activeChatUsage.whisperCalls} rounds · ${(activeChatUsage.whisperSecs || 0).toFixed(1)}s` : 'No rounds' }}</span>
-                  <span v-if="activeChatCost">{{ formatCost(activeChatCost.whisperUsd) }}</span>
-                  <span v-else class="ict-blank">—</span>
-                </div>
-              </div>
-
-              <!-- Total row -->
-              <div class="ict-total">
-                <div class="ict-total-row">
-                  <span class="ict-total-label">Total (USD / CNY / SGD)</span>
-                </div>
-                <div v-if="activeChatCost" class="ict-total-amounts">
-                  <span><span class="ict-amount">{{ formatCost(activeChatCost.all?.USD ?? 0) }}</span> <span class="ict-cur">USD</span></span>
-                  <span class="ict-sep">/</span>
-                  <span><span class="ict-amount">{{ formatCost(activeChatCost.all?.CNY ?? 0, 'CNY') }}</span> <span class="ict-cur">CNY</span></span>
-                  <span class="ict-sep">/</span>
-                  <span><span class="ict-amount">{{ formatCost(activeChatCost.all?.SGD ?? 0, 'SGD') }}</span> <span class="ict-cur">SGD</span></span>
-                </div>
-                <div v-else class="ict-blank" style="padding-top:0.125rem;">—</div>
-              </div>
-            </div>
-          </div>
+          <!-- Inspect button -->
+          <button
+            @click="inspectContext"
+            :disabled="!hasContextData"
+            class="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
+            :style="hasContextData
+              ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
+              : 'background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+            <span style="font-size:var(--fs-small);">{{ t('chats.inspect') }}</span>
+          </button>
 
           <!-- Compact button -->
           <button
@@ -418,7 +334,7 @@
                 : 'background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
             @mouseenter="e => { if (!isCompacting && (activeRunning || hasContextData)) e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }"
             @mouseleave="e => { if (!isCompacting && (activeRunning || hasContextData)) e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }"
-            :title="isCompacting ? 'Compacting…' : activeRunning ? 'Compact on next iteration' : 'Compact context window'"
+            :title="isCompacting ? t('chats.compacting') : activeRunning ? t('chats.compactOnNext') : t('chats.compactContextWindow')"
           >
             <svg v-if="isCompacting" class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
@@ -426,7 +342,7 @@
             <svg v-else class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/>
             </svg>
-            <span style="font-size:var(--fs-small);">{{ isCompacting ? 'Compacting…' : 'Compact' }}</span>
+            <span style="font-size:var(--fs-small);">{{ isCompacting ? t('chats.compacting') : t('chats.compact') }}</span>
           </button>
         </div>
         </div>
@@ -448,7 +364,7 @@
                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                 </svg>
-                <span class="font-semibold" style="font-family:'Inter',sans-serif; color:#1A1A1A; font-size:var(--fs-subtitle);">Context Inspector</span>
+                <span class="font-semibold" style="font-family:'Inter',sans-serif; color:#1A1A1A; font-size:var(--fs-subtitle);">{{ t('chats.contextInspector') }}</span>
                 <span
                   v-if="activeChatModel"
                   class="px-1.5 py-0.5 rounded-full"
@@ -479,7 +395,7 @@
                   @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
                   @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
-                  <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Metrics</span>
+                  <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.metrics') }}</span>
                   <svg class="w-4 h-4 transition-transform" :style="inspectorSections.metrics ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
                     <polyline points="6 9 12 15 18 9"/>
                   </svg>
@@ -488,99 +404,34 @@
                   <table style="width:100%; font-size:var(--fs-body); color:#1A1A1A;">
                     <tbody>
                       <tr style="border-bottom:1px solid #F5F5F5;">
-                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Input tokens</td>
+                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.inputTokens') }}</td>
                         <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeContextMetrics.inputTokens?.toLocaleString() ?? '0' }}</td>
                       </tr>
                       <tr style="border-bottom:1px solid #F5F5F5;">
-                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Max tokens</td>
+                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.maxTokens') }}</td>
                         <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (activeContextMetrics.maxTokens ?? 0).toLocaleString() }}</td>
                       </tr>
                       <tr style="border-bottom:1px solid #F5F5F5;">
-                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Usage</td>
+                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.context') }}</td>
                         <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ Math.round(activeContextMetrics.percentage) }}%</td>
                       </tr>
                       <tr :style="(activeContextMetrics.voiceInputTokens || activeContextMetrics.voiceOutputTokens) ? 'border-bottom:1px solid #F5F5F5;' : ''">
-                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Compactions</td>
+                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.compactions') }}</td>
                         <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeContextMetrics.compactionCount ?? 0 }}</td>
                       </tr>
                       <template v-if="activeContextMetrics.voiceInputTokens || activeContextMetrics.voiceOutputTokens">
                         <tr style="border-bottom:1px solid #F5F5F5;">
-                          <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Voice in</td>
-                          <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (activeContextMetrics.voiceInputTokens ?? 0).toLocaleString() }} tok</td>
+                          <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.voiceIn') }}</td>
+                          <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (activeContextMetrics.voiceInputTokens ?? 0).toLocaleString() }} {{ t('chats.tok') }}</td>
                         </tr>
                         <tr :style="(activeContextMetrics.whisperCalls) ? 'border-bottom:1px solid #F5F5F5;' : ''">
-                          <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Voice out</td>
-                          <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (activeContextMetrics.voiceOutputTokens ?? 0).toLocaleString() }} tok</td>
+                          <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.voiceOut') }}</td>
+                          <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (activeContextMetrics.voiceOutputTokens ?? 0).toLocaleString() }} {{ t('chats.tok') }}</td>
                         </tr>
                       </template>
                       <tr v-if="activeContextMetrics.whisperCalls">
-                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Whisper STT</td>
-                        <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeContextMetrics.whisperCalls }} rounds, {{ (activeContextMetrics.whisperSecs ?? 0).toFixed(1) }}s audio</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <!-- Usage (cumulative) section -->
-              <div v-if="activeChatUsage" style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
-                <button
-                  @click="inspectorSections.cost = !inspectorSections.cost"
-                  class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-                  style="background:#F2F2F7;"
-                  @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
-                  @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
-                >
-                  <div class="flex items-center gap-2">
-                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Usage (cumulative)</span>
-                    <span v-if="activeChatCost" class="px-1.5 py-0.5 rounded-full" style="background:#F0FDF4; color:#15803D; font-size:var(--fs-small); font-weight:600;">
-                      {{ formatCost(activeChatCost.usd, 'USD') }}
-                    </span>
-                  </div>
-                  <svg class="w-4 h-4 transition-transform" :style="inspectorSections.cost ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
-                    <polyline points="6 9 12 15 18 9"/>
-                  </svg>
-                </button>
-                <div v-if="inspectorSections.cost" class="px-4 py-3" style="border-top:1px solid #E5E5EA;">
-                  <table style="width:100%; font-size:var(--fs-body); color:#1A1A1A;">
-                    <tbody>
-                      <tr style="border-bottom:1px solid #F5F5F5;">
-                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Input tokens</td>
-                        <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (activeChatUsage.inputTokens || 0).toLocaleString() }}</td>
-                      </tr>
-                      <tr style="border-bottom:1px solid #F5F5F5;">
-                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Output tokens</td>
-                        <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (activeChatUsage.outputTokens || 0).toLocaleString() }}</td>
-                      </tr>
-                      <tr v-if="activeChatUsage.cacheCreationTokens" style="border-bottom:1px solid #F5F5F5;">
-                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Cache writes</td>
-                        <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (activeChatUsage.cacheCreationTokens || 0).toLocaleString() }}</td>
-                      </tr>
-                      <tr v-if="activeChatUsage.cacheReadTokens" style="border-bottom:1px solid #F5F5F5;">
-                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Cache reads</td>
-                        <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (activeChatUsage.cacheReadTokens || 0).toLocaleString() }}</td>
-                      </tr>
-                      <tr v-if="activeChatUsage.whisperCalls" style="border-bottom:1px solid #F5F5F5;">
-                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">Whisper STT</td>
-                        <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeChatUsage.whisperCalls }} rounds, {{ (activeChatUsage.whisperSecs || 0).toFixed(1) }}s</td>
-                      </tr>
-                      <template v-if="activeChatCost">
-                        <tr style="border-top:2px solid #E5E5EA;">
-                          <td class="py-1.5 pr-4 font-semibold" style="color:#1A1A1A; white-space:nowrap;">Est. Cost</td>
-                          <td class="py-1.5 font-semibold" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A;">
-                            {{ formatCost(activeChatCost.all.USD, 'USD') }}<span style="color:#9CA3AF;font-size:0.85em;font-weight:400;"> USD</span>
-                            &nbsp;/&nbsp;
-                            {{ formatCost(activeChatCost.all.CNY, 'CNY') }}<span style="color:#9CA3AF;font-size:0.85em;font-weight:400;"> CNY</span>
-                            &nbsp;/&nbsp;
-                            {{ formatCost(activeChatCost.all.SGD, 'SGD') }}<span style="color:#9CA3AF;font-size:0.85em;font-weight:400;"> SGD</span>
-                          </td>
-                        </tr>
-                      </template>
-                      <tr v-else-if="activeChatUsage.inputTokens || activeChatUsage.outputTokens">
-                        <td class="py-1.5 pr-4" style="color:#9CA3AF;">Est. Cost</td>
-                        <td class="py-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
-                          Price not configured for "{{ activeChatModel || '?' }}" — set it in Config → AI → Pricing
-                        </td>
+                        <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.whisperStt') }}</td>
+                        <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ activeContextMetrics.whisperCalls }} {{ t('chats.rounds') }}, {{ (activeContextMetrics.whisperSecs ?? 0).toFixed(1) }}{{ t('chats.audioUnit') }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -597,9 +448,9 @@
                   @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
                   <div class="flex items-center gap-2">
-                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">System Prompt</span>
+                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.systemPrompt') }}</span>
                     <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                      {{ contextSnapshot ? (contextSnapshot.systemPrompt?.length ?? 0).toLocaleString() + ' chars' : 'not yet loaded' }}
+                      {{ contextSnapshot ? (contextSnapshot.systemPrompt?.length ?? 0).toLocaleString() + ' ' + t('chats.chars') : t('chats.notYetLoaded') }}
                     </span>
                   </div>
                   <svg class="w-4 h-4 transition-transform" :style="inspectorSections.system ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
@@ -608,7 +459,7 @@
                 </button>
                 <div v-if="inspectorSections.system" class="px-4 py-3" style="border-top:1px solid #E5E5EA;">
                   <pre v-if="contextSnapshot?.systemPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:300px; overflow-y:auto;">{{ contextSnapshot.systemPrompt }}</pre>
-                  <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">Available after the first message is sent.</p>
+                  <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">{{ t('chats.availableAfterFirstMessage') }}</p>
                 </div>
               </div>
 
@@ -622,9 +473,9 @@
                   @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
                   <div class="flex items-center gap-2">
-                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Agents</span>
+                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.agents') }}</span>
                     <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                      {{ (inspectorAgents.systemAgentPrompt || inspectorAgents.systemAgentName ? 1 : 0) + (inspectorAgents.userAgentPrompt || inspectorAgents.userAgentName ? 1 : 0) }} active
+                      {{ (inspectorAgents.systemAgentPrompt || inspectorAgents.systemAgentName ? 1 : 0) + (inspectorAgents.userAgentPrompt || inspectorAgents.userAgentName ? 1 : 0) }} {{ t('chats.active') }}
                     </span>
                   </div>
                   <svg class="w-4 h-4 transition-transform" :style="inspectorSections.agents ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
@@ -639,20 +490,20 @@
                     :style="(inspectorAgents.userAgentPrompt || inspectorAgents.userAgentName) ? 'border-bottom:1px solid #F5F5F5;' : ''"
                   >
                     <div class="flex items-center gap-2 mb-1.5">
-                      <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:rgba(0,122,255,0.1); color:#0056CC;">System Agent</span>
+                      <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:rgba(0,122,255,0.1); color:#0056CC;">{{ t('chats.systemAgent') }}</span>
                       <span v-if="inspectorAgents.systemAgentName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorAgents.systemAgentName }}</span>
                     </div>
                     <pre v-if="inspectorAgents.systemAgentPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorAgents.systemAgentPrompt }}</pre>
-                    <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">Prompt available after first message.</p>
+                    <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">{{ t('chats.promptAvailableAfterFirstMessage') }}</p>
                   </div>
                   <!-- User agent -->
                   <div v-if="inspectorAgents.userAgentPrompt || inspectorAgents.userAgentName" class="px-4 py-3">
                     <div class="flex items-center gap-2 mb-1.5">
-                      <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#D1FAE5; color:#065F46;">User Agent</span>
+                      <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#D1FAE5; color:#065F46;">{{ t('chats.userAgent') }}</span>
                       <span v-if="inspectorAgents.userAgentName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorAgents.userAgentName }}</span>
                     </div>
                     <pre v-if="inspectorAgents.userAgentPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorAgents.userAgentPrompt }}</pre>
-                    <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">Prompt available after first message.</p>
+                    <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">{{ t('chats.promptAvailableAfterFirstMessage') }}</p>
                   </div>
                 </div>
               </div>
@@ -667,7 +518,7 @@
                   @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
                   <div class="flex items-center gap-2">
-                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Messages</span>
+                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.messages') }}</span>
                     <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
                       {{ contextSnapshot?.messages?.length ?? 0 }}
                     </span>
@@ -691,7 +542,7 @@
                             ? 'background:rgba(0,122,255,0.1); color:#0056CC;'
                             : 'background:#D1FAE5; color:#065F46;'"
                         >{{ msg.role }}</span>
-                        <span style="color:#9CA3AF; font-size:var(--fs-small);">{{ msg.contentLength?.toLocaleString() }} chars</span>
+                        <span style="color:#9CA3AF; font-size:var(--fs-small);">{{ msg.contentLength?.toLocaleString() }} {{ t('chats.chars') }}</span>
                       </div>
                       <div
                         class="text-xs cursor-pointer"
@@ -699,11 +550,11 @@
                         @click="expandedMessages[idx] = !expandedMessages[idx]"
                       >
                         <pre v-if="expandedMessages[idx]" class="whitespace-pre-wrap leading-relaxed overflow-x-auto" style="max-height:300px; overflow-y:auto;">{{ msg.fullContent }}</pre>
-                        <span v-else>{{ msg.contentPreview }}<span v-if="msg.contentLength > 200" style="color:#007AFF;"> ... (click to expand)</span></span>
+                        <span v-else>{{ msg.contentPreview }}<span v-if="msg.contentLength > 200" style="color:#007AFF;"> ... ({{ t('chats.clickToExpand') }})</span></span>
                       </div>
                     </div>
                   </template>
-                  <div v-else class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">{{ contextSnapshot ? 'No messages' : 'Available after the first message is sent.' }}</div>
+                  <div v-else class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">{{ contextSnapshot ? t('chats.noMessages') : t('chats.availableAfterFirstMessage') }}</div>
                 </div>
               </div>
 
@@ -717,7 +568,7 @@
                   @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
                   <div class="flex items-center gap-2">
-                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Tools</span>
+                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.tools') }}</span>
                     <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
                       {{ contextSnapshot?.tools?.length ?? 0 }}
                     </span>
@@ -738,7 +589,7 @@
                       <p v-if="tool.description" class="mt-0.5 text-xs" style="color:#9CA3AF;">{{ tool.description.slice(0, 150) }}{{ tool.description.length > 150 ? '...' : '' }}</p>
                     </div>
                   </template>
-                  <div v-else class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">{{ contextSnapshot ? 'No tools' : 'Available after the first message is sent.' }}</div>
+                  <div v-else class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">{{ contextSnapshot ? t('chats.noTools') : t('chats.availableAfterFirstMessage') }}</div>
                 </div>
               </div>
 
@@ -752,9 +603,9 @@
                   @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
                 >
                   <div class="flex items-center gap-2">
-                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">Debug Log</span>
+                    <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.debugLog') }}</span>
                     <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                      {{ debugLog.length }} entries
+                      {{ debugLog.length }} {{ t('chats.entries') }}
                     </span>
                   </div>
                   <svg class="w-4 h-4 transition-transform" :style="inspectorSections.debugLog ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
@@ -765,16 +616,16 @@
                   <!-- Info bar -->
                   <div class="px-4 py-2 flex items-center gap-3 flex-wrap" style="background:#F2F2F7; border-bottom:1px solid #F5F5F5;">
                     <span style="font-size:var(--fs-small); color:#9CA3AF;">
-                      Electron: <span :style="hasElectron ? 'color:#007AFF; font-weight:600;' : 'color:#dc2626; font-weight:600;'">{{ hasElectron ? 'YES' : 'NO' }}</span>
+                      {{ t('chats.electron') }}: <span :style="hasElectron ? 'color:#007AFF; font-weight:600;' : 'color:#dc2626; font-weight:600;'">{{ hasElectron ? t('chats.yes') : t('chats.no') }}</span>
                     </span>
                     <span style="font-size:var(--fs-small); color:#9CA3AF;">
-                      Model: <span style="color:#1A1A1A; font-weight:600;">{{ debugModelId }}</span>
+                      {{ t('chats.modelLabel') }} <span style="color:#1A1A1A; font-weight:600;">{{ debugModelId }}</span>
                     </span>
                   </div>
                   <!-- Log entries (last 100) -->
                   <div ref="debugLogEl" style="max-height:300px; overflow-y:auto; background:#1A1A1A; font-family:'JetBrains Mono',monospace;">
                     <div class="px-3 py-2 space-y-0.5">
-                      <div v-if="debugLog.length === 0" style="color:#6B7280; font-size:var(--fs-secondary);">No events yet — send a message to start logging.</div>
+                      <div v-if="debugLog.length === 0" style="color:#6B7280; font-size:var(--fs-secondary);">{{ t('chats.noEventsYet') }}</div>
                       <div
                         v-for="(entry, i) in debugLog.slice(-100)"
                         :key="i"
@@ -847,6 +698,7 @@
           :showDelete="true"
           @send="handleChatWindowSend"
           @resend-message="handleResendMessage"
+          @retry-waiting-indicator="handleRetryWaitingIndicator"
           @stop="stopAgent(chatsStore.activeChatId)"
           @quote="quoteMessage"
           @quote-image="handleQuoteImage"
@@ -1403,25 +1255,63 @@
     <div v-if="showNewChatModal" class="rename-backdrop">
       <div class="rename-modal" style="width:min(460px, 90vw);" @keydown.escape="cancelNewChat" @keydown.enter.prevent="confirmNewChat">
         <div class="rename-header">
-          <h3 class="rename-title">New Chat</h3>
+          <h3 class="rename-title">{{ t('chats.newChat') }}</h3>
           <button class="rename-close-btn" @click="cancelNewChat" aria-label="Close">
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
         <div style="padding:1rem 1.25rem 1.25rem; display:flex; flex-direction:column; gap:0.875rem;">
-          <!-- Row 1: Chat name + agent picker -->
+          <!-- Row 1: Chat icon + name -->
           <div class="newchat-name-row-v2">
-            <svg style="width:16px;height:16px;flex-shrink:0;color:#6B7280;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
+            <button class="newchat-icon-picker-btn" @click.stop="showNewChatIconPicker = true" :title="t('chats.chatIcon')">
+              <span class="newchat-icon-display">{{ newChatIcon || '💬' }}</span>
+              <svg class="newchat-icon-edit" style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
             <input
               ref="newChatNameInputRef"
               v-model="newChatName"
               type="text"
-              placeholder="Chat name (optional)"
+              :placeholder="t('chats.chatNameOptional')"
               class="newchat-name-input"
             />
-            <button class="newchat-agent-cfg-btn" @click.stop="showNewChatAgentPopover = true" title="Configure agents">
+          </div>
+
+          <div class="newchat-field-stack">
+            <div class="newchat-folder-tree-label">{{ t('chats.userPersona') }}</div>
+            <button class="newchat-agent-row-btn" @click.stop="showNewChatUserPopover = true" :title="t('chats.userPersona')">
+              <div class="newchat-agent-cfg-avatars" v-if="activeNewChatUserAgent">
+                <img v-if="getAvatarDataUriForAgent(activeNewChatUserAgent)" :src="getAvatarDataUriForAgent(activeNewChatUserAgent)" alt="" class="newchat-agent-cfg-avatar-img" />
+                <span v-else class="newchat-agent-cfg-avatar-fb">{{ (activeNewChatUserAgent.name || '?').charAt(0) }}</span>
+              </div>
+              <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span class="newchat-agent-row-label">{{ activeNewChatUserAgent?.name || t('common.default') }}</span>
+            </button>
+            <div v-if="activeNewChatUserAgent" class="newchat-selected-preview">
+              <div class="newchat-selected-agent-chip">
+                <img v-if="getAvatarDataUriForAgent(activeNewChatUserAgent)" :src="getAvatarDataUriForAgent(activeNewChatUserAgent)" alt="" class="newchat-selected-agent-avatar" />
+                <span v-else class="newchat-selected-agent-fallback">{{ (activeNewChatUserAgent.name || '?').charAt(0) }}</span>
+                <span class="newchat-selected-agent-name">{{ activeNewChatUserAgent.name }}</span>
+                <button
+                  v-if="newChatUserAgentId"
+                  class="newchat-selected-agent-remove"
+                  @click.stop="clearNewChatUserSelection"
+                  :aria-label="t('common.remove')"
+                  :title="t('common.remove')"
+                >
+                  <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="newchat-field-stack">
+            <div class="newchat-folder-tree-label">{{ t('chats.systemAgents') }}</div>
+            <button class="newchat-agent-row-btn" @click.stop="showNewChatAgentPopover = true" :title="t('chats.configureAgents')">
               <div class="newchat-agent-cfg-avatars" v-if="newChatAgentIds.length > 0">
                 <template v-for="(pid, i) in newChatAgentIds.slice(0, 3)" :key="pid">
                   <img v-if="getAvatarDataUriForAgent(agentsStore.getAgentById(pid))" :src="getAvatarDataUriForAgent(agentsStore.getAgentById(pid))" alt="" class="newchat-agent-cfg-avatar-img" :style="{ zIndex: 10 - i }" />
@@ -1432,11 +1322,29 @@
               <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
               </svg>
+              <span class="newchat-agent-row-label">{{ displayedSystemPersonaAgents.length > 0 ? t('common.selected') + ': ' + displayedSystemPersonaAgents.length : t('common.default') }}</span>
             </button>
+            <div v-if="displayedSystemPersonaAgents.length > 0" class="newchat-selected-preview">
+              <div v-for="p in displayedSystemPersonaAgents" :key="p.id" class="newchat-selected-agent-chip">
+                <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" class="newchat-selected-agent-avatar" />
+                <span v-else class="newchat-selected-agent-fallback">{{ (p.name || '?').charAt(0) }}</span>
+                <span class="newchat-selected-agent-name">{{ p.name }}</span>
+                <button
+                  v-if="newChatAgentIds.includes(p.id)"
+                  class="newchat-selected-agent-remove"
+                  @click.stop="removeNewChatSystemAgent(p.id)"
+                  :aria-label="t('common.remove')"
+                  :title="t('common.remove')"
+                >
+                  <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+              </div>
+            </div>
           </div>
+
           <!-- Row 2: Folder tree selector -->
           <div v-if="chatsStore.chatTree.some(n => n.type === 'folder')" class="newchat-folder-tree-wrap">
-            <div class="newchat-folder-tree-label">Save to folder</div>
+            <div class="newchat-folder-tree-label">{{ t('chats.saveToFolder') }}</div>
             <div class="newchat-folder-tree">
               <!-- Root option -->
               <button
@@ -1445,7 +1353,7 @@
                 @click="newChatFolderId = null"
               >
                 <svg style="width:14px;height:14px;flex-shrink:0;opacity:0.75;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                <span>Root (no folder)</span>
+                <span>{{ t('chats.rootNoFolder') }}</span>
               </button>
               <!-- Recursive folder tree -->
               <template v-for="node in chatsStore.chatTree" :key="node.id">
@@ -1463,15 +1371,22 @@
           </div>
         </div>
         <div class="rename-actions">
-          <AppButton variant="secondary" size="modal" @click="cancelNewChat">Cancel</AppButton>
-          <AppButton size="modal" @click="confirmNewChat">Create</AppButton>
+          <AppButton variant="secondary" size="modal" @click="cancelNewChat">{{ t('common.cancel') }}</AppButton>
+          <AppButton size="modal" @click="confirmNewChat">{{ t('common.create') }}</AppButton>
         </div>
       </div>
     </div>
 
+    <EmojiPicker
+      v-if="showNewChatIconPicker"
+      :current="newChatIcon"
+      @select="onNewChatIconSelect"
+      @close="showNewChatIconPicker = false"
+    />
+
   <!-- New Chat Agent Picker Dialog (dark, CCM-style) -->
   <Teleport to="body">
-    <div v-if="showNewChatAgentPopover" class="ncp-backdrop" @click.self="showNewChatAgentPopover = false">
+    <div v-if="showNewChatAgentPopover" class="ncp-backdrop">
       <div class="ncp-dialog">
         <!-- Header -->
         <div class="ncp-header">
@@ -1481,8 +1396,8 @@
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
               </svg>
             </div>
-            <h2 class="ncp-title">Choose Agents</h2>
-            <span class="ncp-badge">{{ newChatAgentIds.length }} selected</span>
+            <h2 class="ncp-title">{{ t('chats.systemAgents') }}</h2>
+            <span class="ncp-badge">{{ newChatAgentIds.length }} {{ t('common.selected') }}</span>
           </div>
           <button class="ncp-close" @click="showNewChatAgentPopover = false">
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -1496,7 +1411,7 @@
             ref="newChatAgentSearchEl"
             v-model="newChatAgentSearch"
             type="text"
-            placeholder="Search agents..."
+              :placeholder="t('chats.searchAgents')"
             class="ncp-search-input"
             @keydown.stop
           />
@@ -1528,7 +1443,7 @@
                 <span v-if="p.description" class="ncp-desc">{{ p.description }}</span>
               </div>
             </label>
-            <div v-if="filteredNewChatAgents.length === 0" class="ncp-empty">No agents match your search</div>
+            <div v-if="filteredNewChatAgents.length === 0" class="ncp-empty">{{ t('chats.noAgentsMatch') }}</div>
           </template>
           <!-- No search: category tree -->
           <template v-else>
@@ -1567,7 +1482,7 @@
             <div class="ncp-cat-section">
               <button class="ncp-cat-header" @click="toggleNcpCat('__all__')">
                 <svg class="ncp-cat-chevron" :class="{ expanded: ncpExpandedCatIds.has('__all__') }" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                <span class="ncp-cat-name">All</span>
+                <span class="ncp-cat-name">{{ t('common.all') }}</span>
                 <span class="ncp-cat-count">{{ sortedSystemAgents.length }}</span>
               </button>
               <div v-if="ncpExpandedCatIds.has('__all__')" class="ncp-cat-items">
@@ -1597,8 +1512,135 @@
 
         <!-- Footer -->
         <div class="ncp-footer">
-          <span class="ncp-footer-hint">{{ newChatAgentIds.length === 0 ? 'Default agent' : newChatAgentIds.length === 1 ? '1 agent (single mode)' : newChatAgentIds.length + ' agents (group mode)' }}</span>
-          <button class="ncp-done-btn" @click="showNewChatAgentPopover = false">Done</button>
+          <span class="ncp-footer-hint">{{ newChatAgentIds.length === 0 ? t('chats.defaultSystemPersona') : t('chats.systemPersonaSelected', undefined, { count: newChatAgentIds.length }) }}</span>
+          <button class="ncp-done-btn" @click="showNewChatAgentPopover = false">{{ t('common.done') }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- New Chat User Persona Picker Dialog (single-select) -->
+  <Teleport to="body">
+    <div v-if="showNewChatUserPopover" class="ncp-backdrop">
+      <div class="ncp-dialog">
+        <div class="ncp-header">
+          <div class="ncp-header-left">
+            <div class="ncp-header-icon">
+              <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+            </div>
+            <h2 class="ncp-title">{{ t('chats.userPersona') }}</h2>
+          </div>
+          <button class="ncp-close" @click="showNewChatUserPopover = false">
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+
+        <div class="ncp-search-bar">
+          <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input
+            ref="newChatUserSearchEl"
+            v-model="newChatUserSearch"
+            type="text"
+            :placeholder="t('chats.searchAgents')"
+            class="ncp-search-input"
+            @keydown.stop
+          />
+          <button v-if="newChatUserSearch" class="ncp-search-clear" @click="newChatUserSearch = ''">
+            <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+
+        <div class="ncp-list">
+          <template v-if="newChatUserSearch.trim()">
+            <label
+              v-for="p in filteredNewChatUsers"
+              :key="p.id"
+              class="ncp-item"
+              :class="{ selected: isNewChatUserSelected(p.id) }"
+            >
+              <div class="ncp-check">
+                <input type="radio" name="newchat-user-persona" :checked="isNewChatUserSelected(p.id)" @change="selectNewChatUserAgent(p.id)" />
+                <svg v-if="isNewChatUserSelected(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="ncp-avatar">
+                <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" class="ncp-avatar-img" />
+                <span v-else class="ncp-avatar-fallback">{{ p.name.charAt(0) }}</span>
+              </div>
+              <div class="ncp-info">
+                <span class="ncp-name">{{ p.name }}</span>
+                <span v-if="p.description" class="ncp-desc">{{ p.description }}</span>
+              </div>
+            </label>
+            <div v-if="filteredNewChatUsers.length === 0" class="ncp-empty">{{ t('chats.noAgentsMatch') }}</div>
+          </template>
+
+          <template v-else>
+            <div v-for="cat in agentsStore.userCategories" :key="cat.id" class="ncp-cat-section">
+              <button class="ncp-cat-header" @click="toggleNupCat(cat.id)">
+                <svg class="ncp-cat-chevron" :class="{ expanded: nupExpandedCatIds.has(cat.id) }" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <span v-if="cat.emoji" class="ncp-cat-emoji">{{ cat.emoji }}</span>
+                <span class="ncp-cat-name">{{ cat.name }}</span>
+                <span class="ncp-cat-count">{{ agentsStore.agentsInCategory(cat.id).length }}</span>
+              </button>
+              <div v-if="nupExpandedCatIds.has(cat.id)" class="ncp-cat-items">
+                <label
+                  v-for="p in agentsStore.agentsInCategory(cat.id)"
+                  :key="p.id"
+                  class="ncp-item"
+                  :class="{ selected: isNewChatUserSelected(p.id) }"
+                >
+                  <div class="ncp-check">
+                    <input type="radio" name="newchat-user-persona" :checked="isNewChatUserSelected(p.id)" @change="selectNewChatUserAgent(p.id)" />
+                    <svg v-if="isNewChatUserSelected(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <div class="ncp-avatar">
+                    <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" class="ncp-avatar-img" />
+                    <span v-else class="ncp-avatar-fallback">{{ p.name.charAt(0) }}</span>
+                  </div>
+                  <div class="ncp-info">
+                    <span class="ncp-name">{{ p.name }}</span>
+                    <span v-if="p.description" class="ncp-desc">{{ p.description }}</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div class="ncp-cat-section">
+              <button class="ncp-cat-header" @click="toggleNupCat('__all__')">
+                <svg class="ncp-cat-chevron" :class="{ expanded: nupExpandedCatIds.has('__all__') }" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <span class="ncp-cat-name">{{ t('common.all') }}</span>
+                <span class="ncp-cat-count">{{ sortedUserAgents.length }}</span>
+              </button>
+              <div v-if="nupExpandedCatIds.has('__all__')" class="ncp-cat-items">
+                <label
+                  v-for="p in sortedUserAgents"
+                  :key="p.id"
+                  class="ncp-item"
+                  :class="{ selected: isNewChatUserSelected(p.id) }"
+                >
+                  <div class="ncp-check">
+                    <input type="radio" name="newchat-user-persona" :checked="isNewChatUserSelected(p.id)" @change="selectNewChatUserAgent(p.id)" />
+                    <svg v-if="isNewChatUserSelected(p.id)" class="ncp-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <div class="ncp-avatar">
+                    <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" class="ncp-avatar-img" />
+                    <span v-else class="ncp-avatar-fallback">{{ p.name.charAt(0) }}</span>
+                  </div>
+                  <div class="ncp-info">
+                    <span class="ncp-name">{{ p.name }}</span>
+                    <span v-if="p.description" class="ncp-desc">{{ p.description }}</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <div class="ncp-footer">
+          <span class="ncp-footer-hint">{{ activeNewChatUserAgent?.name || t('common.default') }}</span>
+          <button class="ncp-done-btn" @click="showNewChatUserPopover = false">{{ t('common.done') }}</button>
         </div>
       </div>
     </div>
@@ -1705,6 +1747,7 @@ import { v4 as uuidv4 } from 'uuid'
 import AppButton from '../components/common/AppButton.vue'
 import ChatGridLayout from '../components/chat/ChatGridLayout.vue'
 import CategoryModal from '../components/agents/CategoryModal.vue'
+import EmojiPicker from '../components/agents/EmojiPicker.vue'
 import ChatMentionInput from '../components/chat/ChatMentionInput.vue'
 import { estimateToolTokens, estimateMcpTokens, formatTokens, tokenPercentage } from '../utils/tokenEstimate'
 import { resolveModelPrice, calcCostUSD, convertCurrencies, formatCost } from '../utils/pricing.js'
@@ -2004,11 +2047,24 @@ const ChatTreeNodeView = defineComponent({
         }, [
           // Spacer matching folder chevron width for vertical alignment
           h('span', { style: 'width:14px;display:inline-block;flex-shrink:0;' }),
-          // Chat bubble with dots icon
-          h('svg', {
-            style: { width: '14px', height: '14px', flexShrink: 0, color: isDark ? 'rgba(255,255,255,0.5)' : '#9CA3AF', transition: 'color 0.15s' },
-            viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2',
-          }, [h('path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' }), h('circle', { cx: '8', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' }), h('circle', { cx: '12', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' }), h('circle', { cx: '16', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' })]),
+          // Chat icon (custom icon fallback to bubble)
+          node.icon
+            ? h('span', {
+              style: {
+                width: '14px',
+                height: '14px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: '1',
+                fontSize: '12px',
+                flexShrink: 0,
+              },
+            }, node.icon)
+            : h('svg', {
+              style: { width: '14px', height: '14px', flexShrink: 0, color: isDark ? 'rgba(255,255,255,0.5)' : '#9CA3AF', transition: 'color 0.15s' },
+              viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2',
+            }, [h('path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' }), h('circle', { cx: '8', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' }), h('circle', { cx: '12', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' }), h('circle', { cx: '16', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' })]),
           showSpinner ? h('span', { class: isDark ? 'chat-unread-spinner chat-unread-spinner--light' : 'chat-unread-spinner' }) : null,
           h('span', { class: 'truncate flex-1', style: { fontWeight: isActive ? '600' : '500', color: isDark ? '#fff' : '#1A1A1A', transition: 'color 0.15s' } }, node.title),
           // Status chips
@@ -2752,7 +2808,6 @@ const perChatDebugLogs = reactive(new Map())    // chatId → [{time, msg, level
 const perChatSnapshots = reactive(new Map())    // chatId → snapshot object
 const debugLog = computed(() => perChatDebugLogs.get(chatsStore.activeChatId) ?? [])
 const showContextInspector  = ref(false)
-const showInspectTooltip    = ref(false)
 const inspectorUsage        = ref(null)   // usage loaded fresh from disk when inspector opens
 const contextSnapshot = computed(() => perChatSnapshots.get(chatsStore.activeChatId) ?? null)
 
@@ -3349,7 +3404,11 @@ const filteredChats = computed(() => {
 // ── Tree Context Menu (DocsView pattern) ──────────────────────────────────────
 const treeCtxMenu = ref({ visible: false, x: 0, y: 0, node: null })
 const treeCtxDialog = ref({ visible: false, type: '', title: '', placeholder: '', value: '', x: 0, y: 0, folderId: null })
-const folderModal = ref({ visible: false, mode: 'create', initial: { name: '', emoji: '📁' }, parentFolderId: null, editFolderId: null })
+const FOLDER_EMOJI_POOL = ['📁', '📂', '🗂️', '📦', '🧰', '📝', '📚', '🎯', '✨', '🌟', '🚀', '🪄']
+function pickRandomFolderEmoji() {
+  return FOLDER_EMOJI_POOL[Math.floor(Math.random() * FOLDER_EMOJI_POOL.length)]
+}
+const folderModal = ref({ visible: false, mode: 'create', initial: { name: '', emoji: pickRandomFolderEmoji() }, parentFolderId: null, editFolderId: null })
 const ctxDialogInputRef = ref(null)
 const treeTooltip = ref({ visible: false, text: '', right: 0, top: 0 })
 
@@ -3386,7 +3445,7 @@ function closeTreeCtxMenu() {
 function openCtxDialog(type, defaultValue, folderId, x, y) {
   closeTreeCtxMenu()
   if (type === 'newFolder') {
-    folderModal.value = { visible: true, mode: 'create', initial: { name: '', emoji: '📁' }, parentFolderId: folderId, editFolderId: null }
+    folderModal.value = { visible: true, mode: 'create', initial: { name: '', emoji: pickRandomFolderEmoji() }, parentFolderId: folderId, editFolderId: null }
     return
   }
   if (type === 'rename') {
@@ -3502,19 +3561,38 @@ const folderNonEmptyAlert = ref(null)
 // ── Chat Management ──────────────────────────────────────────────────────────
 const showNewChatModal = ref(false)
 const newChatName = ref('')
+const newChatIcon = ref('')
+const newChatUserAgentId = ref('')
+const showNewChatIconPicker = ref(false)
 const newChatFolderId = ref(null)
 const newChatNameInputRef = ref(null)
 const newChatAgentIds = ref([])
 const showNewChatAgentPopover = ref(false)
 const newChatAgentSearch = ref('')
 const newChatAgentSearchEl = ref(null)
+const showNewChatUserPopover = ref(false)
+const newChatUserSearch = ref('')
+const newChatUserSearchEl = ref(null)
 const newChatFolderTreeExpanded = ref(new Set())
 const ncpExpandedCatIds = ref(new Set())
+const nupExpandedCatIds = ref(new Set())
+
+const NEW_CHAT_ICON_POOL = ['💬', '✨', '🚀', '🎯', '🧠', '📌', '🌟', '🪄', '🗂️', '📝', '🎉', '🔥']
+
+function pickRandomNewChatIcon() {
+  return NEW_CHAT_ICON_POOL[Math.floor(Math.random() * NEW_CHAT_ICON_POOL.length)]
+}
 
 function toggleNcpCat(id) {
   const s = new Set(ncpExpandedCatIds.value)
   s.has(id) ? s.delete(id) : s.add(id)
   ncpExpandedCatIds.value = s
+}
+
+function toggleNupCat(id) {
+  const s = new Set(nupExpandedCatIds.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  nupExpandedCatIds.value = s
 }
 
 function toggleNewChatFolderExpand(folderId) {
@@ -3535,6 +3613,34 @@ const filteredNewChatAgents = computed(() => {
   )
 })
 
+const filteredNewChatUsers = computed(() => {
+  const q = newChatUserSearch.value.toLowerCase().trim()
+  const list = sortedUserAgents.value
+  if (!q) return list
+  return list.filter(p =>
+    p.name.toLowerCase().includes(q) ||
+    (p.description && p.description.toLowerCase().includes(q))
+  )
+})
+
+const activeNewChatUserAgent = computed(() => {
+  const id = newChatUserAgentId.value || agentsStore.defaultUserAgent?.id
+  return id ? agentsStore.getAgentById(id) : null
+})
+
+const effectiveNewChatUserAgentId = computed(() =>
+  newChatUserAgentId.value || agentsStore.defaultUserAgent?.id || ''
+)
+
+const displayedSystemPersonaAgents = computed(() => {
+  if (newChatAgentIds.value.length > 0) {
+    return newChatAgentIds.value.map(id => agentsStore.getAgentById(id)).filter(Boolean)
+  }
+  const fallbackId = agentsStore.defaultSystemAgent?.id
+  const fallback = fallbackId ? agentsStore.getAgentById(fallbackId) : null
+  return fallback ? [fallback] : []
+})
+
 watch(showNewChatAgentPopover, (open) => {
   if (open) {
     newChatAgentSearch.value = ''
@@ -3542,6 +3648,37 @@ watch(showNewChatAgentPopover, (open) => {
     nextTick(() => newChatAgentSearchEl.value?.focus())
   }
 })
+
+watch(showNewChatUserPopover, (open) => {
+  if (open) {
+    newChatUserSearch.value = ''
+    nupExpandedCatIds.value = new Set()
+    nextTick(() => newChatUserSearchEl.value?.focus())
+  }
+})
+
+function onNewChatIconSelect(emoji) {
+  newChatIcon.value = emoji || ''
+  showNewChatIconPicker.value = false
+}
+
+function selectNewChatUserAgent(agentId) {
+  const defaultId = agentsStore.defaultUserAgent?.id || ''
+  newChatUserAgentId.value = agentId === defaultId ? '' : agentId
+}
+
+function isNewChatUserSelected(agentId) {
+  return effectiveNewChatUserAgentId.value === agentId
+}
+
+function clearNewChatUserSelection() {
+  newChatUserAgentId.value = ''
+}
+
+function removeNewChatSystemAgent(agentId) {
+  const idx = newChatAgentIds.value.indexOf(agentId)
+  if (idx !== -1) newChatAgentIds.value.splice(idx, 1)
+}
 
 function toggleNewChatAgent(agentId) {
   const idx = newChatAgentIds.value.indexOf(agentId)
@@ -3557,10 +3694,15 @@ function newChat(folderId) {
   const resolvedFolder = folderId !== undefined ? folderId : (chatsStore.activeFolderId?.value ?? null)
   showNewChatModal.value = true
   newChatName.value = ''
+  newChatIcon.value = pickRandomNewChatIcon()
+  newChatUserAgentId.value = ''
+  showNewChatIconPicker.value = false
   newChatFolderId.value = resolvedFolder
   newChatAgentIds.value = []
   showNewChatAgentPopover.value = false
   newChatAgentSearch.value = ''
+  showNewChatUserPopover.value = false
+  newChatUserSearch.value = ''
   // Pre-expand ancestors of pre-selected folder
   newChatFolderTreeExpanded.value = new Set(getAncestorFolderIds(resolvedFolder, chatsStore.chatTree))
   nextTick(() => newChatNameInputRef.value?.focus())
@@ -3581,15 +3723,22 @@ function getAncestorFolderIds(targetId, nodes, path = []) {
 
 async function confirmNewChat() {
   showNewChatModal.value = false
-  const title = newChatName.value.trim() || 'New Chat'
+  const typedName = newChatName.value.trim()
+  const title = typedName || t('chats.newChat')
   let selectedIds = newChatAgentIds.value
   if (selectedIds.length === 0) {
     const def = agentsStore.defaultSystemAgent
     selectedIds = def ? [def.id] : []
   }
+  const chatIcon = newChatIcon.value.trim()
+  const userAgentId = newChatUserAgentId.value || null
   const agentCfg = selectedIds.length > 0 ? [...selectedIds] : null
   const folderId = newChatFolderId.value
-  await chatsStore.createChat(title, agentCfg, folderId)
+  await chatsStore.createChat(title, agentCfg, folderId, {
+    icon: chatIcon,
+    userAgentId,
+    autoTitleEligible: !typedName,
+  })
   // Expand the target folder and all its ancestors so the new chat is visible
   if (folderId) {
     const ancestors = getAncestorFolderIds(folderId, chatsStore.chatTree) || []
@@ -3602,10 +3751,15 @@ async function confirmNewChat() {
 function cancelNewChat() {
   showNewChatModal.value = false
   newChatName.value = ''
+  newChatIcon.value = ''
+  newChatUserAgentId.value = ''
+  showNewChatIconPicker.value = false
   newChatFolderId.value = null
   newChatAgentIds.value = []
   showNewChatAgentPopover.value = false
   newChatAgentSearch.value = ''
+  showNewChatUserPopover.value = false
+  newChatUserSearch.value = ''
 }
 
 const confirmDeleteTarget = ref(null) // { type: 'chat'|'groupAgent', id, pid?, label }
@@ -3755,6 +3909,10 @@ function getAgentProviderLabel(agentId) {
 // sortedSystemAgents kept — used in new chat agent picker
 const sortedSystemAgents = computed(() =>
   [...agentsStore.systemAgents].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
+)
+
+const sortedUserAgents = computed(() =>
+  [...agentsStore.userAgents].sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
 )
 
 // ── RAG chip popover ──────────────────────────────────────────────────────
@@ -4494,6 +4652,50 @@ function handleChatWindowSend(text) {
   sendMessage()
 }
 
+function handleRetryWaitingIndicator(msg) {
+  const chatId = chatsStore.activeChatId
+  if (!chatId || !msg) return
+  const chat = chatsStore.chats.find(c => c.id === chatId)
+  if (!chat?.messages) return
+
+  // Find the original user message
+  const userMsg = msg.sourceUserMessageId
+    ? chat.messages.find(m => m.id === msg.sourceUserMessageId)
+    : null
+
+  // Remove the error waiting indicator
+  const waitIdx = chat.messages.findIndex(m => m.id === msg.id)
+  if (waitIdx >= 0) chat.messages.splice(waitIdx, 1)
+
+  // Remove any empty/streaming assistant placeholders placed after the user message
+  if (userMsg) {
+    const userMsgIdx = chat.messages.findIndex(m => m.id === userMsg.id)
+    if (userMsgIdx >= 0) {
+      let i = userMsgIdx + 1
+      while (i < chat.messages.length) {
+        const m = chat.messages[i]
+        if (m.role === 'assistant' && (m.streaming || (!m.content && !(m.segments?.length)))) {
+          chat.messages.splice(i, 1)
+        } else {
+          i++
+        }
+      }
+    }
+  }
+
+  if (!userMsg) return
+
+  // Pull the user message back out so sendMessage can re-add it
+  const userMsgIdxFinal = chat.messages.findIndex(m => m.id === userMsg.id)
+  if (userMsgIdxFinal >= 0) chat.messages.splice(userMsgIdxFinal, 1)
+
+  inputText.value = typeof userMsg.content === 'string' ? userMsg.content : ''
+  if (Array.isArray(userMsg.attachments) && userMsg.attachments.length > 0) {
+    attachments.value = JSON.parse(JSON.stringify(userMsg.attachments))
+  }
+  sendMessage()
+}
+
 function handleResendMessage(msg) {
   const chatId = chatsStore.activeChatId
   if (!chatId || !msg) return
@@ -5177,8 +5379,10 @@ async function sendMessage() {
 
   let waitingMsgId = null
   let userMsgId = null
+  let waitingTimeoutTimer = null
 
   const clearWaitingIndicator = () => {
+    if (waitingTimeoutTimer) { clearTimeout(waitingTimeoutTimer); waitingTimeoutTimer = null }
     const c = chatsStore.chats.find(x => x.id === chatId)
     if (!c?.messages) return
     const idx = c.messages.findIndex(m => m.id === waitingMsgId || (m.isWaitingIndicator && m.waitingState === 'running'))
@@ -5186,6 +5390,7 @@ async function sendMessage() {
   }
 
   const failWaitingIndicator = (errorText) => {
+    if (waitingTimeoutTimer) { clearTimeout(waitingTimeoutTimer); waitingTimeoutTimer = null }
     const c = chatsStore.chats.find(x => x.id === chatId)
     if (!c?.messages) return
     const idx = c.messages.findIndex(m => m.id === waitingMsgId || (m.isWaitingIndicator && m.sourceUserMessageId === userMsgId))
@@ -5238,6 +5443,11 @@ async function sendMessage() {
   })
   await nextTick()
   scrollToBottom(true)
+
+  // Start 15-second timeout: if no response or error comes in time, show failure state
+  waitingTimeoutTimer = setTimeout(() => {
+    failWaitingIndicator(t('chats.requestTimeout'))
+  }, 15000)
 
   // Clear any stale streaming flags from previous runs that didn't finish cleanly
   const currentChat = chatsStore.chats.find(c => c.id === chatId)
@@ -5833,6 +6043,7 @@ async function sendMessage() {
       safetyChat.isRunning = false
       safetyChat.isThinking = false
     }
+    if (waitingTimeoutTimer) { clearTimeout(waitingTimeoutTimer); waitingTimeoutTimer = null }
   }
 }
 
@@ -6069,16 +6280,6 @@ async function compactContext() {
   } finally {
     isCompacting.value = false
   }
-}
-
-async function refreshCostOnHover() {
-  // Fetch latest usage from disk so tooltip cost is always current
-  const chatId = chatsStore.activeChatId
-  if (!chatId) return
-  try {
-    const freshChat = await window.electronAPI.getChat(chatId)
-    if (freshChat?.usage) inspectorUsage.value = freshChat.usage
-  } catch {}
 }
 
 async function inspectContext() {
@@ -8073,20 +8274,187 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   padding: 0.75rem 1.25rem 1rem;
 }
 
+.chat-sidebar-item-icon {
+  width: 1rem;
+  height: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
 /* ── New chat modal rows ───────────────────────────────────────────────── */
 .newchat-name-row-v2 {
-  display: flex; align-items: center; gap: 0.625rem;
-  padding: 0.5rem 0.75rem; border-radius: 0.625rem;
-  border: 1px solid #2A2A2A; background: #1A1A1A;
+  display: flex;
+  align-items: stretch;
+  gap: 0.625rem;
 }
 .newchat-name-input {
-  flex: 1; min-width: 0; padding: 0.25rem 0.375rem;
-  border-radius: 0.375rem; border: none;
-  background: transparent;
+  flex: 1;
+  min-width: 0;
+  height: 2.75rem;
+  padding: 0 0.75rem;
+  border-radius: 0.625rem;
+  border: 1px solid #2A2A2A;
+  background: #1A1A1A;
   font-family: 'Inter', sans-serif; font-size: var(--fs-body);
-  font-weight: 500; color: #FFFFFF; outline: none;
+  font-weight: 500;
+  color: #FFFFFF;
+  outline: none;
+  box-sizing: border-box;
 }
 .newchat-name-input::placeholder { color: #4B5563; font-weight: 400; }
+.newchat-name-input:focus { border-color: #4B5563; }
+
+.newchat-icon-picker-btn {
+  position: relative;
+  width: 3.5rem;
+  height: 2.75rem;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.625rem;
+  background: #1A1A1A;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.newchat-icon-picker-btn:hover {
+  border-color: #4B5563;
+  background: #202020;
+}
+
+.newchat-icon-display {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.newchat-icon-edit {
+  position: absolute;
+  right: 0.25rem;
+  bottom: 0.25rem;
+  color: #9CA3AF;
+}
+
+.newchat-field-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.newchat-select {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.625rem;
+  background: #1A1A1A;
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  outline: none;
+}
+.newchat-select:focus { border-color: #4B5563; }
+
+.newchat-agent-row-btn {
+  width: 100%;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.625rem;
+  background: #1A1A1A;
+  color: #6B7280;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-start;
+  padding: 0.4375rem 0.625rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.newchat-agent-row-btn:hover {
+  border-color: #374151;
+  color: #FFFFFF;
+}
+
+.newchat-agent-row-label {
+  font-size: var(--fs-caption);
+  font-family: 'Inter', sans-serif;
+  color: inherit;
+}
+
+.newchat-selected-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.newchat-selected-agent-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.875rem 0.25rem 0.4375rem;
+  border-radius: 9999px;
+  border: 1px solid #2A2A2A;
+  background: #111111;
+}
+
+.newchat-selected-agent-avatar,
+.newchat-selected-agent-fallback {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.newchat-selected-agent-avatar {
+  object-fit: cover;
+}
+
+.newchat-selected-agent-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #2A2A2A;
+  color: #9CA3AF;
+  font-size: 0.5625rem;
+  font-weight: 600;
+}
+
+.newchat-selected-agent-name {
+  color: #D1D5DB;
+  font-size: var(--fs-small);
+  line-height: 1;
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newchat-selected-agent-remove {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 9999px;
+  border: 1px solid #374151;
+  background: #1A1A1A;
+  color: #9CA3AF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.newchat-selected-agent-remove:hover {
+  background: rgba(255,59,48,0.15);
+  border-color: rgba(255,59,48,0.45);
+  color: #FF6B6B;
+}
 
 /* ── Folder tree selector ─────────────────────────────────────────────── */
 .newchat-folder-tree-wrap {
@@ -8858,159 +9226,6 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   font-size: 11px;
   color: #9CA3AF;
   margin-top: 0.125rem;
-}
-
-/* ── Inspect button cost tooltip ─────────────────────────────────────────── */
-/* ── Inline cost chip in context bar ── */
-.ict-inline-cost {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: var(--fs-small);
-  color: #6B7280;
-  cursor: default;
-  white-space: nowrap;
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
-  transition: color 0.12s ease;
-}
-.ict-inline-cost:hover { color: #374151; }
-
-/* ── Cost breakdown tooltip ── */
-.inspect-cost-tooltip {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
-  min-width: 22rem;
-  width: max-content;
-  max-width: 30rem;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
-  border-radius: 0.75rem;
-  overflow: hidden;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06);
-  z-index: 1000;
-  pointer-events: none;
-  animation: fadeIn 0.12s ease;
-}
-/* Header: model name + green total badge */
-.ict-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.625rem 0.875rem;
-  background: #F9F9F9;
-  border-bottom: 1px solid #F0F0F0;
-}
-.ict-header-left {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  min-width: 0;
-  color: #6B7280;
-}
-.ict-model-name {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: var(--fs-small);
-  color: #6B7280;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ict-total-badge {
-  flex-shrink: 0;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: var(--fs-small);
-  font-weight: 600;
-  padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  background: #F0FDF4;
-  color: #15803D;
-  white-space: nowrap;
-}
-/* Section block */
-.ict-section {
-  padding: 0.5rem 0.875rem;
-  border-bottom: 1px solid #F5F5F5;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.ict-section-label {
-  font-size: var(--fs-small);
-  font-weight: 600;
-  color: #9CA3AF;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.125rem;
-}
-/* Cost row */
-.ict-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1.5rem;
-  font-size: var(--fs-small);
-  color: #6B7280;
-}
-.ict-row span:last-child {
-  font-family: 'JetBrains Mono', monospace;
-  color: #1A1A1A;
-  white-space: nowrap;
-}
-.ict-row-sub {
-  margin-top: 0.125rem;
-  padding-top: 0.25rem;
-  border-top: 1px solid #F0F0F0;
-  font-weight: 600;
-  color: #374151;
-}
-.ict-row-sub span:last-child {
-  color: #374151;
-}
-/* Total block */
-.ict-total {
-  padding: 0.5rem 0.875rem;
-  background: #F9F9F9;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.ict-total-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.ict-total-label {
-  font-size: var(--fs-small);
-  font-weight: 600;
-  color: #9CA3AF;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.ict-total-amounts {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: var(--fs-caption);
-  flex-wrap: wrap;
-}
-.ict-amount {
-  font-weight: 700;
-  color: #15803D;
-}
-.ict-sep {
-  color: #D1D5DB;
-  font-size: var(--fs-small);
-}
-.ict-cur {
-  font-size: 0.75em;
-  font-weight: 400;
-  color: #9CA3AF;
-}
-.ict-blank {
-  font-family: 'JetBrains Mono', monospace;
-  color: #D1D5DB;
 }
 </style>
 

@@ -155,7 +155,7 @@
                   </svg>
                 </div>
                 <div style="flex:1;min-width:0;">
-                  <h3 class="tools-card-name">{{ tool.name }}</h3>
+                  <h3 class="tools-card-name">{{ toolDisplayName(tool) }}</h3>
                 </div>
                 <!-- Type badge -->
                 <span class="tools-type-badge">
@@ -164,7 +164,7 @@
               </div>
 
               <!-- Description -->
-              <p class="tools-card-desc">{{ tool.description || t('tools.noDescription') }}</p>
+              <p class="tools-card-desc">{{ toolDisplayDesc(tool) || t('tools.noDescription') }}</p>
 
               <!-- Footer — adapts by type -->
               <div class="tools-card-footer">
@@ -427,6 +427,24 @@ const toolsStore = useToolsStore()
 const configStore = useConfigStore()
 const { t } = useI18n()
 const refreshing = ref(false)
+
+// Resolve display name/description for built-in tools via i18n
+function toolDisplayName(tool) {
+  if (tool.i18nKey) {
+    const k = tool.i18nKey + '.name'
+    const v = t(k)
+    if (v && v !== k) return v
+  }
+  return tool.name
+}
+function toolDisplayDesc(tool) {
+  if (tool.i18nKey) {
+    const k = tool.i18nKey + '.description'
+    const v = t(k)
+    if (v && v !== k) return v
+  }
+  return tool.description
+}
 
 const typeLabelMap = computed(() => ({
   http: t('tools.http'),

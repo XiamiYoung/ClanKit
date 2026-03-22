@@ -838,7 +838,7 @@ function confirmUninstall(skill) {
 
 function doUninstall() {
   if (uninstallSkill.value) {
-    console.debug('[Skills] doUninstall:', uninstallSkill.value.id)
+
     skillsStore.uninstallRemoteSkill(uninstallSkill.value.id)
   }
   showUninstallDialog.value = false
@@ -963,10 +963,8 @@ function selectTencentCategory(slug) {
 }
 
 function switchTab(tab) {
-  console.debug('[Skills] switchTab:', tab)
   activeTab.value = tab
   if (tab === 'local') {
-    console.debug('[Skills] local tab selected, auto-refreshing')
     refresh()
   }
   if (tab === 'tencent' && !skillsStore.remoteSkills['tencent-top']) {
@@ -985,7 +983,6 @@ let clawhubSearchTimer = null
 function onClawhubSearch(val) {
   if (clawhubSearchTimer) clearTimeout(clawhubSearchTimer)
   clawhubSearchTimer = setTimeout(() => {
-    console.debug('[Skills] clawhub search keyword:', val)
     skillsStore.fetchRemoteSkills('clawhub', val.trim() ? { keyword: val.trim() } : {})
   }, 400)
 }
@@ -1052,13 +1049,11 @@ const filteredClawhubSkills = computed(() => {
 
 // Sort local skills by installed date (newest first)
 const sortedLocalSkills = computed(() => {
-  console.debug('[SkillsView] sortedLocalSkills computed - filteredSkills.value:', filteredSkills.value)
   const sorted = [...filteredSkills.value].sort((a, b) => {
     const dateA = a.installedAt ? new Date(a.installedAt).getTime() : 0
     const dateB = b.installedAt ? new Date(b.installedAt).getTime() : 0
     return dateB - dateA
   })
-  console.debug('[SkillsView] sortedLocalSkills result:', sorted)
   return sorted
 })
 
@@ -1101,7 +1096,6 @@ watch(() => skillsStore.installingSkills, (map) => {
       state._toasted = true
       const skill = skillsStore.allRemoteSkills.find(s => s.id === skillId)
       const name = skill?.name || skillId
-      console.debug('[Skills] install completed:', skillId, name)
       showInstallToast(`${name} — ${t('skills.installSuccess')}`)
       // Note: no auto tab switch – user switches to local tab manually and it auto-refreshes
     }
@@ -1110,10 +1104,8 @@ watch(() => skillsStore.installingSkills, (map) => {
 
 function installSkill(sourceId, skill) {
   if (!skill.downloadUrl) {
-    console.warn('[Skills] installSkill: no downloadUrl for', skill.id)
     return
   }
-  console.debug('[Skills] installSkill:', sourceId, skill.id, skill.downloadUrl)
   skillsStore.installRemoteSkill(sourceId, skill.id, skill.downloadUrl, configStore.config.skillsPath)
 }
 
@@ -1152,9 +1144,7 @@ const searchQuery = ref('')
 
 const filteredSkills = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
-  console.debug('[SkillsView] filteredSkills computed - skillsStore.skills.length:', skillsStore.skills.length, 'query:', q)
   if (!q) {
-    console.debug('[SkillsView] no query, returning all skills:', skillsStore.skills)
     return skillsStore.skills
   }
   const filtered = skillsStore.skills.filter(skill => {
@@ -1164,7 +1154,6 @@ const filteredSkills = computed(() => {
     const prompt = (skill.systemPrompt || '').toLowerCase()
     return name.includes(q) || desc.includes(q) || summary.includes(q) || prompt.includes(q)
   })
-  console.debug('[SkillsView] filtered results:', filtered)
   return filtered
 })
 
@@ -1293,11 +1282,8 @@ function copySource() {
 }
 
 async function refresh() {
-  console.debug('[SkillsView] refresh() called, skillsPath:', configStore.config.skillsPath)
   await skillsStore.loadSkills(configStore.config.skillsPath)
-  console.debug('[SkillsView] after loadSkills, skills.length:', skillsStore.skills.length)
   await skillsStore.loadSkillPrompts(configStore.config.skillsPath)
-  console.debug('[SkillsView] after loadSkillPrompts, skills:', skillsStore.skills)
   if (selectedSkill.value && !skillsStore.skills.find(s => s.id === selectedSkill.value.id)) {
     goBack()
   }
@@ -2740,17 +2726,16 @@ const SkillTreeNode = defineComponent({
   flex-shrink: 0;
   padding: 0.3125rem 0.875rem;
   border-radius: 0.5rem;
-  border: none;
-  background: #232326;
-  color: #fff;
+  border: 1.5px solid rgba(255,59,48,0.2);
+  background: rgba(255,59,48,0.06);
+  color: #FF3B30;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
-.remote-uninstall-btn:hover { background: #dc2626; box-shadow: 0 2px 12px rgba(220,38,38,0.25); }
+.remote-uninstall-btn:hover { background: #dc2626; color: #fff; border-color: transparent; box-shadow: 0 2px 12px rgba(220,38,38,0.25); }
 .remote-uninstall-btn:active { transform: scale(0.97); }
 .skill-open-btn {
   flex-shrink: 0;
