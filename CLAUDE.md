@@ -75,19 +75,40 @@ Existing hardcoded text should be migrated one by one to `t('key')` calls. Prior
 
 ## Repository Structure
 
-- `electron/` — Main process (CommonJS): `main.js`, `preload.js`, `logger.js`
-  - `electron/agent/` — Agent loop: `agentLoop.js`, `core/` (LLM clients), `managers/`, `mcp/`, `tools/`
+- `electron/` — Main process (CommonJS)
+  - `electron/main.js` (~982 lines) — thin shell: createWindow, app lifecycle, delegates to IPC modules
+  - `electron/preload.js` — contextBridge to `window.electronAPI`
+  - `electron/ipc/` — 18 IPC handler modules + `index.js` registerAll()
+    - `agent.js` (2369 lines) — agent execution, collaboration loop, memory extraction
+    - `store.js`, `tools.js`, `mcp.js`, `knowledge.js`, `models.js`, `skills.js`, `voice.js`, `memory.js`, `claude.js`, `shell.js`, `files.js`, `obsidian.js`, `window.js`, `im.js`, `news.js`, `souls.js`, `tasks.js`
+  - `electron/agent/` — agent loop + extracted modules
+    - `agentLoop.js` (1705 lines) — core LLM loop, tool execution, context management
+    - `systemPromptBuilder.js` — builds per-agent system prompt from soul files + skills
+    - `messageConverter.js` — tool result serialization for LLM API
+    - `toolExecutor.js` — tool execution helpers
+    - `chunkAccumulator.js` — accumulates text from streaming chunks (used by collaboration loop)
+    - `dataNormalizers.js` — normalizes JSON file formats (agents, tools, MCP)
+    - `core/` — LLM clients (AnthropicClient, OpenAIClient, GoogleClient)
+    - `tools/` — ShellTool, FileTool, SoulTool, TodoTool, ToolRegistry, BaseTool
+    - `mcp/` — MCP server management
+    - `voice/` — VoiceSession, WhisperSTT
+  - `electron/lib/` — shared utilities: dataStore, memoryHelpers, windowRef, fileHelpers
 - `src/` — Vue renderer (ES modules)
-  - `src/main.js`, `src/App.vue`, `src/style.css`, `src/router/index.js`
-  - `src/services/storage.js` — storage abstraction (Electron IPC / localStorage)
-  - `src/stores/` — `chats.js`, `config.js`, `agents.js`, `mcp.js`, `tools.js`, `models.js`, `knowledge.js`, `news.js`, `obsidian.js`, `skills.js`, `voice.js`
-  - `src/components/layout/` — Sidebar, TitleBar
+  - `src/stores/` — Pinia stores: chats, config, agents, mcp, tools, models, knowledge, news, obsidian, skills, voice
+  - `src/composables/` — extracted logic from ChatsView:
+    - `useSendMessage.js` (897) — message dispatch, queue, stop, plan approval, compactContext
+    - `useChunkHandler.js` (549) — chunk routing, streaming state, collaboration flags
+    - `useAgentCollaboration.js` (158) — provider credentials, direct group fire
+    - `useChatTree.js` (719) — sidebar tree, drag-drop, rename, search, folders
+    - `useMessageOps.js` (203) — copy/delete/quote/resend
+    - `useVoiceRecording.js` (560) — voice call system
+    - `useGridMode.js`, `useAttachments.js`, `useAvatarTooltip.js`
+  - `src/components/chat/` — ChatWindow, ChatHeader, ChatGridPanel, ChatGridLayout, ChatMentionInput, MessageRenderer, ChatSettingsModal, NewChatModal, ContextInspectorModal, ChatTreeNodeView.js
   - `src/components/common/` — AppButton, ComboBox, ConfirmModal, CategoryModal, EmojiPicker
-  - `src/components/chat/` — MessageRenderer, RichTextEditor, BabylonViewer
-  - `src/components/agents/` — AgentCard, AgentWizard, AvatarPicker, SoulViewer
-  - `src/views/` — ChatsView, ConfigView, AgentsView, McpView, ToolsView, KnowledgeView, NotesView, SkillsView, DocsView, NewsView
-  - `src/utils/mentions.js`
-- `tailwind.config.js`, `vite.config.js`, `postcss.config.js`, `package.json`
+  - `src/components/agents/` — AgentCard, AgentWizard, AvatarPicker, AgentBodyViewer
+  - `src/utils/` — mentions.js, tokenEstimate.js, pricing.js, ipcSerialize.js
+  - `src/views/` — ChatsView (2824 lines), ConfigView, AgentsView, McpView, ToolsView, KnowledgeView, NotesView, SkillsView, DocsView, NewsView
+- `vitest.config.js`, `tailwind.config.js`, `vite.config.js`, `postcss.config.js`, `package.json`
 
 ## Commands
 
@@ -185,87 +206,119 @@ chat.agentModelOverrides[agentId]   ← highest priority (this chat only)
 - Chats: `chats/index.json` (metadata) + `chats/{id}.json` (per-chat with messages)
 - Souls: `souls/{agentId}/{type}.md`
 
-### `.env` vs `config.json` — What Lives Where
+All configuration lives in `config.json`. There is no `.env` file.
 
-- **`.env`** (at `DATA_DIR/.env`) stores only **`CLANKAI_DATA_PATH`** — the data directory override. It must live outside `config.json` because it determines where `config.json` is.
-- **`config.json`** stores everything else, including the three user-configured paths:
-  - `skillsPath` — directory of skill folders (default: `~/.claude/skills`)
-  - `DoCPath` — documents / vault folder path
-  - `artifactPath` — directory where AI artifacts are written during chats
-- These paths are read/written via the `store:get-env-paths` / `store:save-env-path` IPC channels (named for historical reasons), but they no longer touch `.env`.
-- The renderer accesses them through `configStore.config.skillsPath` etc., populated by `loadEnvPaths()` in `src/stores/config.js`.
+## Electron Agent Architecture
 
-## Multi-Agent Collaboration Architecture — Iron Laws
+### IPC Module System
 
-**These rules are non-negotiable. Any change that violates them MUST be confirmed by the user before proceeding. Do not refactor, simplify, or "clean up" this system without explicit sign-off.**
+`electron/main.js` (~982 lines) is a thin shell. All IPC handlers live in `electron/ipc/` (18 modules), loaded via `registerAll()` in `electron/ipc/index.js`. Key module: `agent.js` (2369 lines).
 
-### How the system works
+### Agent Execution Pipeline (`agent:send-message`)
 
-#### 1. Startup flow (`sendMessage` → group path)
+The entire orchestration runs **in Electron** (Node.js). Vue is fire-and-forget.
 
-1. `parseMentions` detects @mentions → `resolveAddressees` (utility LLM) disambiguates who is *addressed* vs. merely *referenced* (for 2+ mentions)
-2. `dispatchGroupTasks` (utility LLM) returns `executionMode: "concurrent" | "sequential"` + per-agent `assignedTask` + `dependsOn[]`
-3. `buildAgentRuns(respondingIds)` constructs a fully isolated `agentRun` object per agent (see isolation rules below)
-4. `isInCollaborationLoop = true` is set **before** `runGroupAgents` — NOT after
-5. `firstRoundRuns` = sequential ? filter out agents with `dependsOn` : all
-6. `runGroupAgents()` → main.js `Promise.all` — all first-round agents run **concurrently**
-7. `waitForAgentEnd(chatId, agentIds)` — polls until all `agent_end` IPC events are processed
-8. `triggerAgentCollaboration(iterationCount=0)` starts the collaboration loop
+```
+Vue: sendMessage() → window.electronAPI.sendMessage(payload) → returns immediately
+                                    ↓
+Electron: agent:send-message handler (async IIFE, non-blocking)
+  1. Read from disk: config, agents, MCP, tools, knowledge (via dataNormalizers.js)
+  2. Parse @mentions → resolveAddressees (2+ mentions → utility model call)
+  3. Determine execution mode: dispatchGroupTasks → concurrent/sequential + dependsOn
+  4. Build isolated agentRuns[] via _buildAgentRuns()
+  5. Run first round: runGroupRound(firstRoundRuns) → Promise.all (concurrent)
+  6. Collaboration loop: triggerCollaboration() → scan @mentions → sequential rounds → recurse
+  7. Emit send_message_complete with stickyTargetIds
+                                    ↓
+Vue: useChunkHandler.handleChunk() receives chunks → updates UI
+```
 
-#### 2. IPC ordering — the critical constraint
+### Chunk Protocol
 
-`ipcMain.handle` (invoke reply) and `event.sender.send` (chunk events: text, tool_call, agent_end) travel on **different Electron IPC channels with NO ordering guarantee**. The invoke reply can arrive in the renderer **before** the last text chunks and `agent_end` have been processed. This means `msg.content` may be incomplete when `triggerAgentCollaboration` scans for @mentions.
+AgentLoop emits raw chunks. IPC wraps them with `{ agentId, agentName }` for group chat.
 
-**Invariant: always call `waitForAgentEnd(chatId, agentIds)` after every `runGroupAgents()` call — in both `sendMessage` and inside the collaboration loop — before scanning messages for @mentions.** Removing this call silently breaks the entire collaboration chain.
+| Chunk Type | Source | Purpose |
+|---|---|---|
+| `text` | AgentLoop | Streaming text delta (`chunk.text`, NOT `chunk.content`) |
+| `tool_call` | AgentLoop | Tool about to execute |
+| `tool_result` | AgentLoop | Tool completed |
+| `tool_output` | AgentLoop via onUpdate | **Live** stdout/stderr from running tool (e.g. shell) |
+| `agent_start` | IPC wrapper | Agent begins responding (group chat) |
+| `agent_end` | IPC wrapper | Agent finished (group chat) |
+| `send_message_complete` | IPC | All agents done; carries `stickyTargetIds` |
+| `send_message_error` | IPC | Orchestration failed |
+| `collaboration_round_done` | IPC | One sequential round completed |
+| `collaboration_summary` | IPC | MAX_ITERATIONS reached |
+| `context_update` | AgentLoop | Token usage snapshot |
+| `permission_request` | AgentLoop | Tool needs user approval |
 
-#### 3. Collaboration loop (`triggerAgentCollaboration`)
+**Critical**: Text chunks use `chunk.text` (not `chunk.content`). `chunkAccumulator.js` ensures this — the collaboration loop depends on accumulated text to find @mentions. Using the wrong property silently breaks all multi-agent collaboration.
 
-- Scans only `targetChat.messages.slice(prevMessagesLength)` — only messages from the current round
-- Uses `parseMentions` + `resolveAddressees` per message to find the next responders
-- **iterationCount === 0** (post-concurrent first round): all mentioned agents are eligible — they haven't seen each other yet
-- **iterationCount > 0** (sequential rounds): skips agents who already replied after the @mention
-- Each round runs agents **sequentially** (one `await runGroupAgents` + `waitForAgentEnd` per agent)
-- Recurses: `triggerAgentCollaboration(iterationCount + 1, nextLength)`
-- Termination: `nextRespondingSet.size === 0` (no @mentions) OR `collaborationCancelled` OR `iterationCount >= MAX_ITERATIONS`
+### Data Normalization (`dataNormalizers.js`)
 
-#### 4. Lifecycle flags — exact semantics
+JSON files have different formats. Normalizers convert to consistent arrays:
 
-| Flag | Set to `true` | Set to `false` | Purpose |
-|---|---|---|---|
-| `isInCollaborationLoop` | Before `runGroupAgents` in `sendMessage` group path; entering `triggerAgentCollaboration` | `sendMessage` finally block; all exit paths of `triggerAgentCollaboration` | Prevents `agent_end` handler from prematurely clearing `isRunning` |
-| `collaborationCancelled` | `stopAgent()` | Top of `sendMessage` | **Only** valid user-stop signal for the collaboration loop |
-| `targetChat.isRunning` | `sendMessage` start; re-asserted inside collaboration loop before each dispatch | `sendMessage` finally block; `stopAgent` | UI running indicator |
-| `runningAgentKeys` | `runningAgentKeys.add(chatId:agentId)` before each `runGroupAgents` | `agent_end` handler | Tracks which agents are actively streaming |
+| File | Formats | Normalizer |
+|---|---|---|
+| `agents.json` | `{ categories, agents: [] }` or plain `[]` | `normalizeAgents()` |
+| `tools.json` | dict `{ "id": config }` or `[]` | `normalizeTools()` — filters `__deletedBuiltins` |
+| `mcp-servers.json` | `[]` or legacy dict `{ "name": config }` | `normalizeMcpServers()` |
 
-**NEVER check `!targetChat.isRunning` as a stop condition inside `triggerAgentCollaboration`.** `isRunning` can be cleared by `agent_end` race conditions. `collaborationCancelled` is the sole stop signal.
+### Per-Agent Isolation — invariants
 
-#### 5. Per-agent isolation — invariants
-
-Every `agentRun` object produced by `buildAgentRuns` must be fully isolated and deep-cloned. The following must NEVER be shared between agents in the same run:
+Every `agentRun` from `_buildAgentRuns()` must be fully isolated. NEVER share between agents:
 
 | Resource | How isolated |
 |---|---|
-| Provider credentials + model | `applyProviderCredsToConfig` on a per-agent shallow copy; `customModel = agent.modelId` |
-| System prompt | `agent.prompt` → `agentPrompts.systemAgentPrompt` |
-| Skills | `filterByRequired(enabledSkillObjects, agent.requiredSkillIds)` |
-| MCP servers | `filterByRequired(mcpStore.servers, agent.requiredMcpServerIds)` |
-| HTTP tools | `filterByRequired(toolsStore.tools, agent.requiredToolIds)` |
-| Knowledge (RAG) | `buildAgentKnowledgeConfig(agent)` → independent Pinecone query per agent |
-| Conversation view | Other agents' messages prefixed with `[AgentName]: ` so each agent knows its own voice |
-| AgentLoop instance | `new AgentLoop(loopConfig)` per agent, keyed `chatId:agentId` in `activeLoops` |
+| Provider credentials + model | Per-agent config copy; `customModel = agent.modelId` |
+| System prompt | `systemPromptBuilder.js` → per-agent soul files + skills |
+| Skills | Filtered by `agent.requiredSkillIds` |
+| MCP servers | Filtered by `agent.requiredMcpServerIds` |
+| HTTP tools | Filtered by `agent.requiredToolIds` |
+| Knowledge (RAG) | Independent Pinecone query per agent |
+| Conversation view | Other agents' messages prefixed with `[AgentName]: ` |
+| AgentLoop instance | `new AgentLoop(loopConfig)` per agent, keyed `chatId:agentId` |
 
-#### 6. Roleplay truncation — segment preservation
+### Tool Streaming (`ShellTool.js`)
 
-In `agent_end` handler, the multi-turn roleplay truncation (cutting content after the first @OtherAgent mention) **must preserve non-text segments** (tool_call, tool_result, agent_step, image, permission). Only text segments may be truncated. **Never replace `msg.segments` with `[{ type: 'text', content: trimmed }]`** — this destroys all tool output visible in the UI.
+Tools receive an `onUpdate` callback for live output:
+```
+ShellTool.execute(toolCallId, params, signal, onUpdate)
+  → spawn() + child.stdout.on('data') → onUpdate({ type: 'stdout', text })
+  → ToolRegistry passes onUpdate through
+  → AgentLoop relays as tool_output chunk to Vue
+  → useChunkHandler accumulates into seg.streamingOutput
+  → MessageRenderer shows live terminal output, auto-collapses when done
+```
 
-#### 7. No-break checklist
+### Collaboration Loop — Iron Laws
 
-Before modifying any of the following, confirm with the user:
-- `waitForAgentEnd` — removing or bypassing breaks @mention detection
-- `isInCollaborationLoop` pre-set before `runGroupAgents` — removing causes premature `isRunning=false`
-- `collaborationCancelled` as the sole stop guard in the loop — adding `isRunning` checks reintroduces the race
-- `buildAgentRuns` isolation logic — sharing config between agents causes identity confusion and credential leaks
-- `agent_end` segment handling — replacing segments wholesale destroys tool output
+**These rules are non-negotiable. Confirm with user before modifying.**
+
+1. **`collaborationCancelled`** is the **sole stop signal** for the loop — never check `!isRunning`
+2. **`isInCollaborationLoop = true`** must be set in Vue **before** IPC call — prevents `agent_end` from clearing `isRunning` prematurely
+3. **Roleplay truncation** in `agent_end` handler must preserve non-text segments (tool_call, tool_result, image, permission) — only truncate text segments
+4. **`waitForAgentEnd()`** must be called after every agent round in Vue — ensures @mention content is complete before scanning
+5. **`_buildAgentRuns` isolation** — sharing config between agents causes identity confusion and credential leaks
+6. **`chunk.text` not `chunk.content`** — `chunkAccumulator.js` enforces this; wrong property = silent collaboration break
+
+### Vue Lifecycle Flags
+
+| Flag | Location | Purpose |
+|---|---|---|
+| `isInCollaborationLoop` | useChunkHandler | Prevents `agent_end` from clearing `isRunning` |
+| `collaborationCancelled` | useChunkHandler | User stop signal; checked by Vue queue logic |
+| `runningAgentKeys` | useChunkHandler | Set of `chatId:agentId` — tracks active streams |
+| `perChatStreamingMsgId` | useChunkHandler | Map: `chatId:agentId` → streaming message ID |
+
+## Testing
+
+- **Framework**: Vitest + happy-dom. Run: `npm test` or `npm run test:watch`
+- **83 tests** across 4 files in `__tests__/` directories
+- `useChunkHandler.test.js` — chunk routing, agent lifecycle, segment preservation
+- `useSendMessage.test.js` — queue management, IPC dispatch, stop, plan approval
+- `agentDataNormalization.test.js` — JSON format normalization + chunk accumulation (imports real `dataNormalizers.js` + `chunkAccumulator.js`)
+- `ipcSerialize.test.js` — Vue proxy → plain object serialization
 
 ---
 
@@ -610,7 +663,7 @@ Config page inner content is capped to prevent fields from stretching uncomforta
 - Keep Tailwind for layout utilities (`flex`, `gap`, `p-*`); use CSS variables for theming
 - Always apply the black gradient for primary interactive elements — this is the visual signature
 - All IPC calls are `async` (invoke/handle pattern)
-- Never store sensitive keys in the renderer; they live in `.env` or `config.json` on disk
+- Never store sensitive keys in the renderer; they live in `config.json` on disk
 - WSL2 compatibility: fontconfig for emoji, path handling in preload
 - Chat persistence is debounced (300ms) — don't call `persistChat` in tight loops
 - **Language policy:** In code files, configuration files, and source code comments, use English only. Chinese is not allowed.
@@ -688,7 +741,7 @@ Do NOT write task state to files on disk — it conflicts across concurrent term
 <!-- Example: -->
 <!-- - **2026-02-25**: Forgot to debounce persist call in tight loop → Always use `debouncedPersistChat()` during streaming, never raw `persistChat()`. -->
 
-- **2026-03-01**: Added a one-time migration block to `main.js` to move path keys from `.env` → `config.json`. Wrong approach — migration code in source is dead weight after first run, requires a restart to execute, and pollutes the codebase with logic that will never run again. **Rule: one-time data migrations must be done by directly editing the data files on disk (e.g. `config.json`, `.env`), not by adding migration logic to source code.**
+- **2026-03-01**: Added a one-time migration block to `main.js` to move path keys from `.env` → `config.json`. Wrong approach — migration code in source is dead weight after first run, requires a restart to execute, and pollutes the codebase with logic that will never run again. **Rule: one-time data migrations must be done by directly editing the data files on disk (e.g. `config.json`), not by adding migration logic to source code.**
 
 - **2026-03-02**: Group chat agent collaboration loop collected ALL @mentions from a agent's response and triggered all mentioned agents immediately. This caused a agent that was only *referenced* (e.g. "then we'll hand to @Reviewer") to respond in the same round as the agent that was *addressed*. **Rule: in the agent→agent collaboration loop (`triggerAgentCollaboration`), apply `resolveAddressees` per source message — the same AI-based disambiguation used in the user→agent path — so only the truly addressed agents respond in each round, not every mentioned name.**
 

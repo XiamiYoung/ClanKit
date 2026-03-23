@@ -27,6 +27,9 @@ const { MemoryFlush } = require('../agent/core/MemoryFlush')
 const { ChatIndex } = require('../memory/ChatIndex')
 const { accumulateUsage, accumulateUtilityUsage } = require('./store')
 const { queryRAG } = require('./knowledge')
+const { createChunkAccumulator } = require('../agent/chunkAccumulator')
+const { normalizeAgents, normalizeTools, normalizeMcpServers } = require('../agent/dataNormalizers')
+const { resolveImageProvider } = ds
 
 
 // --- IPC: Agent Loop ---------------------------------------------------------
@@ -210,6 +213,265 @@ async function _runStartupIndexRecovery() {
   } catch (err) {
     logger.error('[Startup] index recovery failed (non-fatal)', err.message)
   }
+}
+
+// ── Provider credential helpers (mirrors useAgentCollaboration.js) ─────────────
+
+function _detectModelProviderType(modelId) {
+  if (!modelId) return null
+  const m = modelId.toLowerCase()
+  if (m.includes('deepseek')) return 'deepseek'
+  if (m.includes('claude') || m.startsWith('anthropic/')) return 'anthropic'
+  if (m.includes('gemini') || m.startsWith('google/')) return 'google'
+  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('openai/')) return 'openai'
+  return null
+}
+
+function _resolveProviderCreds(cfg, providerType) {
+  if (cfg.providers && Array.isArray(cfg.providers)) {
+    const p = cfg.providers.find(p => p.type === providerType || p.id === providerType)
+    if (p) return { apiKey: p.apiKey || '', baseURL: p.baseURL || '', model: p.model || '', type: p.type || providerType }
+  }
+  const legacy = cfg[providerType]
+  if (legacy) return { apiKey: legacy.apiKey || '', baseURL: legacy.baseURL || '', model: legacy.model || '', type: providerType }
+  return { apiKey: '', baseURL: '', model: '', type: providerType }
+}
+
+function _isProviderActive(cfg, providerType) {
+  if (cfg.providers && Array.isArray(cfg.providers)) {
+    return cfg.providers.some(p => (p.type === providerType || p.id === providerType) && p.isActive)
+  }
+  return !!(cfg[providerType]?.isActive)
+}
+
+function _applyProviderCredsToConfig(cfg, providerType) {
+  const { apiKey, baseURL, type: resolvedType } = _resolveProviderCreds(cfg, providerType)
+  providerType = resolvedType || providerType
+  if (providerType === 'anthropic') {
+    cfg.apiKey  = apiKey
+    cfg.baseURL = baseURL
+    delete cfg._directAuth
+    delete cfg.openaiApiKey
+    delete cfg.openaiBaseURL
+    cfg._resolvedProvider = undefined
+    cfg.defaultProvider   = undefined
+  } else if (providerType === 'openrouter') {
+    cfg.apiKey  = apiKey
+    cfg.baseURL = baseURL
+    delete cfg._directAuth
+    delete cfg.openaiApiKey
+    delete cfg.openaiBaseURL
+    cfg._resolvedProvider = undefined
+    cfg.defaultProvider   = undefined
+  } else if (providerType === 'openai') {
+    cfg.openaiApiKey  = apiKey
+    cfg.openaiBaseURL = baseURL
+    cfg._resolvedProvider = 'openai'
+    cfg.defaultProvider   = 'openai'
+    delete cfg._directAuth
+    delete cfg.apiKey
+    delete cfg.baseURL
+  } else if (providerType === 'deepseek') {
+    cfg.openaiApiKey  = apiKey
+    cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')
+    cfg._resolvedProvider = 'openai'
+    cfg._directAuth       = true
+    cfg.defaultProvider   = 'openai'
+    delete cfg.apiKey
+    delete cfg.baseURL
+  } else {
+    // Generic OpenAI-compatible (minimax, google, custom, etc.)
+    cfg.openaiApiKey  = apiKey
+    cfg.openaiBaseURL = baseURL
+    cfg._resolvedProvider = 'openai'
+    cfg.defaultProvider   = 'openai'
+    delete cfg._directAuth
+    delete cfg.apiKey
+    delete cfg.baseURL
+  }
+}
+
+function _filterByRequired(items, requiredIds) {
+  if (!requiredIds || requiredIds.length === 0) return items
+  return (items || []).filter(item => requiredIds.includes(item.id))
+}
+
+function _buildAgentKnowledgeConfig(agent, knowledgeCfg) {
+  const requiredIds = agent?.requiredKnowledgeBaseIds ?? []
+  if (requiredIds.length === 0) return null
+  const indexConfigs = {}
+  for (const [name, cfg] of Object.entries(knowledgeCfg.indexConfigs || {})) {
+    if (requiredIds.includes(name)) indexConfigs[name] = { ...cfg, enabled: true }
+  }
+  if (Object.keys(indexConfigs).length === 0) return null
+  return {
+    ragEnabled: true,
+    pineconeApiKey: knowledgeCfg.pineconeApiKey || '',
+    pineconeIndexName: Object.keys(indexConfigs)[0],
+    embeddingProvider: knowledgeCfg.embeddingProvider || 'openai',
+    embeddingModel:    knowledgeCfg.embeddingModel    || 'text-embedding-3-small',
+    indexConfigs,
+  }
+}
+
+function _buildUserAgentPrompt(usrAgent) {
+  if (!usrAgent) return null
+  const parts = []
+  if (usrAgent.name) parts.push(`User: ${usrAgent.name}${usrAgent.description ? ` — ${usrAgent.description}` : ''}.`)
+  if (usrAgent.prompt) parts.push(usrAgent.prompt)
+  return parts.length > 0 ? parts.join('\n\n') : null
+}
+
+/**
+ * Build per-agent isolated agentRuns[] from disk-read data.
+ * allData = { agents[], mcpServers[], tools[], knowledgeCfg{}, enabledSkills[] }
+ */
+function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetChatMeta, allData) {
+  const { agents, mcpServers, tools, knowledgeCfg, enabledSkills } = allData
+  const agentsById = Object.fromEntries((agents || []).map(a => [a.id, a]))
+
+  const usrAgentId = targetChatMeta.userAgentId || null
+  const usrAgent   = usrAgentId ? agentsById[usrAgentId] : null
+  const userAgentPrompt = _buildUserAgentPrompt(usrAgent)
+
+  return respondingIds.map(pid => {
+    const agent = agentsById[pid]
+    if (!agent) return null
+
+    const agentCfg = { ...baseCfg }
+
+    // Apply per-chat model override if present (takes priority over agent global default)
+    const perChatOverride = targetChatMeta.agentModelOverrides?.[pid]
+    const resolvedProvider = perChatOverride?.provider || agent.providerId || null
+    const resolvedModel    = perChatOverride?.model    || agent.modelId    || null
+
+    const isBuiltinOrDefault = agent.isBuiltin || agent.isDefault
+    const hasGlobalProvider = baseCfg.providers?.some(p => p.isActive)
+    if (!resolvedProvider && !isBuiltinOrDefault && !hasGlobalProvider) return null
+
+    const effectiveProvider = resolvedProvider || baseCfg.defaultProvider || 'anthropic'
+    _applyProviderCredsToConfig(agentCfg, effectiveProvider)
+    if (resolvedModel) agentCfg.customModel = resolvedModel
+
+    const otherParticipants = (groupIds || [])
+      .filter(id => id !== pid)
+      .map(id => {
+        const p = agentsById[id]
+        return { id, name: p?.name || 'Unknown', description: p?.description || '', prompt: p?.prompt || '' }
+      })
+
+    // Handover note for user-agent switches
+    const prevUsrIds = new Set()
+    const curUsrId = usrAgent?.id || null
+    for (const m of rawMessages) {
+      const mid = m.userAgentId || m._userAgentId || null
+      if (m.role === 'user' && mid && mid !== curUsrId) prevUsrIds.add(mid)
+    }
+    let handoverNote = null
+    if (prevUsrIds.size > 0) {
+      const notes = []
+      for (const id of prevUsrIds) {
+        const a = agentsById[id]
+        if (a) notes.push(`Previous user "${a.name}" (messages prefixed with [${a.name}]:) is no longer in this conversation.`)
+      }
+      if (notes.length > 0) handoverNote = notes.join(' ')
+    }
+
+    const agentPrompts = {
+      systemAgentPrompt: agent.prompt || '',
+      userAgentPrompt:   userAgentPrompt || '',
+      systemAgentId:     pid,
+      userAgentId:       usrAgent?.id || '__default_user__',
+      userAgentName:        usrAgent?.name || null,
+      userAgentDescription: usrAgent?.description || null,
+      groupChatContext: { agentName: agent.name, agentDescription: agent.description || '', otherParticipants },
+      ...(handoverNote ? { chatHandoverNote: handoverNote } : {}),
+    }
+
+    const agentSkills    = _filterByRequired(enabledSkills,  agent.requiredSkillIds      ?? [])
+    const agentMcp       = _filterByRequired(mcpServers,     agent.requiredMcpServerIds  ?? [])
+    const agentTools     = _filterByRequired(tools,          agent.requiredToolIds        ?? [])
+    const agentKnowledge = _buildAgentKnowledgeConfig(agent, knowledgeCfg || {})
+
+    // Per-agent conversation view: other agents' messages prefixed with [Name]:
+    const otherNamesList = otherParticipants.map(p => p.name).join(', ')
+    const currentUsrId   = usrAgent?.id || null
+    const agentMessages  = rawMessages
+      .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
+      .map(m => {
+        const msgAgentId = m.agentId || m._agentId || null
+        const msgUsrId   = m.userAgentId || m._userAgentId || null
+        if (m.role === 'assistant' && msgAgentId && msgAgentId !== pid) {
+          const other = agentsById[msgAgentId]
+          return { role: 'assistant', content: `[${other?.name || 'Agent'}]: ${m.content}` }
+        }
+        if (m.role === 'user' && msgUsrId && msgUsrId !== currentUsrId) {
+          const prev = agentsById[msgUsrId]
+          return { role: 'user', content: `[${prev?.name || 'Previous User'}]: ${m.content}` }
+        }
+        return { role: m.role, content: m.content }
+      })
+
+    // Structural safeguard: append one-turn constraint to last user message (group only)
+    if ((groupIds || []).length > 1 && agentMessages.length > 0) {
+      const lastIdx = agentMessages.length - 1
+      if (agentMessages[lastIdx].role === 'user') {
+        agentMessages[lastIdx] = {
+          ...agentMessages[lastIdx],
+          content: agentMessages[lastIdx].content + `\n\n[SYSTEM: ${agent.name}, write ONLY your own single response. Do NOT write lines or dialogue for ${otherNamesList}. The other participants will reply in their own separate turns.]`,
+        }
+      }
+    }
+
+    return {
+      agentId:      pid,
+      agentName:    agent.name,
+      config:       JSON.parse(JSON.stringify(agentCfg)),
+      enabledAgents: [],
+      enabledSkills: JSON.parse(JSON.stringify(agentSkills)),
+      agentPrompts:  JSON.parse(JSON.stringify(agentPrompts)),
+      mcpServers:    JSON.parse(JSON.stringify(agentMcp)),
+      httpTools:     JSON.parse(JSON.stringify(agentTools)),
+      knowledgeConfig: agentKnowledge ? JSON.parse(JSON.stringify(agentKnowledge)) : null,
+      messages:     agentMessages,
+    }
+  }).filter(Boolean)
+}
+
+/**
+ * Build identity-aware API messages for single-agent path.
+ * Prefixes messages from previous agents with [AgentName]: to prevent identity confusion.
+ */
+function _buildIdentityAwareMessages(rawMessages, currentSysId, currentUsrId, agentsById) {
+  const prevSysIds = new Set()
+  const prevUsrIds = new Set()
+  for (const m of rawMessages) {
+    if (m.role === 'assistant') { const id = m._agentId || m.agentId; if (id && id !== currentSysId) prevSysIds.add(id) }
+    if (m.role === 'user')      { const id = m._userAgentId || m.userAgentId; if (id && id !== currentUsrId) prevUsrIds.add(id) }
+  }
+  const hasSysSwitch = prevSysIds.size > 0
+  const hasUsrSwitch = prevUsrIds.size > 0
+  return rawMessages.map(m => {
+    let content = m.content
+    const msgAgentId = m._agentId || m.agentId || null
+    const msgUsrId   = m._userAgentId || m.userAgentId || null
+    if (m.role === 'assistant') {
+      if (msgAgentId && msgAgentId !== currentSysId) {
+        const prev = agentsById[msgAgentId]
+        content = `[${prev?.name || 'Previous Assistant'}]: ${content}`
+      } else if (!msgAgentId && hasSysSwitch) {
+        content = `[Previous Assistant]: ${content}`
+      }
+    } else if (m.role === 'user') {
+      if (msgUsrId && msgUsrId !== currentUsrId) {
+        const prev = agentsById[msgUsrId]
+        content = `[${prev?.name || 'Previous User'}]: ${content}`
+      } else if (!msgUsrId && hasUsrSwitch) {
+        content = `[Previous User]: ${content}`
+      }
+    }
+    return { role: m.role, content }
+  })
 }
 
 // Register memory:* IPC handlers now that runMemoryExtraction is defined
@@ -460,7 +722,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.memoryDir    = ds.paths().MEMORY_DIR
   loopConfig.chatId       = chatId
   // Inject image provider config so generate_image tool can call image generation APIs
-  loopConfig.imageProvider = _resolveImageProvider(fullCfg)
+  loopConfig.imageProvider = resolveImageProvider(fullCfg)
   const loop = new AgentLoop(loopConfig)
   activeLoops.set(chatId, loop)
   activeLoopMeta.set(chatId, { chatId, agentId: agentPrompts?.systemAgentId || null, agentName: null, isGroup: false })
@@ -539,111 +801,106 @@ ipcMain.handle('agent:accumulate-voice-usage', async (_, { chatId, usage }) => {
 })
 
 // ── Run additional agents for a chat WITHOUT stopping existing loops ──────────
-// Used by the renderer to fire idle agents in a group chat while other agents
-// are already running (per-agent parallel queue feature). Only the group-chat
-// path is supported; agentRuns must be provided.
-ipcMain.handle('agent:run-additional', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, agentPrompts, mcpServers, httpTools, agentRuns, knowledgeConfig, chatPermissionMode, chatAllowList, chatDangerOverrides, maxOutputTokens }) => {
-  if (!agentRuns || agentRuns.length === 0) return { success: false, error: 'agentRuns required' }
-  logger.agent('IPC agent:run-additional received', { chatId, agentCount: agentRuns.length, agents: agentRuns.map(r => r.agentName) })
+// Used by the renderer for the idle-agent queue path (new message while agents running).
+// Accepts minimal params — builds agentRuns from disk data internally.
+ipcMain.handle('agent:run-additional', async (event, {
+  chatId, messages, agentIds, currentAttachments, groupIds,
+  targetChatMeta, enabledSkills,
+}) => {
+  if (!agentIds || agentIds.length === 0) return { success: false, error: 'agentIds required' }
+  logger.agent('IPC agent:run-additional received', { chatId, agentIds })
+
+  // Read from disk
+  const fullCfg     = ds.readJSON(ds.paths().CONFIG_FILE, {})
+  const agentsData  = normalizeAgents(ds.readJSON(ds.paths().AGENTS_FILE, { agents: [] }))
+  const mcpData     = normalizeMcpServers(ds.readJSON(ds.paths().MCP_SERVERS_FILE, []))
+  const toolsData   = normalizeTools(ds.readJSON(ds.paths().TOOLS_FILE, {}))
+  const knowledgeData = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
+  const meta = targetChatMeta || {}
+
+  const agentRuns = _buildAgentRuns(agentIds, groupIds || agentIds, fullCfg, messages || [], meta, {
+    agents: agentsData, mcpServers: mcpData, tools: toolsData,
+    knowledgeCfg: knowledgeData, enabledSkills: enabledSkills || [],
+  })
 
   // Skip agents that already have a running loop (safety guard)
   const filteredRuns = agentRuns.filter(run => {
     const loopKey = `${chatId}:${run.agentId}`
     if (activeLoops.has(loopKey)) {
-      logger.agent('Skipping already-running agent', { chatId, agentId: run.agentId, agentName: run.agentName })
+      logger.agent('Skipping already-running agent', { chatId, agentId: run.agentId })
       return false
     }
     return true
   })
   if (filteredRuns.length === 0) return { success: true, results: [] }
 
-  // -- RAG retrieval helper (same as in agent:run) --
-  async function queryRagContext(kCfg, msgs) {
-    if (!kCfg) return null
-    const fileCfg = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
-    const filePineconeKey = ds.readJSON(ds.paths().CONFIG_FILE, {}).pineconeApiKey || ''
-    if (!kCfg.pineconeApiKey && filePineconeKey) kCfg.pineconeApiKey = filePineconeKey
-    if (!kCfg.indexConfigs || Object.keys(kCfg.indexConfigs).length === 0) {
-      kCfg.indexConfigs = fileCfg.indexConfigs || {}
-    }
-    if (kCfg.ragEnabled === undefined) kCfg.ragEnabled = fileCfg.ragEnabled !== false
-    if (!kCfg.ragEnabled || !kCfg.pineconeApiKey) return null
-    try {
-      const lastUserMsg = [...msgs].reverse().find(m => m.role === 'user')
-      const queryText = typeof lastUserMsg?.content === 'string'
-        ? lastUserMsg.content
-        : (Array.isArray(lastUserMsg?.content)
-          ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text).join(' ')
-          : '')
-      if (!queryText.trim()) return null
-      const idxConfigs = kCfg.indexConfigs || {}
-      const enabledIndexes = Object.entries(idxConfigs)
-        .filter(([, cfg]) => cfg.enabled)
-        .map(([name, cfg]) => ({ name, embeddingProvider: cfg.embeddingProvider, embeddingModel: cfg.embeddingModel }))
-      if (enabledIndexes.length === 0 && kCfg.pineconeIndexName) {
-        enabledIndexes.push({ name: kCfg.pineconeIndexName, embeddingProvider: 'openai', embeddingModel: 'text-embedding-3-small' })
-      }
-      if (enabledIndexes.length === 0) return null
-      const allMatches = []
-      for (const idx of enabledIndexes) {
-        try {
-          const ragResult = await queryRAG({ query: queryText, pineconeApiKey: kCfg.pineconeApiKey, pineconeIndexName: idx.name, topK: 5, embeddingProvider: idx.embeddingProvider, embeddingModel: idx.embeddingModel })
-          if (ragResult.success && ragResult.matches.length > 0) allMatches.push(...ragResult.matches)
-        } catch (idxErr) { logger.error('RAG index query error (non-fatal)', { index: idx.name, error: idxErr.message }) }
-      }
-      if (allMatches.length > 0) { allMatches.sort((a, b) => (b.score || 0) - (a.score || 0)); return allMatches.slice(0, 5) }
-      return null
-    } catch (err) { logger.error('RAG retrieval error (non-fatal)', { chatId, error: err.message }); return null }
-  }
+  const baseMessages = [...(messages || [])]
+  const groupCfg = fullCfg
 
-  const baseMessages = [...messages]
-  const groupCfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
-
-  // Emit agent_start events
   for (const run of filteredRuns) {
     if (!event.sender.isDestroyed()) {
       event.sender.send('agent:chunk', { chatId, chunk: { type: 'agent_start', agentId: run.agentId, agentName: run.agentName } })
     }
   }
 
-  // Launch agent loops concurrently
   const promises = filteredRuns.map(run => {
     const loopKey = `${chatId}:${run.agentId}`
-    const loopConfig = { ...(run.config || config), soulsDir: ds.paths().SOULS_DIR }
-    loopConfig.sandboxConfig = groupCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
-    loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
-    loopConfig.chatAllowList = chatAllowList || []
-    loopConfig.maxOutputTokens = maxOutputTokens || groupCfg.maxOutputTokens || null
-    loopConfig.smtpConfig = groupCfg.smtp || null
-    loopConfig.dataPath     = ds.paths().DATA_DIR
-    loopConfig.artifactPath = groupCfg.artifactPath || groupCfg.artyfactPath || ''
-    loopConfig.skillsPath   = groupCfg.skillsPath   || ''
-    loopConfig.DoCPath      = groupCfg.DoCPath      || ''
-    loopConfig.memoryDir    = ds.paths().MEMORY_DIR
-    loopConfig.chatId       = chatId
+    const loopConfig = { ...(run.config || groupCfg), soulsDir: ds.paths().SOULS_DIR }
+    loopConfig.sandboxConfig       = groupCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
+    loopConfig.chatPermissionMode  = meta.permissionMode || 'inherit'
+    loopConfig.chatAllowList       = meta.chatAllowList || []
+    loopConfig.chatDangerOverrides = meta.chatDangerOverrides || []
+    loopConfig.maxOutputTokens     = meta.maxOutputTokens || groupCfg.maxOutputTokens || null
+    loopConfig.smtpConfig          = groupCfg.smtp || null
+    loopConfig.dataPath            = ds.paths().DATA_DIR
+    loopConfig.artifactPath        = groupCfg.artifactPath || groupCfg.artyfactPath || ''
+    loopConfig.skillsPath          = groupCfg.skillsPath || ''
+    loopConfig.DoCPath             = groupCfg.DoCPath || ''
+    loopConfig.memoryDir           = ds.paths().MEMORY_DIR
+    loopConfig.chatId              = chatId
     const loop = new AgentLoop(loopConfig)
     activeLoops.set(loopKey, loop)
     activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
 
     return (async () => {
       try {
-        const runRagContext = await queryRagContext(run.knowledgeConfig ? { ...run.knowledgeConfig } : null, baseMessages)
-        const runAgentPrompts = run.agentPrompts || agentPrompts
-        const runMessages = run.messages || baseMessages
-        const result = await loop.run(
-          runMessages,
-          run.enabledAgents ?? enabledAgents,
-          run.enabledSkills ?? enabledSkills,
-          (chunk) => {
-            if (!event.sender.isDestroyed()) {
-              event.sender.send('agent:chunk', { chatId, chunk: { ...chunk, agentId: run.agentId, agentName: run.agentName } })
+        // RAG
+        const runRagContext = await (async () => {
+          if (!run.knowledgeConfig) return null
+          try {
+            const kCfg = { ...run.knowledgeConfig }
+            const fileCfg = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
+            if (!kCfg.pineconeApiKey && groupCfg.pineconeApiKey) kCfg.pineconeApiKey = groupCfg.pineconeApiKey
+            if (!kCfg.indexConfigs || Object.keys(kCfg.indexConfigs).length === 0) kCfg.indexConfigs = fileCfg.indexConfigs || {}
+            if (kCfg.ragEnabled === undefined) kCfg.ragEnabled = fileCfg.ragEnabled !== false
+            if (!kCfg.ragEnabled || !kCfg.pineconeApiKey) return null
+            const lastUserMsg = [...baseMessages].reverse().find(m => m.role === 'user')
+            const queryText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content
+              : (Array.isArray(lastUserMsg?.content) ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text).join(' ') : '')
+            if (!queryText.trim()) return null
+            const idxConfigs = kCfg.indexConfigs || {}
+            const enabledIndexes = Object.entries(idxConfigs).filter(([, c]) => c.enabled).map(([name, c]) => ({ name, embeddingProvider: c.embeddingProvider, embeddingModel: c.embeddingModel }))
+            if (enabledIndexes.length === 0 && kCfg.pineconeIndexName) enabledIndexes.push({ name: kCfg.pineconeIndexName, embeddingProvider: 'openai', embeddingModel: 'text-embedding-3-small' })
+            if (enabledIndexes.length === 0) return null
+            const allMatches = []
+            for (const idx of enabledIndexes) {
+              try {
+                const r = await queryRAG({ query: queryText, pineconeApiKey: kCfg.pineconeApiKey, pineconeIndexName: idx.name, topK: 5, embeddingProvider: idx.embeddingProvider, embeddingModel: idx.embeddingModel })
+                if (r.success && r.matches.length > 0) allMatches.push(...r.matches)
+              } catch {}
             }
-          },
-          currentAttachments,
-          runAgentPrompts,
-          run.mcpServers ?? mcpServers,
-          run.httpTools ?? httpTools,
-          runRagContext
+            if (allMatches.length > 0) { allMatches.sort((a, b) => (b.score || 0) - (a.score || 0)); return allMatches.slice(0, 5) }
+            return null
+          } catch { return null }
+        })()
+
+        const runAgentPrompts = run.agentPrompts || {}
+        const runMessages     = run.messages || baseMessages
+        const result = await loop.run(
+          runMessages, run.enabledAgents ?? [], run.enabledSkills ?? [],
+          (chunk) => { if (!event.sender.isDestroyed()) event.sender.send('agent:chunk', { chatId, chunk: { ...chunk, agentId: run.agentId, agentName: run.agentName } }) },
+          currentAttachments || [], runAgentPrompts,
+          run.mcpServers ?? [], run.httpTools ?? [], runRagContext
         )
         return { agentId: run.agentId, agentName: run.agentName, success: true, result }
       } catch (err) {
@@ -657,13 +914,13 @@ ipcMain.handle('agent:run-additional', async (event, { chatId, messages, config,
         activeLoops.delete(loopKey)
         activeLoopMeta.delete(loopKey)
         const _pMetrics  = loop.contextManager.getMetrics()
-        const _pProvider = (run.config || config).defaultProvider || 'anthropic'
+        const _pProvider = (run.config || groupCfg).defaultProvider || 'anthropic'
         const _pModel    = loop.anthropicClient.resolveModel()
         accumulateUsage(chatId, {
-          inputTokens:         _pMetrics.inputTokens         || 0,
-          outputTokens:        _pMetrics.outputTokens        || 0,
+          inputTokens:         _pMetrics.inputTokens || 0,
+          outputTokens:        _pMetrics.outputTokens || 0,
           cacheCreationTokens: _pMetrics.cacheCreationInputTokens || 0,
-          cacheReadTokens:     _pMetrics.cacheReadInputTokens     || 0,
+          cacheReadTokens:     _pMetrics.cacheReadInputTokens || 0,
         }, _pProvider, _pModel).catch(() => {})
       }
     })()
@@ -873,7 +1130,7 @@ Examples:
     let inputTokens = 0, outputTokens = 0
 
     if (isOpenAI) {
-      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
         openaiApiKey: providerCfg.apiKey,
         openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
@@ -905,7 +1162,7 @@ Examples:
         }
       }
     } else {
-      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const { AnthropicClient } = require('../agent/core/AnthropicClient')
       const cfg = {
         apiKey: providerCfg.apiKey,
         baseURL: providerCfg.baseURL.replace(/\/+$/, ''),
@@ -1186,7 +1443,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
     const maxTokens = Math.min(config.maxOutputTokens || 4096, 4096)
     const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
     if (isOpenAI) {
-      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
         openaiApiKey: providerCfg.apiKey,
         openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
@@ -1206,7 +1463,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
       return { success: true, text }
     } else {
       // anthropic or openrouter — both use AnthropicClient
-      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const { AnthropicClient } = require('../agent/core/AnthropicClient')
       const cfg = {
         apiKey:      providerCfg.apiKey,
         baseURL:     providerCfg.baseURL.replace(/\/+$/, ''),
@@ -1235,7 +1492,11 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
  * Input:  { message, agents: [{id, name}], config }
  * Output: { addresseeIds: string[] }  — subset of the provided agent IDs
  */
-ipcMain.handle('agent:resolve-addressees', async (event, { message, agents, config }) => {
+/**
+ * Resolve which @mentioned agents are actually being addressed vs. referenced.
+ * Called directly from agent:send-message collaboration loop and via IPC from renderer.
+ */
+async function _resolveAddresseesInternal(message, agents, config) {
   try {
     const names = agents.map(p => p.name)
     const systemPrompt = `You are a routing assistant for a group chat. Your job is to identify which participants are being directly spoken TO in a message — meaning they are expected to respond.
@@ -1270,7 +1531,7 @@ If none should respond, reply with [].`
     let raw
     const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
     if (isOpenAI) {
-      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
         openaiApiKey: providerCfg.apiKey,
         openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
@@ -1291,7 +1552,7 @@ If none should respond, reply with [].`
       accumulateUtilityUsage(um.model, um.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
     } else {
       // anthropic or openrouter
-      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const { AnthropicClient } = require('../agent/core/AnthropicClient')
       const cfg = {
         apiKey:      providerCfg.apiKey,
         baseURL:     providerCfg.baseURL.replace(/\/+$/, ''),
@@ -1323,6 +1584,10 @@ If none should respond, reply with [].`
     // Fallback: treat all mentioned agents as addressees
     return { addresseeIds: agents.map(p => p.id) }
   }
+}
+
+ipcMain.handle('agent:resolve-addressees', async (event, params) => {
+  return _resolveAddresseesInternal(params.message, params.agents, params.config)
 })
 
 /**
@@ -1330,7 +1595,7 @@ If none should respond, reply with [].`
  * per-agent task assignments + dependency ordering.
  * Returns: [{ agentId, agentName, assignedTask, dependsOn: [agentId] }]
  */
-ipcMain.handle('agent:dispatch-group-tasks', async (event, { message, agents, config }) => {
+async function _dispatchGroupTasksInternal(message, agents, config) {
   try {
     const names = agents.map(p => p.name)
     const systemPrompt = `You are a task dispatcher for a group chat with multiple AI participants.
@@ -1378,7 +1643,7 @@ Reply with ONLY a JSON object:
     let raw
     const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
     if (isOpenAI) {
-      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
         openaiApiKey: providerCfg.apiKey,
         openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
@@ -1394,7 +1659,7 @@ Reply with ONLY a JSON object:
       raw = resp.choices?.[0]?.message?.content || ''
       accumulateUtilityUsage(um.model, um.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
     } else {
-      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const { AnthropicClient } = require('../agent/core/AnthropicClient')
       const cfg = { apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model }
       const resp = await new AnthropicClient(cfg).getClient().messages.create({
         model: um.model, max_tokens: 512, system: systemPrompt,
@@ -1434,6 +1699,10 @@ Reply with ONLY a JSON object:
     logger.error('agent:dispatch-group-tasks error', err.message)
     return { dispatched: null }
   }
+}
+
+ipcMain.handle('agent:dispatch-group-tasks', async (event, { message, agents, config }) => {
+  return _dispatchGroupTasksInternal(message, agents, config)
 })
 
 /**
@@ -1489,7 +1758,7 @@ Rules:
     let raw = ''
     const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
     if (isOpenAI) {
-      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const clientCfg = {
         openaiApiKey: providerCfg.apiKey,
         openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
@@ -1509,7 +1778,7 @@ Rules:
       raw = resp.choices?.[0]?.message?.content || ''
       accumulateUtilityUsage(um.model, um.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
     } else {
-      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const { AnthropicClient } = require('../agent/core/AnthropicClient')
       const clientCfg = {
         apiKey: providerCfg.apiKey,
         baseURL: providerCfg.baseURL.replace(/\/+$/, ''),
@@ -1577,7 +1846,7 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
     const isOpenAI = provider === 'openai' || provider === 'deepseek'
 
     if (isOpenAI) {
-      const { OpenAIClient } = require('./agent/core/OpenAIClient')
+      const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
         openaiApiKey: apiKey,
         openaiBaseURL: baseURL.replace(/\/+$/, ''),
@@ -1598,7 +1867,7 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
       return { success: true, ms, preview: text.substring(0, 40) }
     } else {
       // Anthropic or OpenRouter (both use AnthropicClient)
-      const { AnthropicClient } = require('./agent/core/AnthropicClient')
+      const { AnthropicClient } = require('../agent/core/AnthropicClient')
       const cfg = {
         apiKey,
         baseURL: baseURL.replace(/\/+$/, ''),
@@ -1626,6 +1895,465 @@ ipcMain.handle('agent:get-context', (event, chatId) => {
   if (chatId && activeLoops.has(chatId)) return activeLoops.get(chatId).getContextSnapshot()
   if (chatId) return lastContextSnapshots.get(chatId) || null
   return null
+})
+
+// ── agent:send-message ────────────────────────────────────────────────────────
+// Orchestrates the full send flow on the Node.js side for both single and group chats.
+//   - Reads agents/config/MCP/tools/knowledge from disk
+//   - Resolves respondingIds via @mention parsing + sticky target logic
+//   - Validates provider credentials; emits send_message_error chunk if invalid
+//   - Builds per-agent isolated agentRuns[] via _buildAgentRuns
+//   - Runs agents (single = runGroupRound([run]), group = concurrent first round + collaboration loop)
+//   - Emits { type: 'send_message_complete', stickyTargetIds } when done
+//
+// Input (minimal params from Vue):
+//   chatId             - chat identifier
+//   messages           - raw messages array: { role, content, agentId, userAgentId }
+//   groupIds           - all agent IDs in the group ([] for single)
+//   isGroup            - true if group chat
+//   text               - user's message text (for @mention parsing)
+//   pendingAttachments - file attachments for first round
+//   enabledSkills      - Vue-owned serialized enabled skill objects
+//   stickyTargetIds    - current sticky targeting state from Vue
+//   targetChatMeta     - { permissionMode, chatAllowList, chatDangerOverrides,
+//                         maxOutputTokens, maxAgentRounds, workingPath, codingMode,
+//                         claudeContext, userAgentId, systemAgentId }
+ipcMain.handle('agent:send-message', async (event, {
+  chatId, messages, groupIds, isGroup, text, pendingAttachments,
+  enabledSkills, stickyTargetIds, targetChatMeta,
+}) => {
+  logger.agent('IPC agent:send-message received', { chatId, isGroup, groupIds })
+
+  // ── parseMentions (same logic as src/utils/mentions.js) ──────────────────
+  function parseMentions(text, agents) {
+    if (!text || !agents || agents.length === 0) return { mentions: [], mentionAll: false }
+    const mentionAll = /@all(?=\W|$)/i.test(text)
+    const mentions = []
+    const sorted = [...agents].sort((a, b) => b.name.length - a.name.length)
+    for (const agent of sorted) {
+      const escaped = agent.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const regex = new RegExp(`@${escaped}(?=\\W|$)`, 'i')
+      if (regex.test(text) && !mentions.includes(agent.id)) mentions.push(agent.id)
+    }
+    return { mentions, mentionAll }
+  }
+
+  // ── Helper: run a batch of agentRuns concurrently ─────────────────────────
+  async function runGroupRound(runList, roundMessages, attachments, trackMessages, fullCfg) {
+    const baseMessages = [...roundMessages]
+
+    for (const run of runList) {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('agent:chunk', { chatId, chunk: { type: 'agent_start', agentId: run.agentId, agentName: run.agentName } })
+      }
+    }
+
+    const promises = runList.map(run => {
+      const loopKey = `${chatId}:${run.agentId}`
+      const loopConfig = { ...run.config, soulsDir: ds.paths().SOULS_DIR }
+      loopConfig.sandboxConfig = fullCfg.sandboxConfig || { defaultMode: 'sandbox', sandboxAllowList: [] }
+      loopConfig.chatPermissionMode = targetChatMeta.permissionMode || 'inherit'
+      loopConfig.chatAllowList = targetChatMeta.chatAllowList || []
+      loopConfig.chatDangerOverrides = targetChatMeta.chatDangerOverrides || []
+      loopConfig.maxOutputTokens = targetChatMeta.maxOutputTokens || fullCfg.maxOutputTokens || null
+      loopConfig.smtpConfig = fullCfg.smtp || null
+      loopConfig.dataPath     = ds.paths().DATA_DIR
+      loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
+      loopConfig.skillsPath   = fullCfg.skillsPath   || ''
+      loopConfig.DoCPath      = fullCfg.DoCPath      || ''
+      loopConfig.memoryDir    = ds.paths().MEMORY_DIR
+      loopConfig.chatId       = chatId
+
+      // Inject coding mode context into system prompt if provided
+      if (targetChatMeta.codingMode && targetChatMeta.claudeContext) {
+        const ctxBlock = `\n\n[CODING CONTEXT]\n${targetChatMeta.claudeContext}\n[/CODING CONTEXT]`
+        const prompts = run.agentPrompts || {}
+        prompts.systemAgentPrompt = (prompts.systemAgentPrompt || '') + ctxBlock
+        run.agentPrompts = prompts
+      }
+
+      const loop = new AgentLoop(loopConfig)
+      activeLoops.set(loopKey, loop)
+      activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
+
+      const accumulator = createChunkAccumulator()
+
+      return (async () => {
+        try {
+          const runRagContext = await (async () => {
+            if (!run.knowledgeConfig) return null
+            try {
+              const kCfg = { ...run.knowledgeConfig }
+              const fileCfg = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
+              const filePineconeKey = fullCfg.pineconeApiKey || ''
+              if (!kCfg.pineconeApiKey && filePineconeKey) kCfg.pineconeApiKey = filePineconeKey
+              if (!kCfg.indexConfigs || Object.keys(kCfg.indexConfigs).length === 0) kCfg.indexConfigs = fileCfg.indexConfigs || {}
+              if (kCfg.ragEnabled === undefined) kCfg.ragEnabled = fileCfg.ragEnabled !== false
+              if (!kCfg.ragEnabled || !kCfg.pineconeApiKey) return null
+              const lastUserMsg = [...baseMessages].reverse().find(m => m.role === 'user')
+              const queryText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content
+                : (Array.isArray(lastUserMsg?.content) ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text).join(' ') : '')
+              if (!queryText.trim()) return null
+              const idxConfigs = kCfg.indexConfigs || {}
+              const enabledIndexes = Object.entries(idxConfigs).filter(([, c]) => c.enabled).map(([name, c]) => ({ name, embeddingProvider: c.embeddingProvider, embeddingModel: c.embeddingModel }))
+              if (enabledIndexes.length === 0 && kCfg.pineconeIndexName) enabledIndexes.push({ name: kCfg.pineconeIndexName, embeddingProvider: 'openai', embeddingModel: 'text-embedding-3-small' })
+              if (enabledIndexes.length === 0) return null
+              const allMatches = []
+              for (const idx of enabledIndexes) {
+                try {
+                  const r = await queryRAG({ query: queryText, pineconeApiKey: kCfg.pineconeApiKey, pineconeIndexName: idx.name, topK: 5, embeddingProvider: idx.embeddingProvider, embeddingModel: idx.embeddingModel })
+                  if (r.success && r.matches.length > 0) allMatches.push(...r.matches)
+                } catch {}
+              }
+              if (allMatches.length > 0) { allMatches.sort((a, b) => (b.score || 0) - (a.score || 0)); return allMatches.slice(0, 5) }
+              return null
+            } catch { return null }
+          })()
+
+          const runAgentPrompts = run.agentPrompts || {}
+          const runMessages = run.messages || baseMessages
+
+          // Inject pending memory facts
+          const groupPending = pendingMemoryFacts.get(chatId)
+          if (groupPending?.length > 0) {
+            pendingMemoryFacts.delete(chatId)
+            const block = ['\n\n[MEMORY PENDING CONFIRMATION]', 'The following facts were observed but need user confirmation.', 'At an appropriate moment, naturally ask the user if they want you to remember them.', 'If confirmed, call update_soul_memory. Do not be abrupt — integrate naturally.', ...groupPending.map(p => `- [${p.section}] ${p.entry} (for ${p.target})`), '[/MEMORY PENDING CONFIRMATION]'].join('\n')
+            runAgentPrompts.systemAgentPrompt = (runAgentPrompts.systemAgentPrompt || '') + block
+          }
+
+          const result = await loop.run(
+            runMessages,
+            run.enabledAgents ?? [],
+            run.enabledSkills ?? [],
+            (chunk) => {
+              if (!event.sender.isDestroyed()) {
+                event.sender.send('agent:chunk', { chatId, chunk: { ...chunk, agentId: run.agentId, agentName: run.agentName } })
+              }
+              accumulator.onChunk(chunk)
+            },
+            attachments,
+            runAgentPrompts,
+            run.mcpServers ?? [],
+            run.httpTools ?? [],
+            runRagContext
+          )
+          return { agentId: run.agentId, agentName: run.agentName, success: true, result, text: accumulator.getText() }
+        } catch (err) {
+          logger.error('agent:send-message run error', { chatId, agentId: run.agentId, error: err.message })
+          return { agentId: run.agentId, agentName: run.agentName, success: false, error: err.message, text: accumulator.getText() }
+        } finally {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('agent:chunk', { chatId, chunk: { type: 'agent_end', agentId: run.agentId, agentName: run.agentName } })
+          }
+          if (activeLoops.has(loopKey)) lastContextSnapshots.set(loopKey, activeLoops.get(loopKey).getContextSnapshot())
+          activeLoops.delete(loopKey)
+          activeLoopMeta.delete(loopKey)
+          const _pMetrics  = loop.contextManager.getMetrics()
+          const _pProvider = run.config?.defaultProvider || 'anthropic'
+          const _pModel    = loop.anthropicClient.resolveModel()
+          accumulateUsage(chatId, {
+            inputTokens:         _pMetrics.inputTokens         || 0,
+            outputTokens:        _pMetrics.outputTokens        || 0,
+            cacheCreationTokens: _pMetrics.cacheCreationInputTokens || 0,
+            cacheReadTokens:     _pMetrics.cacheReadInputTokens     || 0,
+          }, _pProvider, _pModel).catch(() => {})
+        }
+      })()
+    })
+
+    const results = await Promise.all(promises)
+
+    for (const r of results) {
+      if (r.text) trackMessages.push({ role: 'assistant', agentId: r.agentId, content: r.text })
+    }
+
+    return results
+  }
+
+  // ── Collaboration loop ─────────────────────────────────────────────────────
+  async function triggerCollaboration(trackMessages, groupAgents, groupIdsArr, allData, fullCfg, iterationCount, prevMsgCount) {
+    const MAX_ITERATIONS = Math.min(100, Math.max(1, targetChatMeta.maxAgentRounds ?? 10))
+
+    const newMessages = trackMessages.slice(prevMsgCount)
+      .filter(m => m.role === 'assistant' && m.agentId && groupIdsArr.includes(m.agentId) && m.content)
+
+    const nextRespondingSet = new Set()
+    for (let msgIdx = 0; msgIdx < newMessages.length; msgIdx++) {
+      const msg = newMessages[msgIdx]
+      const { mentions } = parseMentions(msg.content, groupAgents)
+      const others = mentions.filter(id => id !== msg.agentId)
+      if (others.length === 0) continue
+
+      let addressees = others
+      if (others.length >= 2) {
+        try {
+          const mentionedAgents = others.map(id => { const a = groupAgents.find(g => g.id === id); return a ? { id, name: a.name } : null }).filter(Boolean)
+          const result = await _resolveAddresseesInternal(msg.content, mentionedAgents, fullCfg).catch(() => null)
+          if (result?.addresseeIds?.length > 0) addressees = result.addresseeIds
+        } catch {}
+      }
+
+      for (const id of addressees) {
+        if (iterationCount === 0) {
+          nextRespondingSet.add(id)
+        } else {
+          const alreadyRepliedAfter = newMessages.slice(msgIdx + 1).some(m => m.agentId === id)
+          if (!alreadyRepliedAfter) nextRespondingSet.add(id)
+        }
+      }
+    }
+
+    if (nextRespondingSet.size === 0) return
+
+    logger.agent(`[send-message] collaboration round ${iterationCount + 1}`, { chatId, agents: [...nextRespondingSet] })
+
+    if (iterationCount >= MAX_ITERATIONS) {
+      const summaryContent = `**Collaboration reached the maximum of ${iterationCount} iterations.** The agents were unable to reach a final resolution within the limit. Please review the conversation and decide how to proceed.`
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('agent:chunk', { chatId, chunk: { type: 'collaboration_summary', content: summaryContent } })
+      }
+      return
+    }
+
+    const seqRespondingIds = [...nextRespondingSet]
+    const nextLength = trackMessages.length
+    const usrAgentId = targetChatMeta.userAgentId || null
+    const agentsById = Object.fromEntries((allData.agents || []).map(a => [a.id, a]))
+
+    for (const pid of seqRespondingIds) {
+      const agent = groupAgents.find(a => a.id === pid)
+      if (!agent) continue
+
+      const seqCurrentUsrId = usrAgentId
+      const seqApiMessages = trackMessages
+        .filter(m => (m.role === 'user' && !!m.content) || (m.role === 'assistant' && !!m.content))
+        .map(m => {
+          if (m.role === 'assistant' && m.agentId && m.agentId !== pid) {
+            const other = groupAgents.find(a => a.id === m.agentId)
+            return { role: 'assistant', content: `[${other?.name || 'Agent'}]: ${m.content}` }
+          }
+          if (m.role === 'user' && m.userAgentId && m.userAgentId !== seqCurrentUsrId) {
+            const prev = agentsById[m.userAgentId]
+            return { role: 'user', content: `[${prev?.name || 'Previous User'}]: ${m.content}` }
+          }
+          return { role: m.role, content: m.content }
+        })
+
+      if (iterationCount >= 2 && seqApiMessages.length > 0) {
+        const originalPrompt = trackMessages.find(m => m.role === 'user')?.content?.slice(0, 500) || ''
+        let guidance
+        if (iterationCount >= MAX_ITERATIONS - 2) {
+          guidance = [`[WRAP-UP — Round ${iterationCount + 1}/${MAX_ITERATIONS}]`, `Original request: "${originalPrompt}"`, `You are approaching the collaboration limit.`, `Provide your FINAL answer or summary now.`, `Only @mention another agent if there is a critical unresolved blocker — otherwise END without @mention.`, `Do NOT introduce new topics or expand scope.`].join('\n')
+        } else {
+          guidance = [`[CHECKPOINT — Round ${iterationCount + 1}/${MAX_ITERATIONS}]`, `Original request: "${originalPrompt}"`, `Evaluate: is the original task complete?`, `If YES — provide final summary, end WITHOUT @mention.`, `If something specific remains — state what, @mention the relevant agent for ONLY that item.`, `Do NOT expand scope beyond the original request.`].join('\n')
+        }
+        seqApiMessages[seqApiMessages.length - 1].content += `\n\n${guidance}`
+      }
+
+      const otherNames = groupAgents.filter(a => a.id !== pid).map(a => `@${a.name}`).join(' or ')
+      if (seqApiMessages.length > 0 && seqApiMessages[seqApiMessages.length - 1].role === 'assistant') {
+        const lastMsg = seqApiMessages[seqApiMessages.length - 1]
+        seqApiMessages.push({
+          role: 'user',
+          content: `${lastMsg.content}\n\n[${agent.name}, you have been addressed above. Write ONLY your own single reply — do NOT write dialogue or lines for any other participant. If you have a question for them or need their input, end your reply with ${otherNames} to pass the turn. If the topic is concluded, you are giving a final answer, or there is nothing more to discuss, simply end your reply without any @mention — the conversation will close naturally.]`
+        })
+      }
+
+      const roundRuns = _buildAgentRuns([pid], groupIdsArr, fullCfg, seqApiMessages, targetChatMeta, allData)
+      await runGroupRound(roundRuns, seqApiMessages, [], trackMessages, fullCfg)
+
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('agent:chunk', { chatId, chunk: { type: 'collaboration_round_done', agentId: pid } })
+      }
+    }
+
+    await triggerCollaboration(trackMessages, groupAgents, groupIdsArr, allData, fullCfg, iterationCount + 1, nextLength)
+  }
+
+  // ── Fire async — return immediately to Vue ─────────────────────────────────
+  ;(async () => {
+    // Read all data from disk
+    const fullCfg      = ds.readJSON(ds.paths().CONFIG_FILE, {})
+    const agentsData   = normalizeAgents(ds.readJSON(ds.paths().AGENTS_FILE, { agents: [] }))
+    const mcpData      = normalizeMcpServers(ds.readJSON(ds.paths().MCP_SERVERS_FILE, []))
+    const toolsData    = normalizeTools(ds.readJSON(ds.paths().TOOLS_FILE, {}))
+    const knowledgeData = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
+
+    const agentsById = Object.fromEntries((agentsData || []).map(a => [a.id, a]))
+    const safeSkills = Array.isArray(enabledSkills) ? enabledSkills : []
+
+    const allData = { agents: agentsData, mcpServers: mcpData, tools: toolsData, knowledgeCfg: knowledgeData, enabledSkills: safeSkills }
+
+    // Determine the group agents list for @mention parsing
+    const effectiveGroupIds = groupIds || []
+    const groupAgents = effectiveGroupIds.map(id => agentsById[id]).filter(Boolean).map(a => ({ id: a.id, name: a.name, description: a.description || '' }))
+
+    // trackMessages mirrors the conversation for @mention scanning
+    const trackMessages = (messages || []).map(m => ({ ...m }))
+
+    try {
+      // ── Determine respondingIds ───────────────────────────────────────────
+      let respondingIds = []
+
+      if (isGroup) {
+        const { mentions, mentionAll } = parseMentions(text || '', groupAgents)
+        let initialIds
+
+        if (mentionAll) {
+          initialIds = effectiveGroupIds
+        } else if (mentions.length > 0) {
+          // Apply resolveAddressees if 2+ mentions to disambiguate addressed vs referenced
+          if (mentions.length >= 2) {
+            const mentionedAgents = mentions.map(id => agentsById[id]).filter(Boolean).map(a => ({ id: a.id, name: a.name }))
+            const resolved = await _resolveAddresseesInternal(text || '', mentionedAgents, fullCfg).catch(() => null)
+            initialIds = resolved?.addresseeIds?.length > 0 ? resolved.addresseeIds : mentions
+          } else {
+            initialIds = mentions
+          }
+        } else {
+          // No explicit @mention — apply sticky target logic
+          const sticky = Array.isArray(stickyTargetIds) ? stickyTargetIds : []
+          initialIds = sticky.length > 0 ? sticky.filter(id => effectiveGroupIds.includes(id)) : effectiveGroupIds
+        }
+
+        respondingIds = initialIds.filter(id => effectiveGroupIds.includes(id))
+        if (respondingIds.length === 0) respondingIds = effectiveGroupIds
+      } else {
+        // Single agent
+        const singleId = targetChatMeta.systemAgentId || effectiveGroupIds[0] || null
+        if (singleId) respondingIds = [singleId]
+      }
+
+      if (respondingIds.length === 0) {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_error', error: 'No agents found to respond.' } })
+        }
+        return
+      }
+
+      // ── Single-agent: validate provider ──────────────────────────────────
+      if (!isGroup) {
+        const singleId = respondingIds[0]
+        const agent = agentsById[singleId]
+        if (agent) {
+          const resolvedProvider = agent.providerId || fullCfg.defaultProvider || 'anthropic'
+          const isActive = _isProviderActive(fullCfg, resolvedProvider)
+          if (!isActive) {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_error', error: `⚠️ Provider "${resolvedProvider}" for agent "${agent.name}" is not active. Please configure it in Settings.` } })
+            }
+            return
+          }
+        }
+      }
+
+      // ── Build agentRuns ───────────────────────────────────────────────────
+      const agentRuns = _buildAgentRuns(respondingIds, effectiveGroupIds, fullCfg, messages || [], targetChatMeta, allData)
+
+      if (agentRuns.length === 0) {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_error', error: 'Failed to build agent runs. Check agent provider configuration.' } })
+        }
+        return
+      }
+
+      // ── Determine sticky target for completion event ──────────────────────
+      const newStickyTargetIds = isGroup ? respondingIds : (stickyTargetIds || [])
+
+      if (!isGroup) {
+        // Single-agent path: run via runGroupRound (same infra, single element list)
+        await runGroupRound(agentRuns, messages || [], pendingAttachments || [], trackMessages, fullCfg)
+
+        // Memory extraction
+        const prevCount = lastExtractedMsgCount.get(chatId) || 0
+        if ((messages || []).length - prevCount >= 10) {
+          lastExtractedMsgCount.set(chatId, (messages || []).length)
+          const participants = agentRuns.map(r => ({ id: r.agentId, name: r.agentName, type: 'system' }))
+          runMemoryExtraction(event, chatId, messages || [], fullCfg, agentRuns[0].agentPrompts || {}, participants)
+        }
+
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_complete', stickyTargetIds: newStickyTargetIds } })
+        }
+        return
+      }
+
+      // ── Group path ────────────────────────────────────────────────────────
+
+      // Determine execution mode via dispatchGroupTasks
+      let assignedTasks = {}
+      let executionMode = 'concurrent'
+      if (agentRuns.length > 1) {
+        try {
+          const dispatchResult = await _dispatchGroupTasksInternal(text || '', groupAgents, fullCfg)
+          if (dispatchResult?.tasks) {
+            executionMode = dispatchResult.executionMode || 'concurrent'
+            for (const t of dispatchResult.tasks) assignedTasks[t.agentId] = t
+          }
+        } catch (err) {
+          logger.warn('[send-message] dispatchGroupTasks failed (non-fatal)', err.message)
+        }
+      }
+
+      // Apply assigned tasks to agentRuns
+      for (const run of agentRuns) {
+        const task = assignedTasks[run.agentId]
+        if (task?.assignedTask) {
+          run.agentPrompts = run.agentPrompts || {}
+          run.agentPrompts.assignedTask = task.assignedTask
+        }
+      }
+
+      // Determine firstRoundRuns
+      let firstRoundRuns
+      if (executionMode === 'sequential') {
+        firstRoundRuns = agentRuns.filter(r => {
+          const task = assignedTasks[r.agentId]
+          return !task?.dependsOn || task.dependsOn.length === 0
+        })
+        if (firstRoundRuns.length === 0) firstRoundRuns = agentRuns
+      } else {
+        firstRoundRuns = agentRuns
+      }
+
+      const msgCountBeforeRun = trackMessages.length
+
+      await runGroupRound(firstRoundRuns, messages || [], pendingAttachments || [], trackMessages, fullCfg)
+
+      // Run sequential dependents if executionMode is sequential
+      if (executionMode === 'sequential') {
+        const firstRoundIds = new Set(firstRoundRuns.map(r => r.agentId))
+        const remainingRuns = agentRuns.filter(r => !firstRoundIds.has(r.agentId))
+        for (const run of remainingRuns) {
+          await runGroupRound([run], messages || [], [], trackMessages, fullCfg)
+        }
+      }
+
+      // Collaboration loop
+      if (groupAgents.length >= 2) {
+        await triggerCollaboration(trackMessages, groupAgents, effectiveGroupIds, allData, fullCfg, 0, msgCountBeforeRun)
+      }
+
+      // Memory extraction
+      const prevCount = lastExtractedMsgCount.get(chatId) || 0
+      if ((messages || []).length - prevCount >= 10 && agentRuns.length > 0) {
+        lastExtractedMsgCount.set(chatId, (messages || []).length)
+        const groupParticipants = agentRuns.map(r => ({ id: r.agentId, name: r.agentName, type: 'system' }))
+        runMemoryExtraction(event, chatId, messages || [], fullCfg, agentRuns[0].agentPrompts || {}, groupParticipants)
+      }
+
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_complete', stickyTargetIds: newStickyTargetIds } })
+      }
+    } catch (err) {
+      logger.error('agent:send-message orchestration error', { chatId, error: err.message })
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_error', error: err.message } })
+      }
+    }
+  })()
+
+  return { success: true }
 })
 
 }

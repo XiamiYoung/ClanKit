@@ -1,6 +1,6 @@
 const { BaseTool } = require('./BaseTool')
 const { truncateOutput } = require('./truncate')
-const { execFile } = require('child_process')
+const { spawn } = require('child_process')
 const os = require('os')
 
 class ShellTool extends BaseTool {
@@ -32,18 +32,46 @@ class ShellTool extends BaseTool {
     const safeTimeout = Math.min(timeout || 30000, 120000)
 
     return new Promise((resolve) => {
-      execFile(command, safeArgs, { timeout: safeTimeout, cwd: safeCwd, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
-        if (err && !stdout && !stderr) {
-          resolve(this._err(err.message, { exit_code: err.code ?? 1 }))
-          return
-        }
+      let stdout = '', stderr = ''
+      let killed = false
 
+      const child = spawn(command, safeArgs, {
+        cwd: safeCwd,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      })
+
+      const timer = setTimeout(() => {
+        killed = true
+        child.kill('SIGTERM')
+      }, safeTimeout)
+
+      child.stdout.on('data', (data) => {
+        const text = data.toString()
+        stdout += text
+        if (onUpdate) onUpdate({ type: 'stdout', text })
+      })
+
+      child.stderr.on('data', (data) => {
+        const text = data.toString()
+        stderr += text
+        if (onUpdate) onUpdate({ type: 'stderr', text })
+      })
+
+      child.on('error', (err) => {
+        clearTimeout(timer)
+        resolve(this._err(err.message, { exit_code: 1 }))
+      })
+
+      child.on('close', (code) => {
+        clearTimeout(timer)
+        const exitCode = killed ? 124 : (code ?? 0)
         const combined = [stdout, stderr].filter(Boolean).join('\n---stderr---\n')
         const { text, truncated, totalLines, totalBytes } = truncateOutput(combined)
 
-        const exitCode = err ? (err.code ?? 1) : 0
         let out = text
-        if (exitCode !== 0) out += `\n[exit code: ${exitCode}]`
+        if (killed) out += '\n[timed out]'
+        else if (exitCode !== 0) out += `\n[exit code: ${exitCode}]`
 
         resolve(this._ok(out, { exit_code: exitCode, truncated, totalLines, totalBytes }))
       })

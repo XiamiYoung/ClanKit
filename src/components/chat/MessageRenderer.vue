@@ -143,7 +143,8 @@
         >
           <!-- Icon -->
           <span style="font-size:0.85rem;">
-            <span v-if="seg.name === 'dispatch_subagent'">🤖</span>
+            <span v-if="seg.name === 'execute_shell'">💻</span>
+            <span v-else-if="seg.name === 'dispatch_subagent'">🤖</span>
             <span v-else-if="seg.name === 'background_task'">⚙️</span>
             <span v-else-if="seg.name === 'update_soul_memory' || seg.name === 'read_soul_memory'">🧠</span>
             <span v-else>🔧</span>
@@ -184,7 +185,14 @@
             <button v-if="JSON.stringify(seg.input, null, 2).length > 50" @click.stop="expandedInputs[i] = !expandedInputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#007AFF; background:none; border:none; padding:0;">{{ expandedInputs[i] ? t('chats.showLess') + ' ▲' : t('chats.viewFull') + ' ▼' }}</button>
           </div>
           <!-- Tool images are rendered via the standalone inline image segment below -->
-          <!-- Output -->
+          <!-- Live streaming output (visible while tool is running) -->
+          <div v-if="seg.output === undefined && seg.streamingOutput" class="px-3 py-2" style="border-top:1px solid #E5E5EA;">
+            <div class="flex items-center mb-1">
+              <span style="font-size:0.7rem; font-weight:600; color:#d97706; text-transform:uppercase; letter-spacing:0.05em;">live output</span>
+            </div>
+            <pre class="tool-streaming-pre rounded-xl p-2 overflow-x-auto" style="background:#1C1C1E; color:#34D399; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px; max-height:300px; overflow-y:auto;">{{ seg.streamingOutput }}</pre>
+          </div>
+          <!-- Output (final result after tool completes) -->
           <div v-if="seg.output !== undefined" class="px-3 py-2" style="border-top:1px solid #E5E5EA;">
             <div class="flex items-center justify-between mb-1">
               <span style="font-size:0.7rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">{{ t('chats.output') }}</span>
@@ -707,7 +715,6 @@ function isHiddenTool(seg) {
     if (hiddenOps.includes(seg.input.operation)) return true
   }
   if (seg.name === 'todo_manager') return true
-  if (seg.name === 'execute_shell') return true
   return false
 }
 
@@ -724,6 +731,20 @@ function toolDisplayName(seg) {
 
 function toolSummary(seg) {
   if (!seg.input) return ''
+  if (seg.name === 'execute_shell') {
+    const cmd = seg.input.command || ''
+    const rawArgs = seg.input.args || []
+    const args = Array.isArray(rawArgs) ? rawArgs.join(' ') : String(rawArgs)
+    const cmdStr = (cmd + ' ' + args).trim()
+    // When done, show exit code + line count
+    if (seg.output !== undefined) {
+      const lines = (seg.output || '').split('\n').length
+      const exitMatch = (seg.output || '').match(/\[exit code: (\d+)\]/)
+      const exitCode = exitMatch ? exitMatch[1] : '0'
+      return `${cmdStr.slice(0, 40)}  ·  exit ${exitCode} · ${lines} lines`
+    }
+    return cmdStr.slice(0, 80)
+  }
   if (seg.name === 'dispatch_subagent') {
     const task = seg.input.task || ''
     return task.length > 80 ? task.slice(0, 80) + '…' : task

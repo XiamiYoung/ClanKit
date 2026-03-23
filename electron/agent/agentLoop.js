@@ -31,135 +31,16 @@ const FLUSH_INTERVAL    = 10  // flush every N completed assistant turns
 const { MemoryFlush } = require('./core/MemoryFlush')
 const { ChatIndex }   = require('../memory/ChatIndex')
 
+// Extracted modules
+const spb = require('./systemPromptBuilder')
+const mc  = require('./messageConverter')
+const te  = require('./toolExecutor')
+
+// Module-level helpers (re-imported from extracted modules for use in run())
+const { serializeToolResult, uiResult, sliceToLastNTurns } = mc
+const { readSoulFile, readFileIfExists } = spb
+
 // No hardcoded skill prompts — they arrive dynamically from the UI store
-
-// ── Tool result helpers ──────────────────────────────────────────────────────
-
-/**
- * Serialize a tool result for the LLM context.
- * Tools now return { content: [{type:'text', text}], details } (unified format).
- * Legacy tools (MCP, HTTP, subagent, etc.) still return plain objects — handle both.
- * Hard cap at 100 000 chars to protect context window.
- */
-function serializeToolResult(result, toolName) {
-  if (!result) return '{}'
-
-  // Unified format from BaseTool subclasses
-  if (Array.isArray(result.content) && result.content.length > 0 && result.content[0].type === 'text') {
-    let text = result.content[0].text
-    if (text.length > 100000) {
-      logger.warn(`Tool result too large (${text.length} chars), truncating: ${toolName}`)
-      text = text.slice(0, 100000) + '\n[truncated]'
-    }
-    return text
-  }
-
-  // Legacy plain-object format (MCP, HTTP, subagent, built-ins like load_skill)
-  let serialized = JSON.stringify(result)
-  if (serialized.length > 100000) {
-    logger.warn(`Tool result too large (${serialized.length} chars), truncating: ${toolName}`)
-    serialized = JSON.stringify({ success: result?.success, data: `[Result truncated: ${serialized.length} chars original.]` })
-  }
-  return serialized
-}
-
-/**
- * Extract the UI-facing result to pass to onChunk.
- * For unified format, expose details (structured data) alongside text.
- */
-function uiResult(result) {
-  if (Array.isArray(result?.content) && result.content[0]?.type === 'text') {
-    return { text: result.content[0].text, ...result.details }
-  }
-  return result
-}
-
-// ── Soul Memory Helpers ──────────────────────────────────────────────────────
-const SOUL_KEY_SECTIONS = ['Preferences', 'Communication', 'Technical', 'Projects', 'Agentl']
-
-/**
- * Read a soul file from disk. Returns null if not found.
- */
-function readSoulFile(soulsDir, agentId, agentType) {
-  if (!soulsDir || !agentId) return null
-  try {
-    const filePath = path.join(soulsDir, agentType, `${agentId}.md`)
-    if (fs.existsSync(filePath)) {
-      return fs.readFileSync(filePath, 'utf8')
-    }
-  } catch (err) {
-    logger.error('readSoulFile error', err.message)
-  }
-  return null
-}
-
-/**
- * For files > 4KB, extract only the key sections to limit prompt size.
- */
-function extractKeySections(content) {
-  const lines = content.split('\n')
-  const result = []
-  let currentSection = null
-  let includeSection = false
-
-  for (const line of lines) {
-    const sectionMatch = line.match(/^## (.+)$/)
-    if (sectionMatch) {
-      currentSection = sectionMatch[1]
-      includeSection = SOUL_KEY_SECTIONS.includes(currentSection)
-      if (includeSection) {
-        result.push(line)
-      }
-    } else if (includeSection) {
-      result.push(line)
-    } else if (!currentSection) {
-      // Include header (title, timestamp)
-      result.push(line)
-    }
-  }
-
-  result.push('', '(Some sections omitted for brevity. Use read_soul_memory tool to access full memory.)')
-  return result.join('\n')
-}
-
-/**
- * Size-gated injection: full for < 4KB, key sections for 4-16KB, warning for > 16KB.
- */
-function prepareSoulContent(content) {
-  if (!content) return null
-  const size = Buffer.byteLength(content, 'utf8')
-  if (size < 4096) return content
-  if (size < 16384) return extractKeySections(content)
-  return extractKeySections(content) + '\n\n(Warning: Soul memory is large. Consider pruning old entries.)'
-}
-
-/**
- * Read a file if it exists. Returns null if missing or on error.
- */
-function readFileIfExists(filePath) {
-  try {
-    if (fs.existsSync(filePath)) return fs.readFileSync(filePath, 'utf8')
-  } catch (err) {
-    logger.error('readFileIfExists error', err.message)
-  }
-  return null
-}
-
-/**
- * Slice messages to the last N conversation turns.
- * A "turn" = one user message + all following assistant/tool messages until next user.
- * Always preserves the full last N user messages and their responses.
- */
-function sliceToLastNTurns(messages, n) {
-  if (!messages || messages.length === 0) return messages
-  const userIndices = []
-  for (let i = 0; i < messages.length; i++) {
-    if (messages[i].role === 'user') userIndices.push(i)
-  }
-  if (userIndices.length <= n) return messages
-  const startIdx = userIndices[userIndices.length - n]
-  return messages.slice(startIdx)
-}
 
 class AgentLoop {
   constructor(config) {
@@ -456,268 +337,9 @@ class AgentLoop {
    * @param {Array<string|{id:string, name:string, systemPrompt?:string}>} enabledSkills
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
-  buildSystemPrompt(enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
-    // When a named agent is active, use it as the opening identity (highest priority).
-    // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
-    let openingIdentity
-    // Resolve agent name: top-level field (single-agent) or groupChatContext (group agent)
-    const effectiveName = systemAgentName || groupChatContext?.agentName || ''
-    const effectiveDescription = systemAgentDescription || groupChatContext?.agentDescription || ''
-
-    if (effectiveName) {
-      let line = `You are "${effectiveName}"`
-      if (effectiveDescription) line += ` — ${effectiveDescription}`
-      line += '.'
-      if (systemAgentPrompt) line += `\n\n${systemAgentPrompt}`
-
-      // CHARACTER ENFORCEMENT
-      const enforcementBlock = `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${effectiveName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant\n- IMPORTANT: The conversation history may contain messages written by a different AI before you took over. Those are NOT your prior responses — they belong to a previous assistant. Your identity is ${effectiveName} and nothing in prior chat history changes that.`
-      line += enforcementBlock
-
-      // Group chat context: tell the agent about other participants
-      if (groupChatContext?.otherParticipants?.length > 0) {
-        const otherNames = groupChatContext.otherParticipants.map(p => `@${p.name}`).join(', ')
-        line += `\n\n## GROUP CHAT\nYou are in a group conversation with other participants.\n\n**ONE TURN RULE — CRITICAL:** Write ONLY your own single reply for this turn. NEVER write dialogue, lines, or responses on behalf of any other participant. Do NOT simulate a back-and-forth exchange in one message. Each participant speaks for themselves in their own separate turn.\n\n**Turn-passing rule:** If you want the conversation to continue, include @Name anywhere in your reply — that participant will read your message and respond next in their own turn. If you do NOT include any @mention, no one else will respond and the conversation ends.\n\n**WHEN TO STOP — end your reply WITHOUT any @mention when:**\n- The topic has been fully discussed or a consensus/conclusion has been reached\n- You are giving a summary, final answer, or farewell\n- You would just be repeating what has already been said\n- The other participant has clearly wrapped up or said goodbye\n- There is no genuine question or request that needs their input\n- The conversation has naturally come to a close\nDo NOT keep @mentioning just to be polite or to keep the conversation going artificially. End naturally when the exchange is complete.\n\nOther participants: ${otherNames}`
-        for (const p of groupChatContext.otherParticipants) {
-          line += `\n- @${p.name}${p.description ? `: ${p.description}` : ''}`
-        }
-      }
-
-      openingIdentity = line
-    } else {
-      openingIdentity = (this.config.systemPrompt || '').trim()
-        || 'You are a versatile AI assistant running in a desktop application. You help users with a wide range of tasks including research, writing, analysis, coding, creative work, file management, and general knowledge.'
-    }
-
-    const imageCfgForPrompt = this.config.imageProvider
-    const hasImageTool = !!(imageCfgForPrompt?.apiKey && imageCfgForPrompt?.baseURL && imageCfgForPrompt?.model)
-
-    let system = `${openingIdentity}`
-
-    // ── User Agent Identity Context ──
-    // Inject who the user is whenever we know their name or have a custom prompt.
-    // This fires even when the agent has no custom prompt text — the name alone is
-    // enough to prevent the system agent from relying on stale soul memory.
-    if (userAgentName || userAgentPrompt) {
-      let partnerSection = `\n\n---\n## CONVERSATION PARTNER\n`
-      if (userAgentName) {
-        partnerSection += `The user you are talking with is **${userAgentName}**`
-        if (userAgentDescription) partnerSection += ` — ${userAgentDescription}`
-        partnerSection += '.'
-      }
-      if (userAgentPrompt) {
-        partnerSection += (userAgentName ? '\n\n' : '') + userAgentPrompt
-      }
-      partnerSection += `\n\nRespond to them according to their identity and the context of your conversation.`
-      system += partnerSection
-    }
-
-    // Handover note: inform the agent about previous participants whose messages
-    // appear in the conversation history with [Name]: prefixes.
-    if (chatHandoverNote) {
-      system += `\n\n---\n## CONVERSATION HISTORY NOTE\n${chatHandoverNote}\nMessages from these previous participants are prefixed with their name in brackets (e.g. [Name]:). Those messages are NOT yours — do not confuse them with your own prior responses.`
-    }
-
-    system += `
-
-CORE TOOLS (always available):
-- execute_shell: Run shell commands (command + args separated, e.g. command:"ls" args:["/home"])
-- file_operation: Read, write, list, append, search, mkdir, delete files on the filesystem
-- todo_manager: Plan complex tasks with structured todo lists
-- dispatch_subagent: Delegate a single focused subtask to a specialized sub-agent
-- dispatch_subagents: Dispatch MULTIPLE sub-agents in parallel at once (preferred for 2+ independent tasks)
-- background_task: Run long operations in the background${hasImageTool ? '\n- generate_image: Generate an image from a text prompt and display it directly in the chat. IMAGE GENERATION RULE: ALWAYS use generate_image for ANY image request. NEVER use execute_shell, Python scripts, or any other method for image generation. Call generate_image ONCE per user request — no draft/iterate/final workflow.' : ''}`
-
-    // List active skills — minimal format for cache efficiency
-    const skillIds = (enabledSkills || [])
-      .filter(s => typeof s !== 'string' && s.id)
-      .map(s => s.id)
-      .join(', ')
-
-    if (skillIds) {
-      system += `\nSKILLS: ${skillIds}`
-    }
-
-    // ── ClankAI Data Directory ──
-    // dataPath is injected by main.js (DATA_DIR) — single source of truth
-    const dataPath = this.config.dataPath || require('../defaultDataPath').defaultDataPath()
-    // Artifact path priority: DoCPath (AI Doc folder) → explicit artifactPath → dataPath/artifact
-    const artifactPath = this.config.DoCPath || this.config.artifactPath || path.join(dataPath, 'artifact')
-    const codingPath = this.config.chatWorkingPath || ''
-    const isCodingMode = !!(this.config.codingMode && codingPath)
-    const skillsPath = this.config.skillsPath || ''
-    const utilityModel = this.config.utilityModel || {}
-    const utilityProvider = utilityModel.provider || ''
-    const utilityModelId  = utilityModel.model    || ''
-    system += `\n\nCLANKAI DATA DIRECTORY: ${dataPath}
-This is the local data folder for the ClankAI desktop application. Its structure:
-  ${dataPath}/
-  ├── config.json          — App settings (API keys, models, providers, paths)
-  ├── mcp-servers.json     — MCP server definitions
-  ├── tools.json           — HTTP tool definitions
-  ├── agents.json          — AI agent definitions
-  ├── knowledge.json       — RAG/Pinecone knowledge config
-  ├── chats/               — Per-chat message history
-  ├── souls/               — Persistent memory files (system/, users/)
-  └── artifact/            — AI-generated artifacts
-
-ARTIFACT PATH (default output directory): ${artifactPath}
-This is the default directory for generated files — reports, exports, temp files, and other non-document output. Create subdirectories as needed (e.g. ${artifactPath}/exports/). The directory is auto-created on first write.${isCodingMode ? `
-
-CODING PROJECT PATH: ${codingPath}
-This chat is in CODING MODE. All code files (source code, configs, scripts, tests, etc.) MUST be created/edited within this project directory. Use this path as the root for any code-related file operations. Non-code output (documents, reports) still goes to the document path or artifact path above.` : ''}${skillsPath ? `
-
-SKILLS PATH: ${skillsPath}
-This is the directory where skill folders are stored on disk. Each skill is a folder containing a skill definition file. Use this path if the user asks to inspect, create, or modify skills on disk.` : ''}
-
-DATA FILE ROUTING — when the user asks you to create or modify app configuration, act directly:
-- "create/add/edit a tool" or "add an HTTP tool"  → read then write ${dataPath}/tools.json
-  Format: {"categories":{"CategoryName":{"tools":[{"id":"<uuid>","name":"...","method":"GET|POST|...","endpoint":"...","headers":{},"bodyTemplate":"","description":"..."}]}}}
-- "create/add/edit an MCP server"                  → read then write ${dataPath}/mcp-servers.json
-  Format: [{"id":"<uuid>","name":"...","command":"...","args":[],"env":{},"description":"..."}]
-- "create/add/edit an agent"                       → read then write ${dataPath}/agents.json
-  Format: {"categories":[...],"agents":[...,{"id":"<uuid>","type":"system","name":"...","avatar":"a1","description":"...","prompt":"...","providerId":${utilityProvider ? `"${utilityProvider}"` : 'null'},"modelId":${utilityModelId ? `"${utilityModelId}"` : 'null'},"enabledSkillIds":null,"mcpServerIds":null,"voiceId":null,"categoryIds":[],"createdAt":<timestamp>,"updatedAt":<timestamp>}]}
-  IMPORTANT: always set "providerId" to ${utilityProvider ? `"${utilityProvider}"` : 'null'} and "modelId" to ${utilityModelId ? `"${utilityModelId}"` : 'null'} (the system utility model) unless the user explicitly asks for a different model.
-- "add/edit knowledge / RAG index"                 → read then write ${dataPath}/knowledge.json
-- "create/add/edit a task"                          → read then write ${dataPath}/tasks.json
-  Format: [{"id":"<uuid>","name":"...","description":"...","icon":"📋","prompt":"...","agentInputs":[{"name":"slotName","description":"Role description"}]}]
-  TASK PROMPT RULES: Use @slotName tokens in the prompt to reference agent input slots (e.g. "@analyst review this data"). Slot names must be alphanumeric/underscore only (no spaces). Add agentInputs entries for each @slotName used. If no agent slot is needed, set agentInputs to [].
-- "create/add/edit a plan"                          → read then write ${dataPath}/plans.json
-  Format: [{"id":"<uuid>","name":"...","description":"...","steps":[{"id":"<uuid>","taskId":"<task id>","label":"...","agentAssignments":{"slotName":"<agent id>"},"defaultAgentIds":[],"dependsOn":[],"runCondition":"always"}],"schedule":null,"createdAt":"<iso>","updatedAt":"<iso>"}]
-  PLAN RULES: Each step references a task by its id. If the task has agentInputs, fill agentAssignments with {slotName: agentId}. If no inputs, list agent ids in defaultAgentIds. Set dependsOn:[] for parallel steps; set dependsOn:["<stepId>"] to sequence steps. schedule is null (manual) or a cron string (e.g. "0 8 * * *" = daily 8am). To add a step to the calendar/schedule, set schedule to the appropriate cron expression.
-  AGENT ID LOOKUP: To assign agents to steps, first read ${dataPath}/agents.json and find the id of the agent the user names.
-- Always read the file first to understand existing content before writing. Preserve all existing entries.
-- After writing, tell the user to click Refresh on the relevant page (MCP / Tools / Agents / Knowledge / Tasks) to reload.`
-
-    // ── Document Path + File Placement Rules ──
-    const docPath = process.env.DOC_PATH || this.config.obsidianVaultPath || this.config.DoCPath
-    if (docPath) {
-      let subfolders = []
-      try {
-        const entries = fs.readdirSync(docPath, { withFileTypes: true })
-        subfolders = entries.filter(e => e.isDirectory()).map(e => e.name).sort()
-      } catch (err) {
-        logger.error('Failed to read doc path subfolders', err.message)
-      }
-
-      const subfolderList = subfolders.length > 0
-        ? subfolders.map(f => `  - ${f}/`).join('\n')
-        : '  (no subfolders)'
-
-      system += `\n\nDOCUMENT PATH (primary output for documents): ${docPath}
-This is the user's document folder. Subfolders:
-${subfolderList}
-
-DOCUMENT FILE PLACEMENT:
-When generating documents (.md, .docx, .pptx, slides, reports, notes, summaries, analyses, etc.), ALWAYS write them to the Document Path: ${docPath} by default. Choose an appropriate subfolder (${subfolders.length > 0 ? subfolders.join(', ') : 'root'}) or create a new one if needed.
-Fallback: if the Document Path is unavailable, write to ${artifactPath}/docs/ instead.
-For non-document files (temp files, exports, data), use the Artifact Path: ${artifactPath}.${isCodingMode ? `
-For code files (source code, configs, scripts, tests), use the Coding Project Path: ${codingPath}.` : ''}`
-    } else {
-      // No doc path configured — documents go to artifact path
-      system += `\n\nDOCUMENT & FILE PLACEMENT:
-When generating documents (.md, .docx, .pptx, slides, reports, notes, etc.), write them to ${artifactPath}/docs/.
-For other generated files (exports, data, temp), use ${artifactPath}.${isCodingMode ? `
-For code files (source code, configs, scripts, tests), use the Coding Project Path: ${codingPath}.` : ''}`
-    }
-
-    if (effectiveName) {
-      system += `\n\nOPERATIONAL NOTES (secondary to your character — use these naturally, not robotically):
-- For complex multi-step tasks, use a todo list to stay organized.
-- Delegate independent subtasks to sub-agents when it makes sense.
-- Use background_task for long-running operations.
-- Report progress on large tasks in your own voice and style.
-- The chat UI has a built-in 3D viewer that automatically renders 3D model URLs (.glb, .gltf, .obj, .stl, .babylon, .fbx). When a 3D asset URL appears, acknowledge it in character.`
-    } else {
-      system += `\n\nGUIDELINES:
-- Be concise and precise. Explain your reasoning when using tools.
-- For complex multi-step tasks, ALWAYS create a todo list first using todo_manager.
-- When a subtask is independent and focused, delegate it to a sub-agent.
-- For long-running commands (builds, test suites), use background_task.
-- When asked about your capabilities or tools, report the core tools and any active skills listed above.
-- Always report progress on large tasks.
-- The chat UI has a built-in 3D viewer that automatically renders 3D model URLs (.glb, .gltf, .obj, .stl, .babylon, .fbx). When the user shares a 3D asset URL, acknowledge it — the viewer is already displaying it inline. You can discuss the model, suggest interactions (rotate, zoom, wireframe toggle), or help with 3D-related questions.`
-    }
-
-    // Append MCP server info if any are enabled (minimal format for cache efficiency)
-    const mcpServers = this.mcpServers || []
-    if (mcpServers.length > 0) {
-      const mcpIds = mcpServers.map(s => s.id).join(', ')
-      system += `\n\nMCP SERVERS: ${mcpIds}`
-    }
-
-    // Append user-defined tools as a rich capabilities block
-    const allUserTools = this.httpTools || []
-    const httpToolsList   = allUserTools.filter(t => (t.type || 'http') === 'http')
-    const codeToolsList   = allUserTools.filter(t => t.type === 'code')
-    const promptToolsList = allUserTools.filter(t => t.type === 'prompt')
-    const smtpToolsList   = allUserTools.filter(t => t.type === 'smtp')
-
-    if (allUserTools.length > 0) {
-      system += `\n\n## Your Assigned Tools\nThe following tools have been assigned to you. Use them proactively when relevant — especially for real-time or external data, **never answer from memory when a tool is available**.`
-
-      if (httpToolsList.length > 0) {
-        system += `\n\n**HTTP Tools** (call these for real-time/live data — never guess or use training knowledge):`
-        for (const t of httpToolsList) {
-          system += `\n- \`http_${t.id}\` — ${t.name}${t.description ? `: ${t.description}` : ''}`
-        }
-      }
-
-      if (codeToolsList.length > 0) {
-        system += `\n\n**Code Tools** (reference implementations — use execute_shell to run):`
-        for (const t of codeToolsList) {
-          system += `\n- \`code_${t.id}\` — ${t.name}${t.description ? `: ${t.description}` : ''}`
-        }
-      }
-
-      if (promptToolsList.length > 0) {
-        system += `\n\n**Prompt Tools** (call to retrieve reusable instructions or templates):`
-        for (const t of promptToolsList) {
-          system += `\n- \`prompt_${t.id}\` — ${t.name}${t.description ? `: ${t.description}` : ''}`
-        }
-      }
-
-      if (smtpToolsList.length > 0) {
-        system += `\n\n**Email Tools** (send email via SMTP):`
-        for (const t of smtpToolsList) {
-          system += `\n- \`smtp_${t.id}\` — ${t.name}${t.description ? `: ${t.description}` : ''}`
-        }
-      }
-    }
-
-    // ── Memory context injection ──
-    const { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, historicalContext } = memoryContext
-
-    if (userMd) {
-      system += `\n\n## User Profile\n${prepareSoulContent(userMd)}`
-    }
-
-    if (agentMemoryMd) {
-      system += `\n\n## My Knowledge Base\n${prepareSoulContent(agentMemoryMd)}`
-    }
-
-    const logSections = []
-    if (yesterdayLogMd) logSections.push(`### Yesterday\n${yesterdayLogMd.trim()}`)
-    if (todayLogMd)     logSections.push(`### Today\n${todayLogMd.trim()}`)
-    if (logSections.length > 0) {
-      system += `\n\n## Recent Session Logs\n${logSections.join('\n\n')}`
-    }
-
-    if (historicalContext) {
-      system += `\n\n## Relevant Past Context\n_Retrieved from conversation history_\n\n${historicalContext}`
-    }
-
-    // ── RAG / Knowledge Context injection ──
-    if (ragContext && ragContext.results && ragContext.results.length > 0) {
-      const chunks = ragContext.results
-        .map((r, i) => `### Source ${i + 1}${r.source ? ` (${r.source})` : ''}\n${r.text || r.content || ''}`)
-        .join('\n\n')
-      system += `\n\n## Knowledge Context\n_Retrieved from your assigned knowledge base_\n\n${chunks}`
-    }
-
-    return system
+  buildSystemPrompt(enabledAgents, enabledSkills, agentContext = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
+    return spb.buildSystemPrompt(this.config, this.mcpServers, this.httpTools, enabledAgents, enabledSkills, agentContext, userSoulContent, systemSoulContent, participantSouls, memoryContext, ragContext)
   }
-
   /**
    * Build conversation messages, transforming the last user message's
    * attachments into Anthropic multimodal content blocks.
@@ -727,69 +349,7 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
    * @returns {Array} Messages with the last user message potentially multimodal
    */
   _buildConversationMessages(messages, currentAttachments) {
-    const msgs = [...messages]
-
-    // Find the last user message
-    let lastUserIdx = -1
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].role === 'user') { lastUserIdx = i; break }
-    }
-    if (lastUserIdx === -1) return msgs
-
-    const userMsg = msgs[lastUserIdx]
-    const textContent = typeof userMsg.content === 'string' ? userMsg.content : ''
-
-    // Detect 3D model URLs in the user message and annotate them
-    const MODEL_URL_RE = /https?:\/\/[^\s<>"')\]]+\.(glb|gltf|obj|stl|babylon|fbx)(\?[^\s<>"')\]]*)?/gi
-    const modelMatches = textContent.match(MODEL_URL_RE)
-
-    // If no attachments and no 3D URLs, return as-is
-    if ((!currentAttachments || currentAttachments.length === 0) && !modelMatches) return msgs
-
-    const contentBlocks = []
-
-    // Add attachment content blocks before the user's text
-    if (currentAttachments && currentAttachments.length > 0) {
-      for (const att of currentAttachments) {
-        if (att.type === 'image' && att.base64 && att.mediaType) {
-          contentBlocks.push({
-            type: 'image',
-            source: { type: 'base64', media_type: att.mediaType, data: att.base64 }
-          })
-        } else if (att.type === 'text' && att.content) {
-          contentBlocks.push({
-            type: 'text',
-            text: `--- Attached file: ${att.name} (${att.path}) ---\n${att.content}\n--- End of ${att.name} ---`
-          })
-        } else if (att.type === 'folder') {
-          contentBlocks.push({
-            type: 'text',
-            text: `[Attached folder: ${att.path}] The user attached this folder for context. ${att.preview || ''}`
-          })
-        }
-      }
-    }
-
-    // Add the original user text
-    if (textContent) {
-      contentBlocks.push({ type: 'text', text: textContent })
-    }
-
-    // Annotate 3D model URLs so the AI knows they're being rendered
-    if (modelMatches) {
-      const uniqueUrls = [...new Set(modelMatches)]
-      const fileNames = uniqueUrls.map(u => {
-        const parts = u.split('/')
-        return parts[parts.length - 1].split('?')[0]
-      })
-      contentBlocks.push({
-        type: 'text',
-        text: `[System: The chat UI is displaying an interactive 3D viewer for: ${fileNames.join(', ')}. The user can rotate, zoom, and toggle wireframe. Acknowledge the 3D model and offer helpful context about it.]`
-      })
-    }
-
-    msgs[lastUserIdx] = { role: 'user', content: contentBlocks }
-    return msgs
+    return mc.buildConversationMessages(messages, currentAttachments)
   }
 
   /**
@@ -1681,7 +1241,9 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
                     if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
                       result = permCheck.result
                     } else {
-                      result = await this.toolRegistry.execute(toolName, toolInput, block.id)
+                      result = await this.toolRegistry.execute(toolName, toolInput, block.id, (update) => {
+                        onChunk({ type: 'tool_output', name: toolName, text: update.text, stream: update.type })
+                      })
                     }
                   }
                   const mcpImages = result?._mcpImages || result?.details?.images
@@ -2012,7 +1574,9 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
                     if (permCheck.decision === 'block' || permCheck.decision === 'reject') {
                       result = permCheck.result
                     } else {
-                      result = await this.toolRegistry.execute(toolName, toolInput, block.id)
+                      result = await this.toolRegistry.execute(toolName, toolInput, block.id, (update) => {
+                        onChunk({ type: 'tool_output', name: toolName, text: update.text, stream: update.type })
+                      })
                     }
                   }
 
@@ -2092,129 +1656,7 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
    * Extracts images/binary data so they never enter conversation context.
    */
   async _executeMcpToolViaManager(serverId, toolName, input, serverConfig = null) {
-    // Max size for text going into conversation context (characters)
-    const MAX_TEXT_FOR_CONTEXT = 50000
-
-    try {
-      // Pass serverConfig so McpManager can lazy-start the server if not yet running
-      const result = await mcpManager.callTool(serverId, toolName, input, serverConfig)
-
-      // Log raw content types for debugging
-      const content = result?.content || []
-      logger.info('MCP tool raw content types:', content.map(c => ({
-        type: c.type,
-        hasData: !!c.data,
-        hasText: !!c.text,
-        hasBlob: !!c.blob,
-        hasResource: !!c.resource,
-        textLen: c.text?.length,
-        dataLen: c.data?.length,
-        mimeType: c.mimeType,
-      })))
-
-      if (result?.isError) {
-        const errorText = content
-          .filter(c => c.type === 'text')
-          .map(c => c.text)
-          .join('\n')
-        return { success: false, error: errorText || 'MCP tool returned an error' }
-      }
-
-      const images = []
-      const textParts = []
-
-      for (const item of content) {
-        if (item.type === 'image') {
-          // Standard MCP image content (base64 or URL)
-          if (item.url) {
-            images.push({ url: item.url, mimeType: item.mimeType || 'image/png' })
-          } else {
-            images.push({ data: item.data, mimeType: item.mimeType || 'image/png' })
-          }
-
-        } else if (item.type === 'image_url') {
-          // OpenAI-style image_url content
-          const imgUrl = item.image_url?.url || item.url
-          if (imgUrl) images.push({ url: imgUrl })
-
-        } else if (item.type === 'resource' && item.resource) {
-          // Embedded resource — may contain binary blobs
-          const res = item.resource
-          if (res.blob && res.mimeType && res.mimeType.startsWith('image/')) {
-            images.push({ data: res.blob, mimeType: res.mimeType })
-          } else if (res.text) {
-            textParts.push(res.text)
-          }
-
-        } else if (item.type === 'text') {
-          let text = item.text || ''
-
-          // 1. Check if the ENTIRE text is a standalone base64 image
-          if (this._looksLikeBase64Image(text)) {
-            const parsed = this._extractBase64Image(text)
-            if (parsed) {
-              images.push(parsed)
-              continue // don't add to textParts
-            }
-          }
-
-          // 2. Scan for data:image URIs EMBEDDED within text/JSON (the n8n case)
-          const { cleaned, extracted } = this._extractEmbeddedImages(text)
-          if (extracted.length > 0) {
-            images.push(...extracted)
-            text = cleaned
-          }
-
-          if (text.trim()) {
-            textParts.push(text)
-          }
-
-        } else {
-          // Unknown content type — log and skip large items
-          logger.warn('MCP unknown content type:', item.type, 'keys:', Object.keys(item))
-          if (item.data && item.data.length > 1000) {
-            images.push({ data: item.data, mimeType: item.mimeType || 'application/octet-stream' })
-          }
-        }
-      }
-
-      // Deduplicate images (same data length + mimeType = same image)
-      const seenImgs = new Set()
-      const uniqueImages = images.filter(img => {
-        const key = img.url || `${img.mimeType}:${(img.data || '').length}`
-        if (seenImgs.has(key)) return false
-        seenImgs.add(key)
-        return true
-      })
-      if (uniqueImages.length < images.length) {
-        logger.info(`Deduplicated MCP images: ${images.length} → ${uniqueImages.length}`)
-      }
-
-      // Assemble text, with a hard size cap
-      let textData = textParts.join('\n')
-      if (textData.length > MAX_TEXT_FOR_CONTEXT) {
-        logger.warn(`MCP tool text truncated: ${textData.length} → ${MAX_TEXT_FOR_CONTEXT} chars`)
-        textData = textData.slice(0, MAX_TEXT_FOR_CONTEXT) + `\n\n[Output truncated — ${textData.length} total characters]`
-      }
-
-      // When images were extracted, give the LLM a clean summary so it
-      // doesn't try to describe raw base64 or claim it can't render images
-      if (uniqueImages.length > 0) {
-        // Strip any leftover extraction placeholders from textData
-        textData = textData.replace(/\[Image extracted for display:[^\]]*\]/g, '').trim()
-        const imgSummary = `[${uniqueImages.length} image(s) returned and displayed to the user in the chat. Describe what you see or inform the user the image is shown above.]`
-        textData = textData ? `${textData}\n\n${imgSummary}` : imgSummary
-      }
-
-      return {
-        success: true,
-        data: textData || (uniqueImages.length > 0 ? `[Returned ${uniqueImages.length} image(s)]` : ''),
-        _mcpImages: uniqueImages.length > 0 ? uniqueImages : undefined,
-      }
-    } catch (err) {
-      logger.error('MCP tool execution failed', err.message)
-      return { success: false, error: err.message }
-    }
+    return te.executeMcpToolViaManager(serverId, toolName, input, serverConfig)
   }
 
   /**
@@ -2222,204 +1664,26 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
    * Merges agent-provided body with the tool's bodyTemplate.
    */
   async _executeHttpTool(tool, input) {
-    const MAX_RESPONSE_SIZE = 100000
-
-    try {
-      const method = (tool.method || 'GET').toUpperCase()
-      // Substitute {param} placeholders in endpoint URL with LLM-provided values
-      const rawUrl = tool.endpoint
-      if (!rawUrl) return { success: false, error: 'No endpoint URL configured for this tool' }
-      const url = rawUrl.replace(/\{(\w+)\}/g, (_, key) => {
-        const val = input?.[key]
-        return val !== undefined ? encodeURIComponent(String(val)) : key
-      })
-
-      const headers = { ...tool.headers }
-      if (!headers['Content-Type'] && (method === 'POST' || method === 'PUT')) {
-        headers['Content-Type'] = 'application/json'
-      }
-
-      let body = undefined
-      if (method !== 'GET' && method !== 'DELETE') {
-        let templateBody = {}
-        try { templateBody = JSON.parse(tool.bodyTemplate || '{}') } catch {}
-        const inputBody = input?.body || {}
-        body = JSON.stringify({ ...templateBody, ...inputBody })
-      }
-
-      logger.agent('HTTP tool exec', { name: tool.name, method, url })
-
-      const https = require('https')
-      const http = require('http')
-      const { URL } = require('url')
-      const parsed = new URL(url)
-      const fetcher = parsed.protocol === 'https:' ? https : http
-
-      const responseData = await new Promise((resolve, reject) => {
-        const options = {
-          method,
-          hostname: parsed.hostname,
-          port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-          path: parsed.pathname + parsed.search,
-          headers,
-          timeout: 30000,
-        }
-
-        const req = fetcher.request(options, (res) => {
-          let data = ''
-          res.on('data', chunk => {
-            data += chunk
-            if (data.length > MAX_RESPONSE_SIZE) {
-              req.destroy()
-              resolve({ status: res.statusCode, data: data.slice(0, MAX_RESPONSE_SIZE) + '\n[Response truncated]', truncated: true })
-            }
-          })
-          res.on('end', () => resolve({ status: res.statusCode, data }))
-        })
-
-        req.on('error', reject)
-        req.on('timeout', () => { req.destroy(); reject(new Error('HTTP request timed out')) })
-
-        if (body) req.write(body)
-        req.end()
-      })
-
-      // Try to parse as JSON
-      let parsed_data
-      try { parsed_data = JSON.parse(responseData.data) } catch { parsed_data = responseData.data }
-
-      const isSuccess = responseData.status >= 200 && responseData.status < 300
-      logger.agent('HTTP tool result', { name: tool.name, status: responseData.status, dataLen: responseData.data.length })
-
-      return {
-        success: isSuccess,
-        status: responseData.status,
-        data: parsed_data,
-        ...(responseData.truncated ? { truncated: true } : {}),
-      }
-    } catch (err) {
-      logger.error('HTTP tool execution failed', { name: tool.name, error: err.message })
-      return { success: false, error: err.message }
-    }
+    return te.executeHttpTool(tool, input)
   }
 
   /** Send email via SMTP using the app's configured SMTP credentials */
-  async _executeSmtpTool({ to, subject, body, html, cc, bcc, from_name, attachments }) {
-    const smtp = this.config.smtpConfig || {}
-    const { host, port, user, pass } = smtp
-
-    if (!host || !user || !pass) {
-      return { error: 'SMTP not configured. Open Config → Email and fill in host, username, and password.' }
-    }
-
-    try {
-      const nodemailer = require('nodemailer')
-      const fs = require('fs')
-      const path = require('path')
-
-      const transporter = nodemailer.createTransport({
-        host,
-        port: port || 587,
-        secure: (port === 465),
-        requireTLS: (port !== 465),
-        auth: { user, pass },
-        tls: { rejectUnauthorized: false }
-      })
-
-      const fromAddress = from_name
-        ? `"${String(from_name).replace(/"/g, '')}" <${user}>`
-        : user
-
-      // Resolve attachments
-      const resolvedAttachments = []
-      if (Array.isArray(attachments) && attachments.length > 0) {
-        for (const att of attachments) {
-          const filePath = typeof att === 'string' ? att : att.path
-          const filename = (typeof att === 'object' && att.filename) ? att.filename : path.basename(filePath)
-          if (!filePath) continue
-          if (!fs.existsSync(filePath)) return { error: `Attachment not found: ${filePath}` }
-          resolvedAttachments.push({ path: filePath, filename })
-        }
-      }
-
-      const mailOptions = {
-        from: fromAddress, to, subject, text: body,
-        ...(html ? { html } : {}),
-        ...(cc ? { cc } : {}),
-        ...(bcc ? { bcc } : {}),
-        ...(resolvedAttachments.length > 0 ? { attachments: resolvedAttachments } : {}),
-      }
-
-      logger.agent('SMTP tool exec', { to, subject })
-      const info = await transporter.sendMail(mailOptions)
-      return { success: true, messageId: info.messageId, accepted: info.accepted, rejected: info.rejected }
-    } catch (err) {
-      logger.error('SMTP tool execution failed', err.message)
-      return { success: false, error: err.message }
-    }
+  async _executeSmtpTool(args) {
+    return te.executeSmtpTool(this.config, args)
   }
 
   /** Check if a text string looks like a base64-encoded image */
-  _looksLikeBase64Image(text) {
-    if (!text || text.length < 100) return false
-    // data URI
-    if (/^data:image\/[a-z]+;base64,/i.test(text)) return true
-    // Pure base64 blob (> 10KB, mostly base64 characters)
-    if (text.length > 10000) {
-      const sample = text.slice(0, 1000)
-      const b64Chars = sample.replace(/[A-Za-z0-9+/=\s]/g, '')
-      if (b64Chars.length < sample.length * 0.05) return true
-    }
-    return false
-  }
+  _looksLikeBase64Image(text) { return te.looksLikeBase64Image(text) }
 
   /** Try to extract base64 image data from a standalone text string */
-  _extractBase64Image(text) {
-    // data:image/png;base64,xxxxx
-    const dataUriMatch = text.match(/^data:(image\/[a-z]+);base64,(.+)$/is)
-    if (dataUriMatch) {
-      return { data: dataUriMatch[2].trim(), mimeType: dataUriMatch[1] }
-    }
-    // Pure base64 — assume PNG
-    if (text.length > 10000 && /^[A-Za-z0-9+/=\s]+$/.test(text.slice(0, 1000))) {
-      return { data: text.trim(), mimeType: 'image/png' }
-    }
-    return null
-  }
+  _extractBase64Image(text) { return te.extractBase64Image(text) }
 
   /**
    * Scan text for embedded data:image URIs (e.g. inside JSON), extract them,
    * and replace with a short placeholder. Handles the n8n case where the MCP
    * response is a JSON string containing "data:image/png;base64,<6MB>".
    */
-  _extractEmbeddedImages(text) {
-    if (!text || text.length < 100) return { cleaned: text, extracted: [] }
-
-    const extracted = []
-    let cleaned = text
-
-    // 1. Extract data:image URIs with base64 content (the n8n case)
-    if (text.includes('data:image/')) {
-      cleaned = cleaned.replace(/data:(image\/[a-z+]+);base64,([A-Za-z0-9+/=]{1000,})/gi, (match, mimeType, data) => {
-        extracted.push({ data, mimeType })
-        return `[Image extracted for display: ${mimeType}, ${Math.round(data.length * 0.75 / 1024)}KB]`
-      })
-    }
-
-    // 2. Extract plain image URLs (http/https) ending with known extensions
-    if (/https?:\/\//.test(cleaned)) {
-      cleaned = cleaned.replace(/(https?:\/\/[^\s"'<>]+\.(?:png|jpe?g|gif|webp|svg|bmp|ico)(?:\?[^\s"'<>]*)?)/gi, (match, url) => {
-        extracted.push({ url })
-        return `[Image: ${url}]`
-      })
-    }
-
-    if (extracted.length > 0) {
-      logger.info(`Extracted ${extracted.length} embedded image(s) from text (${text.length} → ${cleaned.length} chars)`)
-    }
-
-    return { cleaned, extracted }
-  }
+  _extractEmbeddedImages(text) { return te.extractEmbeddedImages(text) }
 
   /**
    * Convert Anthropic-format conversation messages to OpenAI chat format.
@@ -2430,73 +1694,7 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
    * - tool_result blocks → { role: 'tool', tool_call_id, content }
    */
   _toOpenAIMessages(systemPrompt, messages) {
-    const out = []
-    if (systemPrompt) {
-      out.push({ role: 'system', content: systemPrompt })
-    }
-    for (const msg of messages) {
-      if (msg.role === 'user') {
-        if (Array.isArray(msg.content)) {
-          // Check for tool_result blocks (Anthropic format)
-          const toolResults = msg.content.filter(b => b.type === 'tool_result')
-          if (toolResults.length > 0) {
-            for (const tr of toolResults) {
-              out.push({
-                role: 'tool',
-                tool_call_id: tr.tool_use_id,
-                content: typeof tr.content === 'string' ? tr.content : JSON.stringify(tr.content)
-              })
-            }
-          } else {
-            // Multimodal content — convert to OpenAI format
-            const parts = msg.content.map(block => {
-              if (block.type === 'text') return { type: 'text', text: block.text }
-              if (block.type === 'image' && block.source) {
-                return {
-                  type: 'image_url',
-                  image_url: { url: `data:${block.source.media_type};base64,${block.source.data}` }
-                }
-              }
-              return { type: 'text', text: JSON.stringify(block) }
-            })
-            out.push({ role: 'user', content: parts })
-          }
-        } else {
-          out.push({ role: 'user', content: msg.content })
-        }
-      } else if (msg.role === 'tool') {
-        // Already OpenAI-native tool result — pass through as-is
-        out.push({ role: 'tool', tool_call_id: msg.tool_call_id, content: msg.content || '' })
-      } else if (msg.role === 'assistant') {
-        if (Array.isArray(msg.content)) {
-          // Anthropic-style content blocks — convert to OpenAI format
-          const textParts = msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
-          const toolUses = msg.content.filter(b => b.type === 'tool_use')
-          const entry = { role: 'assistant' }
-          if (textParts) entry.content = textParts
-          if (toolUses.length > 0) {
-            entry.tool_calls = toolUses.map(tu => ({
-              id: tu.id,
-              type: 'function',
-              function: {
-                name: tu.name,
-                arguments: typeof tu.input === 'string' ? tu.input : JSON.stringify(tu.input)
-              }
-            }))
-          }
-          if (!entry.content && !entry.tool_calls) entry.content = ''
-          out.push(entry)
-        } else {
-          // Already OpenAI-native format (stored directly after streaming).
-          // Preserve reasoning_content so DeepSeek thinking mode doesn't 400.
-          const entry = { role: 'assistant', content: msg.content || '' }
-          if (msg.tool_calls) entry.tool_calls = msg.tool_calls
-          if (msg.reasoning_content) entry.reasoning_content = msg.reasoning_content
-          out.push(entry)
-        }
-      }
-    }
-    return out
+    return mc.toOpenAIMessages(systemPrompt, messages)
   }
 
   /**
@@ -2504,29 +1702,7 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
    * System prompt is injected as a user/model turn pair (Gemini has no system role).
    */
   _toGeminiContents(systemPrompt, messages) {
-    const contents = []
-    if (systemPrompt) {
-      contents.push({ role: 'user', parts: [{ text: systemPrompt }] })
-      contents.push({ role: 'model', parts: [{ text: 'Understood.' }] })
-    }
-    for (const msg of messages) {
-      const role = msg.role === 'assistant' ? 'model' : 'user'
-      const parts = []
-      if (typeof msg.content === 'string') {
-        if (msg.content) parts.push({ text: msg.content })
-      } else if (Array.isArray(msg.content)) {
-        for (const block of msg.content) {
-          if (block.type === 'text' && block.text) {
-            parts.push({ text: block.text })
-          } else if (block.type === 'image' && block.source) {
-            parts.push({ inlineData: { mimeType: block.source.media_type, data: block.source.data } })
-          }
-          // tool_result / tool_use blocks are skipped — Gemini image models don't support tool use
-        }
-      }
-      if (parts.length > 0) contents.push({ role, parts })
-    }
-    return contents
+    return mc.toGeminiContents(systemPrompt, messages)
   }
 }
 

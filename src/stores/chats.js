@@ -9,59 +9,6 @@ const NEW_CHAT_TITLES = new Set([
   zh.chats.newChat,
 ])
 
-/**
- * Look up a provider's credentials from config.providers[] by provider type.
- * Supports new providers[] array structure and legacy flat config.
- */
-function resolveProviderCreds(cfg, providerType) {
-  if (cfg.providers && Array.isArray(cfg.providers)) {
-    const p = cfg.providers.find(p => p.type === providerType)
-    if (p) return { apiKey: p.apiKey || '', baseURL: p.baseURL || '' }
-  }
-  const legacy = cfg[providerType]
-  if (legacy) return { apiKey: legacy.apiKey || '', baseURL: legacy.baseURL || '' }
-  return { apiKey: '', baseURL: '' }
-}
-
-/** Apply provider credentials to a flat config object (mutates in place). */
-function applyProviderCredsToConfig(cfg, providerType) {
-  const { apiKey, baseURL } = resolveProviderCreds(cfg, providerType)
-  if (providerType === 'anthropic' || providerType === 'openrouter') {
-    cfg.apiKey  = apiKey
-    cfg.baseURL = baseURL
-    delete cfg._directAuth
-    delete cfg.openaiApiKey
-    delete cfg.openaiBaseURL
-    cfg._resolvedProvider = undefined
-    cfg.defaultProvider   = undefined
-  } else if (providerType === 'openai') {
-    cfg.openaiApiKey  = apiKey
-    cfg.openaiBaseURL = baseURL
-    cfg._resolvedProvider = 'openai'
-    cfg.defaultProvider   = 'openai'
-    delete cfg._directAuth
-    delete cfg.apiKey
-    delete cfg.baseURL
-  } else if (providerType === 'deepseek') {
-    cfg.openaiApiKey  = apiKey
-    cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')
-    cfg._resolvedProvider = 'openai'
-    cfg._directAuth       = true
-    cfg.defaultProvider   = 'openai'
-    delete cfg.apiKey
-    delete cfg.baseURL
-  } else {
-    // Generic OpenAI-compatible
-    cfg.openaiApiKey  = apiKey
-    cfg.openaiBaseURL = baseURL
-    cfg._resolvedProvider = 'openai'
-    cfg.defaultProvider   = 'openai'
-    delete cfg._directAuth
-    delete cfg.apiKey
-    delete cfg.baseURL
-  }
-}
-
 export const useChatsStore = defineStore('chats', () => {
   // chatTree holds ChatTreeNode[] — folders and chats in a nested structure
   const chatTree = ref([])
@@ -78,10 +25,6 @@ export const useChatsStore = defineStore('chats', () => {
   // Scroll-to-bottom signal: increment to request ChatWindow to scroll to bottom
   const scrollToBottomSignal = ref(0)
   function requestScrollToBottom() { scrollToBottomSignal.value++ }
-
-  // File refresh signal for DocsView: increment to request file content refresh
-  const fileRefreshSignal = ref(0)
-  function requestFileRefresh() { fileRefreshSignal.value++ }
 
   // UI chunk callback — set by ChatsView when mounted, cleared on unmount
   let _uiChunkCallback = null
@@ -204,7 +147,8 @@ export const useChatsStore = defineStore('chats', () => {
         // Re-check: another path may have set messages while we were loading
         if (chat.messages !== null) return
         if (full && full.messages) {
-          chat.messages = full.messages
+          // Strip stale waiting indicators — they were never meant to be persisted
+          chat.messages = full.messages.filter(m => !m.isWaitingIndicator)
           for (const msg of chat.messages) {
             if (msg.streaming) {
               msg.streaming = false
@@ -273,11 +217,16 @@ export const useChatsStore = defineStore('chats', () => {
         } else {
           chatTree.value = _deduplicateTree(wrapTree(index))
         }
-        // Find first chat to set active
-        const firstChat = flattenChats(chatTree.value)[0]
-        if (firstChat) {
-          activeChatId.value = firstChat.id
-          ensureMessages(firstChat.id)  // fire-and-forget, non-blocking
+        // Restore last active chat, or fall back to the first chat
+        const allChats = flattenChats(chatTree.value)
+        let restoredId = null
+        try { restoredId = localStorage.getItem('clankai_lastActiveChatId') || null } catch {}
+        const targetChat = restoredId ? allChats.find(c => c.id === restoredId) : null
+        const initialChat = targetChat || allChats[0]
+        if (initialChat) {
+          activeChatId.value = initialChat.id
+          _expandAncestorFolders(initialChat.id)
+          ensureMessages(initialChat.id)  // fire-and-forget, non-blocking
         }
       } else {
         await createChat(en.chats.newChat)
@@ -488,7 +437,28 @@ export const useChatsStore = defineStore('chats', () => {
     // Update active folder context based on which folder the chat is in
     const parentFolderId = _getParentFolderId(id)
     if (parentFolderId !== undefined) activeFolderId.value = parentFolderId
+    // Expand ancestor folders so the chat is visible in the sidebar tree
+    _expandAncestorFolders(id)
+    // Persist last active chat so it restores on next app launch
+    try { localStorage.setItem('clankai_lastActiveChatId', id || '') } catch {}
     ensureMessages(id)  // fire-and-forget: UI shows loading indicator, never blocks
+  }
+
+  // Expand all ancestor folders for a given chat so it's visible in the tree
+  function _expandAncestorFolders(chatId) {
+    function search(nodes) {
+      for (const node of nodes) {
+        if (node.type === 'chat' && node.id === chatId) return true
+        if (node.type === 'folder') {
+          if (search(node.children || [])) {
+            node.expanded = true
+            return true
+          }
+        }
+      }
+      return false
+    }
+    search(chatTree.value)
   }
 
   function clearActiveChat() {
@@ -1154,10 +1124,10 @@ export const useChatsStore = defineStore('chats', () => {
   }
 
   async function sendMinibarMessage(text, chatId) {
-    const { useConfigStore }   = await import('./config')
     const { useAgentsStore } = await import('./agents')
-    const configStore   = useConfigStore()
+    const { useSkillsStore } = await import('./skills')
     const agentsStore = useAgentsStore()
+    const skillsStore = useSkillsStore()
 
     const targetChat = chats.value.find(c => c.id === chatId)
     if (!targetChat) return
@@ -1165,141 +1135,42 @@ export const useChatsStore = defineStore('chats', () => {
     await ensureMessages(chatId)
     activeChatId.value = chatId
 
-    // Add user message (stamp userAgentId for agent-switch tracking)
     const stampUsrId = targetChat.userAgentId || agentsStore.defaultUserAgent?.id || null
     await addMessage(chatId, { role: 'user', content: text, ...(stampUsrId ? { userAgentId: stampUsrId } : {}) })
 
-    // Streaming placeholder
-    const streamingMsgId = uuidv4()
-    await addMessage(chatId, { id: streamingMsgId, role: 'assistant', content: '', streaming: true, streamingStartedAt: Date.now() })
+    const groupIds = targetChat.groupAgentIds?.length > 0
+      ? targetChat.groupAgentIds
+      : [targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id].filter(Boolean)
+    const isGroup = groupIds.length > 1
 
-    targetChat.isRunning = true
-
-    // Resolve agent + provider — prefer groupAgentIds[0] over systemAgentId
-    // because after agent switches the persisted systemAgentId may be stale.
-    const sysAgentId = (targetChat.groupAgentIds?.length > 0 ? targetChat.groupAgentIds[0] : null)
-      || targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id
-    const sysAgent   = sysAgentId ? agentsStore.getAgentById(sysAgentId) : agentsStore.defaultSystemAgent
-    const chatProvider = sysAgent?.providerId || 'anthropic'
-    const cfg = { ...configStore.config }
-
-    applyProviderCredsToConfig(cfg, chatProvider)
-
-    const resolvedModel = sysAgent?.modelId || null
-    if (resolvedModel) cfg.customModel = resolvedModel
-    if (targetChat.workingPath) cfg.chatWorkingPath = targetChat.workingPath
-
-    const usrAgentId = targetChat.userAgentId
-    const usrAgent   = usrAgentId ? agentsStore.getAgentById(usrAgentId) : agentsStore.defaultUserAgent
-
-    // Scan for previous agents first (needed for both prefixes and handover note)
-    const currentSysId = sysAgent?.id || null
-    const currentUsrId = usrAgent?.id || null
-    const prevSysIds = new Set()
-    const prevUsrIds = new Set()
-    for (const m of (targetChat.messages || [])) {
-      if (m.role === 'assistant' && m.agentId && m.agentId !== currentSysId) prevSysIds.add(m.agentId)
-      if (m.role === 'user' && m.userAgentId && m.userAgentId !== currentUsrId) prevUsrIds.add(m.userAgentId)
-    }
-    const hasSysSwitch = prevSysIds.size > 0
-    const hasUsrSwitch = prevUsrIds.size > 0
-
-    // Build API messages with identity-aware prefixes for agent switches
-    const apiMessages = (targetChat.messages || [])
+    const messages = (targetChat.messages || [])
       .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
-      .map(m => {
-        let content = m.content
-        if (m.role === 'assistant') {
-          if (m.agentId && m.agentId !== currentSysId) {
-            const prev = agentsStore.getAgentById(m.agentId)
-            content = `[${prev?.name || 'Previous Assistant'}]: ${content}`
-          } else if (!m.agentId && hasSysSwitch) {
-            content = `[Previous Assistant]: ${content}`
-          }
-        } else if (m.role === 'user') {
-          if (m.userAgentId && m.userAgentId !== currentUsrId) {
-            const prev = agentsStore.getAgentById(m.userAgentId)
-            content = `[${prev?.name || 'Previous User'}]: ${content}`
-          } else if (!m.userAgentId && hasUsrSwitch) {
-            content = `[Previous User]: ${content}`
-          }
-        }
-        return { role: m.role, content }
-      })
-    let chatHandoverNote = null
-    if (prevSysIds.size > 0 || prevUsrIds.size > 0) {
-      const parts = []
-      for (const id of prevSysIds) {
-        const a = agentsStore.getAgentById(id)
-        if (a) parts.push(`Previous assistant "${a.name}" (messages prefixed with [${a.name}]:) is no longer active.`)
-      }
-      for (const id of prevUsrIds) {
-        const a = agentsStore.getAgentById(id)
-        if (a) parts.push(`Previous user "${a.name}" (messages prefixed with [${a.name}]:) is no longer in this conversation.`)
-      }
-      if (parts.length > 0) chatHandoverNote = parts.join(' ')
-    }
+      .map(m => ({ role: m.role, content: m.content, _agentId: m.agentId || null, _userAgentId: m.userAgentId || null }))
+      .filter(m => !!m.content)
 
-    // Build userAgentPrompt with name+description prefix (same as main sendMessage path)
-    const userAgentPromptParts = []
-    if (usrAgent?.name) userAgentPromptParts.push(`User: ${usrAgent.name}${usrAgent.description ? ` — ${usrAgent.description}` : ''}.`)
-    if (usrAgent?.prompt) userAgentPromptParts.push(usrAgent.prompt)
-    const fullUserAgentPrompt = userAgentPromptParts.length > 0 ? userAgentPromptParts.join('\n\n') : null
-
-    const agentPrompts = {
-      systemAgentPrompt:       sysAgent?.prompt || null,
-      systemAgentName:         sysAgent?.name || null,
-      systemAgentDescription:  sysAgent?.description || null,
-      systemAgentId:           sysAgent?.id || '__default_system__',
-      userAgentId:             usrAgent?.id || '__default_user__',
-      userAgentName:           usrAgent?.name || null,
-      userAgentDescription:    usrAgent?.description || null,
-      userAgentPrompt:         fullUserAgentPrompt,
-      ...(chatHandoverNote ? { chatHandoverNote } : {}),
-    }
-
-    try {
-      const res = await window.electronAPI.runAgent({
-        chatId,
-        messages: JSON.parse(JSON.stringify(apiMessages)),
-        config: JSON.parse(JSON.stringify(cfg)),
-        enabledAgents: [],
-        enabledSkills: [],
-        agentPrompts: agentPrompts,
-        streamingMsgId,
-        mcpServers: [],
-        httpTools: [],
-        chatPermissionMode: targetChat.permissionMode || 'inherit',
+    window.electronAPI.sendMessage({
+      chatId,
+      messages: JSON.parse(JSON.stringify(messages)),
+      groupIds: JSON.parse(JSON.stringify(groupIds)),
+      isGroup,
+      text,
+      pendingAttachments: [],
+      enabledSkills: JSON.parse(JSON.stringify(skillsStore.allSkillObjects || [])),
+      stickyTargetIds: [],
+      targetChatMeta: {
+        permissionMode: targetChat.permissionMode || 'inherit',
         chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
         chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
         maxOutputTokens: targetChat.maxOutputTokens || null,
-        knowledgeConfig: { ragEnabled: false },
-      })
-
-      // Chunks already updated msg.content+segments via _applyChunk; just finalize streaming flag
-      const msg = (targetChat.messages || []).find(m => m.id === streamingMsgId)
-      if (msg) {
-        if (!msg.content && res?.result) {
-          msg.content = res.result
-          msg.segments = [{ type: 'text', content: res.result }]
-        }
-        msg.streaming = false
-        if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
-      }
-    } catch (err) {
-      console.error('[minibar send] runAgent error:', err)
-      const msg = (targetChat.messages || []).find(m => m.id === streamingMsgId)
-      if (msg) {
-        msg.content = `Error: ${err.message}`
-        msg.segments = [{ type: 'text', content: msg.content }]
-        msg.streaming = false
-      }
-    } finally {
-      targetChat.isRunning = false
-      targetChat.isCallingTool = false
-      targetChat.currentToolCall = null
-      debouncedPersistChat(chatId)
-    }
+        maxAgentRounds: targetChat.maxAgentRounds ?? 10,
+        workingPath: targetChat.workingPath || null,
+        codingMode: !!targetChat.codingMode,
+        claudeContext: null,
+        userAgentId: targetChat.userAgentId || null,
+        systemAgentId: isGroup ? null : (groupIds[0] || null),
+        agentModelOverrides: JSON.parse(JSON.stringify(targetChat.agentModelOverrides || {})),
+      },
+    }).catch(err => console.error('[minibar send] IPC error:', err.message))
   }
 
   async function reconnectRunningAgents() {
@@ -1307,7 +1178,6 @@ export const useChatsStore = defineStore('chats', () => {
     try {
       const running = await window.electronAPI.getRunningAgents()
       if (!running?.length) return []
-      // Group entries by chatId
       const byChatId = {}
       for (const entry of running) {
         if (!byChatId[entry.chatId]) byChatId[entry.chatId] = []
@@ -1318,7 +1188,7 @@ export const useChatsStore = defineStore('chats', () => {
         const chat = chats.value.find(c => c.id === chatId)
         if (!chat) continue
         chat.isRunning = true
-        await ensureMessages(chatId)   // idempotent, deduped via _loadingPromises
+        await ensureMessages(chatId)
         reconnected.push({ chatId, entries })
       }
       return reconnected

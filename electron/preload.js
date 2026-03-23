@@ -95,6 +95,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('agent:edit-chunk', (_, data) => callback(data))
     return () => ipcRenderer.removeAllListeners('agent:edit-chunk')
   },
+  sendMessage: (params) => ipcRenderer.invoke('agent:send-message', params),
   resolveAddressees: (params) => ipcRenderer.invoke('agent:resolve-addressees', params),
   dispatchGroupTasks: (params) => ipcRenderer.invoke('agent:dispatch-group-tasks', params),
   suggestChatTitle: (params) => ipcRenderer.invoke('agent:suggest-chat-title', params),
