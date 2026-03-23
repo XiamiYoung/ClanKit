@@ -101,16 +101,15 @@
             class="chat-sidebar-item group"
             :class="{ active: chat.id === chatsStore.activeChatId }"
           >
+            <span v-if="((chat.isRunning && chat.id !== chatsStore.activeChatId) || chatsStore.unreadChatIds.has(chat.id)) && !chatsStore.completedChatIds.has(chat.id) && !chatsStore.pendingPermissionChatIds.has(chat.id)" class="chat-unread-spinner"></span>
             <span v-if="chat.icon" class="chat-sidebar-item-icon">{{ chat.icon }}</span>
             <svg v-else style="width:16px;height:16px;color:#9CA3AF;opacity:0.7;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
-            <span v-if="((chat.isRunning && chat.id !== chatsStore.activeChatId) || chatsStore.unreadChatIds.has(chat.id)) && !chatsStore.completedChatIds.has(chat.id) && !chatsStore.pendingPermissionChatIds.has(chat.id)" class="chat-unread-spinner"></span>
             <span class="chat-sidebar-item-title">{{ chat.title }}</span>
             <!-- Folder badge in search mode -->
             <span v-if="chat._folderName" class="chat-folder-badge">{{ chat._folderName }}</span>
             <span v-if="chatsStore.pendingPermissionChatIds.has(chat.id) && chat.id !== chatsStore.activeChatId" class="chat-approval-chip">Approval</span>
-            <span v-else-if="chatsStore.completedChatIds.has(chat.id) && chat.id !== chatsStore.activeChatId" class="chat-completed-chip">Done</span>
             <div class="chat-sidebar-item-actions">
               <button @click.stop="startRename(chat)" class="chat-sidebar-action-btn" aria-label="Rename chat">
                 <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -530,6 +529,52 @@
                 </button>
               </div>
 
+              <div v-if="isGroupChat || groupActivityState.visible" class="chat-group-status-row chat-group-status-row--input">
+                <div
+                  v-if="isGroupChat"
+                  class="chat-audience-inline"
+                  :title="audienceStatusText"
+                >
+                  <span class="chat-audience-label">{{ t('chats.sendTo') }}</span>
+                  <div class="chat-audience-options">
+                    <button
+                      class="chat-audience-chip"
+                      :class="{ active: groupAudienceMode === 'auto' }"
+                      :title="t('chats.audienceAutoHint')"
+                      @click="setAudienceMode('auto')"
+                    >
+                      {{ t('chats.audienceAuto') }}
+                    </button>
+                    <button
+                      class="chat-audience-chip"
+                      :class="{ active: groupAudienceMode === 'all' }"
+                      :title="t('chats.audienceAllHint')"
+                      @click="setAudienceMode('all')"
+                    >
+                      {{ t('chats.audienceAll') }}
+                    </button>
+                    <button
+                      v-for="agentId in activeSystemAgentIds"
+                      :key="agentId"
+                      class="chat-audience-chip"
+                      :class="{ active: isAudienceAgentSelected(agentId) }"
+                      :title="t('chats.audienceManualHint')"
+                      @click="toggleAudienceAgent(agentId)"
+                    >
+                      {{ agentsStore.getAgentById(agentId)?.name || 'Unknown' }}
+                    </button>
+                  </div>
+                </div>
+                <div
+                  v-if="groupActivityState.visible"
+                  class="chat-activity-bar"
+                  :class="`chat-activity-bar--${groupActivityState.tone}`"
+                >
+                  <span class="chat-activity-pulse"></span>
+                  <span class="chat-activity-text">{{ groupActivityState.text }}</span>
+                </div>
+              </div>
+
               <div
                 class="chat-input-box"
                 :class="{ focused: inputFocused, 'has-quote': quotedMessage }"
@@ -617,12 +662,6 @@
                   <span v-if="attachments.length > 0" style="color:#1A1A1A; font-weight:500; font-size:0.75rem;">
                     {{ attachments.length }} file{{ attachments.length !== 1 ? 's' : '' }} attached
                   </span>
-                  <span v-if="isGroupChat && stickyTargetLabel" class="sticky-target-indicator">
-                    <span class="sticky-target-label">Talking to <strong>{{ stickyTargetLabel }}</strong></span>
-                    <button class="sticky-target-clear" @click="clearStickyTarget" title="Reset to all">
-                      <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                  </span>
                 </div>
                 <p class="text-xs" style="color:#9CA3AF;">
                   {{ t('chats.keyboardHintsEnterToSend') }}
@@ -654,27 +693,27 @@
     <ChatSettingsModal :visible="showChatConfigModal" :chat-id="chatsStore.activeChatId" @close="showChatConfigModal = false" />
 
     <!-- ── Rename Chat Modal ─────────────────────────────────────────────── -->
-    <div v-if="showRenameModal" class="rename-backdrop">
-      <div class="rename-modal" @keydown.escape="cancelRename">
-        <div class="rename-header">
-          <h3 class="rename-title">Rename Chat</h3>
-          <button class="rename-close-btn" @click="cancelRename" aria-label="Close">
+    <div v-if="showRenameModal" class="modal-dialog-backdrop">
+      <div class="modal-dialog-container" @keydown.escape="cancelRename">
+        <div class="modal-dialog-header">
+          <h3 class="modal-dialog-title">Rename Chat</h3>
+          <button class="modal-dialog-close-btn" @click="cancelRename" aria-label="Close">
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
-        <div class="rename-body">
+        <div class="modal-dialog-body">
           <textarea
             ref="renameInput"
             v-model="editingTitle"
             @keydown.enter.exact="onRenameKeydown"
             @compositionstart="renameComposing = true"
             @compositionend="renameComposing = false"
-            class="rename-input"
+            class="modal-dialog-input"
             placeholder="Enter chat name"
             rows="1"
           ></textarea>
         </div>
-        <div class="rename-actions">
+        <div class="modal-dialog-actions">
           <AppButton variant="secondary" size="modal" @click="cancelRename">Cancel</AppButton>
           <AppButton size="modal" :disabled="!editingTitle.trim()" @click="confirmRename">Save</AppButton>
         </div>
@@ -701,6 +740,7 @@
     :filtered-new-chat-agents="filteredNewChatAgents"
     :filtered-new-chat-users="filteredNewChatUsers"
     :active-new-chat-user-agent="activeNewChatUserAgent"
+    :effective-new-chat-user-agent-id="effectiveNewChatUserAgentId"
     :displayed-system-persona-agents="displayedSystemPersonaAgents"
     :sorted-system-agents="sortedSystemAgents"
     :sorted-user-agents="sortedUserAgents"
@@ -1011,16 +1051,25 @@ function _fireGroupAgentsDirectWrapper(...args) {
   return _fireGroupAgentsDirectRef?.(...args)
 }
 
-// Sticky @mention target: persists across messages until explicitly changed.
-// Backed by chat.stickyTarget so it survives reloads and chat switches.
-// null = all agents, string[] = specific agent IDs
+// Explicit group audience selection.
+// Stored on the chat so the audience mode survives reloads and chat switches.
 const stickyTarget = computed({
   get() {
-    return chatsStore.activeChat?.stickyTarget ?? null
+    return chatsStore.activeChat?.groupAudienceAgentIds ?? []
   },
   set(val) {
     const chat = chatsStore.activeChat
-    if (chat) chat.stickyTarget = val
+    if (chat) chat.groupAudienceAgentIds = Array.isArray(val) ? val : []
+  }
+})
+
+const groupAudienceMode = computed({
+  get() {
+    return chatsStore.activeChat?.groupAudienceMode || 'auto'
+  },
+  set(val) {
+    const chat = chatsStore.activeChat
+    if (chat) chat.groupAudienceMode = val || 'auto'
   }
 })
 
@@ -1029,6 +1078,11 @@ const stickyTarget = computed({
 const perChatQueue = reactive(new Map())
 // stopStreamingTimer wrapper — actual impl wired after useSendMessage call
 let _stopStreamingTimerImpl = () => {}
+// processQueuedMessage wrapper — wired after useSendMessage call
+let _processQueuedMessageRef = null
+function _processQueuedMessageWrapper(...args) {
+  return _processQueuedMessageRef?.(...args)
+}
 
 const {
   perChatStreamingMsgId,
@@ -1053,6 +1107,7 @@ const {
   _fireGroupAgentsDirect: _fireGroupAgentsDirectWrapper,
   stickyTarget,
   stopStreamingTimer: () => _stopStreamingTimerImpl(),
+  processQueuedMessage: _processQueuedMessageWrapper,
 })
 
 const {
@@ -1086,7 +1141,7 @@ const activeSystemAgentIds = computed(() => {
 // ── Send message orchestration ──
 const {
   sendMessage, stopAgent, approvePlan, rejectPlan, refinePlan, compactContext,
-  pendingQueue, removeFromQueue,
+  pendingQueue, removeFromQueue, processQueuedMessage,
   _saveDraftForChat, _restoreDraftForChat,
   _codingModeContext, isCompacting,
   startStreamingTimer, stopStreamingTimer,
@@ -1107,6 +1162,8 @@ const {
 })
 // Wire the stopStreamingTimer wrapper now that useSendMessage has provided it
 _stopStreamingTimerImpl = stopStreamingTimer
+// Wire the processQueuedMessage wrapper now that useSendMessage has provided it
+_processQueuedMessageRef = processQueuedMessage
 
 // Group chat popover state moved to ChatHeader
 const showGroupAgentConfigId = ref(null)
@@ -1122,8 +1179,21 @@ function getMsgAssistantName(msg) {
 
 const isGroupChat = computed(() => chatsStore.activeChat?.isGroupChat ?? false)
 
-function clearStickyTarget() {
-  stickyTarget.value = null
+function setAudienceMode(mode) {
+  groupAudienceMode.value = mode
+  if (mode !== 'manual') stickyTarget.value = []
+}
+
+function toggleAudienceAgent(agentId) {
+  const selected = new Set(stickyTarget.value || [])
+  if (selected.has(agentId)) selected.delete(agentId)
+  else selected.add(agentId)
+  stickyTarget.value = [...selected]
+  groupAudienceMode.value = selected.size > 0 ? 'manual' : 'auto'
+}
+
+function isAudienceAgentSelected(agentId) {
+  return groupAudienceMode.value === 'manual' && stickyTarget.value.includes(agentId)
 }
 
 const stickyTargetLabel = computed(() => {
@@ -1131,6 +1201,61 @@ const stickyTargetLabel = computed(() => {
   return stickyTarget.value
     .map(id => agentsStore.getAgentById(id)?.name || 'Unknown')
     .join(', ')
+})
+
+const audienceStatusText = computed(() => {
+  if (!isGroupChat.value) return ''
+  if (groupAudienceMode.value === 'all') return t('chats.audienceAllStatus')
+  if (groupAudienceMode.value === 'manual' && stickyTargetLabel.value) {
+    return t('chats.audienceManualStatus', { names: stickyTargetLabel.value })
+  }
+  return t('chats.audienceAutoStatus')
+})
+
+const groupActivityState = computed(() => {
+  const chat = chatsStore.activeChat
+  if (!chat?.isGroupChat) return { visible: false, tone: 'idle', text: '' }
+
+  const liveMessages = (chat.messages || []).filter(msg => msg.streaming && msg.agentId)
+  const liveNames = [...new Set(liveMessages.map(msg => getMsgAssistantName(msg)).filter(Boolean))]
+
+  if (liveNames.length > 1) {
+    return {
+      visible: true,
+      tone: 'live',
+      text: t('chats.activityMultipleResponding', { count: liveNames.length }),
+    }
+  }
+
+  if (liveNames.length === 1) {
+    const [name] = liveNames
+    if (chat.isCallingTool && chat.currentToolCall) {
+      return {
+        visible: true,
+        tone: 'tool',
+        text: t('chats.activityUsingTool', { names: name, tool: chat.currentToolCall }),
+      }
+    }
+    const hasText = liveMessages.some(msg => {
+      if (msg.content) return true
+      return (msg.segments || []).some(seg => seg.type === 'text' && seg.content)
+    })
+    return {
+      visible: true,
+      tone: hasText ? 'live' : 'thinking',
+      text: t(hasText ? 'chats.activityResponding' : 'chats.activityThinking', { names: name }),
+    }
+  }
+
+  if (chat.isRunning) {
+    return {
+      visible: true,
+      tone: 'routing',
+      text: t('chats.activityChoosing'),
+    }
+  }
+
+  return { visible: false, tone: 'idle', text: '' }
 })
 
 
@@ -1405,7 +1530,7 @@ watch(() => chatsStore.activeChatId, (newId, oldId) => {
   visibleLimit.value = 25
   showContextInspector.value = false
   quotedMessage.value = null
-  // stickyTarget is now backed by chat.stickyTarget — switching chats automatically reads the new chat's value
+  // Group audience state is backed by the active chat — switching chats automatically restores its selection
 
   nextTick(() => {
     mentionInputRef.value?.focus()
@@ -2357,55 +2482,6 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
 
 
 /* ── Reduced motion ─────────────────────────────────────────────────────── */
-/* ── Rename modal ───────────────────────────────────────────────────────── */
-.rename-backdrop {
-  position: fixed; inset: 0; z-index: 100;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-  display: flex; align-items: center; justify-content: center;
-}
-.rename-modal {
-  width: min(26.25rem, 90vw);
-  background: #0F0F0F; border: 1px solid #2A2A2A;
-  border-radius: 1rem; box-shadow: 0 25px 60px rgba(0,0,0,0.5);
-  overflow: hidden;
-  animation: rename-enter 0.2s ease-out;
-}
-@keyframes rename-enter {
-  from { opacity: 0; transform: scale(0.95) translateY(8px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
-}
-.rename-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 1rem 1.25rem; border-bottom: 1px solid #1F1F1F;
-}
-.rename-title {
-  font-family: 'Inter', sans-serif; font-size: var(--fs-subtitle);
-  font-weight: 700; color: #FFFFFF; margin: 0;
-}
-.rename-close-btn {
-  width: 2rem; height: 2rem; border-radius: 0.5rem;
-  display: flex; align-items: center; justify-content: center;
-  border: none; background: transparent; color: #6B7280;
-  cursor: pointer; transition: all 0.15s;
-}
-.rename-close-btn:hover { background: #1F1F1F; color: #FFFFFF; }
-.rename-body { padding: 1rem 1.25rem; }
-.rename-input {
-  width: 100%; padding: 0.625rem 0.875rem;
-  border: 1px solid #2A2A2A; border-radius: 0.625rem;
-  font-family: 'Inter', sans-serif; font-size: var(--fs-body);
-  color: #FFFFFF; background: #1A1A1A; outline: none;
-  resize: none; line-height: 1.5; box-sizing: border-box;
-  transition: border-color 0.15s;
-}
-.rename-input::placeholder { color: #4B5563; }
-.rename-input:focus { border-color: #4B5563; }
-.rename-actions {
-  display: flex; justify-content: flex-end; gap: 0.5rem;
-  padding: 0.75rem 1.25rem 1rem;
-}
-
 .chat-sidebar-item-icon {
   width: 1rem;
   height: 1rem;
@@ -2425,7 +2501,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   .agent-popover-item,
   .chat-header-btn,
   .chat-input-box,
-  .rename-close-btn {
+  .modal-dialog-close-btn {
     transition: none;
   }
   .chat-sidebar-new-btn:hover {
@@ -2433,43 +2509,129 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   }
 }
 
-/* ── Sticky target indicator ─────────────────────────────────────────── */
-.sticky-target-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  background: #F3F4F6;
-  border: 1px solid #E5E5EA;
-  border-radius: 0.375rem;
-  padding: 0.0625rem 0.5rem;
-  font-family: 'Inter', sans-serif;
-}
-.sticky-target-label {
-  font-size: 11px;
-  color: #374151;
-  white-space: nowrap;
-}
-.sticky-target-label strong {
-  font-weight: 700;
-  color: #1A1A1A;
-}
-.sticky-target-clear {
+.chat-group-status-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 0.875rem;
-  height: 0.875rem;
-  border-radius: 50%;
-  border: none;
-  background: transparent;
-  color: #9CA3AF;
-  cursor: pointer;
-  padding: 0;
-  transition: background 0.12s, color 0.12s;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.55rem;
+  padding: 0 0.125rem;
+  flex-wrap: wrap;
 }
-.sticky-target-clear:hover {
-  background: #E5E5EA;
+
+.chat-group-status-row--input {
+  margin: 0 0 0.55rem;
+  padding: 0;
+}
+
+.chat-audience-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-audience-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6B7280;
+}
+
+.chat-audience-options {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.chat-audience-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  border: 1px solid #E5E5EA;
+  background: #FFFFFF;
+  color: #4B5563;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chat-audience-chip:hover {
+  border-color: #D1D5DB;
   color: #1A1A1A;
+  background: #F9FAFB;
+}
+
+.chat-audience-chip.active {
+  border-color: transparent;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.chat-activity-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  padding: 0.625rem 0.85rem;
+  border-radius: 0.875rem;
+  border: 1px solid transparent;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin-left: auto;
+}
+
+.chat-activity-bar--routing {
+  background: #FFFFFF;
+  border-color: #E5E5EA;
+  color: #1A1A1A;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.chat-activity-bar--thinking {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.16);
+  color: #B45309;
+}
+
+.chat-activity-bar--live {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.16);
+  color: #047857;
+}
+
+.chat-activity-bar--tool {
+  background: rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.16);
+  color: #6D28D9;
+}
+
+.chat-activity-pulse {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: currentColor;
+  box-shadow: 0 0 0 0 currentColor;
+  animation: chatActivityPulse 1.2s ease-out infinite;
+}
+
+.chat-activity-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@keyframes chatActivityPulse {
+  0% { box-shadow: 0 0 0 0 rgba(0,0,0,0.18); }
+  70% { box-shadow: 0 0 0 0.55rem rgba(0,0,0,0); }
+  100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); }
 }
 
 /* Fixed-position tooltip for @mention descriptions */
@@ -2780,6 +2942,19 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   to { transform: rotate(360deg); }
 }
 
+@keyframes shake-horizontal {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+.chat-completed-emoji {
+  display: inline-block;
+  margin-right: 0.375rem;
+  animation: shake-horizontal 4s ease-in-out infinite;
+  will-change: transform;
+  flex-shrink: 0;
+}
 
 /* ── Permission mode selector in status bar ─── */
 .permission-mode-select {

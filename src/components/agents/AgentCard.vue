@@ -122,14 +122,14 @@ const fallbackInitial = computed(() => {
 const agentProviderLabel = computed(() => {
   const pid = props.agent.providerId
   if (!pid) return ''
-  const provider = configStore.config.providers?.find(p => p.id === pid)
+  const provider = configStore.config.providers?.find(p => p.id === pid || p.type === pid)
   if (provider?.name) return provider.name
   return PROVIDER_LABELS[pid] || pid.slice(0, 8)
 })
 
 const isProviderInactive = computed(() => {
   if (!props.agent.providerId) return false
-  const provider = configStore.config.providers?.find(p => p.id === props.agent.providerId)
+  const provider = configStore.config.providers?.find(p => p.id === props.agent.providerId || p.type === props.agent.providerId)
   return !provider?.isActive
 })
 
@@ -148,7 +148,7 @@ function detectModelProviderType(modelId) {
 
 const isProviderModelMismatch = computed(() => {
   if (!props.agent.providerId || !props.agent.modelId) return false
-  const provider = configStore.config.providers?.find(p => p.id === props.agent.providerId)
+  const provider = configStore.config.providers?.find(p => p.id === props.agent.providerId || p.type === props.agent.providerId)
   if (!provider) return false
   // OpenRouter can host any model — never a mismatch
   if (provider.type === 'openrouter') return false

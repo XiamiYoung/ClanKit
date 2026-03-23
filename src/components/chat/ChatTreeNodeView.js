@@ -257,6 +257,9 @@ const ChatTreeNodeView = defineComponent({
           h('div', { 'aria-hidden': 'true', style: { position: 'absolute', top: '1px', bottom: '0', left: '0', right: '0', background: rowBg, boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none', borderRadius: '0.5rem', transition: 'background 0.15s', pointerEvents: 'none', zIndex: '-1' } }),
           // Spacer matching folder chevron width for vertical alignment
           h('span', { style: 'width:14px;display:inline-block;flex-shrink:0;' }),
+          showSpinner ? h('span', { class: isDark ? 'chat-unread-spinner chat-unread-spinner--light' : 'chat-unread-spinner' }) : null,
+          // Completion emoji
+          (!isPendingPermission && isCompleted && !isActive) ? h('span', { style: { display: 'inline-block', animation: 'shake-horizontal 4s ease-in-out infinite', willChange: 'transform', flexShrink: 0 } }, '✅') : null,
           // Chat icon (custom icon fallback to bubble)
           node.icon
             ? h('span', {
@@ -275,11 +278,9 @@ const ChatTreeNodeView = defineComponent({
               style: { width: '14px', height: '14px', flexShrink: 0, color: isDark ? 'rgba(255,255,255,0.5)' : '#9CA3AF', transition: 'color 0.15s' },
               viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2',
             }, [h('path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' }), h('circle', { cx: '8', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' }), h('circle', { cx: '12', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' }), h('circle', { cx: '16', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' })]),
-          showSpinner ? h('span', { class: isDark ? 'chat-unread-spinner chat-unread-spinner--light' : 'chat-unread-spinner' }) : null,
           h('span', { class: 'truncate flex-1', style: { fontWeight: isActive ? '600' : '500', color: isDark ? '#fff' : '#1A1A1A', transition: 'color 0.15s' } }, node.title),
           // Status chips
           isPendingPermission && !isActive ? h('span', { class: 'chat-approval-chip' }, 'Approval') : null,
-          (!isPendingPermission && isCompleted && !isActive) ? h('span', { class: 'chat-completed-chip' }, 'Done') : null,
           // Action buttons — always rendered, shown only on row hover via CSS
           h('div', { class: 'chat-sidebar-item-actions' }, [
             h('button', {

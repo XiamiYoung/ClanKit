@@ -338,6 +338,9 @@
               {{ t('agents.model') }}
               <span class="soul-model-badge">{{ currentModelLabel }}</span>
             </div>
+            <div v-if="providerModelMismatch" class="soul-validation-error" style="margin-bottom: 0.5rem;">
+              {{ t('agents.providerModelMismatchDetail', providerModelMismatch) }}
+            </div>
             <input
               v-if="draftProviderType !== 'anthropic'"
               v-model="modelFilter"
@@ -457,6 +460,7 @@ import { useMcpStore } from '../../stores/mcp'
 import { useKnowledgeStore } from '../../stores/knowledge'
 import { useI18n } from '../../i18n/useI18n'
 import { getAvatarDataUri } from './agentAvatars'
+import { buildAgentEnhancementPrompt, buildAgentGenerationPrompt, detectAgentLanguage, extractJsonPayload } from '../../utils/agentDefinitionPrompts'
 import AvatarPicker from './AvatarPicker.vue'
 
 const props = defineProps({
@@ -602,15 +606,56 @@ const activeProviderOptions = computed(() => {
   })
 })
 
-const initProvider = props.agentProviderId || (configStore.activeProviders[0] || 'anthropic')
+const initProvider = props.agentProviderId || configStore.activeProviders[0] || ''
 const draftProvider = ref(initProvider)
 const draftModelId = ref(props.agentModelId || null)
 const modelFilter = ref('')
 const providerDropdownOpen = ref(false)
 
+function resolveProvider(value) {
+  return configStore.config.providers.find(p => p.id === value || p.type === value) || null
+}
+
+const resolvedDraftProvider = computed(() => resolveProvider(draftProvider.value))
+
+const hasValidSelectedProvider = computed(() => {
+  const provider = resolvedDraftProvider.value
+  if (!provider?.id) return false
+  return activeProviderOptions.value.some(option => option.id === provider.id)
+})
+
 const draftProviderType = computed(() => {
-  const provider = configStore.config.providers.find(p => p.id === draftProvider.value)
-  return provider?.type || 'anthropic'
+  const provider = resolvedDraftProvider.value
+  return provider?.type || draftProvider.value || ''
+})
+
+const availableProviderModels = computed(() => modelsStore.getModelsForProvider(draftProviderType.value))
+
+const hasValidSelectedModel = computed(() => {
+  if (!draftModelId.value) return false
+  return availableProviderModels.value.some(model => model.id === draftModelId.value)
+})
+
+function detectModelProviderType(modelId) {
+  if (!modelId) return null
+  const m = modelId.toLowerCase()
+  if (m.includes('deepseek')) return 'deepseek'
+  if (m.includes('claude') || m.startsWith('anthropic/')) return 'anthropic'
+  if (m.includes('gemini') || m.startsWith('google/')) return 'google'
+  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('openai/')) return 'openai'
+  return null
+}
+
+const providerModelMismatch = computed(() => {
+  if (!draftModelId.value || !draftProviderType.value || draftProviderType.value === 'openrouter') return null
+  const detectedType = detectModelProviderType(draftModelId.value)
+  if (!detectedType || detectedType === draftProviderType.value) return null
+  const labels = { anthropic: 'Anthropic', openai: 'OpenAI', deepseek: 'DeepSeek', openrouter: 'OpenRouter', google: 'Google' }
+  return {
+    model: draftModelId.value,
+    detected: labels[detectedType] || detectedType,
+    provider: labels[draftProviderType.value] || draftProviderType.value,
+  }
 })
 
 function toggleProviderDropdown() {
@@ -631,14 +676,14 @@ function pickProvider(id) {
 
 const filteredModels = computed(() => {
   const q = modelFilter.value.trim().toLowerCase()
-  const models = modelsStore.getModelsForProvider(draftProviderType.value)
+  const models = availableProviderModels.value
   if (!q) return models
   return models.filter(m => (m.name || m.label || '').toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
 })
 
 const currentModelLabel = computed(() => {
   if (!draftModelId.value) return '—'
-  const models = modelsStore.getModelsForProvider(draftProviderType.value)
+  const models = availableProviderModels.value
   const m = models.find(x => x.id === draftModelId.value)
   return m?.name || m?.label || draftModelId.value
 })
@@ -647,8 +692,8 @@ function selectProvider(prov) {
   draftProvider.value = prov
   draftModelId.value = null
   modelFilter.value = ''
-  const provider = configStore.config.providers.find(p => p.id === prov)
-  const providerType = provider?.type || 'anthropic'
+  const provider = resolveProvider(prov)
+  const providerType = provider?.type || prov || ''
   if (providerType === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
   if (providerType === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
   if (providerType === 'deepseek' && !modelsStore.deepseekCached) modelsStore.fetchDeepSeekModels()
@@ -700,8 +745,14 @@ async function enhancePrompt() {
   aiError.value = ''
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
+    const lang = detectLanguage() || 'English'
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `Enhance this AI system agent prompt. Make it more specific, effective, and well-structured while keeping the same intent. IMPORTANT: Respond in the SAME language as the original prompt. If the prompt is in Chinese, respond in Chinese. If in English, respond in English. Return ONLY the enhanced prompt text, nothing else.\n\nOriginal prompt:\n${draftPrompt.value}`,
+      prompt: buildAgentEnhancementPrompt({
+        agentType: props.agentType === 'system' ? 'system' : 'user',
+        lang,
+        description: draftDescription.value.trim(),
+        prompt: draftPrompt.value,
+      }),
       config,
     })
     if (res.success && res.text) {
@@ -755,22 +806,11 @@ function toggleRewriteInput() {
 }
 
 function detectLanguage() {
-  const text = (draftDescription.value || '') + ' ' + (draftPrompt.value || '')
-  if (/[\u4e00-\u9fff]/.test(text)) return 'Chinese'
-  if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'Japanese'
-  if (/[\uac00-\ud7af]/.test(text)) return 'Korean'
-  const appLang = configStore.config?.language || 'en'
-  if (appLang.startsWith('zh')) return 'Chinese'
-  return null // default: English
+  return detectAgentLanguage(draftDescription.value, draftPrompt.value, configStore.config?.language || 'en')
 }
 
 function extractJSON(text) {
-  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (match) return match[1].trim()
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  if (start >= 0 && end > start) return text.slice(start, end + 1)
-  return text.trim()
+  return extractJsonPayload(text)
 }
 
 async function generateAgentFromAI(description, isRewrite) {
@@ -778,14 +818,14 @@ async function generateAgentFromAI(description, isRewrite) {
   aiError.value = ''
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
-    const descLine = description
-      ? `The user wants a agent described as: "${description}"\n\n`
-      : 'Generate a completely random, creative, and surprising agent. Be imaginative — pick something unexpected.\n\n'
-
     const lang = detectLanguage()
-    const langInstruction = lang ? `\n\nIMPORTANT: Generate ALL fields (name, description, prompt) entirely in ${lang}.` : ''
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `${descLine}Create a detailed AI agent character. Be specific and creative. It can be a fictional character, historical figure, professional archetype, mythological being, movie/TV character, or anything interesting.\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"character name","role":"brief role or identity (5-10 words)","description":"one sentence who they are (max 15 words)","prompt":"300-500 word character prompt — start with 'You are [name]...', include: who they are, how they speak day-to-day, their agentlity quirks, what they genuinely care about, what annoys them, their background. Make them feel like a real person or character — NOT an AI assistant. No \\"Certainly!\\", no formal helper voice."}${langInstruction}`,
+      prompt: buildAgentGenerationPrompt({
+        agentType: props.agentType === 'system' ? 'system' : 'user',
+        description: description || '',
+        lang,
+        existingName: draftName.value?.trim(),
+      }),
       config,
     })
 
@@ -822,8 +862,9 @@ async function applyRewriteInstruction() {
   aiError.value = ''
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
+    const subject = props.agentType === 'system' ? 'AI agent' : 'user persona'
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `You are updating an existing AI agent based on the user's instruction. Apply the instruction to the name, description, and prompt — only change what the instruction requires, keep everything else intact.\n\nCurrent agent:\n- Name: ${draftName.value}\n- Description: ${draftDescription.value}\n- Prompt: ${draftPrompt.value}\n\nUser instruction: "${instruction}"\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"updated name","description":"updated description","prompt":"updated full prompt"}`,
+      prompt: `You are updating an existing ${subject} based on the user's instruction. Apply the instruction to the name, description, and prompt — only change what the instruction requires, keep everything else intact.\n\nCurrent ${subject}:\n- Name: ${draftName.value}\n- Description: ${draftDescription.value}\n- Prompt: ${draftPrompt.value}\n\nUser instruction: "${instruction}"\n\nReturn ONLY valid JSON (no markdown, no code blocks, no explanation):\n{"name":"updated name","description":"updated description","prompt":"updated full prompt"}`,
       config,
     })
 
@@ -921,7 +962,10 @@ function saveAll() {
   if (!draftPrompt.value.trim()) e.prompt = 'Agent prompt is required'
   if (props.agentType === 'system') {
     if (!draftProvider.value) e.provider = 'Provider is required'
+    else if (!hasValidSelectedProvider.value) e.provider = t('agents.invalidProviderSelection')
     if (!draftModelId.value) e.model = 'Model is required'
+    else if (!hasValidSelectedModel.value) e.model = t('agents.invalidModelSelection')
+    else if (providerModelMismatch.value) e.model = t('agents.providerModelMismatchDetail', providerModelMismatch.value)
     if (!draftVoiceId.value) e.voice = 'Voice is required'
   }
 

@@ -48,6 +48,48 @@
     >
       <template #input>
         <div class="gp-input-area">
+          <div v-if="isGroupChat" class="gp-audience-panel">
+            <div class="gp-audience-header">
+              <span class="gp-audience-label">{{ t('chats.sendTo') }}</span>
+              <span class="gp-audience-status">{{ audienceStatusText }}</span>
+            </div>
+            <div class="gp-audience-options">
+              <button
+                class="gp-audience-chip"
+                :class="{ active: groupAudienceMode === 'auto' }"
+                :title="t('chats.audienceAutoHint')"
+                @click="setAudienceMode('auto')"
+              >
+                {{ t('chats.audienceAuto') }}
+              </button>
+              <button
+                class="gp-audience-chip"
+                :class="{ active: groupAudienceMode === 'all' }"
+                :title="t('chats.audienceAllHint')"
+                @click="setAudienceMode('all')"
+              >
+                {{ t('chats.audienceAll') }}
+              </button>
+              <button
+                v-for="agentId in chatAgentIds"
+                :key="agentId"
+                class="gp-audience-chip"
+                :class="{ active: isAudienceAgentSelected(agentId) }"
+                :title="t('chats.audienceManualHint')"
+                @click="toggleAudienceAgent(agentId)"
+              >
+                {{ agentsStore.getAgentById(agentId)?.name || 'Unknown' }}
+              </button>
+            </div>
+          </div>
+          <div
+            v-if="groupActivityState.visible"
+            class="gp-activity-bar"
+            :class="`gp-activity-bar--${groupActivityState.tone}`"
+          >
+            <span class="gp-activity-pulse"></span>
+            <span class="gp-activity-text">{{ groupActivityState.text }}</span>
+          </div>
           <!-- Attachment preview strip -->
           <div v-if="gpAttachments.length > 0" class="gp-attach-strip">
             <template v-for="att in gpAttachments" :key="att.id">
@@ -135,12 +177,6 @@
           <div class="gp-hint-bar">
             <div class="gp-hint-left">
               <span v-if="gpAttachments.length > 0" class="gp-att-count">{{ gpAttachments.length }} file{{ gpAttachments.length !== 1 ? 's' : '' }} attached</span>
-              <span v-if="isGroupChat && stickyTargetLabel" class="gp-sticky-indicator">
-                Talking to <strong>{{ stickyTargetLabel }}</strong>
-                <button class="gp-sticky-clear" @click="clearStickyTarget" :title="t('chats.resetToAll')">
-                  <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-              </span>
             </div>
             <span class="gp-hint-right">↵ send · ⇧↵ newline</span>
           </div>
@@ -220,6 +256,48 @@ function filterByRequired(items, requiredIds) {
   return items.filter(item => requiredIds.includes(item.id))
 }
 
+function resolveProviderCreds(cfg, providerType) {
+  if (cfg.providers && Array.isArray(cfg.providers)) {
+    const provider = cfg.providers.find(item => item.type === providerType || item.id === providerType)
+    if (provider) return { apiKey: provider.apiKey || '', baseURL: provider.baseURL || '', model: provider.model || '', type: provider.type || providerType }
+  }
+  const legacy = cfg[providerType]
+  if (legacy) return { apiKey: legacy.apiKey || '', baseURL: legacy.baseURL || '', model: legacy.model || '', type: providerType }
+  return { apiKey: '', baseURL: '', model: '', type: providerType }
+}
+
+function applyProviderCredsToConfig(cfg, providerType) {
+  const { apiKey, baseURL, type: resolvedType } = resolveProviderCreds(cfg, providerType)
+  const effectiveType = resolvedType || providerType
+  if (effectiveType === 'anthropic' || effectiveType === 'openrouter') {
+    cfg.apiKey = apiKey
+    cfg.baseURL = baseURL
+    delete cfg._directAuth
+    delete cfg.openaiApiKey
+    delete cfg.openaiBaseURL
+    cfg._resolvedProvider = undefined
+    cfg.defaultProvider = undefined
+    return
+  }
+  if (effectiveType === 'deepseek') {
+    cfg.openaiApiKey = apiKey
+    cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')
+    cfg._resolvedProvider = 'openai'
+    cfg._directAuth = true
+    cfg.defaultProvider = 'openai'
+    delete cfg.apiKey
+    delete cfg.baseURL
+    return
+  }
+  cfg.openaiApiKey = apiKey
+  cfg.openaiBaseURL = baseURL
+  cfg._resolvedProvider = 'openai'
+  cfg.defaultProvider = 'openai'
+  delete cfg._directAuth
+  delete cfg.apiKey
+  delete cfg.baseURL
+}
+
 const props = defineProps({
   chatId: { type: String, required: true },
   gridChatIds: { type: Array, default: () => [] }
@@ -243,7 +321,21 @@ const mentionInputRef = ref(null)
 const gpAttachments = ref([])
 const gpInputFocused = ref(false)
 
-// ── Sticky target label for hint bar ──
+// ── Explicit group audience selection ──
+const groupAudienceMode = computed({
+  get: () => chat.value?.groupAudienceMode || 'auto',
+  set: (val) => {
+    if (chat.value) chat.value.groupAudienceMode = val || 'auto'
+  },
+})
+
+const stickyTarget = computed({
+  get: () => chat.value?.groupAudienceAgentIds || [],
+  set: (val) => {
+    if (chat.value) chat.value.groupAudienceAgentIds = Array.isArray(val) ? val : []
+  },
+})
+
 const stickyTargetLabel = computed(() => {
   if (!stickyTarget.value?.length) return ''
   const names = stickyTarget.value
@@ -265,9 +357,6 @@ const isGroupChat = computed(() => {
   const c = chatsStore.chats.find(c => c.id === props.chatId)
   return c?.isGroupChat ?? false
 })
-
-// ── Sticky @mention target for this grid panel ──
-const stickyTarget = ref(null)
 
 // ── Swap menu state
 const showSwapMenu = ref(false)
@@ -361,9 +450,68 @@ function removeGpAttachment(id) {
   gpAttachments.value = gpAttachments.value.filter(a => a.id !== id)
 }
 
-function clearStickyTarget() {
-  stickyTarget.value = null
+function setAudienceMode(mode) {
+  groupAudienceMode.value = mode
+  if (mode !== 'manual') stickyTarget.value = []
 }
+
+function toggleAudienceAgent(agentId) {
+  const selected = new Set(stickyTarget.value || [])
+  if (selected.has(agentId)) selected.delete(agentId)
+  else selected.add(agentId)
+  stickyTarget.value = [...selected]
+  groupAudienceMode.value = selected.size > 0 ? 'manual' : 'auto'
+}
+
+function isAudienceAgentSelected(agentId) {
+  return groupAudienceMode.value === 'manual' && stickyTarget.value.includes(agentId)
+}
+
+const audienceStatusText = computed(() => {
+  if (!isGroupChat.value) return ''
+  if (groupAudienceMode.value === 'all') return t('chats.audienceAllStatus')
+  if (groupAudienceMode.value === 'manual' && stickyTargetLabel.value) {
+    return t('chats.audienceManualStatus', { names: stickyTargetLabel.value })
+  }
+  return t('chats.audienceAutoStatus')
+})
+
+const groupActivityState = computed(() => {
+  if (!chat.value?.isGroupChat) return { visible: false, tone: 'idle', text: '' }
+
+  const liveMessages = (chat.value.messages || []).filter(msg => msg.streaming && msg.agentId)
+  const liveNames = [...new Set(liveMessages.map(msg => msg.agentName || agentsStore.getAgentById(msg.agentId)?.name).filter(Boolean))]
+
+  if (liveNames.length > 1) {
+    return { visible: true, tone: 'live', text: t('chats.activityMultipleResponding', { count: liveNames.length }) }
+  }
+
+  if (liveNames.length === 1) {
+    const [name] = liveNames
+    if (chat.value.isCallingTool && chat.value.currentToolCall) {
+      return {
+        visible: true,
+        tone: 'tool',
+        text: t('chats.activityUsingTool', { names: name, tool: chat.value.currentToolCall }),
+      }
+    }
+    const hasText = liveMessages.some(msg => {
+      if (msg.content) return true
+      return (msg.segments || []).some(seg => seg.type === 'text' && seg.content)
+    })
+    return {
+      visible: true,
+      tone: hasText ? 'live' : 'thinking',
+      text: t(hasText ? 'chats.activityResponding' : 'chats.activityThinking', { names: name }),
+    }
+  }
+
+  if (chat.value?.isRunning) {
+    return { visible: true, tone: 'routing', text: t('chats.activityChoosing') }
+  }
+
+  return { visible: false, tone: 'idle', text: '' }
+})
 
 // ── Send from mention input (handles group chat @mention routing) ──
 async function onMentionSend(text) {
@@ -404,15 +552,28 @@ async function onMentionSend(text) {
     let respondingIds
     if (mentionAll) {
       respondingIds = [...groupIds]
-      stickyTarget.value = null
     } else if (addressees.length > 0) {
       respondingIds = [...new Set(addressees)]
-      stickyTarget.value = [...respondingIds]
-    } else if (stickyTarget.value?.length > 0) {
-      respondingIds = stickyTarget.value.filter(id => groupIds.includes(id))
-      if (respondingIds.length === 0) { respondingIds = [...groupIds]; stickyTarget.value = null }
-    } else {
+    } else if (groupAudienceMode.value === 'all') {
       respondingIds = [...groupIds]
+    } else if (groupAudienceMode.value === 'manual' && stickyTarget.value?.length > 0) {
+      respondingIds = stickyTarget.value.filter(id => groupIds.includes(id))
+      if (respondingIds.length === 0) {
+        respondingIds = [...groupIds]
+        setAudienceMode('auto')
+      }
+    } else {
+      try {
+        const result = await window.electronAPI.routeGroupAudience({
+          message: text,
+          agents: groupAgents.map(agent => ({ id: agent.id, name: agent.name, description: agent.description || '' })),
+          messages: JSON.parse(JSON.stringify(targetChat.messages || [])),
+          config: JSON.parse(JSON.stringify(cfg)),
+        })
+        respondingIds = result?.audienceIds?.length > 0 ? result.audienceIds : [...groupIds]
+      } catch {
+        respondingIds = [...groupIds]
+      }
     }
 
     // Add user message
@@ -438,10 +599,7 @@ async function onMentionSend(text) {
         })
         const singleCfg = { ...cfg }
         const pProvider = agent.providerId || chatProvider
-        if (pProvider === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
-        else if (pProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || ''; delete singleCfg._directAuth; delete singleCfg.openaiApiKey; singleCfg._resolvedProvider = undefined; singleCfg.defaultProvider = undefined }
-        else if (pProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai'; delete singleCfg._directAuth }
-        else if (pProvider === 'deepseek') { singleCfg.openaiApiKey = cfg.deepseek?.apiKey || ''; singleCfg.openaiBaseURL = (cfg.deepseek?.baseURL || '').replace(/\/+$/, ''); singleCfg._resolvedProvider = 'openai'; singleCfg._directAuth = true; singleCfg.defaultProvider = 'openai' }
+        applyProviderCredsToConfig(singleCfg, pProvider)
         const pModel = agent.modelId || targetChat.model || null
         if (pModel) singleCfg.customModel = pModel
         if (targetChat.workingPath) singleCfg.chatWorkingPath = targetChat.workingPath
@@ -488,6 +646,8 @@ async function onMentionSend(text) {
       const finChat = chatsStore.chats.find(c => c.id === chatId)
       if (finChat) { finChat.isRunning = false; finChat.isThinking = false }
       if (finChat?.messages) for (const m of finChat.messages) if (m.streaming) { m.streaming = false; if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt }
+      // Mark chat as completed (display logic will show Done label for non-active chats)
+      chatsStore.markCompleted(chatId)
       await chatsStore.persist?.()
     }
   } else {
@@ -545,9 +705,7 @@ async function onSend(text, pendingAttachments = []) {
   agentPrompts.userAgentId = usrAgent?.id || '__default_user__'
   const singleCfg = { ...cfg }
   const agentProvider = sysAgent?.providerId || chatProvider
-  if (agentProvider === 'anthropic') { singleCfg.apiKey = cfg.anthropic?.apiKey || ''; singleCfg.baseURL = cfg.anthropic?.baseURL || '' }
-  else if (agentProvider === 'openrouter') { singleCfg.apiKey = cfg.openrouter?.apiKey || ''; singleCfg.baseURL = cfg.openrouter?.baseURL || '' }
-  else if (agentProvider === 'openai') { singleCfg.openaiApiKey = cfg.openai?.apiKey || ''; singleCfg.openaiBaseURL = cfg.openai?.baseURL || ''; singleCfg._resolvedProvider = 'openai'; singleCfg.defaultProvider = 'openai' }
+  applyProviderCredsToConfig(singleCfg, agentProvider)
   const agentModel = sysAgent?.modelId || targetChat.model || null
   if (agentModel) singleCfg.customModel = agentModel
   try {
@@ -575,6 +733,8 @@ async function onSend(text, pendingAttachments = []) {
     const finChat = chatsStore.chats.find(c => c.id === chatId)
     if (finChat) { finChat.isRunning = false; finChat.isThinking = false }
     if (finChat?.messages) for (const m of finChat.messages) if (m.streaming) { m.streaming = false; if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt }
+    // Mark chat as completed (display logic will show Done label for non-active chats)
+    chatsStore.markCompleted(chatId)
   }
 }
 
@@ -637,6 +797,134 @@ function deleteMessage(msg) {
   padding: 0.5rem 0.75rem 0.375rem;
   border-top: 1px solid var(--border, #E5E5EA);
   background: #FFFFFF;
+}
+
+.gp-audience-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  margin-bottom: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #E5E5EA;
+  border-radius: 0.875rem;
+  background: linear-gradient(180deg, #FFFFFF 0%, #F9FAFB 100%);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.gp-audience-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.625rem;
+}
+
+.gp-audience-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6B7280;
+}
+
+.gp-audience-status {
+  min-width: 0;
+  font-size: 0.72rem;
+  color: #374151;
+  text-align: right;
+}
+
+.gp-audience-options {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  flex-wrap: wrap;
+}
+
+.gp-audience-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.625rem;
+  padding: 0.1875rem 0.625rem;
+  border-radius: 9999px;
+  border: 1px solid #E5E5EA;
+  background: #FFFFFF;
+  color: #4B5563;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gp-audience-chip:hover {
+  border-color: #D1D5DB;
+  color: #1A1A1A;
+  background: #F9FAFB;
+}
+
+.gp-audience-chip.active {
+  border-color: transparent;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.gp-activity-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+  min-height: 2rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.875rem;
+  border: 1px solid transparent;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.gp-activity-bar--routing {
+  background: #FFFFFF;
+  border-color: #E5E5EA;
+  color: #1A1A1A;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.gp-activity-bar--thinking {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.16);
+  color: #B45309;
+}
+
+.gp-activity-bar--live {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.16);
+  color: #047857;
+}
+
+.gp-activity-bar--tool {
+  background: rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.16);
+  color: #6D28D9;
+}
+
+.gp-activity-pulse {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: currentColor;
+  box-shadow: 0 0 0 0 currentColor;
+  animation: gpActivityPulse 1.2s ease-out infinite;
+}
+
+.gp-activity-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@keyframes gpActivityPulse {
+  0% { box-shadow: 0 0 0 0 rgba(0,0,0,0.18); }
+  70% { box-shadow: 0 0 0 0.55rem rgba(0,0,0,0); }
+  100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); }
 }
 
 /* ── Attachment preview strip ── */
@@ -761,31 +1049,6 @@ function deleteMessage(msg) {
 .gp-hint-left { display: flex; align-items: center; gap: 0.5rem; }
 .gp-att-count { font-size: var(--fs-small, 0.75rem); color: #1A1A1A; font-weight: 500; }
 .gp-hint-right { font-size: var(--fs-small, 0.75rem); color: #9CA3AF; }
-.gp-sticky-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: var(--fs-small, 0.75rem);
-  color: #6B7280;
-  background: rgba(0,0,0,0.04);
-  border-radius: 0.375rem;
-  padding: 0.125rem 0.375rem 0.125rem 0.5rem;
-}
-.gp-sticky-indicator strong { color: #1A1A1A; }
-.gp-sticky-clear {
-  width: 0.875rem;
-  height: 0.875rem;
-  border-radius: 0.25rem;
-  border: none;
-  background: transparent;
-  color: #9CA3AF;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-.gp-sticky-clear:hover { color: #1A1A1A; }
 
 /* ── Approval badge (red, pulsing) ── */
 .gp-approval-badge {

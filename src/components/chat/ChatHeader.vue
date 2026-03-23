@@ -107,36 +107,6 @@
       <div class="ch-row-bottom-right">
         <!-- Agent selectors -->
         <div class="agent-section">
-          <!-- ── User agent ── -->
-          <div class="agent-group">
-            <div class="agent-card-wrap" ref="usrChipWrap">
-              <div class="agent-card user" @mouseenter="showAgentTooltip($event, resolvedUserAgentId)" @mouseleave="hideAgentTooltip">
-                <div class="agent-card-avatar">
-                  <img
-                    v-if="activeUserAvatarDataUri"
-                    :src="activeUserAvatarDataUri"
-                    alt=""
-                    class="agent-card-avatar-img"
-                    @click.stop="$emit('open-soul-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
-                    title="View summary"
-                  />
-                  <div
-                    v-else
-                    class="agent-card-avatar-default user"
-                    @click.stop="$emit('open-soul-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
-                    title="View summary"
-                  >
-                    <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                  </div>
-                </div>
-              </div>
-              <!-- User agent select button -->
-              <button class="sys-add-btn" @click.stop="togglePopover('user')" :title="t('chats.switchUserAgent', 'Switch user agent')">
-                <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="8" r="4"/><path d="M3 21v-2a6 6 0 0 1 9.29-5"/><path d="M19 14v6m-3-3 3 3 3-3"/></svg>
-              </button>
-              </div>
-          </div>
-
           <!-- ── System agents ── -->
           <div class="agent-group system-group">
             <!-- Overlapping avatar stack -->
@@ -177,6 +147,36 @@
                 <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </button>
             </div>
+          </div>
+
+          <!-- ── User agent ── -->
+          <div class="agent-group">
+            <div class="agent-card-wrap" ref="usrChipWrap">
+              <div class="agent-card user" @mouseenter="showAgentTooltip($event, resolvedUserAgentId)" @mouseleave="hideAgentTooltip">
+                <div class="agent-card-avatar">
+                  <img
+                    v-if="activeUserAvatarDataUri"
+                    :src="activeUserAvatarDataUri"
+                    alt=""
+                    class="agent-card-avatar-img"
+                    @click.stop="$emit('open-soul-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
+                    title="View summary"
+                  />
+                  <div
+                    v-else
+                    class="agent-card-avatar-default user"
+                    @click.stop="$emit('open-soul-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
+                    title="View summary"
+                  >
+                    <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  </div>
+                </div>
+              </div>
+              <!-- User agent select button -->
+              <button class="sys-add-btn" @click.stop="togglePopover('user')" :title="t('chats.switchUserAgent', 'Switch user agent')">
+                <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="8" r="4"/><path d="M3 21v-2a6 6 0 0 1 9.29-5"/><path d="M19 14v6m-3-3 3 3 3-3"/></svg>
+              </button>
+              </div>
           </div>
         </div>
 

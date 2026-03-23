@@ -488,7 +488,7 @@ export const en = {
     description: 'Description',
     descriptionPlaceholder: 'Brief description of the agent...',
     systemPromptPlaceholder: 'System prompt for this agent...',
-    userPromptPlaceholder: 'User prompt for this agent...',
+    userPromptPlaceholder: 'User persona definition for this agent...',
     changeAvatar: 'Change avatar',
     newSystemAgent: 'New System Agent',
     newUserAgent: 'New User Agent',
@@ -497,12 +497,43 @@ export const en = {
     noProviderConfigured: 'No provider configured',
     providerModelMismatch: 'Model/provider mismatch — fix in Agents settings',
     providerModelMismatchDetail: 'The model "{model}" belongs to {detected}, but the agent uses {provider}. Update the agent\'s provider or model.',
+    invalidProviderSelection: 'The selected provider is invalid or unavailable. Choose a valid provider before saving.',
+    invalidModelSelection: 'The selected model is invalid for the current provider. Choose a valid provider/model pair before saving.',
     generatingAgent: 'Generating Agent',
     generationComplete: 'Generation complete!',
     nameRequired: 'Name is required',
     providerRequired: 'Provider is required',
     modelRequired: 'Model is required',
     browseAvatars: 'Browse Avatars',
+    builtinClankName: 'Clank',
+    builtinClankDescription: 'Built-in default Clank system agent. Excels at conversation, writing, coding, debugging, research, planning, and tool orchestration with a witty, lively style and disciplined judgment.',
+    builtinClankPrompt: `You are Clank, the built-in default system agent in ClankAI and the primary partner users meet by default.
+
+  Your role and background:
+  - You are a high-capability generalist AI operator who can chat naturally and handle serious work.
+  - You can write code, debug issues, read docs, research topics, plan work, summarize decisions, and use tools, skills, MCP servers, and knowledge bases when the task calls for them.
+  - You understand how ClankAI works and you prefer grounded context, tool output, and retrieved knowledge over guesswork.
+
+  Your capabilities:
+  - Understand the real goal first, then choose the most direct effective path.
+  - Handle product, engineering, research, writing, analysis, and operations tasks without artificial handoffs.
+  - When information is uncertain, say so plainly and propose the fastest verification path.
+  - When using tools, skills, MCP, or RAG, convert raw output into useful conclusions instead of dumping it back verbatim.
+  - If the task is non-trivial, produce a concise plan and then execute it.
+
+  Your voice:
+  - Match the user's language. Use English for English users and Chinese for Chinese users.
+  - Sound sharp, lively, and lightly humorous without becoming flippant.
+  - Be natural, crisp, and human. Avoid stiff corporate phrasing, empty praise, and generic assistant cliches.
+  - Lead with actionable answers. Explain clearly when explanation helps, but do not ramble.
+
+  Your working principles:
+  - Prioritize facts, clear conclusions, and useful progress.
+  - If you can solve it, solve it. If you are blocked, state the blocker and the next move.
+  - Never fabricate results or pretend work is complete.
+  - When writing code, changing configuration, or analyzing systems, operate with disciplined engineering judgment.
+
+  In short: you are not a generic AI helper. You are Clank: quick, capable, tool-savvy, grounded, and fun to work with.`,
     noDescription: 'No description',
     default: 'Default',
     builtin: 'Built-in',
@@ -546,6 +577,7 @@ export const en = {
     backToSingleView: 'Back to single view',
     gridPanels: '{n} panels',
     sendMessage: 'Send message',
+    groupMessagePlaceholder: 'Type a message... @name for specific agents, @all for everyone',
     placeholder: 'Type your message...',
     noChats: 'No chats yet',
     noChatsHint: 'Start a new conversation',
@@ -581,6 +613,9 @@ export const en = {
     speaking: 'Speaking...',
     recording: 'Recording...',
     waitingForResponse: 'Waiting for response...',
+    mentionAgents: 'Agents',
+    mentionNavigateHint: 'Up/down navigate · Enter select',
+    mentionBroadcastAll: 'Broadcast to all agents',
     preResponseFailed: 'Send failed before response. Please resend.',
     requestTimeout: 'No response after 15s — connection may have failed.',
     retry: 'Retry',
@@ -616,6 +651,20 @@ export const en = {
     resetToAll: 'Reset to all',
     queueMessage: 'Queue message',
     sendMessageBtn: 'Send message',
+    sendTo: 'Send to',
+    audienceAuto: 'Auto',
+    audienceAll: 'All',
+    audienceAutoHint: 'Auto-select the best agent for each message.',
+    audienceAllHint: 'Broadcast this chat to every agent.',
+    audienceManualHint: 'Click agent names to focus the conversation.',
+    audienceAutoStatus: 'Auto-selecting the best agent for this message',
+    audienceAllStatus: 'Sending this message to all agents',
+    audienceManualStatus: 'Sending this message to {names}',
+    activityChoosing: 'Choosing who should reply...',
+    activityThinking: '{names} thinking',
+    activityResponding: '{names} responding',
+    activityUsingTool: '{names} using {tool}',
+    activityMultipleResponding: '{count} agents responding',
     loadingMessages: 'Loading messages',
     taskList: 'Task List',
     done: 'done',
@@ -2001,7 +2050,7 @@ export const zh = {
     description: '描述',
     descriptionPlaceholder: '数字人的简短描述...',
     systemPromptPlaceholder: '数字人的系统提示...',
-    userPromptPlaceholder: '数字人的用户提示...',
+    userPromptPlaceholder: '这个用户画像的定义内容...',
     changeAvatar: '更换头像',
     newSystemAgent: '新建数字人',
     newUserAgent: '新用户画像',
@@ -2010,12 +2059,43 @@ export const zh = {
     noProviderConfigured: '未配置提供商',
     providerModelMismatch: '模型与提供商不匹配 — 请到数字人设置中修复',
     providerModelMismatchDetail: '模型「{model}」属于 {detected}，但该数字人使用的是 {provider}。请更新数字人的提供商或模型。',
+    invalidProviderSelection: '当前选中的提供商无效或不可用，请重新选择后再保存。',
+    invalidModelSelection: '当前选中的模型不属于该提供商，请重新选择有效的 provider/model 组合后再保存。',
     generatingAgent: '正在生成数字人',
     generationComplete: '生成完成！',
     nameRequired: '名称为必填项',
     providerRequired: '模型提供商为必填项',
     modelRequired: '模型为必填项',
     browseAvatars: '浏览头像',
+    builtinClankName: 'Clank',
+    builtinClankDescription: '内置默认 Clank 系统 Agent。擅长对话、写作、编程、调试、调研、规划与多工具协同，风格幽默灵动，但判断保持清晰可靠。',
+    builtinClankPrompt: `你是 Clank，ClankAI 内置的默认系统 Agent，也是用户进入应用后默认会遇到的主力搭档。
+
+  你的背景与定位：
+  - 你是一个通用型高能力 AI 操作员，既能聊天，也能做严肃工作。
+  - 你能写代码、查问题、改 Bug、读文档、整理方案、拆解任务、总结结论，并在需要时使用工具、skills、MCP 和知识库完成工作。
+  - 你熟悉 ClankAI 的工作方式，知道自己应该优先利用可用上下文、工具结果与检索信息，而不是凭空猜测。
+
+  你的能力要求：
+  - 先理解真实目标，再选择最直接、最有效的做法。
+  - 能处理产品、工程、研究、写作、分析、运营等跨领域任务。
+  - 遇到不确定的信息时，要明确说明不确定点，并主动给出验证路径。
+  - 使用工具、skills、MCP、RAG 时，要把返回结果转化为对用户有价值的结论，而不是机械复述原始输出。
+  - 如果任务复杂，先给出简洁计划，再执行。
+
+  你的表达风格：
+  - 默认用中文回应中文用户；如果用户用英文，就改用英文。
+  - 说话聪明、机灵、有一点幽默感，但不要油腻，不要浮夸。
+  - 语气自然、利落、有人味，避免官腔、套话和空洞赞美。
+  - 优先给出可执行答案；需要解释时，解释清楚但不拖沓。
+
+  你的工作原则：
+  - 事实优先，结论明确，少废话。
+  - 能直接解决就直接解决，不能解决就说明卡点和下一步。
+  - 不编造结果，不假装完成，不用模糊语言掩盖不确定性。
+  - 在写代码、改配置、分析系统时，保持工程师级别的严谨度。
+
+  总之，你不是一个模板化的“AI 助手”，你是 Clank：反应快、能动手、懂判断、会开工具箱，也会让合作过程保持轻松。`,
     noDescription: '暂无描述',
     default: '默认',
     builtin: '内置',
@@ -2059,6 +2139,7 @@ export const zh = {
     backToSingleView: '返回单视图',
     gridPanels: '{n} 个面板',
     sendMessage: '发送消息',
+    groupMessagePlaceholder: '输入消息... @名字 指定对象，@all 发给所有人',
     placeholder: '输入消息...',
     noChats: '暂无对话',
     noChatsHint: '开始新的对话',
@@ -2095,6 +2176,9 @@ export const zh = {
     speaking: '说话中...',
     recording: '录音中...',
     waitingForResponse: '等待回复...',
+    mentionAgents: '数字人',
+    mentionNavigateHint: '上下选择 · Enter 确认',
+    mentionBroadcastAll: '广播给所有数字人',
     preResponseFailed: '响应前发送失败，请重试。',
     requestTimeout: '15秒内无响应，连接可能失败。',
     retry: '重试',
@@ -2131,6 +2215,20 @@ export const zh = {
     resetToAll: '重置为全部',
     queueMessage: '排队消息',
     sendMessageBtn: '发送消息',
+    sendTo: '发送给',
+    audienceAuto: '自动',
+    audienceAll: '全部',
+    audienceAutoHint: '每条消息自动选择最合适的数字人。',
+    audienceAllHint: '将这条消息广播给所有数字人。',
+    audienceManualHint: '点击名字，显式聚焦到指定数字人。',
+    audienceAutoStatus: '正在为这条消息自动选择最合适的数字人',
+    audienceAllStatus: '这条消息将发送给所有数字人',
+    audienceManualStatus: '这条消息将发送给 {names}',
+    activityChoosing: '正在判断该由谁回复...',
+    activityThinking: '{names} 思考中',
+    activityResponding: '{names} 回复中',
+    activityUsingTool: '{names} 正在使用 {tool}',
+    activityMultipleResponding: '{count} 个数字人正在回复',
     loadingMessages: '加载消息中',
     taskList: '任务列表',
     done: '已完成',

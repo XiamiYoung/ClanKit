@@ -29,6 +29,14 @@ const { accumulateUsage, accumulateUtilityUsage } = require('./store')
 const { queryRAG } = require('./knowledge')
 const { createChunkAccumulator } = require('../agent/chunkAccumulator')
 const { normalizeAgents, normalizeTools, normalizeMcpServers } = require('../agent/dataNormalizers')
+const {
+  detectModelProviderType: _detectModelProviderType,
+  isProviderActive: _isProviderActive,
+  applyProviderCredsToConfig: _applyProviderCredsToConfig,
+  normalizeLoopConfig: _normalizeLoopConfig,
+  validateLoopConfig: _validateLoopConfig,
+  buildHeuristicSequentialDispatch: _buildHeuristicSequentialDispatch,
+} = require('./agentRuntimeUtils')
 const { resolveImageProvider } = ds
 
 
@@ -217,80 +225,6 @@ async function _runStartupIndexRecovery() {
 
 // ── Provider credential helpers (mirrors useAgentCollaboration.js) ─────────────
 
-function _detectModelProviderType(modelId) {
-  if (!modelId) return null
-  const m = modelId.toLowerCase()
-  if (m.includes('deepseek')) return 'deepseek'
-  if (m.includes('claude') || m.startsWith('anthropic/')) return 'anthropic'
-  if (m.includes('gemini') || m.startsWith('google/')) return 'google'
-  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('openai/')) return 'openai'
-  return null
-}
-
-function _resolveProviderCreds(cfg, providerType) {
-  if (cfg.providers && Array.isArray(cfg.providers)) {
-    const p = cfg.providers.find(p => p.type === providerType || p.id === providerType)
-    if (p) return { apiKey: p.apiKey || '', baseURL: p.baseURL || '', model: p.model || '', type: p.type || providerType }
-  }
-  const legacy = cfg[providerType]
-  if (legacy) return { apiKey: legacy.apiKey || '', baseURL: legacy.baseURL || '', model: legacy.model || '', type: providerType }
-  return { apiKey: '', baseURL: '', model: '', type: providerType }
-}
-
-function _isProviderActive(cfg, providerType) {
-  if (cfg.providers && Array.isArray(cfg.providers)) {
-    return cfg.providers.some(p => (p.type === providerType || p.id === providerType) && p.isActive)
-  }
-  return !!(cfg[providerType]?.isActive)
-}
-
-function _applyProviderCredsToConfig(cfg, providerType) {
-  const { apiKey, baseURL, type: resolvedType } = _resolveProviderCreds(cfg, providerType)
-  providerType = resolvedType || providerType
-  if (providerType === 'anthropic') {
-    cfg.apiKey  = apiKey
-    cfg.baseURL = baseURL
-    delete cfg._directAuth
-    delete cfg.openaiApiKey
-    delete cfg.openaiBaseURL
-    cfg._resolvedProvider = undefined
-    cfg.defaultProvider   = undefined
-  } else if (providerType === 'openrouter') {
-    cfg.apiKey  = apiKey
-    cfg.baseURL = baseURL
-    delete cfg._directAuth
-    delete cfg.openaiApiKey
-    delete cfg.openaiBaseURL
-    cfg._resolvedProvider = undefined
-    cfg.defaultProvider   = undefined
-  } else if (providerType === 'openai') {
-    cfg.openaiApiKey  = apiKey
-    cfg.openaiBaseURL = baseURL
-    cfg._resolvedProvider = 'openai'
-    cfg.defaultProvider   = 'openai'
-    delete cfg._directAuth
-    delete cfg.apiKey
-    delete cfg.baseURL
-  } else if (providerType === 'deepseek') {
-    cfg.openaiApiKey  = apiKey
-    cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')
-    cfg._resolvedProvider = 'openai'
-    cfg._directAuth       = true
-    cfg.defaultProvider   = 'openai'
-    delete cfg.apiKey
-    delete cfg.baseURL
-  } else {
-    // Generic OpenAI-compatible (minimax, google, custom, etc.)
-    cfg.openaiApiKey  = apiKey
-    cfg.openaiBaseURL = baseURL
-    cfg._resolvedProvider = 'openai'
-    cfg.defaultProvider   = 'openai'
-    delete cfg._directAuth
-    delete cfg.apiKey
-    delete cfg.baseURL
-  }
-}
-
 function _filterByRequired(items, requiredIds) {
   if (!requiredIds || requiredIds.length === 0) return items
   return (items || []).filter(item => requiredIds.includes(item.id))
@@ -298,10 +232,10 @@ function _filterByRequired(items, requiredIds) {
 
 function _buildAgentKnowledgeConfig(agent, knowledgeCfg) {
   const requiredIds = agent?.requiredKnowledgeBaseIds ?? []
-  if (requiredIds.length === 0) return null
+  const includeAllIndexes = agent?.id === '__default_system__' && agent?.isBuiltin
   const indexConfigs = {}
   for (const [name, cfg] of Object.entries(knowledgeCfg.indexConfigs || {})) {
-    if (requiredIds.includes(name)) indexConfigs[name] = { ...cfg, enabled: true }
+    if (includeAllIndexes || requiredIds.includes(name)) indexConfigs[name] = { ...cfg, enabled: true }
   }
   if (Object.keys(indexConfigs).length === 0) return null
   return {
@@ -418,7 +352,7 @@ function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetCh
       if (agentMessages[lastIdx].role === 'user') {
         agentMessages[lastIdx] = {
           ...agentMessages[lastIdx],
-          content: agentMessages[lastIdx].content + `\n\n[SYSTEM: ${agent.name}, write ONLY your own single response. Do NOT write lines or dialogue for ${otherNamesList}. The other participants will reply in their own separate turns.]`,
+          content: agentMessages[lastIdx].content + `\n\n[SYSTEM: ${agent.name}, write ONLY your own single response. Do NOT write lines, dialogue, quoted transcript, or speaker labels for ${otherNamesList}. Do NOT output text like [Name]: ... for anyone else. Do NOT continue, summarize, or repeat another participant's answer. The other participants will reply in their own separate turns.]`,
         }
       }
     }
@@ -478,8 +412,13 @@ function _buildIdentityAwareMessages(rawMessages, currentSysId, currentUsrId, ag
 function register() {
 
 ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, agentPrompts, mcpServers, httpTools, agentRuns, knowledgeConfig, injectedPlan, chatPermissionMode, chatAllowList, chatDangerOverrides, maxOutputTokens }) => {
-  logger.agent('IPC agent:run received', { chatId, model: config?.anthropic?.activeModel || config?.activeModel, msgCount: messages?.length, agentRuns: agentRuns?.length || 0 })
-  logger.agent('config', { provider: config?.defaultProvider || 'anthropic', model: config?.anthropic?.activeModel, hasKey: !!(config?.apiKey) })
+  const normalizedIncomingConfig = _normalizeLoopConfig(config, agentPrompts?.systemAgentId || null)
+  logger.agent('IPC agent:run received', { chatId, model: normalizedIncomingConfig?.customModel || normalizedIncomingConfig?.anthropic?.activeModel || normalizedIncomingConfig?.activeModel, msgCount: messages?.length, agentRuns: agentRuns?.length || 0 })
+  logger.agent('config', {
+    provider: normalizedIncomingConfig?.provider?.type || normalizedIncomingConfig?._resolvedProvider || normalizedIncomingConfig?.defaultProvider || _detectModelProviderType(normalizedIncomingConfig?.customModel) || 'anthropic',
+    model: normalizedIncomingConfig?.customModel || normalizedIncomingConfig?.anthropic?.activeModel,
+    hasKey: !!(normalizedIncomingConfig?.openaiApiKey || normalizedIncomingConfig?.apiKey),
+  })
 
   // If this chat already has a running loop, stop it first
   for (const [key, loop] of activeLoops) {
@@ -582,7 +521,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     const groupCfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
     const promises = agentRuns.map(run => {
       const loopKey = `${chatId}:${run.agentId}`
-      const loopConfig = { ...(run.config || config), soulsDir: ds.paths().SOULS_DIR }
+      const loopConfig = _normalizeLoopConfig({ ...(run.config || normalizedIncomingConfig), soulsDir: ds.paths().SOULS_DIR }, run.agentId)
       if (injectedPlan) loopConfig.injectedPlan = injectedPlan
       loopConfig.sandboxConfig = groupCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
       loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
@@ -597,6 +536,11 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       loopConfig.DoCPath      = groupCfg.DoCPath      || ''
       loopConfig.memoryDir    = ds.paths().MEMORY_DIR
       loopConfig.chatId       = chatId
+      const loopConfigError = _validateLoopConfig(loopConfig)
+      if (loopConfigError) {
+        logger.error('agent:run invalid group loop config', { chatId, agentId: run.agentId, error: loopConfigError })
+        throw new Error(loopConfigError)
+      }
       const loop = new AgentLoop(loopConfig)
       activeLoops.set(loopKey, loop)
       activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
@@ -705,7 +649,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
 
   // -- Single agent (backward compat) --
   const fullCfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
-  const loopConfig = { ...config, soulsDir: ds.paths().SOULS_DIR }
+  const loopConfig = _normalizeLoopConfig({ ...normalizedIncomingConfig, soulsDir: ds.paths().SOULS_DIR }, agentPrompts?.systemAgentId || null)
   if (injectedPlan) loopConfig.injectedPlan = injectedPlan
   loopConfig.sandboxConfig = fullCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
   loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
@@ -723,11 +667,16 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.chatId       = chatId
   // Inject image provider config so generate_image tool can call image generation APIs
   loopConfig.imageProvider = resolveImageProvider(fullCfg)
+  const loopConfigError = _validateLoopConfig(loopConfig)
+  if (loopConfigError) {
+    logger.error('agent:run invalid loop config', { chatId, error: loopConfigError })
+    return { success: false, error: loopConfigError }
+  }
   const loop = new AgentLoop(loopConfig)
   activeLoops.set(chatId, loop)
   activeLoopMeta.set(chatId, { chatId, agentId: agentPrompts?.systemAgentId || null, agentName: null, isGroup: false })
 
-  logger.agent('run start', { chatId, model: config.anthropic?.activeModel || config.activeModel, msgCount: messages.length, agents: enabledAgents?.length || 0, skills: (enabledSkills || []).map(s => s.id) })
+  logger.agent('run start', { chatId, model: loopConfig.customModel || loopConfig.anthropic?.activeModel || loopConfig.activeModel, msgCount: messages.length, agents: enabledAgents?.length || 0, skills: (enabledSkills || []).map(s => s.id) })
 
   // Inject pending memory facts for conversational confirmation (one-shot per run)
   const singlePending = pendingMemoryFacts.get(chatId)
@@ -764,7 +713,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     logger.agent('run done', { chatId, success: result !== undefined, resultLen: typeof result === 'string' ? result.length : 0 })
     // Persist cumulative usage to chat JSON
     const _usageMetrics = loop.contextManager.getMetrics()
-    const _provider = config.defaultProvider || (config._resolvedProvider) || 'anthropic'
+    const _provider = loopConfig.defaultProvider || loopConfig._resolvedProvider || _detectModelProviderType(loopConfig.customModel) || 'anthropic'
     const _model    = loop.anthropicClient.resolveModel()
     accumulateUsage(chatId, {
       inputTokens:         _usageMetrics.inputTokens         || 0,
@@ -1509,6 +1458,8 @@ A participant is directly addressed if:
 A participant is NOT directly addressed if:
 - They are merely mentioned as a subject or object ("say hello to X", "do you know X", "tell X about Y")
 - They are referenced in passing
+- They are explicitly told not to speak, to stay quiet, to hold, or to listen only
+- They are mentioned only to exclude them while another participant is being asked to answer
 
 Participants in this chat: ${names.map(n => `"${n}"`).join(', ')}
 
@@ -1591,12 +1542,143 @@ ipcMain.handle('agent:resolve-addressees', async (event, params) => {
 })
 
 /**
+ * Route a group-chat message to the most relevant participants when the user
+ * did not explicitly @mention anyone.
+ *
+ * Input:  { message, agents: [{id, name, description}], config, messages }
+ * Output: { audienceIds: string[] }  — subset of the provided agent IDs
+ */
+async function _routeGroupAudienceInternal(message, agents, config, messages = []) {
+  try {
+    const participants = agents.map(agent => ({
+      id: agent.id,
+      name: agent.name,
+      description: agent.description || '',
+    }))
+
+    const recentTranscript = (Array.isArray(messages) ? messages : [])
+      .filter(msg => (msg.role === 'user' || msg.role === 'assistant') && msg.content)
+      .slice(-8)
+      .map(msg => {
+        const speaker = msg.role === 'user'
+          ? 'User'
+          : (msg.agentName || participants.find(agent => agent.id === msg.agentId)?.name || 'Assistant')
+        return `${speaker}: ${msg.content}`
+      })
+      .join('\n')
+
+    const participantBlock = participants
+      .map(agent => `- ${agent.name}${agent.description ? `: ${agent.description}` : ''}`)
+      .join('\n')
+
+    const heuristicSequential = _buildHeuristicSequentialDispatch(message, agents)
+    if (heuristicSequential) {
+      const audienceIds = heuristicSequential.dispatched.map(item => item.agentId)
+      logger.agent('route-group-audience heuristic sequential', { message: String(message || '').slice(0, 80), audienceIds })
+      return { audienceIds }
+    }
+
+    const systemPrompt = `You are a routing assistant for a multi-agent group chat.
+Choose which participants should respond to the user's message.
+
+Participants:
+${participantBlock}
+
+Rules:
+- Prefer the smallest useful audience.
+- Default to 1 participant when one person is clearly the best fit.
+- Choose 2 or more participants only when the user clearly asks for comparison, debate, collaboration, or multiple perspectives.
+- Choose ALL participants only when the user explicitly asks everyone to respond.
+- Use the recent conversation context to infer who the user is currently talking to.
+- If someone was explicitly told to stay quiet, not answer, listen only, or step aside, do NOT select them unless the latest user message clearly re-invites them.
+- If one participant is being asked to answer while another is merely being silenced, excluded, or referenced, select only the answering participant.
+- If the latest user message gives different instructions to multiple named participants, include all of those participants.
+- If the latest user message asks multiple participants to start together, act in parallel, or respond simultaneously, include all of them.
+- Return ONLY a JSON array of participant names.
+
+Examples:
+- ["Alice"]
+- ["Alice", "Bob"]
+- []`
+
+    const userContent = `Recent conversation:\n${recentTranscript || '(none)'}\n\nLatest user message: "${message}"`
+
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) {
+      logger.warn('agent:route-group-audience: no utilityModel configured, falling back to all participants')
+      return { audienceIds: agents.map(agent => agent.id) }
+    }
+    const providerCfg = config[um.provider]
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
+      logger.warn(`agent:route-group-audience: utilityModel provider "${um.provider}" missing apiKey/baseURL, falling back to all participants`)
+      return { audienceIds: agents.map(agent => agent.id) }
+    }
+
+    let raw
+    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    if (isOpenAI) {
+      const { OpenAIClient } = require('../agent/core/OpenAIClient')
+      const cfg = {
+        openaiApiKey: providerCfg.apiKey,
+        openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+        _resolvedProvider: 'openai',
+        defaultProvider: 'openai',
+        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+      }
+      const resp = await new OpenAIClient(cfg).getClient().chat.completions.create({
+        model: um.model,
+        max_tokens: 128,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+      })
+      raw = resp.choices?.[0]?.message?.content || ''
+      accumulateUtilityUsage(um.model, um.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
+    } else {
+      const { AnthropicClient } = require('../agent/core/AnthropicClient')
+      const cfg = {
+        apiKey: providerCfg.apiKey,
+        baseURL: providerCfg.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+      }
+      const resp = await new AnthropicClient(cfg).getClient().messages.create({
+        model: um.model,
+        max_tokens: 128,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }],
+      })
+      raw = resp.content.filter(block => block.type === 'text').map(block => block.text).join('').trim()
+      accumulateUtilityUsage(um.model, um.provider, resp.usage?.input_tokens || 0, resp.usage?.output_tokens || 0).catch(() => {})
+    }
+
+    const match = raw.match(/\[.*?\]/s)
+    const audienceNames = match ? JSON.parse(match[0]) : []
+    const audienceIds = agents
+      .filter(agent => audienceNames.some(name => name.toLowerCase() === agent.name.toLowerCase()))
+      .map(agent => agent.id)
+
+    logger.agent('route-group-audience', { message: message.slice(0, 80), audienceNames, audienceIds })
+    return { audienceIds }
+  } catch (err) {
+    logger.error('agent:route-group-audience error', err.message)
+    return { audienceIds: agents.map(agent => agent.id) }
+  }
+}
+
+ipcMain.handle('agent:route-group-audience', async (_event, params) => {
+  return _routeGroupAudienceInternal(params.message, params.agents, params.config, params.messages)
+})
+
+/**
  * Dispatch group tasks: utility model parses the user message and extracts
  * per-agent task assignments + dependency ordering.
  * Returns: [{ agentId, agentName, assignedTask, dependsOn: [agentId] }]
  */
 async function _dispatchGroupTasksInternal(message, agents, config) {
   try {
+    const heuristicSequential = _buildHeuristicSequentialDispatch(message, agents)
     const names = agents.map(p => p.name)
     const systemPrompt = `You are a task dispatcher for a group chat with multiple AI participants.
 Parse the user's message and determine execution mode + per-participant assignments.
@@ -1612,8 +1694,17 @@ Determine whether participants should respond CONCURRENTLY or SEQUENTIALLY:
 - Default to CONCURRENT when unclear.
 
 ## Task Assignment
-- Look for "@Name: task description" patterns to extract individual tasks.
+- Look for participant-specific instructions, including natural-language name references such as "Bo Jun do X, Yifei do Y" or "Alice handles A while Bob handles B".
+- Do NOT require an explicit "@Name:" pattern. Natural-language assignments are valid.
+- Detect developer-reviewer workflows such as "implement then review", "fix then review again", "repeat until bug is solved", or "review until approved".
 - For SEQUENTIAL mode: the first speaker's task should explicitly tell them to address the next participant by @mention (e.g. "Start the conversation with @Bob — address them directly"). The waiting participant's task describes what to do when their turn comes.
+- For developer-reviewer workflows, default to SEQUENTIAL unless the user explicitly asked them to work in parallel.
+- In developer-reviewer workflows, the reviewer should @mention the developer again ONLY if there are specific unresolved issues, failing checks, or requested changes.
+- In developer-reviewer workflows, if the reviewer finds no concrete remaining issues, they should explicitly say the work is approved / complete and end WITHOUT any @mention.
+- In developer-reviewer workflows, the developer should implement the requested changes and stop WITHOUT any @mention unless they are blocked or explicitly need another review round.
+- For CONCURRENT mode: each participant's task should tell them to complete only their own portion, independently and in parallel.
+- For CONCURRENT mode: do NOT tell participants to quote, hand off to, wait for, or @mention each other unless the user explicitly asked for interaction between them.
+- For CONCURRENT mode: participants must not narrate, simulate, or quote the other participants' output. No faux transcript format like "[OtherName]: ...".
 - Do NOT instruct agents to @mention unconditionally. Agents should only @mention when they genuinely need input from the other participant. When the discussion reaches a natural conclusion, agents should end without @mention so the conversation can terminate gracefully.
 - If no explicit tasks, set assignedTask to null.
 - dependsOn: list names of participants this person must wait for before speaking.
@@ -1632,12 +1723,12 @@ Reply with ONLY a JSON object:
     const um = config.utilityModel
     if (!um?.provider || !um?.model) {
       logger.warn('agent:dispatch-group-tasks: no utilityModel configured, skipping dispatch')
-      return { dispatched: null }
+      return heuristicSequential || { dispatched: null }
     }
     const providerCfg = config[um.provider]
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       logger.warn('agent:dispatch-group-tasks: utilityModel missing credentials, skipping dispatch')
-      return { dispatched: null }
+      return heuristicSequential || { dispatched: null }
     }
 
     let raw
@@ -1693,11 +1784,20 @@ Reply with ONLY a JSON object:
       }))
       .filter(d => d.agentId)
 
+    if (heuristicSequential && (executionMode !== 'sequential' || dispatched.length < heuristicSequential.dispatched.length)) {
+      logger.agent('dispatch-group-tasks heuristic override', {
+        modelExecutionMode: executionMode,
+        modelAgents: dispatched.map(d => d.agentName),
+        heuristicAgents: heuristicSequential.dispatched.map(d => d.agentName),
+      })
+      return heuristicSequential
+    }
+
     logger.agent('dispatch-group-tasks', { executionMode, agents: dispatched.map(d => ({ name: d.agentName, deps: d.dependsOn.length, taskLen: d.assignedTask.length })) })
     return { dispatched, executionMode }
   } catch (err) {
     logger.error('agent:dispatch-group-tasks error', err.message)
-    return { dispatched: null }
+    return _buildHeuristicSequentialDispatch(message, agents) || { dispatched: null }
   }
 }
 
@@ -1900,7 +2000,7 @@ ipcMain.handle('agent:get-context', (event, chatId) => {
 // ── agent:send-message ────────────────────────────────────────────────────────
 // Orchestrates the full send flow on the Node.js side for both single and group chats.
 //   - Reads agents/config/MCP/tools/knowledge from disk
-//   - Resolves respondingIds via @mention parsing + sticky target logic
+//   - Resolves respondingIds via @mention parsing + explicit audience mode
 //   - Validates provider credentials; emits send_message_error chunk if invalid
 //   - Builds per-agent isolated agentRuns[] via _buildAgentRuns
 //   - Runs agents (single = runGroupRound([run]), group = concurrent first round + collaboration loop)
@@ -1914,10 +2014,11 @@ ipcMain.handle('agent:get-context', (event, chatId) => {
 //   text               - user's message text (for @mention parsing)
 //   pendingAttachments - file attachments for first round
 //   enabledSkills      - Vue-owned serialized enabled skill objects
-//   stickyTargetIds    - current sticky targeting state from Vue
+//   stickyTargetIds    - legacy selected audience IDs from Vue
 //   targetChatMeta     - { permissionMode, chatAllowList, chatDangerOverrides,
 //                         maxOutputTokens, maxAgentRounds, workingPath, codingMode,
-//                         claudeContext, userAgentId, systemAgentId }
+//                         claudeContext, userAgentId, systemAgentId,
+//                         groupAudienceMode, groupAudienceAgentIds }
 ipcMain.handle('agent:send-message', async (event, {
   chatId, messages, groupIds, isGroup, text, pendingAttachments,
   enabledSkills, stickyTargetIds, targetChatMeta,
@@ -1950,7 +2051,7 @@ ipcMain.handle('agent:send-message', async (event, {
 
     const promises = runList.map(run => {
       const loopKey = `${chatId}:${run.agentId}`
-      const loopConfig = { ...run.config, soulsDir: ds.paths().SOULS_DIR }
+      const loopConfig = _normalizeLoopConfig({ ...run.config, soulsDir: ds.paths().SOULS_DIR }, run.agentId)
       loopConfig.sandboxConfig = fullCfg.sandboxConfig || { defaultMode: 'sandbox', sandboxAllowList: [] }
       loopConfig.chatPermissionMode = targetChatMeta.permissionMode || 'inherit'
       loopConfig.chatAllowList = targetChatMeta.chatAllowList || []
@@ -1963,6 +2064,11 @@ ipcMain.handle('agent:send-message', async (event, {
       loopConfig.DoCPath      = fullCfg.DoCPath      || ''
       loopConfig.memoryDir    = ds.paths().MEMORY_DIR
       loopConfig.chatId       = chatId
+      const loopConfigError = _validateLoopConfig(loopConfig)
+      if (loopConfigError) {
+        logger.error('agent:send-message invalid loop config', { chatId, agentId: run.agentId, error: loopConfigError })
+        throw new Error(loopConfigError)
+      }
 
       // Inject coding mode context into system prompt if provided
       if (targetChatMeta.codingMode && targetChatMeta.claudeContext) {
@@ -2049,7 +2155,7 @@ ipcMain.handle('agent:send-message', async (event, {
           activeLoops.delete(loopKey)
           activeLoopMeta.delete(loopKey)
           const _pMetrics  = loop.contextManager.getMetrics()
-          const _pProvider = run.config?.defaultProvider || 'anthropic'
+          const _pProvider = loopConfig.defaultProvider || loopConfig._resolvedProvider || _detectModelProviderType(loopConfig.customModel) || 'anthropic'
           const _pModel    = loop.anthropicClient.resolveModel()
           accumulateUsage(chatId, {
             inputTokens:         _pMetrics.inputTokens         || 0,
@@ -2068,6 +2174,25 @@ ipcMain.handle('agent:send-message', async (event, {
     }
 
     return results
+  }
+
+  function buildGroupApiMessages(responderId, sourceMessages = trackMessages) {
+    const currentUserAgentId = targetChatMeta.userAgentId || null
+    const agentsById = Object.fromEntries((allData.agents || []).map(a => [a.id, a]))
+
+    return sourceMessages
+      .filter(m => (m.role === 'user' && !!m.content) || (m.role === 'assistant' && !!m.content))
+      .map(m => {
+        if (m.role === 'assistant' && m.agentId && m.agentId !== responderId) {
+          const other = groupAgents.find(a => a.id === m.agentId)
+          return { role: 'assistant', content: `[${other?.name || 'Agent'}]: ${m.content}` }
+        }
+        if (m.role === 'user' && m.userAgentId && m.userAgentId !== currentUserAgentId) {
+          const previousUser = agentsById[m.userAgentId]
+          return { role: 'user', content: `[${previousUser?.name || 'Previous User'}]: ${m.content}` }
+        }
+        return { role: m.role, content: m.content }
+      })
   }
 
   // ── Collaboration loop ─────────────────────────────────────────────────────
@@ -2117,35 +2242,20 @@ ipcMain.handle('agent:send-message', async (event, {
 
     const seqRespondingIds = [...nextRespondingSet]
     const nextLength = trackMessages.length
-    const usrAgentId = targetChatMeta.userAgentId || null
-    const agentsById = Object.fromEntries((allData.agents || []).map(a => [a.id, a]))
 
     for (const pid of seqRespondingIds) {
       const agent = groupAgents.find(a => a.id === pid)
       if (!agent) continue
 
-      const seqCurrentUsrId = usrAgentId
-      const seqApiMessages = trackMessages
-        .filter(m => (m.role === 'user' && !!m.content) || (m.role === 'assistant' && !!m.content))
-        .map(m => {
-          if (m.role === 'assistant' && m.agentId && m.agentId !== pid) {
-            const other = groupAgents.find(a => a.id === m.agentId)
-            return { role: 'assistant', content: `[${other?.name || 'Agent'}]: ${m.content}` }
-          }
-          if (m.role === 'user' && m.userAgentId && m.userAgentId !== seqCurrentUsrId) {
-            const prev = agentsById[m.userAgentId]
-            return { role: 'user', content: `[${prev?.name || 'Previous User'}]: ${m.content}` }
-          }
-          return { role: m.role, content: m.content }
-        })
+      const seqApiMessages = buildGroupApiMessages(pid)
 
       if (iterationCount >= 2 && seqApiMessages.length > 0) {
         const originalPrompt = trackMessages.find(m => m.role === 'user')?.content?.slice(0, 500) || ''
         let guidance
         if (iterationCount >= MAX_ITERATIONS - 2) {
-          guidance = [`[WRAP-UP — Round ${iterationCount + 1}/${MAX_ITERATIONS}]`, `Original request: "${originalPrompt}"`, `You are approaching the collaboration limit.`, `Provide your FINAL answer or summary now.`, `Only @mention another agent if there is a critical unresolved blocker — otherwise END without @mention.`, `Do NOT introduce new topics or expand scope.`].join('\n')
+          guidance = [`[WRAP-UP — Round ${iterationCount + 1}/${MAX_ITERATIONS}]`, `Original request: "${originalPrompt}"`, `You are approaching the collaboration limit.`, `Provide your FINAL answer or summary now.`, `Only @mention another agent if there is a critical unresolved blocker — otherwise END without @mention.`, `If you are reviewing work and there are no concrete remaining issues, explicitly say it is approved / complete and STOP without any @mention.`, `Do NOT introduce new topics or expand scope.`].join('\n')
         } else {
-          guidance = [`[CHECKPOINT — Round ${iterationCount + 1}/${MAX_ITERATIONS}]`, `Original request: "${originalPrompt}"`, `Evaluate: is the original task complete?`, `If YES — provide final summary, end WITHOUT @mention.`, `If something specific remains — state what, @mention the relevant agent for ONLY that item.`, `Do NOT expand scope beyond the original request.`].join('\n')
+          guidance = [`[CHECKPOINT — Round ${iterationCount + 1}/${MAX_ITERATIONS}]`, `Original request: "${originalPrompt}"`, `Evaluate: is the original task complete?`, `If YES — provide final summary, end WITHOUT @mention.`, `If you are reviewing work and there are no concrete remaining issues, explicitly say it is approved / complete and STOP without any @mention.`, `If something specific remains — state what, @mention the relevant agent for ONLY that item.`, `Do NOT expand scope beyond the original request.`, `Do NOT keep the loop alive with polite follow-ups, generic questions, or "anything else" style prompts.`].join('\n')
         }
         seqApiMessages[seqApiMessages.length - 1].content += `\n\n${guidance}`
       }
@@ -2155,7 +2265,7 @@ ipcMain.handle('agent:send-message', async (event, {
         const lastMsg = seqApiMessages[seqApiMessages.length - 1]
         seqApiMessages.push({
           role: 'user',
-          content: `${lastMsg.content}\n\n[${agent.name}, you have been addressed above. Write ONLY your own single reply — do NOT write dialogue or lines for any other participant. If you have a question for them or need their input, end your reply with ${otherNames} to pass the turn. If the topic is concluded, you are giving a final answer, or there is nothing more to discuss, simply end your reply without any @mention — the conversation will close naturally.]`
+          content: `${lastMsg.content}\n\n[${agent.name}, you have been addressed above. Write ONLY your own single reply — do NOT write dialogue or lines for any other participant. If you genuinely need another participant's input, end your reply with ${otherNames} to pass the turn. If the topic is concluded, you are giving a final answer, or there is nothing more to discuss, simply end your reply without any @mention — the conversation will close naturally. If you are reviewing work and there are no concrete remaining issues, say it is approved / complete and end without any @mention. Do NOT keep the loop going with generic follow-ups.]`
         })
       }
 
@@ -2198,6 +2308,10 @@ ipcMain.handle('agent:send-message', async (event, {
       if (isGroup) {
         const { mentions, mentionAll } = parseMentions(text || '', groupAgents)
         let initialIds
+        const audienceMode = targetChatMeta?.groupAudienceMode || 'auto'
+        const selectedAudienceIds = Array.isArray(targetChatMeta?.groupAudienceAgentIds)
+          ? targetChatMeta.groupAudienceAgentIds
+          : (Array.isArray(stickyTargetIds) ? stickyTargetIds : [])
 
         if (mentionAll) {
           initialIds = effectiveGroupIds
@@ -2210,10 +2324,13 @@ ipcMain.handle('agent:send-message', async (event, {
           } else {
             initialIds = mentions
           }
+        } else if (audienceMode === 'all') {
+          initialIds = effectiveGroupIds
+        } else if (audienceMode === 'manual' && selectedAudienceIds.length > 0) {
+          initialIds = selectedAudienceIds.filter(id => effectiveGroupIds.includes(id))
         } else {
-          // No explicit @mention — apply sticky target logic
-          const sticky = Array.isArray(stickyTargetIds) ? stickyTargetIds : []
-          initialIds = sticky.length > 0 ? sticky.filter(id => effectiveGroupIds.includes(id)) : effectiveGroupIds
+          const routed = await _routeGroupAudienceInternal(text || '', groupAgents, fullCfg, messages || []).catch(() => null)
+          initialIds = routed?.audienceIds?.length > 0 ? routed.audienceIds : effectiveGroupIds
         }
 
         respondingIds = initialIds.filter(id => effectiveGroupIds.includes(id))
@@ -2257,8 +2374,12 @@ ipcMain.handle('agent:send-message', async (event, {
         return
       }
 
-      // ── Determine sticky target for completion event ──────────────────────
-      const newStickyTargetIds = isGroup ? respondingIds : (stickyTargetIds || [])
+      // ── Echo explicit audience selection for completion event ─────────────
+      const newStickyTargetIds = isGroup
+        ? ((targetChatMeta?.groupAudienceMode === 'manual' && Array.isArray(targetChatMeta?.groupAudienceAgentIds))
+          ? targetChatMeta.groupAudienceAgentIds
+          : [])
+        : (stickyTargetIds || [])
 
       if (!isGroup) {
         // Single-agent path: run via runGroupRound (same infra, single element list)
@@ -2286,9 +2407,9 @@ ipcMain.handle('agent:send-message', async (event, {
       if (agentRuns.length > 1) {
         try {
           const dispatchResult = await _dispatchGroupTasksInternal(text || '', groupAgents, fullCfg)
-          if (dispatchResult?.tasks) {
+          if (dispatchResult?.dispatched) {
             executionMode = dispatchResult.executionMode || 'concurrent'
-            for (const t of dispatchResult.tasks) assignedTasks[t.agentId] = t
+            for (const t of dispatchResult.dispatched) assignedTasks[t.agentId] = t
           }
         } catch (err) {
           logger.warn('[send-message] dispatchGroupTasks failed (non-fatal)', err.message)
@@ -2325,7 +2446,8 @@ ipcMain.handle('agent:send-message', async (event, {
         const firstRoundIds = new Set(firstRoundRuns.map(r => r.agentId))
         const remainingRuns = agentRuns.filter(r => !firstRoundIds.has(r.agentId))
         for (const run of remainingRuns) {
-          await runGroupRound([run], messages || [], [], trackMessages, fullCfg)
+          const seqApiMessages = buildGroupApiMessages(run.agentId)
+          await runGroupRound([run], seqApiMessages, [], trackMessages, fullCfg)
         }
       }
 

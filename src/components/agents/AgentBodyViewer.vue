@@ -305,7 +305,7 @@
                       <input v-if="draftProviderType !== 'anthropic'" v-model="modelFilter" type="text" :placeholder="t('agents.searchModels')" class="bv-input bv-input-sm" />
                       <div class="bv-model-list">
                         <div v-if="modelsLoading" class="bv-detail-empty">{{ t('common.loading') }}...</div>
-                        <button v-for="m in filteredModels" :key="m.id" class="bv-model-item" :class="{ active: draftModelId === m.id }" @click="draftModelId = m.id">
+                        <button v-for="m in filteredModels" :key="m.id" class="bv-model-item" :class="{ active: draftModelId === m.id }" @click="draftModelId = m.id; saveError = ''">
                           <span>{{ m.name || m.label || m.id }}</span>
                           <span v-if="m.id !== (m.name || m.label)" class="bv-model-id">{{ m.id }}</span>
                         </button>
@@ -637,6 +637,7 @@ import { useMcpStore } from '../../stores/mcp'
 import { useKnowledgeStore } from '../../stores/knowledge'
 import { useI18n } from '../../i18n/useI18n'
 import { getAvatarDataUri, STYLES, generateRandomBatch } from './agentAvatars'
+import { buildAgentEnhancementPrompt, buildAgentGenerationPrompt, detectAgentLanguage, extractJsonPayload } from '../../utils/agentDefinitionPrompts'
 import AppButton from '../common/AppButton.vue'
 
 const props = defineProps({
@@ -795,14 +796,33 @@ const activeProviderOptions = computed(() => {
   })
 })
 
-const initProvider  = props.agentProviderId || (configStore.activeProviders[0] || 'anthropic')
+const initProvider  = props.agentProviderId || configStore.activeProviders[0] || ''
 const draftProvider = ref(initProvider)
 const draftModelId  = ref(props.agentModelId || null)
 const modelFilter   = ref('')
 
+function resolveProvider(value) {
+  return configStore.config.providers.find(p => p.id === value || p.type === value) || null
+}
+
+const resolvedDraftProvider = computed(() => resolveProvider(draftProvider.value))
+
+const hasValidSelectedProvider = computed(() => {
+  const provider = resolvedDraftProvider.value
+  if (!provider?.id) return false
+  return activeProviderOptions.value.some(option => option.id === provider.id)
+})
+
 const draftProviderType = computed(() => {
-  const provider = configStore.config.providers.find(p => p.id === draftProvider.value)
-  return provider?.type || 'anthropic'
+  const provider = resolvedDraftProvider.value
+  return provider?.type || draftProvider.value || ''
+})
+
+const availableProviderModels = computed(() => modelsStore.getModelsForProvider(draftProviderType.value))
+
+const hasValidSelectedModel = computed(() => {
+  if (!draftModelId.value) return false
+  return availableProviderModels.value.some(model => model.id === draftModelId.value)
 })
 
 function _detectModelProviderType(modelId) {
@@ -816,7 +836,7 @@ function _detectModelProviderType(modelId) {
 }
 
 const providerModelMismatch = computed(() => {
-  if (!draftModelId.value || draftProviderType.value === 'openrouter') return null
+  if (!draftModelId.value || !draftProviderType.value || draftProviderType.value === 'openrouter') return null
   const detectedType = _detectModelProviderType(draftModelId.value)
   if (!detectedType || detectedType === draftProviderType.value) return null
   const LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', deepseek: 'DeepSeek', openrouter: 'OpenRouter', google: 'Google' }
@@ -831,11 +851,12 @@ const modelsLoading = computed(() => {
 })
 
 function selectProvider(prov) {
+  saveError.value = ''
   draftProvider.value = prov
   draftModelId.value  = null
   modelFilter.value   = ''
-  const provider = configStore.config.providers.find(p => p.id === prov)
-  const pt = provider?.type || 'anthropic'
+  const provider = resolveProvider(prov)
+  const pt = provider?.type || prov || ''
   if (pt === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
   if (pt === 'openai'     && !modelsStore.openaiCached)     modelsStore.fetchOpenAIModels()
   if (pt === 'deepseek'   && !modelsStore.deepseekCached)   modelsStore.fetchDeepSeekModels()
@@ -843,14 +864,14 @@ function selectProvider(prov) {
 
 const filteredModels = computed(() => {
   const q = modelFilter.value.trim().toLowerCase()
-  const models = modelsStore.getModelsForProvider(draftProviderType.value)
+  const models = availableProviderModels.value
   if (!q) return models
   return models.filter(m => (m.name || m.label || '').toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
 })
 
 const currentModelLabel = computed(() => {
   if (!draftModelId.value) return '—'
-  const models = modelsStore.getModelsForProvider(draftProviderType.value)
+  const models = availableProviderModels.value
   const m = models.find(x => x.id === draftModelId.value)
   return m?.name || m?.label || draftModelId.value
 })
@@ -886,146 +907,7 @@ const aiWorkingMode = ref('')
 const aiError       = ref('')
 
 function detectLanguage() {
-  const text = (draftDescription.value || '') + ' ' + (draftPrompt.value || '')
-  if (/[\u4e00-\u9fff]/.test(text)) return 'Chinese'
-  if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'Japanese'
-  if (/[\uac00-\ud7af]/.test(text)) return 'Korean'
-  const appLang = configStore.config?.language || 'en'
-  if (appLang.startsWith('zh')) return 'Chinese'
-  return null
-}
-
-function getCharacterPromptSections(lang) {
-  if (lang === 'Chinese') {
-    return `### 身份定位
-以”你是 [姓名/称谓] — [一句话核心特征]”开头，说明这个角色最本质的一点
-
-### 核心限制
-写一条这个角色绝对无法违反的行为规则——这是让角色有辨识度的灵魂
-要求：必须是可观察的行为（不是内心感受），必须是无条件的（不能出现”通常”、”倾向于”等词）
-参考格式（不要照抄，根据角色写专属的）：
-“你只能用[具体方式]表达，绝无例外，哪怕对方要求你[极端情况]”
-“你绝不会[具体行为]，每一次[相关动作]都必须包含[必要元素]”
-“无论发生什么，你都必须[具体行为]，哪怕[极端情况]也不例外”
-
-### 说话方式
-根据这个角色的表达媒介，定义可直接操作的语言机制——不是性格描述，是执行规则
-
-如果角色用文字说话：
-- **必用句式**：2-3个每次都会出现的固定开场词或口头禅（用引号写出原话）
-- **情绪编码对照表**：用什么符号/重复/停顿/大小写表达不同情绪，写成查表格式
-- **禁用内容**：至少2条这个角色绝对不会说的具体话或词
-
-如果角色用非文字媒介（emoji / 肢体动作 / 特殊符号等）：
-- **表达系统**：定义这套媒介的映射规则，写成对照表（媒介单元 → 含义）
-- **组合规则**：说明如何组合来表达复杂意思或情绪变化
-- **禁用内容**：明确这个角色绝对不会用的表达方式
-
-### 触发规则
-写6条覆盖完全不同场景的 IF→THEN 规则
-每条写”策略描述”而不是固定台词——描述这个角色会采取什么行动/态度，不要写死具体句子：
-当被夸奖时 →
-当被反驳或挑战时 →
-当对方向自己求助时 →
-当话题冷场或对方沉默时 →
-当对方想结束对话时 →
-当触碰到角色的敏感点时 →
-
-### 示例对话
-3组对话，每组展示不同的触发场景，每组至少2个来回
-示例必须体现上面定义的口头禅、情绪编码和触发规则，让读者一眼就能感受到这个角色的独特质感
-
-### 铁律
-一句话锁死这个角色最不可妥协的特征：
-格式：”永远[做什么]。哪怕[极端情况]，也绝不例外。”`
-  }
-  return `### Core Identity
-Start with “You are [Name/Title] — [one defining trait]” — the single most essential thing about this character
-
-### The Core Constraint
-Write ONE absolute behavioral rule this character can NEVER violate — this is what makes them recognizable
-Requirements: must be an OBSERVABLE BEHAVIOR (not an internal feeling); must be UNCONDITIONAL (no “tends to”, “usually”, “often”)
-Reference formats (don't copy — write one that's specific to this character):
-“You can ONLY [specific method of expression]. No exceptions, not even if [extreme situation]”
-“You NEVER [specific behavior] — every [related action] must contain [required element]”
-“No matter what, you always [specific behavior]. Even if [extreme situation], no exceptions”
-
-### How You Speak
-Don't describe personality — define executable language mechanics:
-
-**Signature phrases**: 2-3 fixed openers or catchphrases this character uses in EVERY conversation (write them in quotes)
-**Emotion encoding**: A reference table showing how this character uses punctuation/repetition/pauses/capitalization to encode different emotions
-e.g. “.” = calm statement / “!” = excited / “...” = trailing off or loaded silence
-**Forbidden content**: At least 2 specific things this character would NEVER say or words they would never use
-
-### Trigger Rules
-Write 6 IF→THEN rules — each must cover a completely different scenario
-Each rule describes a STRATEGY or APPROACH, not a fixed line — describe what the character does/how they react, not a scripted sentence:
-When complimented →
-When contradicted or challenged →
-When someone asks for help →
-When the conversation goes silent or someone stops responding →
-When someone tries to end the conversation →
-When a sensitive topic is hit →
-
-### Example Exchanges
-3 exchanges, each showing a DIFFERENT trigger scenario, at least 2 turns each
-Examples must actively demonstrate the signature phrases, emotion encoding, and trigger rules — let the reader feel this character's distinct voice immediately
-
-### The One Rule
-One final sentence locking in this character's most non-negotiable trait:
-Format: “Always [do what]. Even if [extreme situation], no exceptions.”`
-}
-
-function getProfessionalPromptSections(lang) {
-  if (lang === 'Chinese') {
-    return `### 核心定位
-以”你是 [名字]，[一句话定位]”开头，清晰说明这个Agent的专业身份和服务范围
-
-### 专业能力
-列出具体技能、工具、技术栈和细分领域（使用具体名称，不用泛称）；说明各项能力的深度和侧重点
-
-### 工作规则
-针对这个Agent实际会遇到的具体场景，写3-5条 IF→THEN 行为规则
-格式：”当[这个Agent真实会遇到的场景]时，[具体做什么]——不允许[错误替代做法]”
-规则必须专属于这个Agent的工作领域，不能写成通用套话
-
-### 输出格式
-定义这个Agent最常见输出类型的具体结构模板
-根据这个Agent的实际工作产出写，不要写通用格式
-
-### 边界约束
-明确列出：不做什么 / 什么时候拒绝 / 什么时候必须追问才能继续
-必须是这个Agent领域专属的限制，不是”遵循高标准”这种废话`
-  }
-  return `### Core Role
-Start with “You are [Name], [one-line positioning]” — clearly state this agent's professional identity and scope
-
-### Expertise & Tools
-List specific skills, tools, tech stack, and sub-disciplines by name (no vague terms); describe the depth and focus of each area
-
-### Working Rules
-3-5 IF→THEN behavioral rules specific to THIS agent's actual work scenarios
-Format: “When [a real scenario this agent faces], [do what] — never [wrong alternative]”
-Rules must be domain-specific — no generic filler like “always include an actionable step”
-
-### Output Format
-Define the exact structural template for this agent's most common deliverable(s)
-Write based on what this agent actually produces — not a generic format
-
-### Hard Constraints
-Explicit list of: what you won't do / when you refuse / what must be clarified before you proceed
-Must be domain-specific to this agent — not generic quality platitudes`
-}
-
-
-function extractJSON(text) {
-  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (match) return match[1].trim()
-  const start = text.indexOf('{')
-  const end   = text.lastIndexOf('}')
-  if (start >= 0 && end > start) return text.slice(start, end + 1)
-  return text.trim()
+  return detectAgentLanguage(draftDescription.value, draftPrompt.value, configStore.config?.language || 'en')
 }
 
 async function surpriseMe() {
@@ -1036,20 +918,13 @@ async function surpriseMe() {
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const lang = detectLanguage()
-    const langInstruction = lang ? `IMPORTANT: Generate ALL fields entirely in ${lang}.\n\n` : ''
-    const charSections = getCharacterPromptSections(lang)
-    const profSections = getProfessionalPromptSections(lang)
-    const nameRequirement = lang === 'Chinese'
-      ? 'Name must be a realistic Chinese personal name (e.g., 李晓霖). Do NOT use titles or roles like "星空编织者".'
-      : 'Name must be a realistic personal name (e.g., Alex Chen). Do NOT use titles or roles like "Starlight Weaver".'
-
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `${langInstruction}Generate a completely random, creative, and surprising agent — they could be anyone or anything: a quirky character, a niche professional, a fictional archetype, a roleplay persona. Be imaginative and unexpected.\n\nGenerate a realistic personal name.\n${nameRequirement}\n\nFirst, decide the agent type:\n- TYPE A (Professional/Functional): skills, tools, expertise-focused\n- TYPE B (Character/Persona): personality, relationship, behavior-focused\n\n## If TYPE A — use this structure:\n${profSections}\n\n## If TYPE B — use this structure:\n${charSections}\n\n## Output Format (CRITICAL - return ONLY valid JSON)\n{\n  "name": "realistic personal name",\n  "description": "keyword-style summary, max 100 characters, no prose",\n  "prompt": "### Section\\ncontent\\n\\n### Section\\ncontent..."\n}\n\nReturn ONLY valid JSON, no additional text.`,
+      prompt: buildAgentGenerationPrompt({ agentType: props.agentType === 'system' ? 'system' : 'user', lang }),
       config,
     })
     if (res.success && res.text) {
       let data
-      try { data = JSON.parse(extractJSON(res.text)) } catch {
+      try { data = JSON.parse(extractJsonPayload(res.text)) } catch {
         aiError.value = 'AI returned invalid JSON. Try again.'
         aiWorking.value = false
         return
@@ -1079,31 +954,21 @@ async function generateFromDescription() {
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const desc = draftDescription.value.trim()
-    const descLine = desc
-      ? `The user wants an agent described as: "${desc}"\n\n`
-      : 'Generate a completely random, creative, and surprising agent. Be imaginative.\n\n'
     const lang = detectLanguage()
-    const langInstruction = lang ? `IMPORTANT: Write ALL output entirely in ${lang}.\n\n` : ''
-    const charSections = getCharacterPromptSections(lang)
-    const profSections = getProfessionalPromptSections(lang)
     const existingName = draftName.value?.trim()
-    const nameRequirement = existingName
-      ? ''
-      : (lang === 'Chinese'
-        ? 'Name must be a realistic Chinese personal name (e.g., 李晓霖). Do NOT use titles or roles like "星空编织者".'
-        : 'Name must be a realistic personal name (e.g., Alex Chen). Do NOT use titles or roles like "Starlight Weaver".')
-
-    const nameInstruction = existingName
-      ? `The agent's name is "${existingName}". Use this exact name in the "name" JSON field AND as the identity name throughout the "prompt" field (e.g., the prompt must start with "You are ${existingName} — ..."). Do NOT generate a different name.`
-      : 'Generate a realistic personal name.'
 
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `${langInstruction}${descLine}First, determine the agent type from the description:\n- TYPE A (Professional/Functional): the description focuses on skills, tools, expertise, domain knowledge — e.g. "2D美工", "code reviewer", "data analyst"\n- TYPE B (Character/Persona): the description focuses on a person's personality, role, relationship — e.g. "grumpy doctor", "supportive friend", "fictional wizard"\n\nThen generate a detailed definition using the matching section structure below. Expand VERTICALLY — go deeper into what is described, not sideways into unrelated areas.\n\n${nameInstruction}\n${nameRequirement}\n\n## If TYPE A — use this structure:\n${profSections}\n\n## If TYPE B — use this structure:\n${charSections}\n\n## Output Format (CRITICAL)\n- Return ONLY valid JSON, no markdown fences, no extra text\n- The "prompt" field MUST be a single plain string with markdown section headers inside — NOT a nested object\n{\n  "name": "realistic personal name",\n  "description": "keyword-style summary, max 100 characters, no prose sentences",\n  "prompt": "### Section\\ncontent\\n\\n### Section\\ncontent..."\n}`,
+      prompt: buildAgentGenerationPrompt({
+        agentType: props.agentType === 'system' ? 'system' : 'user',
+        description: desc,
+        lang,
+        existingName,
+      }),
       config,
     })
     if (res.success && res.text) {
       let data
-      try { data = JSON.parse(extractJSON(res.text)) } catch {
+      try { data = JSON.parse(extractJsonPayload(res.text)) } catch {
         aiError.value = 'AI returned invalid JSON. Try again.'
         aiWorking.value = false
         return
@@ -1134,8 +999,12 @@ async function enhanceDescription() {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const lang = detectLanguage()
     const langInstruction = lang ? `IMPORTANT: Write ALL output entirely in ${lang}.\n\n` : ''
+    const isUserPersona = props.agentType !== 'system'
+    const prompt = isUserPersona
+      ? `${langInstruction}Enrich this user persona description with implied specifics. Rules:\n- Maximum 100 characters total\n- Infer and ADD the concrete identity, background tension, temperament, or life context naturally implied by the description\n- Keep the same direction; do NOT introduce unrelated themes\n- Format: short factual phrases separated by commas — NOT prose sentences\n- Do NOT mention system agents, prompts, tools, workflows, or future development\n- Return ONLY the enriched description, nothing else\n\nExample: "穷学生，进京赶考，名门之后" → "家道中落，寒门求生，名门余脉，自尊强，命运翻身"\n\nOriginal:\n${draftDescription.value}`
+      : `${langInstruction}Enrich this agent description with implied specifics. Rules:\n- Maximum 100 characters total\n- Infer and ADD the concrete details that naturally belong to this domain but weren't spelled out — specific tools by name, sub-disciplines, platforms, techniques, workflows\n- Keep the same direction; do NOT introduce unrelated fields\n- Replace vague phrases ("各种工具", "大量经验") with the actual specifics they imply\n- Format: short factual phrases separated by commas — NOT prose sentences\n- Return ONLY the enriched description, nothing else\n\nExample: "精通2D美工，有游戏Art经验" → "2D角色/场景设计，游戏原画，PS/SAI/SP，手游美术规范"\n\nOriginal:\n${draftDescription.value}`
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `${langInstruction}Enrich this agent description with implied specifics. Rules:\n- Maximum 100 characters total\n- Infer and ADD the concrete details that naturally belong to this domain but weren't spelled out — specific tools by name, sub-disciplines, platforms, techniques, workflows\n- Keep the same direction; do NOT introduce unrelated fields\n- Replace vague phrases ("各种工具", "大量经验") with the actual specifics they imply\n- Format: short factual phrases separated by commas — NOT prose sentences\n- Return ONLY the enriched description, nothing else\n\nExample: "精通2D美工，有游戏Art经验" → "2D角色/场景设计，游戏原画，PS/SAI/SP，手游美术规范"\n\nOriginal:\n${draftDescription.value}`,
+      prompt,
       config,
     })
     if (res.success && res.text) {
@@ -1158,17 +1027,13 @@ async function enhancePrompt() {
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const lang = detectLanguage() || 'English'
-    const langInstruction = `IMPORTANT: Write ALL output entirely in ${lang}.\n\n`
-    const charSections = getCharacterPromptSections(lang === 'English' ? null : lang)
-    const profSections = getProfessionalPromptSections(lang === 'English' ? null : lang)
-    const anchorDesc = draftDescription.value.trim()
-    const anchorNote = anchorDesc
-      ? `The agent's core description is: "${anchorDesc}". The enhanced definition MUST stay anchored to this — deepen it vertically, do NOT drift into unrelated directions.\n\n`
-      : ''
-    const enhancementPrompt = `${langInstruction}${anchorNote}Enhance this agent definition. First determine the type from the existing content:\n- TYPE A (Professional/Functional): focuses on skills, tools, expertise → use Professional sections\n- TYPE B (Character/Persona): focuses on personality, relationship, roleplay → use Character sections\n\nRules:\n- Expand VERTICALLY — go deeper into what is already there, more specific and actionable\n- Keep the same section structure; enrich each section's content\n- Do NOT add sections from the wrong type (e.g. do NOT add 心理动机 to a professional agent)\n- Return ONLY the enhanced definition text, nothing else\n\n## Professional sections (TYPE A):\n${profSections}\n\n## Character sections (TYPE B):\n${charSections}\n\nOriginal Definition:\n${draftPrompt.value}`
-
     const res = await window.electronAPI.enhancePrompt({
-      prompt: enhancementPrompt,
+      prompt: buildAgentEnhancementPrompt({
+        agentType: props.agentType === 'system' ? 'system' : 'user',
+        lang,
+        description: draftDescription.value.trim(),
+        prompt: draftPrompt.value,
+      }),
       config,
     })
     if (res.success && res.text) {
@@ -1195,6 +1060,33 @@ function saveAll() {
   if (props.agentType === 'system' && !draftPrompt.value.trim()) {
     saveError.value = locale.value === 'zh' ? '系统提示词不能为空' : 'Definition (system prompt) is required'
     return
+  }
+  if (props.agentType === 'system') {
+    if (!draftProvider.value) {
+      activePanel.value = 'model'
+      saveError.value = t('agents.providerRequired')
+      return
+    }
+    if (!hasValidSelectedProvider.value) {
+      activePanel.value = 'model'
+      saveError.value = t('agents.invalidProviderSelection')
+      return
+    }
+    if (!draftModelId.value) {
+      activePanel.value = 'model'
+      saveError.value = t('agents.modelRequired')
+      return
+    }
+    if (!hasValidSelectedModel.value) {
+      activePanel.value = 'model'
+      saveError.value = t('agents.invalidModelSelection')
+      return
+    }
+    if (providerModelMismatch.value) {
+      activePanel.value = 'model'
+      saveError.value = t('agents.providerModelMismatchDetail', providerModelMismatch.value)
+      return
+    }
   }
   // Duplicate name check — same type, exclude self
   // agentType prop is 'system' | 'users'; store uses 'system' | 'user'

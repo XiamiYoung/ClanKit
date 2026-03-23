@@ -9,7 +9,7 @@
         @focus="onFocus"
         @blur="onBlur"
         @paste="onPaste"
-        :placeholder="isGroupChat ? 'Type a message… (use @name to target an agent)' : 'Type your message here…'"
+        :placeholder="isGroupChat ? t('chats.groupMessagePlaceholder') : t('chats.placeholder')"
         :rows="compact ? 1 : 3"
         class="cmi-textarea"
         :class="{ 'cmi-textarea-compact': compact }"
@@ -20,8 +20,8 @@
         class="cmi-mention-popup"
       >
         <div class="cmi-mention-popup-header">
-          <span>Agents</span>
-          <span class="cmi-mention-popup-hint">↑↓ navigate · ↵ select</span>
+          <span>{{ t('chats.mentionAgents') }}</span>
+          <span class="cmi-mention-popup-hint">{{ t('chats.mentionNavigateHint') }}</span>
         </div>
         <div class="cmi-mention-popup-list">
           <button
@@ -54,7 +54,7 @@
             </div>
             <div class="cmi-mention-popup-body">
               <span class="cmi-mention-popup-name">all</span>
-              <span class="cmi-mention-popup-desc">Broadcast to all agents</span>
+              <span class="cmi-mention-popup-desc">{{ t('chats.mentionBroadcastAll') }}</span>
             </div>
           </button>
         </div>
@@ -79,6 +79,7 @@ import { ref, computed, reactive, nextTick } from 'vue'
 import { useAgentsStore } from '../../stores/agents'
 import { getAvatarDataUri } from '../agents/agentAvatars'
 import { v4 as uuidv4 } from 'uuid'
+import { useI18n } from '../../i18n/useI18n'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -91,6 +92,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'send', 'stop', 'focus', 'blur', 'attach'])
 
 const agentsStore = useAgentsStore()
+const { t } = useI18n()
 
 const inputEl = ref(null)
 const inputFocused = ref(false)

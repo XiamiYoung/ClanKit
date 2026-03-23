@@ -318,7 +318,9 @@ ShellTool.execute(toolCallId, params, signal, onUpdate)
 - `useChunkHandler.test.js` — chunk routing, agent lifecycle, segment preservation
 - `useSendMessage.test.js` — queue management, IPC dispatch, stop, plan approval
 - `agentDataNormalization.test.js` — JSON format normalization + chunk accumulation (imports real `dataNormalizers.js` + `chunkAccumulator.js`)
+- `agentRuntimeUtils.test.js` — provider/model normalization, loop-config validation, sequential chat dispatch heuristics
 - `ipcSerialize.test.js` — Vue proxy → plain object serialization
+- **Mandatory chat regression rule:** Any change that touches chat logic, chat orchestration, agent routing/collaboration, message streaming/chunk handling, or chat model/provider resolution MUST run the relevant regression tests before the task is considered done. At minimum run: `npm test -- electron/ipc/__tests__/agentRuntimeUtils.test.js src/composables/__tests__/useChunkHandler.test.js src/composables/__tests__/useSendMessage.test.js electron/ipc/__tests__/agentDataNormalization.test.js`
 
 ---
 
@@ -760,6 +762,8 @@ Do NOT write task state to files on disk — it conflicts across concurrent term
 - **2026-03-22**: Applied Chinese-to-English replacement too broadly without first separating functional multilingual content from replaceable text. **Rule: before replacing non-English text, classify occurrences into (1) functional/required multilingual data to keep (i18n dictionaries, language-sensitive parsing examples, CJK stopwords/regex, hallucination blocklists) and (2) non-functional comments or hardcoded UI copy that can be translated without logic changes.**
 
 - **2026-03-22**: Replaced multilingual literals with hardcoded English/Unicode escapes in runtime logic and view templates (e.g., `\u65b0\u5efa\u5bf9\u8bdd`, inline labels in Config/Skills). **Rule: never hardcode translatable UI text or language-dependent title checks in views/stores; always source them from `src/i18n/index.js` via `t('...')` in components and shared i18n constants in stores.**
+
+- **2026-03-24**: Chat logic bugs were fixed without a hard project rule to run the existing chat regression suite, so routing/provider/chunk regressions could slip back in later. **Rule: any change touching chat logic, group orchestration, chunk handling, or chat-side provider/model resolution must run the chat regression suite before completion: `npm test -- electron/ipc/__tests__/agentRuntimeUtils.test.js src/composables/__tests__/useChunkHandler.test.js src/composables/__tests__/useSendMessage.test.js electron/ipc/__tests__/agentDataNormalization.test.js`.**
 
 ## App Icon
 

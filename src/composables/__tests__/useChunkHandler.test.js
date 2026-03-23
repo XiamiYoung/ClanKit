@@ -257,31 +257,25 @@ describe('useChunkHandler', () => {
 
   // ─── 5. send_message_complete chunk ──────────────────────────────────────
   describe('send_message_complete chunk', () => {
-    it('updates stickyTarget when stickyTargetIds is provided', () => {
-      const stickyTarget = ref(null)
-      const { handleChunk } = createHandler({ stickyTarget })
+    it('awaits processQueuedMessage after completion cleanup', async () => {
+      const processQueuedMessage = vi.fn(async () => {})
+      const { handleChunk } = createHandler({ processQueuedMessage })
 
-      const chat = mockChatsStore.chats[0]
-      chat.isRunning = true
+      await handleChunk('chat1', { type: 'send_message_complete' })
+
+      expect(processQueuedMessage).toHaveBeenCalledWith('chat1', false)
+    })
+
+    it('does not mutate stickyTarget when completion arrives', () => {
+      const stickyTarget = ref(['a1'])
+      const { handleChunk } = createHandler({ stickyTarget })
 
       handleChunk('chat1', {
         type: 'send_message_complete',
         stickyTargetIds: ['a1', 'a2'],
       })
 
-      expect(stickyTarget.value).toEqual(['a1', 'a2'])
-    })
-
-    it('clears stickyTarget when stickyTargetIds is empty', () => {
-      const stickyTarget = ref(['a1'])
-      const { handleChunk } = createHandler({ stickyTarget })
-
-      handleChunk('chat1', {
-        type: 'send_message_complete',
-        stickyTargetIds: [],
-      })
-
-      expect(stickyTarget.value).toBeNull()
+      expect(stickyTarget.value).toEqual(['a1'])
     })
 
     it('clears isInCollaborationLoop and chat running state', () => {

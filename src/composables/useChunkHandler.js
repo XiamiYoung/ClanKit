@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid'
  * @param {Function} deps.scrollToBottom        - scrollToBottom(smooth, chatId)
  * @param {Function} deps.dbg                   - dbg(msg, level) debug logger
  * @param {Function} deps._fireGroupAgentsDirect - internal group-agent fire function
+ * @param {Function} deps.processQueuedMessage  - queue processing callback from useSendMessage
  */
 export function useChunkHandler({
   perChatQueue,
@@ -20,6 +21,7 @@ export function useChunkHandler({
   _fireGroupAgentsDirect,
   stickyTarget,
   stopStreamingTimer,
+  processQueuedMessage,
 } = {}) {
   const chatsStore = useChatsStore()
   const agentsStore = useAgentsStore()
@@ -125,7 +127,7 @@ export function useChunkHandler({
     dbg(`waitForAgentEnd timed out after ${timeoutMs}ms — proceeding with potentially incomplete messages`, 'warn')
   }
 
-  function handleChunk(cId, chunk) {
+  async function handleChunk(cId, chunk) {
     if (chunk.type === 'plan_submitted') {
       const chat = chatsStore.chats.find(c => c.id === cId)
       if (chat?.messages) {
@@ -312,7 +314,9 @@ export function useChunkHandler({
               fc.isThinking = false
               fc.isCallingTool = false
               fc.currentToolCall = null
-              if (cId !== chatsStore.activeChatId) chatsStore.markCompleted(cId)
+              // Always mark completed when side-fired agents are all done
+              // (display logic checks active status before showing "Done" label)
+              chatsStore.markCompleted(cId)
             }
           }
         }
@@ -478,11 +482,6 @@ export function useChunkHandler({
         if (waitingIdx >= 0) targetChat.messages.splice(waitingIdx, 1)
       }
 
-      // Update sticky target from Electron's resolved respondingIds
-      if (chunk.type === 'send_message_complete' && chunk.stickyTargetIds !== undefined && stickyTarget) {
-        stickyTarget.value = chunk.stickyTargetIds?.length > 0 ? chunk.stickyTargetIds : null
-      }
-
       if (chunk.type === 'send_message_error') {
         dbg(`send_message_error from Node.js: ${chunk.error}`, 'error')
         // Mark any still-streaming messages as errored (waiting indicator already removed above)
@@ -527,13 +526,22 @@ export function useChunkHandler({
         finChat.isCallingTool = false
         finChat.currentToolCall = null
       }
-      if (cId !== chatsStore.activeChatId) chatsStore.markCompleted(cId)
+      // Always mark completed when send_message_complete arrives (regardless of active status)
+      // The display logic in ChatsView already checks "chat !== activeChatId" to only show
+      // the "Done" label for background chats. This ensures background chats always get
+      // the completed status and spinner disappears properly.
+      chatsStore.markCompleted(cId)
 
       // Persist chat
       chatsStore.persist?.()
 
       scrollToBottom(false, cId)
       dbg(`send_message_complete for ${cId}`, 'info')
+
+      // Process next queued message (if any) now that this message is complete
+      if (processQueuedMessage) {
+        await processQueuedMessage(cId, false)
+      }
     }
   }
 

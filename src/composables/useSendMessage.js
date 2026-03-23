@@ -110,6 +110,44 @@ export function useSendMessage({
     }
   }
 
+  // ── Process queued message ──────────────────────────────────────────────────
+  // Called when a message completes (from sendMessage finally or useChunkHandler send_message_complete)
+  // Processes the next queued message in the queue for this chat.
+  async function processQueuedMessage(chatId, hasActiveAgents = false) {
+    if (hasActiveAgents) return // Don't process queue if agents are still running
+
+    let dequeued = false
+
+    // Try per-agent queues first (group chat)
+    for (const [key, agentQueue] of [...perChatQueue.entries()]) {
+      if (!key.startsWith(chatId + ':') || agentQueue.length === 0) continue
+      const agentId = key.split(':').slice(1).join(':')
+      const queued = agentQueue.shift()
+      if (agentQueue.length === 0) perChatQueue.delete(key)
+      dbg(`Processing queued prompt for agent ${agentId}: "${queued.text.slice(0,30)}…"`, 'info')
+      const targetChat = chatsStore.chats.find(c => c.id === chatId)
+      nextTick(() => _fireGroupAgentsDirect(chatId, targetChat, queued.text, [agentId], queued.attachments)
+        .catch(err => dbg(`_fireGroupAgentsDirect queue dequeue error: ${err.message}`, 'error')))
+      dequeued = true
+      break // One at a time; agent_end will pick up the next
+    }
+
+    // If no per-agent queue, try chat-level queue
+    if (!dequeued) {
+      const queue = perChatQueue.get(chatId)
+      if (queue && queue.length > 0) {
+        const queued = queue.shift()
+        if (queue.length === 0) perChatQueue.delete(chatId)
+        dbg(`Processing queued prompt (#${(queue?.length ?? 0) + 1} remaining): "${queued.text.slice(0,30)}…"`, 'info')
+        userScrolled.value = false
+        inputText.value = queued.text
+        attachments.value = queued.attachments || []
+        await nextTick()
+        sendMessage()
+      }
+    }
+  }
+
   // ── Last active message + interrupt helpers ─────────────────────────────────
   function getLastActiveMessage(chatId) {
     const chat = chatsStore.chats.find(c => c.id === chatId)
@@ -503,6 +541,8 @@ export function useSendMessage({
           claudeContext: claudeContext ? JSON.parse(JSON.stringify(claudeContext)) : null,
           userAgentId: targetChat.userAgentId || null,
           systemAgentId: isGroup ? null : (activeSystemAgentIds.value[0] || targetChat.systemAgentId || null),
+          groupAudienceMode: targetChat.groupAudienceMode || 'auto',
+          groupAudienceAgentIds: JSON.parse(JSON.stringify(targetChat.groupAudienceAgentIds || [])),
           agentModelOverrides: JSON.parse(JSON.stringify(targetChat.agentModelOverrides || {})),
         },
       }).catch(err => dbg(`sendMessage IPC error: ${err.message}`, 'error'))
@@ -560,10 +600,8 @@ export function useSendMessage({
         targetChat.isCallingTool = false
         targetChat.currentToolCall = null
 
-        // If this chat is not active, show a "Completed" chip (and stop the unread pulse)
-        if (chatId !== chatsStore.activeChatId) {
-          chatsStore.markCompleted(chatId)
-        }
+        // Always mark completed (display logic checks if active before showing "Done" label)
+        chatsStore.markCompleted(chatId)
       } else {
         // Still clear thinking/tool state for the primary run — the side-fired agent(s)
         // will manage their own flags via their own IPC flow
@@ -625,38 +663,10 @@ export function useSendMessage({
 
       }
 
-      // Pick up next queued prompt.
-      // Per-agent dequeue (group chat) is now handled in agent_end via _fireGroupAgentsDirect.
-      // The finally block only handles:
-      // 1. Per-agent queues that remain when ALL agents are done (safety net)
-      // 2. Chat-level (single agent) queue dequeue
-      if (!hasActiveAgents) {
-        let dequeued = false
-        for (const [key, agentQueue] of [...perChatQueue.entries()]) {
-          if (!key.startsWith(chatId + ':') || agentQueue.length === 0) continue
-          const agentId = key.split(':').slice(1).join(':')
-          const queued = agentQueue.shift()
-          if (agentQueue.length === 0) perChatQueue.delete(key)
-          dbg(`Finally: picking up remaining per-agent queued prompt for ${agentId}: "${queued.text.slice(0,30)}…"`, 'info')
-          nextTick(() => _fireGroupAgentsDirect(chatId, finChat || targetChat, queued.text, [agentId], queued.attachments)
-            .catch(err => dbg(`_fireGroupAgentsDirect finally dequeue error: ${err.message}`, 'error')))
-          dequeued = true
-          break // One at a time; agent_end will pick up the next
-        }
-        if (!dequeued) {
-          const queue = perChatQueue.get(chatId)
-          if (queue && queue.length > 0) {
-            const queued = queue.shift()
-            if (queue.length === 0) perChatQueue.delete(chatId)
-            dbg(`Picking up queued prompt (#${(queue?.length ?? 0) + 1} remaining): "${queued.text.slice(0,30)}…"`, 'info')
-            userScrolled.value = false
-            inputText.value = queued.text
-            attachments.value = queued.attachments || []
-            await nextTick()
-            sendMessage()
-          }
-        }
-      }
+      // Pick up next queued prompt (defers to useChunkHandler send_message_complete)
+      // This is kept as a safety net for immediate IPC returns, but the primary
+      // queue trigger now happens in useChunkHandler when send_message_complete arrives.
+      // await processQueuedMessage(chatId, hasActiveAgents)
     }
     } catch (outerErr) {
       // Catch errors from addMessage, activeChat access, etc.
@@ -884,6 +894,7 @@ export function useSendMessage({
     compactContext,
     pendingQueue,
     removeFromQueue,
+    processQueuedMessage,
     _saveDraftForChat,
     _restoreDraftForChat,
     _codingModeContext,

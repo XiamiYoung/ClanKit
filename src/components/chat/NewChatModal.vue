@@ -1,14 +1,14 @@
 <template>
   <!-- New Chat Modal -->
-  <div v-if="visible" class="rename-backdrop">
-    <div class="rename-modal" style="width:min(460px, 90vw);" @keydown.escape="emit('close')" @keydown.enter.prevent="emit('confirm')">
-      <div class="rename-header">
-        <h3 class="rename-title">{{ t('chats.newChat') }}</h3>
-        <button class="rename-close-btn" @click="emit('close')" aria-label="Close">
+  <div v-if="visible" class="modal-dialog-backdrop">
+    <div class="modal-dialog-container" style="width:min(460px, 90vw);" @keydown.escape="emit('close')" @keydown.enter.prevent="emit('confirm')">
+      <div class="modal-dialog-header">
+        <h3 class="modal-dialog-title">{{ t('chats.newChat') }}</h3>
+        <button class="modal-dialog-close-btn" @click="emit('close')" aria-label="Close">
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
-      <div style="padding:1rem 1.25rem 1.25rem; display:flex; flex-direction:column; gap:0.875rem;">
+      <div class="modal-dialog-body" style="padding:1rem 1.25rem 1.25rem; display:flex; flex-direction:column; gap:0.875rem;">
         <!-- Row 1: Chat icon + name -->
         <div class="newchat-name-row-v2">
           <button class="newchat-icon-picker-btn" @click.stop="emit('update:showNewChatIconPicker', true)" :title="t('chats.chatIcon')">
@@ -119,7 +119,7 @@
           </div>
         </div>
       </div>
-      <div class="rename-actions">
+      <div class="modal-dialog-actions">
         <AppButton variant="secondary" size="modal" @click="emit('close')">{{ t('common.cancel') }}</AppButton>
         <AppButton size="modal" @click="emit('confirm')">{{ t('common.create') }}</AppButton>
       </div>
@@ -893,7 +893,10 @@ const FolderTreeItem = defineComponent({
   position: absolute; opacity: 0; width: 100%; height: 100%;
   cursor: pointer; margin: 0;
 }
-.ncp-check-icon { width: 0.75rem; height: 0.75rem; color: #fff; }
+.ncp-check-icon {
+  width: 0.75rem; height: 0.75rem; color: #fff;
+  pointer-events: none;
+}
 
 /* Avatar */
 .ncp-avatar {

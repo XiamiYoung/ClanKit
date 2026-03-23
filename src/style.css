@@ -204,6 +204,107 @@
   /* Legacy alias */
   .prose-botanic { @apply prose-clankai; }
 
+  /* ── Modal Dialogs ──────────────────────────────────────────────────────── */
+  .modal-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-dialog-container {
+    width: min(26.25rem, 90vw);
+    background: #0F0F0F;
+    border: 1px solid #2A2A2A;
+    border-radius: 1rem;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+    overflow: hidden;
+    animation: modal-dialog-enter 0.2s ease-out;
+  }
+  @keyframes modal-dialog-enter {
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #1F1F1F;
+  }
+  .modal-dialog-title {
+    font-family: 'Inter', sans-serif;
+    font-size: var(--fs-subtitle);
+    font-weight: 700;
+    color: #FFFFFF;
+    margin: 0;
+  }
+  .modal-dialog-close-btn {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: #6B7280;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .modal-dialog-close-btn:hover {
+    background: #1F1F1F;
+    color: #FFFFFF;
+  }
+  .modal-dialog-body {
+    padding: 1rem 1.25rem;
+  }
+  .modal-dialog-input {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid #2A2A2A;
+    border-radius: 0.625rem;
+    font-family: 'Inter', sans-serif;
+    font-size: var(--fs-body);
+    color: #FFFFFF;
+    background: #1A1A1A;
+    outline: none;
+    resize: none;
+    line-height: 1.5;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+  }
+  .modal-dialog-input::placeholder {
+    color: #4B5563;
+  }
+  .modal-dialog-input:focus {
+    border-color: #4B5563;
+  }
+  .modal-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem 1rem;
+  }
+
+  /* ── For backward compatibility ──────────────────────────────────────── */
+  .rename-backdrop { @apply modal-dialog-backdrop; }
+  .rename-modal { @apply modal-dialog-container; }
+  .rename-header { @apply modal-dialog-header; }
+  .rename-title { @apply modal-dialog-title; }
+  .rename-close-btn { @apply modal-dialog-close-btn; }
+  .rename-body { @apply modal-dialog-body; }
+  .rename-input { @apply modal-dialog-input; }
+  .rename-actions { @apply modal-dialog-actions; }
+  @keyframes rename-enter {
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
   /* Busy indicator bouncing dots */
   .busy-dot {
     display: inline-block;
