@@ -89,7 +89,7 @@ async function _createSocket() {
       try {
         const remoteJid = msg.key?.remoteJid
         if (!remoteJid) continue
-        // Only accept agentl 1:1 chats — skip groups, channels, status, broadcasts
+        // Only accept personal 1:1 chats — skip groups, channels, status, broadcasts
         if (!remoteJid.endsWith('@s.whatsapp.net') && !remoteJid.endsWith('@lid')) continue
 
         const fromMe = msg.key?.fromMe || false

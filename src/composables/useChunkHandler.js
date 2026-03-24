@@ -485,13 +485,28 @@ export function useChunkHandler({
       if (chunk.type === 'send_message_error') {
         dbg(`send_message_error from Node.js: ${chunk.error}`, 'error')
         // Mark any still-streaming messages as errored (waiting indicator already removed above)
+        let foundStreaming = false
         if (targetChat?.messages) {
           for (const m of targetChat.messages) {
             if (m.streaming) {
+              foundStreaming = true
               m.content = m.content || `Error: ${chunk.error}`
+              m.segments = [{ type: 'text', content: m.content }]
               m.streaming = false
               if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
             }
+          }
+          // If no streaming message exists (error before agent_start), create an error message
+          if (!foundStreaming) {
+            targetChat.messages.push({
+              id: `error-${Date.now()}`,
+              role: 'assistant',
+              content: `Error: ${chunk.error}`,
+              segments: [{ type: 'text', content: `Error: ${chunk.error}` }],
+              streaming: false,
+              isError: true,
+              timestamp: new Date().toISOString(),
+            })
           }
         }
       }

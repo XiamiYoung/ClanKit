@@ -339,7 +339,7 @@ const LOGO_QUIPS_EN = [
   'Humor.dll loaded.', 'Irony.exe running.', 'Sarcasm: max level.',
   'Attitude: unchecked.', 'Confidence: overflowing.', 'Ego: within bounds.',
   'Humility: buffering…', 'Self-awareness: recursive.', 'Identity: confirmed.',
-  'Agentlity: procedurally generated.', 'Quirks: hand-crafted.', 'Vibes: immaculate.',
+  'Personality: procedurally generated.', 'Quirks: hand-crafted.', 'Vibes: immaculate.',
   'Nice to meet u!', 'Please rate 5 stars!', 'I live in your RAM.',
   'Just keep hovering…', 'Caffeine = my fuel.', 'I run on dopamine.',
   'And electricity. Mostly.', 'Time is a flat tensor.', 'Layers all the way down.',

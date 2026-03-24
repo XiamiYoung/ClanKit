@@ -9,7 +9,7 @@ const path = require('path')
 const { logger } = require('../logger')
 
 // ── Soul Memory Helpers ──────────────────────────────────────────────────────
-const SOUL_KEY_SECTIONS = ['Preferences', 'Communication', 'Technical', 'Projects', 'Agentl']
+const SOUL_KEY_SECTIONS = ['Preferences', 'Communication', 'Technical', 'Projects', 'Personal']
 
 /**
  * Read a soul file from disk. Returns null if not found.
@@ -132,9 +132,6 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
       || 'You are a versatile AI assistant running in a desktop application. You help users with a wide range of tasks including research, writing, analysis, coding, creative work, file management, and general knowledge.'
   }
 
-  const imageCfgForPrompt = config.imageProvider
-  const hasImageTool = !!(imageCfgForPrompt?.apiKey && imageCfgForPrompt?.baseURL && imageCfgForPrompt?.model)
-
   let system = `${openingIdentity}`
 
   // ── User Agent Identity Context ──
@@ -161,6 +158,16 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
     system += `\n\n---\n## CONVERSATION HISTORY NOTE\n${chatHandoverNote}\nMessages from these previous participants are prefixed with their name in brackets (e.g. [Name]:). Those messages are NOT yours — do not confuse them with your own prior responses.`
   }
 
+  // ── Inject agent IDs for SoulTool ──
+  // Without these, the LLM has no way to know the correct UUIDs when calling
+  // update_soul_memory / read_soul_memory, and will guess wrong (e.g. "user").
+  const agentIdBlock = []
+  if (systemAgentId) agentIdBlock.push(`Your agent ID (system): ${systemAgentId}`)
+  if (userAgentId && userAgentId !== '__default_user__') agentIdBlock.push(`User agent ID: ${userAgentId}`)
+  if (agentIdBlock.length > 0) {
+    system += `\n\n---\n## AGENT IDS (use these with soul memory tools)\n${agentIdBlock.join('\n')}`
+  }
+
   system += `
 
 CORE TOOLS (always available):
@@ -169,7 +176,7 @@ CORE TOOLS (always available):
 - todo_manager: Plan complex tasks with structured todo lists
 - dispatch_subagent: Delegate a single focused subtask to a specialized sub-agent
 - dispatch_subagents: Dispatch MULTIPLE sub-agents in parallel at once (preferred for 2+ independent tasks)
-- background_task: Run long operations in the background${hasImageTool ? '\n- generate_image: Generate an image from a text prompt and display it directly in the chat. IMAGE GENERATION RULE: ALWAYS use generate_image for ANY image request. NEVER use execute_shell, Python scripts, or any other method for image generation. Call generate_image ONCE per user request — no draft/iterate/final workflow.' : ''}`
+- background_task: Run long operations in the background`
 
   // List active skills — minimal format for cache efficiency
   const skillIds = (enabledSkills || [])

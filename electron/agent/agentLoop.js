@@ -17,7 +17,6 @@ const { logger } = require('../logger')
 const { AnthropicClient }  = require('./core/AnthropicClient')
 const { OpenAIClient }     = require('./core/OpenAIClient')
 const { GeminiClient }       = require('./core/GeminiClient')
-const { GenerateImageTool }  = require('./tools/GenerateImageTool')
 const { ContextManager }   = require('./core/ContextManager')
 const { ToolRegistry }     = require('./tools/ToolRegistry')
 const { SubAgentManager }  = require('./managers/SubAgentManager')
@@ -56,14 +55,14 @@ class AgentLoop {
     // If using new provider config structure
     if (config.provider && config.provider.type) {
       const pType = config.provider.type
-      isOpenAIProvider = (pType === 'openai' || pType === 'deepseek' || pType === 'minimax')
+      isOpenAIProvider = (pType === 'openai' || pType === 'deepseek' || pType === 'minimax' || pType === 'openrouter')
 
       // Normalize config for clients
       if (isOpenAIProvider) {
         config.openaiApiKey = config.provider.apiKey
         config.openaiBaseURL = config.provider.baseURL
         config.customModel = config.provider.model
-        config._directAuth = (pType === 'deepseek' || pType === 'minimax')
+        config._directAuth = (pType === 'deepseek' || pType === 'minimax' || pType === 'openrouter')
       } else {
         config.apiKey = config.provider.apiKey
         config.baseURL = config.provider.baseURL
@@ -517,13 +516,6 @@ class AgentLoop {
       this.taskManager.getToolDefinition()
     ]
 
-    // Add generate_image tool if an image provider is configured
-    const imageCfg = this.config.imageProvider  // { apiKey, baseURL, model }
-    if (imageCfg?.apiKey && imageCfg?.baseURL && imageCfg?.model) {
-      const genImgTool = new GenerateImageTool()
-      allToolsAnthropic.push(genImgTool.definition)
-    }
-
     // Add load_skill tool when skills are available
     if (this.skillPrompts.size > 0) {
       allToolsAnthropic.push({
@@ -920,16 +912,23 @@ class AgentLoop {
           msgs: createParams.messages.length,
           tools: allTools.length,
           thinking: isOpus46 ? 'adaptive' : (supportsThinking ? 'enabled' : 'none'),
-          provider: this.isGoogle ? 'google' : (this.config._directAuth ? 'deepseek' : (this.isOpenAI ? 'openai-compat' : 'anthropic'))
+          provider: this.isGoogle ? 'google' : (this.config.provider?.type || (this.isOpenAI ? 'openai-compat' : 'anthropic'))
         })
 
         if (this.isGoogle) {
           // ── Google Gemini native API (non-streaming, supports inline image output) ──
           const gc = this.geminiClient.getClient()
           const contents = this._toGeminiContents(systemPrompt, conversationMessages)
+          const geminiModelLower = (model || '').toLowerCase()
+          const geminiImageCapable = geminiModelLower.includes('image')
+          const generateConfig = { model, contents }
+          if (geminiImageCapable) {
+            generateConfig.config = { responseModalities: ['TEXT', 'IMAGE'] }
+            logger.agent('Gemini image-capable model detected', { model })
+          }
           let geminiResponse
           try {
-            geminiResponse = await gc.models.generateContent({ model, contents })
+            geminiResponse = await gc.models.generateContent(generateConfig)
           } catch (geminiErr) {
             logger.error('Gemini generateContent FAILED', geminiErr.message)
             throw geminiErr
@@ -959,8 +958,7 @@ class AgentLoop {
             })
           }
 
-          // Gemini image models don't support tool use — always end here
-          stopReason = 'end_turn'
+          // Gemini doesn't support tool use — always end after one response
           assistantContent = [{ type: 'text', text: finalText }]
           conversationMessages.push({ role: 'assistant', content: finalText || '(image generated)' })
 
@@ -970,15 +968,16 @@ class AgentLoop {
           onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
 
           logger.agent('Gemini response end', { iteration, parts: parts.length, images: responseImages.length })
+          break  // exit iteration loop — Gemini has no tool-use cycle
 
         } else if (this.isOpenAI) {
           // ── OpenAI-format streaming ──
           const openaiMessages = this._toOpenAIMessages(systemPrompt, conversationMessages)
-          // DeepSeek has a per-model cap (default 8192); use configured limit or fall back to 8192
-          const deepseekMax = this.config._directAuth
+          // DeepSeek has a per-model cap (default 8192); only apply to deepseek, not other _directAuth providers
+          const isDeepSeek = this.config.provider?.type === 'deepseek'
+          const effectiveMaxTokens = isDeepSeek
             ? Math.min(configuredMaxTokens, Number(this.config.deepseek?.maxTokens) || 8192)
             : configuredMaxTokens
-          const effectiveMaxTokens = deepseekMax
           const openaiParams = {
             model,
             max_tokens: effectiveMaxTokens,
@@ -987,14 +986,24 @@ class AgentLoop {
           }
           if (allTools.length > 0) openaiParams.tools = allTools
 
+          // Image-capable models (e.g. OpenRouter Gemini image-preview) need
+          // modalities: ["text", "image"] and non-streaming mode for image output.
+          const modelLower = (model || '').toLowerCase()
+          const isImageCapable = modelLower.includes('image')
+          if (isImageCapable) {
+            openaiParams.modalities = ['text', 'image']
+            openaiParams.stream = false  // Image generation doesn't work in streaming mode
+            delete openaiParams.tools    // Image models don't support tools
+            logger.agent('Image-capable model detected', { model, modalities: openaiParams.modalities })
+          }
+
           let stream
           try {
             stream = await client.chat.completions.create(openaiParams, {
               signal: this._abortController.signal
             })
           } catch (streamErr) {
-            // Some models (e.g. OpenRouter image-generation models) don't support tool use.
-            // If the error says so, retry once without tools so image generation can proceed.
+            // Some models don't support tool use — retry without tools
             const noToolSupport = streamErr.message?.includes('tool use') ||
                                   streamErr.message?.includes('tool_use') ||
                                   streamErr.status === 404
@@ -1011,9 +1020,53 @@ class AgentLoop {
                 throw retryErr
               }
             } else {
-              logger.error(`${this.config._directAuth ? 'DeepSeek' : 'OpenAI'} stream open FAILED`, streamErr.message)
+              logger.error('OpenAI stream open FAILED', streamErr.message)
               throw streamErr
             }
+          }
+
+          // Non-streaming image model: extract text + images from complete response
+          if (isImageCapable && !openaiParams.stream) {
+            const response = stream  // not a stream, it's a complete response object
+            const msg = response.choices?.[0]?.message || {}
+            const textContent = typeof msg.content === 'string' ? msg.content : ''
+            if (textContent) {
+              finalText += textContent
+              onChunk({ type: 'text', text: textContent })
+              assistantContent.push({ type: 'text', text: textContent })
+            }
+            // Extract images from message.images[]
+            const responseImages = []
+            if (Array.isArray(msg.images)) {
+              for (const img of msg.images) {
+                const url = img?.image_url?.url || img?.url || ''
+                if (url.startsWith('data:')) {
+                  const commaIdx = url.indexOf(',')
+                  const mimeType = url.slice(5, commaIdx).replace(';base64', '')
+                  responseImages.push({ data: url.slice(commaIdx + 1), mimeType: mimeType || 'image/png' })
+                } else if (url) {
+                  responseImages.push({ url })
+                }
+              }
+            }
+            if (responseImages.length > 0) {
+              onChunk({
+                type: 'tool_result',
+                name: '_image',
+                result: `[${responseImages.length} image(s) generated]`,
+                images: responseImages
+              })
+            }
+            logger.agent('Image model response', { textLen: textContent.length, images: responseImages.length, msgKeys: Object.keys(msg) })
+            // Build conversation message and skip streaming loop
+            conversationMessages.push({ role: 'assistant', content: textContent || null })
+            stopReason = response.choices?.[0]?.finish_reason || 'stop'
+            // Rough usage estimate
+            const estTokens = JSON.stringify(openaiMessages).length / 4
+            this.contextManager.inputTokens = Math.ceil(estTokens)
+            onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
+            logger.agent('OpenAI image end', { iteration, stopReason, textLen: textContent.length, images: responseImages.length })
+            break  // skip tool loop — image models don't use tools
           }
 
           // Accumulate streamed tool calls: index → { id, name, arguments }
@@ -1021,8 +1074,10 @@ class AgentLoop {
           let streamedReasoningContent = ''
           const responseImages = []
 
+          let lastChunk = null
           for await (const chunk of stream) {
             if (this.stopped) break
+            lastChunk = chunk
             const choice = chunk.choices?.[0]
             if (!choice) continue
 
@@ -1111,7 +1166,26 @@ class AgentLoop {
             })
           }
 
-          // Emit any images collected from multimodal delta.content arrays
+          // Extract images from the last streaming chunk's message field
+          // OpenRouter image models (Gemini) return images in message.images[]
+          // which only appears in the final chunk, not in streaming deltas
+          if (lastChunk) {
+            const lastMsg = lastChunk.choices?.[0]?.message
+            if (lastMsg && Array.isArray(lastMsg.images)) {
+              for (const img of lastMsg.images) {
+                const url = img?.image_url?.url || img?.url || ''
+                if (url.startsWith('data:')) {
+                  const commaIdx = url.indexOf(',')
+                  const mimeType = url.slice(5, commaIdx).replace(';base64', '')
+                  responseImages.push({ data: url.slice(commaIdx + 1), mimeType: mimeType || 'image/png' })
+                } else if (url) {
+                  responseImages.push({ url })
+                }
+              }
+            }
+          }
+
+          // Emit any images collected (from streaming deltas or final message)
           if (responseImages.length > 0) {
             onChunk({
               type: 'tool_result',
@@ -1137,7 +1211,7 @@ class AgentLoop {
           if (streamedReasoningContent) nativeAssistant.reasoning_content = streamedReasoningContent
           conversationMessages.push(nativeAssistant)
 
-          logger.agent('OpenAI stream end', { iteration, stopReason })
+          logger.agent('OpenAI stream end', { iteration, stopReason, textLen: finalText.length, images: responseImages.length })
 
           // ── Handle tool_calls stop reason ──
           if ((stopReason === 'tool_calls' || stopReason === 'stop' && openaiToolCalls.length > 0) && !this.stopped) {
@@ -1228,9 +1302,6 @@ class AgentLoop {
                   } else if (promptToolMap.has(toolName)) {
                     const promptTool = promptToolMap.get(toolName)
                     result = { success: true, data: promptTool.promptText || '' }
-                  } else if (toolName === 'generate_image') {
-                    const genImgTool = new GenerateImageTool()
-                    result = await genImgTool.execute(toolInput, this.config.imageProvider || {})
                   } else if (toolName === 'submit_plan') {
                     onChunk({ type: 'plan_submitted', plan: toolInput })
                     result = { success: true, status: 'awaiting_approval' }
@@ -1373,12 +1444,6 @@ class AgentLoop {
                 onChunk({ type: 'thinking', text: event.delta.thinking })
               } else if (event.delta.type === 'input_json_delta' && currentToolUse) {
                 currentToolUse.input += event.delta.partial_json
-              } else if (event.delta.type === 'image_delta' && event.delta.image) {
-                // OpenRouter may stream image data via Anthropic SDK (non-standard extension)
-                const img = event.delta.image
-                if (img.source?.data) {
-                  onChunk({ type: 'tool_result', name: '_image', result: '[image generated]', images: [{ data: img.source.data, mimeType: img.source.media_type || 'image/png' }] })
-                }
               }
 
             } else if (event.type === 'content_block_stop') {
@@ -1428,21 +1493,6 @@ class AgentLoop {
                     textLen: b.type === 'text' ? b.text?.length : undefined,
                     textPreview: b.type === 'text' ? b.text?.slice(0, 80) : undefined,
                   })))
-                }
-
-                // Extract any image blocks from finalMessage (OpenRouter image models may
-                // return images in the final message rather than as streaming deltas)
-                if (Array.isArray(finalMessage.content)) {
-                  for (const block of finalMessage.content) {
-                    if (block.type === 'image' && block.source?.data) {
-                      onChunk({
-                        type: 'tool_result',
-                        name: '_image',
-                        result: '[image generated]',
-                        images: [{ data: block.source.data, mimeType: block.source.media_type || 'image/png' }]
-                      })
-                    }
-                  }
                 }
 
                 if (isOpus46 && finalMessage.content) {
@@ -1561,9 +1611,6 @@ class AgentLoop {
                   } else if (promptToolMap.has(toolName)) {
                     const promptTool = promptToolMap.get(toolName)
                     result = { success: true, data: promptTool.promptText || '' }
-                  } else if (toolName === 'generate_image') {
-                    const genImgTool = new GenerateImageTool()
-                    result = await genImgTool.execute(toolInput, this.config.imageProvider || {})
                   } else if (toolName === 'submit_plan') {
                     onChunk({ type: 'plan_submitted', plan: toolInput })
                     result = { success: true, status: 'awaiting_approval' }

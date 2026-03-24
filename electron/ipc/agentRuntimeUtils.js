@@ -32,6 +32,10 @@ function isProviderActive(cfg, providerType) {
 function applyProviderCredsToConfig(cfg, providerType) {
   const { apiKey, baseURL, type: resolvedType } = resolveProviderCreds(cfg, providerType)
   providerType = resolvedType || providerType
+
+  // Always set cfg.provider so AgentLoop constructor can detect provider type
+  cfg.provider = { type: providerType, apiKey, baseURL, model: cfg.customModel }
+
   if (providerType === 'anthropic') {
     cfg.apiKey = apiKey
     cfg.baseURL = baseURL
@@ -41,13 +45,13 @@ function applyProviderCredsToConfig(cfg, providerType) {
     cfg._resolvedProvider = undefined
     cfg.defaultProvider = undefined
   } else if (providerType === 'openrouter') {
-    cfg.apiKey = apiKey
-    cfg.baseURL = baseURL
-    delete cfg._directAuth
-    delete cfg.openaiApiKey
-    delete cfg.openaiBaseURL
-    cfg._resolvedProvider = undefined
-    cfg.defaultProvider = undefined
+    cfg.openaiApiKey = apiKey
+    cfg.openaiBaseURL = baseURL
+    cfg._resolvedProvider = 'openai'
+    cfg._directAuth = true
+    cfg.defaultProvider = 'openai'
+    delete cfg.apiKey
+    delete cfg.baseURL
   } else if (providerType === 'openai') {
     cfg.openaiApiKey = apiKey
     cfg.openaiBaseURL = baseURL
@@ -64,6 +68,14 @@ function applyProviderCredsToConfig(cfg, providerType) {
     cfg.defaultProvider = 'openai'
     delete cfg.apiKey
     delete cfg.baseURL
+  } else if (providerType === 'google') {
+    cfg.apiKey = apiKey
+    cfg.baseURL = baseURL
+    delete cfg._directAuth
+    delete cfg.openaiApiKey
+    delete cfg.openaiBaseURL
+    cfg._resolvedProvider = undefined
+    cfg.defaultProvider = undefined
   } else {
     cfg.openaiApiKey = apiKey
     cfg.openaiBaseURL = baseURL
@@ -115,7 +127,7 @@ function validateLoopConfig(cfg) {
 
   if (providerType === 'google') return null
 
-  const isOpenAICompat = providerType === 'openai' || providerType === 'deepseek' || providerType === 'minimax'
+  const isOpenAICompat = providerType === 'openai' || providerType === 'deepseek' || providerType === 'minimax' || providerType === 'openrouter'
   if (isOpenAICompat) {
     const baseURL = cfg.openaiBaseURL || cfg.openai?.baseURL || cfg.baseURL || ''
     const apiKey = cfg.openaiApiKey || cfg.openai?.apiKey || cfg.apiKey || ''

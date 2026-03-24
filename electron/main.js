@@ -52,35 +52,6 @@ function buildProviderClientConfig(provider, model = null) {
   return cfg
 }
 
-/**
- * Resolve the image generation provider from config.
- * Looks for a provider with type 'openrouter' or 'google' that has imageModel set,
- * or falls back to any active OpenRouter provider (which supports Gemini image models).
- * Returns { apiKey, baseURL, model } or null.
- */
-function _resolveImageProvider(cfg) {
-  const providers = cfg?.providers || []
-  // Prefer a provider that has an explicit imageModel field
-  const withImageModel = providers.find(p => p.imageModel && p.apiKey)
-  if (withImageModel) {
-    return {
-      apiKey:   withImageModel.apiKey,
-      baseURL:  withImageModel.baseURL || '',
-      model:    withImageModel.imageModel,
-    }
-  }
-  // Fall back to first active OpenRouter provider (can route to any Gemini image model)
-  const or = providers.find(p => p.type === 'openrouter' && p.isActive && p.apiKey)
-  if (or && or.settings?.imageModel) {
-    return {
-      apiKey:  or.apiKey,
-      baseURL: or.baseURL || 'https://openrouter.ai/api/v1',
-      model:   or.settings.imageModel,
-    }
-  }
-  return null
-}
-
 // Suppress libsignal verbose warnings — they use console.warn internally
 const originalWarn = console.warn
 console.warn = function (...args) {

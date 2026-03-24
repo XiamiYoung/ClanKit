@@ -149,6 +149,8 @@ onMounted(async () => {
   if (configStore.config.openrouter?.apiKey) modelsStore.fetchOpenRouterModels()
   if (configStore.config.openai?.apiKey) modelsStore.fetchOpenAIModels()
   if (configStore.config.deepseek?.apiKey && configStore.config.deepseek?.baseURL) modelsStore.fetchDeepSeekModels()
+  const googleProv = (configStore.config.providers || []).find(p => p.type === 'google')
+  if (googleProv?.apiKey) modelsStore.fetchGoogleModels()
 
   // Fire all store loads concurrently — none blocks the UI
   Promise.all([

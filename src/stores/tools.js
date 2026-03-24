@@ -151,6 +151,12 @@ export const useToolsStore = defineStore('tools', () => {
     } else {
       tools.value = []
     }
+    // Re-attach i18nKey from BUILTIN_TOOLS for any existing builtins (persist() strips it)
+    const builtinMap = new Map(BUILTIN_TOOLS.map(bt => [bt.id, bt.i18nKey]))
+    for (const t of tools.value) {
+      const key = builtinMap.get(t.id)
+      if (key) t.i18nKey = key
+    }
     // Seed missing built-in tools, skipping any the user has explicitly deleted
     const existingIds = new Set(tools.value.map(t => t.id))
     const missing = BUILTIN_TOOLS.filter(bt => !existingIds.has(bt.id) && !deletedBuiltins.value.has(bt.id))

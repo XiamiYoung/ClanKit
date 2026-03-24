@@ -464,18 +464,6 @@
                     </div>
                   </template>
 
-                  <!-- Image Model (OpenRouter / Google) -->
-                  <template v-if="['openrouter','google'].includes(selectedProvider.type)">
-                    <div class="form-divider"></div>
-                    <div class="form-group compact">
-                      <label class="form-label">Image Generation Model <span class="form-label-hint">optional</span></label>
-                      <input v-model="selectedProvider.imageModel" type="text" class="field font-mono"
-                        :placeholder="selectedProvider.type === 'openrouter' ? 'google/gemini-3-pro-image-preview' : 'gemini-3-pro-image-preview'"
-                      />
-                      <p class="hint">Used by the <code>generate_image</code> tool. Must be a model that supports image output.</p>
-                    </div>
-                  </template>
-
                   <!-- Generic Settings -->
                   <div class="form-divider"></div>
                   <div class="form-section-subheader">
@@ -1803,6 +1791,7 @@ import { useConfigStore } from '../stores/config'
 import { useModelsStore } from '../stores/models'
 import AppButton from '../components/common/AppButton.vue'
 import ProviderModelPicker from '../components/common/ProviderModelPicker.vue'
+import ComboBox from '../components/common/ComboBox.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import { useI18n } from '../i18n/useI18n'
 import { DEFAULT_PRICES } from '../utils/pricing.js'

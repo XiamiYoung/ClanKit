@@ -95,6 +95,7 @@ const modelsLoading = computed(() => {
   if (props.provider === 'openrouter') return modelsStore.openrouterLoading
   if (props.provider === 'openai')     return modelsStore.openaiLoading
   if (props.provider === 'deepseek')   return modelsStore.deepseekLoading
+  if (props.provider === 'google')     return modelsStore.googleLoading
   return false
 })
 
@@ -129,6 +130,7 @@ function selectProvider(type) {
   if (type === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
   if (type === 'openai'     && !modelsStore.openaiCached)     modelsStore.fetchOpenAIModels()
   if (type === 'deepseek'   && !modelsStore.deepseekCached)   modelsStore.fetchDeepSeekModels()
+  if (type === 'google'     && !modelsStore.googleCached)     modelsStore.fetchGoogleModels()
 }
 
 function selectModel(id) {

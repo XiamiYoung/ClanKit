@@ -425,10 +425,11 @@ export const useChatsStore = defineStore('chats', () => {
     await persistIndex()
   }
 
-  async function renameChat(id, title) {
+  async function renameChat(id, title, icon) {
     const chat = chats.value.find(c => c.id === id)
     if (chat) {
       chat.title = title
+      if (icon !== undefined) chat.icon = icon
       chat.autoTitleEligible = false
       chat.autoTitleLocked = true
       chat.updatedAt = Date.now()

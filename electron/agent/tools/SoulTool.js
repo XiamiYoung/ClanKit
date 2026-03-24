@@ -21,7 +21,7 @@ const SECTIONS = [
   'Communication',
   'Technical',
   'Projects',
-  'Agentl',
+  'Personal',
   'Interaction Notes',
   'Memory Updates Log',
 ]
@@ -115,7 +115,7 @@ class SoulUpdateTool extends BaseTool {
   constructor(soulsDir) {
     super(
       'update_soul_memory',
-      'Update memory for a user or system agent. For user agents (agent_type: "users"): store user preferences, facts, habits, and agentl context. For system agents (agent_type: "system"): store behavioral learnings, tone/format preferences, and domain context that help this AI agent respond better. Always check existing memory with read_soul_memory before adding duplicates.',
+      'Update memory for a user or system agent. For user agents (agent_type: "users"): store user preferences, facts, habits, and personal context. For system agents (agent_type: "system"): store behavioral learnings, tone/format preferences, and domain context that help this AI agent respond better. Always check existing memory with read_soul_memory before adding duplicates.',
       'update_soul_memory'
     )
     this.soulsDir = soulsDir
@@ -127,7 +127,7 @@ class SoulUpdateTool extends BaseTool {
       properties: {
         agent_id:   { type: 'string', description: 'ID of the agent whose memory to update' },
         agent_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user agent' },
-        section:      { type: 'string', description: 'Section name: Preferences, Communication, Technical, Projects, Agentl, Interaction Notes' },
+        section:      { type: 'string', description: 'Section name: Preferences, Communication, Technical, Projects, Personal, Interaction Notes' },
         action:       { type: 'string', enum: ['add', 'update', 'remove'], description: 'What to do' },
         entry:        { type: 'string', description: 'The memory entry to add/update/remove' },
         old_entry:    { type: 'string', description: 'For update action: the existing entry text to replace' },

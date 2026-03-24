@@ -72,7 +72,11 @@ function init() {
     CHATS_DIR,
     CHATS_INDEX_FILE:     path.join(CHATS_DIR, 'index.json'),
     CONFIG_FILE:          path.join(DATA_DIR, 'config.json'),
-    AGENTS_FILE:          path.join(DATA_DIR, 'agents.json'),
+    AGENTS_FILE:          fs.existsSync(path.join(DATA_DIR, 'agents.json'))
+                            ? path.join(DATA_DIR, 'agents.json')
+                            : (fs.existsSync(path.join(DATA_DIR, 'personas.json'))
+                              ? path.join(DATA_DIR, 'personas.json')
+                              : path.join(DATA_DIR, 'agents.json')),
     MCP_SERVERS_FILE:     path.join(DATA_DIR, 'mcp-servers.json'),
     TOOLS_FILE:           path.join(DATA_DIR, 'tools.json'),
     SOULS_DIR:            path.join(DATA_DIR, 'souls'),
@@ -177,19 +181,6 @@ function buildProviderClientConfig(provider, model = null) {
   return cfg
 }
 
-function resolveImageProvider(cfg) {
-  const providers = cfg?.providers || []
-  const withImageModel = providers.find(p => p.imageModel && p.apiKey)
-  if (withImageModel) {
-    return { apiKey: withImageModel.apiKey, baseURL: withImageModel.baseURL || '', model: withImageModel.imageModel }
-  }
-  const or = providers.find(p => p.type === 'openrouter' && p.isActive && p.apiKey)
-  if (or && or.settings?.imageModel) {
-    return { apiKey: or.apiKey, baseURL: or.baseURL || 'https://openrouter.ai/api/v1', model: or.settings.imageModel }
-  }
-  return null
-}
-
 // --- Env-backed path accessors ------------------------------------------------
 function getEnvPaths() {
   const cfg = readJSON(_paths.CONFIG_FILE, {})
@@ -215,5 +206,4 @@ module.exports = {
   getProviderByType,
   getProviderById,
   buildProviderClientConfig,
-  resolveImageProvider,
 }

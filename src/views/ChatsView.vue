@@ -696,29 +696,45 @@
     <div v-if="showRenameModal" class="modal-dialog-backdrop">
       <div class="modal-dialog-container" @keydown.escape="cancelRename">
         <div class="modal-dialog-header">
-          <h3 class="modal-dialog-title">Rename Chat</h3>
+          <h3 class="modal-dialog-title">{{ t('chats.renameChat') }}</h3>
           <button class="modal-dialog-close-btn" @click="cancelRename" aria-label="Close">
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
         <div class="modal-dialog-body">
-          <textarea
-            ref="renameInput"
-            v-model="editingTitle"
-            @keydown.enter.exact="onRenameKeydown"
-            @compositionstart="renameComposing = true"
-            @compositionend="renameComposing = false"
-            class="modal-dialog-input"
-            placeholder="Enter chat name"
-            rows="1"
-          ></textarea>
+          <div class="newchat-name-row-v2">
+            <button class="newchat-icon-picker-btn" @click.stop="showRenameIconPicker = true" :title="t('chats.chatIcon')">
+              <span class="newchat-icon-display">{{ editingIcon || '💬' }}</span>
+              <svg class="newchat-icon-edit" style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <textarea
+              ref="renameInput"
+              v-model="editingTitle"
+              @keydown.enter.exact="onRenameKeydown"
+              @compositionstart="renameComposing = true"
+              @compositionend="renameComposing = false"
+              class="modal-dialog-input"
+              style="flex:1; min-width:0;"
+              placeholder="Enter chat name"
+              rows="1"
+            ></textarea>
+          </div>
         </div>
         <div class="modal-dialog-actions">
-          <AppButton variant="secondary" size="modal" @click="cancelRename">Cancel</AppButton>
-          <AppButton size="modal" :disabled="!editingTitle.trim()" @click="confirmRename">Save</AppButton>
+          <AppButton variant="secondary" size="modal" @click="cancelRename">{{ t('common.cancel') }}</AppButton>
+          <AppButton size="modal" :disabled="!editingTitle.trim()" @click="confirmRename">{{ t('common.save') }}</AppButton>
         </div>
       </div>
     </div>
+    <EmojiPicker
+      v-if="showRenameIconPicker"
+      :current="editingIcon"
+      @select="onRenameIconSelect"
+      @close="showRenameIconPicker = false"
+    />
   </div>
 
   <!-- New Chat Modal -->
@@ -978,8 +994,8 @@ const {
   sidebarWidth, chatHeaderRef, chatSidebarCollapsed,
   treeLastSelected, selectedFolderId, rootExpanded, isResizing,
   anyFolderExpanded, hasFolders, startResize,
-  renameInput, showRenameModal, editingChatId, editingTitle, renameComposing,
-  startRename, confirmRename, cancelRename, onRenameKeydown,
+  renameInput, showRenameModal, editingChatId, editingTitle, editingIcon, showRenameIconPicker, renameComposing,
+  startRename, confirmRename, cancelRename, onRenameKeydown, onRenameIconSelect,
   chatFilterQuery, chatSearchCache, filteredChats, ensureChatSearchable,
   treeCtxMenu, treeCtxDialog, folderModal, ctxDialogInputRef, treeTooltip,
   openTreeContextMenu, closeTreeCtxMenu, openCtxDialog,

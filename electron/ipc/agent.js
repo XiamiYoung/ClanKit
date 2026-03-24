@@ -37,7 +37,6 @@ const {
   validateLoopConfig: _validateLoopConfig,
   buildHeuristicSequentialDispatch: _buildHeuristicSequentialDispatch,
 } = require('./agentRuntimeUtils')
-const { resolveImageProvider } = ds
 
 
 // --- IPC: Agent Loop ---------------------------------------------------------
@@ -114,7 +113,15 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
       return
     }
 
-    const userAgentId = agentPrompts?.userAgentId || '__default_user__'
+    let userAgentId = agentPrompts?.userAgentId || null
+    // Resolve default user agent when chat has no explicit user agent
+    if (!userAgentId || userAgentId === '__default_user__') {
+      try {
+        const allAgents = normalizeAgents(ds.readJSON(ds.paths().AGENTS_FILE, { agents: [] }))
+        const defaultUsr = (allAgents || []).find(a => a.type === 'user' && a.isDefault)
+        userAgentId = defaultUsr?.id || '__default_user__'
+      } catch (_) { userAgentId = '__default_user__' }
+    }
     const systemAgentId = agentPrompts?.systemAgentId || '__default_system__'
 
     logger.debug('[Memory] agentIds + soulsDir', { chatId, userAgentId, systemAgentId, soulsDir: ds.paths().SOULS_DIR })
@@ -163,7 +170,7 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
       logger.agent('Memory auto-saved', { chatId, count: autoSave.length })
 
       // Also write to new memory files (USER.md / MEMORY.md)
-      const userAgentIdForMemory = agentPrompts?.userAgentId || '__default_user__'
+      const userAgentIdForMemory = userAgentId
       for (const item of autoSave) {
         appendMemoryEntry(
           item.agentId,
@@ -265,7 +272,8 @@ function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetCh
   const agentsById = Object.fromEntries((agents || []).map(a => [a.id, a]))
 
   const usrAgentId = targetChatMeta.userAgentId || null
-  const usrAgent   = usrAgentId ? agentsById[usrAgentId] : null
+  const usrAgent   = usrAgentId ? agentsById[usrAgentId]
+    : (agents || []).find(a => a.type === 'user' && a.isDefault) || null
   const userAgentPrompt = _buildUserAgentPrompt(usrAgent)
 
   return respondingIds.map(pid => {
@@ -665,8 +673,6 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.DoCPath      = fullCfg.DoCPath      || ''
   loopConfig.memoryDir    = ds.paths().MEMORY_DIR
   loopConfig.chatId       = chatId
-  // Inject image provider config so generate_image tool can call image generation APIs
-  loopConfig.imageProvider = resolveImageProvider(fullCfg)
   const loopConfigError = _validateLoopConfig(loopConfig)
   if (loopConfigError) {
     logger.error('agent:run invalid loop config', { chatId, error: loopConfigError })
@@ -2170,21 +2176,26 @@ ipcMain.handle('agent:send-message', async (event, {
     const results = await Promise.all(promises)
 
     for (const r of results) {
-      if (r.text) trackMessages.push({ role: 'assistant', agentId: r.agentId, content: r.text })
+      if (r.text) {
+        trackMessages.push({ role: 'assistant', agentId: r.agentId, content: r.text })
+        logger.agent(`[collab-debug] trackMessages.push agentId=${r.agentId} textLen=${r.text.length} tail="${r.text.slice(-150)}"`, { chatId })
+      } else {
+        logger.agent(`[collab-debug] runGroupRound result has NO text for agentId=${r.agentId}`, { chatId })
+      }
     }
 
     return results
   }
 
-  function buildGroupApiMessages(responderId, sourceMessages = trackMessages) {
+  function buildGroupApiMessages(responderId, sourceMessages, groupAgentsList, allAgents) {
     const currentUserAgentId = targetChatMeta.userAgentId || null
-    const agentsById = Object.fromEntries((allData.agents || []).map(a => [a.id, a]))
+    const agentsById = Object.fromEntries((allAgents || []).map(a => [a.id, a]))
 
     return sourceMessages
       .filter(m => (m.role === 'user' && !!m.content) || (m.role === 'assistant' && !!m.content))
       .map(m => {
         if (m.role === 'assistant' && m.agentId && m.agentId !== responderId) {
-          const other = groupAgents.find(a => a.id === m.agentId)
+          const other = groupAgentsList.find(a => a.id === m.agentId)
           return { role: 'assistant', content: `[${other?.name || 'Agent'}]: ${m.content}` }
         }
         if (m.role === 'user' && m.userAgentId && m.userAgentId !== currentUserAgentId) {
@@ -2202,11 +2213,19 @@ ipcMain.handle('agent:send-message', async (event, {
     const newMessages = trackMessages.slice(prevMsgCount)
       .filter(m => m.role === 'assistant' && m.agentId && groupIdsArr.includes(m.agentId) && m.content)
 
+    logger.agent(`[collab-debug] round=${iterationCount} prevMsgCount=${prevMsgCount} trackMessages.length=${trackMessages.length} newMessages.length=${newMessages.length}`, { chatId })
+    for (const nm of newMessages) {
+      const contentSnip = (nm.content || '').slice(-200)
+      logger.agent(`[collab-debug]   newMsg agentId=${nm.agentId} contentTail="${contentSnip}"`, { chatId })
+    }
+
     const nextRespondingSet = new Set()
     for (let msgIdx = 0; msgIdx < newMessages.length; msgIdx++) {
       const msg = newMessages[msgIdx]
       const { mentions } = parseMentions(msg.content, groupAgents)
       const others = mentions.filter(id => id !== msg.agentId)
+      const sourceAgent = groupAgents.find(a => a.id === msg.agentId)
+      logger.agent(`[collab-debug]   parseMentions from="${sourceAgent?.name || msg.agentId}" mentions=[${mentions.join(',')}] others=[${others.join(',')}]`, { chatId })
       if (others.length === 0) continue
 
       let addressees = others
@@ -2214,20 +2233,24 @@ ipcMain.handle('agent:send-message', async (event, {
         try {
           const mentionedAgents = others.map(id => { const a = groupAgents.find(g => g.id === id); return a ? { id, name: a.name } : null }).filter(Boolean)
           const result = await _resolveAddresseesInternal(msg.content, mentionedAgents, fullCfg).catch(() => null)
+          logger.agent(`[collab-debug]   resolveAddressees result=${JSON.stringify(result?.addresseeIds)}`, { chatId })
           if (result?.addresseeIds?.length > 0) addressees = result.addresseeIds
         } catch {}
       }
 
+      logger.agent(`[collab-debug]   addressees=[${addressees.join(',')}] iterationCount=${iterationCount}`, { chatId })
       for (const id of addressees) {
         if (iterationCount === 0) {
           nextRespondingSet.add(id)
         } else {
           const alreadyRepliedAfter = newMessages.slice(msgIdx + 1).some(m => m.agentId === id)
+          logger.agent(`[collab-debug]   id=${id} alreadyRepliedAfter=${alreadyRepliedAfter}`, { chatId })
           if (!alreadyRepliedAfter) nextRespondingSet.add(id)
         }
       }
     }
 
+    logger.agent(`[collab-debug] nextRespondingSet=[${[...nextRespondingSet].join(',')}]`, { chatId })
     if (nextRespondingSet.size === 0) return
 
     logger.agent(`[send-message] collaboration round ${iterationCount + 1}`, { chatId, agents: [...nextRespondingSet] })
@@ -2247,7 +2270,7 @@ ipcMain.handle('agent:send-message', async (event, {
       const agent = groupAgents.find(a => a.id === pid)
       if (!agent) continue
 
-      const seqApiMessages = buildGroupApiMessages(pid)
+      const seqApiMessages = buildGroupApiMessages(pid, trackMessages, groupAgents, allData.agents)
 
       if (iterationCount >= 2 && seqApiMessages.length > 0) {
         const originalPrompt = trackMessages.find(m => m.role === 'user')?.content?.slice(0, 500) || ''
@@ -2446,13 +2469,18 @@ ipcMain.handle('agent:send-message', async (event, {
         const firstRoundIds = new Set(firstRoundRuns.map(r => r.agentId))
         const remainingRuns = agentRuns.filter(r => !firstRoundIds.has(r.agentId))
         for (const run of remainingRuns) {
-          const seqApiMessages = buildGroupApiMessages(run.agentId)
+          const seqApiMessages = buildGroupApiMessages(run.agentId, trackMessages, groupAgents, allData.agents)
           await runGroupRound([run], seqApiMessages, [], trackMessages, fullCfg)
         }
       }
 
       // Collaboration loop
       if (groupAgents.length >= 2) {
+        logger.agent(`[collab-debug] entering collaboration. groupAgents=[${groupAgents.map(a=>a.name).join(',')}] effectiveGroupIds=[${effectiveGroupIds.join(',')}] msgCountBeforeRun=${msgCountBeforeRun} trackMessages.length=${trackMessages.length}`, { chatId })
+        for (let ti = msgCountBeforeRun; ti < trackMessages.length; ti++) {
+          const tm = trackMessages[ti]
+          logger.agent(`[collab-debug]   trackMsg[${ti}] role=${tm.role} agentId=${tm.agentId || 'none'} hasContent=${!!tm.content} contentLen=${(tm.content||'').length}`, { chatId })
+        }
         await triggerCollaboration(trackMessages, groupAgents, effectiveGroupIds, allData, fullCfg, 0, msgCountBeforeRun)
       }
 

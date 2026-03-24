@@ -130,26 +130,37 @@ export function useChatTree({ mentionInputRef } = {}) {
   const showRenameModal = ref(false)
   const editingChatId = ref(null)
   const editingTitle = ref('')
+  const editingIcon = ref('')
+  const showRenameIconPicker = ref(false)
   const renameComposing = ref(false)
 
   function startRename(chat) {
     editingChatId.value = chat.id
     editingTitle.value = chat.title
+    editingIcon.value = chat.icon || ''
+    showRenameIconPicker.value = false
     showRenameModal.value = true
     nextTick(() => renameInput.value?.focus())
   }
 
+  function onRenameIconSelect(emoji) {
+    editingIcon.value = emoji || ''
+    showRenameIconPicker.value = false
+  }
+
   async function confirmRename() {
     if (editingChatId.value && editingTitle.value.trim()) {
-      await chatsStore.renameChat(editingChatId.value, editingTitle.value.trim())
+      await chatsStore.renameChat(editingChatId.value, editingTitle.value.trim(), editingIcon.value.trim())
     }
     showRenameModal.value = false
     editingChatId.value = null
+    showRenameIconPicker.value = false
   }
 
   function cancelRename() {
     showRenameModal.value = false
     editingChatId.value = null
+    showRenameIconPicker.value = false
   }
 
   function onRenameKeydown(e) {
@@ -647,11 +658,14 @@ export function useChatTree({ mentionInputRef } = {}) {
     showRenameModal,
     editingChatId,
     editingTitle,
+    editingIcon,
+    showRenameIconPicker,
     renameComposing,
     startRename,
     confirmRename,
     cancelRename,
     onRenameKeydown,
+    onRenameIconSelect,
     // Filter
     chatFilterQuery,
     chatSearchCache,

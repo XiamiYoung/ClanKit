@@ -350,7 +350,7 @@
               @click.stop
             />
             <div class="soul-model-list" :class="{ 'soul-input-error': errors.model }">
-              <div v-if="(draftProviderType === 'openrouter' && modelsStore.openrouterLoading) || (draftProviderType === 'openai' && modelsStore.openaiLoading) || (draftProviderType === 'deepseek' && modelsStore.deepseekLoading)" class="soul-model-loading">
+              <div v-if="(draftProviderType === 'openrouter' && modelsStore.openrouterLoading) || (draftProviderType === 'openai' && modelsStore.openaiLoading) || (draftProviderType === 'deepseek' && modelsStore.deepseekLoading) || (draftProviderType === 'google' && modelsStore.googleLoading)" class="soul-model-loading">
                 {{ t('common.loading') }}...
               </div>
               <button
@@ -697,6 +697,7 @@ function selectProvider(prov) {
   if (providerType === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
   if (providerType === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
   if (providerType === 'deepseek' && !modelsStore.deepseekCached) modelsStore.fetchDeepSeekModels()
+  if (providerType === 'google' && !modelsStore.googleCached) modelsStore.fetchGoogleModels()
 }
 
 // ── Memory & content ──
@@ -1013,6 +1014,7 @@ onMounted(() => {
   if (draftProviderType.value === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
   if (draftProviderType.value === 'openai' && !modelsStore.openaiCached) modelsStore.fetchOpenAIModels()
   if (draftProviderType.value === 'deepseek' && !modelsStore.deepseekCached) modelsStore.fetchDeepSeekModels()
+  if (draftProviderType.value === 'google' && !modelsStore.googleCached) modelsStore.fetchGoogleModels()
   // Ensure capability stores are loaded
   if (toolsStore.tools.length === 0) toolsStore.loadTools()
   if (skillsStore.skills.length === 0) skillsStore.loadSkills(configStore.config.skillsPath)

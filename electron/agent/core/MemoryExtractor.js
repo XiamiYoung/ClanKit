@@ -26,13 +26,13 @@ function buildExtractionPrompt(participants, language) {
   if (hasParticipants) {
     const nameList = participants.map(p => `"${p.name}"`).join(', ')
     targetInstructions = `For each memory, specify the target:
-- "user" for facts about the human user (their preferences, habits, agentl info)
+- "user" for facts about the human user (their preferences, habits, personal info)
 - The exact agent name (one of: ${nameList}) for facts about or relevant to a specific AI agent
   Examples: behavioral feedback for that agent, facts the agent should remember, domain knowledge for their role
 - If unsure which agent a fact belongs to, use the agent name that is most relevant to the topic`
   } else {
     targetInstructions = `For each memory, specify the target:
-- "user" for facts about the human user (their preferences, habits, agentl info)
+- "user" for facts about the human user (their preferences, habits, personal info)
 - "system" for facts about how the AI agent should behave (tone, format, approach preferences)`
   }
 
@@ -44,8 +44,8 @@ You will be given:
 ${hasParticipants ? '3. A list of AI agents participating in this conversation' : ''}
 
 WHAT TO EXTRACT (only these categories):
-- Key agentl facts: name, title, role, employer, location, age
-- Agentlity traits, character, core values, communication style
+- Key personal facts: name, title, role, employer, location, age
+- Personality traits, character, core values, communication style
 - Hobbies, interests, passions
 - Strong preferences: tools, languages, frameworks, workflows, editors, OS
 - Behavioral feedback: how the AI should adjust tone, format, verbosity, approach
@@ -64,7 +64,7 @@ WHAT TO IGNORE (never extract these):
 - Inferred or assumed context — only extract facts EXPLICITLY stated by the user in their message
 - Anything the user did NOT actually say — do not fabricate or infer projects, intentions, or goals from thin air
 
-CRITICAL: Only extract from what the USER explicitly said. If the user message is a greeting or contains no substantive agentl information, return an EMPTY array. Do not infer, assume, or fabricate. When in doubt, return empty.
+CRITICAL: Only extract from what the USER explicitly said. If the user message is a greeting or contains no substantive personal information, return an EMPTY array. Do not infer, assume, or fabricate. When in doubt, return empty.
 
 CONFIDENCE SCORING:
 - 0.9–1.0: Very certain explicit fact directly stated by the user (e.g. "I work at Google", "I prefer TypeScript")
@@ -73,7 +73,7 @@ CONFIDENCE SCORING:
 
 Rules:
 - ${targetInstructions}
-- Choose the most appropriate section: Preferences, Communication, Technical, Projects, Agentl, Interaction Notes
+- Choose the most appropriate section: Preferences, Communication, Technical, Projects, Personal, Interaction Notes
 - Keep entries concise — one line each, written as bullet-point facts
 - If there is nothing worth remembering, return an empty array
 - LANGUAGE: Write all memory entries in ${language === 'zh' ? 'Chinese (Simplified)' : 'the same language the user is speaking in the conversation'}. Match the language of the conversation — if the user speaks Chinese, write memories in Chinese; if English, write in English.

@@ -231,7 +231,6 @@ function register() {
     if (!mainWindow) return
     // arg can be a plain boolean (initial enter/exit) or { enable, height?, width? }
     const enable = typeof arg === 'object' ? arg.enable : !!arg
-    const { width: sw } = screen.getPrimaryDisplay().workAreaSize
     if (enable) {
       const explicitW = typeof arg === 'object' && arg.width
       const explicitH = typeof arg === 'object' && arg.height
@@ -240,17 +239,34 @@ function register() {
       if (!_preMinibarBounds) {
         // Entering minibar mode: save normal bounds, disable OS resize, apply constraints
         _preMinibarBounds = mainWindow.getBounds()
+        const allDisplays = screen.getAllDisplays()
+        const currentDisplay = screen.getDisplayMatching(_preMinibarBounds)
+        logger.info('[minibar] === ENTERING MINIBAR MODE ===')
+        logger.info('[minibar] mainWindow bounds:', JSON.stringify(_preMinibarBounds))
+        logger.info('[minibar] all displays:', JSON.stringify(allDisplays.map((d, i) => ({ i, id: d.id, bounds: d.bounds, workArea: d.workArea }))))
+        logger.info('[minibar] matched display:', JSON.stringify({ id: currentDisplay.id, bounds: currentDisplay.bounds, workArea: currentDisplay.workArea }))
+        logger.info('[minibar] _lastMinibarBounds:', JSON.stringify(_lastMinibarBounds))
         mainWindow.setMinimumSize(200, 80)
         mainWindow.setResizable(false)
         mainWindow.setAlwaysOnTop(true, 'floating')
-        if (_lastMinibarBounds) {
+        const wa = currentDisplay.workArea
+        // Check if saved minibar bounds are on the same display as the main window
+        const savedOnSameDisplay = _lastMinibarBounds
+          && screen.getDisplayMatching(_lastMinibarBounds).id === currentDisplay.id
+        if (_lastMinibarBounds && savedOnSameDisplay) {
+          logger.info('[minibar] restoring saved bounds (same display):', JSON.stringify(_lastMinibarBounds))
           _minibarIntendedW = _lastMinibarBounds.width
           _minibarIntendedH = _lastMinibarBounds.height
           mainWindow.setBounds(_lastMinibarBounds)
         } else {
-          _minibarIntendedW = barW
-          _minibarIntendedH = barH
-          mainWindow.setBounds({ x: Math.round((sw - barW) / 2), y: 0, width: barW, height: barH })
+          // No saved bounds, or saved on a different monitor — center on current display
+          const useW = _lastMinibarBounds ? _lastMinibarBounds.width : barW
+          const useH = _lastMinibarBounds ? _lastMinibarBounds.height : barH
+          _minibarIntendedW = useW
+          _minibarIntendedH = useH
+          const newBounds = { x: Math.round(wa.x + (wa.width - useW) / 2), y: wa.y, width: useW, height: useH }
+          logger.info('[minibar] centering on current display:', JSON.stringify(newBounds), 'savedOnSameDisplay:', savedOnSameDisplay)
+          mainWindow.setBounds(newBounds)
         }
       } else {
         // Already in minibar mode: only update what was explicitly passed
