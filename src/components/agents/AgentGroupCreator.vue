@@ -70,7 +70,11 @@
           <div v-if="activeTab === 'custom'" class="agc-custom">
             <div class="agc-custom-input-wrap">
               <div class="agc-custom-top-row">
-                <div></div>
+                <span v-if="_aiSurpriseGenerating" class="agc-ai-hint">
+                  <svg class="agc-ai-hint-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                  {{ t('agents.groupCreator.generatingIdeas', 'Generating new ideas...') }}
+                </span>
+                <div v-else></div>
                 <AppButton
                   size="compact"
                   class="bv-ai-micro"
@@ -341,9 +345,29 @@ const ZH_SURPRISE_PHRASES = [
 const _surpriseUsedEN = []
 const _surpriseUsedZH = []
 
+// AI-generated surprise pool
+const _aiSurprisePool = ref([])
+const _aiSurpriseIndex = ref(0)
+const _aiSurpriseGenerating = ref(false)
+
 function generateDynamicSurpriseIdea() {
   const appLang = configStore.config?.language || 'en'
   const isZh = appLang.startsWith('zh')
+
+  // Use AI pool if available
+  if (_aiSurprisePool.value.length > 0 && _aiSurpriseIndex.value < _aiSurprisePool.value.length) {
+    const idea = _aiSurprisePool.value[_aiSurpriseIndex.value]
+    _aiSurpriseIndex.value++
+    // When pool exhausted, trigger background regeneration
+    if (_aiSurpriseIndex.value >= _aiSurprisePool.value.length) {
+      _aiSurprisePool.value = []
+      _aiSurpriseIndex.value = 0
+      _generateAiSurprisePool()
+    }
+    return idea
+  }
+
+  // Fallback to fixed phrases
   const pool = isZh ? ZH_SURPRISE_PHRASES : EN_SURPRISE_PHRASES
   const used = isZh ? _surpriseUsedZH : _surpriseUsedEN
   const recentLimit = Math.min(10, Math.floor(pool.length / 2))
@@ -353,6 +377,53 @@ function generateDynamicSurpriseIdea() {
   used.push(idx)
   if (used.length > recentLimit) used.shift()
   return pool[idx]
+}
+
+async function _generateAiSurprisePool() {
+  if (_aiSurpriseGenerating.value) return
+  _aiSurpriseGenerating.value = true
+  try {
+    const config = JSON.parse(JSON.stringify(configStore.config))
+    const um = config.utilityModel
+    if (!um?.provider || !um?.model) return
+
+    const appLang = config.language || 'en'
+    const isZh = appLang.startsWith('zh')
+    const examples = isZh ? ZH_SURPRISE_PHRASES : EN_SURPRISE_PHRASES
+    const lang = isZh ? 'Chinese (中文)' : 'English'
+
+    const res = await window.electronAPI.enhancePrompt({
+      prompt: `You are a creative writing assistant. Below are example prompts that describe fun, imaginative group-chat agent scenarios. Study their style — they are vivid, specific, culturally resonant, and often humorous.
+
+Examples:
+${examples.map((e, i) => `${i + 1}. ${e}`).join('\n')}
+
+Now generate 50 NEW prompts in the same style. They must be:
+- In ${lang}
+- Completely different from the examples (no duplicates or paraphrases)
+- Each one line, no numbering
+- Creative, specific, and fun — mixing pop culture, history, archetypes, daily life
+- Varied in theme (don't repeat the same genre)
+
+Reply with ONLY a JSON array of 50 strings. No explanation, no markdown.`,
+      config,
+    })
+    if (res.success && res.text) {
+      try {
+        const parsed = JSON.parse(extractJSON(res.text))
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Shuffle the array
+          for (let i = parsed.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [parsed[i], parsed[j]] = [parsed[j], parsed[i]]
+          }
+          _aiSurprisePool.value = parsed.map(s => String(s).trim()).filter(Boolean)
+          _aiSurpriseIndex.value = 0
+        }
+      } catch { /* ignore parse errors, keep using fixed phrases */ }
+    }
+  } catch { /* silently fail, fixed phrases remain as fallback */ }
+  _aiSurpriseGenerating.value = false
 }
 const placeholderText = computed(() => {
   return t('agents.groupCreator.placeholder', 'Describe what you need... e.g. Build a category of quirky neighbors, anime-style heroes, or aliens with clashing personalities.')
@@ -920,6 +991,10 @@ function generateSurpriseProposal() {
   aiWarning.value = ''
   generatedProposal.value = null
   customDescription.value = generateDynamicSurpriseIdea()
+  // Trigger background AI pool generation if not yet started
+  if (_aiSurprisePool.value.length === 0 && !_aiSurpriseGenerating.value) {
+    _generateAiSurprisePool()
+  }
 }
 
 async function createAgents() {
@@ -1686,5 +1761,21 @@ async function createAgents() {
 
 @keyframes agcSpin {
   to { transform: rotate(360deg); }
+}
+
+.agc-ai-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
+  color: #9CA3AF;
+  font-style: italic;
+}
+
+.agc-ai-hint-spinner {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  animation: agcSpin 1s linear infinite;
 }
 </style>

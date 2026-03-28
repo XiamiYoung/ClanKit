@@ -111,12 +111,25 @@
               <!-- Description -->
               <p class="mcp-card-desc">{{ server.description || 'No description' }}</p>
 
-              <!-- Footer -->
-              <div class="mcp-card-footer">
-                <span class="mcp-card-endpoint" :title="formatCommand(server)">
-                  <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-                  {{ truncateCommand(server) }}
-                </span>
+              <!-- Test connection row -->
+              <div class="mcp-card-test-row">
+                <template v-if="cardTests[server.id]?.status === 'testing'">
+                  <span class="mcp-card-countdown">
+                    <svg class="spin" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    {{ cardTests[server.id].countdown }}s
+                  </span>
+                  <button class="mcp-card-stop-btn" @click="stopCardTest(server.id, $event)">
+                    <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+                    {{ t('common.stop') }}
+                  </button>
+                </template>
+                <button v-else class="mcp-card-test-btn" @click="runCardTest(server, $event)">
+                  <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                  </svg>
+                  {{ t('mcp.testConnection') }}
+                </button>
               </div>
             </div>
           </div>
@@ -148,21 +161,21 @@
           <div class="mcp-modal-body">
             <!-- Server details -->
             <div class="form-group">
-              <label class="form-label">Name *</label>
+              <label class="form-label">{{ t('mcp.formName') }} *</label>
               <input v-model="form.name" type="text" class="form-input" placeholder="my-mcp-server" />
-              <p class="form-hint">Unique server identifier (used as key in config)</p>
+              <p class="form-hint">{{ t('mcp.formNameHint') }}</p>
             </div>
 
             <div class="form-group">
-              <label class="form-label">Description</label>
+              <label class="form-label">{{ t('mcp.formDescription') }}</label>
             </div>
             <section class="mcp-modal-desc-section">
-              <textarea v-model="form.description" class="form-textarea mcp-modal-desc-textarea" placeholder="What this MCP server does"></textarea>
+              <textarea v-model="form.description" class="form-textarea mcp-modal-desc-textarea" :placeholder="t('mcp.formDescriptionPlaceholder')"></textarea>
             </section>
 
             <!-- Transport type toggle -->
             <div class="form-group">
-              <label class="form-label">Transport</label>
+              <label class="form-label">{{ t('mcp.formTransport') }}</label>
               <div class="transport-toggle">
                 <button
                   class="transport-btn"
@@ -183,26 +196,26 @@
                   HTTP / SSE
                 </button>
               </div>
-              <p class="form-hint">stdio — local subprocess &nbsp;·&nbsp; HTTP/SSE — remote server (supports OAuth)</p>
+              <p class="form-hint">{{ t('mcp.formTransportHint') }}</p>
             </div>
 
             <!-- HTTP: URL field -->
             <div v-if="form.transportType === 'http'" class="form-group">
-              <label class="form-label">Server URL *</label>
+              <label class="form-label">{{ t('mcp.formUrl') }} *</label>
               <input v-model="form.url" type="url" class="form-input" placeholder="https://your-mcp-server.example.com/mcp" />
-              <p class="form-hint">Endpoint URL for the remote MCP server</p>
+              <p class="form-hint">{{ t('mcp.formUrlHint') }}</p>
             </div>
 
             <!-- stdio: Command + Args -->
             <template v-if="form.transportType === 'stdio'">
               <div class="form-group">
-                <label class="form-label">Command *</label>
+                <label class="form-label">{{ t('mcp.formCommand') }} *</label>
                 <input v-model="form.command" type="text" class="form-input" placeholder="npx" />
-                <p class="form-hint">Executable to run (e.g., npx, node, python, uvx)</p>
+                <p class="form-hint">{{ t('mcp.formCommandHint') }}</p>
               </div>
 
               <div class="form-group">
-                <label class="form-label">Arguments</label>
+                <label class="form-label">{{ t('mcp.formArgs') }}</label>
                 <textarea
                   v-model="form.argsText"
                   class="form-textarea"
@@ -210,22 +223,22 @@
                   placeholder="-y
 @modelcontextprotocol/server-everything"
                 ></textarea>
-                <p class="form-hint">One argument per line</p>
+                <p class="form-hint">{{ t('mcp.formArgsHint') }}</p>
               </div>
             </template>
 
             <!-- Environment Variables -->
             <div class="env-section">
               <div class="env-header">
-                <h3 class="env-title">Environment Variables</h3>
+                <h3 class="env-title">{{ t('mcp.formEnvVars') }}</h3>
                 <button class="env-add-btn" @click="addEnvVar">
                   <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  Add
+                  {{ t('common.add') }}
                 </button>
               </div>
 
               <div v-if="form.envVars.length === 0" class="env-empty">
-                <p>No environment variables. Add if the server requires API keys or config.</p>
+                <p>{{ t('mcp.formEnvEmpty') }}</p>
               </div>
 
               <div v-for="(ev, idx) in form.envVars" :key="idx" class="env-row">
@@ -237,37 +250,6 @@
               </div>
             </div>
 
-            <!-- Test Connection -->
-            <div ref="testResultEl" class="test-section">
-              <AppButton
-                @click="runTestConnection"
-                :disabled="(form.transportType === 'http' ? !form.url?.trim() : !form.command?.trim()) || testStatus === 'testing'"
-              >
-                <svg v-if="testStatus !== 'testing'" style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                  <polyline points="22 4 12 14.01 9 11.01"/>
-                </svg>
-                <svg v-else class="spin" style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                </svg>
-                {{ testStatus === 'testing' ? 'Testing...' : 'Test Connection' }}
-              </AppButton>
-
-              <!-- Test results -->
-              <div v-if="testStatus === 'success'" class="test-result success">
-                <p class="test-result-title">Connection successful - {{ testTools.length }} tool{{ testTools.length !== 1 ? 's' : '' }} discovered:</p>
-                <div class="test-tools-list">
-                  <div v-for="t in testTools" :key="t.name" class="test-tool-item">
-                    <span class="test-tool-name">{{ t.name }}</span>
-                    <span v-if="t.description" class="test-tool-desc">{{ t.description }}</span>
-                  </div>
-                </div>
-              </div>
-              <div v-if="testStatus === 'error'" class="test-result error">
-                <p class="test-result-title">Connection failed:</p>
-                <p class="test-result-error">{{ testError }}</p>
-              </div>
-            </div>
           </div>
 
           <!-- Save error -->
@@ -281,11 +263,43 @@
             <div v-if="editingServer" style="flex:1;">
               <AppButton variant="danger-ghost" @click="confirmDelete">
                 <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-                Delete
+                {{ t('common.delete') }}
               </AppButton>
             </div>
-            <AppButton variant="secondary" size="modal" @click="closeModal">Cancel</AppButton>
-            <AppButton size="modal" @click="saveForm" :disabled="!form.name?.trim() || (form.transportType === 'http' ? !form.url?.trim() : !form.command?.trim())">Save</AppButton>
+            <AppButton variant="secondary" size="modal" @click="closeModal">{{ t('common.cancel') }}</AppButton>
+            <AppButton size="modal" @click="saveForm" :disabled="!form.name?.trim() || (form.transportType === 'http' ? !form.url?.trim() : !form.command?.trim())">{{ t('common.save') }}</AppButton>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Test Result Dialog (from card-level test) -->
+    <Teleport to="body">
+      <div v-if="testResultDialogId && cardTests[testResultDialogId]" class="mcp-backdrop">
+        <div class="mcp-test-dialog" role="dialog" aria-modal="true">
+          <div class="mcp-test-dialog-header">
+            <h3 class="mcp-test-dialog-title">{{ t('mcp.testConnection') }}</h3>
+            <button class="mcp-modal-close" @click="closeTestResultDialog">
+              <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          <div class="mcp-test-dialog-body">
+            <div v-if="cardTests[testResultDialogId]?.status === 'success'" class="test-result success">
+              <p class="test-result-title">{{ t('mcp.testSuccess') }} - {{ cardTests[testResultDialogId].tools.length }} {{ t('mcp.toolsDiscovered') }}:</p>
+              <div class="test-tools-list">
+                <div v-for="tool in cardTests[testResultDialogId].tools" :key="tool.name" class="test-tool-item">
+                  <span class="test-tool-name">{{ tool.name }}</span>
+                  <span v-if="tool.description" class="test-tool-desc">{{ tool.description }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="cardTests[testResultDialogId]?.status === 'error'" class="test-result error">
+              <p class="test-result-title">{{ t('mcp.testFailed') }}</p>
+              <p class="test-result-error">{{ cardTests[testResultDialogId].error }}</p>
+            </div>
+          </div>
+          <div class="mcp-test-dialog-footer">
+            <AppButton variant="secondary" size="modal" @click="closeTestResultDialog">{{ t('common.close') }}</AppButton>
           </div>
         </div>
       </div>
@@ -307,7 +321,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import { useMcpStore } from '../stores/mcp'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
@@ -353,10 +367,10 @@ const showModal = ref(false)
 const editingServer = ref(null)
 const saveError = ref('')
 
-const testStatus = ref('')   // '' | 'testing' | 'success' | 'error'
-const testTools = ref([])
-const testError = ref('')
-const testResultEl = ref(null)
+// ── Card-level test connection state (per-server, concurrent) ──
+const MCP_TEST_TIMEOUT = 60
+const cardTests = reactive({})
+const testResultDialogId = ref(null)
 
 const form = ref(emptyForm())
 
@@ -384,17 +398,12 @@ const filteredServers = computed(() => {
   return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 })
 
-function resetTestState() {
-  testStatus.value = ''
-  testTools.value = []
-  testError.value = ''
-}
 
 function openAdd() {
   editingServer.value = null
   form.value = emptyForm()
   saveError.value = ''
-  resetTestState()
+
   showModal.value = true
 }
 
@@ -411,14 +420,14 @@ function openEdit(server) {
     url: server.url || '',
     envVars: Object.entries(server.env || {}).map(([key, value]) => ({ key, value })),
   }
-  resetTestState()
+
   showModal.value = true
 }
 
 function closeModal() {
   showModal.value = false
   editingServer.value = null
-  resetTestState()
+
 }
 
 // Lock body scroll & handle ESC when modal is open
@@ -479,42 +488,74 @@ async function saveForm() {
   closeModal()
 }
 
-async function runTestConnection() {
-  resetTestState()
-  testStatus.value = 'testing'
+// ── Card-level test functions ──
+function _clearCardTimer(id) {
+  const t = cardTests[id]
+  if (t?.timerId) { clearInterval(t.timerId); t.timerId = null }
+}
 
-  const isHttp = form.value.transportType === 'http'
-  const env = Object.fromEntries(
-    form.value.envVars
-      .filter(ev => (ev.key || '').trim())
-      .map(ev => [(ev.key || '').trim(), ev.value])
-  )
-
+async function runCardTest(server, event) {
+  event.stopPropagation()
+  const id = server.id
+  if (cardTests[id]?.status === 'testing') return
+  cardTests[id] = { status: 'testing', countdown: MCP_TEST_TIMEOUT, tools: [], error: '', timerId: null, rejected: false }
+  cardTests[id].timerId = setInterval(() => {
+    const t = cardTests[id]
+    if (!t || t.status !== 'testing') { _clearCardTimer(id); return }
+    t.countdown -= 1
+    if (t.countdown <= 0) {
+      _clearCardTimer(id)
+      t.rejected = true
+      t.status = 'error'
+      t.error = `Connection timed out after ${MCP_TEST_TIMEOUT}s`
+      testResultDialogId.value = id
+    }
+  }, 1000)
+  const s = JSON.parse(JSON.stringify(server))
+  const isHttp = !!s.url
   const connConfig = isHttp
-    ? { name: form.value.name || 'test', url: (form.value.url || '').trim(), env }
-    : {
-        name: form.value.name || 'test',
-        command: (form.value.command || '').trim(),
-        args: form.value.argsText.split('\n').map(l => (l || '').trim()).filter(Boolean),
-        env,
-      }
-
+    ? { name: s.name || 'test', url: (s.url || '').trim(), env: s.env || {} }
+    : { name: s.name || 'test', command: (s.command || '').trim(), args: s.args || [], env: s.env || {} }
   try {
     const result = await mcpStore.testConnection(connConfig)
-
-    if (result.success) {
-      testStatus.value = 'success'
-      testTools.value = result.tools || []
-    } else {
-      testStatus.value = 'error'
-      testError.value = result.error || 'Unknown error'
-    }
+    const t = cardTests[id]
+    if (!t || t.rejected) return
+    _clearCardTimer(id)
+    if (result.success) { t.status = 'success'; t.tools = result.tools || [] }
+    else { t.status = 'error'; t.error = result.error || 'Unknown error' }
+    testResultDialogId.value = id
   } catch (err) {
-    testStatus.value = 'error'
-    testError.value = err.message || 'Failed to test connection'
+    const t = cardTests[id]
+    if (!t || t.rejected) return
+    _clearCardTimer(id)
+    t.status = 'error'
+    t.error = err.message || 'Failed to test connection'
+    testResultDialogId.value = id
   }
-  nextTick(() => testResultEl.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
 }
+
+function stopCardTest(serverId, event) {
+  event.stopPropagation()
+  const t = cardTests[serverId]
+  if (!t) return
+  _clearCardTimer(serverId)
+  t.rejected = true
+  testResultDialogId.value = null
+  delete cardTests[serverId]
+}
+
+function stopAllCardTests() {
+  for (const id of Object.keys(cardTests)) { _clearCardTimer(id); delete cardTests[id] }
+  testResultDialogId.value = null
+}
+
+function closeTestResultDialog() {
+  const id = testResultDialogId.value
+  testResultDialogId.value = null
+  if (id && cardTests[id]) delete cardTests[id]
+}
+
+onBeforeUnmount(() => stopAllCardTests())
 
 const showConfirmDelete = ref(false)
 
@@ -528,16 +569,6 @@ async function executeDelete() {
   showConfirmDelete.value = false
   await mcpStore.deleteServer(editingServer.value.id)
   closeModal()
-}
-
-function formatCommand(server) {
-  if (server.url) return server.url
-  return `${server.command || ''} ${(server.args || []).join(' ')}`.trim()
-}
-
-function truncateCommand(server) {
-  const cmd = formatCommand(server)
-  return cmd.length > 45 ? cmd.slice(0, 42) + '...' : cmd
 }
 
 function cardGradient() {
@@ -643,12 +674,11 @@ function cardGradient() {
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
 .mcp-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1.25rem;
 }
-@media (max-width: 1800px) { .mcp-grid { grid-template-columns: repeat(5, 1fr); } }
-@media (max-width: 1400px) { .mcp-grid { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 1100px) { .mcp-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 800px) { .mcp-grid { grid-template-columns: repeat(2, 1fr); } }
 
 /* ── Card ──────────────────────────────────────────────────────────────────── */
 .mcp-card {
@@ -750,22 +780,49 @@ function cardGradient() {
   font-family: 'Inter', sans-serif;
   line-height: 1.6;
 }
-.mcp-card-footer {
-  border-top: 1px solid #E5E5EA;
-  padding-top: 0.75rem;
-  margin-top: auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* ── Card test row ─────────────────────────────────────────────────────────── */
+.mcp-card-test-row {
+  border-top: 1px solid #E5E5EA; padding-top: 0.5rem; margin-top: auto;
+  display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem;
 }
-.mcp-card-endpoint {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: var(--fs-caption);
-  color: #9CA3AF;
-  display: flex; align-items: center; gap: 0.3125rem;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  max-width: 100%;
+.mcp-card-test-btn {
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption); font-weight: 600;
+  color: #fff; background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border: none; cursor: pointer; padding: 0.3125rem 0.875rem; border-radius: 0.5rem;
+  transition: all 0.15s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
+.mcp-card-test-btn:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); box-shadow: 0 2px 12px rgba(0,0,0,0.18); }
+.mcp-card-test-btn:active { transform: scale(0.97); }
+.mcp-card-countdown {
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-caption); font-weight: 600; color: #6B7280;
+}
+.mcp-card-stop-btn {
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  font-family: 'Inter', sans-serif; font-size: var(--fs-caption); font-weight: 600;
+  color: #fff; background: #dc2626; border: none; cursor: pointer;
+  padding: 0.3125rem 0.875rem; border-radius: 0.5rem;
+  transition: all 0.15s ease; box-shadow: 0 2px 8px rgba(220,38,38,0.2);
+}
+.mcp-card-stop-btn:hover { background: #b91c1c; box-shadow: 0 2px 12px rgba(220,38,38,0.3); }
+.mcp-card-stop-btn:active { transform: scale(0.97); }
+
+/* ── Test Result Dialog ────────────────────────────────────────────────────── */
+.mcp-test-dialog {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(32rem, 90vw); max-height: 70vh;
+  display: flex; flex-direction: column;
+  background: #FFFFFF; border-radius: 1rem;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2), 0 8px 20px rgba(0,0,0,0.12); overflow: hidden;
+}
+.mcp-test-dialog-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.25rem; border-bottom: 1px solid #E5E5EA;
+}
+.mcp-test-dialog-title { font-family: 'Inter', sans-serif; font-size: var(--fs-body); font-weight: 600; color: #1A1A1A; margin: 0; }
+.mcp-test-dialog-body { flex: 1; overflow-y: auto; padding: 1rem 1.25rem; }
+.mcp-test-dialog-footer { display: flex; justify-content: flex-end; padding: 0.75rem 1.25rem; border-top: 1px solid #E5E5EA; }
 
 /* ═══ Modal ═══════════════════════════════════════════════════════════════════ */
 .mcp-backdrop {
@@ -929,7 +986,6 @@ function cardGradient() {
 .env-remove-btn:hover { background: rgba(239,68,68,0.15); color: #EF4444; }
 
 /* ── Test Connection ───────────────────────────────────────────────────────── */
-.test-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #1F1F1F; }
 
 .test-result { margin-top: 0.75rem; padding: 0.75rem 0.875rem; border-radius: 0.625rem; box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); }
 .test-result.success { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }

@@ -59,7 +59,7 @@ function register({ lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtracti
       if (agentId && messages && messages.length >= 2) {
         const um = config.utilityModel
         if (um?.provider && um?.model) {
-          const providerCfg = config[um.provider]
+          const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
           if (providerCfg?.apiKey && providerCfg?.baseURL) {
             const { logsDir } = ensureAgentMemoryDirs(agentId)
             const flusher = new MemoryFlush({
@@ -98,7 +98,7 @@ function register({ lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtracti
     try {
       const um = config.utilityModel
       if (!um?.provider || !um?.model) return { success: true, count: 0 }
-      const providerCfg = config[um.provider]
+      const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
       if (!providerCfg?.apiKey || !providerCfg?.baseURL) return { success: true, count: 0 }
 
       const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'

@@ -797,12 +797,11 @@ function truncateEndpoint(ep) {
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
 .tools-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1.25rem;
 }
-@media (max-width: 1800px) { .tools-grid { grid-template-columns: repeat(5, 1fr); } }
-@media (max-width: 1400px) { .tools-grid { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 1100px) { .tools-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 800px) { .tools-grid { grid-template-columns: repeat(2, 1fr); } }
 
 /* ── Card ──────────────────────────────────────────────────────────────────── */
 .tools-card {

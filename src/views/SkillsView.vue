@@ -475,13 +475,20 @@
 
     </template>
     <template v-else>
-      <!-- Row 1: back button + refresh (right) -->
+      <!-- Header: back + icon + title + path + refresh -->
       <div class="detail-header">
         <button @click="goBack" class="detail-back-btn">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
         </button>
+        <div class="detail-icon">
+          <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </div>
+        <h1 class="detail-title">{{ skillDisplayName(selectedSkill) }}</h1>
+        <span class="detail-title-path" :title="selectedSkill.path">{{ selectedSkill.path }}</span>
         <button
           @click="refreshTree"
           class="ml-auto p-1.5 rounded-lg transition-all duration-150 cursor-pointer"
@@ -492,19 +499,6 @@
         >
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
-      </div>
-
-      <!-- Row 2: icon + title (left) + path (right) -->
-      <div class="detail-title-row">
-        <div style="display:flex;align-items:center;gap:0.625rem;min-width:0;">
-          <div class="detail-icon">
-            <svg style="width:16px;height:16px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-            </svg>
-          </div>
-          <h1 class="detail-title">{{ skillDisplayName(selectedSkill) }}</h1>
-        </div>
-        <span class="detail-title-path" :title="selectedSkill.path">{{ selectedSkill.path }}</span>
       </div>
 
       <!-- File explorer + content viewer -->
@@ -1677,12 +1671,11 @@ const SkillTreeNode = defineComponent({
 /* ── Skills Grid ───────────────────────────────────────────────────────────── */
 .skill-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
 }
-@media (max-width: 1800px) { .skill-grid { grid-template-columns: repeat(5, 1fr); } }
-@media (max-width: 1400px) { .skill-grid { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 1100px) { .skill-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 800px) { .skill-grid { grid-template-columns: repeat(2, 1fr); } }
 
 /* ── Skill Card — iOS Minimalist ─────────────────────────────────────── */
 .skill-card {
@@ -1925,6 +1918,7 @@ const SkillTreeNode = defineComponent({
   flex-shrink: 0;
   display: flex;
   align-items: center;
+  gap: 0.625rem;
   padding: 0.625rem 1.25rem;
   background: #FFFFFF;
   border-bottom: 1px solid #E5E5EA;

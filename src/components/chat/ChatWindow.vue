@@ -117,7 +117,7 @@
                 </svg>
               </div>
             </div>
-            <span class="cw-msg-name-chip cw-msg-name-chip--assistant">{{ getMsgAssistantName(msg) }}</span>
+            <span class="cw-msg-name-chip cw-msg-name-chip--assistant">{{ truncateName(getMsgAssistantName(msg)) }}</span>
           </div>
 
           <!-- Message bubble (not rendered for system banners) -->
@@ -201,10 +201,12 @@
                 <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
-                <span>{{ t('chats.agentError') }}</span>
-                <button v-if="msg.errorDetail" class="cw-error-detail-btn" @click="errorDialogText = msg.errorDetail">
-                  {{ t('chats.viewDetails') }}
-                </button>
+                <span>{{ formatErrorLabel(msg) }}</span>
+                <span v-if="msg.errorDetail" class="cw-error-info" :data-tooltip="msg.errorDetail">
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                  </svg>
+                </span>
               </div>
               <div v-if="msg.isWaitingIndicator" class="cw-thinking">
                 <span style="font-size:0.75rem; color:#6B7280; margin-right:8px;">{{ t('chats.waitingForResponse') }}</span>
@@ -246,7 +248,7 @@
                 </svg>
               </div>
             </div>
-            <span class="cw-msg-name-chip cw-msg-name-chip--user">{{ getMsgUserName(msg) }}</span>
+            <span class="cw-msg-name-chip cw-msg-name-chip--user">{{ truncateName(getMsgUserName(msg)) }}</span>
           </div>
         </div>
       </template>
@@ -355,7 +357,7 @@
       class="cw-avatar-tooltip-fixed"
       :style="{ top: avatarTooltip.y + 'px', left: avatarTooltip.x + 'px' }"
     >
-      <div class="cw-avatar-tooltip-name">{{ avatarTooltip.name }}</div>
+      <div class="cw-avatar-tooltip-name">{{ avatarTooltip.name }}<span v-if="avatarTooltip.providerModel" class="cw-avatar-tooltip-pm">({{ avatarTooltip.providerModel }})</span></div>
       <div v-if="avatarTooltip.desc" class="cw-avatar-tooltip-desc">{{ avatarTooltip.desc }}</div>
     </div>
   </Teleport>
@@ -382,6 +384,7 @@
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useChatsStore } from '../../stores/chats'
 import { useAgentsStore } from '../../stores/agents'
+import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
 import { getAvatarDataUri } from '../agents/agentAvatars'
 import MessageRenderer from './MessageRenderer.vue'
@@ -400,6 +403,7 @@ const emit = defineEmits(['send', 'stop', 'quote', 'delete-message', 'send-with-
 
 const chatsStore = useChatsStore()
 const agentsStore = useAgentsStore()
+const configStore = useConfigStore()
 const { t } = useI18n()
 
 const messagesEl = ref(null)
@@ -451,10 +455,31 @@ function getSystemAvatar(msg) {
   return getAvatarUri(agent)
 }
 
+function truncateName(name, max = 30) {
+  return name && name.length > max ? name.slice(0, max) + '…' : name
+}
+
 function getMsgAssistantName(msg) {
   const pid = resolveAgentPid(msg)
   const agent = pid ? agentsStore.getAgentById(pid) : null
   return agent?.name || msg.agentName || 'Assistant'
+}
+
+function getMsgAssistantProviderModel(msg) {
+  const pid = resolveAgentPid(msg)
+  if (!pid) return ''
+  const agent = agentsStore.getAgentById(pid)
+  if (!agent) return ''
+  const override = chat.value?.agentModelOverrides?.[pid] || chat.value?.personaModelOverrides?.[pid]
+  const providerId = override?.provider || agent.providerId
+  const modelId = override?.model || agent.modelId
+  if (!providerId && !modelId) return ''
+  const providers = configStore.config?.providers || []
+  const found = providers.find(p => p.id === providerId || p.type === providerId)
+  const providerName = found?.alias || found?.name || found?.type || providerId || ''
+  const modelShort = modelId ? modelId.split('/').pop().split(':')[0] : ''
+  if (providerName && modelShort) return `${providerName} / ${modelShort}`
+  return providerName || modelShort
 }
 
 // Resolve user agent for a specific message — honours msg.userAgentId for historical
@@ -492,23 +517,25 @@ const systemAgentIds = computed(() => {
 })
 
 // ── Avatar tooltip ──
-const avatarTooltip = reactive({ visible: false, name: '', desc: '', x: 0, y: 0 })
+const avatarTooltip = reactive({ visible: false, name: '', providerModel: '', desc: '', x: 0, y: 0 })
 
 function showAvatarTooltip(event, msg) {
-  let agent
+  let agent, agentId
   if (msg.role === 'user') {
     agent = resolveUserAgent(msg)
+    agentId = msg.userAgentId || chat.value?.userAgentId
   } else {
-    const pid = resolveAgentPid(msg)
-    agent = pid ? agentsStore.getAgentById(pid) : null
+    agentId = resolveAgentPid(msg)
+    agent = agentId ? agentsStore.getAgentById(agentId) : null
   }
   if (!agent) { avatarTooltip.visible = false; return }
   const rect = event.currentTarget.getBoundingClientRect()
   avatarTooltip.name = agent.name || (msg.role === 'user' ? 'User' : 'Assistant')
+  avatarTooltip.providerModel = agentId ? getMsgAssistantProviderModel(msg) : ''
   avatarTooltip.desc = agent.description || ''
-  const tooltipWidth = 280
+  const tooltipMaxW = 448
   let left = rect.left + rect.width / 2
-  left = Math.max(tooltipWidth / 2 + 8, Math.min(left, window.innerWidth - tooltipWidth / 2 - 8))
+  left = Math.max(tooltipMaxW / 2 + 8, Math.min(left, window.innerWidth - tooltipMaxW / 2 - 8))
   avatarTooltip.x = left
   avatarTooltip.y = rect.top - 8
   avatarTooltip.visible = true
@@ -642,6 +669,22 @@ function getQuotedSenderName(q) {
 
 function clearQuote() {
   quotedMessage.value = null
+}
+
+// ── Error label formatting ──
+function formatErrorLabel(msg) {
+  const code = msg.errorCode || 'unknown'
+  // Try i18n key for known error codes — use a unique sentinel to detect missing keys
+  const sentinel = '__MISSING__'
+  const i18nKey = `chats.error_${code}`
+  const label = t(i18nKey, sentinel)
+  if (label !== sentinel) return label
+  // Fallback: extract short summary from raw error detail
+  if (msg.errorDetail) {
+    const clean = msg.errorDetail.replace(/^\d{3}\s+/, '').slice(0, 80)
+    return clean + (msg.errorDetail.length > 80 ? '…' : '')
+  }
+  return t('chats.agentError')
 }
 
 // ── Scroll management ──
@@ -1156,21 +1199,42 @@ defineExpose({ scrollToBottom })
   font-weight: 600;
   font-family: 'Inter', sans-serif;
 }
-.cw-error-detail-btn {
+.cw-error-info {
   margin-left: auto;
-  padding: 0.125rem 0.5rem;
-  border-radius: 0.25rem;
-  border: 1px solid rgba(220, 38, 38, 0.3);
-  background: transparent;
-  color: #DC2626;
-  font-size: var(--fs-caption);
-  font-weight: 500;
-  font-family: 'Inter', sans-serif;
-  cursor: pointer;
-  transition: background 0.15s;
+  position: relative;
+  cursor: help;
+  opacity: 0.5;
+  transition: opacity 0.15s;
   flex-shrink: 0;
 }
-.cw-error-detail-btn:hover { background: rgba(220, 38, 38, 0.1); }
+.cw-error-info:hover { opacity: 1; }
+.cw-error-info::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  max-width: 360px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #1F2937;
+  color: #F9FAFB;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 50;
+}
+.cw-error-info:hover::after {
+  opacity: 1;
+  transform: translateY(0);
+}
 
 /* ── Error detail dialog ─────────────────────────────────────────────────── */
 .cw-error-dialog-backdrop {
@@ -1406,8 +1470,8 @@ defineExpose({ scrollToBottom })
   z-index: 9999;
   pointer-events: none;
   transform: translate(-50%, -100%);
-  min-width: 8.75rem;
-  max-width: 17.5rem;
+  width: max-content;
+  max-width: 28rem;
   padding: 0.5rem 0.75rem;
   background: rgba(0, 0, 0, 0.92);
   border-radius: 0.625rem;
@@ -1418,6 +1482,13 @@ defineExpose({ scrollToBottom })
   font-size: 0.875rem;
   font-weight: 700;
   color: #F5F5F5;
+  white-space: nowrap;
+}
+.cw-avatar-tooltip-pm {
+  font-weight: 400;
+  color: #9CA3AF;
+  margin-left: 0.375rem;
+  font-size: 0.75rem;
 }
 .cw-avatar-tooltip-desc {
   font-family: 'Inter', sans-serif;

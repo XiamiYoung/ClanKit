@@ -15,7 +15,7 @@ function detectModelProviderType(modelId) {
 function resolveProviderCreds(cfg, providerType) {
   if (cfg.providers && Array.isArray(cfg.providers)) {
     const provider = cfg.providers.find(item => item.type === providerType || item.id === providerType)
-    if (provider) return { apiKey: provider.apiKey || '', baseURL: provider.baseURL || '', model: provider.model || '', type: provider.type || providerType }
+    if (provider) return { apiKey: provider.apiKey || '', baseURL: provider.baseURL || '', model: provider.model || '', type: provider.type || providerType, maxOutputTokens: provider.settings?.maxOutputTokens || null }
   }
   const legacy = cfg[providerType]
   if (legacy) return { apiKey: legacy.apiKey || '', baseURL: legacy.baseURL || '', model: legacy.model || '', type: providerType }
@@ -30,11 +30,14 @@ function isProviderActive(cfg, providerType) {
 }
 
 function applyProviderCredsToConfig(cfg, providerType) {
-  const { apiKey, baseURL, type: resolvedType } = resolveProviderCreds(cfg, providerType)
+  const { apiKey, baseURL, type: resolvedType, maxOutputTokens: providerMaxTokens } = resolveProviderCreds(cfg, providerType)
   providerType = resolvedType || providerType
 
   // Always set cfg.provider so AgentLoop constructor can detect provider type
   cfg.provider = { type: providerType, apiKey, baseURL, model: cfg.customModel }
+
+  // Propagate per-provider maxOutputTokens as a hard ceiling
+  if (providerMaxTokens && providerMaxTokens > 0) cfg.providerMaxOutputTokens = providerMaxTokens
 
   if (providerType === 'anthropic') {
     cfg.apiKey = apiKey

@@ -130,7 +130,7 @@ function resolveStyle(styleKey) {
  */
 export function getAvatarDataUri(id) {
   if (!id) return null
-  if (id === BUILTIN_SYSTEM_ICON_ID) return './icon.png'
+  if (id === BUILTIN_SYSTEM_ICON_ID) return '/icon.png'
   // Custom uploaded image — stored as a data URI directly
   if (id.startsWith('data:')) return id
   if (svgCache.has(id)) return svgCache.get(id)

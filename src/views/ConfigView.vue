@@ -294,7 +294,7 @@
                   </div>
                   <div class="form-group" style="margin-bottom:0;">
                     <label class="form-label">
-                      Utility Model <span class="cfg-required">*</span>
+                      {{ t('config.utilityModel') }} <span class="cfg-required">*</span>
                       <span class="form-label-hint">{{ t('config.backgroundTasks') }}</span>
                     </label>
                     <div class="test-connection-row">
@@ -2111,31 +2111,6 @@ const testResults = ref({})        // { [provider]: { ok, message } }
 const testingUtilityModel = ref(false)
 const testUtilityModelResult = ref(null)
 
-// OpenRouter local state (fetch button + test model selection)
-const orModelsFetching = ref(false)
-const orModelsFetchError = ref('')
-const orModelFilter = ref('')
-const orSelectedTestModel = ref('')
-
-// OpenAI state
-const showOpenAIKey = ref(false)
-const openaiModelsFetching = ref(false)
-const openaiModelsFetchError = ref('')
-const openaiModelFilter = ref('')
-const openaiSelectedTestModel = ref('')
-
-// DeepSeek state
-const showDeepSeekKey = ref(false)
-const deepseekModelsFetching = ref(false)
-const deepseekModelsFetchError = ref('')
-const deepseekModelFilter = ref('')
-const deepseekSelectedTestModel = ref('')
-
-// Ephemeral test ping models (not persisted)
-const testModelAnthropicTemp = ref('')
-const testModelOpenRouterTemp = ref('')
-const testModelOpenAITemp = ref('')
-const testModelDeepSeekTemp = ref('')
 
 
 // Pinecone state
@@ -2512,82 +2487,21 @@ const providerOptions = [
   { value: 'deepseek',    label: 'DeepSeek',                   icon: IconDeepSeek    },
 ]
 
-const filteredOrModels = computed(() => {
-  const models = modelsStore.getModelsForProvider('openrouter')
-  if (!orModelFilter.value) return models
-  const q = orModelFilter.value.toLowerCase()
-  return models.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
-})
-
-const filteredOpenAIModels = computed(() => {
-  const models = modelsStore.getModelsForProvider('openai')
-  if (!openaiModelFilter.value) return models
-  const q = openaiModelFilter.value.toLowerCase()
-  return models.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
-})
-
-const filteredDeepSeekModels = computed(() => {
-  const models = modelsStore.getModelsForProvider('deepseek')
-  if (!deepseekModelFilter.value) return models
-  const q = deepseekModelFilter.value.toLowerCase()
-  return models.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
-})
 
 
-// ── Test Connection (new unified approach using agent:test-provider IPC) ─────
-const canTestAnthropic  = computed(() => !!(form.anthropic.apiKey  && form.anthropic.baseURL  && testModelAnthropicTemp.value))
-const canTestOpenRouter = computed(() => !!(form.openrouter.apiKey && form.openrouter.baseURL && testModelOpenRouterTemp.value))
-const canTestOpenAI     = computed(() => !!(form.openai.apiKey     && form.openai.baseURL     && testModelOpenAITemp.value))
-const canTestDeepSeek   = computed(() => !!(form.deepseek.apiKey   && form.deepseek.baseURL   && testModelDeepSeekTemp.value))
-
-const testModelTempMap = {
-  anthropic:  testModelAnthropicTemp,
-  openrouter: testModelOpenRouterTemp,
-  openai:     testModelOpenAITemp,
-  deepseek:   testModelDeepSeekTemp,
-}
-
-async function testProviderConnection(provider) {
-  testingProvider.value = provider
-  testResults.value[provider] = null
-  const pCfg = form[provider]
-  const pingModel = testModelTempMap[provider]?.value?.trim()
-  try {
-    const res = await window.electronAPI.testProvider({
-      provider,
-      apiKey: pCfg.apiKey,
-      baseURL: pCfg.baseURL,
-      utilityModel: pingModel,
-    })
-    if (res.success) {
-      form[provider].isActive = true
-      form[provider].testedAt = Date.now()
-      testResults.value[provider] = { ok: true, message: `Connected \u00B7 ${res.ms}ms` }
-    } else {
-      form[provider].isActive = false
-      testResults.value[provider] = { ok: false, message: res.error }
-    }
-    // Auto-save the isActive + testedAt
-    await configStore.saveConfig(JSON.parse(JSON.stringify(form)))
-  } catch (err) {
-    form[provider].isActive = false
-    testResults.value[provider] = { ok: false, message: err.message || 'Test failed' }
-  } finally {
-    testingProvider.value = null
-  }
-}
+// ── Test Connection ──────────────────────────────────────────────────────────
 
 async function testUtilityModel() {
   if (testingUtilityModel.value || !form.utilityModel.provider || !form.utilityModel.model) return
   testingUtilityModel.value = true
   testUtilityModelResult.value = null
-  const provider = form.utilityModel.provider
-  const pCfg = form[provider] || {}
+  const providerType = form.utilityModel.provider
+  const providerCfg = configStore.config.providers?.find(p => p.type === providerType && p.isActive) || {}
   try {
     const res = await window.electronAPI.testProvider({
-      provider,
-      apiKey: pCfg.apiKey,
-      baseURL: pCfg.baseURL,
+      provider: providerType,
+      apiKey: providerCfg.apiKey,
+      baseURL: providerCfg.baseURL,
       utilityModel: form.utilityModel.model,
     })
     if (res.success) {
@@ -2603,34 +2517,6 @@ async function testUtilityModel() {
 }
 
 const form = reactive({
-  anthropic: {
-    apiKey:      '',
-    baseURL:     '',
-    sonnetModel: '',
-    opusModel:   '',
-    haikuModel:  '',
-    isActive:    false,
-    testedAt:    null,
-  },
-  openrouter: {
-    apiKey:  '',
-    baseURL: '',
-    isActive:    false,
-    testedAt:    null,
-  },
-  openai: {
-    apiKey:       '',
-    baseURL:      '',
-    isActive:    false,
-    testedAt:    null,
-  },
-  deepseek: {
-    apiKey:    '',
-    baseURL:   '',
-    isActive:    false,
-    testedAt:    null,
-    maxTokens: 8192,
-  },
   utilityModel: {
     provider: '',
     model:    '',
@@ -2682,17 +2568,6 @@ watch(() => form.im.teams?.enabled, async (enabled) => {
   }
 })
 
-// Reset isActive when key fields change (skip initial population)
-const formReady = ref(false)
-function resetActive(provider) {
-  if (!formReady.value) return
-  form[provider].isActive = false
-  testResults.value[provider] = null
-}
-watch(() => [form.anthropic.apiKey, form.anthropic.baseURL], () => resetActive('anthropic'))
-watch(() => [form.openrouter.apiKey, form.openrouter.baseURL], () => resetActive('openrouter'))
-watch(() => [form.openai.apiKey, form.openai.baseURL], () => resetActive('openai'))
-watch(() => [form.deepseek.apiKey, form.deepseek.baseURL], () => resetActive('deepseek'))
 
 // ── Models Page: New left sidebar logic ────────────────────────────────
 const modelsLeftNav = ref('empty')  // 'empty' | providerId | 'global' | 'utility'
@@ -2872,10 +2747,6 @@ onMounted(async () => {
   delete c.defaultProvider
   
   // Legacy provider objects (for backward compat during transition)
-  if (c.anthropic)    Object.assign(form.anthropic, c.anthropic)
-  if (c.openrouter)   Object.assign(form.openrouter, c.openrouter)
-  if (c.openai)       Object.assign(form.openai, c.openai)
-  if (c.deepseek)     Object.assign(form.deepseek, c.deepseek)
   
   if (c.voiceCall)    Object.assign(form.voiceCall, c.voiceCall)
   if (c.smtp)         Object.assign(form.smtp, c.smtp)
@@ -3005,8 +2876,6 @@ onMounted(async () => {
     teamsAuthStatus.value = { connected: true, displayName: imStatus.value.teamsAuth.userDisplayName, userId: imStatus.value.teamsAuth.userId || '' }
   }
 
-  // Enable watcher-based isActive reset now that initial population is done
-  nextTick(() => { formReady.value = true })
 })
 
 async function handleLanguageChange() {
@@ -3041,43 +2910,6 @@ onUnmounted(() => {
   window.electronAPI?.im?.onTeamsReady?.(() => {})
   window.electronAPI?.im?.onTeamsAuthError?.(() => {})
 })
-
-async function fetchOrModels() {
-  if (!form.openrouter.apiKey) { orModelsFetchError.value = 'Enter an API key first.'; return }
-  orModelsFetching.value = true
-  orModelsFetchError.value = ''
-  try {
-    const success = await modelsStore.fetchModelsForProvider('openrouter')
-    if (success) { orSelectedTestModel.value = '' }
-    else { orModelsFetchError.value = 'Fetch failed — check API key and Base URL.' }
-  } catch (err) { orModelsFetchError.value = err.message }
-  finally { orModelsFetching.value = false }
-}
-
-async function fetchOpenAIModelsLocal() {
-  if (!form.openai.apiKey) { openaiModelsFetchError.value = 'Enter an API key first.'; return }
-  openaiModelsFetching.value = true
-  openaiModelsFetchError.value = ''
-  try {
-    const success = await modelsStore.fetchModelsForProvider('openai')
-    if (success) { openaiSelectedTestModel.value = '' }
-    else { openaiModelsFetchError.value = 'Fetch failed — check API key and Base URL.' }
-  } catch (err) { openaiModelsFetchError.value = err.message }
-  finally { openaiModelsFetching.value = false }
-}
-
-async function fetchDeepSeekModels() {
-  if (!form.deepseek.apiKey) { deepseekModelsFetchError.value = 'Enter an API key first.'; return }
-  if (!form.deepseek.baseURL) { deepseekModelsFetchError.value = 'Enter a Base URL first.'; return }
-  deepseekModelsFetching.value = true
-  deepseekModelsFetchError.value = ''
-  try {
-    const success = await modelsStore.fetchModelsForProvider('deepseek')
-    if (!success) { deepseekModelsFetchError.value = 'Fetch failed — check API key and Base URL.'; return }
-    deepseekSelectedTestModel.value = ''
-  } catch (err) { deepseekModelsFetchError.value = err.message }
-  finally { deepseekModelsFetching.value = false }
-}
 
 async function saveGeneral() {
   savingGeneral.value = true

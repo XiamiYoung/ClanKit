@@ -3,7 +3,7 @@
     <!-- Provider dropdown (hidden in modelOnly mode) -->
     <div v-if="!modelOnly" class="pmp-select-wrap">
       <button class="pmp-trigger" :class="{ 'pmp-selected': provider }" :disabled="disabled" @click="toggleProviderMenu">
-        <span>{{ provider ? PROVIDER_LABELS[provider] : 'Select Provider' }}</span>
+        <span>{{ provider ? selectedProviderLabel : 'Select Provider' }}</span>
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <div v-if="showProviderMenu" class="pmp-menu">
@@ -90,6 +90,11 @@ const activeProviderOptions = computed(() =>
       providerId: p.id
     }))
 )
+
+const selectedProviderLabel = computed(() => {
+  const opt = activeProviderOptions.value.find(p => p.id === props.provider)
+  return opt?.label || PROVIDER_LABELS[props.provider] || props.provider
+})
 
 const modelsLoading = computed(() => modelsStore.isLoading(props.provider))
 

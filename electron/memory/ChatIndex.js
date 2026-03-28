@@ -44,8 +44,17 @@ function extractKeywords(query) {
     'where','why','and','or','but','if','in','on','at','to','for','of',
     'with','by','from','about','as','into','through','during','before',
     'after','above','below','up','down','out','off','over','under',
-    // Chinese stop characters (basic)
+    'not','no','just','also','very','really','much','well','too','only',
+    'all','some','any','every','each','both','few','more','most','other',
+    'like','want','know','think','say','said','tell','told','make','get',
+    'got','let','help','please','thanks','thank','sure','okay','yes',
+    // Chinese stop words
     '的','了','是','在','我','你','他','她','它','我们','你们','他们',
+    '这','那','这个','那个','什么','怎么','如何','为什么','哪个','哪里',
+    '和','或','但','如果','因为','所以','虽然','不','没','没有','有',
+    '很','非常','就','也','都','还','又','再','能','可以','会','要',
+    '想','说','看','做','用','让','给','把','被','到','从','对',
+    '请','帮','帮我','一下','一个','一些','可以吗','好的','好吧',
   ])
   return query
     .toLowerCase()
@@ -116,10 +125,14 @@ class ChatIndex {
       if (!fs.existsSync(indexDir)) return []
 
       const keywords = extractKeywords(query)
-      if (keywords.length === 0) return []
+      if (keywords.length < 2) return []  // need at least 2 meaningful keywords
 
       const files = fs.readdirSync(indexDir).filter(f => f.endsWith('.json'))
       const scored = []
+
+      // Minimum match ratio — at least 40% of keywords must hit for relevance
+      const minMatchRatio = 0.4
+      const minMatchCount = Math.max(2, Math.ceil(keywords.length * minMatchRatio))
 
       for (const file of files) {
         try {
@@ -130,10 +143,11 @@ class ChatIndex {
             for (const kw of keywords) {
               if (snippet.lower.includes(kw)) score++
             }
-            if (score > 0) {
+            if (score >= minMatchCount) {
               scored.push({
                 text:      snippet.text,
                 score,
+                ratio:     score / keywords.length,
                 chatId:    entry.chatId,
                 updatedAt: entry.updatedAt,
               })
@@ -142,8 +156,8 @@ class ChatIndex {
         } catch { /* skip corrupt files */ }
       }
 
-      // Sort by score desc, then recency desc
-      scored.sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt)
+      // Sort by match ratio desc, then score desc, then recency desc
+      scored.sort((a, b) => b.ratio - a.ratio || b.score - a.score || b.updatedAt - a.updatedAt)
 
       // Deduplicate by chatId — keep the highest-scoring snippet per chat
       const seen = new Set()

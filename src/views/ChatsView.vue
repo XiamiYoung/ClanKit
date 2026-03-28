@@ -657,7 +657,7 @@
                   </div>
                   <!-- Status Info -->
                   <span class="text-xs" style="color:#9CA3AF; white-space:nowrap;">
-                    {{ enabledSkills.length }} skill{{ enabledSkills.length !== 1 ? 's' : '' }} active
+                    {{ enabledSkills.length }} {{ t('chats.statusSkills') }}{{ enabledToolsCount > 0 ? ', ' + enabledToolsCount + ' ' + t('chats.statusTools') : '' }}{{ enabledMcpCount > 0 ? ', ' + enabledMcpCount + ' MCP' : '' }}{{ enabledKnowledgeCount > 0 ? ', ' + enabledKnowledgeCount + ' RAG' : '' }}
                   </span>
                   <span v-if="attachments.length > 0" style="color:#1A1A1A; font-weight:500; font-size:0.75rem;">
                     {{ attachments.length }} file{{ attachments.length !== 1 ? 's' : '' }} attached
@@ -908,7 +908,13 @@ const knowledgeStore = useKnowledgeStore()
 const voiceStore = useVoiceStore()
 const focusModeStore = useFocusModeStore()
 const { t } = useI18n()
-const enabledSkillObjects = computed(() => skillsStore.allSkillObjects)
+const enabledSkillObjects = computed(() => {
+  const agent = currentSingleAgent.value
+  if (!agent) return skillsStore.allSkillObjects
+  const required = agent.requiredSkillIds
+  if (!required || required.length === 0) return []
+  return skillsStore.allSkillObjects.filter(s => required.includes(s.id))
+})
 
 const inputText = ref('')
 
@@ -1290,7 +1296,42 @@ onErrorCaptured((err, instance, info) => {
   return false // don't propagate — keep the parent alive
 })
 
-const enabledSkills = computed(() => skillsStore.skills.map(s => s.id))
+// ── Current single-agent (null for group chat) ──
+const currentSingleAgent = computed(() => {
+  const chat = chatsStore.activeChat
+  if (!chat || chat.groupAgentIds?.length > 0) return null
+  const id = chat.systemAgentId || agentsStore.defaultSystemAgent?.id
+  return id ? agentsStore.getAgentById(id) : null
+})
+
+const enabledSkills = computed(() => {
+  const agent = currentSingleAgent.value
+  if (!agent) return skillsStore.skills.map(s => s.id)
+  const required = agent.requiredSkillIds
+  if (!required || required.length === 0) return []
+  return required
+})
+
+const enabledToolsCount = computed(() => {
+  const agent = currentSingleAgent.value
+  if (!agent) return toolsStore.tools.length
+  const required = agent.requiredToolIds
+  return (required && required.length > 0) ? required.length : 0
+})
+
+const enabledMcpCount = computed(() => {
+  const agent = currentSingleAgent.value
+  if (!agent) return mcpStore.servers.length
+  const required = agent.requiredMcpServerIds
+  return (required && required.length > 0) ? required.length : 0
+})
+
+const enabledKnowledgeCount = computed(() => {
+  const agent = currentSingleAgent.value
+  if (!agent) return Object.values(knowledgeStore.indexConfigs).filter(c => c.enabled).length
+  const required = agent.requiredKnowledgeBaseIds
+  return (required && required.length > 0) ? required.length : 0
+})
 
 // ── Permission mode for quick selector in status bar ──
 const chatPermissionMode = computed({

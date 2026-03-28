@@ -114,7 +114,7 @@ ${modelIds.join('\n')}`
         req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')) })
       })
       const models = (data.data || []).map(m => ({ id: m.id, name: m.name || m.id, context_length: m.context_length, pricing: m.pricing }))
-      logger.info('openrouter:fetch-models', { count: models.length })
+
       return { success: true, models }
     } catch (err) {
       logger.error('openrouter:fetch-models error', err.message)
@@ -151,7 +151,7 @@ ${modelIds.join('\n')}`
         req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')) })
       })
       const models = (data.data || []).map(m => ({ id: m.id, name: m.name || m.id, context_length: m.context_length || null }))
-      logger.info('openai:fetch-models', { count: models.length })
+
       return { success: true, models }
     } catch (err) {
       logger.error('openai:fetch-models error', err.message)
@@ -170,7 +170,7 @@ ${modelIds.join('\n')}`
       }
       const data = await resp.json()
       const models = (data.models || []).map(m => ({ id: m.name.replace('models/', ''), name: m.displayName || m.name.replace('models/', ''), context_length: m.inputTokenLimit || null }))
-      logger.info('google:fetch-models', { count: models.length })
+
       return { success: true, models }
     } catch (err) {
       logger.error('google:fetch-models error', err.message)

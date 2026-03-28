@@ -3,7 +3,6 @@
     v-if="visible"
     class="fixed inset-0 z-50 flex items-center justify-center"
     style="background:rgba(0,0,0,0.3);"
-    @click.self="$emit('close')"
   >
     <div
       class="relative flex flex-col rounded-2xl overflow-hidden"

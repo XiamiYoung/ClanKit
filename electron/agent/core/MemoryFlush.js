@@ -88,12 +88,14 @@ class MemoryFlush {
       apiKey:  this.apiKey,
       baseURL: this.baseURL.replace(/\/+$/, ''),
     })
+    // Strip extra fields (e.g. timestamp) — Anthropic API rejects unknown properties
+    const cleanMsgs = messages.map(m => ({ role: m.role, content: m.content }))
     const response = await client.messages.create({
       model: this.model,
       max_tokens: 512,
       system: FLUSH_SYSTEM,
       messages: [
-        ...messages,
+        ...cleanMsgs,
         { role: 'user', content: FLUSH_PROMPT }
       ],
     })
@@ -111,12 +113,14 @@ class MemoryFlush {
       _directAuth:       this.directAuth,
     }
     const client = new OpenAIClient(cfg).getClient()
+    // Strip extra fields (e.g. timestamp) — some providers reject unknown properties
+    const cleanMsgs = messages.map(m => ({ role: m.role, content: m.content }))
     const response = await client.chat.completions.create({
       model: this.model,
       max_tokens: 512,
       messages: [
         { role: 'system', content: FLUSH_SYSTEM },
-        ...messages,
+        ...cleanMsgs,
         { role: 'user', content: FLUSH_PROMPT }
       ],
     })

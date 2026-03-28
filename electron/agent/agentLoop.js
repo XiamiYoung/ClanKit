@@ -405,7 +405,7 @@ class AgentLoop {
       const logsDir = path.join(this.config.memoryDir, 'agents', agentId, 'memory')
       const um = this.config.utilityModel
       if (!um?.provider || !um?.model) return
-      const providerCfg = this.config[um.provider]
+      const providerCfg = (this.config.providers || []).find(p => p.type === um.provider && p.isActive)
       if (!providerCfg?.apiKey || !providerCfg?.baseURL) return
 
       const flusher = new MemoryFlush({
@@ -494,9 +494,9 @@ class AgentLoop {
         const query = typeof lastUserMsg?.content === 'string'
           ? lastUserMsg.content.slice(0, 500)
           : ''
-        if (query.trim().length > 10) {
+        if (query.trim().length > 20) {
           const results = chatIdx.search(
-            query, agentPrompts.systemAgentId, 4,
+            query, agentPrompts.systemAgentId, 2,
             { excludeChatId: this.config.chatId }
           )
           if (results.length > 0) {
@@ -755,9 +755,21 @@ class AgentLoop {
 
     // Resolve configured output token limit: per-chat → global config → hardcoded default
     const DEFAULT_MAX_TOKENS = 32768
-    const configuredMaxTokens = this.config.maxOutputTokens
+    let configuredMaxTokens = this.config.maxOutputTokens
       ? Math.min(98304, Math.max(1024, Number(this.config.maxOutputTokens)))
       : DEFAULT_MAX_TOKENS
+    // Cap by per-provider hard limit (e.g. DeepSeek 8192)
+    const providerMaxTokens = this.config.providerMaxOutputTokens
+    if (providerMaxTokens && providerMaxTokens > 0 && providerMaxTokens < configuredMaxTokens) {
+      const originalValue = configuredMaxTokens
+      configuredMaxTokens = providerMaxTokens
+      // Only warn if user explicitly set a per-chat maxOutputTokens that exceeds provider limit.
+      // Silent cap for global defaults — that's expected behavior, not a surprise.
+      if (this.config._maxOutputTokensExplicit) {
+        logger.agent('maxOutputTokens capped by provider limit (explicit per-chat override)', { configured: originalValue, providerMax: providerMaxTokens })
+        onChunk({ type: 'warning', code: 'max_tokens_capped', from: originalValue, to: configuredMaxTokens })
+      }
+    }
 
     try {
       let iteration = 0
@@ -1056,15 +1068,21 @@ class AgentLoop {
             }
 
             // 2. Context overflow → parse limit, adjust max_tokens or drop tools
-            if (!retried && streamErr.status === 400 && streamErr.message?.includes('maximum context length')) {
+            if (!retried && streamErr.status === 400 && (
+              streamErr.message?.includes('maximum context length') ||
+              streamErr.message?.includes('context_length_exceeded')
+            )) {
               const limitMatch = streamErr.message.match(/maximum context length is (\d+)/)
+              const totalMatch = streamErr.message.match(/resulted in (\d+) tokens/)
               const msgMatch   = streamErr.message.match(/(\d+) in the messages/)
               const fnMatch    = streamErr.message.match(/(\d+) in the (?:functions|tools)/)
               const compMatch  = streamErr.message.match(/(\d+) in the completion/)
 
               if (limitMatch) {
                 const ctxLimit  = Number(limitMatch[1])
-                const msgTokens = msgMatch  ? Number(msgMatch[1])  : 0
+                // When no breakdown is given, use total as msgTokens (conservative estimate)
+                const totalTokens = totalMatch ? Number(totalMatch[1]) : 0
+                const msgTokens = msgMatch  ? Number(msgMatch[1])  : totalTokens
                 const fnTokens  = fnMatch   ? Number(fnMatch[1])   : 0
                 const compTokens = compMatch ? Number(compMatch[1]) : 0
 
@@ -1083,7 +1101,7 @@ class AgentLoop {
                     }
                   }
                 } else if (fnTokens > 0 && openaiParams.tools?.length > 0) {
-                  // Case B: input alone exceeds limit — drop tools to free space
+                  // Case B: messages fit without tools — drop tools to free space
                   const withoutTools = msgTokens
                   if (withoutTools < ctxLimit) {
                     const available = ctxLimit - withoutTools
@@ -1097,7 +1115,76 @@ class AgentLoop {
                       logger.error('Context overflow retry (no tools) also FAILED', retryErr.message)
                       throw retryErr
                     }
+                  } else {
+                    // Case C: messages alone exceed limit even without tools — trim messages + drop tools
+                    const trimmed = this._trimMessagesToFit(openaiParams.messages, msgTokens, ctxLimit)
+                    if (trimmed.length > 0) {
+                      const available = Math.max(256, Math.floor(ctxLimit * 0.25))
+                      logger.warn(`Context overflow (messages+tools) — trimming messages & dropping tools`, { model, ctxLimit, msgTokens, trimmedMsgs: trimmed.length, original: openaiParams.messages.length })
+                      const retryParams = { ...openaiParams, messages: trimmed, ...this.anthropicClient.tokenLimit(Math.min(available, effectiveMaxTokens)) }
+                      delete retryParams.tools
+                      try {
+                        stream = await client.chat.completions.create(retryParams, { signal: this._abortController.signal })
+                        retried = true
+                        onChunk({ type: 'warning', code: 'context_trimmed' })
+                      } catch (retryErr) {
+                        logger.error('Context overflow retry (trimmed+no tools) also FAILED', retryErr.message)
+                        throw retryErr
+                      }
+                    }
                   }
+                } else if (msgTokens > ctxLimit && openaiParams.tools?.length > 0) {
+                  // Case D1: total exceeds limit and tools present (no breakdown) — drop tools + trim
+                  const trimmed = this._trimMessagesToFit(openaiParams.messages, msgTokens, ctxLimit)
+                  if (trimmed.length > 0) {
+                    const available = Math.max(256, Math.floor(ctxLimit * 0.25))
+                    logger.warn(`Context overflow (total, with tools) — trimming & dropping tools`, { model, ctxLimit, msgTokens, trimmedMsgs: trimmed.length, original: openaiParams.messages.length })
+                    const retryParams = { ...openaiParams, messages: trimmed, ...this.anthropicClient.tokenLimit(Math.min(available, effectiveMaxTokens)) }
+                    delete retryParams.tools
+                    try {
+                      stream = await client.chat.completions.create(retryParams, { signal: this._abortController.signal })
+                      retried = true
+                      onChunk({ type: 'warning', code: 'context_trimmed' })
+                    } catch (retryErr) {
+                      logger.error('Context overflow retry (total, trimmed+no tools) also FAILED', retryErr.message)
+                      throw retryErr
+                    }
+                  }
+                } else if (msgTokens > ctxLimit) {
+                  // Case D2: no tools but messages still exceed — trim messages only
+                  const trimmed = this._trimMessagesToFit(openaiParams.messages, msgTokens, ctxLimit)
+                  if (trimmed.length > 0) {
+                    const available = Math.max(256, Math.floor(ctxLimit * 0.25))
+                    logger.warn(`Context overflow (messages only) — trimming`, { model, ctxLimit, msgTokens, trimmedMsgs: trimmed.length, original: openaiParams.messages.length })
+                    const retryParams = { ...openaiParams, messages: trimmed, ...this.anthropicClient.tokenLimit(Math.min(available, effectiveMaxTokens)) }
+                    try {
+                      stream = await client.chat.completions.create(retryParams, { signal: this._abortController.signal })
+                      retried = true
+                      onChunk({ type: 'warning', code: 'context_trimmed' })
+                    } catch (retryErr) {
+                      logger.error('Context overflow retry (trimmed) also FAILED', retryErr.message)
+                      throw retryErr
+                    }
+                  }
+                }
+              }
+            }
+
+            // 3. max_tokens out of valid range → parse upper bound and retry
+            if (!retried && streamErr.status === 400 && /max_tokens|max_completion_tokens/.test(streamErr.message || '')) {
+              const rangeMatch = (streamErr.message || '').match(/valid range.*?\[(\d+),\s*(\d+)\]/)
+              const upperBound = rangeMatch ? Number(rangeMatch[2]) : null
+              if (upperBound && upperBound > 0) {
+                logger.warn(`max_tokens ${effectiveMaxTokens} exceeds model limit ${upperBound} — retrying`, { model })
+                const retryParams = { ...openaiParams, ...this.anthropicClient.tokenLimit(upperBound) }
+                try {
+                  stream = await client.chat.completions.create(retryParams, { signal: this._abortController.signal })
+                  retried = true
+                  // Update for future iterations so we don't retry every turn
+                  effectiveMaxTokens = upperBound
+                } catch (retryErr) {
+                  logger.error('max_tokens retry also FAILED', retryErr.message)
+                  throw retryErr
                 }
               }
             }
@@ -1579,14 +1666,13 @@ class AgentLoop {
                 this.contextManager.updateUsage(finalMessage)
                 onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
 
-                // Debug: log finalMessage content block types to understand image response format
+                // Debug: log finalMessage content block types (no text content)
                 if (Array.isArray(finalMessage.content)) {
                   logger.agent('finalMessage content blocks', finalMessage.content.map(b => ({
                     type: b.type,
                     hasData: b.type === 'image' ? !!b.source?.data : undefined,
                     dataLen: b.type === 'image' ? b.source?.data?.length : undefined,
                     textLen: b.type === 'text' ? b.text?.length : undefined,
-                    textPreview: b.type === 'text' ? b.text?.slice(0, 80) : undefined,
                   })))
                 }
 
@@ -1837,6 +1923,32 @@ class AgentLoop {
    */
   _toOpenAIMessages(systemPrompt, messages) {
     return mc.toOpenAIMessages(systemPrompt, messages)
+  }
+
+  /**
+   * Trim OpenAI-format messages to fit within a token limit.
+   * Keeps the system message (first) + most recent messages.
+   * Uses rough char/4 estimation for token count.
+   */
+  _trimMessagesToFit(messages, currentTokens, contextLimit) {
+    if (messages.length <= 2) return messages
+    const target = Math.floor(contextLimit * 0.70)
+    // Keep first message (system prompt) and progressively drop oldest non-system messages
+    const first = messages[0]?.role === 'system' ? [messages[0]] : []
+    const rest = first.length > 0 ? messages.slice(1) : [...messages]
+    let est = first.length > 0 ? Math.ceil(JSON.stringify(first[0]).length / 4) : 0
+    // Walk backwards to keep most recent messages
+    const kept = []
+    for (let i = rest.length - 1; i >= 0; i--) {
+      const msgTokens = Math.ceil(JSON.stringify(rest[i]).length / 4)
+      if (est + msgTokens > target && kept.length >= 2) break
+      est += msgTokens
+      kept.unshift(rest[i])
+    }
+    // Prepend trim marker after system message
+    const marker = { role: 'user', content: '[Earlier conversation was trimmed to fit context window]' }
+    const markerReply = { role: 'assistant', content: 'Understood. Continuing with recent context.' }
+    return [...first, marker, markerReply, ...kept]
   }
 
   /**

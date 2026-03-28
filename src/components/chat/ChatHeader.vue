@@ -201,8 +201,10 @@
       class="ch-agent-tooltip-fixed"
       :style="{ top: tooltipState.y + 'px', left: tooltipState.x + 'px' }"
     >
-      <div class="ch-agent-tooltip-name">{{ tooltipState.name }}</div>
-      <div class="ch-agent-tooltip-text">{{ tooltipState.text }}</div>
+      <div class="ch-agent-tooltip-name">{{ tooltipState.name }}
+        <span v-if="tooltipState.providerModel" class="ch-agent-tooltip-pm">{{ tooltipState.providerModel }}</span>
+      </div>
+      <div v-if="tooltipState.text" class="ch-agent-tooltip-text">{{ tooltipState.text }}</div>
     </div>
   </Teleport>
 
@@ -629,7 +631,7 @@ const agentSearchQuery = ref('')
 const expandedSysCatIds = ref(new Set())
 
 // ── Own tooltip state (not shared with parent) ──
-const tooltipState = reactive({ visible: false, name: '', text: '', x: 0, y: 0 })
+const tooltipState = reactive({ visible: false, name: '', providerModel: '', text: '', x: 0, y: 0 })
 
 // ── Agent computed ──
 function getAvatarDataUriForAgent(agent) {
@@ -768,15 +770,33 @@ function onSysAvatarClick(pid) {
 }
 
 // ── Agent tooltip (header-only) ──
+function _resolveAgentProviderModel(agentId) {
+  const agent = agentsStore.getAgentById(agentId)
+  if (!agent) return ''
+  // Per-chat override first
+  const override = chat.value?.agentModelOverrides?.[agentId] || chat.value?.personaModelOverrides?.[agentId]
+  const providerId = override?.provider || agent.providerId
+  const modelId = override?.model || agent.modelId
+  if (!providerId && !modelId) return ''
+  const providers = configStore.config?.providers || []
+  const found = providers.find(p => p.id === providerId || p.type === providerId)
+  const providerName = found?.alias || found?.name || found?.type || providerId || ''
+  const modelShort = modelId ? modelId.split('/').pop().split(':')[0] : ''
+  if (providerName && modelShort) return `${providerName} / ${modelShort}`
+  return providerName || modelShort
+}
+
 function showAgentTooltip(event, pid) {
   const agent = agentsStore.getAgentById(pid)
-  if (!agent?.description) { tooltipState.visible = false; return }
+  const providerModel = _resolveAgentProviderModel(pid)
+  if (!agent?.description && !providerModel) { tooltipState.visible = false; return }
   const rect = event.currentTarget.getBoundingClientRect()
-  tooltipState.name = agent.name
-  tooltipState.text = agent.description
-  const tooltipWidth = 280
+  tooltipState.name = agent?.name || '?'
+  tooltipState.providerModel = providerModel
+  tooltipState.text = agent?.description || ''
+  const tooltipMaxW = 448
   let left = rect.left + rect.width / 2
-  left = Math.max(tooltipWidth / 2 + 8, Math.min(left, window.innerWidth - tooltipWidth / 2 - 8))
+  left = Math.max(tooltipMaxW / 2 + 8, Math.min(left, window.innerWidth - tooltipMaxW / 2 - 8))
   tooltipState.x = left
   tooltipState.y = rect.bottom + 10
   tooltipState.visible = true
@@ -796,7 +816,7 @@ const effectiveProviderLabel = computed(() => {
   if (!agent?.providerId) return '—'
   const providers = configStore.config?.providers || []
   const found = providers.find(p => p.id === agent.providerId || p.type === agent.providerId)
-  return found?.name || found?.type || agent.providerId
+  return found?.alias || found?.name || found?.type || agent.providerId
 })
 
 const effectiveModelLabel = computed(() => {
@@ -1586,8 +1606,8 @@ const effectiveMaxOutputTokens = computed(() => {
   z-index: 9999;
   pointer-events: none;
   transform: translateX(-50%);
-  min-width: 12.5rem;
-  max-width: 18.75rem;
+  width: max-content;
+  max-width: 28rem;
   padding: 0.625rem 0.875rem;
   background: rgba(0, 0, 0, 0.92);
   border-radius: 0.625rem;
@@ -1599,6 +1619,13 @@ const effectiveMaxOutputTokens = computed(() => {
   font-weight: 700;
   color: #F5F5F5;
   margin-bottom: 0.25rem;
+  white-space: nowrap;
+}
+.ch-agent-tooltip-pm {
+  font-weight: 400;
+  color: #9CA3AF;
+  margin-left: 0.375rem;
+  font-size: 0.6875rem;
 }
 .ch-agent-tooltip-text {
   font-family: 'Inter', sans-serif;

@@ -75,7 +75,7 @@ function register() {
       if (!um?.provider || !um?.model) {
         return { success: false, error: 'Utility model not configured.' }
       }
-      const providerCfg = config[um.provider]
+      const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
       if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
         return { success: false, error: `Provider "${um.provider}" missing apiKey or baseURL.` }
       }
@@ -140,7 +140,7 @@ Example: ${langExample}`
     try {
       const um = config.utilityModel
       if (!um?.provider || !um?.model) return { success: false, error: 'Utility model not configured.' }
-      const providerCfg = config[um.provider]
+      const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
       if (!providerCfg?.apiKey || !providerCfg?.baseURL) return { success: false, error: `Provider "${um.provider}" missing credentials.` }
 
       const prompt = `Given this description of a debate topic idea: "${description}"
@@ -203,7 +203,7 @@ Example (Chinese input): {"title":"机器真的能思考吗？","description":"�
       // Always generate a fresh topic via utility model
       const um = config.utilityModel
       if (!um?.provider || !um?.model) return { success: false, error: 'Utility model not configured.' }
-      const providerCfg = config[um.provider]
+      const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
       if (!providerCfg?.apiKey || !providerCfg?.baseURL) return { success: false, error: `Provider "${um.provider}" missing credentials.` }
 
       const lang = language === 'zh' ? 'Chinese (Simplified)' : 'English'
@@ -444,7 +444,7 @@ Example: ${langExample}`
     try {
       const um = config.utilityModel
       if (!um?.provider || !um?.model) return { success: false, error: 'Utility model not configured.' }
-      const providerCfg = config[um.provider]
+      const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
       if (!providerCfg?.apiKey || !providerCfg?.baseURL) return { success: false, error: `Provider "${um.provider}" missing credentials.` }
 
       const transcript = session.messages.map(m => `[${m.agentName}]: ${m.content}`).join('\n\n')
@@ -497,7 +497,7 @@ Example: ${memExample}`
     try {
       const um = config.utilityModel
       if (!um?.provider || !um?.model) return { success: false, error: 'Utility model not configured.' }
-      const providerCfg = config[um.provider]
+      const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
       if (!providerCfg?.apiKey || !providerCfg?.baseURL) return { success: false, error: `Provider "${um.provider}" missing credentials.` }
 
       const transcript = session.messages.map(m => `[${m.agentName}]: ${m.content}`).join('\n\n')

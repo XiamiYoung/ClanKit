@@ -75,7 +75,7 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
       logger.debug('[Memory] skip: utility model not configured', { chatId })
       return
     }
-    const providerCfg = config[um.provider]
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       logger.debug('[Memory] skip: provider missing apiKey/baseURL', { chatId, provider: um.provider })
       return
@@ -229,6 +229,23 @@ async function _runStartupIndexRecovery() {
   } catch (err) {
     logger.error('[Startup] index recovery failed (non-fatal)', err.message)
   }
+}
+
+// ── Error classification ───────────────────────────────────────────────────────
+
+function _classifyError(err) {
+  const msg = (err.message || '').toLowerCase()
+  const status = err.status || err.statusCode || 0
+  if (msg.includes('maximum context length') || msg.includes('context_length_exceeded')) return 'context_overflow'
+  if (msg.includes('max_tokens') || msg.includes('max_completion_tokens')) return 'max_tokens_invalid'
+  if (msg.includes('rate limit') || status === 429) return 'rate_limited'
+  if (msg.includes('authentication') || msg.includes('unauthorized') || msg.includes('invalid.*api.key') || status === 401 || status === 403) return 'auth_error'
+  if (msg.includes('timeout') || msg.includes('econnrefused') || msg.includes('econnreset') || msg.includes('enotfound') || msg.includes('fetch failed')) return 'connection_error'
+  if (msg.includes('tool use') || msg.includes('tool_use')) return 'tool_not_supported'
+  if (msg.includes('content filter') || msg.includes('content_policy')) return 'content_filtered'
+  if (status === 400) return 'bad_request'
+  if (status >= 500) return 'server_error'
+  return 'unknown'
 }
 
 // ── Provider credential helpers (mirrors useAgentCollaboration.js) ─────────────
@@ -547,6 +564,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       loopConfig.chatAllowList = chatAllowList || []
       // Per-chat value takes precedence; fall back to global config default
       loopConfig.maxOutputTokens = maxOutputTokens || groupCfg.maxOutputTokens || null
+      loopConfig._maxOutputTokensExplicit = !!maxOutputTokens
       loopConfig.smtpConfig = groupCfg.smtp || null
       // Inject config-backed paths — all agents share the same global paths
       loopConfig.dataPath     = ds.paths().DATA_DIR
@@ -676,6 +694,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.chatDangerOverrides = chatDangerOverrides || []
   // Per-chat value takes precedence; fall back to global config default
   loopConfig.maxOutputTokens = maxOutputTokens || fullCfg.maxOutputTokens || null
+  loopConfig._maxOutputTokensExplicit = !!maxOutputTokens
   loopConfig.smtpConfig = fullCfg.smtp || null
   // Inject config-backed paths so the agent always has them regardless of what the renderer sent
   loopConfig.dataPath     = ds.paths().DATA_DIR
@@ -817,6 +836,7 @@ ipcMain.handle('agent:run-additional', async (event, {
     loopConfig.chatAllowList       = meta.chatAllowList || []
     loopConfig.chatDangerOverrides = meta.chatDangerOverrides || []
     loopConfig.maxOutputTokens     = meta.maxOutputTokens || groupCfg.maxOutputTokens || null
+    loopConfig._maxOutputTokensExplicit = !!meta.maxOutputTokens
     loopConfig.smtpConfig          = groupCfg.smtp || null
     loopConfig.dataPath            = ds.paths().DATA_DIR
     loopConfig.artifactPath        = groupCfg.artifactPath || groupCfg.artyfactPath || ''
@@ -1041,7 +1061,7 @@ ipcMain.handle('agent:edit-text', async (event, { requestId, selectedText, fullF
       event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: 'Utility model not configured. Set it in Config → AI → Models → Global Model Settings.' })
       return { success: false }
     }
-    const providerCfg = config[um.provider]
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: `Utility model provider "${um.provider}" is missing apiKey or baseURL.` })
       return { success: false }
@@ -1231,6 +1251,7 @@ ipcMain.handle('agent:doc-run', async (event, {
     loopConfig.chatPermissionMode = permissionMode || 'allow_all'
     loopConfig.chatAllowList = []
     loopConfig.maxOutputTokens = fullCfg.maxOutputTokens || null
+    loopConfig._maxOutputTokensExplicit = false
     loopConfig.dataPath     = ds.paths().DATA_DIR
     loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
     loopConfig.skillsPath   = fullCfg.skillsPath   || ''
@@ -1402,9 +1423,9 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
     if (!um?.provider || !um?.model) {
       return { success: false, error: 'Utility model not configured. Set it in Config → AI → Models → Global Model Settings.' }
     }
-    const providerCfg = config[um.provider]
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
-      return { success: false, error: `Utility model provider "${um.provider}" is missing apiKey or baseURL.` }
+      return { success: false, error: `Utility model provider "${um.provider}" is missing apiKey or baseURL. Check provider configuration.` }
     }
     // Use the global maxOutputTokens from config, capped at 4096 for utility calls.
     // The global setting reflects what models the user's providers actually support.
@@ -1493,7 +1514,7 @@ If none should respond, reply with [].`
       logger.warn('agent:resolve-addressees: no global utilityModel configured, treating all mentions as addressees')
       return { addresseeIds: agents.map(p => p.id) }
     }
-    const providerCfg = config[um.provider]
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       logger.warn(`agent:resolve-addressees: utilityModel provider "${um.provider}" missing apiKey/baseURL, treating all mentions as addressees`)
       return { addresseeIds: agents.map(p => p.id) }
@@ -1630,7 +1651,7 @@ Examples:
       logger.warn('agent:route-group-audience: no utilityModel configured, falling back to all participants')
       return { audienceIds: agents.map(agent => agent.id) }
     }
-    const providerCfg = config[um.provider]
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       logger.warn(`agent:route-group-audience: utilityModel provider "${um.provider}" missing apiKey/baseURL, falling back to all participants`)
       return { audienceIds: agents.map(agent => agent.id) }
@@ -1749,7 +1770,7 @@ Reply with ONLY a JSON object:
       logger.warn('agent:dispatch-group-tasks: no utilityModel configured, skipping dispatch')
       return heuristicSequential || { dispatched: null }
     }
-    const providerCfg = config[um.provider]
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       logger.warn('agent:dispatch-group-tasks: utilityModel missing credentials, skipping dispatch')
       return heuristicSequential || { dispatched: null }
@@ -2093,6 +2114,7 @@ ipcMain.handle('agent:send-message', async (event, {
       loopConfig.chatAllowList = targetChatMeta.chatAllowList || []
       loopConfig.chatDangerOverrides = targetChatMeta.chatDangerOverrides || []
       loopConfig.maxOutputTokens = targetChatMeta.maxOutputTokens || fullCfg.maxOutputTokens || null
+      loopConfig._maxOutputTokensExplicit = !!targetChatMeta.maxOutputTokens
       loopConfig.smtpConfig = fullCfg.smtp || null
       loopConfig.dataPath     = ds.paths().DATA_DIR
       loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
@@ -2181,7 +2203,19 @@ ipcMain.handle('agent:send-message', async (event, {
           )
           return { agentId: run.agentId, agentName: run.agentName, success: true, result, text: accumulator.getText() }
         } catch (err) {
-          logger.error('agent:send-message run error', { chatId, agentId: run.agentId, error: err.message })
+          // Include last user message and any accumulated LLM response in error log
+          const lastUserMsg = [...(run.messages || baseMessages)].reverse().find(m => m.role === 'user')
+          const lastUserText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content.slice(0, 200) : ''
+          const llmText = accumulator.getText()
+          logger.error('agent:send-message run error', {
+            chatId, agentId: run.agentId, error: err.message,
+            lastUserMsg: lastUserText || '(empty)',
+            llmResponse: llmText ? llmText.slice(0, 200) : '(none)',
+          })
+          // Send error chunk so UI can display it with detail tooltip
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('agent:chunk', { chatId, chunk: { type: 'agent_error', agentId: run.agentId, agentName: run.agentName, errorCode: _classifyError(err), error: err.message } })
+          }
           return { agentId: run.agentId, agentName: run.agentName, success: false, error: err.message, text: accumulator.getText() }
         } finally {
           if (!event.sender.isDestroyed()) {
@@ -2208,9 +2242,6 @@ ipcMain.handle('agent:send-message', async (event, {
     for (const r of results) {
       if (r.text) {
         trackMessages.push({ role: 'assistant', agentId: r.agentId, content: r.text })
-        logger.agent(`[collab-debug] trackMessages.push agentId=${r.agentId} textLen=${r.text.length} tail="${r.text.slice(-150)}"`, { chatId })
-      } else {
-        logger.agent(`[collab-debug] runGroupRound result has NO text for agentId=${r.agentId}`, { chatId })
       }
     }
 
@@ -2243,19 +2274,11 @@ ipcMain.handle('agent:send-message', async (event, {
     const newMessages = trackMessages.slice(prevMsgCount)
       .filter(m => m.role === 'assistant' && m.agentId && groupIdsArr.includes(m.agentId) && m.content)
 
-    logger.agent(`[collab-debug] round=${iterationCount} prevMsgCount=${prevMsgCount} trackMessages.length=${trackMessages.length} newMessages.length=${newMessages.length}`, { chatId })
-    for (const nm of newMessages) {
-      const contentSnip = (nm.content || '').slice(-200)
-      logger.agent(`[collab-debug]   newMsg agentId=${nm.agentId} contentTail="${contentSnip}"`, { chatId })
-    }
-
     const nextRespondingSet = new Set()
     for (let msgIdx = 0; msgIdx < newMessages.length; msgIdx++) {
       const msg = newMessages[msgIdx]
       const { mentions } = parseMentions(msg.content, groupAgents)
       const others = mentions.filter(id => id !== msg.agentId)
-      const sourceAgent = groupAgents.find(a => a.id === msg.agentId)
-      logger.agent(`[collab-debug]   parseMentions from="${sourceAgent?.name || msg.agentId}" mentions=[${mentions.join(',')}] others=[${others.join(',')}]`, { chatId })
       if (others.length === 0) continue
 
       let addressees = others
@@ -2263,24 +2286,19 @@ ipcMain.handle('agent:send-message', async (event, {
         try {
           const mentionedAgents = others.map(id => { const a = groupAgents.find(g => g.id === id); return a ? { id, name: a.name } : null }).filter(Boolean)
           const result = await _resolveAddresseesInternal(msg.content, mentionedAgents, fullCfg).catch(() => null)
-          logger.agent(`[collab-debug]   resolveAddressees result=${JSON.stringify(result?.addresseeIds)}`, { chatId })
           if (result?.addresseeIds?.length > 0) addressees = result.addresseeIds
         } catch {}
       }
 
-      logger.agent(`[collab-debug]   addressees=[${addressees.join(',')}] iterationCount=${iterationCount}`, { chatId })
       for (const id of addressees) {
         if (iterationCount === 0) {
           nextRespondingSet.add(id)
         } else {
           const alreadyRepliedAfter = newMessages.slice(msgIdx + 1).some(m => m.agentId === id)
-          logger.agent(`[collab-debug]   id=${id} alreadyRepliedAfter=${alreadyRepliedAfter}`, { chatId })
           if (!alreadyRepliedAfter) nextRespondingSet.add(id)
         }
       }
     }
-
-    logger.agent(`[collab-debug] nextRespondingSet=[${[...nextRespondingSet].join(',')}]`, { chatId })
     if (nextRespondingSet.size === 0) return
 
     logger.agent(`[send-message] collaboration round ${iterationCount + 1}`, { chatId, agents: [...nextRespondingSet] })
@@ -2513,11 +2531,6 @@ ipcMain.handle('agent:send-message', async (event, {
 
       // Collaboration loop
       if (groupAgents.length >= 2) {
-        logger.agent(`[collab-debug] entering collaboration. groupAgents=[${groupAgents.map(a=>a.name).join(',')}] effectiveGroupIds=[${effectiveGroupIds.join(',')}] msgCountBeforeRun=${msgCountBeforeRun} trackMessages.length=${trackMessages.length}`, { chatId })
-        for (let ti = msgCountBeforeRun; ti < trackMessages.length; ti++) {
-          const tm = trackMessages[ti]
-          logger.agent(`[collab-debug]   trackMsg[${ti}] role=${tm.role} agentId=${tm.agentId || 'none'} hasContent=${!!tm.content} contentLen=${(tm.content||'').length}`, { chatId })
-        }
         await triggerCollaboration(trackMessages, groupAgents, effectiveGroupIds, allData, fullCfg, 0, msgCountBeforeRun)
       }
 

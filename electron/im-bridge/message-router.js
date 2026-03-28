@@ -353,24 +353,9 @@ async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, noti
     DoCPath:             config.DoCPath || '',
   }
 
-  if (provider === 'anthropic') {
-    loopConfig.apiKey  = config.anthropic?.apiKey  || ''
-    loopConfig.baseURL = config.anthropic?.baseURL || ''
-  } else if (provider === 'openrouter') {
-    loopConfig.apiKey  = config.openrouter?.apiKey  || ''
-    loopConfig.baseURL = config.openrouter?.baseURL || ''
-  } else if (provider === 'openai') {
-    loopConfig.openaiApiKey  = config.openai?.apiKey  || ''
-    loopConfig.openaiBaseURL = config.openai?.baseURL || ''
-    loopConfig._resolvedProvider = 'openai'
-    loopConfig.defaultProvider   = 'openai'
-  } else if (provider === 'deepseek') {
-    loopConfig.openaiApiKey  = config.deepseek?.apiKey  || ''
-    loopConfig.openaiBaseURL = (config.deepseek?.baseURL || '').replace(/\/+$/, '')
-    loopConfig._resolvedProvider = 'openai'
-    loopConfig._directAuth       = true
-    loopConfig.defaultProvider   = 'openai'
-  }
+  // Use agentRuntimeUtils for proper provider credential resolution (new providers[] array + legacy fallback)
+  const { applyProviderCredsToConfig } = require('../ipc/agentRuntimeUtils')
+  applyProviderCredsToConfig(loopConfig, provider)
 
   const messages = loadMessages(chatId)
 

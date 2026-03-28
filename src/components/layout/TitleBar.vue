@@ -43,6 +43,7 @@
 
     <!-- Window controls -->
     <div class="flex items-center" style="gap:0.125rem;" @mousedown.stop @dblclick.stop>
+      <div id="titlebar-help-slot" class="tb-focus-slot"></div>
       <button @click.stop="minimize" @dblclick.stop class="flex items-center justify-center rounded transition-colors"
         style="width:2rem;height:1.625rem;background:transparent;border:none;color:#6B7280;cursor:pointer;"
         @mouseenter="e=>e.currentTarget.style.background='#F5F5F5'"

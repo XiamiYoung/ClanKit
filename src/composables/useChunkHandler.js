@@ -198,6 +198,21 @@ export function useChunkHandler({
       return
     }
 
+    if (chunk.type === 'agent_error') {
+      // Store error detail + code on the streaming message so agent_end can display it
+      const errKey = `${cId}:${chunk.agentId}`
+      const errMsgId = perChatStreamingMsgId.get(errKey)
+      if (errMsgId && targetChat) {
+        const errMsg = targetChat.messages.find(m => m.id === errMsgId)
+        if (errMsg) {
+          errMsg.errorDetail = chunk.error
+          errMsg.errorCode = chunk.errorCode || 'unknown'
+        }
+      }
+      dbg(`agent_error: [${chunk.errorCode}] ${chunk.agentName}`, 'error')
+      return
+    }
+
     if (chunk.type === 'agent_end') {
       const agentKey = `${cId}:${chunk.agentId}`
       const msgId = perChatStreamingMsgId.get(agentKey)
@@ -454,6 +469,20 @@ export function useChunkHandler({
       dbg(`thinking: ${chunk.text?.slice(0,60) ?? ''}…`, 'chunk')
     } else if (chunk.type === 'compaction') {
       dbg(`compaction: ${chunk.message || 'context compacted'}`, 'warn')
+    } else if (chunk.type === 'warning') {
+      dbg(`warning: ${chunk.code || chunk.message || 'unknown'}`, 'warn')
+      // Show warning as a persistent segment in the chat bubble
+      const warnRouteKey = chunk.agentId ? `${cId}:${chunk.agentId}` : cId
+      const warnSegs = perChatStreamingSegments.get(warnRouteKey) || []
+      warnSegs.push({
+        type: 'warning',
+        code: chunk.code || null,
+        from: chunk.from || null,
+        to: chunk.to || null,
+        message: chunk.message || null,
+      })
+      perChatStreamingSegments.set(warnRouteKey, warnSegs)
+      flushSegments(warnRouteKey)
     } else if (chunk.type === 'max_tokens_reached') {
       dbg(`max_tokens reached (limit=${chunk.limit})`, 'warn')
     } else if (chunk.type === 'subagent_progress') {

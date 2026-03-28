@@ -42,7 +42,7 @@
             <div class="bv-field">
               <label class="bv-field-label">{{ t('agents.name') }}<span v-if="!readOnly" class="bv-required">*</span></label>
               <div v-if="readOnly" class="bv-readonly-text">{{ draftName || '—' }}</div>
-              <input v-else v-model="draftName" type="text" class="bv-input" :class="{ error: saveError && !draftName.trim() }" :placeholder="t('agents.agentNamePlaceholder')" spellcheck="false" @input="saveError = ''" />
+              <input v-else v-model="draftName" type="text" class="bv-input" maxlength="30" :class="{ error: saveError && (!draftName.trim() || draftName.trim().length > 30 || /\s/.test(draftName.trim())) }" :placeholder="t('agents.agentNamePlaceholder')" spellcheck="false" @input="saveError = ''" />
             </div>
 
             <!-- Description -->
@@ -162,13 +162,13 @@
                   clip-path="url(#bv-head-clip)"
                   preserveAspectRatio="xMidYMid slice"
                   class="bv-avatar-hs" :class="{ active: activePanel === 'avatar' }"
-                  @click="!readOnly && togglePanel('avatar')" :style="{ cursor: readOnly ? 'default' : 'pointer' }"
+                  @click="!readOnly && !isBuiltinSystemAgent && togglePanel('avatar')" :style="{ cursor: readOnly || isBuiltinSystemAgent ? 'default' : 'pointer' }"
                 />
                 <text v-else x="160" y="93" text-anchor="middle" class="bv-figure-initial">{{ fallbackInitial }}</text>
                 <circle cx="160" cy="82" r="58" fill="none" stroke="#3D8BF0" stroke-width="2"
                   class="bv-avatar-hs" :class="{ active: activePanel === 'avatar' }"
-                  @click="!readOnly && togglePanel('avatar')" :style="{ cursor: readOnly ? 'default' : 'pointer' }"/>
-                <g v-if="!readOnly" class="bv-avatar-edit-hint" @click="togglePanel('avatar')" style="cursor:pointer;">
+                  @click="!readOnly && !isBuiltinSystemAgent && togglePanel('avatar')" :style="{ cursor: readOnly || isBuiltinSystemAgent ? 'default' : 'pointer' }"/>
+                <g v-if="!readOnly && !isBuiltinSystemAgent" class="bv-avatar-edit-hint" @click="togglePanel('avatar')" style="cursor:pointer;">
                   <circle cx="196" cy="122" r="12" fill="#0D2040" stroke="#3D8BF0" stroke-width="1.5"/>
                   <path d="M191 124.5l5-5 3 3-5 5-3.5 0.5 0.5-3.5z" fill="none" stroke="#3D8BF0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </g>
@@ -520,7 +520,7 @@
                 </div>
 
                 <!-- Avatar picker (inline in right panel) -->
-                <div v-else-if="activePanel === 'avatar'" class="bv-detail-body bv-avatar-panel">
+                <div v-else-if="activePanel === 'avatar' && !isBuiltinSystemAgent" class="bv-detail-body bv-avatar-panel">
                   <!-- Style tabs -->
                   <div class="bv-av-tabs">
                     <button
@@ -676,7 +676,7 @@
 
   <!-- Test error modal -->
   <Teleport to="body">
-    <div v-if="showTestErrorModal" class="bv-error-backdrop" @click.self="showTestErrorModal = false">
+    <div v-if="showTestErrorModal" class="bv-error-backdrop">
       <div class="bv-error-modal">
         <div class="bv-error-modal-header">
           <svg style="width:16px;height:16px;color:#EF4444;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -693,7 +693,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue'
-import { useAgentsStore } from '../../stores/agents'
+import { useAgentsStore, BUILTIN_SYSTEM_AGENT_ID } from '../../stores/agents'
 import { useModelsStore } from '../../stores/models'
 import { useConfigStore } from '../../stores/config'
 import { useToolsStore } from '../../stores/tools'
@@ -726,6 +726,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'update-agent'])
+
+const isBuiltinSystemAgent = computed(() => props.agentId === BUILTIN_SYSTEM_AGENT_ID)
 
 const agentsStore = useAgentsStore()
 const modelsStore = useModelsStore()
@@ -1102,16 +1104,9 @@ async function surpriseMe() {
       config,
     })
     if (res.success && res.text) {
-      let data
-      try { data = JSON.parse(extractJsonPayload(res.text)) } catch {
-        aiError.value = 'AI returned invalid JSON. Try again.'
-        aiWorking.value = false
-        return
-      }
-      // Surprise Me always randomizes the name
-      if (data.name) {
-        draftName.value = data.name
-      }
+      const data = robustParseAgentJSON(res.text)
+      if (!data) { aiWorking.value = false; return }
+      if (data.name) draftName.value = data.name
       if (data.description) draftDescription.value = String(data.description)
       if (data.prompt)      draftPrompt.value = typeof data.prompt === 'string' ? data.prompt : JSON.stringify(data.prompt, null, 2)
       if (!draftAvatar.value) draftAvatar.value = `a${Math.floor(Math.random() * 36) + 1}`
@@ -1146,13 +1141,8 @@ async function generateFromDescription() {
       config,
     })
     if (res.success && res.text) {
-      let data
-      try { data = JSON.parse(extractJsonPayload(res.text)) } catch {
-        aiError.value = 'AI returned invalid JSON. Try again.'
-        aiWorking.value = false
-        return
-      }
-      // Preserve existing name if user provided it
+      const data = robustParseAgentJSON(res.text)
+      if (!data) { aiWorking.value = false; return }
       if (!draftName.value?.trim() && data.name) {
         draftName.value = data.name
       }
@@ -1167,6 +1157,46 @@ async function generateFromDescription() {
   }
   aiWorking.value = false
   aiWorkingMode.value = ''
+}
+
+/**
+ * Robust JSON parser for AI-generated agent definitions.
+ * Handles markdown fences, smart quotes, trailing commas, and
+ * broken "prompt" fields with unescaped newlines/quotes.
+ */
+function robustParseAgentJSON(rawText) {
+  let extracted = extractJsonPayload(rawText)
+
+  // Normalize smart quotes and trailing commas
+  const candidates = [
+    extracted,
+    extracted
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/,\s*([}\]])/g, '$1')
+  ]
+
+  for (const candidate of candidates) {
+    try { return JSON.parse(candidate) } catch {}
+  }
+
+  // Last resort: extract fields individually with regex
+  try {
+    const nameMatch = extracted.match(/"name"\s*:\s*"((?:[^"\\]|\\.)*)"/s)
+    const descMatch = extracted.match(/"description"\s*:\s*"((?:[^"\\]|\\.)*)"/s)
+    // prompt field often contains unescaped newlines — grab everything between the last two top-level keys
+    const promptMatch = extracted.match(/"prompt"\s*:\s*"([\s\S]*)"\s*\}?\s*$/s)
+    if (nameMatch || descMatch || promptMatch) {
+      return {
+        name: nameMatch ? nameMatch[1] : '',
+        description: descMatch ? descMatch[1] : '',
+        prompt: promptMatch ? promptMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '',
+      }
+    }
+  } catch {}
+
+  aiError.value = 'AI returned invalid JSON. Try again.'
+  return null
 }
 
 async function enhanceDescription() {
@@ -1233,11 +1263,19 @@ const saveError = ref('')
 function saveAll() {
   saveError.value = ''
   if (!draftName.value.trim()) {
-    saveError.value = locale.value === 'zh' ? '名称不能为空' : 'Name is required'
+    saveError.value = t('agents.nameRequired')
+    return
+  }
+  if (/\s/.test(draftName.value.trim())) {
+    saveError.value = t('agents.nameNoSpaces')
+    return
+  }
+  if (draftName.value.trim().length > 30) {
+    saveError.value = t('agents.nameTooLong')
     return
   }
   if (props.agentType === 'system' && !draftPrompt.value.trim()) {
-    saveError.value = locale.value === 'zh' ? '系统提示词不能为空' : 'Definition (system prompt) is required'
+    saveError.value = t('agents.promptRequired')
     return
   }
   if (props.agentType === 'system') {
@@ -1283,11 +1321,13 @@ function saveAll() {
     a.id !== props.agentId
   )
   if (duplicate) {
-    saveError.value = locale.value === 'zh'
-      ? `已存在名为"${duplicate.name}"的 Agent`
-      : `An agent named "${duplicate.name}" already exists.`
+    saveError.value = t('agents.duplicateName', { name: duplicate.name })
     return
   }
+  // Trim fields in place so UI reflects cleaned values
+  draftName.value = draftName.value.trim()
+  draftDescription.value = draftDescription.value.trim()
+  draftPrompt.value = draftPrompt.value.trim()
   emit('update-agent', {
     name:        draftName.value,
     avatar:      draftAvatar.value,
