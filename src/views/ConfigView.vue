@@ -190,7 +190,7 @@
                   :class="{ active: modelsLeftNav === p.id }"
                   @click="modelsLeftNav = p.id"
                 >
-                  <span class="models-nav-name">{{ p.name }}</span>
+                  <span class="models-nav-name">{{ p.alias || p.name }}</span>
                   <span class="models-nav-dot" :class="p.isActive ? 'active' : 'inactive'"></span>
                 </button>
                 <div v-if="configStore.config.providers.length === 0" class="models-nav-empty">
@@ -347,7 +347,7 @@
                           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                         </svg>
                       </div>
-                      <h3 class="form-section-title">{{ selectedProvider.name }}</h3>
+                      <h3 class="form-section-title">{{ selectedProvider.alias || selectedProvider.name }}</h3>
                     </div>
                     <div class="header-actions">
                       <button class="action-btn danger icon-only" @click="deleteProvider(selectedProvider.id)" :title="t('config.deleteProvider', 'Delete provider')">
@@ -361,7 +361,25 @@
                           <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
                         </svg>
                       </AppButton>
+                      <span v-if="savedModelsMsg" class="save-indicator" :class="savedModelsMsg.ok ? 'success' : 'error'">
+                        <svg v-if="savedModelsMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        {{ savedModelsMsg.text }}
+                      </span>
                     </div>
+                  </div>
+
+                  <!-- Alias -->
+                  <div class="form-group compact">
+                    <label class="form-label">{{ t('config.providerAlias') }}</label>
+                    <input
+                      v-model="selectedProvider.alias"
+                      type="text"
+                      maxlength="20"
+                      :placeholder="selectedProvider.name"
+                      class="field"
+                    />
+                    <p class="hint">{{ t('config.providerAliasHint') }}</p>
                   </div>
 
                   <!-- Credentials -->
@@ -442,13 +460,19 @@
                       <div>
                         <p class="hint" style="margin-top:2px;">{{ selectedProviderModels.length > 0 ? t('config.modelsLoaded', '', { count: selectedProviderModels.length }) : t('config.enterApiKeyFetchModels') }}</p>
                       </div>
-                      <AppButton size="icon" @click="fetchProviderModels" :disabled="providerModelsFetching || !selectedProvider.apiKey || !selectedProvider.baseURL" :loading="providerModelsFetching" :title="providerModelsFetching ? t('config.fetching') : t('config.fetchModels')"><svg v-if="!providerModelsFetching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/></svg></AppButton>
+                      <div style="display: flex; gap: 0.375rem; align-items: center;">
+                        <AppButton size="icon" @click="fetchProviderModels" :disabled="providerModelsFetching || !selectedProvider.apiKey || (selectedProvider.type !== 'google' && !selectedProvider.baseURL)" :loading="providerModelsFetching" :title="providerModelsFetching ? t('config.fetching') : t('config.fetchModels')"><svg v-if="!providerModelsFetching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/></svg></AppButton>
+                        <AppButton v-if="selectedProviderModels.length > 0 && providerHasMissingContext" size="icon" @click="enrichProviderContext" :disabled="providerContextEnriching" :loading="providerContextEnriching" :title="t('config.aiFillContext')"><svg v-if="!providerContextEnriching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/></svg></AppButton>
+                      </div>
                     </div>
                     <div v-if="selectedProviderModels.length > 0" style="margin-top: 0.5rem;">
                       <input v-model="providerModelFilter" type="text" placeholder="Filter models…" class="field font-mono field-sm" style="width: 100%; margin-bottom: 0.5rem;" />
-                      <select v-model="selectedProvider.model" class="field font-mono field-sm" :size="Math.min(filteredProviderModels.length, 8)" style="width: 100%; height: auto; padding: 6px 8px;">
-                        <option v-for="m in filteredProviderModels" :key="m.id" :value="m.id">{{ m.id }} — {{ m.name || m.id }}</option>
-                      </select>
+                      <div class="cv-model-list">
+                        <button v-for="m in filteredProviderModels" :key="m.id" class="cv-model-item" :class="{ active: selectedProvider.model === m.id }" @click="selectedProvider.model = m.id">
+                          <span class="cv-model-name">{{ m.name || m.id }}</span>
+                          <span v-if="m.context_length" class="cv-model-ctx">{{ Math.round(m.context_length / 1000) }}k</span>
+                        </button>
+                      </div>
                       <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
                         <AppButton size="icon" @click="testProviderNew" :disabled="testingProviderNew || !canTestNew" :loading="testingProviderNew" :title="testingProviderNew ? t('config.testing') : t('config.test')"><svg v-if="!testingProviderNew" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
                       </div>
@@ -498,8 +522,8 @@
 
           <!-- Add Provider Modal -->
           <Teleport to="body">
-            <div v-if="showAddProviderModal" class="modal-backdrop" @click.self="showAddProviderModal = false">
-              <div class="modal-content" style="max-width:400px;">
+            <div v-if="showAddProviderModal" class="modal-backdrop">
+              <div class="modal-content" style="min-width:20vw;">
                 <div class="modal-header">
                   <h3>{{ t('config.addProvider', 'Add Provider') }}</h3>
                   <button class="modal-close" @click="showAddProviderModal = false">
@@ -1075,7 +1099,7 @@
                   <p class="form-section-title">{{ t('config.smtpTest') }}</p>
                   <p class="hint" style="margin-top:2px;">{{ t('config.smtpTestButton') }}</p>
                 </div>
-                <AppButton size="icon" @click="testSmtpConnection" :disabled="testingSmtp || !form.smtp.host || !form.smtp.user" :loading="testingSmtp" :title="testingSmtp ? t('config.smtpTestTesting') : t('config.smtpTestButton')" />
+                <AppButton size="icon" @click="testSmtpConnection" :disabled="testingSmtp || !form.smtp.host || !form.smtp.user" :loading="testingSmtp" :title="testingSmtp ? t('config.smtpTestTesting') : t('config.smtpTestButton')"><svg v-if="!testingSmtp" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
               </div>
             <div v-if="testResultSmtp" class="test-result" :class="testResultSmtp.ok ? 'success' : 'error'" style="margin-top:10px;">
               <svg v-if="testResultSmtp.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1230,6 +1254,11 @@
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
               Feishu
               <span class="prov-dot" :class="feishuReady ? 'active' : 'inactive'" />
+            </button>
+            <button @click="activeIMTab = 'teams'" class="config-tab-btn" :class="{ active: activeIMTab === 'teams' }">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Teams
+              <span class="prov-dot" :class="teamsReady ? 'active' : 'inactive'" />
             </button>
             <button @click="activeIMTab = 'bridge'" class="config-tab-btn" :class="{ active: activeIMTab === 'bridge' }">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -1532,6 +1561,166 @@
             </div>
           </template>
 
+          <!-- ══════════ TEAMS TAB ══════════ -->
+          <template v-else-if="activeIMTab === 'teams' && form.im.teams">
+            <div class="config-card">
+              <div class="form-section-header">
+                <div class="section-icon-sm">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <h3 class="form-section-title">{{ t('config.teams') }}</h3>
+                <span class="im-platform-status" :class="teamsReady ? 'ready' : 'idle'">
+                  {{ teamsReady ? t('config.teamsConfigured') : t('config.teamsNotConfigured') }}
+                </span>
+              </div>
+
+              <div class="im-enable-row">
+                <span class="im-enable-label">{{ t('config.teamsEnable') }}</span>
+                <label class="im-toggle" @click.stop>
+                  <input type="checkbox" v-model="form.im.teams.enabled" />
+                  <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                </label>
+              </div>
+
+              <div class="form-divider" />
+
+              <div class="form-group">
+                <label class="form-label" for="teamsTenantId">{{ t('config.teamsTenantId') }}</label>
+                <input
+                  id="teamsTenantId"
+                  v-model="form.im.teams.tenantId"
+                  type="text"
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  class="field font-mono"
+                />
+                <p class="hint">{{ t('config.teamsTenantIdHint') }}</p>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="teamsClientId">{{ t('config.teamsClientId') }}</label>
+                <input
+                  id="teamsClientId"
+                  v-model="form.im.teams.clientId"
+                  type="text"
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  class="field font-mono"
+                />
+                <p class="hint">{{ t('config.teamsClientIdHint') }}</p>
+              </div>
+
+              <div class="form-divider" />
+
+              <!-- Device code auth section -->
+              <div class="im-wa-link-section">
+                <div class="im-wa-link-header">
+                  <div>
+                    <p class="form-label" style="margin:0 0 0.2rem;">Microsoft Account</p>
+                    <p class="hint" style="margin:0;">
+                      <template v-if="teamsAuthStatus.connected">{{ t('config.teamsConnected') }} {{ teamsAuthStatus.displayName }}</template>
+                      <template v-else>{{ t('config.teamsNotConnected') }}</template>
+                    </p>
+                  </div>
+                  <AppButton v-if="!teamsAuthStatus.connected" size="compact" variant="primary" @click="requestTeamsAuth" :loading="teamsAuthLoading" :disabled="teamsAuthLoading || !form.im.teams.tenantId?.trim() || !form.im.teams.clientId?.trim()">
+                    <svg v-if="!teamsAuthLoading" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                    {{ teamsAuthLoading ? t('config.teamsSigningIn') : t('config.teamsSignIn') }}
+                  </AppButton>
+                  <AppButton v-else size="compact" @click="teamsSignOut">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    {{ t('config.teamsSignOut') }}
+                  </AppButton>
+                </div>
+
+                <!-- Device code prompt -->
+                <div v-if="teamsDeviceCode.userCode && !teamsAuthStatus.connected" class="im-qr-block" style="flex-direction:column; align-items:flex-start; gap:0.75rem;">
+                  <p style="margin:0; font-size:var(--fs-secondary); color:var(--text-secondary);">{{ t('config.teamsDeviceCodePrompt') }}</p>
+                  <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+                    <a :href="teamsDeviceCode.verificationUri" target="_blank" rel="noopener" style="color:var(--accent); font-size:var(--fs-secondary);">{{ teamsDeviceCode.verificationUri }}</a>
+                    <code style="font-size:1.2rem; font-weight:700; background:var(--bg-tertiary); padding:0.3rem 0.75rem; border-radius:var(--radius-sm); letter-spacing:0.1em; color:var(--text-primary);">{{ teamsDeviceCode.userCode }}</code>
+                  </div>
+                </div>
+
+                <!-- Connected state -->
+                <div v-else-if="teamsAuthStatus.connected" class="im-wa-connected">
+                  <svg style="width:18px;height:18px;color:#10B981;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span>{{ t('config.teamsConnected') }} {{ teamsAuthStatus.displayName }}</span>
+                </div>
+              </div>
+
+              <div class="form-divider" />
+
+              <!-- Self-only toggle -->
+              <div class="im-enable-row">
+                <span class="im-enable-label">{{ t('config.teamsSelfOnly') }}</span>
+                <label class="im-toggle" @click.stop>
+                  <input type="checkbox" v-model="form.im.teams.selfOnly" />
+                  <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                </label>
+              </div>
+              <p class="hint" style="margin-top:-0.25rem;">{{ t('config.teamsSelfOnlyHint') }}</p>
+
+              <div class="form-group">
+                <label class="form-label" for="teamsAllowedUsers">{{ t('config.allowedUsers') }}</label>
+                <input
+                  id="teamsAllowedUsers"
+                  :value="(form.im.teams.allowedUsers || []).join(',')"
+                  @input="form.im.teams.allowedUsers = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+                  placeholder="user1@company.com,user2@company.com"
+                  class="field font-mono"
+                />
+                <p class="hint">{{ t('config.teamsAllowedUsersHint') }}</p>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="teamsPollInterval">{{ t('config.teamsPollInterval') }}</label>
+                <input
+                  id="teamsPollInterval"
+                  v-model.number="form.im.teams.pollInterval"
+                  type="number"
+                  min="1"
+                  max="60"
+                  placeholder="5"
+                  class="field font-mono"
+                  style="max-width:8rem;"
+                />
+                <p class="hint">{{ t('config.teamsPollIntervalHint') }}</p>
+              </div>
+
+              <div class="form-divider" />
+              <details class="im-setup-guide">
+                <summary class="im-setup-guide-summary">
+                  <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></svg>
+                  {{ t('config.setupGuide') }}
+                  <svg class="im-setup-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <ol class="im-setup-steps">
+                  <li>{{ t('config.teamsSetupGuide1') }}</li>
+                  <li>{{ t('config.teamsSetupGuide2') }}</li>
+                  <li>{{ t('config.teamsSetupGuide3') }}</li>
+                  <li>{{ t('config.teamsSetupGuide4') }}</li>
+                  <li>{{ t('config.teamsSetupGuide5') }}</li>
+                  <li>{{ t('config.teamsSetupGuide6') }}</li>
+                  <li>{{ t('config.teamsSetupGuide7') }}</li>
+                  <li>{{ t('config.teamsSetupGuide8') }}</li>
+                  <li>{{ t('config.teamsSetupGuide9') }}</li>
+                </ol>
+                <p class="im-setup-note">{{ t('config.teamsSetupNote') }}</p>
+              </details>
+
+              <div class="form-divider" style="margin-top:1rem;" />
+              <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-top:0.75rem;">
+                <AppButton size="compact" @click="saveIM" :loading="savingIM">
+                  <svg v-if="!savingIM" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  {{ t('common.save') }}
+                </AppButton>
+                <span v-if="savedIMMsg" class="save-indicator" :class="savedIMMsg.ok ? 'success' : 'error'">
+                  <svg v-if="savedIMMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  {{ savedIMMsg.text }}
+                </span>
+              </div>
+            </div>
+          </template>
+
           <!-- ══════════ BRIDGE TAB ══════════ -->
           <template v-else-if="activeIMTab === 'bridge'">
             <div class="config-card">
@@ -1595,6 +1784,24 @@
                     <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
                   </label>
                 </div>
+
+                <div class="form-divider" style="margin:0;" />
+
+                <!-- Teams -->
+                <div class="im-bridge-row">
+                  <svg style="width:15px;height:15px;flex-shrink:0;color:var(--text-muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  <div class="im-bridge-info">
+                    <span class="im-bridge-name">Teams</span>
+                    <span class="im-bridge-sub" :class="imStatus.platforms?.teams ? 'running' : (teamsReady ? 'ready' : 'idle')">
+                      {{ imStatus.platforms?.teams ? t('config.bridgeRunning') : (teamsReady ? t('config.teamsConfigured') : t('config.teamsNotConfigured')) }}
+                    </span>
+                  </div>
+                  <label class="im-toggle" :class="{ disabled: !teamsReady }" @click.stop>
+                    <input type="checkbox" :checked="!!imStatus.platforms?.teams" :disabled="!teamsReady"
+                      @change="togglePlatform('teams', $event.target.checked)" />
+                    <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                  </label>
+                </div>
               </div>
 
               <!-- Active sessions -->
@@ -1609,6 +1816,34 @@
                   </div>
                 </div>
               </div>
+
+              <div class="form-divider" />
+
+              <!-- Demo Mode -->
+              <div class="im-bridge-row">
+                <svg style="width:15px;height:15px;flex-shrink:0;color:var(--text-muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                <div class="im-bridge-info">
+                  <span class="im-bridge-name">
+                    {{ t('config.demoMode') }}
+                    <span
+                      class="demo-info-icon"
+                      @mouseenter="onDemoInfoHover"
+                      @mouseleave="onDemoInfoLeave"
+                    >
+                      <svg style="width:12px;height:12px;vertical-align:-1px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    </span>
+                  </span>
+                  <span class="im-bridge-sub idle">{{ t('config.demoModeDesc') }}</span>
+                </div>
+                <label class="im-toggle" @click.stop>
+                  <input type="checkbox" :checked="!!configStore.config.demoMode"
+                    @change="configStore.config.demoMode = $event.target.checked; configStore.saveConfig(configStore.config)" />
+                  <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                </label>
+              </div>
+              <Teleport to="body">
+                <div v-if="showDemoTooltip" class="demo-tooltip" :style="{ left: demoTooltipPos.x + 'px', top: demoTooltipPos.y + 'px' }" v-html="demoTooltipHtml" />
+              </Teleport>
             </div>
           </template>
 
@@ -1685,6 +1920,25 @@
               <li>{{ t('config.feishuGuide6') }}</li>
             </ol>
             <p class="im-guide-note">{{ t('config.feishuGuideNote') }}</p>
+          </div>
+
+          <div class="im-guide-divider" />
+
+          <!-- Teams Setup -->
+          <div class="im-guide-section">
+            <div class="im-guide-section-title">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              {{ t('config.teamsSteps') }}
+            </div>
+            <ol class="im-guide-steps">
+              <li>{{ t('config.teamsGuide1') }}</li>
+              <li>{{ t('config.teamsGuide2') }}</li>
+              <li>{{ t('config.teamsGuide3') }}</li>
+              <li>{{ t('config.teamsGuide4') }}</li>
+              <li>{{ t('config.teamsGuide5') }}</li>
+              <li>{{ t('config.teamsGuide6') }}</li>
+            </ol>
+            <p class="im-guide-note">{{ t('config.teamsGuideNote') }}</p>
           </div>
 
           <div class="im-guide-divider" />
@@ -1773,7 +2027,7 @@
   <ConfirmModal
     :visible="showDeleteConfirm"
     :title="t('common.confirmDelete', 'Confirm Delete')"
-    :message="t('config.deleteProviderConfirm', `Are you sure you want to delete ${deleteConfirmName}? This action cannot be undone.`)"
+    :message="t('config.deleteProviderConfirm', { name: deleteConfirmName })"
     :confirm-text="t('common.delete', 'Delete')"
     :cancel-text="t('common.cancel', 'Cancel')"
     confirm-class="danger"
@@ -1784,7 +2038,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick, defineComponent, h } from 'vue'
+import { ref, reactive, onMounted, onActivated, onUnmounted, computed, watch, nextTick, defineComponent, h } from 'vue'
 defineOptions({ inheritAttrs: false })
 import { useRoute } from 'vue-router'
 import { useConfigStore } from '../stores/config'
@@ -1795,6 +2049,7 @@ import ComboBox from '../components/common/ComboBox.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import { useI18n } from '../i18n/useI18n'
 import { DEFAULT_PRICES } from '../utils/pricing.js'
+import { buildDemoTooltipHtml } from '../utils/demoMode.js'
 
 const configStore = useConfigStore()
 const modelsStore = useModelsStore()
@@ -1802,6 +2057,19 @@ const route = useRoute()
 const { t } = useI18n()
 
 const isElectron = !!(typeof window !== 'undefined' && window.electronAPI)
+
+const demoTooltipHtml = computed(() => buildDemoTooltipHtml(configStore.config.language || 'en'))
+const showDemoTooltip = ref(false)
+const demoTooltipPos = reactive({ x: 0, y: 0 })
+function onDemoInfoHover(e) {
+  const rect = e.currentTarget.getBoundingClientRect()
+  demoTooltipPos.x = rect.left
+  demoTooltipPos.y = rect.bottom + 6
+  showDemoTooltip.value = true
+}
+function onDemoInfoLeave() {
+  showDemoTooltip.value = false
+}
 
 function openInExplorer(path) {
   if (!path || !window.electronAPI?.showInFolder) return
@@ -2077,10 +2345,20 @@ const whatsappReady = computed(() =>
 const feishuReady = computed(() =>
   !!(form.im.feishu?.enabled && form.im.feishu?.appId?.trim() && form.im.feishu?.appSecret?.trim())
 )
-const imAnyReady = computed(() => telegramReady.value || whatsappReady.value || feishuReady.value)
+const teamsReady = computed(() =>
+  !!(form.im.teams?.enabled && form.im.teams?.clientId?.trim() && form.im.teams?.tenantId?.trim())
+)
+const imAnyReady = computed(() => telegramReady.value || whatsappReady.value || feishuReady.value || teamsReady.value)
 
 // Reset IM inner tab to first platform when navigating back to the IM sub-section
 watch(activeSubTab, (val) => { if (val === 'im') activeIMTab.value = 'telegram' })
+// Ensure form.im.teams exists (handles KeepAlive cache from before Teams was added)
+watch(activeIMTab, (val) => {
+  if (val === 'teams' && !form.im.teams) {
+    form.im.teams = { enabled: false, tenantId: '', clientId: '', allowedUsers: [], pollInterval: 10 }
+  }
+})
+
 
 // WhatsApp QR flow state
 const waLinking = ref(false)  // true while requestQR is in-flight
@@ -2107,6 +2385,49 @@ async function requestWhatsAppLink() {
   }
 }
 
+// Teams auth flow state
+const teamsAuthLoading = ref(false)
+const teamsAuthStatus  = ref({ connected: false, displayName: '', userId: '' })
+const teamsDeviceCode  = ref({ userCode: '', verificationUri: '' })
+
+
+async function _restartTeamsBridge() {
+  if (!window.electronAPI?.im) return
+  if (imStatus.value?.platforms?.teams) {
+    await window.electronAPI.im.stopPlatform('teams')
+    imStatus.value = await window.electronAPI.im.startPlatform('teams')
+  }
+}
+
+async function requestTeamsAuth() {
+  teamsAuthLoading.value = true
+  teamsDeviceCode.value = { userCode: '', verificationUri: '' }
+  try {
+    if (window.electronAPI?.im?.teamsRequestAuth) {
+      await window.electronAPI.im.teamsRequestAuth({
+        tenantId: form.im.teams.tenantId,
+        clientId: form.im.teams.clientId,
+      })
+    }
+  } catch (err) {
+    console.error('[im] requestTeamsAuth error:', err.message)
+    teamsAuthLoading.value = false
+  }
+}
+
+async function teamsSignOut() {
+  try {
+    if (window.electronAPI?.im?.teamsSignOut) {
+      await window.electronAPI.im.teamsSignOut()
+    }
+    teamsAuthStatus.value = { connected: false, displayName: '' }
+    teamsDeviceCode.value = { userCode: '', verificationUri: '' }
+    await loadIMStatus()
+  } catch (err) {
+    console.error('[im] teamsSignOut error:', err.message)
+  }
+}
+
 async function loadIMStatus() {
   if (window.electronAPI?.im) {
     imStatus.value = await window.electronAPI.im.getStatus()
@@ -2118,6 +2439,8 @@ async function saveIM() {
   savedIMMsg.value = null
   try {
     await configStore.saveConfig({ im: JSON.parse(JSON.stringify(form.im)) })
+    // Restart Teams bridge if running so new config (allowedUsers etc.) takes effect
+    await _restartTeamsBridge()
     savedIMMsg.value = { ok: true, text: 'Saved successfully' }
   } catch (err) {
     savedIMMsg.value = { ok: false, text: err.message || 'Save failed' }
@@ -2190,23 +2513,24 @@ const providerOptions = [
 ]
 
 const filteredOrModels = computed(() => {
-  const models = modelsStore.openrouterModels
+  const models = modelsStore.getModelsForProvider('openrouter')
   if (!orModelFilter.value) return models
   const q = orModelFilter.value.toLowerCase()
   return models.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
 })
 
 const filteredOpenAIModels = computed(() => {
-  const models = modelsStore.openaiModels
+  const models = modelsStore.getModelsForProvider('openai')
   if (!openaiModelFilter.value) return models
   const q = openaiModelFilter.value.toLowerCase()
   return models.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
 })
 
 const filteredDeepSeekModels = computed(() => {
-  if (!deepseekModelFilter.value) return modelsStore.deepseekModels
+  const models = modelsStore.getModelsForProvider('deepseek')
+  if (!deepseekModelFilter.value) return models
   const q = deepseekModelFilter.value.toLowerCase()
-  return modelsStore.deepseekModels.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
+  return models.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
 })
 
 
@@ -2345,8 +2669,17 @@ const form = reactive({
     telegram: { enabled: false, botToken: '', allowedUsers: [] },
     whatsapp: { enabled: false, allowedUsers: [] },
     feishu:   { enabled: false, appId: '', appSecret: '', allowedUsers: [] },
+    teams:    { enabled: false, tenantId: '', clientId: '', selfOnly: true, allowedUsers: [], pollInterval: 5 },
   },
   language: 'en',
+})
+
+// Sync: when Teams is disabled, auto-stop the running bridge platform
+watch(() => form.im.teams?.enabled, async (enabled) => {
+  if (enabled === false && imStatus.value?.platforms?.teams) {
+    await window.electronAPI?.im?.stopPlatform?.('teams')
+    await loadIMStatus()
+  }
 })
 
 // Reset isActive when key fields change (skip initial population)
@@ -2382,6 +2715,7 @@ const providerModelFilter = ref('')
 
 const providerPresetOptions = [
   { value: 'anthropic', label: 'Anthropic' },
+  { value: 'openai_official', label: 'OpenAI' },
   { value: 'openai', label: 'OpenAI Compatible' },
   { value: 'openrouter', label: 'OpenRouter' },
   { value: 'deepseek', label: 'DeepSeek' },
@@ -2408,12 +2742,17 @@ const canTestNew = computed(() => {
 
 const selectedProviderModels = computed(() => {
   if (!selectedProvider.value) return []
-  const type = selectedProvider.value.type
-  if (type === 'openrouter') return modelsStore.openrouterModels
-  if (type === 'openai') return modelsStore.openaiModels
-  if (type === 'deepseek') return modelsStore.deepseekModels
-  if (type === 'google') return modelsStore.googleModels
-  return []
+  return modelsStore.getModelsForProvider(selectedProvider.value.id || selectedProvider.value.type)
+})
+
+const providerHasMissingContext = computed(() => {
+  if (!selectedProvider.value) return false
+  return modelsStore.hasMissingContext(selectedProvider.value.id || selectedProvider.value.type)
+})
+
+const providerContextEnriching = computed(() => {
+  if (!selectedProvider.value) return false
+  return modelsStore.isEnriching(selectedProvider.value.id || selectedProvider.value.type)
 })
 
 const filteredProviderModels = computed(() => {
@@ -2503,7 +2842,6 @@ async function fetchProviderModels() {
     return
   }
   const type = selectedProvider.value.type
-  // Non-Google providers also need a baseURL
   if (type !== 'google' && !selectedProvider.value.baseURL) {
     providerModelsFetchError.value = 'Enter API key and Base URL first.'
     return
@@ -2511,29 +2849,16 @@ async function fetchProviderModels() {
   providerModelsFetching.value = true
   providerModelsFetchError.value = ''
   try {
-    if (type === 'openrouter') {
-      const result = await window.electronAPI.fetchOpenRouterModels({ apiKey: selectedProvider.value.apiKey, baseURL: selectedProvider.value.baseURL })
-      if (result.success) { modelsStore.openrouterModels = result.models; modelsStore.openrouterCached = true }
-      else { providerModelsFetchError.value = result.error || 'Unknown error' }
-    } else if (type === 'openai') {
-      const result = await window.electronAPI.fetchOpenAIModels({ apiKey: selectedProvider.value.apiKey, baseURL: selectedProvider.value.baseURL })
-      if (result.success) { modelsStore.openaiModels = result.models; modelsStore.openaiCached = true }
-      else { providerModelsFetchError.value = result.error || 'Unknown error' }
-    } else if (type === 'deepseek') {
-      configStore.config.deepseek = configStore.config.deepseek || {}
-      configStore.config.deepseek.apiKey = selectedProvider.value.apiKey
-      configStore.config.deepseek.baseURL = selectedProvider.value.baseURL
-      await modelsStore.fetchDeepSeekModels()
-      if (!modelsStore.deepseekCached) { providerModelsFetchError.value = 'Fetch failed — check API key and Base URL.' }
-    } else if (type === 'google') {
-      const result = await window.electronAPI.fetchGoogleModels({ apiKey: selectedProvider.value.apiKey })
-      if (result.success) { modelsStore.googleModels = result.models; modelsStore.googleCached = true }
-      else { providerModelsFetchError.value = result.error || 'Unknown error' }
-    } else {
-      providerModelsFetchError.value = 'Model fetching not supported for this provider type.'
-    }
+    const success = await modelsStore.fetchModelsForProvider(selectedProvider.value.id)
+    if (!success) providerModelsFetchError.value = 'Fetch failed — check API key and Base URL.'
   } catch (err) { providerModelsFetchError.value = err.message }
   finally { providerModelsFetching.value = false }
+}
+
+async function enrichProviderContext() {
+  if (!selectedProvider.value) return
+  const success = await modelsStore.enrichContextWindows(selectedProvider.value.id)
+  if (!success) providerModelsFetchError.value = t('config.aiFillContextFailed')
 }
 
 function getHardLimit(provider, key) {
@@ -2581,6 +2906,14 @@ onMounted(async () => {
       appId:        c.im?.feishu?.appId        ?? '',
       appSecret:    c.im?.feishu?.appSecret    ?? '',
       allowedUsers: c.im?.feishu?.allowedUsers ?? [],
+    },
+    teams: {
+      enabled:      c.im?.teams?.enabled      ?? false,
+      tenantId:     c.im?.teams?.tenantId     ?? '',
+      clientId:     c.im?.teams?.clientId     ?? '',
+      selfOnly:     c.im?.teams?.selfOnly     !== false,  // default true
+      allowedUsers: c.im?.teams?.allowedUsers ?? [],
+      pollInterval: c.im?.teams?.pollInterval ?? 5,
     },
   }
   form.pricing = {
@@ -2650,6 +2983,28 @@ onMounted(async () => {
       await loadIMStatus()
     })
   }
+  // Teams auth event listeners
+  if (window.electronAPI?.im?.onTeamsDeviceCode) {
+    window.electronAPI.im.onTeamsDeviceCode((d) => {
+      teamsDeviceCode.value = { userCode: d.userCode, verificationUri: d.verificationUri }
+    })
+    window.electronAPI.im.onTeamsReady(async (d) => {
+      teamsAuthStatus.value = { connected: true, displayName: d.displayName, userId: d.userId || '' }
+      teamsDeviceCode.value = { userCode: '', verificationUri: '' }
+      teamsAuthLoading.value = false
+      await loadIMStatus()
+    })
+    window.electronAPI.im.onTeamsAuthError((d) => {
+      teamsAuthLoading.value = false
+      teamsDeviceCode.value = { userCode: '', verificationUri: '' }
+      console.error('[im] Teams auth error:', d.error)
+    })
+  }
+  // Seed Teams auth status from bridge status
+  if (imStatus.value?.teamsAuth?.connected) {
+    teamsAuthStatus.value = { connected: true, displayName: imStatus.value.teamsAuth.userDisplayName, userId: imStatus.value.teamsAuth.userId || '' }
+  }
+
   // Enable watcher-based isActive reset now that initial population is done
   nextTick(() => { formReady.value = true })
 })
@@ -2658,34 +3013,55 @@ async function handleLanguageChange() {
   await configStore.saveConfig({ language: form.language })
 }
 
+// KeepAlive: re-hydrate Teams config from store when reactivated
+onActivated(async () => {
+  const c = configStore.config
+  if (c.im?.teams) {
+    form.im.teams = {
+      enabled:      c.im.teams.enabled      ?? false,
+      tenantId:     c.im.teams.tenantId     ?? '',
+      clientId:     c.im.teams.clientId     ?? '',
+      selfOnly:     c.im.teams.selfOnly     !== false,
+      allowedUsers: c.im.teams.allowedUsers ?? [],
+      pollInterval: c.im.teams.pollInterval ?? 10,
+    }
+  }
+  await loadIMStatus()
+  // Refresh Teams auth status
+  if (imStatus.value?.teamsAuth?.connected) {
+    teamsAuthStatus.value = { connected: true, displayName: imStatus.value.teamsAuth.userDisplayName, userId: imStatus.value.teamsAuth.userId || '' }
+  }
+})
+
 onUnmounted(() => {
   window.electronAPI?.im?.onWhatsAppQr?.(() => {})
   window.electronAPI?.im?.onWhatsAppReady?.(() => {})
   window.electronAPI?.im?.onPlatformStopped?.(() => {})
+  window.electronAPI?.im?.onTeamsDeviceCode?.(() => {})
+  window.electronAPI?.im?.onTeamsReady?.(() => {})
+  window.electronAPI?.im?.onTeamsAuthError?.(() => {})
 })
 
 async function fetchOrModels() {
-  if (!window.electronAPI?.fetchOpenRouterModels) { orModelsFetchError.value = 'Not running inside Electron.'; return }
   if (!form.openrouter.apiKey) { orModelsFetchError.value = 'Enter an API key first.'; return }
   orModelsFetching.value = true
   orModelsFetchError.value = ''
   try {
-    const result = await window.electronAPI.fetchOpenRouterModels({ apiKey: form.openrouter.apiKey, baseURL: form.openrouter.baseURL })
-    if (result.success) { modelsStore.openrouterModels = result.models; modelsStore.openrouterCached = true; orSelectedTestModel.value = '' }
-    else { orModelsFetchError.value = result.error || 'Unknown error' }
+    const success = await modelsStore.fetchModelsForProvider('openrouter')
+    if (success) { orSelectedTestModel.value = '' }
+    else { orModelsFetchError.value = 'Fetch failed — check API key and Base URL.' }
   } catch (err) { orModelsFetchError.value = err.message }
   finally { orModelsFetching.value = false }
 }
 
 async function fetchOpenAIModelsLocal() {
-  if (!window.electronAPI?.fetchOpenAIModels) { openaiModelsFetchError.value = 'Not running inside Electron.'; return }
   if (!form.openai.apiKey) { openaiModelsFetchError.value = 'Enter an API key first.'; return }
   openaiModelsFetching.value = true
   openaiModelsFetchError.value = ''
   try {
-    const result = await window.electronAPI.fetchOpenAIModels({ apiKey: form.openai.apiKey, baseURL: form.openai.baseURL })
-    if (result.success) { modelsStore.openaiModels = result.models; modelsStore.openaiCached = true; openaiSelectedTestModel.value = '' }
-    else { openaiModelsFetchError.value = result.error || 'Unknown error' }
+    const success = await modelsStore.fetchModelsForProvider('openai')
+    if (success) { openaiSelectedTestModel.value = '' }
+    else { openaiModelsFetchError.value = 'Fetch failed — check API key and Base URL.' }
   } catch (err) { openaiModelsFetchError.value = err.message }
   finally { openaiModelsFetching.value = false }
 }
@@ -2696,12 +3072,8 @@ async function fetchDeepSeekModels() {
   deepseekModelsFetching.value = true
   deepseekModelsFetchError.value = ''
   try {
-    // Sync current form values into config store so the store fetch picks them up
-    configStore.config.deepseek = configStore.config.deepseek || {}
-    configStore.config.deepseek.apiKey = form.deepseek.apiKey
-    configStore.config.deepseek.baseURL = form.deepseek.baseURL
-    await modelsStore.fetchDeepSeekModels()
-    if (!modelsStore.deepseekCached) { deepseekModelsFetchError.value = 'Fetch failed — check API key and Base URL.'; return }
+    const success = await modelsStore.fetchModelsForProvider('deepseek')
+    if (!success) { deepseekModelsFetchError.value = 'Fetch failed — check API key and Base URL.'; return }
     deepseekSelectedTestModel.value = ''
   } catch (err) { deepseekModelsFetchError.value = err.message }
   finally { deepseekModelsFetching.value = false }
@@ -3136,8 +3508,10 @@ async function savePricing() {
 /* ── Content area ───────────────────────────────────────────────────────── */
 .config-content { flex: 1; min-width: 0; overflow-y: auto; padding: 1.5rem 2rem 5rem; scrollbar-width: thin; }
 .config-content-inner { max-width: 860px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.config-content-inner:has(.models-page-layout) { max-width: 80%; }
 @media (min-width: 2560px) {
   .config-content-inner { max-width: 1000px; }
+  .config-content-inner:has(.models-page-layout) { max-width: 80%; }
 }
 
 /* ── Provider tabs ──────────────────────────────────────────────────────── */
@@ -3994,6 +4368,74 @@ async function savePricing() {
   color: var(--accent);
   flex-shrink: 0;
 }
+.demo-info-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.25rem;
+  color: var(--text-muted);
+  cursor: help;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+/* ── Model list (matching AgentBodyViewer style) ───────────────────────── */
+.cv-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 15rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem;
+}
+.cv-model-list::-webkit-scrollbar { width: 4px; }
+.cv-model-list::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+
+.cv-model-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  background: transparent;
+  border: none;
+  border-radius: 0.375rem;
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+  font-family: 'JetBrains Mono', monospace;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.cv-model-item:hover {
+  background: rgba(255,255,255,0.04);
+  color: var(--text-primary);
+}
+.cv-model-item.active {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+}
+
+.cv-model-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.cv-model-ctx {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  color: #9CA3AF;
+  font-weight: 500;
+  padding: 0.0625rem 0.375rem;
+  background: rgba(255,255,255,0.06);
+  border-radius: 0.25rem;
+}
+.cv-model-item.active .cv-model-ctx { color: #E5E7EB; background: rgba(255,255,255,0.12); }
+
+.demo-info-icon:hover { opacity: 1; }
 </style>
 
 <style>
@@ -4327,4 +4769,19 @@ async function savePricing() {
   padding: 1rem 1.25rem;
   border-top: 1px solid var(--border);
 }
+.demo-tooltip {
+  position: fixed;
+  z-index: 99999;
+  background: #1A1A1A;
+  color: #F5F5F5;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  pointer-events: none;
+  max-width: 15rem;
+}
+.demo-tooltip ul { list-style: disc; }
+.demo-tooltip li { margin: 0.1rem 0; }
 </style>

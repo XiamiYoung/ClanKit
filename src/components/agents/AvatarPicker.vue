@@ -160,8 +160,8 @@ function onFileUpload(event) {
   overflow-x: auto;
   border-bottom: 1px solid #1F1F1F;
   flex-shrink: 0;
-  scrollbar-width: thin;
-  scrollbar-color: #333 transparent;
+  
+  
 }
 .avpicker-tabs-wrap::-webkit-scrollbar { height: 3px; }
 .avpicker-tabs-wrap::-webkit-scrollbar-track { background: transparent; }
@@ -190,8 +190,8 @@ function onFileUpload(event) {
   flex: 1;
   overflow-y: auto;
   padding: 1.25rem 1.25rem 1.25rem 1.5rem;
-  scrollbar-width: thin;
-  scrollbar-color: #444 transparent;
+  
+  
 }
 .avpicker-grid-wrap::-webkit-scrollbar { width: 6px; }
 .avpicker-grid-wrap::-webkit-scrollbar-track { background: transparent; }

@@ -623,7 +623,7 @@ function schedulePlan(plan) {
         catch (err) { logger.error(`[TaskScheduler] Error executing plan ${plan.id}:`, err.message) }
       }, { timezone, scheduled: true })
       _jobs.set(plan.id, task)
-      logger.info(`[TaskScheduler] Scheduled plan "${plan.name}" (${plan.id}): ${plan.schedule.cron} [${timezone}]`)
+      logger.debug(`[TaskScheduler] Scheduled plan "${plan.name}" (${plan.id}): ${plan.schedule.cron} [${timezone}]`)
     } catch (err) {
       logger.error(`[TaskScheduler] Failed to schedule plan ${plan.id}:`, err.message)
     }
@@ -674,7 +674,7 @@ function init(getDataDir, getMainWindow) {
         scheduled++
       }
     }
-    if (scheduled > 0) logger.info(`[TaskScheduler] Scheduled ${scheduled} plan(s) on startup`)
+    if (scheduled > 0) logger.debug(`[TaskScheduler] Scheduled ${scheduled} plan(s) on startup`)
   } catch (err) {
     logger.error('[TaskScheduler] init error:', err.message)
   }

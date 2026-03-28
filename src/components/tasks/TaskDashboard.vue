@@ -675,7 +675,7 @@ function openDetail(row) {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-  scrollbar-width: thin;
+  
   scrollbar-gutter: stable;
   margin-right: 0.375rem;
 }

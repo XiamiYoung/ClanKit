@@ -60,6 +60,14 @@ function applyProviderCredsToConfig(cfg, providerType) {
     delete cfg._directAuth
     delete cfg.apiKey
     delete cfg.baseURL
+  } else if (providerType === 'openai_official') {
+    cfg.openaiApiKey = apiKey
+    cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')
+    cfg._resolvedProvider = 'openai'
+    cfg._directAuth = true
+    cfg.defaultProvider = 'openai'
+    delete cfg.apiKey
+    delete cfg.baseURL
   } else if (providerType === 'deepseek') {
     cfg.openaiApiKey = apiKey
     cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')
@@ -127,7 +135,7 @@ function validateLoopConfig(cfg) {
 
   if (providerType === 'google') return null
 
-  const isOpenAICompat = providerType === 'openai' || providerType === 'deepseek' || providerType === 'minimax' || providerType === 'openrouter'
+  const isOpenAICompat = providerType === 'openai' || providerType === 'openai_official' || providerType === 'deepseek' || providerType === 'minimax' || providerType === 'openrouter'
   if (isOpenAICompat) {
     const baseURL = cfg.openaiBaseURL || cfg.openai?.baseURL || cfg.baseURL || ''
     const apiKey = cfg.openaiApiKey || cfg.openai?.apiKey || cfg.apiKey || ''

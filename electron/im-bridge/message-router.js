@@ -59,6 +59,23 @@ function appendMessage(chatId, msg) {
   } catch { /* non-fatal */ }
 }
 
+function finalizeMessage(chatId, msgId, updates) {
+  const chat = readJSON(chatFile(chatId), { id: chatId, messages: [] })
+  const msg = (chat.messages || []).find(m => m.id === msgId)
+  if (msg) {
+    Object.assign(msg, updates)
+    chat.updatedAt = Date.now()
+    writeAtomic(chatFile(chatId), chat)
+  }
+}
+
+function removeMessage(chatId, msgId) {
+  const chat = readJSON(chatFile(chatId), { id: chatId, messages: [] })
+  chat.messages = (chat.messages || []).filter(m => m.id !== msgId)
+  chat.updatedAt = Date.now()
+  writeAtomic(chatFile(chatId), chat)
+}
+
 function readAgents() {
   const data = readJSON(AGENTS_FILE(), [])
   return Array.isArray(data) ? data : (data.agents || [])
@@ -204,7 +221,7 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
     ...config,
     soulsDir:            path.join(getDataDir(), 'souls'),
     dataPath:            getDataDir(),
-    chatPermissionMode:  'allow_all',
+    chatPermissionMode:  'all_permissions',
     chatAllowList:       [],
     chatDangerOverrides: [],
     maxOutputTokens:     config.maxOutputTokens || null,
@@ -239,15 +256,47 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
       }
     }
 
+    // Create streaming placeholder on disk + notify UI to create bubble in memory
+    const msgId = uuidv4()
+    const streamingMsg = {
+      id: msgId,
+      role: 'assistant',
+      content: '',
+      agentId: pid,
+      streaming: true,
+      streamingStartedAt: Date.now(),
+      segments: [{ type: 'text', content: '' }],
+      timestamp: Date.now(),
+      createdAt: Date.now(),
+    }
+    appendMessage(chatId, streamingMsg)
+    notifyRenderer('im:agent-stream-start', { chatId, message: streamingMsg })
+
     const loop = new AgentLoop(loopConfig)
     let fullText = ''
+    let flushedLen = 0
+    const groupPrefix = isGroupChat && respondingIds.length > 1 ? `**${agent.name}**: ` : ''
+
+    // Flush accumulated text to Teams immediately (fire-and-forget)
+    const flushPartial = () => {
+      const partial = fullText.slice(flushedLen).trim()
+      if (partial) {
+        flushedLen = fullText.length
+        sendToIM(groupPrefix + partial).catch(() => {})
+      }
+    }
 
     try {
       await loop.run(
         messages,
         [],
         [],
-        (chunk) => { if (chunk.type === 'text') fullText += chunk.text || '' },
+        (chunk) => {
+          if (chunk.type === 'text') fullText += chunk.text || ''
+          // Before a tool runs, send accumulated text to Teams so user sees it immediately
+          if (chunk.type === 'tool_call') flushPartial()
+          notifyRenderer('im:agent-chunk', { chatId, messageId: msgId, chunk })
+        },
         imageAttachment ? [imageAttachment] : [],
         agentPrompts,
         [],
@@ -262,23 +311,18 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
       loop.stop?.()
     }
 
+    // Finalize: replace streaming placeholder with final content
     if (fullText) {
-      const assistantMsg = {
-        id:        uuidv4(),
-        role:      'assistant',
+      finalizeMessage(chatId, msgId, {
         content:   fullText,
-        agentId: pid,
+        streaming: false,
         segments:  [{ type: 'text', content: fullText }],
-        timestamp: Date.now(),
-        createdAt: Date.now(),
-      }
-      appendMessage(chatId, assistantMsg)
-      notifyRenderer('im:chat-updated', { chatId })
+      })
+      notifyRenderer('im:agent-stream-end', { chatId, messageId: msgId })
 
-      const replyText = isGroupChat && respondingIds.length > 1
-        ? `**${agent.name}**: ${fullText}`
-        : fullText
-      await sendToIM(replyText)
+      // Send any remaining text that wasn't flushed yet
+      const remaining = fullText.slice(flushedLen).trim()
+      if (remaining) await sendToIM(groupPrefix + remaining)
 
       // Only accumulate history in single-agent mode; in group mode each
       // agent responds independently to the same snapshot — appending an
@@ -287,6 +331,9 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
       if (respondingIds.length === 1) {
         messages.push({ role: 'assistant', content: fullText })
       }
+    } else {
+      removeMessage(chatId, msgId)
+      notifyRenderer('im:agent-stream-end', { chatId, messageId: msgId })
     }
   }
 }
@@ -297,7 +344,7 @@ async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, noti
     ...config,
     soulsDir:            path.join(getDataDir(), 'souls'),
     dataPath:            getDataDir(),
-    chatPermissionMode:  'allow_all',
+    chatPermissionMode:  'all_permissions',
     chatAllowList:       [],
     chatDangerOverrides: [],
     maxOutputTokens:     config.maxOutputTokens || null,
@@ -326,12 +373,39 @@ async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, noti
   }
 
   const messages = loadMessages(chatId)
+
+  // Create streaming placeholder on disk + notify UI to create bubble in memory
+  const msgId = uuidv4()
+  const streamingMsg = {
+    id: msgId,
+    role: 'assistant',
+    content: '',
+    streaming: true,
+    streamingStartedAt: Date.now(),
+    segments: [{ type: 'text', content: '' }],
+    timestamp: Date.now(),
+    createdAt: Date.now(),
+  }
+  appendMessage(chatId, streamingMsg)
+  notifyRenderer('im:agent-stream-start', { chatId, message: streamingMsg })
+
   const loop = new AgentLoop(loopConfig)
   let fullText = ''
+  let flushedLen = 0
+
+  const flushPartial = () => {
+    const partial = fullText.slice(flushedLen).trim()
+    if (partial) {
+      flushedLen = fullText.length
+      sendToIM(partial).catch(() => {})
+    }
+  }
 
   try {
     await loop.run(messages, [], [], (chunk) => {
       if (chunk.type === 'text') fullText += chunk.text || ''
+      if (chunk.type === 'tool_call') flushPartial()
+      notifyRenderer('im:agent-chunk', { chatId, messageId: msgId, chunk })
     }, imageAttachment ? [imageAttachment] : [], undefined, [], [], null)
   } catch (err) {
     console.error('[im-bridge] agentLoop error:', err.message)
@@ -342,16 +416,17 @@ async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, noti
   }
 
   if (fullText) {
-    appendMessage(chatId, {
-      id:        uuidv4(),
-      role:      'assistant',
+    finalizeMessage(chatId, msgId, {
       content:   fullText,
+      streaming: false,
       segments:  [{ type: 'text', content: fullText }],
-      timestamp: Date.now(),
-      createdAt: Date.now(),
     })
-    await sendToIM(fullText)
-    notifyRenderer('im:chat-updated', { chatId })
+    const remaining = fullText.slice(flushedLen).trim()
+    if (remaining) await sendToIM(remaining)
+    notifyRenderer('im:agent-stream-end', { chatId, messageId: msgId })
+  } else {
+    removeMessage(chatId, msgId)
+    notifyRenderer('im:agent-stream-end', { chatId, messageId: msgId })
   }
 }
 

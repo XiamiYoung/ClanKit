@@ -868,7 +868,7 @@ function isDeleteButtonDisabled(agent) {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
+  
 }
 
 .nav-section--first { padding-top: 0.625rem; }
@@ -1291,7 +1291,7 @@ function isDeleteButtonDisabled(agent) {
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem;
-  scrollbar-width: thin;
+  
 }
 .agents-grid {
   display: grid;

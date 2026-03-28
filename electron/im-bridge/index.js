@@ -8,6 +8,7 @@ const messageRouter    = require('./message-router')
 const telegram         = require('./adapters/telegram')
 const whatsapp         = require('./adapters/whatsapp')
 const feishu           = require('./adapters/feishu')
+const teams            = require('./adapters/teams')
 
 // Lazy: DATA_DIR is set by main.js via process.env after ensureDataDir()
 const { defaultDataPath } = require('../defaultDataPath')
@@ -190,9 +191,10 @@ async function handleIncoming(platform, channelId, displayName, text, replyWithV
 }
 
 async function sendToIM(platform, channelId, text) {
-  if (platform === 'telegram')  await telegram.sendMessage(channelId, text)
-  else if (platform === 'whatsapp') await whatsapp.sendMessage(channelId, text)
-  else if (platform === 'feishu')   await feishu.sendMessage(channelId, text)
+  if (platform === 'telegram')       await telegram.sendMessage(channelId, text)
+  else if (platform === 'whatsapp')  await whatsapp.sendMessage(channelId, text)
+  else if (platform === 'feishu')    await feishu.sendMessage(channelId, text)
+  else if (platform === 'teams')     await teams.sendMessage(channelId, text)
 }
 
 async function sendVoiceToIM(platform, channelId, audioBuffer) {
@@ -309,6 +311,29 @@ function start(fullConfig) {
     )
     console.log('[im-bridge] Feishu adapter started')
   }
+
+  if (_config.im?.teams?.enabled && _config.im?.teams?.clientId && _config.im?.teams?.tenantId) {
+    const dataDir = getDataDir()
+    if (dataDir) {
+      teams.start(
+        {
+          tenantId:     _config.im.teams.tenantId,
+          clientId:     _config.im.teams.clientId,
+          scopes:       'offline_access User.Read Chat.ReadWrite ChannelMessage.ReadWrite Team.ReadBasic.All Channel.ReadBasic.All Sites.Read.All Files.Read.All Mail.ReadWrite Mail.Send',
+          selfOnly:     _config.im.teams.selfOnly !== false,  // default true
+          allowedUsers: _config.im.teams.allowedUsers || [],
+          pollInterval: _config.im.teams.pollInterval || 5,
+          dataDir,
+        },
+        (chatId, username, text) => handleIncoming('teams', chatId, username, text)
+          .catch(err => {
+            console.error('[im-bridge] teams error:', err.message)
+            teams.sendMessage(chatId, 'Error: ' + err.message)
+          })
+      )
+      console.log('[im-bridge] Teams adapter started')
+    }
+  }
 }
 
 function _startWhatsApp() {
@@ -393,14 +418,38 @@ function startPlatform(platform) {
           })
       )
     }
+  } else if (platform === 'teams') {
+    const cfg = _config.im?.teams || {}
+    if (cfg.enabled && cfg.clientId && cfg.tenantId) {
+      const dataDir = getDataDir()
+      if (dataDir) {
+        teams.start(
+          {
+            tenantId:     cfg.tenantId,
+            clientId:     cfg.clientId,
+            scopes:       'offline_access User.Read Chat.ReadWrite ChannelMessage.ReadWrite Team.ReadBasic.All Channel.ReadBasic.All Sites.Read.All Files.Read.All Mail.ReadWrite Mail.Send',
+            selfOnly:     cfg.selfOnly !== false,
+            allowedUsers: cfg.allowedUsers || [],
+            pollInterval: cfg.pollInterval || 5,
+            dataDir,
+          },
+          (chatId, username, text) => handleIncoming('teams', chatId, username, text)
+            .catch(err => {
+              console.error('[im-bridge] teams error:', err.message)
+              teams.sendMessage(chatId, 'Error: ' + err.message)
+            })
+        )
+      }
+    }
   }
   return getStatus()
 }
 
 function stopPlatform(platform) {
-  if (platform === 'telegram') telegram.stop()
-  else if (platform === 'whatsapp') whatsapp.stop()
-  else if (platform === 'feishu') feishu.stop()
+  if (platform === 'telegram')       telegram.stop()
+  else if (platform === 'whatsapp')  whatsapp.stop()
+  else if (platform === 'feishu')    feishu.stop()
+  else if (platform === 'teams')     teams.stop()
   return getStatus()
 }
 
@@ -408,18 +457,21 @@ function stop() {
   telegram.stop()
   whatsapp.stop()
   feishu.stop()
+  teams.stop()
   console.log('[im-bridge] stopped')
 }
 
 function getStatus() {
   return {
-    running: telegram.isRunning() || whatsapp.isRunning() || feishu.isRunning(),
+    running: telegram.isRunning() || whatsapp.isRunning() || feishu.isRunning() || teams.isRunning(),
     platforms: {
       telegram: telegram.isRunning(),
       whatsapp: whatsapp.isRunning(),
       feishu:   feishu.isRunning(),
+      teams:    teams.isRunning(),
     },
-    sessions: sessionStore.getAllSessions(),
+    teamsAuth: teams.getAuthStatus(),
+    sessions:  sessionStore.getAllSessions(),
   }
 }
 
@@ -441,4 +493,52 @@ function requestWhatsAppQR() {
   ).catch(err => console.error('[im-bridge] requestWhatsAppQR error:', err.message))
 }
 
-module.exports = { start, stop, getStatus, setMainWindow, requestWhatsAppQR, startPlatform, stopPlatform }
+/**
+ * Start device code auth flow for Teams.
+ * Notifies renderer with device code info and auth result.
+ */
+/**
+ * @param {{ tenantId?: string, clientId?: string }} [opts]
+ *   Values passed directly from the UI form fields.
+ *   Falls back to _config if not provided.
+ */
+function requestTeamsAuth(opts) {
+  const tenantId = opts?.tenantId || _config.im?.teams?.tenantId
+  const clientId = opts?.clientId || _config.im?.teams?.clientId
+  if (!clientId || !tenantId) {
+    notifyRenderer('im:teams-auth-error', { error: 'Teams Client ID and Tenant ID are required.' })
+    return
+  }
+  const dataDir = getDataDir()
+  if (!dataDir) {
+    notifyRenderer('im:teams-auth-error', { error: 'Invalid data directory.' })
+    return
+  }
+  teams.startAuth(
+    {
+      tenantId,
+      clientId,
+      scopes:   'offline_access User.Read Chat.ReadWrite ChannelMessage.ReadWrite Team.ReadBasic.All Channel.ReadBasic.All Sites.Read.All Files.Read.All Mail.ReadWrite Mail.Send',
+      dataDir,
+    },
+    (userCode, verificationUri) => notifyRenderer('im:teams-device-code', { userCode, verificationUri }),
+    (displayName, userId) => {
+      notifyRenderer('im:teams-ready', { displayName, userId })
+      // Auto-start polling if bridge is enabled
+      if (_config.im?.teams?.enabled) {
+        teams._startPolling()
+      }
+    },
+    (error) => notifyRenderer('im:teams-auth-error', { error })
+  )
+}
+
+function teamsSignOut() {
+  teams.signOut()
+}
+
+function getTeamsAuthStatus() {
+  return teams.getAuthStatus()
+}
+
+module.exports = { start, stop, getStatus, setMainWindow, requestWhatsAppQR, startPlatform, stopPlatform, requestTeamsAuth, teamsSignOut, getTeamsAuthStatus }

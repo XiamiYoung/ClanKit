@@ -1076,6 +1076,9 @@ export const useChatsStore = defineStore('chats', () => {
       s.delete(chatId)
       unreadChatIds.value = s
     }
+    // Only show the ✅ indicator if the user is NOT currently viewing this chat.
+    // If they're watching it, they already saw the completion — no need to notify.
+    if (chatId === activeChatId.value) return
     const s = new Set(completedChatIds.value)
     s.add(chatId)
     completedChatIds.value = s

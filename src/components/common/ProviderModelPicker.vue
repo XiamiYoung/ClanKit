@@ -84,20 +84,14 @@ const modelSearch = ref('')
 const activeProviderOptions = computed(() =>
   configStore.config.providers
     .filter(p => p.isActive && p.apiKey && p.baseURL)
-    .map(p => ({ 
+    .map(p => ({
       id: p.type,
-      label: p.name,
+      label: p.alias || p.name,
       providerId: p.id
     }))
 )
 
-const modelsLoading = computed(() => {
-  if (props.provider === 'openrouter') return modelsStore.openrouterLoading
-  if (props.provider === 'openai')     return modelsStore.openaiLoading
-  if (props.provider === 'deepseek')   return modelsStore.deepseekLoading
-  if (props.provider === 'google')     return modelsStore.googleLoading
-  return false
-})
+const modelsLoading = computed(() => modelsStore.isLoading(props.provider))
 
 const allModels = computed(() => modelsStore.getModelsForProvider(props.provider))
 
@@ -119,7 +113,6 @@ function toggleModelMenu() {
 }
 
 function selectProvider(type) {
-  // Find the first active provider with this type
   const provider = configStore.config.providers.find(p => p.type === type && p.isActive && p.apiKey)
   if (provider) {
     emit('update:provider', type)
@@ -127,10 +120,6 @@ function selectProvider(type) {
   }
   showProviderMenu.value = false
   modelSearch.value = ''
-  if (type === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
-  if (type === 'openai'     && !modelsStore.openaiCached)     modelsStore.fetchOpenAIModels()
-  if (type === 'deepseek'   && !modelsStore.deepseekCached)   modelsStore.fetchDeepSeekModels()
-  if (type === 'google'     && !modelsStore.googleCached)     modelsStore.fetchGoogleModels()
 }
 
 function selectModel(id) {

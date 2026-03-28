@@ -358,9 +358,11 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
   }
 
   // ── RAG / Knowledge Context injection ──
-  if (ragContext && ragContext.results && ragContext.results.length > 0) {
-    const chunks = ragContext.results
-      .map((r, i) => `### Source ${i + 1}${r.source ? ` (${r.source})` : ''}\n${r.text || r.content || ''}`)
+  // ragContext is a plain array of { id, score, text, documentName } from queryRagContext()
+  const ragResults = Array.isArray(ragContext) ? ragContext : ragContext?.results
+  if (ragResults && ragResults.length > 0) {
+    const chunks = ragResults
+      .map((r, i) => `### Source ${i + 1}${r.documentName ? ` (${r.documentName})` : ''}\n${r.text || r.content || ''}`)
       .join('\n\n')
     system += `\n\n## Knowledge Context\n_Retrieved from your assigned knowledge base_\n\n${chunks}`
   }

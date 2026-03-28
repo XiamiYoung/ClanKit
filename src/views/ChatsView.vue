@@ -1419,7 +1419,7 @@ function resolveProviderName(providerId) {
   if (!providerId) return 'anthropic'
   const providers = configStore.config?.providers || []
   const found = providers.find(p => p.id === providerId)
-  if (found) return found.name || found.type || providerId
+  if (found) return found.alias || found.name || found.type || providerId
   return providerId
 }
 
@@ -2020,7 +2020,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   flex: 1;
   overflow-y: auto;
   padding: 0.5rem;
-  scrollbar-width: thin;
+  
 }
 .chat-sidebar-loading {
   display: flex;
@@ -2292,7 +2292,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  scrollbar-width: thin;
+  
   background: #FFFFFF;
 }
 
@@ -2791,7 +2791,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
   z-index: 50;
   padding: 0.75rem;
-  scrollbar-width: thin;
+  
 }
 .rag-popover-header {
   display: flex;

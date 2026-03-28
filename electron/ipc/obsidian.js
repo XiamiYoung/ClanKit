@@ -11,18 +11,9 @@ const ds = require('../lib/dataStore')
 const winRef = require('../lib/windowRef')
 const fh = require('../lib/fileHelpers')
 
-// Normalize paths for the current platform (WSL ↔ Windows ↔ Linux)
+// Normalize path separators
 function toLinuxPath(p) {
   if (!p) return p
-  const m = p.match(/^([A-Za-z]):[/\\](.*)$/)
-  if (m) {
-    if (fh.IS_WSL) {
-      const drive = m[1].toLowerCase()
-      const rest = m[2].replace(/\\/g, '/')
-      return `/mnt/${drive}/${rest}`.replace(/\/+$/, '') || `/mnt/${drive}`
-    }
-    return p.replace(/\\/g, '/')
-  }
   return p
 }
 
@@ -46,20 +37,11 @@ function register() {
     return true
   })
 
-  // Folder picker — on WSL use native Windows Explorer dialog via PowerShell
+  // Folder picker
   ipcMain.handle('obsidian:pick-folder', async () => {
     if (fh.isFilePickerOpen()) return null
     fh.setFilePickerOpen(true)
     try {
-      if (fh.IS_WSL) {
-        try {
-          const folder = await fh.showWindowsFolderPicker()
-          if (!folder) return null
-          return folder
-        } catch (err) {
-          logger.error('Windows folder picker failed, falling back to GTK:', err.message)
-        }
-      }
       const result = await dialog.showOpenDialog(winRef.get(), {
         properties: ['openDirectory'],
         title: 'Select Obsidian Vault Folder'

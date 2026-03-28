@@ -1114,7 +1114,7 @@ onBeforeUnmount(() => {
   padding-bottom: 1rem;
   padding-right: 0.25rem;
   align-content: start;
-  scrollbar-width: thin;
+  
   flex: 1;
   min-height: 0;
 }
@@ -1206,7 +1206,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  scrollbar-width: thin;
+  
 }
 
 .tev-cat-header {
@@ -1575,7 +1575,7 @@ onBeforeUnmount(() => {
   align-content: start;
   padding-bottom: 1rem;
   padding-right: 0.25rem;
-  scrollbar-width: thin;
+  
   flex: 1;
   min-height: 0;
 }

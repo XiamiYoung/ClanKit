@@ -421,7 +421,7 @@ function buildNode(step, allSteps) {
 .pv-body {
   overflow-y: auto; padding: 1.5rem;
   display: flex; flex-direction: column; gap: 1.125rem;
-  scrollbar-width: thin; scrollbar-color: #2A2A2A transparent;
+   
 }
 
 /* Plan description */
@@ -487,7 +487,7 @@ function buildNode(step, allSteps) {
   font-family: 'JetBrains Mono', monospace; font-size: var(--fs-small); color: #D1D5DB;
   background: #111; border: 1px solid #1E1E1E; border-radius: 0.375rem;
   padding: 0.5rem 0.625rem; white-space: pre-wrap; word-break: break-word; line-height: 1.5;
-  max-height: 10rem; overflow: auto; scrollbar-width: thin; scrollbar-color: #1E1E1E transparent;
+  max-height: 10rem; overflow: auto;  
 }
 .pv-dep-info {
   display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
@@ -519,7 +519,7 @@ function buildNode(step, allSteps) {
 }
 .pv-flow-scroll {
   flex: 1; overflow: auto;
-  scrollbar-width: thin; scrollbar-color: #2A2A2A transparent;
+   
   display: flex; flex-direction: column;
   min-height: 0;
 }

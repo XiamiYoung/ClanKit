@@ -400,8 +400,8 @@ defineExpose({ focusInput })
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  scrollbar-width: thin;
-  scrollbar-color: #2A2A2A transparent;
+  
+  
 }
 
 /* Empty state */
@@ -495,7 +495,7 @@ defineExpose({ focusInput })
   word-break: break-word;
   max-height: 200px;
   overflow-y: auto;
-  scrollbar-width: thin;
+  
 }
 .ai-magic-replacement-actions {
   border-top: 1px solid #2A2A2A;
@@ -742,7 +742,7 @@ defineExpose({ focusInput })
   word-break: break-word;
   max-height: 120px;
   overflow-y: auto;
-  scrollbar-width: thin;
+  
   border-top: 1px solid #2A2A2A;
 }
 </style>
@@ -802,7 +802,7 @@ defineExpose({ focusInput })
   flex: 1; overflow-y: auto;
   padding: 0.5rem;
   display: flex; flex-direction: column; gap: 0.1875rem;
-  scrollbar-width: thin; scrollbar-color: #333 transparent;
+   
 }
 /* ── Search bar inside agent modal ── */
 .ch-modal-search {

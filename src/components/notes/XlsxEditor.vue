@@ -1419,7 +1419,7 @@ defineExpose({ getSheetTextContent, getAllSheetsText, performSearchReplace, coun
   flex: 1;
   overflow: auto;
   outline: none;
-  scrollbar-width: thin;
+  
 }
 .xlsx-loading {
   display: flex;

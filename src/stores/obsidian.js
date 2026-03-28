@@ -1,22 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-// Normalize paths based on platform.
-// On WSL: convert Windows drive paths (D:\notes) to WSL mount paths (/mnt/d/notes).
-// On native Windows/Linux: leave paths as-is.
 function normalizePath(p) {
-  if (!p) return p
-  const m = p.match(/^([A-Za-z]):[/\\](.*)$/)
-  if (m) {
-    if (window.electronAPI?.isWSL) {
-      const drive = m[1].toLowerCase()
-      const rest = m[2].replace(/\\/g, '/')
-      return `/mnt/${drive}/${rest}`.replace(/\/+$/, '') || `/mnt/${drive}`
-    }
-    // Native Windows: keep as-is
-    return p
-  }
-  return p
+  return p || ''
 }
 
 export const useObsidianStore = defineStore('obsidian', () => {

@@ -2,7 +2,7 @@
  * MemoryLogTool — lets the agent read its own session log files.
  *
  * Log files live at:
- *   ~/.clankai/memory/agents/{agentId}/memory/YYYY-MM-DD.md
+ *   {DATA_DIR}/memory/agents/{agentId}/memory/YYYY-MM-DD.md
  *
  * Two actions:
  *   list  — return all dates that have a log, with session headers (very cheap)

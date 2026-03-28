@@ -2,7 +2,7 @@
  * ChatIndex — lightweight keyword index of past chat conversations.
  *
  * Stores per-agent JSON snippet files in:
- *   ~/.clankai/memory/agents/{agentId}/index/{chatId}.json
+ *   {DATA_DIR}/memory/agents/{agentId}/index/{chatId}.json
  *
  * Each file: { chatId, agentId, updatedAt, snippets: [{text, idx, lower}] }
  *
@@ -55,7 +55,7 @@ function extractKeywords(query) {
 
 class ChatIndex {
   constructor(agentMemoryDir) {
-    this.agentMemoryDir = agentMemoryDir  // ~/.clankai/memory/agents/
+    this.agentMemoryDir = agentMemoryDir  // {DATA_DIR}/memory/agents/
   }
 
   _indexDir(agentId) {

@@ -1341,7 +1341,7 @@ defineExpose({ getSlideTextContent, getAllSlidesText, performSearchReplace, coun
   flex-shrink: 0;
   min-height: 3rem;
   overflow-x: auto;
-  scrollbar-width: none;
+  
 }
 .pptx-ribbon::-webkit-scrollbar { display: none; }
 .ribbon-group {
@@ -1460,7 +1460,7 @@ defineExpose({ getSlideTextContent, getAllSlidesText, performSearchReplace, coun
   flex: 1;
   overflow-y: auto;
   padding: 0.5rem;
-  scrollbar-width: thin;
+  
   display: flex;
   flex-direction: column;
   gap: 0.5rem;

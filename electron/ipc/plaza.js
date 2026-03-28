@@ -93,7 +93,7 @@ All titles and descriptions MUST be written in ${lang}.
 Return ONLY a JSON array with objects containing "title" (short, max 60 chars) and "description" (1-2 sentences, max 150 chars).
 Example: ${langExample}`
 
-      const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+      const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
       let text
       if (isOpenAI) {
         const { OpenAIClient } = require('../agent/core/OpenAIClient')
@@ -103,11 +103,12 @@ Example: ${langExample}`
           customModel: um.model,
           _resolvedProvider: 'openai',
           defaultProvider: 'openai',
-          ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+          ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+          provider: { type: um.provider },
         }
-        const client = new OpenAIClient(cfg).getClient()
-        const response = await client.chat.completions.create({
-          model: um.model, max_tokens: 2048,
+        const oaiClient = new OpenAIClient(cfg)
+        const response = await oaiClient.getClient().chat.completions.create({
+          model: um.model, ...oaiClient.tokenLimit(2048),
           messages: [{ role: 'user', content: prompt }],
         })
         text = response.choices?.[0]?.message?.content || ''
@@ -153,7 +154,7 @@ Return ONLY a JSON object with:
 Example (English input): {"title":"Can machines truly think?","description":"Examining whether artificial intelligence possesses genuine consciousness or merely simulates it."}
 Example (Chinese input): {"title":"机器真的能思考吗？","description":"探讨人工智能是否具有真正的意识，还是仅仅模拟思考的过程。"}`
 
-      const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+      const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
       let text
       if (isOpenAI) {
         const { OpenAIClient } = require('../agent/core/OpenAIClient')
@@ -161,11 +162,12 @@ Example (Chinese input): {"title":"机器真的能思考吗？","description":"�
           openaiApiKey: providerCfg.apiKey,
           openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
           customModel: um.model, _resolvedProvider: 'openai', defaultProvider: 'openai',
-          ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+          ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+          provider: { type: um.provider },
         }
-        const client = new OpenAIClient(cfg).getClient()
-        const response = await client.chat.completions.create({
-          model: um.model, max_tokens: 512,
+        const oaiClient = new OpenAIClient(cfg)
+        const response = await oaiClient.getClient().chat.completions.create({
+          model: um.model, ...oaiClient.tokenLimit(512),
           messages: [{ role: 'user', content: prompt }],
         })
         text = response.choices?.[0]?.message?.content || ''
@@ -214,13 +216,13 @@ All text MUST be written in ${lang}.
 Return ONLY a JSON object: {"title":"... (max 60 chars)","description":"... (1-2 sentences, max 150 chars)"}
 Example: ${langExample}`
 
-      const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+      const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
       let text
       if (isOpenAI) {
         const { OpenAIClient } = require('../agent/core/OpenAIClient')
-        const cfg = { openaiApiKey: providerCfg.apiKey, openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model, _resolvedProvider: 'openai', defaultProvider: 'openai', ...(um.provider === 'deepseek' ? { _directAuth: true } : {}) }
-        const client = new OpenAIClient(cfg).getClient()
-        const response = await client.chat.completions.create({ model: um.model, max_tokens: 512, messages: [{ role: 'user', content: prompt }] })
+        const cfg = { openaiApiKey: providerCfg.apiKey, openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model, _resolvedProvider: 'openai', defaultProvider: 'openai', ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}), provider: { type: um.provider } }
+        const oaiClient = new OpenAIClient(cfg)
+        const response = await oaiClient.getClient().chat.completions.create({ model: um.model, ...oaiClient.tokenLimit(512), messages: [{ role: 'user', content: prompt }] })
         text = response.choices?.[0]?.message?.content || ''
         accumulateUtilityUsage(um.model, um.provider, response.usage?.prompt_tokens || 0, response.usage?.completion_tokens || 0).catch(() => {})
       } else {
@@ -333,7 +335,7 @@ Example: ${langExample}`
 
       if (providerConfig) {
         // Use new providers array config
-        const isOpenAI = providerConfig.type === 'openai' || providerConfig.type === 'deepseek' || providerConfig.type === 'minimax'
+        const isOpenAI = providerConfig.type === 'openai' || providerConfig.type === 'openai_official' || providerConfig.type === 'deepseek' || providerConfig.type === 'minimax'
 
         globalCfg.provider = {
           id: providerConfig.id,
@@ -348,7 +350,7 @@ Example: ${langExample}`
         if (isOpenAI) {
           globalCfg._resolvedProvider = 'openai'
           globalCfg.defaultProvider = 'openai'
-          globalCfg._directAuth = (providerConfig.type === 'deepseek' || providerConfig.type === 'minimax')
+          globalCfg._directAuth = (providerConfig.type === 'openai_official' || providerConfig.type === 'deepseek' || providerConfig.type === 'minimax')
         } else {
           globalCfg.defaultProvider = providerConfig.type
           globalCfg._resolvedProvider = providerConfig.type
@@ -463,13 +465,13 @@ ${transcript}
 Return ONLY a JSON object where keys are agent IDs and values are arrays of short memory strings (1 sentence each, in ${memLang}).
 Example: ${memExample}`
 
-      const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+      const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
       let text
       if (isOpenAI) {
         const { OpenAIClient } = require('../agent/core/OpenAIClient')
-        const cfg = { openaiApiKey: providerCfg.apiKey, openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model, _resolvedProvider: 'openai', defaultProvider: 'openai', ...(um.provider === 'deepseek' ? { _directAuth: true } : {}) }
-        const client = new OpenAIClient(cfg).getClient()
-        const response = await client.chat.completions.create({ model: um.model, max_tokens: 2048, messages: [{ role: 'user', content: prompt }] })
+        const cfg = { openaiApiKey: providerCfg.apiKey, openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model, _resolvedProvider: 'openai', defaultProvider: 'openai', ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}), provider: { type: um.provider } }
+        const oaiClient = new OpenAIClient(cfg)
+        const response = await oaiClient.getClient().chat.completions.create({ model: um.model, ...oaiClient.tokenLimit(2048), messages: [{ role: 'user', content: prompt }] })
         text = response.choices?.[0]?.message?.content || ''
         accumulateUtilityUsage(um.model, um.provider, response.usage?.prompt_tokens || 0, response.usage?.completion_tokens || 0).catch(() => {})
       } else {
@@ -518,13 +520,13 @@ IMPORTANT: You MUST write the entire conclusion in ${concLang}. Every word of yo
 
 Return ONLY the conclusion text, no JSON, no formatting, just plain text.`
 
-      const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+      const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
       let text
       if (isOpenAI) {
         const { OpenAIClient } = require('../agent/core/OpenAIClient')
-        const cfg = { openaiApiKey: providerCfg.apiKey, openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model, _resolvedProvider: 'openai', defaultProvider: 'openai', ...(um.provider === 'deepseek' ? { _directAuth: true } : {}) }
-        const client = new OpenAIClient(cfg).getClient()
-        const response = await client.chat.completions.create({ model: um.model, max_tokens: 1024, messages: [{ role: 'user', content: prompt }] })
+        const cfg = { openaiApiKey: providerCfg.apiKey, openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model, _resolvedProvider: 'openai', defaultProvider: 'openai', ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}), provider: { type: um.provider } }
+        const oaiClient = new OpenAIClient(cfg)
+        const response = await oaiClient.getClient().chat.completions.create({ model: um.model, ...oaiClient.tokenLimit(1024), messages: [{ role: 'user', content: prompt }] })
         text = response.choices?.[0]?.message?.content || ''
         accumulateUtilityUsage(um.model, um.provider, response.usage?.prompt_tokens || 0, response.usage?.completion_tokens || 0).catch(() => {})
       } else {

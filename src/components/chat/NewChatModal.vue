@@ -717,7 +717,7 @@ const FolderTreeItem = defineComponent({
   background: #111111; border: 1px solid #2A2A2A;
   border-radius: 0.625rem;
   max-height: 10rem; overflow-y: auto;
-  scrollbar-width: thin; scrollbar-color: #333 transparent;
+   
   padding: 0.25rem;
   display: flex; flex-direction: column; gap: 1px;
 }
@@ -859,7 +859,7 @@ const FolderTreeItem = defineComponent({
 .ncp-list {
   flex: 1; overflow-y: auto; padding: 0.5rem 0.75rem;
   display: flex; flex-direction: column; gap: 0.25rem;
-  scrollbar-width: thin; scrollbar-color: #333 transparent;
+   
 }
 .ncp-item {
   display: flex; align-items: center; gap: 0.625rem;

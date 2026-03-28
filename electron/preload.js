@@ -1,18 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron')
-const os = require('os')
-
-// Detect WSL so the renderer can skip path conversions on native Windows/Linux
-const IS_WSL = (() => {
-  try {
-    if (process.platform !== 'linux') return false
-    const release = os.release().toLowerCase()
-    return release.includes('microsoft') || release.includes('wsl')
-  } catch { return false }
-})()
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // ── Platform ────────────────────────────────────────────────────────────────
-  isWSL: IS_WSL,
   platform: process.platform,
 
   // ── Storage ──────────────────────────────────────────────────────────────
@@ -52,14 +41,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveConfig: (config) => ipcRenderer.invoke('tools:save-config', config),
   },
 
-  // ── OpenRouter ─────────────────────────────────────────────────────────
+  // ── Model fetching & cache ──────────────────────────────────────────────
   fetchOpenRouterModels: (params) => ipcRenderer.invoke('openrouter:fetch-models', params),
-
-  // ── OpenAI ─────────────────────────────────────────────────────────────
   fetchOpenAIModels: (params) => ipcRenderer.invoke('openai:fetch-models', params),
-
-  // ── Google ──────────────────────────────────────────────────────────────
   fetchGoogleModels: (params) => ipcRenderer.invoke('google:fetch-models', params),
+  loadModelCache: () => ipcRenderer.invoke('models:load-cache'),
+  saveModelCache: (data) => ipcRenderer.invoke('models:save-cache', data),
+  enrichModelContext: (params) => ipcRenderer.invoke('models:enrich-context', params),
 
   // ── Skills (filesystem-based) ───────────────────────────────────────────
   skills: {
@@ -236,6 +224,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
+  // App info (no IPC needed — available in preload context)
+  getAppVersion:      () => require('../package.json').version,
+  getPlatformInfo:    () => {
+    const os = require('os')
+    const platform = process.platform
+    const release = os.release()
+    let name = platform
+    if (platform === 'win32') {
+      const major = parseInt(release.split('.')[0], 10)
+      const build = parseInt(release.split('.')[2], 10) || 0
+      name = major >= 10 && build >= 22000 ? 'Windows 11' : major >= 10 ? 'Windows 10' : `Windows (${release})`
+    } else if (platform === 'darwin') {
+      name = `macOS ${release}`
+    } else if (platform === 'linux') {
+      name = `Linux ${release.split('-')[0]}`
+    }
+    return { platform: name }
+  },
+
   // Keep legacy top-level aliases used by the existing TitleBar.vue
   windowMinimize:     () => ipcRenderer.invoke('window:minimize'),
   windowMaximize:     () => ipcRenderer.invoke('window:maximize'),
@@ -352,6 +359,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('im:chat-updated', (_e, data) => cb(data))
       return () => ipcRenderer.removeAllListeners('im:chat-updated')
     },
+    onAgentStreamStart: (cb) => {
+      ipcRenderer.removeAllListeners('im:agent-stream-start')
+      ipcRenderer.on('im:agent-stream-start', (_e, d) => cb(d))
+      return () => ipcRenderer.removeAllListeners('im:agent-stream-start')
+    },
+    onAgentChunk: (cb) => {
+      ipcRenderer.removeAllListeners('im:agent-chunk')
+      ipcRenderer.on('im:agent-chunk', (_e, d) => cb(d))
+      return () => ipcRenderer.removeAllListeners('im:agent-chunk')
+    },
+    onAgentStreamEnd: (cb) => {
+      ipcRenderer.removeAllListeners('im:agent-stream-end')
+      ipcRenderer.on('im:agent-stream-end', (_e, d) => cb(d))
+      return () => ipcRenderer.removeAllListeners('im:agent-stream-end')
+    },
     requestWhatsAppQr: () => ipcRenderer.invoke('im:whatsapp-request-qr'),
     onWhatsAppQr: (cb) => {
       ipcRenderer.removeAllListeners('im:whatsapp-qr')
@@ -367,6 +389,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeAllListeners('im:platform-stopped')
       ipcRenderer.on('im:platform-stopped', (_e, d) => cb(d))
       return () => ipcRenderer.removeAllListeners('im:platform-stopped')
+    },
+    // Teams
+    teamsRequestAuth: (opts) => ipcRenderer.invoke('im:teams-request-auth', opts),
+    teamsSignOut:     () => ipcRenderer.invoke('im:teams-sign-out'),
+    teamsAuthStatus:  () => ipcRenderer.invoke('im:teams-auth-status'),
+    onTeamsDeviceCode: (cb) => {
+      ipcRenderer.removeAllListeners('im:teams-device-code')
+      ipcRenderer.on('im:teams-device-code', (_e, d) => cb(d))
+      return () => ipcRenderer.removeAllListeners('im:teams-device-code')
+    },
+    onTeamsReady: (cb) => {
+      ipcRenderer.removeAllListeners('im:teams-ready')
+      ipcRenderer.on('im:teams-ready', (_e, d) => cb(d))
+      return () => ipcRenderer.removeAllListeners('im:teams-ready')
+    },
+    onTeamsAuthError: (cb) => {
+      ipcRenderer.removeAllListeners('im:teams-auth-error')
+      ipcRenderer.on('im:teams-auth-error', (_e, d) => cb(d))
+      return () => ipcRenderer.removeAllListeners('im:teams-auth-error')
     },
   },
 })

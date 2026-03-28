@@ -274,7 +274,7 @@ watch(() => props.visible, (v) => {
 /* Body */
 .agent-select-body {
   flex: 1; overflow-y: auto; padding: 0;
-  scrollbar-width: thin; scrollbar-color: #2A2A2A transparent;
+   
 }
 
 /* Category section */

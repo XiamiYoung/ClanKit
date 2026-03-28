@@ -780,7 +780,7 @@ watch(() => props.base64, (val) => {
   display: flex;
   justify-content: center;
   padding: 2rem 1rem;
-  scrollbar-width: thin;
+  
 }
 .docx-loading {
   display: flex;

@@ -112,7 +112,7 @@ class McpManager {
   async ensureStarted(serverConfig) {
     const runtime = await this._ensureRegistered(serverConfig)
     // Trigger connection by listing tools; result goes to schema cache
-    const tools = await runtime.listTools(serverConfig.id)
+    const tools = await runtime.listTools(serverConfig.id, { includeSchema: true })
     this._schemaCache.set(serverConfig.id, tools)
     logger.info(`[McpManager] Connected: ${serverConfig.name} — ${tools.length} tool(s)`)
     return { started: true, name: serverConfig.name }
@@ -131,7 +131,7 @@ class McpManager {
         unknown.map(async (config) => {
           try {
             const runtime = await this._ensureRegistered(config)
-            const tools = await runtime.listTools(config.id)
+            const tools = await runtime.listTools(config.id, { includeSchema: true })
             this._schemaCache.set(config.id, tools)
             logger.info(`[McpManager] Schema cached: ${config.name} — ${tools.length} tool(s)`)
           } catch (err) {

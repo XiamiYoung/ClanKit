@@ -65,7 +65,7 @@
         @mousedown.prevent="onOptionClick(opt)"
       >
         <span class="combo-option-name">{{ opt.name || opt.id }}</span>
-        <span class="combo-option-id">{{ opt.detail || opt.id }}</span>
+        <span v-if="opt.detail" class="combo-option-id">{{ opt.detail }}</span>
       </div>
     </div>
   </div>
@@ -175,8 +175,7 @@ function clear() {
 .combo-chip {
   display: flex; align-items: center; gap: 0.5rem; margin: 0.25rem; padding: 0.3125rem 0.5rem 0.3125rem 0.75rem;
   border-radius: 0.5rem;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  background: transparent;
 }
 .combo-chip-label {
   font-family: 'JetBrains Mono', 'Inter', monospace; font-size: 0.8125rem; font-weight: 600;

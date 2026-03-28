@@ -503,8 +503,8 @@ function _loadDraftFromChat() {
   flex: 1; display: flex; flex-direction: column; min-height: 0;
   padding: 1.25rem 1.5rem;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #333 transparent;
+  
+  
 }
 
 /* Dark sections (used in Model & RAG tabs) */
@@ -711,7 +711,7 @@ function _loadDraftFromChat() {
   flex: 1; overflow-y: auto;
   border: 1px solid #2A2A2A; border-radius: 0.75rem;
   display: flex; flex-direction: column;
-  scrollbar-width: thin; scrollbar-color: #333 transparent;
+   
   background: #1A1A1A;
 }
 .ccm-model-item {
@@ -776,7 +776,7 @@ function _loadDraftFromChat() {
 /* ── Item cards (Tools/MCP) ────────────────────────────────────────────── */
 .ccm-item-list {
   flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.375rem;
-  scrollbar-width: thin; scrollbar-color: #333 transparent;
+   
 }
 .ccm-item-card {
   display: flex; align-items: center; gap: 0.875rem;

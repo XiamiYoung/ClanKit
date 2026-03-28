@@ -25,66 +25,11 @@ const MEDIA_TYPES = {
 const IMAGE_EXTS = new Set(Object.keys(MEDIA_TYPES))
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024   // 20 MB
 
-// --- Detect WSL environment --------------------------------------------------
-
-const IS_WSL = (() => {
-  try {
-    if (process.platform !== 'linux') return false
-    const release = os.release().toLowerCase()
-    if (release.includes('microsoft') || release.includes('wsl')) return true
-    if (fs.existsSync('/proc/version')) {
-      const ver = fs.readFileSync('/proc/version', 'utf8').toLowerCase()
-      return ver.includes('microsoft') || ver.includes('wsl')
-    }
-  } catch {}
-  return false
-})()
-
-logger.info('WSL detection (files):', IS_WSL ? 'YES -- will use PowerShell file dialogs' : 'NO')
-
-/**
- * Convert a Windows path to its WSL2 mount equivalent.
- * Handles: C:\foo\bar, C:/foo/bar, file:///C:/foo/bar, \\wsl$\...
- * Falls through for paths that are already Linux-native.
- */
-function toWslPath(inputPath) {
-  if (!inputPath) return inputPath
-  let p = inputPath.trim()
-
-  // Strip file:// URI prefix
-  if (p.startsWith('file:///')) {
-    p = decodeURIComponent(p.slice(7))  // file:///C:/foo -> C:/foo
-  } else if (p.startsWith('file://')) {
-    p = decodeURIComponent(p.slice(5))
-  }
-
-  // Strip surrounding quotes
-  if ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) {
-    p = p.slice(1, -1)
-  }
-
-  // Windows drive letter path: C:\foo or C:/foo
-  const driveMatch = p.match(/^([A-Za-z]):[/\\](.*)$/)
-  if (driveMatch) {
-    const drive = driveMatch[1].toLowerCase()
-    const rest = driveMatch[2].replace(/\\/g, '/')
-    return `/mnt/${drive}/${rest}`.replace(/\/+$/, '') || `/mnt/${drive}`
-  }
-
-  // UNC \\wsl$\distro\path -> /path  (already inside WSL)
-  const wslUncMatch = p.match(/^\\\\wsl\$\\[^\\]+\\(.*)$/)
-  if (wslUncMatch) {
-    return '/' + wslUncMatch[1].replace(/\\/g, '/')
-  }
-
-  // Already a Linux path
-  return p
-}
 
 // --- Read attachment ---------------------------------------------------------
 
 function readAttachment(rawPath) {
-  const filePath = IS_WSL ? toWslPath(rawPath) : rawPath
+  const filePath = rawPath
   const name = path.basename(filePath)
   const id = uuidv4()
 
@@ -161,19 +106,6 @@ $results -join '|'
   })
 }
 
-// -- Helper: detect WSL (for shell open) --------------------------------------
-function isWSLForShell() {
-  try {
-    const release = fs.readFileSync('/proc/version', 'utf8').toLowerCase()
-    return release.includes('microsoft') || release.includes('wsl')
-  } catch { return false }
-}
-
-// -- Helper: Linux path to Windows path ---------------------------------------
-function toWindowsPath(linuxPath) {
-  const { execSync } = require('child_process')
-  return execSync('wslpath -w "' + linuxPath + '"').toString().trim().replace(/\\$/, '')
-}
 
 function register() {
   // files:pick -- native OS dialog (supports multi-select, files and folders)
@@ -223,11 +155,6 @@ function register() {
       if (!fs.existsSync(tmpPath)) {
         fs.writeFileSync(tmpPath, Buffer.from(match[2], 'base64'))
       }
-      if (isWSLForShell()) {
-        const { execSync } = require('child_process')
-        execSync('explorer.exe "' + toWindowsPath(tmpPath) + '"')
-        return { success: true }
-      }
       const result = await shell.openPath(tmpPath)
       if (result) return { error: result }
       return { success: true }
@@ -237,15 +164,10 @@ function register() {
   })
 
   // Get image from Windows clipboard via PowerShell.
-  // On WSL2: uses powershell.exe (WSLg clipboard only bridges text, not images).
-  // On native Windows: uses powershell.exe directly.
   // On native Linux/macOS: not supported (browser clipboard handles images natively).
   ipcMain.handle('clipboard:get-image', async () => {
-    const isWindows = process.platform === 'win32'
-    if (!IS_WSL && !isWindows) return { hasImage: false }
-
-    // PowerShell command is the same for both WSL and native Windows
-    const psCmd = isWindows ? 'powershell' : 'powershell.exe'
+    if (process.platform !== 'win32') return { hasImage: false }
+    const psCmd = 'powershell'
     return new Promise((resolve) => {
       const ps = `
 Add-Type -AssemblyName System.Windows.Forms
@@ -284,8 +206,6 @@ if ($img -eq $null) {
 module.exports = {
   register,
   // Exported for use by other modules that need file reading helpers
-  IS_WSL,
-  toWslPath,
   readAttachment,
   filePickerOpen: {
     get: () => filePickerOpen,

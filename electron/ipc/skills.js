@@ -9,38 +9,12 @@ const { ipcMain, app } = require('electron')
 const { logger } = require('../logger')
 const ds = require('../lib/dataStore')
 
-// Detect WSL environment
-const IS_WSL = (() => {
-  try {
-    if (process.platform !== 'linux') return false
-    const release = os.release().toLowerCase()
-    if (release.includes('microsoft') || release.includes('wsl')) return true
-    if (fs.existsSync('/proc/version')) {
-      const ver = fs.readFileSync('/proc/version', 'utf8').toLowerCase()
-      return ver.includes('microsoft') || ver.includes('wsl')
-    }
-  } catch {}
-  return false
-})()
-
 /**
- * Normalize paths for the current platform.
- * On WSL: convert Windows drive paths (D:\notes) to WSL mount paths (/mnt/d/notes).
- * On native Windows/Linux: leave paths as-is (just normalize backslashes on Windows).
+ * Normalize path separators on Windows.
  */
-function toLinuxPath(p) {
+function normalizePath(p) {
   if (!p) return p
-  const m = p.match(/^([A-Za-z]):[/\\](.*)$/)
-  if (m) {
-    if (IS_WSL) {
-      // WSL: convert to /mnt/drive/... mount path
-      const drive = m[1].toLowerCase()
-      const rest = m[2].replace(/\\/g, '/')
-      return `/mnt/${drive}/${rest}`.replace(/\/+$/, '') || `/mnt/${drive}`
-    }
-    // Native Windows: normalize backslashes to forward slashes for consistency
-    return p.replace(/\\/g, '/')
-  }
+  if (process.platform === 'win32') return p.replace(/\//g, '\\')
   return p
 }
 
@@ -55,9 +29,9 @@ function resolveSkillsPath(configPath) {
     if (p.startsWith('~/') || p === '~') {
       p = path.join(os.homedir(), p.slice(1))
     }
-    return toLinuxPath(p)
+    return normalizePath(p)
   }
-  // Default: ~/.claude/skills on Linux/WSL, %APPDATA%\Claude\skills on Windows
+  // Default: ~/.claude/skills on Linux, %APPDATA%\Claude\skills on Windows
   if (process.platform === 'win32') {
     return path.join(process.env.APPDATA || '', 'Claude', 'skills')
   }
@@ -159,7 +133,7 @@ function register() {
   })
 
   ipcMain.handle('skills:read-tree', (_, rawSkillPath) => {
-    const skillPath = toLinuxPath(rawSkillPath)
+    const skillPath = normalizePath(rawSkillPath)
     const SKIP_DIRS = new Set(['$RECYCLE.BIN', 'System Volume Information', '$WinREAgent', 'Recovery', 'node_modules', '.git'])
 
     function readDir(dirPath) {
@@ -201,7 +175,7 @@ function register() {
 
   ipcMain.handle('skills:read-file', (_, rawPath) => {
     try {
-      return { content: fs.readFileSync(toLinuxPath(rawPath), 'utf8') }
+      return { content: fs.readFileSync(normalizePath(rawPath), 'utf8') }
     } catch (err) {
       return { error: err.message }
     }
@@ -209,7 +183,7 @@ function register() {
 
   ipcMain.handle('skills:write-file', (_, rawPath, content) => {
     try {
-      fs.writeFileSync(toLinuxPath(rawPath), content, 'utf8')
+      fs.writeFileSync(normalizePath(rawPath), content, 'utf8')
       return { success: true }
     } catch (err) {
       return { error: err.message }

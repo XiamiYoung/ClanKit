@@ -231,7 +231,7 @@ export const useToolsStore = defineStore('tools', () => {
     const plain = JSON.parse(JSON.stringify(dict))
     const result = await window.electronAPI.tools.saveConfig(plain)
     if (result && !result.success) {
-      console.error('tools:save-config failed:', result.error)
+      throw new Error(result.error || 'Failed to save tool configuration')
     }
   }
 

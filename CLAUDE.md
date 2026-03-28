@@ -335,7 +335,6 @@ ShellTool.execute(toolCallId, params, signal, onUpdate)
 - Always apply the black gradient for primary interactive elements — this is the visual signature
 - All IPC calls are `async` (invoke/handle pattern)
 - Never store sensitive keys in the renderer; they live in `config.json` on disk
-- WSL2 compatibility: fontconfig for emoji, path handling in preload
 - Chat persistence is debounced (300ms) — don't call `persistChat` in tight loops
 - **Language policy:** In code files, configuration files, and source code comments, use English only. Chinese is not allowed.
 - **Restart notification:** When any change touches files that require an app restart to take effect (anything under `electron/` — `main.js`, `preload.js`, `agent/`, etc.), end your message to the user with a **red-colored** notice: <span style="color:#EF4444;">**⟳ This change requires restarting the app to take effect.**</span>

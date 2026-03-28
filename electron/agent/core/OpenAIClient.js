@@ -11,13 +11,15 @@ const { logger } = require('../../logger')
 class OpenAIClient {
   constructor(config) {
     this.config = config
+    this.isOfficialOpenAI = config.provider?.type === 'openai_official'
     const resolvedBaseURL = config.openaiBaseURL || config.openai?.baseURL || config.baseURL
     if (!resolvedBaseURL) throw new Error('OpenAI baseURL not configured')
     const baseURL = resolvedBaseURL.replace(/\/+$/, '')
     const apiKey = config.openaiApiKey || config.openai?.apiKey || config.apiKey || ''
     // _directAuth: use standard Bearer auth (DeepSeek, direct OpenAI endpoints).
     if (config._directAuth) {
-      this.client = new OpenAI({ baseURL: baseURL + '/v1', apiKey })
+      const directURL = baseURL.endsWith('/v1') ? baseURL : baseURL + '/v1'
+      this.client = new OpenAI({ baseURL: directURL, apiKey })
     } else {
       this.client = new OpenAI({
         baseURL: baseURL + '/proxy/openai/v1',
@@ -47,6 +49,22 @@ class OpenAIClient {
 
   /** Get the raw OpenAI SDK client */
   getClient() { return this.client }
+
+  /**
+   * Returns the correct token limit parameter.
+   * Newer OpenAI models (o-series, gpt-5.x) require max_completion_tokens;
+   * older models and non-OpenAI endpoints use max_tokens.
+   * Checks both provider type and model name to handle proxied scenarios.
+   */
+  tokenLimit(n) {
+    if (this.isOfficialOpenAI) return { max_completion_tokens: n }
+    // Only auto-detect for direct auth (talking to real OpenAI API, not through a proxy)
+    if (this.config._directAuth) {
+      const model = (this.resolveModel() || '').toLowerCase()
+      if (/^(gpt-5|o[1-9]|o\d+-|chatgpt-4o-latest)/.test(model)) return { max_completion_tokens: n }
+    }
+    return { max_tokens: n }
+  }
 
   /** Rough token estimate (OpenAI SDK doesn't expose count_tokens) */
   async countTokens(messages, system, tools) {

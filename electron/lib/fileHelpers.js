@@ -1,6 +1,6 @@
 /**
  * Shared file/path utilities used by multiple IPC handler modules.
- * WSL detection, path conversion, file picker helpers, attachment reading.
+ * Path conversion, file picker helpers, attachment reading.
  */
 const path = require('path')
 const fs = require('fs')
@@ -20,48 +20,11 @@ const MEDIA_TYPES = {
 const IMAGE_EXTS = new Set(Object.keys(MEDIA_TYPES))
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024   // 20 MB
 
-// --- WSL detection ---
-const IS_WSL = (() => {
-  try {
-    if (process.platform !== 'linux') return false
-    const release = os.release().toLowerCase()
-    if (release.includes('microsoft') || release.includes('wsl')) return true
-    if (fs.existsSync('/proc/version')) {
-      const ver = fs.readFileSync('/proc/version', 'utf8').toLowerCase()
-      return ver.includes('microsoft') || ver.includes('wsl')
-    }
-  } catch {}
-  return false
-})()
-
-logger.info('WSL detection:', IS_WSL ? 'YES -- will use PowerShell file dialogs' : 'NO')
-
-/**
- * Convert a Windows path to its WSL2 mount equivalent.
- * Handles: C:\foo\bar, C:/foo/bar, file:///C:/foo/bar, \\wsl$\...
- */
-function toWslPath(inputPath) {
-  if (!inputPath) return inputPath
-  let p = inputPath.trim()
-  if (p.startsWith('file:///')) p = decodeURIComponent(p.slice(7))
-  else if (p.startsWith('file://')) p = decodeURIComponent(p.slice(5))
-  if ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) p = p.slice(1, -1)
-  const driveMatch = p.match(/^([A-Za-z]):[/\\](.*)$/)
-  if (driveMatch) {
-    const drive = driveMatch[1].toLowerCase()
-    const rest = driveMatch[2].replace(/\\/g, '/')
-    return `/mnt/${drive}/${rest}`.replace(/\/+$/, '') || `/mnt/${drive}`
-  }
-  const wslUncMatch = p.match(/^\\\\wsl\$\\[^\\]+\\(.*)$/)
-  if (wslUncMatch) return '/' + wslUncMatch[1].replace(/\\/g, '/')
-  return p
-}
-
 /**
  * Read a file attachment, returning metadata + base64 for images.
  */
 function readAttachment(rawPath) {
-  const filePath = IS_WSL ? toWslPath(rawPath) : rawPath
+  const filePath = rawPath
   const name = path.basename(filePath)
   const id = uuidv4()
   try {
@@ -172,21 +135,10 @@ $owner.Close()
   })
 }
 
-/**
- * Convert a Linux path to Windows path for WSL (used by skills and other modules).
- */
-function toLinuxPath(inputPath) {
-  if (!inputPath) return inputPath
-  return IS_WSL ? toWslPath(inputPath) : inputPath
-}
-
 module.exports = {
   MEDIA_TYPES,
   IMAGE_EXTS,
   MAX_IMAGE_SIZE,
-  IS_WSL,
-  toWslPath,
-  toLinuxPath,
   readAttachment,
   isFilePickerOpen,
   setFilePickerOpen,

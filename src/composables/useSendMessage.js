@@ -4,6 +4,7 @@ import { useChatsStore } from '../stores/chats'
 import { useConfigStore } from '../stores/config'
 import { useAgentsStore } from '../stores/agents'
 import { useVoiceStore } from '../stores/voice'
+import { useModelsStore } from '../stores/models'
 import { parseMentions } from '../utils/mentions'
 import { useI18n } from '../i18n/useI18n'
 
@@ -37,6 +38,7 @@ export function useSendMessage({
   const configStore = useConfigStore()
   const agentsStore = useAgentsStore()
   const voiceStore = useVoiceStore()
+  const modelsStore = useModelsStore()
   const { t } = useI18n()
 
   // ── Internal state ──────────────────────────────────────────────────────────
@@ -322,7 +324,7 @@ export function useSendMessage({
       await chatsStore.addMessage(chatId, { role: 'user', content: text })
       await chatsStore.addMessage(chatId, {
         role: 'assistant',
-        content: 'Agent loop is not available in browser mode. Please open the app via `npm run dev` in WSL and use the Electron window (not localhost:5173 in a browser).'
+        content: 'Agent loop is not available in browser mode. Please use the Electron window (not localhost:5173 in a browser).'
       })
       scrollToBottom()
       return
@@ -544,6 +546,7 @@ export function useSendMessage({
           groupAudienceMode: targetChat.groupAudienceMode || 'auto',
           groupAudienceAgentIds: JSON.parse(JSON.stringify(targetChat.groupAudienceAgentIds || [])),
           agentModelOverrides: JSON.parse(JSON.stringify(targetChat.agentModelOverrides || {})),
+          modelContextWindows: modelsStore.getAllContextWindows(),
         },
       }).catch(err => dbg(`sendMessage IPC error: ${err.message}`, 'error'))
 

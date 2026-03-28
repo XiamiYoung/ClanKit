@@ -126,11 +126,11 @@ export const storage = {
   // ── Agents ──────────────────────────────────────────────────────────────────
   async getAgents() {
     if (isElectron()) return window.electronAPI.getAgents()
-    return lsGet('maestro:agents', { categories: [], agents: [] })
+    return lsGet('clankai:agents', { categories: [], agents: [] })
   },
   async saveAgents(agents) {
     if (isElectron()) return window.electronAPI.saveAgents(agents)
-    lsSet('maestro:agents', agents)
+    lsSet('clankai:agents', agents)
   },
 
   // ── Plaza ─────────────────────────────────────────────────────────────────

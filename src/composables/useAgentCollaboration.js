@@ -65,6 +65,14 @@ export function useAgentCollaboration({
       delete cfg._directAuth
       delete cfg.apiKey
       delete cfg.baseURL
+    } else if (providerType === 'openai_official') {
+      cfg.openaiApiKey  = apiKey
+      cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')
+      cfg._resolvedProvider = 'openai'
+      cfg._directAuth       = true
+      cfg.defaultProvider   = 'openai'
+      delete cfg.apiKey
+      delete cfg.baseURL
     } else if (providerType === 'deepseek') {
       cfg.openaiApiKey  = apiKey
       cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')

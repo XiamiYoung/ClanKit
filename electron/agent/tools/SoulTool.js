@@ -2,8 +2,8 @@
  * SoulTool — allows the agent to read and update agent memory ("soul") files.
  *
  * Soul files are structured markdown documents stored at:
- *   ~/.clankai/souls/system/{agentId}.md  (system agents)
- *   ~/.clankai/souls/users/{agentId}.md   (user agents)
+ *   {DATA_DIR}/souls/system/{agentId}.md  (system agents)
+ *   {DATA_DIR}/souls/users/{agentId}.md   (user agents)
  *
  * Two tools are exported:
  *   - SoulUpdateTool: add/update/remove entries in soul memory

@@ -80,7 +80,7 @@
           <!-- File tree (root drop zone) -->
           <div
             class="flex-1 overflow-y-auto py-1"
-            style="scrollbar-width:thin;"
+            style=""
             tabindex="0"
             @dragover.prevent="onRootDragOver"
             @dragleave="onRootDragLeave"
@@ -320,7 +320,7 @@
                 <div
                   v-else-if="isMarkdown && !editMode"
                   class="flex-1 overflow-y-auto py-6"
-                  style="scrollbar-width:thin; display:flex; justify-content:center;"
+                  style=" display:flex; justify-content:center;"
                   @click="handlePreviewClick"
                 >
                   <div
@@ -355,7 +355,7 @@
                 <div
                   v-else-if="isMarkdown && editMode"
                   class="flex-1 overflow-y-auto"
-                  style="scrollbar-width:thin; display:flex; justify-content:center;"
+                  style=" display:flex; justify-content:center;"
                 >
                   <textarea
                     ref="sourceTextareaRef"
@@ -370,7 +370,7 @@
                 <div
                   v-else-if="isImage"
                   class="flex-1 overflow-y-auto flex items-center justify-center"
-                  style="scrollbar-width:thin; background:#F2F2F7; padding:2rem;"
+                  style=" background:#F2F2F7; padding:2rem;"
                 >
                   <img
                     :src="imageDataUri"

@@ -214,8 +214,12 @@ export function useChunkHandler({
           }
           msg.streaming = false
           if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
-          // If content is empty, show indicator
-          if (!msg.content && (!msg.segments || msg.segments.length === 0)) {
+          // If no text content, mark as error — the agent produced nothing (likely a backend error).
+          // Check for text segments specifically; non-text segments like agent_step don't count.
+          const hasTextContent = msg.content || (msg.segments || []).some(s => s.type === 'text' && s.content)
+          if (!hasTextContent) {
+            msg.isError = true
+            // Strip non-text segments (agent_step etc.) and replace with error placeholder
             msg.content = '_No response_'
             msg.segments = [{ type: 'text', content: '_No response_' }]
           }
@@ -493,6 +497,8 @@ export function useChunkHandler({
               m.content = m.content || `Error: ${chunk.error}`
               m.segments = [{ type: 'text', content: m.content }]
               m.streaming = false
+              m.isError = true
+              m.errorDetail = chunk.error
               if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
             }
           }
@@ -505,6 +511,7 @@ export function useChunkHandler({
               segments: [{ type: 'text', content: `Error: ${chunk.error}` }],
               streaming: false,
               isError: true,
+              errorDetail: chunk.error,
               timestamp: new Date().toISOString(),
             })
           }

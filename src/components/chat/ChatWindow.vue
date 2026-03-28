@@ -194,8 +194,18 @@
 
             <div
               class="cw-msg-bubble"
-              :class="[msg.role === 'user' ? 'cw-msg-bubble-user' : 'cw-msg-bubble-assistant', shakingIds.has(msg.id) ? 'bubble-shake' : '']"
+              :class="[msg.role === 'user' ? 'cw-msg-bubble-user' : msg.isError ? 'cw-msg-bubble-error' : 'cw-msg-bubble-assistant', shakingIds.has(msg.id) ? 'bubble-shake' : '']"
             >
+              <!-- Error indicator bar -->
+              <div v-if="msg.isError" class="cw-error-indicator">
+                <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <span>{{ t('chats.agentError') }}</span>
+                <button v-if="msg.errorDetail" class="cw-error-detail-btn" @click="errorDialogText = msg.errorDetail">
+                  {{ t('chats.viewDetails') }}
+                </button>
+              </div>
               <div v-if="msg.isWaitingIndicator" class="cw-thinking">
                 <span style="font-size:0.75rem; color:#6B7280; margin-right:8px;">{{ t('chats.waitingForResponse') }}</span>
                 <span class="dot"></span><span class="dot"></span><span class="dot"></span>
@@ -349,6 +359,23 @@
       <div v-if="avatarTooltip.desc" class="cw-avatar-tooltip-desc">{{ avatarTooltip.desc }}</div>
     </div>
   </Teleport>
+
+  <!-- Error detail dialog -->
+  <Teleport to="body">
+    <div v-if="errorDialogText" class="cw-error-dialog-backdrop">
+      <div class="cw-error-dialog">
+        <div class="cw-error-dialog-header">
+          <h3 class="cw-error-dialog-title">{{ t('chats.agentError') }}</h3>
+          <button class="cw-error-dialog-close" @click="errorDialogText = null">
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="cw-error-dialog-body">
+          <pre class="cw-error-dialog-text">{{ errorDialogText }}</pre>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -377,6 +404,7 @@ const { t } = useI18n()
 
 const messagesEl = ref(null)
 const inputEl = ref(null)
+const errorDialogText = ref(null)
 const inputFocused = ref(false)
 const defaultInputText = ref('')
 const copiedId = ref(null)
@@ -861,16 +889,15 @@ defineExpose({ scrollToBottom })
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  scrollbar-width: thin;
   background: #FFFFFF;
   min-height: 0;
 }
 
-/* Scrollbar — dark / wide */
-.cw-messages::-webkit-scrollbar { width: 10px; }
-.cw-messages::-webkit-scrollbar-track { background: #F2F2F7; border-radius: 5px; }
-.cw-messages::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #1A1A1A 0%, #374151 100%); border-radius: 5px; border: 2px solid #F2F2F7; }
-.cw-messages::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #0F0F0F 0%, #1A1A1A 100%); }
+/* Scrollbar — matches global style */
+.cw-messages::-webkit-scrollbar { width: 6px; }
+.cw-messages::-webkit-scrollbar-track { background: transparent; }
+.cw-messages::-webkit-scrollbar-thumb { background: #D1D1D6; border-radius: 9999px; }
+.cw-messages::-webkit-scrollbar-thumb:hover { background: #A1A1AA; }
 
 /* ── Placeholder / empty / loading ── */
 .cw-placeholder {
@@ -1108,6 +1135,79 @@ defineExpose({ scrollToBottom })
   color: #1A1A1A;
   box-shadow: 0 4px 16px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
   border-radius: 1.125rem;
+}
+.cw-msg-bubble-error {
+  background: #FEF2F2;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #1A1A1A;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.08), 0 2px 6px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+  border-radius: 1.125rem;
+}
+.cw-error-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  margin-bottom: 0.5rem;
+  border-radius: 0.5rem;
+  background: rgba(239, 68, 68, 0.08);
+  color: #DC2626;
+  font-size: var(--fs-small, 0.8125rem);
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+}
+.cw-error-detail-btn {
+  margin-left: auto;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  background: transparent;
+  color: #DC2626;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.cw-error-detail-btn:hover { background: rgba(220, 38, 38, 0.1); }
+
+/* ── Error detail dialog ─────────────────────────────────────────────────── */
+.cw-error-dialog-backdrop {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex; align-items: center; justify-content: center;
+}
+.cw-error-dialog {
+  width: min(36rem, 90vw); max-height: 60vh;
+  display: flex; flex-direction: column;
+  background: #FFFFFF; border-radius: 1rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+.cw-error-dialog-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.25rem; border-bottom: 1px solid #E5E5EA;
+}
+.cw-error-dialog-title {
+  font-family: 'Inter', sans-serif; font-size: var(--fs-body);
+  font-weight: 600; color: #DC2626; margin: 0;
+}
+.cw-error-dialog-close {
+  width: 2rem; height: 2rem; border-radius: 0.5rem;
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: #9CA3AF;
+  cursor: pointer; transition: all 0.15s;
+}
+.cw-error-dialog-close:hover { background: #F3F4F6; color: #1A1A1A; }
+.cw-error-dialog-body {
+  flex: 1; overflow-y: auto; padding: 1rem 1.25rem;
+}
+.cw-error-dialog-text {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: var(--fs-caption); color: #374151;
+  white-space: pre-wrap; word-break: break-word;
+  margin: 0; line-height: 1.5;
 }
 
 /* ── Timestamp ── */

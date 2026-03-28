@@ -115,7 +115,7 @@ function start() {
   gap: 0.25rem;
   max-height: 18rem;
   overflow-y: auto;
-  scrollbar-width: thin;
+  
 }
 .agent-row {
   display: flex;

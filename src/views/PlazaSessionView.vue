@@ -425,7 +425,7 @@ async function autoExtractAndCommit() {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  scrollbar-width: thin;
+  
   padding-right: 0.25rem;
 }
 .session-loading, .session-no-msgs {

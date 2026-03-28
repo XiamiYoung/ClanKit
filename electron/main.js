@@ -24,7 +24,7 @@ function getProviderById(config, id) {
 function buildProviderClientConfig(provider, model = null) {
   if (!provider) return null
   
-  const isOpenAI = provider.type === 'openai' || provider.type === 'deepseek' || provider.type === 'minimax'
+  const isOpenAI = provider.type === 'openai' || provider.type === 'openai_official' || provider.type === 'deepseek' || provider.type === 'minimax'
   
   const cfg = {
     provider: {
@@ -41,7 +41,7 @@ function buildProviderClientConfig(provider, model = null) {
   if (isOpenAI) {
     cfg.defaultProvider = 'openai'
     cfg._resolvedProvider = 'openai'
-    if (provider.type === 'deepseek' || provider.type === 'minimax') {
+    if (provider.type === 'openai_official' || provider.type === 'deepseek' || provider.type === 'minimax') {
       cfg._directAuth = true
     }
   } else {
@@ -61,7 +61,7 @@ console.warn = function (...args) {
 
 // Point Chromium's fontconfig at our bundled fonts.conf BEFORE electron is
 // required -- this is the only hook that runs before Chromium initialises its
-// font subsystem. On Linux/WSL2 this makes Segoe UI Emoji available so the
+// font subsystem. On Linux this makes Segoe UI Emoji available so the
 // renderer can display emoji without any user system changes.
 if (process.platform === 'linux') {
   process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts.conf')
@@ -221,43 +221,6 @@ function getEnvPaths() {
   }
 }
 
-const OLD_DATA_DIR = path.join(os.homedir(), '.maestro-agent')
-
-function findExistingDataDir() {
-  // os.homedir() can return the wrong profile on Windows (e.g. C:\Users\46540
-  // instead of C:\Users\yxue). Check alternative home paths for an existing
-  // .clankai / .clankai data directory before giving up.
-  const candidates = new Set()
-  for (const env of ['USERPROFILE', 'HOMEDRIVE', 'HOME']) {
-    const val = env === 'HOMEDRIVE'
-      ? (process.env.HOMEDRIVE || '') + (process.env.HOMEPATH || '')
-      : process.env[env]
-    if (val) candidates.add(val)
-  }
-  try { candidates.add(app.getPath('home')) } catch {}
-  // APPDATA (C:\Users\yxue\AppData\Roaming) → go up 2 levels → C:\Users\yxue
-  try {
-    const appData = app.getPath('appData')
-    if (appData) candidates.add(path.resolve(appData, '..', '..'))
-  } catch {}
-  candidates.delete(os.homedir()) // already checked as DATA_DIR
-
-  for (const home of candidates) {
-    // Check for .clankai directory (legacy)
-    const dir = path.join(home, '.clankai')
-    if (fs.existsSync(dir)) {
-      logger.info(`Found existing data directory at ${dir}`)
-      return dir
-    }
-    // Check for clankai/data directory (new structure)
-    const dir2 = path.join(home, 'AppData', 'Roaming', 'clankai', 'data')
-    if (fs.existsSync(dir2)) {
-      logger.info(`Found existing data directory at ${dir2}`)
-      return dir2
-    }
-  }
-  return null
-}
 
 function ensureDataDir() {
   // Always use default path - no user customization
@@ -281,21 +244,6 @@ function ensureDataDir() {
     }
   }
 
-  // Migrate data from old .maestro-agent directory if new directory is empty
-  if (fs.existsSync(OLD_DATA_DIR)) {
-    for (const file of ['chats.json', 'config.json']) {
-      const oldFile = path.join(OLD_DATA_DIR, file)
-      const newFile = path.join(DATA_DIR, file)
-      if (fs.existsSync(oldFile) && !fs.existsSync(newFile)) {
-        try {
-          fs.copyFileSync(oldFile, newFile)
-          logger.info(`Migrated ${file} from .maestro-agent to .clankai`)
-        } catch (err) {
-          logger.error(`Failed to migrate ${file}:`, err.message)
-        }
-      }
-    }
-  }
 
   // Ensure memory directories exist
   fs.mkdirSync(MEMORY_DIR,       { recursive: true })
@@ -326,7 +274,7 @@ async function writeJSONAtomic(file, data, _retries = 2) {
   } catch (err) {
     // Clean up orphaned tmp file
     try { await fs.promises.unlink(tmp) } catch {}
-    // Retry on ENOENT (WSL2 filesystem race) or EPERM
+    // Retry on ENOENT or EPERM (filesystem race)
     if (_retries > 0 && (err.code === 'ENOENT' || err.code === 'EPERM')) {
       await new Promise(r => setTimeout(r, 50))
       return writeJSONAtomic(file, data, _retries - 1)
@@ -833,6 +781,9 @@ app.whenReady().then(async () => {
   ipcAgent = require('./ipc').registerAll({ DEFAULT_CONFIG, imBridge, mcpManager }).ipcAgent
   logger.info(`startup: registerAll done +${Date.now()-t0}ms`)
 
+  // Anonymous install telemetry (async, non-blocking, silent on failure)
+  require('./lib/telemetry').sendInstallPing().catch(() => {})
+
   // ── Clean up stale 'running' run entries from a previous session ────────────
   try {
     if (fs.existsSync(TASK_RUNS_INDEX)) {
@@ -878,7 +829,7 @@ app.whenReady().then(async () => {
   // defer it past the current event loop tick to avoid blocking main startup.
   const _imCfg = readJSON(CONFIG_FILE, {})
   imBridge.setMainWindow(mainWindow)
-  if (_imCfg.im?.telegram?.enabled || _imCfg.im?.whatsapp?.enabled || _imCfg.im?.feishu?.enabled) {
+  if (_imCfg.im?.telegram?.enabled || _imCfg.im?.whatsapp?.enabled || _imCfg.im?.feishu?.enabled || _imCfg.im?.teams?.enabled) {
     setImmediate(() => imBridge.start(_imCfg))
   }
 

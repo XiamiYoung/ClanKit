@@ -485,8 +485,8 @@ const runStatusSummary = computed(() => {
   overflow-y: auto;
   padding: 1.5rem 2rem;
   gap: 0;
-  scrollbar-width: thin;
-  scrollbar-color: #2A2A2A transparent;
+  
+  
 }
 
 /* ── Wave row (each wave is a horizontal strip) ──────────────────────────── */
@@ -861,8 +861,8 @@ const runStatusSummary = computed(() => {
   max-height: 16rem;
   line-height: 1.5;
   flex: 1;
-  scrollbar-width: thin;
-  scrollbar-color: #2A2A2A transparent;
+  
+  
 }
 .wf-detail-pre--error {
   color: #FCA5A5;

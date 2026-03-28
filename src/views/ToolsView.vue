@@ -955,7 +955,7 @@ function truncateEndpoint(ep) {
 .tools-modal-close:hover { background: #1F1F1F; color: #FFFFFF; }
 .tools-modal-body {
   flex: 1; overflow-y: auto; padding: 1.5rem;
-  scrollbar-width: thin; scrollbar-color: #333 transparent;
+   
 }
 .save-error {
   display: flex; align-items: center; gap: 0.5rem; margin: 0 1.5rem 0;

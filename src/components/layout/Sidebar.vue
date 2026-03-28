@@ -55,7 +55,7 @@
           </RouterLink>
         </div>
         <NavItem to="/notes" :icon="IconNotes" :label="t('nav.aiDoc')"   :isCollapsed="isCollapsed" />
-        <NavItem to="/news"  :icon="IconNews"  :label="t('news.title')"   :isCollapsed="isCollapsed" />
+        <NavItem v-if="!configStore.config.demoMode" to="/news"  :icon="IconNews"  :label="t('news.title')"   :isCollapsed="isCollapsed" />
       </div>
 
       <!-- ── Agent Universe ── -->
@@ -88,7 +88,7 @@
       </div>
 
       <!-- ── Workspace ── -->
-      <div class="nav-section" :class="{ collapsed: isCollapsed }">
+      <div v-if="!configStore.config.demoMode" class="nav-section" :class="{ collapsed: isCollapsed }">
         <div class="nav-section-header" v-show="!isCollapsed">
           <span class="nav-section-label">{{ t('nav.workspace') }}</span>
         </div>
@@ -100,13 +100,13 @@
 
     <!-- ── Bottom: Settings ── -->
     <div :style="{ marginTop: 'auto', padding: isCollapsed ? '0.75rem' : '0.75rem 1rem', borderTop: '1px solid #F0F0F0' }">
-      <div 
-        class="nav-item" 
+      <div
+        class="nav-item"
         :class="{ collapsed: isCollapsed }"
         @click="router.push('/config')"
         :style="{ display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'flex-start', cursor: 'pointer' }"
       >
-        <div 
+        <div
           :style="{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', color: '#666', transition: 'background 0.15s' }"
           @mouseenter="$event.target.style.background = '#F5F5F5'"
           @mouseleave="$event.target.style.background = 'transparent'"
@@ -124,7 +124,7 @@
     </Teleport>
 
     <!-- Focus lightbulb moved to title bar via slot mount -->
-    <Teleport v-if="titlebarFocusTarget" :to="titlebarFocusTarget">
+    <Teleport v-if="titlebarFocusTarget && !configStore.config.demoMode" :to="titlebarFocusTarget">
       <button
         class="focus-bulb focus-bulb-titlebar"
         :class="{ 'focus-bulb-active': focusModeStore.isFocusMode }"
@@ -138,6 +138,49 @@
       </button>
     </Teleport>
 
+    <!-- Privacy modal -->
+    <PrivacyModal
+      :visible="showPrivacyModal"
+      @agree="showPrivacyModal = false"
+      @cancel="showPrivacyModal = false"
+    />
+
+    <!-- Help / About button in title bar -->
+    <Teleport v-if="titlebarHelpTarget" :to="titlebarHelpTarget">
+      <button
+        class="tb-btn"
+        :title="t('help.title')"
+        @click="toggleHelpPopover"
+        ref="helpBtnRef"
+      >
+        <svg class="tb-btn-glyph" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </button>
+    </Teleport>
+
+    <!-- Help popover -->
+    <Teleport to="body">
+      <div v-if="showHelpPopover" class="help-popover-backdrop" @click="showHelpPopover = false"></div>
+      <div v-if="showHelpPopover" class="help-popover" :style="helpPopoverStyle">
+        <div class="help-popover-header">
+          <img src="/icon.png" alt="ClankAI" style="width:2rem;height:2rem;border-radius:0.5rem;" />
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:0.875rem;color:#1A1A1A;">ClankAI</div>
+            <div style="font-size:0.6875rem;color:#999;">{{ t('app.tagline') }}</div>
+          </div>
+          <button class="help-privacy-btn" :title="t('nav.privacy')" @click="showPrivacyModal = true; showHelpPopover = false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="help-popover-body">
+          <div class="help-row"><span class="help-label">{{ t('help.version') }}</span><span class="help-value">{{ appVersion }}</span></div>
+          <div class="help-row"><span class="help-label">{{ t('help.platform') }}</span><span class="help-value">{{ platformInfo.platform }}</span></div>
+        </div>
+      </div>
+    </Teleport>
 
   </nav>
 </template>
@@ -149,7 +192,7 @@ import { useVoiceStore } from '../../stores/voice'
 import { useFocusModeStore } from '../../stores/focusMode'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
-
+import PrivacyModal from '../common/PrivacyModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -202,9 +245,33 @@ const isCollapsed = ref(false)
 const userOverride = ref(null) // null = auto mode, true/false = user locked
 const agentCapabilitiesOpen = ref(false)
 const titlebarFocusTarget = ref(null)
+const titlebarHelpTarget = ref(null)
+const showPrivacyModal = ref(false)
+const showHelpPopover = ref(false)
+const helpBtnRef = ref(null)
+const helpPopoverStyle = ref({})
+
+const appVersion = window.electronAPI?.getAppVersion?.() || '—'
+const platformInfo = window.electronAPI?.getPlatformInfo?.() || { platform: '—' }
+
+function toggleHelpPopover() {
+  if (showHelpPopover.value) {
+    showHelpPopover.value = false
+    return
+  }
+  if (helpBtnRef.value) {
+    const rect = helpBtnRef.value.getBoundingClientRect()
+    const popoverWidth = 224
+    let left = rect.right - popoverWidth
+    if (left < 8) left = 8
+    helpPopoverStyle.value = { top: `${rect.bottom + 6}px`, left: `${left}px` }
+  }
+  showHelpPopover.value = true
+}
 
 function refreshTitlebarFocusTarget() {
   titlebarFocusTarget.value = document.getElementById('titlebar-focus-slot') || null
+  titlebarHelpTarget.value = document.getElementById('titlebar-help-slot') || null
 }
 
 // Auto-open agent capabilities when navigating to those routes
@@ -269,7 +336,18 @@ onMounted(() => {
 })
 
 onUpdated(() => {
-  if (!titlebarFocusTarget.value) refreshTitlebarFocusTarget()
+  if (!titlebarFocusTarget.value || !titlebarHelpTarget.value) refreshTitlebarFocusTarget()
+})
+
+// When demoMode toggles off, the #titlebar-focus-slot is recreated in TitleBar —
+// re-acquire the DOM target so the focus bulb Teleport can mount.
+watch(() => configStore.config.demoMode, async (demo) => {
+  if (!demo) {
+    await nextTick()
+    refreshTitlebarFocusTarget()
+  } else {
+    titlebarFocusTarget.value = null
+  }
 })
 
 onUnmounted(() => {
@@ -1466,6 +1544,75 @@ const NavItem = defineComponent({
   border-radius: 0.375rem;
   box-shadow: 0 4px 12px rgba(0,0,0,0.25);
   pointer-events: none;
+}
+
+/* Help popover — teleported to body */
+.help-popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+}
+
+.help-popover {
+  position: fixed;
+  z-index: 9999;
+  width: 14rem;
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
+  border-radius: 0.625rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.help-popover-header {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem;
+  border-bottom: 1px solid #F0F0F0;
+}
+
+.help-privacy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  background: transparent;
+  color: #999;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.help-privacy-btn:hover {
+  background: #F5F5F5;
+  color: #1A1A1A;
+}
+
+.help-popover-body {
+  padding: 0.5rem 0.875rem 0.625rem;
+}
+
+.help-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0;
+}
+
+.help-label {
+  font-size: 0.6875rem;
+  color: #999;
+}
+
+.help-value {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #1A1A1A;
+  font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
 </style>

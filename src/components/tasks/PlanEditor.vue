@@ -1196,8 +1196,8 @@ function cancel() {
   display: flex;
   flex-direction: column;
   gap: 1.125rem;
-  scrollbar-width: thin;
-  scrollbar-color: #2A2A2A transparent;
+  
+  
 }
 
 /* RIGHT: canvas */
@@ -1220,8 +1220,8 @@ function cancel() {
 .pe-flow-scroll {
   flex: 1;
   overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #2A2A2A transparent;
+  
+  
   display: flex;
   flex-direction: column;
   min-height: 0;

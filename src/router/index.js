@@ -12,13 +12,10 @@ import TaskEngineView from '../views/TaskEngineView.vue'
 import AiTaskView from '../views/AiTaskView.vue'
 import PlazaView from '../views/PlazaView.vue'
 import PlazaSessionView from '../views/PlazaSessionView.vue'
-import AuthView from '../views/AuthView.vue'
-
 export default createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/',          redirect: '/chats' },
-    { path: '/auth',      component: AuthView },
     { path: '/news',      component: NewsView },
     { path: '/chats',     component: ChatsView },
     { path: '/agents',    component: AgentsView },

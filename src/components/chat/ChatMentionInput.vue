@@ -451,7 +451,7 @@ defineExpose({ focus, resetHeight, insertTextAtCursor: insertTextAtCursorExposed
   padding: 0.25rem 0;
   max-height: 20rem;
   overflow-y: auto;
-  scrollbar-width: thin;
+  
 }
 .cmi-mention-popup-item {
   display: flex;

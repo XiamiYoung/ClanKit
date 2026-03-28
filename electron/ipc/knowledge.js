@@ -371,13 +371,6 @@ function register() {
     if (fh.isFilePickerOpen()) return []
     fh.setFilePickerOpen(true)
     try {
-      if (fh.IS_WSL) {
-        try {
-          const winPaths = await fh.showWindowsFilePicker()
-          if (winPaths.length === 0) return []
-          return winPaths.map(wp => fh.IS_WSL ? fh.toWslPath(wp) : wp)
-        } catch (err) { logger.error('Knowledge file picker (WSL) failed:', err.message) }
-      }
       const result = await dialog.showOpenDialog(winRef.get(), {
         properties: ['openFile', 'multiSelections'],
         title: 'Select files to upload to Knowledge Base',
@@ -415,7 +408,7 @@ function register() {
       }
 
       for (const filePath of filePaths) {
-        const resolvedPath = fh.IS_WSL ? fh.toWslPath(filePath) : filePath
+        const resolvedPath = filePath
         const name = path.basename(resolvedPath)
         const ext = path.extname(name).toLowerCase().replace('.', '')
         let content = '', size = 0

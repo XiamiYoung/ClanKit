@@ -518,7 +518,7 @@
             @mousedown="startSkillsResize"
           ></div>
           <!-- File tree -->
-          <div class="flex-1 overflow-y-auto py-1.5" style="scrollbar-width:thin;">
+          <div class="flex-1 overflow-y-auto py-1.5" style="">
             <div v-if="fileTree.length === 0" class="px-4 py-8 text-center">
               <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">{{ t('common.noData') }}</p>
             </div>
@@ -596,7 +596,7 @@
             <div
               v-else-if="isMarkdownFile"
               class="flex-1 overflow-y-auto py-6"
-              style="scrollbar-width:thin; display:flex; justify-content:center;"
+              style=" display:flex; justify-content:center;"
             >
               <div
                 class="prose-skills"
@@ -1600,8 +1600,8 @@ const SkillTreeNode = defineComponent({
   border-bottom: 1px solid #E5E5EA;
   overflow-y: auto;
   max-height: 40vh;
-  scrollbar-width: thin;
-  scrollbar-color: #D1D1D6 transparent;
+  
+  
 }
 .tencent-category-grid {
   display: grid;
@@ -1657,8 +1657,8 @@ const SkillTreeNode = defineComponent({
 /* ── Grid background: flat iOS style ──────────────────────────────────── */
 .skill-grid-bg {
   background: #F2F2F7;
-  scrollbar-width: thin;
-  scrollbar-color: #D1D5DB transparent;
+  
+  
 }
 .skill-grid-bg::-webkit-scrollbar {
   width: 6px;
@@ -2114,7 +2114,7 @@ const SkillTreeNode = defineComponent({
   flex: 1;
   overflow-y: auto;
   padding: 1.75rem 2.25rem;
-  scrollbar-width: thin;
+  
 }
 .detail-raw-code {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
@@ -2382,8 +2382,8 @@ const SkillTreeNode = defineComponent({
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  scrollbar-width: thin;
-  scrollbar-color: #E5E5EA transparent;
+  
+  
 }
 /* tags */
 .rsd-tag {

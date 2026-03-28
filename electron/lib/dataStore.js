@@ -38,23 +38,6 @@ function init() {
     }
   }
 
-  // Migrate from legacy .maestro-agent directory
-  const OLD_DATA_DIR = path.join(require('os').homedir(), '.maestro-agent')
-  if (fs.existsSync(OLD_DATA_DIR)) {
-    for (const file of ['chats.json', 'config.json']) {
-      const oldFile = path.join(OLD_DATA_DIR, file)
-      const newFile = path.join(DATA_DIR, file)
-      if (fs.existsSync(oldFile) && !fs.existsSync(newFile)) {
-        try {
-          fs.copyFileSync(oldFile, newFile)
-          logger.info(`Migrated ${file} from .maestro-agent to .clankai`)
-        } catch (err) {
-          logger.error(`Failed to migrate ${file}:`, err.message)
-        }
-      }
-    }
-  }
-
   const CHATS_DIR        = path.join(DATA_DIR, 'chats')
   const MEMORY_DIR       = path.join(DATA_DIR, 'memory')
   const AGENT_MEMORY_DIR = path.join(MEMORY_DIR, 'agents')
@@ -72,11 +55,7 @@ function init() {
     CHATS_DIR,
     CHATS_INDEX_FILE:     path.join(CHATS_DIR, 'index.json'),
     CONFIG_FILE:          path.join(DATA_DIR, 'config.json'),
-    AGENTS_FILE:          fs.existsSync(path.join(DATA_DIR, 'agents.json'))
-                            ? path.join(DATA_DIR, 'agents.json')
-                            : (fs.existsSync(path.join(DATA_DIR, 'personas.json'))
-                              ? path.join(DATA_DIR, 'personas.json')
-                              : path.join(DATA_DIR, 'agents.json')),
+    AGENTS_FILE:          path.join(DATA_DIR, 'agents.json'),
     MCP_SERVERS_FILE:     path.join(DATA_DIR, 'mcp-servers.json'),
     TOOLS_FILE:           path.join(DATA_DIR, 'tools.json'),
     SOULS_DIR:            path.join(DATA_DIR, 'souls'),
@@ -89,6 +68,7 @@ function init() {
     TASK_CATEGORIES_FILE: path.join(DATA_DIR, 'task-categories.json'),
     PLAN_CATEGORIES_FILE: path.join(DATA_DIR, 'plan-categories.json'),
     AI_TASK_TREE_FILE:    path.join(DATA_DIR, 'ai-task-tree.json'),
+    PROVIDER_MODELS_FILE: path.join(DATA_DIR, 'provider-models.json'),
     PLAZA_TOPICS_FILE:    path.join(DATA_DIR, 'plaza-topics.json'),
     PLAZA_SESSIONS_DIR:   path.join(DATA_DIR, 'plaza-sessions'),
     MEMORY_DIR,
@@ -162,7 +142,7 @@ function getProviderById(config, id) {
 
 function buildProviderClientConfig(provider, model = null) {
   if (!provider) return null
-  const isOpenAI = provider.type === 'openai' || provider.type === 'deepseek' || provider.type === 'minimax'
+  const isOpenAI = provider.type === 'openai' || provider.type === 'openai_official' || provider.type === 'deepseek' || provider.type === 'minimax'
   const cfg = {
     provider: {
       id: provider.id, type: provider.type, name: provider.name,
@@ -173,7 +153,7 @@ function buildProviderClientConfig(provider, model = null) {
   if (isOpenAI) {
     cfg.defaultProvider = 'openai'
     cfg._resolvedProvider = 'openai'
-    if (provider.type === 'deepseek' || provider.type === 'minimax') cfg._directAuth = true
+    if (provider.type === 'openai_official' || provider.type === 'deepseek' || provider.type === 'minimax') cfg._directAuth = true
   } else {
     cfg.defaultProvider = provider.type
     cfg._resolvedProvider = provider.type

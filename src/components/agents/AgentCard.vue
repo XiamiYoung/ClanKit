@@ -123,7 +123,7 @@ const agentProviderLabel = computed(() => {
   const pid = props.agent.providerId
   if (!pid) return ''
   const provider = configStore.config.providers?.find(p => p.id === pid || p.type === pid)
-  if (provider?.name) return provider.name
+  if (provider) return provider.alias || provider.name || provider.type
   return PROVIDER_LABELS[pid] || pid.slice(0, 8)
 })
 
@@ -150,10 +150,14 @@ const isProviderModelMismatch = computed(() => {
   if (!props.agent.providerId || !props.agent.modelId) return false
   const provider = configStore.config.providers?.find(p => p.id === props.agent.providerId || p.type === props.agent.providerId)
   if (!provider) return false
-  // OpenRouter can host any model — never a mismatch
-  if (provider.type === 'openrouter') return false
+  // OpenRouter and OpenAI Compatible can proxy any model — skip mismatch check
+  if (provider.type === 'openrouter' || provider.type === 'openai') return false
   const detectedType = detectModelProviderType(props.agent.modelId)
-  return detectedType !== null && detectedType !== provider.type
+  if (!detectedType) return false
+  if (detectedType === provider.type) return false
+  // openai_official is compatible with 'openai' detected type (gpt-*, o1-*, etc.)
+  if (detectedType === 'openai' && provider.type === 'openai_official') return false
+  return true
 })
 
 const isNoProviderConfigured = computed(() => {

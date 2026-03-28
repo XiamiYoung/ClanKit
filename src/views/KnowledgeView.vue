@@ -312,6 +312,16 @@
       </div>
     </div>
 
+    <!-- Refresh toast -->
+    <Teleport to="body">
+      <Transition name="toast-fade">
+        <div v-if="refreshToast" class="page-toast">
+          <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          {{ refreshToast }}
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- Upload result toast -->
     <div v-if="uploadResult" class="upload-toast" :class="uploadResult.success ? 'toast-success' : 'toast-error'">
       <svg v-if="uploadResult.success" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
@@ -324,7 +334,7 @@
 
     <!-- Inspect Modal -->
     <Teleport to="body">
-      <div v-if="inspectDoc" class="modal-backdrop" @click.self="inspectDoc = null">
+      <div v-if="inspectDoc" class="modal-backdrop">
         <div class="modal-container">
           <div class="modal-header">
             <div class="modal-header-left">
@@ -476,13 +486,9 @@ const embeddingProviderOptions = [
 const embeddingModelsLoading = ref(false)
 
 async function fetchEmbeddingModels(provider) {
-  if (provider === 'openrouter' && !modelsStore.openrouterCached) {
+  if (!modelsStore.isCached(provider)) {
     embeddingModelsLoading.value = true
-    await modelsStore.fetchOpenRouterModels()
-    embeddingModelsLoading.value = false
-  } else if (provider === 'openai' && !modelsStore.openaiCached) {
-    embeddingModelsLoading.value = true
-    await modelsStore.fetchOpenAIModels()
+    await modelsStore.fetchModelsForProvider(provider)
     embeddingModelsLoading.value = false
   }
 }
@@ -602,10 +608,16 @@ async function toggleRag() {
   setTimeout(() => { saveMsg.value = null }, 2500)
 }
 
+const refreshToast = ref('')
+let refreshToastTimer = null
+
 async function refreshAll() {
   isRefreshing.value = true
   try {
     await knowledgeStore.refresh()
+    refreshToast.value = t('common.dataRefreshed')
+    if (refreshToastTimer) clearTimeout(refreshToastTimer)
+    refreshToastTimer = setTimeout(() => { refreshToast.value = '' }, 2000)
   } finally {
     isRefreshing.value = false
   }
@@ -1115,6 +1127,35 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   max-height: 120px; overflow-y: auto;
 }
 .test-rag-empty { padding: 0.75rem 0 0; }
+
+/* ── Page toast ─────────────────────────────────────────────────────────── */
+.page-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1C1C1E;
+  color: #fff;
+  padding: 0.625rem 1rem;
+  border-radius: 0.625rem;
+  font-size: var(--fs-secondary);
+  font-family: 'Inter', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  z-index: 9999;
+  white-space: nowrap;
+}
+.toast-fade-enter-active,
+.toast-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.toast-fade-enter-from,
+.toast-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(0.5rem);
+}
 
 /* ── Reduced motion ──────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {

@@ -274,14 +274,14 @@ defineExpose({ getSelectedText, replaceSelectedText, clearSelection, setHighligh
   tab-size: 2;
   white-space: pre;
   overflow: auto;
-  scrollbar-width: thin;
+  
 }
 
 /* ── Scroll container ── */
 .code-viewer-scroll {
   flex: 1;
   overflow: auto;
-  scrollbar-width: thin;
+  
   padding: 1rem 0;
 }
 .code-viewer-table {
@@ -326,10 +326,10 @@ defineExpose({ getSelectedText, replaceSelectedText, clearSelection, setHighligh
 .cv-theme-dark .cv-edit-area {
   background: #1C1C1E;
   color: #E5E5EA;
-  scrollbar-color: #3A3A3C transparent;
+  
 }
 .cv-theme-dark .code-viewer-scroll {
-  scrollbar-color: #3A3A3C transparent;
+  
 }
 .cv-theme-dark .code-line-num { color: #4B5563; }
 .cv-theme-dark .code-line-content { color: #E5E5EA; }
@@ -356,10 +356,10 @@ defineExpose({ getSelectedText, replaceSelectedText, clearSelection, setHighligh
 .cv-theme-light .cv-edit-area {
   background: #FFFFFF;
   color: #1C1C1E;
-  scrollbar-color: #D1D1D6 transparent;
+  
 }
 .cv-theme-light .code-viewer-scroll {
-  scrollbar-color: #D1D1D6 transparent;
+  
   background: #FFFFFF;
 }
 .cv-theme-light .code-line-num { color: #9CA3AF; }

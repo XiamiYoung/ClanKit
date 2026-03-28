@@ -339,8 +339,8 @@ function cancel() {
   display: flex;
   flex-direction: column;
   gap: 1.125rem;
-  scrollbar-width: thin;
-  scrollbar-color: #2A2A2A transparent;
+  
+  
   border-right: 1px solid #1E1E1E;
 }
 
@@ -350,7 +350,7 @@ function cancel() {
   display: flex; flex-direction: column; gap: 0.625rem;
   padding: 1.5rem 1rem;
   overflow-y: auto;
-  scrollbar-width: thin; scrollbar-color: #2A2A2A transparent;
+   
 }
 .te-plans-label {
   font-family: 'Inter', sans-serif; font-size: 0.6875rem; font-weight: 600;

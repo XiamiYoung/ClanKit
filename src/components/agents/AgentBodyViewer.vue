@@ -264,6 +264,13 @@
                 <!-- Memory -->
                 <div v-if="activePanel === 'memory'" class="bv-detail-body">
                   <div v-if="memoryLoading" class="bv-detail-empty">{{ t('common.loading') }}...</div>
+                  <template v-else-if="memorySections.length > 0">
+                    <div v-for="(sec, idx) in memorySections" :key="idx" class="bv-mem-section">
+                      <div v-if="sec.title" class="bv-mem-title">{{ sec.title.replace(/^#+\s*/, '') }}</div>
+                      <div v-if="readOnly" class="bv-mem-content-ro">{{ sec.body || t('agents.noMemory') }}</div>
+                      <textarea v-else :value="sec.body" @input="updateMemorySection(idx, $event.target.value)" class="bv-mem-textarea" spellcheck="false"></textarea>
+                    </div>
+                  </template>
                   <template v-else>
                     <div v-if="readOnly" class="bv-readonly-text bv-readonly-multiline bv-readonly-grow">{{ draftMemory || t('agents.noMemory') }}</div>
                     <textarea v-else v-model="draftMemory" class="bv-textarea bv-textarea-grow" :placeholder="t('agents.memoryPlaceholder')" spellcheck="false"></textarea>
@@ -276,7 +283,7 @@
                   <template v-if="readOnly">
                     <div class="bv-ro-section">
                       <div class="bv-ro-label">{{ t('agents.provider') }}</div>
-                      <div class="bv-ro-value">{{ activeProviderOptions.find(p => p.id === draftProvider)?.label || draftProvider || '—' }}</div>
+                      <div class="bv-ro-value">{{ activeProviderOptions.find(p => p.id === draftProvider)?.name || draftProvider || '—' }}</div>
                     </div>
                     <div class="bv-ro-section">
                       <div class="bv-ro-label">{{ t('agents.model') }}</div>
@@ -288,9 +295,13 @@
                     <div class="bv-model-section">
                       <label class="bv-field-label">{{ t('agents.provider') }}</label>
                       <div v-if="activeProviderOptions.length === 0" class="bv-detail-empty">{{ t('agents.noActiveProviders') }}</div>
-                      <div v-else class="bv-provider-select">
-                        <button v-for="p in activeProviderOptions" :key="p.id" class="bv-provider-option" :class="{ active: draftProvider === p.id }" @click="selectProvider(p.id)">{{ p.label }}</button>
-                      </div>
+                      <ComboBox
+                        v-else
+                        :modelValue="draftProvider"
+                        @update:modelValue="selectProvider($event)"
+                        :options="activeProviderOptions"
+                        :placeholder="t('agents.selectProvider')"
+                      />
                     </div>
                     <!-- Mismatch warning -->
                     <div v-if="providerModelMismatch" class="bv-mismatch-warn">
@@ -301,13 +312,39 @@
                       <label class="bv-field-label">
                         {{ t('agents.model') }}
                         <span v-if="currentModelLabel && currentModelLabel !== '—'" class="bv-model-badge">{{ currentModelLabel }}</span>
+                        <span v-if="!draftModelId || ((draftProvider !== agentProviderId || draftModelId !== agentModelId) && !testModelResult?.ok)" class="bv-model-hint">
+                          <svg style="width:11px;height:11px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          {{ !draftModelId ? t('agents.selectModelAndTest') : t('agents.testBeforeSave') }}
+                        </span>
                       </label>
                       <input v-if="draftProviderType !== 'anthropic'" v-model="modelFilter" type="text" :placeholder="t('agents.searchModels')" class="bv-input bv-input-sm" />
                       <div class="bv-model-list">
                         <div v-if="modelsLoading" class="bv-detail-empty">{{ t('common.loading') }}...</div>
-                        <button v-for="m in filteredModels" :key="m.id" class="bv-model-item" :class="{ active: draftModelId === m.id }" @click="draftModelId = m.id; saveError = ''">
+                        <button v-for="m in filteredModels" :key="m.id" class="bv-model-item" :class="{ active: draftModelId === m.id, 'bv-model-small-ctx': m.context_length && m.context_length < SMALL_CONTEXT_THRESHOLD }" @click="draftModelId = m.id; saveError = ''; testModelResult = null">
                           <span>{{ m.name || m.label || m.id }}</span>
-                          <span v-if="m.id !== (m.name || m.label)" class="bv-model-id">{{ m.id }}</span>
+                          <span v-if="m.context_length" class="bv-model-ctx">{{ Math.round(m.context_length / 1000) }}k</span>
+                        </button>
+                      </div>
+                      <!-- Context window warning -->
+                      <div v-if="selectedModelContextWindow && selectedModelContextWindow < SMALL_CONTEXT_THRESHOLD" class="bv-ctx-warn">
+                        <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <span>{{ t('agents.smallContextWarning', { size: Math.round(selectedModelContextWindow / 1000) + 'k' }) }}</span>
+                      </div>
+
+                      <div class="bv-test-row">
+                        <span v-if="testModelResult?.ok" class="bv-test-result" :class="testModelResult.smallCtx ? 'warn' : 'success'">
+                          <svg v-if="!testModelResult.smallCtx" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                          <svg v-else style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                          {{ testModelResult.message }}
+                        </span>
+                        <span v-else-if="testModelResult && !testModelResult.ok" class="bv-test-result error" style="cursor:pointer;" @click="showTestErrorModal = true">
+                          <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          {{ t('config.testFailed') }}
+                        </span>
+                        <button class="bv-test-btn" :disabled="testingModel || !draftModelId" @click="testModelConnection">
+                          <svg v-if="!testingModel" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                          <svg v-else style="width:12px;height:12px;" class="bv-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                          {{ testingModel ? t('config.testing') : t('config.test') }}
                         </button>
                       </div>
                     </div>
@@ -331,6 +368,7 @@
                     <div v-if="availableTools.length === 0" class="bv-detail-empty">{{ t('agents.noToolsAvailable') }}</div>
                     <template v-else>
                       <div class="bv-cap-toolbar">
+                        <input v-model="capFilter.tools" type="text" :placeholder="t('common.search')" class="bv-input bv-input-sm bv-cap-filter" />
                         <button class="bv-cap-toggle-btn" @click="toggleSelectAll('tools')">
                           {{ draftRequiredToolIds.length === availableTools.length ? t('common.deselectAll') : t('common.selectAll') }}
                         </button>
@@ -340,10 +378,12 @@
                         {{ locale.value === 'zh' ? `已选 ${draftRequiredToolIds.length} 个工具，超过建议上限 ${CAP_LIMITS.tools}，可能影响准确度并增加 cost` : `${draftRequiredToolIds.length} tools selected — over the recommended limit of ${CAP_LIMITS.tools}. This may reduce accuracy and increase cost.` }}
                       </div>
                       <div class="bv-cap-list">
-                        <label v-for="tool in availableTools" :key="tool.id" class="bv-cap-item">
+                        <label v-for="tool in filteredTools" :key="tool.id" class="bv-cap-item">
                           <input type="checkbox" :value="tool.id" v-model="draftRequiredToolIds" />
-                          <span class="bv-cap-name">{{ tool.name }}</span>
-                          <span class="bv-cap-desc">{{ tool.description || tool.category || '' }}</span>
+                          <div class="bv-cap-text">
+                            <span class="bv-cap-name">{{ tool.name }}</span>
+                            <span v-if="tool.description || tool.category" class="bv-cap-desc">{{ tool.description || tool.category }}</span>
+                          </div>
                         </label>
                       </div>
                     </template>
@@ -365,6 +405,7 @@
                     <div v-if="availableSkills.length === 0" class="bv-detail-empty">{{ t('agents.noSkillsAvailable') }}</div>
                     <template v-else>
                       <div class="bv-cap-toolbar">
+                        <input v-model="capFilter.skills" type="text" :placeholder="t('common.search')" class="bv-input bv-input-sm bv-cap-filter" />
                         <button class="bv-cap-toggle-btn" @click="toggleSelectAll('skills')">
                           {{ draftRequiredSkillIds.length === availableSkills.length ? t('common.deselectAll') : t('common.selectAll') }}
                         </button>
@@ -374,10 +415,12 @@
                         {{ locale.value === 'zh' ? `已选 ${draftRequiredSkillIds.length} 个技能，超过建议上限 ${CAP_LIMITS.skills}，可能影响准确度并增加 cost` : `${draftRequiredSkillIds.length} skills selected — over the recommended limit of ${CAP_LIMITS.skills}. This may reduce accuracy and increase cost.` }}
                       </div>
                       <div class="bv-cap-list">
-                        <label v-for="skill in availableSkills" :key="skill.id" class="bv-cap-item">
+                        <label v-for="skill in filteredSkills" :key="skill.id" class="bv-cap-item">
                           <input type="checkbox" :value="skill.id" v-model="draftRequiredSkillIds" />
-                          <span class="bv-cap-name">{{ skill.name }}</span>
-                          <span class="bv-cap-desc">{{ skill.summary || '' }}</span>
+                          <div class="bv-cap-text">
+                            <span class="bv-cap-name">{{ skill.name }}</span>
+                            <span v-if="skill.summary" class="bv-cap-desc">{{ skill.summary }}</span>
+                          </div>
                         </label>
                       </div>
                     </template>
@@ -398,6 +441,7 @@
                     <div v-if="availableKnowledgeBases.length === 0" class="bv-detail-empty">{{ t('agents.noKnowledgeBases') }}</div>
                     <template v-else>
                       <div class="bv-cap-toolbar">
+                        <input v-model="capFilter.knowledge" type="text" :placeholder="t('common.search')" class="bv-input bv-input-sm bv-cap-filter" />
                         <button class="bv-cap-toggle-btn" @click="toggleSelectAll('knowledge')">
                           {{ draftRequiredKnowledgeBaseIds.length === availableKnowledgeBases.length ? t('common.deselectAll') : t('common.selectAll') }}
                         </button>
@@ -407,10 +451,12 @@
                         {{ locale.value === 'zh' ? `已选 ${draftRequiredKnowledgeBaseIds.length} 个知识库，超过建议上限 ${CAP_LIMITS.knowledge}，可能影响准确度并增加 cost` : `${draftRequiredKnowledgeBaseIds.length} knowledge bases selected — over the recommended limit of ${CAP_LIMITS.knowledge}. This may reduce accuracy and increase cost.` }}
                       </div>
                       <div class="bv-cap-list">
-                        <label v-for="kb in availableKnowledgeBases" :key="kb.id" class="bv-cap-item">
+                        <label v-for="kb in filteredKnowledge" :key="kb.id" class="bv-cap-item">
                           <input type="checkbox" :value="kb.id" v-model="draftRequiredKnowledgeBaseIds" />
-                          <span class="bv-cap-name">{{ kb.name }}</span>
-                          <span class="bv-cap-desc">{{ kb.description || '' }}</span>
+                          <div class="bv-cap-text">
+                            <span class="bv-cap-name">{{ kb.name }}</span>
+                            <span v-if="kb.description" class="bv-cap-desc">{{ kb.description }}</span>
+                          </div>
                         </label>
                       </div>
                     </template>
@@ -432,6 +478,7 @@
                     <div v-if="availableMcpServers.length === 0" class="bv-detail-empty">{{ t('agents.noMcpServers') }}</div>
                     <template v-else>
                       <div class="bv-cap-toolbar">
+                        <input v-model="capFilter.mcp" type="text" :placeholder="t('common.search')" class="bv-input bv-input-sm bv-cap-filter" />
                         <button class="bv-cap-toggle-btn" @click="toggleSelectAll('mcp')">
                           {{ draftRequiredMcpServerIds.length === availableMcpServers.length ? t('common.deselectAll') : t('common.selectAll') }}
                         </button>
@@ -441,10 +488,12 @@
                         {{ locale.value === 'zh' ? `已选 ${draftRequiredMcpServerIds.length} 个 MCP 服务器，超过建议上限 ${CAP_LIMITS.mcp}，可能影响准确度并增加 cost` : `${draftRequiredMcpServerIds.length} MCP servers selected — over the recommended limit of ${CAP_LIMITS.mcp}. This may reduce accuracy and increase cost.` }}
                       </div>
                       <div class="bv-cap-list">
-                        <label v-for="srv in availableMcpServers" :key="srv.id" class="bv-cap-item">
+                        <label v-for="srv in filteredMcp" :key="srv.id" class="bv-cap-item">
                           <input type="checkbox" :value="srv.id" v-model="draftRequiredMcpServerIds" />
-                          <span class="bv-cap-name">{{ srv.name }}</span>
-                          <span class="bv-cap-desc">{{ srv.description || '' }}</span>
+                          <div class="bv-cap-text">
+                            <span class="bv-cap-name">{{ srv.name }}</span>
+                            <span v-if="srv.description" class="bv-cap-desc">{{ srv.description }}</span>
+                          </div>
                         </label>
                       </div>
                     </template>
@@ -624,6 +673,22 @@
     </div>
 
   </Teleport>
+
+  <!-- Test error modal -->
+  <Teleport to="body">
+    <div v-if="showTestErrorModal" class="bv-error-backdrop" @click.self="showTestErrorModal = false">
+      <div class="bv-error-modal">
+        <div class="bv-error-modal-header">
+          <svg style="width:16px;height:16px;color:#EF4444;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>{{ t('config.testFailed') }}</span>
+          <button class="bv-error-modal-close" @click="showTestErrorModal = false">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div class="bv-error-modal-body">{{ testModelResult?.message }}</div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -639,6 +704,7 @@ import { useI18n } from '../../i18n/useI18n'
 import { getAvatarDataUri, STYLES, generateRandomBatch } from './agentAvatars'
 import { buildAgentEnhancementPrompt, buildAgentGenerationPrompt, detectAgentLanguage, extractJsonPayload } from '../../utils/agentDefinitionPrompts'
 import AppButton from '../common/AppButton.vue'
+import ComboBox from '../common/ComboBox.vue'
 
 const props = defineProps({
   agentId:          { type: String, required: true },
@@ -709,6 +775,24 @@ const draftRequiredSkillIds         = ref([...(props.agentRequiredSkillIds || []
 const draftRequiredMcpServerIds     = ref([...(props.agentRequiredMcpServerIds || [])])
 const draftRequiredKnowledgeBaseIds = ref([...(props.agentRequiredKnowledgeBaseIds || [])])
 
+const capFilter = ref({ tools: '', skills: '', knowledge: '', mcp: '' })
+const filteredTools = computed(() => {
+  const q = capFilter.value.tools.toLowerCase()
+  return q ? availableTools.value.filter(t => (t.name || '').toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q) || t.id.toLowerCase().includes(q)) : availableTools.value
+})
+const filteredSkills = computed(() => {
+  const q = capFilter.value.skills.toLowerCase()
+  return q ? availableSkills.value.filter(s => (s.name || '').toLowerCase().includes(q) || (s.summary || '').toLowerCase().includes(q) || s.id.toLowerCase().includes(q)) : availableSkills.value
+})
+const filteredKnowledge = computed(() => {
+  const q = capFilter.value.knowledge.toLowerCase()
+  return q ? availableKnowledgeBases.value.filter(k => (k.name || '').toLowerCase().includes(q) || (k.description || '').toLowerCase().includes(q) || k.id.toLowerCase().includes(q)) : availableKnowledgeBases.value
+})
+const filteredMcp = computed(() => {
+  const q = capFilter.value.mcp.toLowerCase()
+  return q ? availableMcpServers.value.filter(s => (s.name || '').toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q) || s.id.toLowerCase().includes(q)) : availableMcpServers.value
+})
+
 
 const avatarDataUri   = computed(() => getAvatarDataUri(draftAvatar.value))
 const fallbackInitial  = computed(() => (draftName.value || '?').charAt(0).toUpperCase())
@@ -759,12 +843,62 @@ const memoryLoading = ref(!props.isNew)
 const memoryLoaded  = ref(false)
 const memoryLineCount = computed(() => draftMemory.value.split('\n').filter(l => l.trim()).length)
 
+// Ensure blank lines between list entries and line breaks between numbered items
+function normalizeMemoryBody(body) {
+  let s = body
+  // Blank line between - [...] entries
+  s = s.replace(/([^\n])\n(- \[)/g, '$1\n\n$2')
+  // Line break before numbered items: "1)", "2)" etc. after punctuation
+  s = s.replace(/([;:])\s*(\d+\))/g, '$1\n$2')
+  return s
+}
+
+const memorySections = computed(() => {
+  const text = draftMemory.value || ''
+  if (!text.trim()) return []
+  const parts = text.split(/^(#{1,3}\s+.+)$/m)
+  const sections = []
+  let currentTitle = ''
+  let currentBody = ''
+  for (const part of parts) {
+    if (/^#{1,3}\s+/.test(part)) {
+      if (currentTitle || currentBody.trim()) {
+        sections.push({ title: currentTitle, body: normalizeMemoryBody(currentBody.trim()) })
+      }
+      currentTitle = part.trim()
+      currentBody = ''
+    } else {
+      currentBody += part
+    }
+  }
+  if (currentTitle || currentBody.trim()) {
+    sections.push({ title: currentTitle, body: normalizeMemoryBody(currentBody.trim()) })
+  }
+  return sections
+})
+
+function updateMemorySection(index, newBody) {
+  const secs = memorySections.value.map((s, i) => i === index ? { ...s, body: newBody } : s)
+  draftMemory.value = secs.map(s => s.title ? `${s.title}\n\n${s.body}` : s.body).join('\n\n')
+}
+
+// On first load, normalize memory to add blank lines between entries
+function normalizeMemoryOnLoad() {
+  if (draftMemory.value) {
+    let s = draftMemory.value
+    s = s.replace(/([^\n])\n(- \[)/g, '$1\n\n$2')
+    s = s.replace(/([;:])\s*(\d+\))/g, '$1\n$2')
+    if (s !== draftMemory.value) draftMemory.value = s
+  }
+}
+
 async function loadMemory() {
   if (memoryLoaded.value || props.isNew) return
   memoryLoading.value = true
   try {
     const data = await window.electronAPI.souls.read(props.agentId, props.agentType)
     draftMemory.value = data || ''
+    normalizeMemoryOnLoad()
     memoryLoaded.value = true
   } catch (err) {
     console.error('[Memory] souls.read error', err)
@@ -789,10 +923,9 @@ const voiceOptions = [
 
 // ── Provider / model ───────────────────────────────────────────────────────
 const activeProviderOptions = computed(() => {
-  const labels = { anthropic: 'Anthropic', openrouter: 'OpenRouter', openai: 'OpenAI', deepseek: 'DeepSeek' }
   return configStore.activeProviders.map(id => {
     const provider = configStore.config.providers.find(p => p.id === id)
-    return { id, label: labels[provider?.type] || provider?.name || id }
+    return { id, name: configStore.getProviderDisplayName(provider) || id }
   })
 })
 
@@ -818,7 +951,13 @@ const draftProviderType = computed(() => {
   return provider?.type || draftProvider.value || ''
 })
 
-const availableProviderModels = computed(() => modelsStore.getModelsForProvider(draftProviderType.value))
+// Use provider instance ID for cache lookup, fall back to type
+const draftProviderKey = computed(() => {
+  const provider = resolvedDraftProvider.value
+  return provider?.id || draftProviderType.value
+})
+
+const availableProviderModels = computed(() => modelsStore.getModelsForProvider(draftProviderKey.value))
 
 const hasValidSelectedModel = computed(() => {
   if (!draftModelId.value) return false
@@ -836,32 +975,62 @@ function _detectModelProviderType(modelId) {
 }
 
 const providerModelMismatch = computed(() => {
-  if (!draftModelId.value || !draftProviderType.value || draftProviderType.value === 'openrouter') return null
+  if (!draftModelId.value || !draftProviderType.value) return null
+  // OpenRouter and OpenAI Compatible can proxy any model — skip mismatch check
+  if (draftProviderType.value === 'openrouter' || draftProviderType.value === 'openai') return null
   const detectedType = _detectModelProviderType(draftModelId.value)
-  if (!detectedType || detectedType === draftProviderType.value) return null
-  const LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', deepseek: 'DeepSeek', openrouter: 'OpenRouter', google: 'Google' }
+  if (!detectedType) return null
+  if (detectedType === draftProviderType.value) return null
+  // openai_official is compatible with 'openai' detected type (gpt-*, o1-*, etc.)
+  if (detectedType === 'openai' && draftProviderType.value === 'openai_official') return null
+  const LABELS = { anthropic: 'Anthropic', openai_official: 'OpenAI', openai: 'OpenAI Compatible', deepseek: 'DeepSeek', openrouter: 'OpenRouter', google: 'Google' }
   return { model: draftModelId.value, detected: LABELS[detectedType] || detectedType, provider: LABELS[draftProviderType.value] || draftProviderType.value }
 })
 
-const modelsLoading = computed(() => {
-  const pt = draftProviderType.value
-  return (pt === 'openrouter' && modelsStore.openrouterLoading) ||
-         (pt === 'openai'     && modelsStore.openaiLoading) ||
-         (pt === 'deepseek'   && modelsStore.deepseekLoading) ||
-         (pt === 'google'     && modelsStore.googleLoading)
-})
+const modelsLoading = computed(() => modelsStore.isLoading(draftProviderKey.value))
 
 function selectProvider(prov) {
   saveError.value = ''
   draftProvider.value = prov
   draftModelId.value  = null
   modelFilter.value   = ''
-  const provider = resolveProvider(prov)
-  const pt = provider?.type || prov || ''
-  if (pt === 'openrouter' && !modelsStore.openrouterCached) modelsStore.fetchOpenRouterModels()
-  if (pt === 'openai'     && !modelsStore.openaiCached)     modelsStore.fetchOpenAIModels()
-  if (pt === 'deepseek'   && !modelsStore.deepseekCached)   modelsStore.fetchDeepSeekModels()
-  if (pt === 'google'     && !modelsStore.googleCached)     modelsStore.fetchGoogleModels()
+  testModelResult.value = null
+}
+
+// ── Model test ──
+const testingModel = ref(false)
+const testModelResult = ref(null)
+const showTestErrorModal = ref(false)
+
+async function testModelConnection() {
+  const provider = resolvedDraftProvider.value
+  if (!provider || !draftModelId.value || testingModel.value) return
+  testingModel.value = true
+  testModelResult.value = null
+  try {
+    const res = await window.electronAPI.testProvider({
+      provider: provider.type,
+      apiKey: provider.apiKey,
+      baseURL: provider.baseURL,
+      utilityModel: draftModelId.value,
+    })
+    if (res.success) {
+      const ctx = selectedModelContextWindow.value
+      const ctxWarn = ctx && ctx < SMALL_CONTEXT_THRESHOLD
+        ? ` — ${t('agents.smallContextBrief', { size: Math.round(ctx / 1000) + 'k' })}`
+        : ''
+      testModelResult.value = { ok: true, message: `${res.ms}ms${ctxWarn}`, smallCtx: !!ctxWarn }
+    } else {
+      testModelResult.value = { ok: false, message: res.error }
+    }
+  } catch (err) {
+    testModelResult.value = { ok: false, message: err.message || 'Test failed' }
+  if (testModelResult.value && !testModelResult.value.ok) {
+    showTestErrorModal.value = true
+  }
+  } finally {
+    testingModel.value = false
+  }
 }
 
 const filteredModels = computed(() => {
@@ -877,6 +1046,14 @@ const currentModelLabel = computed(() => {
   const m = models.find(x => x.id === draftModelId.value)
   return m?.name || m?.label || draftModelId.value
 })
+
+const selectedModelContextWindow = computed(() => {
+  if (!draftModelId.value) return null
+  const m = availableProviderModels.value.find(x => x.id === draftModelId.value)
+  return m?.context_length || null
+})
+
+const SMALL_CONTEXT_THRESHOLD = 20000
 
 // ── Capabilities data ──────────────────────────────────────────────────────
 const CAP_LIMITS = { tools: 20, skills: 50, mcp: 5, knowledge: 3 }
@@ -1089,6 +1266,12 @@ function saveAll() {
       saveError.value = t('agents.providerModelMismatchDetail', providerModelMismatch.value)
       return
     }
+    const modelChanged = draftProvider.value !== props.agentProviderId || draftModelId.value !== props.agentModelId
+    if (modelChanged && !testModelResult.value?.ok) {
+      activePanel.value = 'model'
+      saveError.value = t('agents.testModelBeforeSave')
+      return
+    }
   }
   // Duplicate name check — same type, exclude self
   // agentType prop is 'system' | 'users'; store uses 'system' | 'user'
@@ -1285,6 +1468,39 @@ function saveAll() {
 .bv-textarea:focus { border-color: #4B5563; }
 .bv-textarea-grow { flex: 1; resize: none; min-height: 8rem; overflow-y: auto; }
 
+/* ── Memory sections ── */
+.bv-mem-section {
+  display: flex; flex-direction: column; gap: 0.25rem;
+  flex-shrink: 0;
+}
+.bv-mem-title {
+  font-size: 0.75rem; font-weight: 600; color: #9CA3AF;
+  padding: 0.125rem 0; border-bottom: 1px solid #2A2A2A;
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.bv-mem-textarea {
+  resize: vertical; min-height: 1.75rem;
+  background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 0.375rem;
+  color: #FFFFFF; font-family: 'Inter', sans-serif; font-size: 0.75rem;
+  padding: 0.375rem 0.5rem; outline: none; line-height: 1.5;
+  overflow-y: auto; width: 100%; box-sizing: border-box;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+  field-sizing: content;
+}
+.bv-mem-textarea:focus { border-color: #4B5563; }
+.bv-mem-textarea::-webkit-scrollbar { width: 4px; }
+.bv-mem-textarea::-webkit-scrollbar-track { background: transparent; }
+.bv-mem-textarea::-webkit-scrollbar-thumb { background: #333; border-radius: 9999px; }
+.bv-mem-content-ro {
+  min-height: 1.75rem; overflow-y: auto;
+  font-size: 0.75rem; color: #D1D5DB; line-height: 1.5;
+  padding: 0.375rem 0.5rem; white-space: pre-wrap;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+}
+.bv-mem-content-ro::-webkit-scrollbar { width: 4px; }
+.bv-mem-content-ro::-webkit-scrollbar-track { background: transparent; }
+.bv-mem-content-ro::-webkit-scrollbar-thumb { background: #333; border-radius: 9999px; }
+
 /* AI buttons */
 .bv-ai-btn-row {
   display: flex;
@@ -1468,6 +1684,7 @@ function saveAll() {
   flex: 1; overflow-y: auto;
   padding: 0.875rem 1rem;
   display: flex; flex-direction: column; gap: 0.625rem;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
 }
 .bv-detail-empty { font-size: var(--fs-secondary); color: #6B7280; padding: 0.25rem 0; }
 
@@ -1497,8 +1714,9 @@ function saveAll() {
 }
 
 .bv-model-list {
-  flex: 1; overflow-y: auto;
-  border: 1px solid #2A2A2A; border-radius: 0.5rem; min-height: 5rem;
+  overflow-y: auto;
+  border: 1px solid #2A2A2A; border-radius: 0.5rem;
+  flex: 1; min-height: 0;
 }
 
 .bv-model-item {
@@ -1518,6 +1736,12 @@ function saveAll() {
   color: #4B5563; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 7rem; flex-shrink: 0;
 }
+.bv-model-ctx {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.5625rem;
+  color: #6B7280; background: rgba(255,255,255,0.08); padding: 0.0625rem 0.3125rem;
+  border-radius: 0.25rem; flex-shrink: 0;
+}
+.bv-model-small-ctx .bv-model-ctx { color: #D97706; background: rgba(245,158,11,0.15); }
 
 /* Capabilities */
 .bv-cap-toolbar {
@@ -1543,28 +1767,44 @@ function saveAll() {
   color: #FCD34D;
   font-size: var(--fs-caption); line-height: 1.4;
 }
-.bv-cap-list { display: flex; flex-direction: column; gap: 0.1875rem; }
+.bv-cap-list {
+  display: flex; flex-direction: column; gap: 0.1875rem;
+  flex: 1; min-height: 0; overflow-y: auto;
+  border: 1px solid #2A2A2A; border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+}
+.bv-cap-list::-webkit-scrollbar { width: 4px; }
+.bv-cap-list::-webkit-scrollbar-track { background: transparent; }
+.bv-cap-list::-webkit-scrollbar-thumb { background: #333; border-radius: 9999px; }
+.bv-cap-filter { flex: 1; min-width: 0; }
 
 .bv-cap-item {
-  display: flex; align-items: center; gap: 0.5rem;
+  display: flex; align-items: flex-start; gap: 0.5rem;
   padding: 0.375rem 0.5rem; border-radius: 0.375rem;
   cursor: pointer; transition: background 0.12s;
+  border-bottom: 1px solid #1E1E1E;
 }
+.bv-cap-item:last-child { border-bottom: none; }
 .bv-cap-item:hover { background: #1A1A1A; }
 
 .bv-cap-item input[type="checkbox"] {
   width: 0.875rem; height: 0.875rem; flex-shrink: 0;
   cursor: pointer; accent-color: #007AFF;
+  margin-top: 0.125rem;
 }
+
+.bv-cap-text { display: flex; flex-direction: column; gap: 0.125rem; min-width: 0; flex: 1; }
 
 .bv-cap-name {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary); font-weight: 600; color: #FFFFFF;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .bv-cap-desc {
-  font-size: var(--fs-caption); color: #6B7280; margin-left: auto;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 7rem;
+  font-size: 0.6875rem; color: #6B7280; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 
 
@@ -1905,5 +2145,63 @@ function saveAll() {
 .bv-detail-body::-webkit-scrollbar-thumb,
 .bv-av-grid::-webkit-scrollbar-thumb,
 .bv-av-tabs::-webkit-scrollbar-thumb,
-.bv-model-list::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 9999px; }
+.bv-model-list::-webkit-scrollbar-thumb { background: #333; border-radius: 9999px; }
+
+.bv-ctx-warn {
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  margin-top: 0.5rem; padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm, 8px);
+  background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #D97706; font-size: var(--fs-caption); font-family: 'Inter', sans-serif; line-height: 1.4;
+}
+.bv-test-row { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
+.bv-test-btn {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.25rem 0.5rem; border: none; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF; font-size: 0.6875rem; font-weight: 500; cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.bv-test-btn:hover:not(:disabled) { box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+.bv-test-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.bv-test-result {
+  display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.6875rem;
+  max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default;
+}
+.bv-test-result.success { color: #22C55E; }
+.bv-test-result.warn { color: #D97706; }
+.bv-test-result.error { color: #EF4444; }
+.bv-model-hint {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  font-size: 0.6875rem; font-weight: 400; color: #F59E0B; margin-left: 0.25rem;
+}
+@keyframes bv-spin { to { transform: rotate(360deg); } }
+.bv-spin { animation: bv-spin 1s linear infinite; }
+
+.bv-error-backdrop {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+}
+.bv-error-modal {
+  background: #111; border: 1px solid #2A2A2A; border-radius: 0.75rem;
+  width: 28rem; max-width: 90vw; max-height: 60vh; display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}
+.bv-error-modal-header {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.75rem 1rem; border-bottom: 1px solid #2A2A2A;
+  font-size: 0.8125rem; font-weight: 600; color: #EF4444;
+}
+.bv-error-modal-close {
+  margin-left: auto; background: none; border: none; color: #6B7280; cursor: pointer;
+  padding: 0.25rem; border-radius: 0.25rem; display: flex;
+}
+.bv-error-modal-close:hover { color: #FFFFFF; background: #1A1A1A; }
+.bv-error-modal-body {
+  padding: 1rem; font-size: 0.75rem; color: #D1D5DB;
+  font-family: 'JetBrains Mono', monospace; line-height: 1.5;
+  overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+}
 </style>

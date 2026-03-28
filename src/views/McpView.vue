@@ -812,7 +812,7 @@ function cardGradient() {
 .mcp-modal-close:hover { background: #1F1F1F; color: #FFFFFF; }
 .mcp-modal-body {
   flex: 1; min-height: 0; overflow-y: auto; padding: 1.5rem;
-  scrollbar-width: thin; scrollbar-color: #333 transparent;
+   
 }
 .save-error {
   display: flex; align-items: center; gap: 0.5rem; margin: 0 1.5rem 0;

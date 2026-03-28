@@ -979,8 +979,8 @@ onBeforeUnmount(() => {
   grid-template-rows: 2.5rem repeat(24, 3rem);
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  
+  
 }
 .tca-time-grid--day {
   grid-template-columns: 3.5rem 1fr;
@@ -1210,8 +1210,8 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: #2A2A2A transparent;
+  
+  
   scrollbar-gutter: stable;
 }
 

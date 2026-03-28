@@ -12,6 +12,14 @@ export const PROVIDER_PRESETS = {
     defaultModels: ['claude-sonnet-latest', 'claude-opus-latest', 'claude-haiku-latest'],
     hardLimits: {}
   },
+  openai_official: {
+    name: 'OpenAI',
+    type: 'openai_official',
+    auth: 'bearer',
+    defaultBaseURL: 'https://api.openai.com/v1',
+    defaultModels: ['gpt-4o', 'gpt-4o-mini', 'o3-mini'],
+    hardLimits: {}
+  },
   openai: {
     name: 'OpenAI Compatible',
     type: 'openai',
@@ -142,8 +150,10 @@ export const useConfigStore = defineStore('config', () => {
       telegram: { enabled: false, botToken: '', allowedUsers: [] },
       whatsapp: { enabled: false, allowedUsers: [] },
       feishu: { enabled: false, appId: '', appSecret: '', allowedUsers: [] },
+      teams: { enabled: false, tenantId: '', clientId: '', selfOnly: true, allowedUsers: [], pollInterval: 5 },
     },
     language: 'en',
+    demoMode: true,
   })
 
   function createProvider(presetType, name = null) {
@@ -158,6 +168,7 @@ export const useConfigStore = defineStore('config', () => {
     return {
       id: uuidv4(),
       name: name || preset.name,
+      alias: '',
       type: preset.type,
       apiKey: '',
       baseURL: preset.defaultBaseURL || '',
@@ -261,6 +272,7 @@ export const useConfigStore = defineStore('config', () => {
         telegram: { ...defaults.im.telegram, ...(saved.im?.telegram || {}) },
         whatsapp: { ...defaults.im.whatsapp, ...(saved.im?.whatsapp || {}) },
         feishu: { ...defaults.im.feishu, ...(saved.im?.feishu || {}) },
+        teams: { ...defaults.im.teams, ...(saved.im?.teams || {}) },
       }
     }
 
@@ -362,6 +374,7 @@ export const useConfigStore = defineStore('config', () => {
         telegram: { ...prev.im?.telegram, ...(newConfig.im?.telegram || {}) },
         whatsapp: { ...prev.im?.whatsapp, ...(newConfig.im?.whatsapp || {}) },
         feishu: { ...prev.im?.feishu, ...(newConfig.im?.feishu || {}) },
+        teams: { ...prev.im?.teams, ...(newConfig.im?.teams || {}) },
       },
     }
     await storage.saveConfig(JSON.parse(JSON.stringify(toRaw(config.value))))
@@ -370,13 +383,24 @@ export const useConfigStore = defineStore('config', () => {
   const isVoiceCallActive = computed(() => config.value.voiceCall?.isActive === true)
   const language = computed(() => config.value.language || 'en')
 
-  return { 
-    config, 
-    activeProviders, 
-    isConfigured, 
-    isVoiceCallActive, 
+  /** Get user-facing display name for a provider (alias → name → type) */
+  function getProviderDisplayName(providerOrId) {
+    let p = providerOrId
+    if (typeof p === 'string') {
+      p = config.value.providers?.find(x => x.id === p || x.type === p)
+    }
+    if (!p) return providerOrId || ''
+    return p.alias || p.name || p.type || ''
+  }
+
+  return {
+    config,
+    activeProviders,
+    isConfigured,
+    isVoiceCallActive,
     language,
     PROVIDER_PRESETS,
+    getProviderDisplayName,
     createProvider,
     addProvider,
     removeProvider,

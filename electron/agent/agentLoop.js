@@ -27,6 +27,8 @@ const { PermissionGate }   = require('./tools/PermissionGate')
 const MAX_CONTEXT_TURNS = 20  // max user/assistant turn pairs sent to LLM
 const FLUSH_INTERVAL    = 10  // flush every N completed assistant turns
 
+
+
 const { MemoryFlush } = require('./core/MemoryFlush')
 const { ChatIndex }   = require('../memory/ChatIndex')
 
@@ -38,6 +40,28 @@ const te  = require('./toolExecutor')
 // Module-level helpers (re-imported from extracted modules for use in run())
 const { serializeToolResult, uiResult, sliceToLastNTurns } = mc
 const { readSoulFile, readFileIfExists } = spb
+
+// Strip lone Unicode surrogates that break JSON.stringify / Anthropic API.
+// Replaces unpaired high/low surrogates with U+FFFD (replacement character).
+function stripLoneSurrogates(str) {
+  if (typeof str !== 'string') return str
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD')
+}
+
+// Recursively sanitize all strings in an object/array.
+function sanitizeForJson(obj) {
+  if (typeof obj === 'string') return stripLoneSurrogates(obj)
+  if (Array.isArray(obj)) return obj.map(sanitizeForJson)
+  if (obj !== null && typeof obj === 'object') {
+    const out = {}
+    for (const [k, v] of Object.entries(obj)) {
+      out[k] = sanitizeForJson(v)
+    }
+    return out
+  }
+  return obj
+}
 
 // No hardcoded skill prompts — they arrive dynamically from the UI store
 
@@ -55,18 +79,18 @@ class AgentLoop {
     // If using new provider config structure
     if (config.provider && config.provider.type) {
       const pType = config.provider.type
-      isOpenAIProvider = (pType === 'openai' || pType === 'deepseek' || pType === 'minimax' || pType === 'openrouter')
+      isOpenAIProvider = (pType === 'openai' || pType === 'openai_official' || pType === 'deepseek' || pType === 'minimax' || pType === 'openrouter')
 
       // Normalize config for clients
       if (isOpenAIProvider) {
         config.openaiApiKey = config.provider.apiKey
         config.openaiBaseURL = config.provider.baseURL
-        config.customModel = config.provider.model
-        config._directAuth = (pType === 'deepseek' || pType === 'minimax' || pType === 'openrouter')
+        if (!config.customModel) config.customModel = config.provider.model
+        config._directAuth = (pType === 'openai_official' || pType === 'deepseek' || pType === 'minimax' || pType === 'openrouter')
       } else {
         config.apiKey = config.provider.apiKey
         config.baseURL = config.provider.baseURL
-        config.customModel = config.provider.model
+        if (!config.customModel) config.customModel = config.provider.model
       }
     }
 
@@ -115,12 +139,12 @@ class AgentLoop {
     })
 
     logger.agent('AgentLoop init', {
+      provider: config.provider?.type || (this.isOpenAI ? 'openai' : 'anthropic'),
       model: this.anthropicClient.resolveModel(),
       isOpenAI: this.isOpenAI,
-      globalMode: sandboxCfg.defaultMode || 'sandbox',
-      chatMode: config.chatPermissionMode || 'inherit',
-      allowList: (sandboxCfg.sandboxAllowList || []).length,
-      dangerList: effectiveDangerList.length,
+      isGoogle: this.isGoogle,
+      ctxWindow: config.modelContextWindow || null,
+      permissionMode: config.chatPermissionMode || 'inherit',
     })
   }
 
@@ -307,6 +331,10 @@ class AgentLoop {
 
     logger.agent('Standalone compaction', { model, msgCount: messages.length })
 
+    // Sanitize before sending to API
+    if (createParams.messages) createParams.messages = sanitizeForJson(createParams.messages)
+    if (createParams.system)   createParams.system   = sanitizeForJson(createParams.system)
+
     let response
     if (createParams.betas && createParams.betas.length > 0) {
       const { betas, ...restParams } = createParams
@@ -384,8 +412,8 @@ class AgentLoop {
         model:      um.model,
         apiKey:     providerCfg.apiKey,
         baseURL:    providerCfg.baseURL,
-        isOpenAI:   um.provider === 'openai' || um.provider === 'deepseek',
-        directAuth: um.provider === 'deepseek',
+        isOpenAI:   um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek',
+        directAuth: um.provider === 'openai_official' || um.provider === 'deepseek',
       })
       logger.agent(`[AgentLoop] memory flush triggered (${reason})`, { agentId })
       const flushMeta = this.config.chatId ? { chatId: this.config.chatId } : {}
@@ -658,13 +686,8 @@ class AgentLoop {
                 from_name:   { type: 'string', description: 'Sender display name (defaults to SMTP username)' },
                 attachments: {
                   type: 'array',
-                  description: 'Files to attach. Each item is a path string or {path, filename}.',
-                  items: {
-                    oneOf: [
-                      { type: 'string' },
-                      { type: 'object', properties: { path: { type: 'string' }, filename: { type: 'string' } }, required: ['path'] }
-                    ]
-                  }
+                  description: 'Files to attach. Each item is a path string or an object with "path" (required) and optional "filename".',
+                  items: { type: 'string', description: 'File path to attach' }
                 }
               },
               required: ['to', 'subject', 'body']
@@ -881,6 +904,11 @@ class AgentLoop {
           onChunk({ type: 'compaction', message: 'Older messages trimmed to fit context' })
         }
 
+        // ── Sanitize request: strip lone surrogates that break JSON encoding ──
+        if (createParams.messages) createParams.messages = sanitizeForJson(createParams.messages)
+        if (createParams.system)   createParams.system   = sanitizeForJson(createParams.system)
+        if (createParams.tools)    createParams.tools     = sanitizeForJson(createParams.tools)
+
         // ── Stream the response ──
         let assistantContent = []
         let currentTextBlock = ''
@@ -908,11 +936,12 @@ class AgentLoop {
 
         logger.agent('stream start', {
           iteration,
+          provider: this.isGoogle ? 'google' : (this.config.provider?.type || (this.isOpenAI ? 'openai-compat' : 'anthropic')),
           model,
+          maxTokens: configuredMaxTokens,
           msgs: createParams.messages.length,
           tools: allTools.length,
-          thinking: isOpus46 ? 'adaptive' : (supportsThinking ? 'enabled' : 'none'),
-          provider: this.isGoogle ? 'google' : (this.config.provider?.type || (this.isOpenAI ? 'openai-compat' : 'anthropic'))
+          inputTokens: this.contextManager.inputTokens || 0,
         })
 
         if (this.isGoogle) {
@@ -965,6 +994,8 @@ class AgentLoop {
           // Rough token estimate for context tracking
           const estTokens = JSON.stringify(contents).length / 4
           this.contextManager.inputTokens = Math.ceil(estTokens)
+          // Estimate output tokens from response length
+          this.contextManager.outputTokens = Math.ceil((finalText || '').length / 4)
           onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
 
           logger.agent('Gemini response end', { iteration, parts: parts.length, images: responseImages.length })
@@ -973,14 +1004,15 @@ class AgentLoop {
         } else if (this.isOpenAI) {
           // ── OpenAI-format streaming ──
           const openaiMessages = this._toOpenAIMessages(systemPrompt, conversationMessages)
-          // DeepSeek has a per-model cap (default 8192); only apply to deepseek, not other _directAuth providers
-          const isDeepSeek = this.config.provider?.type === 'deepseek'
-          const effectiveMaxTokens = isDeepSeek
-            ? Math.min(configuredMaxTokens, Number(this.config.deepseek?.maxTokens) || 8192)
-            : configuredMaxTokens
+          // Cap max_tokens by known model context window (passed from Vue metadata)
+          let effectiveMaxTokens = configuredMaxTokens
+          const ctxWindow = this.config.modelContextWindow
+          if (ctxWindow && ctxWindow > 0) {
+            effectiveMaxTokens = Math.min(effectiveMaxTokens, Math.floor(ctxWindow * 0.75))
+          }
           const openaiParams = {
             model,
-            max_tokens: effectiveMaxTokens,
+            ...this.anthropicClient.tokenLimit(effectiveMaxTokens),
             messages: openaiMessages,
             stream: true,
           }
@@ -1003,23 +1035,74 @@ class AgentLoop {
               signal: this._abortController.signal
             })
           } catch (streamErr) {
-            // Some models don't support tool use — retry without tools
+            // ── Smart retry logic for recoverable errors ──
+            let retried = false
+
+            // 1. Tool-use not supported → retry without tools
             const noToolSupport = streamErr.message?.includes('tool use') ||
                                   streamErr.message?.includes('tool_use') ||
                                   streamErr.status === 404
-            if (noToolSupport && openaiParams.tools?.length > 0) {
+            if (!retried && noToolSupport && openaiParams.tools?.length > 0) {
               logger.warn('Model does not support tool use — retrying without tools', streamErr.message)
-              const paramsNoTools = { ...openaiParams }
-              delete paramsNoTools.tools
+              const retryParams = { ...openaiParams }
+              delete retryParams.tools
               try {
-                stream = await client.chat.completions.create(paramsNoTools, {
-                  signal: this._abortController.signal
-                })
+                stream = await client.chat.completions.create(retryParams, { signal: this._abortController.signal })
+                retried = true
               } catch (retryErr) {
                 logger.error('Retry without tools also FAILED', retryErr.message)
                 throw retryErr
               }
-            } else {
+            }
+
+            // 2. Context overflow → parse limit, adjust max_tokens or drop tools
+            if (!retried && streamErr.status === 400 && streamErr.message?.includes('maximum context length')) {
+              const limitMatch = streamErr.message.match(/maximum context length is (\d+)/)
+              const msgMatch   = streamErr.message.match(/(\d+) in the messages/)
+              const fnMatch    = streamErr.message.match(/(\d+) in the (?:functions|tools)/)
+              const compMatch  = streamErr.message.match(/(\d+) in the completion/)
+
+              if (limitMatch) {
+                const ctxLimit  = Number(limitMatch[1])
+                const msgTokens = msgMatch  ? Number(msgMatch[1])  : 0
+                const fnTokens  = fnMatch   ? Number(fnMatch[1])   : 0
+                const compTokens = compMatch ? Number(compMatch[1]) : 0
+
+                if (compTokens > 0) {
+                  // Case A: completion requested too many → cap max_tokens to what fits
+                  const available = ctxLimit - msgTokens - fnTokens
+                  if (available > 256) {
+                    logger.warn(`Context overflow (completion) — retrying with max_tokens=${available}`, { model, ctxLimit, msgTokens, fnTokens })
+                    const retryParams = { ...openaiParams, ...this.anthropicClient.tokenLimit(available) }
+                    try {
+                      stream = await client.chat.completions.create(retryParams, { signal: this._abortController.signal })
+                      retried = true
+                    } catch (retryErr) {
+                      logger.error('Context overflow retry also FAILED', retryErr.message)
+                      throw retryErr
+                    }
+                  }
+                } else if (fnTokens > 0 && openaiParams.tools?.length > 0) {
+                  // Case B: input alone exceeds limit — drop tools to free space
+                  const withoutTools = msgTokens
+                  if (withoutTools < ctxLimit) {
+                    const available = ctxLimit - withoutTools
+                    logger.warn(`Context overflow (input) — retrying without tools, max_tokens=${Math.min(available, effectiveMaxTokens)}`, { model, ctxLimit, msgTokens, fnTokens })
+                    const retryParams = { ...openaiParams, ...this.anthropicClient.tokenLimit(Math.min(available, effectiveMaxTokens)) }
+                    delete retryParams.tools
+                    try {
+                      stream = await client.chat.completions.create(retryParams, { signal: this._abortController.signal })
+                      retried = true
+                    } catch (retryErr) {
+                      logger.error('Context overflow retry (no tools) also FAILED', retryErr.message)
+                      throw retryErr
+                    }
+                  }
+                }
+              }
+            }
+
+            if (!retried) {
               logger.error('OpenAI stream open FAILED', streamErr.message)
               throw streamErr
             }
@@ -1059,11 +1142,17 @@ class AgentLoop {
             }
             logger.agent('Image model response', { textLen: textContent.length, images: responseImages.length, msgKeys: Object.keys(msg) })
             // Build conversation message and skip streaming loop
-            conversationMessages.push({ role: 'assistant', content: textContent || null })
+            conversationMessages.push({ role: 'assistant', content: textContent || '' })
             stopReason = response.choices?.[0]?.finish_reason || 'stop'
-            // Rough usage estimate
-            const estTokens = JSON.stringify(openaiMessages).length / 4
-            this.contextManager.inputTokens = Math.ceil(estTokens)
+            // Usage tracking
+            if (response.usage) {
+              this.contextManager.inputTokens = response.usage.prompt_tokens || 0
+              this.contextManager.outputTokens = response.usage.completion_tokens || 0
+            } else {
+              const estTokens = JSON.stringify(openaiMessages).length / 4
+              this.contextManager.inputTokens = Math.ceil(estTokens)
+              this.contextManager.outputTokens = Math.ceil((textContent || '').length / 4)
+            }
             onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
             logger.agent('OpenAI image end', { iteration, stopReason, textLen: textContent.length, images: responseImages.length })
             break  // skip tool loop — image models don't use tools
@@ -1195,9 +1284,15 @@ class AgentLoop {
             })
           }
 
-          // Rough usage estimate for context tracking
-          const estTokens = JSON.stringify(openaiMessages).length / 4
-          this.contextManager.inputTokens = Math.ceil(estTokens)
+          // Usage tracking: prefer real usage from last chunk, fallback to estimation
+          if (lastChunk?.usage) {
+            this.contextManager.inputTokens = lastChunk.usage.prompt_tokens || 0
+            this.contextManager.outputTokens = lastChunk.usage.completion_tokens || 0
+          } else {
+            const estTokens = JSON.stringify(openaiMessages).length / 4
+            this.contextManager.inputTokens = Math.ceil(estTokens)
+            this.contextManager.outputTokens = Math.ceil((finalText || '').length / 4)
+          }
           onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
 
           // Push assistant message — store in OpenAI-native format so that
@@ -1205,13 +1300,13 @@ class AgentLoop {
           // The Anthropic-style assistantContent is kept only for tool dispatch below.
           const nativeAssistant = { role: 'assistant' }
           const textParts = assistantContent.filter(b => b.type === 'text').map(b => b.text).join('')
-          nativeAssistant.content = textParts || null
+          nativeAssistant.content = textParts || ''
           if (openaiToolCalls.length > 0) nativeAssistant.tool_calls = openaiToolCalls
           // DeepSeek requires reasoning_content to be echoed back verbatim in history
           if (streamedReasoningContent) nativeAssistant.reasoning_content = streamedReasoningContent
           conversationMessages.push(nativeAssistant)
 
-          logger.agent('OpenAI stream end', { iteration, stopReason, textLen: finalText.length, images: responseImages.length })
+          logger.agent('OpenAI stream end', { iteration, stopReason, textLen: finalText.length, tokens: this.contextManager.getMetrics() })
 
           // ── Handle tool_calls stop reason ──
           if ((stopReason === 'tool_calls' || stopReason === 'stop' && openaiToolCalls.length > 0) && !this.stopped) {

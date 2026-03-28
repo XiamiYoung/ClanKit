@@ -965,7 +965,7 @@ onMounted(async () => {
   gap: 20px;
   padding: 24px 28px 24px;
   padding-right: 28px;
-  scrollbar-width: thin;
+  
 }
 
 .news-header-actions {
@@ -1307,7 +1307,7 @@ onMounted(async () => {
   flex: 1;
   overflow-y: auto;
   padding: 4px 0;
-  scrollbar-width: thin;
+  
 }
 
 .feed-articles::-webkit-scrollbar {
@@ -1707,7 +1707,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
-  scrollbar-width: thin;
+  
 }
 
 .top-criteria-field {
@@ -1959,7 +1959,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;
-  scrollbar-width: thin;
+  
 }
 
 .add-feed-field {
@@ -2082,7 +2082,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  scrollbar-width: thin;
+  
 }
 
 .add-feed-row {

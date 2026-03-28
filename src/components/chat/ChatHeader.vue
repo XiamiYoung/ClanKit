@@ -409,6 +409,16 @@
     </div>
   </Teleport>
 
+  <!-- Agent config warning toast -->
+  <Teleport to="body">
+    <Transition name="ch-warn-fade">
+      <div v-if="agentConfigWarn" class="ch-agent-warn-toast">
+        <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        {{ agentConfigWarn }}
+      </div>
+    </Transition>
+  </Teleport>
+
   <!-- Floating call button tooltip (Teleport to body to escape stacking contexts) -->
   <Teleport to="body">
     <div
@@ -700,7 +710,27 @@ function togglePopover(type) {
   }
 }
 
+const agentConfigWarn = ref(null)
+let agentConfigWarnTimer = null
+
+function _showAgentWarn(msg) {
+  agentConfigWarn.value = msg
+  if (agentConfigWarnTimer) clearTimeout(agentConfigWarnTimer)
+  agentConfigWarnTimer = setTimeout(() => { agentConfigWarn.value = null }, 5000)
+}
+
+function _checkAgentConfig(agentId) {
+  const agent = agentsStore.getAgentById(agentId)
+  if (!agent || agent.isBuiltin || agent.isDefault) return true
+  if (!agent.modelId) {
+    _showAgentWarn(t('agents.noModelWarning', { name: agent.name }))
+    return false
+  }
+  return true
+}
+
 function selectAgent(type, id) {
+  if (type === 'system') _checkAgentConfig(id)
   if (props.chatId) chatsStore.setChatAgent(props.chatId, type, id)
   showUsrPopover.value = false
 }
@@ -724,6 +754,7 @@ function toggleSystemAgent(agentId) {
     if (currentIds.length <= 1) return
     chatsStore.removeGroupAgent(chatId, agentId)
   } else {
+    _checkAgentConfig(agentId)
     if (!c.isGroupChat) {
       chatsStore.toggleGroupMode(chatId, true)
     }
@@ -1368,7 +1399,7 @@ const effectiveMaxOutputTokens = computed(() => {
   flex: 1; overflow-y: auto;
   padding: 0.5rem;
   display: flex; flex-direction: column; gap: 0.1875rem;
-  scrollbar-width: thin; scrollbar-color: #333 transparent;
+   
 }
 .ch-modal-item {
   display: flex; align-items: center; gap: 0.75rem;
@@ -1472,6 +1503,19 @@ const effectiveMaxOutputTokens = computed(() => {
   min-width: 12.5rem;
   box-shadow: 0 8px 24px rgba(0,0,0,0.18);
 }
+/* ── Agent config warning toast ────────────────────────────────────────── */
+.ch-agent-warn-toast {
+  position: fixed; top: 4rem; left: 50%; transform: translateX(-50%); z-index: 200;
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: #FFFBEB; border: 1px solid #F59E0B; border-radius: 0.5rem;
+  color: #92400E; font-size: var(--fs-secondary); font-family: 'Inter', sans-serif; font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  max-width: 36rem;
+}
+.ch-warn-fade-enter-active, .ch-warn-fade-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.ch-warn-fade-enter-from, .ch-warn-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(-0.5rem); }
+
 .ch-config-tooltip-fixed {
   position: fixed;
   z-index: 9999;

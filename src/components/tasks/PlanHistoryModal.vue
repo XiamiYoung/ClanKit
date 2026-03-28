@@ -755,7 +755,7 @@ onBeforeUnmount(() => {
   font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#4B5563;
 }
 
-.phm-run-list { flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1E1E1E transparent; }
+.phm-run-list { flex:1; overflow-y:auto;   }
 
 .phm-run-item {
   display:flex; align-items:center; gap:0.625rem;
@@ -836,7 +836,7 @@ onBeforeUnmount(() => {
   display:flex; flex-direction:column; align-items:center;
   overflow-x:hidden; overflow-y:auto;
   padding:1.5rem 2rem; gap:0;
-  scrollbar-width:thin; scrollbar-color:#1E1E1E transparent;
+   
 }
 
 /* ── Connectors ──────────────────────────────────────────────────────────── */
@@ -1074,8 +1074,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  scrollbar-width: thin;
-  scrollbar-color: #2A2A2A transparent;
+  
+  
 }
 
 .phm-output-section-label {
@@ -1101,8 +1101,8 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.6;
-  scrollbar-width: thin;
-  scrollbar-color: #2A2A2A transparent;
+  
+  
   flex-shrink: 0;
 }
 .phm-output-pre--err {

@@ -35,7 +35,7 @@ export function useAttachments({ inputText, mentionInputRef, dbg }) {
 
   /**
    * Extract file paths from a drop event using multiple strategies.
-   * WSLg doesn't reliably bridge Windows Explorer DnD, so we try:
+   * We try multiple strategies:
    * 1. dataTransfer.files[].path (Electron native — works for Linux files)
    * 2. text/uri-list (may contain file:///C:/... URIs from Windows)
    * 3. text/plain (may contain raw Windows paths)
@@ -127,7 +127,7 @@ export function useAttachments({ inputText, mentionInputRef, dbg }) {
     dbg(`Drop: ${rawPaths.length} path(s) extracted: ${rawPaths.map(p => p.slice(0, 60)).join(', ')}`)
 
     if (rawPaths.length === 0) {
-      dbg('Drop: no file paths found in dataTransfer. On WSL2, drag-and-drop from Windows Explorer is not supported by WSLg. Use the attach button (paperclip) or paste file paths instead.', 'warn')
+      dbg('Drop: no file paths found in dataTransfer. Use the attach button (paperclip) or paste file paths instead.', 'warn')
       return
     }
 

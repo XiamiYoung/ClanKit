@@ -66,8 +66,8 @@ function register({ lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtracti
               model:      um.model,
               apiKey:     providerCfg.apiKey,
               baseURL:    providerCfg.baseURL,
-              isOpenAI:   um.provider === 'openai' || um.provider === 'deepseek',
-              directAuth: um.provider === 'deepseek',
+              isOpenAI:   um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek',
+              directAuth: um.provider === 'openai_official' || um.provider === 'deepseek',
             })
             flusher.run(messages, agentId, logsDir).catch(err =>
               logger.error('[memory:extract-on-chat-switch] flush error', err.message)
@@ -101,13 +101,13 @@ function register({ lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtracti
       const providerCfg = config[um.provider]
       if (!providerCfg?.apiKey || !providerCfg?.baseURL) return { success: true, count: 0 }
 
-      const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+      const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
       const extractor = new MemoryExtractor({
         model: um.model,
         apiKey: providerCfg.apiKey,
         baseURL: providerCfg.baseURL,
         isOpenAI,
-        directAuth: um.provider === 'deepseek',
+        directAuth: um.provider === 'openai_official' || um.provider === 'deepseek',
       })
 
       // Read existing soul files for each participant

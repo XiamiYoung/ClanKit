@@ -6,9 +6,9 @@
  * agent orchestration pipeline.
  */
 
-/** Normalize agents.json: may be { categories, agents: [] }, { categories, personas: [] }, or plain array */
+/** Normalize agents.json: may be { categories, agents: [] } or plain array */
 function normalizeAgents(raw) {
-  return Array.isArray(raw) ? raw : (raw?.agents || raw?.personas || [])
+  return Array.isArray(raw) ? raw : (raw?.agents || [])
 }
 
 /** Normalize tools.json: may be dict { "id": config } or array. Filters __deletedBuiltins. */

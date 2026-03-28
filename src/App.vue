@@ -1,8 +1,5 @@
 <template>
-  <!-- Auth page (full screen, no title bar/sidebar) -->
-  <AuthView v-if="authRequired || isAuthPage" />
-  
-  <template v-else-if="!focusModeStore.isMinibarMode">
+  <template v-if="!focusModeStore.isMinibarMode">
     <div class="flex flex-col h-screen w-screen overflow-hidden" style="background:#F2F2F7; color:#1A1A1A; border-radius:10px; border: 1.5px solid #999;">
 
       <TitleBar @toggle-sidebar="sidebarRef?.toggleCollapse()" />
@@ -69,10 +66,8 @@ import { useModelsStore } from './stores/models'
 import { useToolsStore } from './stores/tools'
 import { useKnowledgeStore } from './stores/knowledge'
 import { useVoiceStore } from './stores/voice'
-import { useUserStore } from './stores/user'
 import { useI18n } from './i18n/useI18n'
 import SetupWizard from './components/setup/SetupWizard.vue'
-import AuthView from './views/AuthView.vue'
 
 const { t } = useI18n()
 
@@ -91,19 +86,13 @@ const knowledgeStore = useKnowledgeStore()
 const focusModeStore = useFocusModeStore()
 
 const voiceStore = useVoiceStore()
-const userStore = useUserStore()
 
 const configLoaded = ref(false)
 const bannerDismissed = ref(false)
 const setupWizardDismissed = ref(false)
-const authRequired = ref(false)
 
 const showSetupWizard = computed(() => {
   return configLoaded.value && !configStore.isConfigured && !setupWizardDismissed.value
-})
-
-const isAuthPage = computed(() => {
-  return route.path === '/auth'
 })
 
 // Handle quick-send from minibar — runs here so it works even when ChatsView is unmounted
@@ -136,21 +125,8 @@ onMounted(async () => {
   await configStore.loadConfig()
   configLoaded.value = true
 
-  // Initialize user store
-  userStore.init()
-  
-  // Check if auth is required (API is configured but user not logged in)
-  const apiConfigured = localStorage.getItem('api-cn-url') || localStorage.getItem('api-global-url')
-  if (apiConfigured && !userStore.isAuthenticated) {
-    authRequired.value = true
-  }
-
-  // Auto-fetch models for providers that have API keys configured
-  if (configStore.config.openrouter?.apiKey) modelsStore.fetchOpenRouterModels()
-  if (configStore.config.openai?.apiKey) modelsStore.fetchOpenAIModels()
-  if (configStore.config.deepseek?.apiKey && configStore.config.deepseek?.baseURL) modelsStore.fetchDeepSeekModels()
-  const googleProv = (configStore.config.providers || []).find(p => p.type === 'google')
-  if (googleProv?.apiKey) modelsStore.fetchGoogleModels()
+  // Load cached model lists from disk (instant, no API calls)
+  modelsStore.loadFromDisk()
 
   // Fire all store loads concurrently — none blocks the UI
   Promise.all([

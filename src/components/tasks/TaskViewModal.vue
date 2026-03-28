@@ -142,13 +142,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .tvm-col-left {
   flex: 1; min-width: 0; overflow-y: auto; padding: 1.25rem 1.5rem;
   display: flex; flex-direction: column; gap: 1rem;
-  scrollbar-width: thin; scrollbar-color: #2A2A2A transparent;
+   
   border-right: 1px solid #1E1E1E;
 }
 .tvm-col-right {
   width: 16rem; flex-shrink: 0; overflow-y: auto; padding: 1.25rem 1rem;
   display: flex; flex-direction: column; gap: 0.625rem;
-  scrollbar-width: thin; scrollbar-color: #2A2A2A transparent;
+   
 }
 
 .tvm-section { display: flex; flex-direction: column; gap: 0.375rem; }

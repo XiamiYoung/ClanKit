@@ -520,7 +520,7 @@ function confirm() {
   flex-shrink: 0;
   border-bottom: 1px solid #1F1F1F;
   overflow-x: auto;
-  scrollbar-width: none;
+  
 }
 .emojipicker-tabs::-webkit-scrollbar { display: none; }
 .emojipicker-tab {
@@ -548,8 +548,8 @@ function confirm() {
   flex-shrink: 0;
   height: 32rem;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #333 transparent;
+  
+  
 }
 .emojipicker-grid {
   display: grid;

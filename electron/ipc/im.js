@@ -1,5 +1,5 @@
 /**
- * IPC handlers for IM Bridge (Telegram, Feishu, WhatsApp).
+ * IPC handlers for IM Bridge (Telegram, Feishu, WhatsApp, Teams).
  * Channels: im:*
  */
 const { ipcMain } = require('electron')
@@ -35,6 +35,19 @@ function register({ imBridge }) {
 
   ipcMain.handle('im:whatsapp-request-qr', () => {
     _imBridge.requestWhatsAppQR()
+  })
+
+  ipcMain.handle('im:teams-request-auth', (_, opts) => {
+    _imBridge.requestTeamsAuth(opts)
+  })
+
+  ipcMain.handle('im:teams-sign-out', () => {
+    _imBridge.teamsSignOut()
+    return _imBridge.getStatus()
+  })
+
+  ipcMain.handle('im:teams-auth-status', () => {
+    return _imBridge.getTeamsAuthStatus()
   })
 }
 

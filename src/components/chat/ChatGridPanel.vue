@@ -1193,7 +1193,7 @@ function deleteMessage(msg) {
   flex: 1;
   overflow-y: auto;
   padding: 0.375rem;
-  scrollbar-width: thin;
+  
 }
 .gp-swap-list::-webkit-scrollbar { width: 6px; }
 .gp-swap-list::-webkit-scrollbar-track { background: transparent; }

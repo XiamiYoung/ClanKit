@@ -42,20 +42,6 @@ function _loadMinibarBounds() {
 // -- Title-bar drag state -----------------------------------------------------
 let _dragPinnedSize = null
 
-// -- Helper: detect WSL -------------------------------------------------------
-function isWSL() {
-  try {
-    const release = fs.readFileSync('/proc/version', 'utf8').toLowerCase()
-    return release.includes('microsoft') || release.includes('wsl')
-  } catch { return false }
-}
-
-// -- Helper: Linux path to Windows path ---------------------------------------
-function toWindowsPath(linuxPath) {
-  const { execSync } = require('child_process')
-  return execSync('wslpath -w "' + linuxPath + '"').toString().trim().replace(/\\$/, '')
-}
-
 // -- Helper: resolve ~ in path ------------------------------------------------
 function resolvePath(filePath) {
   return filePath.startsWith('~') ? path.join(os.homedir(), filePath.slice(1)) : filePath
@@ -99,11 +85,6 @@ function register() {
   ipcMain.handle('shell:open-file', async (_, filePath) => {
     try {
       const resolved = resolvePath(filePath)
-      if (isWSL()) {
-        const { execSync } = require('child_process')
-        execSync('explorer.exe "' + toWindowsPath(resolved) + '"')
-        return { success: true }
-      }
       const result = await shell.openPath(resolved)
       if (result) return { error: result }
       return { success: true }
@@ -124,11 +105,6 @@ function register() {
   ipcMain.handle('shell:show-in-folder', (_, filePath) => {
     try {
       const resolved = resolvePath(filePath)
-      if (isWSL()) {
-        const { execSync } = require('child_process')
-        execSync('explorer.exe /select,"' + toWindowsPath(resolved) + '"');
-        return { success: true }
-      }
       shell.showItemInFolder(resolved)
       return { success: true }
     } catch (err) {

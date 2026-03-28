@@ -83,13 +83,13 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
 
     logger.debug('[Memory] start', { chatId, provider: um.provider, model: um.model, msgCount: messages?.length })
 
-    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
     const extractor = new MemoryExtractor({
       model: um.model,
       apiKey: providerCfg.apiKey,
       baseURL: providerCfg.baseURL,
       isOpenAI,
-      directAuth: um.provider === 'deepseek',
+      directAuth: um.provider === 'openai_official' || um.provider === 'deepseek',
     })
 
     // Extract last user message + last assistant response
@@ -195,8 +195,9 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
 
 async function _runStartupIndexRecovery() {
   try {
-    if (!fs.existsSync(CHATS_INDEX_FILE)) return
-    const chatsIndex = JSON.parse(fs.readFileSync(CHATS_INDEX_FILE, 'utf8'))
+    const indexFile = ds.paths().CHATS_INDEX_FILE
+    if (!fs.existsSync(indexFile)) return
+    const chatsIndex = JSON.parse(fs.readFileSync(indexFile, 'utf8'))
     if (!Array.isArray(chatsIndex)) return
 
     logger.debug('[Startup] checking for unindexed chats', { total: chatsIndex.length })
@@ -290,10 +291,20 @@ function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetCh
     const isBuiltinOrDefault = agent.isBuiltin || agent.isDefault
     const hasGlobalProvider = baseCfg.providers?.some(p => p.isActive)
     if (!resolvedProvider && !isBuiltinOrDefault && !hasGlobalProvider) return null
+    // Non-builtin agents must have a model configured
+    if (!isBuiltinOrDefault && !resolvedModel) {
+      logger.warn('Skipping agent — no model configured', { agentId: pid, agentName: agent.name })
+      return { _skipError: `Agent "${agent.name}" has no model configured. Please set a model in Agent settings.` }
+    }
 
     const effectiveProvider = resolvedProvider || baseCfg.defaultProvider || 'anthropic'
     _applyProviderCredsToConfig(agentCfg, effectiveProvider)
     if (resolvedModel) agentCfg.customModel = resolvedModel
+    // Pass model context window from Vue metadata (if known)
+    const ctxWindows = targetChatMeta.modelContextWindows
+    if (resolvedModel && ctxWindows?.[resolvedModel]) {
+      agentCfg.modelContextWindow = ctxWindows[resolvedModel]
+    }
 
     const otherParticipants = (groupIds || [])
       .filter(id => id !== pid)
@@ -1081,7 +1092,7 @@ Examples:
     abort = new AbortController()
     _activeEditRequests.set(requestId, abort)
 
-    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
     let inputTokens = 0, outputTokens = 0
 
     if (isOpenAI) {
@@ -1092,12 +1103,14 @@ Examples:
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
-        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        provider: { type: um.provider },
       }
-      const client = new OpenAIClient(cfg).getClient()
+      const oaiClient = new OpenAIClient(cfg)
+      const client = oaiClient.getClient()
       const stream = await client.chat.completions.create({
         model: um.model,
-        max_tokens: 4096,
+        ...oaiClient.tokenLimit(4096),
         stream: true,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -1204,14 +1217,14 @@ ipcMain.handle('agent:doc-run', async (event, {
     } else if (provider === 'openrouter') {
       loopConfig.apiKey  = providerCfg.apiKey
       loopConfig.baseURL = providerCfg.baseURL
-    } else if (provider === 'openai' || provider === 'deepseek') {
+    } else if (provider === 'openai' || provider === 'openai_official' || provider === 'deepseek') {
       loopConfig.defaultProvider   = 'openai'
       loopConfig._resolvedProvider = 'openai'
       loopConfig.openaiApiKey      = providerCfg.apiKey
       loopConfig.openaiBaseURL     = providerCfg.baseURL
       loopConfig.apiKey            = providerCfg.apiKey
       loopConfig.baseURL           = providerCfg.baseURL
-      if (provider === 'deepseek') loopConfig._directAuth = true
+      if (provider === 'openai_official' || provider === 'deepseek') loopConfig._directAuth = true
     }
 
     loopConfig.sandboxConfig = fullCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
@@ -1396,7 +1409,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
     // Use the global maxOutputTokens from config, capped at 4096 for utility calls.
     // The global setting reflects what models the user's providers actually support.
     const maxTokens = Math.min(config.maxOutputTokens || 4096, 4096)
-    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
@@ -1405,12 +1418,13 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
-        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        provider: { type: um.provider },
       }
-      const client = new OpenAIClient(cfg).getClient()
-      const response = await client.chat.completions.create({
+      const oaiClient = new OpenAIClient(cfg)
+      const response = await oaiClient.getClient().chat.completions.create({
         model: um.model,
-        max_tokens: maxTokens,
+        ...oaiClient.tokenLimit(maxTokens),
         messages: [{ role: 'user', content: prompt }],
       })
       const text = response.choices?.[0]?.message?.content || ''
@@ -1486,7 +1500,7 @@ If none should respond, reply with [].`
     }
 
     let raw
-    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
@@ -1495,11 +1509,13 @@ If none should respond, reply with [].`
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
-        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        provider: { type: um.provider },
       }
-      const resp = await new OpenAIClient(cfg).getClient().chat.completions.create({
+      const oaiClient = new OpenAIClient(cfg)
+      const resp = await oaiClient.getClient().chat.completions.create({
         model: um.model,
-        max_tokens: 128,
+        ...oaiClient.tokenLimit(128),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user',   content: userContent },
@@ -1621,7 +1637,7 @@ Examples:
     }
 
     let raw
-    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
@@ -1630,11 +1646,13 @@ Examples:
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
-        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        provider: { type: um.provider },
       }
-      const resp = await new OpenAIClient(cfg).getClient().chat.completions.create({
+      const oaiClient = new OpenAIClient(cfg)
+      const resp = await oaiClient.getClient().chat.completions.create({
         model: um.model,
-        max_tokens: 128,
+        ...oaiClient.tokenLimit(128),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userContent },
@@ -1738,7 +1756,7 @@ Reply with ONLY a JSON object:
     }
 
     let raw
-    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
@@ -1747,10 +1765,12 @@ Reply with ONLY a JSON object:
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
-        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        provider: { type: um.provider },
       }
-      const resp = await new OpenAIClient(cfg).getClient().chat.completions.create({
-        model: um.model, max_tokens: 512,
+      const oaiClient = new OpenAIClient(cfg)
+      const resp = await oaiClient.getClient().chat.completions.create({
+        model: um.model, ...oaiClient.tokenLimit(512),
         messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }],
       })
       raw = resp.choices?.[0]?.message?.content || ''
@@ -1862,7 +1882,7 @@ Rules:
     const userContent = `Conversation:\n${convo}`
 
     let raw = ''
-    const isOpenAI = um.provider === 'openai' || um.provider === 'deepseek'
+    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const clientCfg = {
@@ -1871,11 +1891,13 @@ Rules:
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
-        ...(um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        provider: { type: um.provider },
       }
-      const resp = await new OpenAIClient(clientCfg).getClient().chat.completions.create({
+      const oaiClient = new OpenAIClient(clientCfg)
+      const resp = await oaiClient.getClient().chat.completions.create({
         model: um.model,
-        max_tokens: 120,
+        ...oaiClient.tokenLimit(120),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userContent },
@@ -1949,7 +1971,7 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
       return { success: false, error: 'Missing required field: baseURL' }
     }
 
-    const isOpenAI = provider === 'openai' || provider === 'deepseek'
+    const isOpenAI = provider === 'openai' || provider === 'openai_official' || provider === 'deepseek' || provider === 'minimax'
 
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
@@ -1959,13 +1981,13 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
         customModel: utilityModel,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
-        ...(provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(provider === 'openai_official' || provider === 'deepseek' || provider === 'minimax' ? { _directAuth: true } : {}),
       }
+      cfg.provider = { type: provider }
       const client = new OpenAIClient(cfg)
       const start = Date.now()
       const resp = await client.getClient().chat.completions.create({
         model: utilityModel,
-        max_tokens: 8,
         messages: [{ role: 'user', content: 'hi' }],
       })
       const ms = Date.now() - start
@@ -1993,7 +2015,15 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
     }
   } catch (err) {
     logger.error('agent:test-provider error', err.message)
-    return { success: false, error: err.message }
+    const msg = err.message || 'Unknown error'
+    const status = err.status || err.statusCode
+    let friendly = msg
+    if (status === 401 || status === 403 || /unauthorized|forbidden|invalid.*key/i.test(msg)) {
+      friendly = `Authentication failed (${status || 'auth error'}) — check your API key`
+    } else if (/header|ENOTFOUND|ECONNREFUSED/i.test(msg)) {
+      friendly = `${msg} — check your Base URL and network connection`
+    }
+    return { success: false, error: friendly }
   }
 })
 
@@ -2388,7 +2418,14 @@ ipcMain.handle('agent:send-message', async (event, {
       }
 
       // ── Build agentRuns ───────────────────────────────────────────────────
-      const agentRuns = _buildAgentRuns(respondingIds, effectiveGroupIds, fullCfg, messages || [], targetChatMeta, allData)
+      const rawRuns = _buildAgentRuns(respondingIds, effectiveGroupIds, fullCfg, messages || [], targetChatMeta, allData)
+      // Emit errors for agents that failed validation (e.g. no model configured)
+      for (const r of rawRuns) {
+        if (r?._skipError && !event.sender.isDestroyed()) {
+          event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_error', error: r._skipError } })
+        }
+      }
+      const agentRuns = rawRuns.filter(r => r && !r._skipError)
 
       if (agentRuns.length === 0) {
         if (!event.sender.isDestroyed()) {
