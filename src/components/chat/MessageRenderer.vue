@@ -424,7 +424,7 @@ function stripBase64(text) {
 // File-path regex: matches files with known extensions OR directory paths (trailing / or \)
 // Files:  ~/path/file.ext, /abs/path/file.ext, C:\path\file.ext, \\server\share\file.ext
 // Dirs:   ~/dir/sub/, /abs/path/dir/, C:\path\dir\, \\server\share\  (2+ segments)
-const FILE_PATH_RE = /(?:(?:~\/[\w.\/\-]+|\/(?:[\w.\-]+\/)+[\w.\-]+|[A-Z]:\\(?:[\w.\-]+\\)*[\w.\-]+|\\\\[\w.\-]+(?:\\[\w.\-]+)+)\.(?:md|txt|json|js|ts|jsx|tsx|py|rb|go|rs|java|c|cpp|h|hpp|css|scss|html|xml|yaml|yml|toml|ini|cfg|conf|log|csv|sql|sh|bash|zsh|env|vue|svelte)|(?:~\/(?:[\w.\-]+\/)+|\/(?:[\w.\-]+\/){2,}|[A-Z]:\\(?:[\w.\-]+\\){2,}|\\\\[\w.\-]+(?:\\[\w.\-]+)+\\)(?=[\s.,;:!?)'"}\]]|$))/g
+const FILE_PATH_RE = /(?:(?:~\/[\w.\/\-]+|\/(?:[\w.\-]+\/)+[\w.\-]+|[A-Z]:\\(?:[\w.\- ]+\\)*[\w.\-]+|\\\\[\w.\-]+(?:\\[\w.\-]+)+)\.(?:md|txt|json|js|ts|jsx|tsx|py|rb|go|rs|java|c|cpp|h|hpp|css|scss|html|xml|yaml|yml|toml|ini|cfg|conf|log|csv|sql|sh|bash|zsh|env|vue|svelte)|(?:~\/(?:[\w.\-]+\/)+|\/(?:[\w.\-]+\/){2,}|[A-Z]:\\(?:[\w.\- ]+\\){2,}|\\\\[\w.\-]+(?:\\[\w.\-]+)+\\)(?=[\s.,;:!?)'"}\]]|$))/g
 
 function injectFilePathChips(html) {
   // Split HTML into tags vs text runs so we never match inside tags or <pre>/<a>
@@ -443,7 +443,11 @@ function injectFilePathChips(html) {
       continue
     }
     if (insidePre > 0 || insideA > 0) continue
-    // File paths are rendered as plain text (no chip/button decoration)
+    // Replace file paths with chips containing open buttons (use data-* for event delegation)
+    parts[i] = p.replace(FILE_PATH_RE, (path) => {
+      const escaped = path.replace(/"/g, '&quot;')
+      return `${path}<button class="file-path-btn file-path-open" data-action="open-file" data-path="${escaped}" title="${t('common.openFile')}">📄</button><button class="file-path-btn file-path-folder" data-action="open-folder" data-path="${escaped}" title="${t('common.openFolder')}">📁</button>`
+    })
   }
   return parts.join('')
 }
@@ -481,8 +485,23 @@ function renderMarkdown(text) {
   } catch { return String(text) }
 }
 
-// ── Click handler for code-copy (event delegation) ───────────────────────────
+// ── Click handler for code-copy + file-path buttons (event delegation) ───────
 function handleContentClick(e) {
+  // File path chip buttons
+  const fpBtn = e.target.closest('[data-action]')
+  if (fpBtn) {
+    e.stopPropagation()
+    const action = fpBtn.dataset.action
+    const filePath = fpBtn.dataset.path
+    if (!filePath) return
+    if (action === 'open-file' && window.electronAPI?.openFile) {
+      window.electronAPI.openFile(filePath)
+    } else if (action === 'open-folder' && window.electronAPI?.showInFolder) {
+      window.electronAPI.showInFolder(filePath)
+    }
+    return
+  }
+
   // Code block copy button
   const btn = e.target.closest('.code-copy-btn')
   if (!btn) return
@@ -807,6 +826,7 @@ function openImageFullscreen(dataUri, imgObj) {
   win.document.body.appendChild(imgEl)
 }
 
+
 // ── File diff ────────────────────────────────────────────────────────────────
 function getDiff(i, seg) {
   if (diffCache[i]) return diffCache[i]
@@ -996,6 +1016,22 @@ function diffMarker(type) {
   padding: 0.0625rem 0.25rem;
   border-radius: 0.25rem;
   font-weight: 600;
+}
+
+/* File path action buttons */
+:deep(.file-path-btn) {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0 0.125rem;
+  vertical-align: middle;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+:deep(.file-path-btn:hover) {
+  opacity: 1;
 }
 
 </style>

@@ -31,6 +31,12 @@
     "asarUnpack": [
       "electron/fonts.conf"
     ],
+    "extraResources": [
+      {
+        "from": "build/icons/icon.png",
+        "to": "icon.png"
+      }
+    ],
     "win": {
       "target": [
         {

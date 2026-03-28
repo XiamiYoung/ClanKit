@@ -622,7 +622,9 @@ function createWindow() {
   const winH = Math.round(screenH * 4 / 5)
 
   mainWindow = new BrowserWindow({
-    icon: path.join(__dirname, '../public/icon.png'),
+    icon: app.isPackaged
+      ? path.join(process.resourcesPath, 'icon.png')
+      : path.join(__dirname, '../public/icon.png'),
     width: Math.round(screenW * 0.7),
     height: Math.round(screenH * 0.7),
     x: Math.round((screenW - screenW * 0.7) / 2),

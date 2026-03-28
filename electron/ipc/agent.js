@@ -124,8 +124,7 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
     }
     const systemAgentId = agentPrompts?.systemAgentId || '__default_system__'
 
-    logger.debug('[Memory] agentIds + soulsDir', { chatId, userAgentId, systemAgentId, soulsDir: ds.paths().SOULS_DIR })
-    logger.debug('[Memory] userText preview', { chatId, text: lastUserText.slice(0, 100) })
+    logger.debug('[Memory] agentIds', { chatId, userAgentId, systemAgentId })
 
     const userSoulContent = readSoulFileSync(userAgentId, 'users')
     const systemSoulContent = readSoulFileSync(systemAgentId, 'system')
@@ -141,7 +140,7 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
       language: config.language || 'en',
     })
 
-    logger.debug('[Memory] suggestions', { chatId, count: suggestions.length, items: suggestions.map(s => ({ target: s.target, agentType: s.agentType, section: s.section, confidence: s.confidence, entry: s.entry?.slice(0, 80) })) })
+    logger.debug('[Memory] suggestions', { chatId, count: suggestions.length })
 
     if (suggestions.length === 0) return
 
@@ -2178,7 +2177,7 @@ ipcMain.handle('agent:send-message', async (event, {
     for (const r of results) {
       if (r.text) {
         trackMessages.push({ role: 'assistant', agentId: r.agentId, content: r.text })
-        logger.agent(`[collab-debug] trackMessages.push agentId=${r.agentId} textLen=${r.text.length} tail="${r.text.slice(-150)}"`, { chatId })
+        logger.agent(`[collab-debug] trackMessages.push agentId=${r.agentId} textLen=${r.text.length}`, { chatId })
       } else {
         logger.agent(`[collab-debug] runGroupRound result has NO text for agentId=${r.agentId}`, { chatId })
       }
@@ -2215,8 +2214,7 @@ ipcMain.handle('agent:send-message', async (event, {
 
     logger.agent(`[collab-debug] round=${iterationCount} prevMsgCount=${prevMsgCount} trackMessages.length=${trackMessages.length} newMessages.length=${newMessages.length}`, { chatId })
     for (const nm of newMessages) {
-      const contentSnip = (nm.content || '').slice(-200)
-      logger.agent(`[collab-debug]   newMsg agentId=${nm.agentId} contentTail="${contentSnip}"`, { chatId })
+      logger.agent(`[collab-debug]   newMsg agentId=${nm.agentId} contentLen=${(nm.content || '').length}`, { chatId })
     }
 
     const nextRespondingSet = new Set()
@@ -2476,11 +2474,7 @@ ipcMain.handle('agent:send-message', async (event, {
 
       // Collaboration loop
       if (groupAgents.length >= 2) {
-        logger.agent(`[collab-debug] entering collaboration. groupAgents=[${groupAgents.map(a=>a.name).join(',')}] effectiveGroupIds=[${effectiveGroupIds.join(',')}] msgCountBeforeRun=${msgCountBeforeRun} trackMessages.length=${trackMessages.length}`, { chatId })
-        for (let ti = msgCountBeforeRun; ti < trackMessages.length; ti++) {
-          const tm = trackMessages[ti]
-          logger.agent(`[collab-debug]   trackMsg[${ti}] role=${tm.role} agentId=${tm.agentId || 'none'} hasContent=${!!tm.content} contentLen=${(tm.content||'').length}`, { chatId })
-        }
+        logger.agent(`[collab-debug] entering collaboration. groupAgents=${groupAgents.length} trackMessages=${trackMessages.length} newSince=${trackMessages.length - msgCountBeforeRun}`, { chatId })
         await triggerCollaboration(trackMessages, groupAgents, effectiveGroupIds, allData, fullCfg, 0, msgCountBeforeRun)
       }
 
