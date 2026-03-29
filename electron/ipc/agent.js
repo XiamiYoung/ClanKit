@@ -43,6 +43,7 @@ const {
 // is resolved. im-bridge modules use lazy getDataDir() so they pick it up.
 const activeLoops = new Map()          // chatId -> AgentLoop
 const activeLoopMeta = new Map()       // same key as activeLoops → { chatId, agentId, agentName, isGroup }
+const pendingStops = new Set()         // chatIds where stop was requested before loop existed
 const lastContextSnapshots = new Map() // chatId -> snapshot
 const lastExtractedMsgCount = new Map() // chatId -> message count at last extraction
 const pendingMemoryFacts = new Map()    // chatId -> Array of pending fact objects (medium-confidence)
@@ -578,6 +579,16 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
         logger.error('agent:run invalid group loop config', { chatId, agentId: run.agentId, error: loopConfigError })
         throw new Error(loopConfigError)
       }
+
+      if (pendingStops.has(chatId)) {
+        pendingStops.delete(chatId)
+        logger.agent('agent:run — pendingStop found, skipping loop', { chatId, agentId: run.agentId })
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('agent:chunk', { chatId, chunk: { type: 'agent_end', agentId: run.agentId, agentName: run.agentName } })
+        }
+        return async () => ({ agentId: run.agentId, agentName: run.agentName, success: false, error: 'Cancelled before start', text: '' })
+      }
+
       const loop = new AgentLoop(loopConfig)
       activeLoops.set(loopKey, loop)
       activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
@@ -844,6 +855,16 @@ ipcMain.handle('agent:run-additional', async (event, {
     loopConfig.DoCPath             = groupCfg.DoCPath || ''
     loopConfig.memoryDir           = ds.paths().MEMORY_DIR
     loopConfig.chatId              = chatId
+
+    if (pendingStops.has(chatId)) {
+      pendingStops.delete(chatId)
+      logger.agent('agent:run-additional — pendingStop found, skipping loop', { chatId, agentId: run.agentId })
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('agent:chunk', { chatId, chunk: { type: 'agent_end', agentId: run.agentId, agentName: run.agentName } })
+      }
+      return async () => ({ agentId: run.agentId, agentName: run.agentName, success: false, error: 'Cancelled before start', text: '' })
+    }
+
     const loop = new AgentLoop(loopConfig)
     activeLoops.set(loopKey, loop)
     activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
@@ -927,6 +948,14 @@ ipcMain.handle('agent:stop', (event, chatId) => {
         activeLoopMeta.delete(key)
         stopped = true
       }
+    }
+    if (!stopped) {
+      // No active loop found — remember this stop request so agent:send-message
+      // can check before creating a loop (race condition: stop arrives before loop exists).
+      pendingStops.add(chatId)
+      logger.agent('agent:stop — no active loop, registered pendingStop', { chatId })
+      // Auto-clear after 5s to avoid stale entries
+      setTimeout(() => pendingStops.delete(chatId), 5000)
     }
     return stopped
   }
@@ -2136,6 +2165,16 @@ ipcMain.handle('agent:send-message', async (event, {
         run.agentPrompts = prompts
       }
 
+      // Check if user already pressed stop before the loop was created (race condition fix)
+      if (pendingStops.has(chatId)) {
+        pendingStops.delete(chatId)
+        logger.agent('agent:send-message — pendingStop found, skipping loop', { chatId, agentId: run.agentId })
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('agent:chunk', { chatId, chunk: { type: 'agent_end', agentId: run.agentId, agentName: run.agentName } })
+        }
+        return async () => ({ agentId: run.agentId, agentName: run.agentName, success: false, error: 'Cancelled before start', text: '' })
+      }
+
       const loop = new AgentLoop(loopConfig)
       activeLoops.set(loopKey, loop)
       activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
@@ -2353,6 +2392,16 @@ ipcMain.handle('agent:send-message', async (event, {
 
   // ── Fire async — return immediately to Vue ─────────────────────────────────
   ;(async () => {
+    // Early bail: user may have pressed stop before this IIFE even starts
+    if (pendingStops.has(chatId)) {
+      pendingStops.delete(chatId)
+      logger.agent('agent:send-message IIFE — pendingStop at entry, aborting', { chatId })
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_complete', stickyTargetIds: stickyTargetIds || [] } })
+      }
+      return
+    }
+
     // Read all data from disk
     const fullCfg      = ds.readJSON(ds.paths().CONFIG_FILE, {})
     const agentsData   = normalizeAgents(ds.readJSON(ds.paths().AGENTS_FILE, { agents: [] }))
@@ -2532,6 +2581,18 @@ ipcMain.handle('agent:send-message', async (event, {
       // Collaboration loop
       if (groupAgents.length >= 2) {
         await triggerCollaboration(trackMessages, groupAgents, effectiveGroupIds, allData, fullCfg, 0, msgCountBeforeRun)
+      }
+
+      // Combine per-agent snapshots into a single chatId snapshot for the inspector
+      const groupSnaps = agentRuns.map(run => {
+        const snap = lastContextSnapshots.get(`${chatId}:${run.agentId}`)
+        return snap ? { agentId: run.agentId, agentName: run.agentName, ...snap } : null
+      }).filter(Boolean)
+      if (groupSnaps.length > 0) {
+        const base = { ...groupSnaps[0] }
+        base.model = groupSnaps.map(s => `${s.agentName}: ${s.model || 'default'}`).join(' | ')
+        base.agentSnapshots = groupSnaps
+        lastContextSnapshots.set(chatId, base)
       }
 
       // Memory extraction

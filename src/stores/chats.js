@@ -67,6 +67,8 @@ export const useChatsStore = defineStore('chats', () => {
     chat.currentToolCall = null
     chat.isLoadingMessages = false
     chat.contextMetrics = chat.contextMetrics || defaultContextMetrics()
+    if (!chat.perAgentContextMetrics) chat.perAgentContextMetrics = {}
+    if (!chat.lastContextSnapshot) chat.lastContextSnapshot = null
     if (chat.systemAgentId === undefined) chat.systemAgentId = null
     if (chat.userAgentId === undefined) chat.userAgentId = null
     if (chat.provider === undefined) chat.provider = null
@@ -159,6 +161,9 @@ export const useChatsStore = defineStore('chats', () => {
               }
             }
           }
+          if (full.contextMetrics) chat.contextMetrics = full.contextMetrics
+          if (full.perAgentContextMetrics) chat.perAgentContextMetrics = full.perAgentContextMetrics
+          if (full.lastContextSnapshot) chat.lastContextSnapshot = full.lastContextSnapshot
           if (full.segmentCount) {
             chat.segmentCount = full.segmentCount
             chat._nextSegToLoad = full.segmentCount
@@ -229,7 +234,8 @@ export const useChatsStore = defineStore('chats', () => {
           ensureMessages(initialChat.id)  // fire-and-forget, non-blocking
         }
       } else {
-        await createChat(en.chats.newChat)
+        // No chats on disk — start with empty state (user creates via New Chat)
+        activeChatId.value = null
       }
     } finally {
       isLoading.value = false
@@ -326,7 +332,6 @@ export const useChatsStore = defineStore('chats', () => {
       workingPath: null,
       codingMode: false,
       codingProvider: 'claude-code',
-      maxOutputTokens: null,    // null = use global default from config
     }
     if (agentConfig && agentConfig.length === 1) {
       chat.systemAgentId = agentConfig[0]
@@ -419,7 +424,6 @@ export const useChatsStore = defineStore('chats', () => {
     if (activeChatId.value === id) {
       const remaining = flattenChats(chatTree.value)
       activeChatId.value = remaining[0]?.id || null
-      if (!activeChatId.value) await createChat()
     }
     await storage.deleteChat(id)
     await persistIndex()
@@ -887,7 +891,7 @@ export const useChatsStore = defineStore('chats', () => {
         }
       } else {
         // chat node — strip messages and runtime flags
-        const { messages, isRunning, isThinking, isLoadingMessages, contextMetrics, ...meta } = JSON.parse(JSON.stringify(node))
+        const { messages, isRunning, isThinking, isLoadingMessages, contextMetrics, perAgentContextMetrics, lastContextSnapshot, ...meta } = JSON.parse(JSON.stringify(node))
         return meta
       }
     })
@@ -949,6 +953,18 @@ export const useChatsStore = defineStore('chats', () => {
         }
       }
 
+      // IM bridge chunks: always route through _applyChunk (useChunkHandler
+      // doesn't know about IM streaming messages in its perChatStreamingMsgId map)
+      const chat = chats.value.find(c => c.id === chatId)
+      if (chunk.type === 'im_user_message' || chunk.type === 'im_stream_start' || chunk.type === 'im_stream_end') {
+        _applyChunk(chatId, chunk)
+        return
+      }
+      if (chat?._imStreaming) {
+        _applyChunk(chatId, chunk)
+        return
+      }
+
       // If ChatsView is mounted and has a UI callback, let it handle everything
       // (it manages segments, scroll, timers, AND updates message content)
       if (_uiChunkCallback) {
@@ -977,12 +993,44 @@ export const useChatsStore = defineStore('chats', () => {
       return
     }
 
-    // Group agent chunks (tagged with agentId) are handled exclusively by
-    // ChatsView.handleChunk via the perChatStreamingMsgId keying system.
-    // The store must NOT touch them — doing so causes duplicate content writes,
-    // race conditions with the streaming flag, and merged/shared bubbles.
-    if (chunk.agentId) {
-      // Only propagate state flags that don't mutate messages
+    // IM bridge: inject messages into in-memory store
+    if (chunk.type === 'im_user_message' && chunk.message) {
+      if (!chat.messages.find(m => m.id === chunk.message.id)) {
+        chat.messages.push({ ...chunk.message })
+      }
+      return
+    }
+    if (chunk.type === 'im_stream_start' && chunk.message) {
+      let msg = chat.messages.find(m => m.id === chunk.message.id)
+      if (!msg) {
+        msg = { ...chunk.message }
+        chat.messages.push(msg)
+      }
+      // Force streaming=true — disk may already have the finalized version
+      msg.streaming = true
+      msg.content = ''
+      msg.segments = [{ type: 'text', content: '' }]
+      chat.isRunning = true
+      chat._imStreaming = true
+      chat._imStreamingMsgId = chunk.message.id
+      return
+    }
+    if (chunk.type === 'im_stream_end') {
+      const msg = chat.messages.find(m => m.id === chunk.messageId)
+      if (msg) msg.streaming = false
+      chat.isRunning = false
+      chat._imStreaming = false
+      chat._imStreamingMsgId = null
+      debouncedPersistChat(chatId)
+      return
+    }
+
+    // When _uiChunkCallback is set (ChatsView mounted), group agent chunks
+    // (tagged with agentId) are handled exclusively by handleChunk. The store
+    // must NOT touch them — doing so causes duplicate content writes.
+    // BUT when _uiChunkCallback is null (minibar, other routes), the store is
+    // the ONLY handler and must process the full lifecycle.
+    if (chunk.agentId && _uiChunkCallback) {
       if (chunk.type === 'thinking_start') chat.isThinking = true
       else if (chunk.type === 'text') chat.isThinking = false
       else if (chunk.type === 'context_update' && chunk.metrics) chat.contextMetrics = { ...chunk.metrics }
@@ -990,9 +1038,80 @@ export const useChatsStore = defineStore('chats', () => {
       return
     }
 
+    // ── Lifecycle: agent_start / agent_end / send_message_complete ──
+    if (chunk.type === 'agent_start') {
+      // Create streaming placeholder for this agent
+      const msgId = uuidv4()
+      chat.messages.push({
+        id: msgId,
+        role: 'assistant',
+        content: '',
+        streaming: true,
+        streamingStartedAt: Date.now(),
+        agentId: chunk.agentId,
+        agentName: chunk.agentName,
+        segments: [],
+      })
+      chat.isRunning = true
+      chat.isThinking = true
+      debouncedPersistChat(chatId)
+      return
+    }
+
+    if (chunk.type === 'agent_end') {
+      const msg = [...chat.messages].reverse().find(
+        m => m.role === 'assistant' && m.streaming && m.agentId === chunk.agentId
+      )
+      if (msg) {
+        msg.streaming = false
+        if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
+        if (!msg.content && !(msg.segments || []).some(s => s.type === 'text' && s.content)) {
+          msg.isError = true
+          msg.content = '_No response_'
+          msg.segments = [{ type: 'text', content: '_No response_' }]
+        }
+      }
+      debouncedPersistChat(chatId)
+      return
+    }
+
+    if (chunk.type === 'send_message_complete' || chunk.type === 'send_message_error') {
+      // Remove stale waiting indicators
+      if (chat.messages) {
+        const waitIdx = chat.messages.findIndex(m => m.isWaitingIndicator)
+        if (waitIdx >= 0) chat.messages.splice(waitIdx, 1)
+      }
+      // Finalize any still-streaming messages
+      for (const m of chat.messages) {
+        if (m.streaming) {
+          m.streaming = false
+          if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
+        }
+      }
+      if (chunk.type === 'send_message_error') {
+        const errMsg = [...chat.messages].reverse().find(m => m.role === 'assistant')
+        if (errMsg && !errMsg.content) {
+          errMsg.content = `Error: ${chunk.error}`
+          errMsg.segments = [{ type: 'text', content: errMsg.content }]
+          errMsg.isError = true
+        }
+      }
+      chat.isRunning = false
+      chat.isThinking = false
+      chat.isCallingTool = false
+      chat.currentToolCall = null
+      const cs = new Set(completedChatIds.value)
+      cs.add(chatId)
+      completedChatIds.value = cs
+      debouncedPersistChat(chatId)
+      return
+    }
+
     if (chunk.type === 'text') {
       chat.isThinking = false
-      const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
+      const msg = chat._imStreamingMsgId
+        ? chat.messages.find(m => m.id === chat._imStreamingMsgId)
+        : [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
       if (msg) {
         msg.content = (msg.content || '') + chunk.text
         // Keep a minimal segments array so MessageRenderer can display the text
@@ -1009,35 +1128,27 @@ export const useChatsStore = defineStore('chats', () => {
     } else if (chunk.type === 'plan_submitted') {
       const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
       if (msg) {
-        msg.planData  = chunk.plan   // { title, steps: [{ label }] }
-        msg.planState = 'pending'    // 'pending' | 'approved' | 'rejected'
+        msg.planData  = chunk.plan
+        msg.planState = 'pending'
       }
     } else if (chunk.type === 'context_update' && chunk.metrics) {
       chat.contextMetrics = { ...chunk.metrics }
     } else if (chunk.type === 'agent_step') {
-      // Add agent progress step to segments
       const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
       if (msg) {
         if (!msg.segments) msg.segments = []
-        // Keep only the latest step segment to avoid accumulation.
         const existingStepIndex = msg.segments.findIndex(s => s.type === 'agent_step')
         const newStep = {
           type: 'agent_step',
           id: chunk.id,
           title: chunk.title,
-          status: chunk.status, // 'in_progress', 'completed', 'pending'
+          status: chunk.status,
           duration: chunk.duration,
           details: chunk.details || {},
           timestamp: chunk.timestamp,
         }
-        
-        if (existingStepIndex >= 0) {
-          // Replace the existing step segment.
-          msg.segments[existingStepIndex] = newStep
-        } else {
-          // Append a new step segment.
-          msg.segments.push(newStep)
-        }
+        if (existingStepIndex >= 0) msg.segments[existingStepIndex] = newStep
+        else msg.segments.push(newStep)
       }
     } else if (chunk.type === 'max_tokens_reached') {
       const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
@@ -1050,8 +1161,6 @@ export const useChatsStore = defineStore('chats', () => {
         else msg.segments.push({ type: 'text', content: msg.content })
       }
     }
-    // tool_call/tool_result segment rendering handled by UI callback in ChatsView
-    // (isCallingTool/currentToolCall are updated in initChunkListener unconditionally)
 
     debouncedPersistChat(chatId)
   }
@@ -1151,6 +1260,8 @@ export const useChatsStore = defineStore('chats', () => {
       : [targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id].filter(Boolean)
     const isGroup = groupIds.length > 1
 
+    targetChat.isRunning = true
+    targetChat.isThinking = true
     const messages = (targetChat.messages || [])
       .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
       .map(m => ({ role: m.role, content: m.content, _agentId: m.agentId || null, _userAgentId: m.userAgentId || null }))
@@ -1169,7 +1280,6 @@ export const useChatsStore = defineStore('chats', () => {
         permissionMode: targetChat.permissionMode || 'inherit',
         chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
         chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
-        maxOutputTokens: targetChat.maxOutputTokens || null,
         maxAgentRounds: targetChat.maxAgentRounds ?? 10,
         workingPath: targetChat.workingPath || null,
         codingMode: !!targetChat.codingMode,
@@ -1178,7 +1288,6 @@ export const useChatsStore = defineStore('chats', () => {
         systemAgentId: isGroup ? null : (groupIds[0] || null),
         groupAudienceMode: targetChat.groupAudienceMode || 'auto',
         groupAudienceAgentIds: JSON.parse(JSON.stringify(targetChat.groupAudienceAgentIds || [])),
-        agentModelOverrides: JSON.parse(JSON.stringify(targetChat.agentModelOverrides || {})),
       },
     }).catch(err => console.error('[minibar send] IPC error:', err.message))
   }

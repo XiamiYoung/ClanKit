@@ -42,10 +42,10 @@
           <div v-if="activeTab === 'templates'" class="agc-templates">
             <div class="agc-templates-grid">
               <div
-                v-for="template in templates"
+                v-for="template in sortedTemplates"
                 :key="template.id"
                 class="agc-template-card"
-                :class="{ selected: selectedTemplate?.id === template.id }"
+                :class="{ selected: selectedTemplate?.id === template.id, highlighted: highlightedTemplateIds.includes(template.id) }"
                 @click="selectedTemplate = template"
               >
                 <div class="agc-template-icon">{{ template.emoji }}</div>
@@ -210,13 +210,21 @@ import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
-import { getAgentTemplates } from '../../data/agentTemplates'
+import { getAgentTemplates, PROFESSIONAL_TEMPLATE_IDS, getEntertainmentTemplateIds } from '../../data/agentTemplates'
 import AppButton from '../common/AppButton.vue'
 
 const props = defineProps({
   agentType: {
     type: String,
     default: 'system'
+  },
+  initialTab: {
+    type: String,
+    default: ''
+  },
+  highlightCategory: {
+    type: String,
+    default: ''
   }
 })
 
@@ -228,7 +236,22 @@ const configStore = useConfigStore()
 
 const templates = computed(() => getAgentTemplates(locale.value))
 
-const activeTab = ref('custom')
+const highlightedTemplateIds = computed(() => {
+  if (props.highlightCategory === 'professional') return PROFESSIONAL_TEMPLATE_IDS
+  if (props.highlightCategory === 'entertainment') return getEntertainmentTemplateIds(locale.value)
+  return []
+})
+
+const sortedTemplates = computed(() => {
+  if (!highlightedTemplateIds.value.length) return templates.value
+  return [...templates.value].sort((a, b) => {
+    const aH = highlightedTemplateIds.value.includes(a.id) ? 0 : 1
+    const bH = highlightedTemplateIds.value.includes(b.id) ? 0 : 1
+    return aH - bH
+  })
+})
+
+const activeTab = ref(props.initialTab || 'custom')
 const selectedTemplate = ref(null)
 const customDescription = ref('')
 const generatingSurprise = ref(false)
@@ -1283,6 +1306,12 @@ async function createAgents() {
 .agc-template-card.selected {
   border-color: #007AFF;
   background: rgba(0, 122, 255, 0.08);
+}
+
+.agc-template-card.highlighted {
+  border-color: #4B5563;
+  background: rgba(75, 85, 99, 0.12);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .agc-template-icon {

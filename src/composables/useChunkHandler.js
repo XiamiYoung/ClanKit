@@ -1,4 +1,4 @@
-import { ref, reactive, nextTick } from 'vue'
+import { ref, reactive } from 'vue'
 import { useChatsStore } from '../stores/chats'
 import { useAgentsStore } from '../stores/agents'
 import { v4 as uuidv4 } from 'uuid'
@@ -8,20 +8,16 @@ import { v4 as uuidv4 } from 'uuid'
  * history context banners, collaboration tracking, and IPC chunk routing.
  *
  * @param {Object}   deps
- * @param {Map}      deps.perChatQueue          - reactive Map for queued messages
  * @param {Function} deps.scrollToBottom        - scrollToBottom(smooth, chatId)
  * @param {Function} deps.dbg                   - dbg(msg, level) debug logger
  * @param {Function} deps._fireGroupAgentsDirect - internal group-agent fire function
- * @param {Function} deps.processQueuedMessage  - queue processing callback from useSendMessage
  */
 export function useChunkHandler({
-  perChatQueue,
   scrollToBottom,
   dbg,
   _fireGroupAgentsDirect,
   stickyTarget,
   stopStreamingTimer,
-  processQueuedMessage,
 } = {}) {
   const chatsStore = useChatsStore()
   const agentsStore = useAgentsStore()
@@ -229,14 +225,20 @@ export function useChunkHandler({
           }
           msg.streaming = false
           if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
-          // If no text content, mark as error — the agent produced nothing (likely a backend error).
-          // Check for text segments specifically; non-text segments like agent_step don't count.
+          // If no text content: distinguish user-initiated stop from real error.
+          // When user pressed stop/escape, silently remove the empty placeholder.
+          // Otherwise mark as error (the agent produced nothing — likely a backend error).
           const hasTextContent = msg.content || (msg.segments || []).some(s => s.type === 'text' && s.content)
           if (!hasTextContent) {
-            msg.isError = true
-            // Strip non-text segments (agent_step etc.) and replace with error placeholder
-            msg.content = '_No response_'
-            msg.segments = [{ type: 'text', content: '_No response_' }]
+            if (collaborationCancelled.value) {
+              // User-initiated stop — silently remove empty placeholder
+              const rmIdx = targetChat.messages.indexOf(msg)
+              if (rmIdx !== -1) targetChat.messages.splice(rmIdx, 1)
+            } else {
+              msg.isError = true
+              msg.content = '_No response_'
+              msg.segments = [{ type: 'text', content: '_No response_' }]
+            }
           }
 
           // ── Post-processing: truncate multi-turn roleplay ──
@@ -245,7 +247,7 @@ export function useChunkHandler({
           // so the collaboration loop can detect the turn-pass).
           if (msg.content && msg.agentId) {
             const thisAgentId = msg.agentId
-            const groupIds = (targetChat.groupAgentIds || targetChat.groupPersonaIds || [])
+            const groupIds = (targetChat.groupAgentIds || [])
             if (groupIds.length > 1) {
               const otherAgents = groupIds
                 .filter(id => id !== thisAgentId)
@@ -308,35 +310,18 @@ export function useChunkHandler({
       dbg(`agent_end: ${chunk.agentName}`, 'info')
       scrollToBottom(false, cId)
 
-      // Per-agent dequeue: if a user message was queued for this specific agent, fire it now
-      // via runAgentAdditional (which does NOT stop existing loops).
-      // Skip dequeue during collaboration loop — those rounds are managed by triggerAgentCollaboration.
+      // Check if ALL agents for this chat are now idle — if so, clear isRunning.
       if (!isInCollaborationLoop.value) {
-        const qKey = `${cId}:${chunk.agentId}`
-        const queue = perChatQueue.get(qKey)
-        if (queue?.length > 0) {
-          const queued = queue.shift()
-          if (queue.length === 0) perChatQueue.delete(qKey)
-          dbg(`Dequeuing for agent ${chunk.agentName}: "${queued.text.slice(0,30)}…"`, 'info')
-          nextTick(() => _fireGroupAgentsDirect(cId, targetChat, queued.text, [chunk.agentId], queued.attachments)
-            .catch(err => dbg(`_fireGroupAgentsDirect dequeue error: ${err.message}`, 'error')))
-        } else {
-          // No more queued work for this agent. Check if ALL agents for this chat are now idle
-          // — if so, clear isRunning (the primary run's finally block may have already exited).
-          const anyStillRunning = [...runningAgentKeys].some(k => k.startsWith(cId + ':'))
-          const anyQueued = [...perChatQueue.keys()].some(k => k.startsWith(cId + ':') && perChatQueue.get(k)?.length > 0)
-          if (!anyStillRunning && !anyQueued) {
-            const fc = chatsStore.chats.find(c => c.id === cId)
-            if (fc && fc.isRunning) {
-              dbg(`Last side-fired agent done — isRunning → false for ${cId}`)
-              fc.isRunning = false
-              fc.isThinking = false
-              fc.isCallingTool = false
-              fc.currentToolCall = null
-              // Always mark completed when side-fired agents are all done
-              // (display logic checks active status before showing "Done" label)
-              chatsStore.markCompleted(cId)
-            }
+        const anyStillRunning = [...runningAgentKeys].some(k => k.startsWith(cId + ':'))
+        if (!anyStillRunning) {
+          const fc = chatsStore.chats.find(c => c.id === cId)
+          if (fc && fc.isRunning) {
+            dbg(`Last agent done — isRunning → false for ${cId}`)
+            fc.isRunning = false
+            fc.isThinking = false
+            fc.isCallingTool = false
+            fc.currentToolCall = null
+            chatsStore.markCompleted(cId)
           }
         }
       }
@@ -347,6 +332,9 @@ export function useChunkHandler({
     const routeKey = chunk.agentId ? `${cId}:${chunk.agentId}` : cId
 
     if (chunk.type === 'text') {
+      const hasMsgId = perChatStreamingMsgId.has(routeKey)
+      if (!hasMsgId) {
+      }
       targetChat.isThinking = false
       lastTextSeg(routeKey).content += chunk.text
       flushSegments(routeKey)
@@ -450,6 +438,11 @@ export function useChunkHandler({
     } else if (chunk.type === 'context_update') {
       if (chunk.metrics) {
         targetChat.contextMetrics = { ...chunk.metrics }
+        // Store per-agent metrics for group chat inspector
+        if (chunk.agentId) {
+          if (!targetChat.perAgentContextMetrics) targetChat.perAgentContextMetrics = {}
+          targetChat.perAgentContextMetrics[chunk.agentId] = { agentName: chunk.agentName || chunk.agentId, ...chunk.metrics }
+        }
         const msgId = perChatStreamingMsgId.get(routeKey)
         const streamMsg = msgId
           ? targetChat.messages?.find(m => m.id === msgId)
@@ -508,7 +501,6 @@ export function useChunkHandler({
 
     } else if (chunk.type === 'send_message_complete' || chunk.type === 'send_message_error') {
       // Node.js orchestration finished — do final cleanup for both single and group paths.
-
       // Remove any stale waiting indicator (may survive if agent_start never fired, e.g. on stop or error)
       if (targetChat?.messages) {
         const waitingIdx = targetChat.messages.findIndex(m => m.isWaitingIndicator)
@@ -589,10 +581,7 @@ export function useChunkHandler({
       scrollToBottom(false, cId)
       dbg(`send_message_complete for ${cId}`, 'info')
 
-      // Process next queued message (if any) now that this message is complete
-      if (processQueuedMessage) {
-        await processQueuedMessage(cId, false)
-      }
+      // (queue system removed — interrupt & steer replaces queuing)
     }
   }
 

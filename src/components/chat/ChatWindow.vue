@@ -326,10 +326,12 @@
             rows="2"
             class="cw-textarea"
           />
-          <!-- Stop -->
+          <!-- Escape retrieve (visible while running) -->
           <template v-if="isRunning">
-            <button @click.stop="defaultStop" class="cw-btn stop" :aria-label="t('chats.stopGenerating')" :title="t('chats.stopAndClear')">
-              <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            <button @click.stop="emit('escape-retrieve')" class="cw-btn escape" :aria-label="t('chats.escapeRetrieve')" :title="t('chats.escapeRetrieve')">
+              <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
+              </svg>
             </button>
           </template>
           <!-- Send -->
@@ -339,7 +341,7 @@
             class="cw-btn send"
             :class="{ active: defaultInputText.trim() || attachments.length > 0 }"
             :aria-label="t('chats.sendMessageBtn')"
-            :title="isRunning ? t('chats.queueMessage') : t('chats.sendMessageBtn')"
+            :title="t('chats.sendMessageBtn')"
           >
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -399,7 +401,7 @@ const props = defineProps({
   onRefinePlan:  { type: Function, default: null },
 })
 
-const emit = defineEmits(['send', 'stop', 'quote', 'delete-message', 'send-with-attachments', 'resend-message', 'quote-image', 'retry-waiting-indicator'])
+const emit = defineEmits(['send', 'stop', 'escape-retrieve', 'quote', 'delete-message', 'send-with-attachments', 'resend-message', 'quote-image', 'retry-waiting-indicator'])
 
 const chatsStore = useChatsStore()
 const agentsStore = useAgentsStore()
@@ -470,9 +472,8 @@ function getMsgAssistantProviderModel(msg) {
   if (!pid) return ''
   const agent = agentsStore.getAgentById(pid)
   if (!agent) return ''
-  const override = chat.value?.agentModelOverrides?.[pid] || chat.value?.personaModelOverrides?.[pid]
-  const providerId = override?.provider || agent.providerId
-  const modelId = override?.model || agent.modelId
+  const providerId = agent.providerId
+  const modelId = agent.modelId
   if (!providerId && !modelId) return ''
   const providers = configStore.config?.providers || []
   const found = providers.find(p => p.id === providerId || p.type === providerId)
@@ -875,6 +876,11 @@ function removeAttachment(id) {
 
 // ── Default input handlers (used when no custom input slot is provided) ──
 function onKeydown(e) {
+  if (e.key === 'Escape' && isRunning.value) {
+    e.preventDefault()
+    emit('escape-retrieve')
+    return
+  }
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     defaultSend()
@@ -907,7 +913,7 @@ function defaultSend() {
 }
 
 function defaultStop() {
-  emit('stop')
+  emit('escape-retrieve')
 }
 
 // Expose scrollToBottom so parents can trigger it
@@ -1450,8 +1456,8 @@ defineExpose({ scrollToBottom })
 .cw-btn.attach { background: #F5F5F5; color: #9CA3AF; }
 .cw-btn.attach:hover { background: #E5E5EA; color: #1A1A1A; }
 .cw-btn.attach:disabled { opacity: 0.4; cursor: not-allowed; }
-.cw-btn.stop { background: rgba(255,59,48,0.08); color: #FF3B30; }
-.cw-btn.stop:hover { background: rgba(255,59,48,0.14); }
+.cw-btn.escape { background: rgba(255,59,48,0.08); color: #FF3B30; }
+.cw-btn.escape:hover { background: rgba(255,59,48,0.14); }
 .cw-btn.send { background: #E5E5EA; color: #9CA3AF; cursor: not-allowed; }
 .cw-btn.send.active {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);

@@ -20,7 +20,6 @@ const ccmActiveTab = ref('general')
 
 // ── General tab draft state ──
 const draftMaxAgentRounds = ref(10)
-const draftMaxOutputTokens = ref(null)  // null = use global default
 const draftWorkingPath = ref('')
 const draftCodingMode = ref(false)
 const draftCodingProvider = ref('claude-code')
@@ -72,7 +71,6 @@ watch(() => props.visible, (open) => {
     codingMode: draftCodingMode.value,
     codingProvider: draftCodingProvider.value,
     maxAgentRounds: draftMaxAgentRounds.value,
-    maxOutputTokens: draftMaxOutputTokens.value,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
     chatDangerOverrides: JSON.parse(JSON.stringify(draftChatDangerOverrides.value)),
@@ -84,14 +82,11 @@ function saveChatSettings() {
   if (!chatId) return
   const rawRounds = Number(draftMaxAgentRounds.value)
   const clampedRounds = Number.isFinite(rawRounds) ? Math.min(100, Math.max(1, rawRounds)) : 10
-  const rawMaxOutput = Number(draftMaxOutputTokens.value)
-  const clampedMaxOutput = draftMaxOutputTokens.value ? Math.min(98304, Math.max(1024, rawMaxOutput)) : null
   chatsStore.setChatSettings(chatId, {
     workingPath: draftWorkingPath.value || null,
     codingMode: draftCodingMode.value,
     codingProvider: draftCodingProvider.value,
     maxAgentRounds: clampedRounds,
-    maxOutputTokens: clampedMaxOutput,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
     chatDangerOverrides: JSON.parse(JSON.stringify(draftChatDangerOverrides.value)),
@@ -116,7 +111,6 @@ function cancelChatSettings() {
     draftCodingMode.value = _draftSnapshot.codingMode ?? false
     draftCodingProvider.value = _draftSnapshot.codingProvider ?? 'claude-code'
     draftMaxAgentRounds.value = _draftSnapshot.maxAgentRounds
-    draftMaxOutputTokens.value = _draftSnapshot.maxOutputTokens ?? null
     draftPermissionMode.value = _draftSnapshot.permissionMode
     draftChatAllowList.value = _draftSnapshot.chatAllowList
     draftChatDangerOverrides.value = _draftSnapshot.chatDangerOverrides
@@ -157,8 +151,6 @@ function _loadDraftFromChat() {
   draftCodingProvider.value = chat.codingProvider ?? 'claude-code'
   // Max agent rounds (null in JSON = use default 10)
   draftMaxAgentRounds.value = chat.maxAgentRounds ?? 10
-  // Max output tokens (null = use global default)
-  draftMaxOutputTokens.value = chat.maxOutputTokens ?? null
   // Permissions
   draftPermissionMode.value = chat.permissionMode || 'inherit'
   draftChatAllowList.value = JSON.parse(JSON.stringify(chat.chatAllowList || []))
@@ -271,23 +263,6 @@ function _loadDraftFromChat() {
             <span class="ccm-working-path-hint">{{ t('chats.maxAgentChatRoundsHint') }}</span>
           </div>
 
-          <div class="ccm-dark-section">
-            <div class="ccm-dark-section-label">
-              {{ t('chats.maxOutputTokens') }}
-              <span class="ccm-dark-badge">{{ draftMaxOutputTokens ? draftMaxOutputTokens.toLocaleString() + ' ' + t('chats.tokens') : t('chats.globalDefault') }}</span>
-            </div>
-            <div class="ccm-stepper-row">
-              <button class="ccm-stepper-btn" @click="draftMaxOutputTokens = Math.max(1024, (draftMaxOutputTokens ?? configStore.config.maxOutputTokens ?? 32768) - 1024)">−</button>
-              <input :value="draftMaxOutputTokens ?? configStore.config.maxOutputTokens ?? 32768" type="number" min="1024" max="98304" class="ccm-stepper-input ccm-stepper-input--wide" @input="draftMaxOutputTokens = Number($event.target.value) || null" @blur="draftMaxOutputTokens = draftMaxOutputTokens ? Math.min(98304, Math.max(1024, Number(draftMaxOutputTokens))) : null" />
-              <button class="ccm-stepper-btn" @click="draftMaxOutputTokens = Math.min(98304, (draftMaxOutputTokens ?? configStore.config.maxOutputTokens ?? 32768) + 1024)">+</button>
-              <button v-if="draftMaxOutputTokens" class="ccm-stepper-reset" @click="draftMaxOutputTokens = null" :title="t('common.reset')">
-                {{ t('common.reset') }}
-              </button>
-            </div>
-            <span class="ccm-working-path-hint">
-              {{ t('chats.globalDefaultTokens', { count: (configStore.config.maxOutputTokens ?? 32768).toLocaleString() }) }}
-            </span>
-          </div>
         </div>
 
         <!-- PERMISSIONS TAB -->

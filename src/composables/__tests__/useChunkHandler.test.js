@@ -38,7 +38,6 @@ function makeChat(overrides = {}) {
 
 function createHandler(overrides = {}) {
   return useChunkHandler({
-    perChatQueue: reactive(new Map()),
     scrollToBottom: vi.fn(),
     dbg: vi.fn(),
     _fireGroupAgentsDirect: vi.fn(),
@@ -257,13 +256,15 @@ describe('useChunkHandler', () => {
 
   // ─── 5. send_message_complete chunk ──────────────────────────────────────
   describe('send_message_complete chunk', () => {
-    it('awaits processQueuedMessage after completion cleanup', async () => {
-      const processQueuedMessage = vi.fn(async () => {})
-      const { handleChunk } = createHandler({ processQueuedMessage })
+    it('clears isRunning and marks chat completed on send_message_complete', async () => {
+      const chat = makeChat({ isRunning: true })
+      mockChatsStore.chats = [chat]
+      const { handleChunk } = createHandler()
 
       await handleChunk('chat1', { type: 'send_message_complete' })
 
-      expect(processQueuedMessage).toHaveBeenCalledWith('chat1', false)
+      expect(chat.isRunning).toBe(false)
+      expect(mockChatsStore.markCompleted).toHaveBeenCalledWith('chat1')
     })
 
     it('does not mutate stickyTarget when completion arrives', () => {

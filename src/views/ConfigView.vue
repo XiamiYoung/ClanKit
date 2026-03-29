@@ -205,13 +205,6 @@
                 <div class="models-nav-section-label">{{ t('config.globalSettings') }}</div>
                 <button
                   class="models-nav-item"
-                  :class="{ active: modelsLeftNav === 'global' }"
-                  @click="modelsLeftNav = 'global'"
-                >
-                  <span class="models-nav-name">{{ t('config.globalModelSettings') }}</span>
-                </button>
-                <button
-                  class="models-nav-item"
                   :class="{ active: modelsLeftNav === 'utility' }"
                   @click="modelsLeftNav = 'utility'"
                 >
@@ -235,51 +228,6 @@
                 </div>
               </template>
 
-              <!-- Global Model Settings -->
-              <template v-else-if="modelsLeftNav === 'global'">
-                <div class="config-card">
-                  <div class="form-section-header">
-                    <div class="section-icon-sm">
-                      <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/>
-                      </svg>
-                    </div>
-                    <h3 class="form-section-title">{{ t('config.models', 'Models') }}</h3>
-                  </div>
-                  <div class="form-group">
-                    <label for="maxOutputTokens" class="form-label">
-                      {{ t('config.maxOutputTokens') }}
-                      <span class="form-label-hint">{{ t('config.perTurnOutputLimit') }}</span>
-                    </label>
-                    <input
-                      id="maxOutputTokens"
-                      v-model.number="form.maxOutputTokens"
-                      type="number"
-                      min="1024"
-                      max="98304"
-                      class="field font-mono"
-                      style="max-width: 160px;"
-                      @blur="form.maxOutputTokens = Math.min(98304, Math.max(1024, Number(form.maxOutputTokens) || 32768))"
-                    />
-                    <p class="hint">
-                      {{ t('config.maxOutputTokensHint') }}
-                    </p>
-                  </div>
-                </div>
-                <div class="save-row">
-                  <AppButton size="save" @click="saveModels" :disabled="savingModels" :loading="savingModels">
-                    <svg v-if="!savingModels" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                      <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-                    </svg>
-                  </AppButton>
-                  <span v-if="savedModelsMsg" class="save-indicator" :class="savedModelsMsg.ok ? 'success' : 'error'">
-                    <svg v-if="savedModelsMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                    <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    {{ savedModelsMsg.text }}
-                  </span>
-                </div>
-              </template>
 
               <!-- Utility Model -->
               <template v-else-if="modelsLeftNav === 'utility'">
@@ -488,32 +436,31 @@
                     </div>
                   </template>
 
-                  <!-- Generic Settings -->
+                  <!-- Advanced Settings (collapsed by default) -->
                   <div class="form-divider"></div>
-                  <div class="form-section-subheader">
-                    <div class="section-icon-sm" style="width: 1.25rem; height: 1.25rem;">
-                      <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 0.75rem; height: 0.75rem;">
-                        <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-                        <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-                      </svg>
+                  <button class="provider-advanced-toggle" @click="providerAdvancedOpen = !providerAdvancedOpen">
+                    <svg class="icon-xs" :style="{ transform: providerAdvancedOpen ? 'rotate(90deg)' : '' }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 0.75rem; height: 0.75rem; transition: transform 0.15s;">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                    {{ t('config.advancedSettings') }}
+                  </button>
+                  <div v-if="providerAdvancedOpen" style="margin-top: 0.5rem;">
+                    <div class="form-group">
+                      <label class="form-label">
+                        {{ t('config.maxOutputTokens') }}
+                        <span v-if="getHardLimit(selectedProvider, 'maxOutputTokens')" class="form-label-hint" style="color:#EF4444;">
+                          {{ t('config.hardLimit', '', { count: getHardLimit(selectedProvider, 'maxOutputTokens') }) }}
+                        </span>
+                      </label>
+                      <input
+                        v-model.number="selectedProvider.settings.maxOutputTokens"
+                        type="number"
+                        min="1"
+                        :max="getHardLimit(selectedProvider, 'maxOutputTokens') || 98304"
+                        class="field font-mono"
+                        style="max-width: 160px;"
+                      />
                     </div>
-                    {{ t('config.genericSettings') }}
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">
-                      {{ t('config.maxOutputTokens') }}
-                      <span v-if="getHardLimit(selectedProvider, 'maxOutputTokens')" class="form-label-hint" style="color:#EF4444;">
-                        {{ t('config.hardLimit', '', { count: getHardLimit(selectedProvider, 'maxOutputTokens') }) }}
-                      </span>
-                    </label>
-                    <input
-                      v-model.number="selectedProvider.settings.maxOutputTokens"
-                      type="number"
-                      min="1"
-                      :max="getHardLimit(selectedProvider, 'maxOutputTokens') || 98304"
-                      class="field font-mono"
-                      style="max-width: 160px;"
-                    />
                   </div>
                 </div>
               </template>
@@ -1015,7 +962,7 @@
 
           <!-- Save row -->
           <div class="config-save-row">
-            <span v-if="pricingSaved" class="save-status saved">Saved</span>
+            <span v-if="pricingSaved" class="save-status saved">{{ t('config.saved') }}</span>
             <AppButton variant="primary" size="save" @click="savePricing">Save</AppButton>
           </div>
         </template>
@@ -1231,6 +1178,24 @@
               {{ savedSecurityMsg.text }}
             </span>
           </div>
+
+          <!-- Telemetry opt-out -->
+          <div class="config-card" style="margin-top: 1rem;">
+            <div class="form-group" style="margin-bottom:0;">
+              <div class="im-enable-row">
+                <div>
+                  <span class="im-enable-label">{{ t('config.telemetryTitle') }}</span>
+                  <p class="hint" style="margin-top:4px; margin-bottom:0;">{{ t('config.telemetryDesc') }}</p>
+                </div>
+                <label class="im-toggle" @click.stop>
+                  <input type="checkbox"
+                    :checked="!configStore.config.telemetryOptOut"
+                    @change="configStore.saveConfig({ telemetryOptOut: !$event.target.checked })" />
+                  <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                </label>
+              </div>
+            </div>
+          </div>
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
@@ -1371,6 +1336,18 @@
                   <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
                 </label>
               </div>
+
+              <div class="form-divider" />
+
+              <!-- Self-only toggle -->
+              <div class="im-enable-row">
+                <span class="im-enable-label">{{ t('config.whatsappSelfOnly') }}</span>
+                <label class="im-toggle" @click.stop>
+                  <input type="checkbox" v-model="form.im.whatsapp.selfOnly" />
+                  <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                </label>
+              </div>
+              <p class="hint" style="margin-top:-0.25rem;">{{ t('config.whatsappSelfOnlyHint') }}</p>
 
               <div class="form-divider" />
 
@@ -2035,25 +2012,62 @@
     @confirm="confirmDeleteProvider"
     @close="showDeleteConfirm = false"
   />
+
+  <!-- Onboarding: spotlight on Add Provider modal content -->
+  <OnboardingOverlay
+    v-if="configOnboardingPhase === 'addProvider' && showAddProviderModal"
+    :title="t('onboarding.addProviderTitle')"
+    :description="t('onboarding.addProviderDesc')"
+    target-selector=".modal-content"
+    :padding="16"
+    :current-step="1"
+    :total-steps="3"
+    @skip="skipConfigOnboarding"
+  />
+
+  <!-- Onboarding: spotlight on provider form with step checklist -->
+  <OnboardingOverlay
+    v-if="configOnboardingPhase === 'configureProvider'"
+    :title="t('onboarding.configureProviderTitle')"
+    :description="t('onboarding.configureProviderDesc')"
+    target-selector=".models-right-content"
+    :steps="providerConfigSteps"
+    :current-step="1"
+    :total-steps="3"
+    @skip="skipConfigOnboarding"
+  />
+
+  <!-- Onboarding: spotlight on utility model config (extra padding for dropdown) -->
+  <OnboardingOverlay
+    v-if="configOnboardingPhase === 'configureUtility'"
+    :title="t('onboarding.configureUtilityTitle')"
+    :description="t('onboarding.configureUtilityDesc')"
+    target-selector=".models-right-content"
+    :padding="24"
+    :current-step="2"
+    :total-steps="3"
+    @skip="skipConfigOnboarding"
+  />
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onActivated, onUnmounted, computed, watch, nextTick, defineComponent, h } from 'vue'
 defineOptions({ inheritAttrs: false })
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useConfigStore } from '../stores/config'
 import { useModelsStore } from '../stores/models'
 import AppButton from '../components/common/AppButton.vue'
 import ProviderModelPicker from '../components/common/ProviderModelPicker.vue'
 import ComboBox from '../components/common/ComboBox.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import OnboardingOverlay from '../components/agents/OnboardingOverlay.vue'
 import { useI18n } from '../i18n/useI18n'
-import { DEFAULT_PRICES } from '../utils/pricing.js'
 import { buildDemoTooltipHtml } from '../utils/demoMode.js'
 
 const configStore = useConfigStore()
 const modelsStore = useModelsStore()
 const route = useRoute()
+const router = useRouter()
 const { t } = useI18n()
 
 const isElectron = !!(typeof window !== 'undefined' && window.electronAPI)
@@ -2081,21 +2095,34 @@ const VALID_TABS = ['general', 'ai', 'models', 'skills', 'knowledge', 'voice', '
 const activeTopTab = ref('general')
 const activeProviderTab = ref('openai')
 
-// Respond to ?tab= query param (e.g. from ToolsView → "Configure SMTP" button)
-// Map old flat tab values to new two-level structure
-watch(() => route.query.tab, (tab) => {
-  if (!tab) return
-  // New top-level tabs
-  if (tab === 'general') { activeTopTab.value = 'general'; activeSubTab.value = 'paths'; return }
-  if (tab === 'ai') { activeTopTab.value = 'ai'; activeSubTab.value = 'models'; return }
-  // Old flat tab values → remap
-  if (tab === 'models') { activeTopTab.value = 'ai'; activeSubTab.value = 'models'; return }
-  if (tab === 'voice') { activeTopTab.value = 'ai'; activeSubTab.value = 'voice'; return }
-  if (tab === 'knowledge') { activeTopTab.value = 'ai'; activeSubTab.value = 'knowledge'; return }
-  if (tab === 'security') { activeTopTab.value = 'general'; activeSubTab.value = 'security'; return }
-  if (tab === 'email') { activeTopTab.value = 'general'; activeSubTab.value = 'email'; return }
-  if (tab === 'skills') { activeTopTab.value = 'general'; activeSubTab.value = 'paths'; return }
-}, { immediate: true })
+// NOTE: route.query.tab watcher moved below activeSubTab definition to avoid TDZ error.
+
+// ── Onboarding state machine ───────────────────────────────────────────────
+const configOnboardingPhase = ref('idle') // 'idle' | 'addProvider' | 'configureProvider' | 'configureUtility'
+
+function skipConfigOnboarding() {
+  configOnboardingPhase.value = 'idle'
+  configStore.saveConfig({ onboardingCompleted: true })
+}
+
+// Provider config sub-steps for the onboarding checklist
+const providerConfigSteps = computed(() => {
+  const p = selectedProvider.value
+  if (!p) return []
+  const hasBaseURL = !!p.baseURL
+  const hasApiKey = !!p.apiKey
+  // "Fetch models" requires user to actually click Fetch and succeed
+  const modelReady = modelsFetchedOnce.value && !!p.model
+  const tested = !!p.testedAt
+  const saved = tested && p.isActive
+  return [
+    { label: t('onboarding.providerStep1'), done: hasBaseURL },
+    { label: t('onboarding.providerStep2'), done: hasApiKey },
+    { label: t('onboarding.providerStep3'), done: modelReady },
+    { label: t('onboarding.providerStep4'), done: tested },
+    { label: t('onboarding.providerStep5'), done: saved },
+  ]
+})
 
 // Per-tab save state
 const savingModels = ref(false)
@@ -2170,9 +2197,9 @@ async function saveSecurity() {
   savingSecurity.value = true
   try {
     await configStore.saveConfig({ sandboxConfig: JSON.parse(JSON.stringify(sandboxForm)) })
-    savedSecurityMsg.value = { ok: true, text: 'Saved successfully' }
+    savedSecurityMsg.value = { ok: true, text: t('common.successSaved') }
   } catch (err) {
-    savedSecurityMsg.value = { ok: false, text: err.message || 'Save failed' }
+    savedSecurityMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
   } finally {
     savingSecurity.value = false
     setTimeout(() => { savedSecurityMsg.value = null }, 3000)
@@ -2275,6 +2302,42 @@ const subTabsAI = computed(() => [
 
 const activeSubTab = ref('language')
 
+// Route query → tab mapping (must be after activeSubTab definition to avoid TDZ)
+watch(() => route.query.tab, (tab) => {
+  if (!tab) return
+  if (tab === 'general') { activeTopTab.value = 'general'; activeSubTab.value = 'paths'; return }
+  if (tab === 'ai') { activeTopTab.value = 'ai'; activeSubTab.value = 'models'; return }
+  if (tab === 'models') { activeTopTab.value = 'ai'; activeSubTab.value = 'models'; return }
+  if (tab === 'voice') { activeTopTab.value = 'ai'; activeSubTab.value = 'voice'; return }
+  if (tab === 'knowledge') { activeTopTab.value = 'ai'; activeSubTab.value = 'knowledge'; return }
+  if (tab === 'security') { activeTopTab.value = 'general'; activeSubTab.value = 'security'; return }
+  if (tab === 'email') { activeTopTab.value = 'general'; activeSubTab.value = 'email'; return }
+  if (tab === 'skills') { activeTopTab.value = 'general'; activeSubTab.value = 'paths'; return }
+}, { immediate: true })
+
+// Forward-declared here (before onboarding watcher) to avoid TDZ;
+// full watcher + related logic lives in the "Models Page" section below.
+const modelsLeftNav = ref('empty')  // 'empty' | providerId | 'global' | 'utility'
+
+// Onboarding: detect ?onboarding=1 and enter the right phase
+watch(() => route.query.onboarding, (val) => {
+  if (val !== '1') return
+  activeTopTab.value = 'ai'
+  activeSubTab.value = 'models'
+  if (!configStore.isConfigured) {
+    configOnboardingPhase.value = 'addProvider'
+    // showAddProviderModal opened below after it's defined (avoids TDZ)
+  } else if (!configStore.config.utilityModel?.provider || !configStore.config.utilityModel?.model) {
+    configOnboardingPhase.value = 'configureUtility'
+    modelsLeftNav.value = 'utility'
+  }
+  router.replace({ path: '/config', query: {} })
+}, { immediate: true })
+
+// Onboarding: provider→utility transition now happens in saveModels(), not here.
+// Removed isConfigured watcher — test sets isActive=true+saves, which triggered
+// premature jump before user clicked Save.
+
 const currentSubTabs = computed(() =>
   activeTopTab.value === 'general' ? subTabsGeneral.value : subTabsAI.value
 )
@@ -2326,7 +2389,13 @@ const teamsReady = computed(() =>
 const imAnyReady = computed(() => telegramReady.value || whatsappReady.value || feishuReady.value || teamsReady.value)
 
 // Reset IM inner tab to first platform when navigating back to the IM sub-section
-watch(activeSubTab, (val) => { if (val === 'im') activeIMTab.value = 'telegram' })
+watch(activeSubTab, (val) => {
+  if (val === 'im') activeIMTab.value = 'telegram'
+  // Clear stale save/test messages when switching sub-tabs
+  savedModelsMsg.value = ''
+  testResultNew.value = null
+  testUtilityModelResult.value = null
+})
 // Ensure form.im.teams exists (handles KeepAlive cache from before Teams was added)
 watch(activeIMTab, (val) => {
   if (val === 'teams' && !form.im.teams) {
@@ -2416,9 +2485,9 @@ async function saveIM() {
     await configStore.saveConfig({ im: JSON.parse(JSON.stringify(form.im)) })
     // Restart Teams bridge if running so new config (allowedUsers etc.) takes effect
     await _restartTeamsBridge()
-    savedIMMsg.value = { ok: true, text: 'Saved successfully' }
+    savedIMMsg.value = { ok: true, text: t('common.successSaved') }
   } catch (err) {
-    savedIMMsg.value = { ok: false, text: err.message || 'Save failed' }
+    savedIMMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
   } finally {
     savingIM.value = false
     setTimeout(() => { savedIMMsg.value = null }, 3000)
@@ -2526,7 +2595,6 @@ const form = reactive({
   ragEnabled:          true,
   dataPath:            '',
   artifactPath:        '',
-  maxOutputTokens:     32768,
   voiceCall: {
     whisperApiKey:  '',
     whisperBaseURL: '',
@@ -2553,7 +2621,7 @@ const form = reactive({
   },
   im: {
     telegram: { enabled: false, botToken: '', allowedUsers: [] },
-    whatsapp: { enabled: false, allowedUsers: [] },
+    whatsapp: { enabled: false, selfOnly: true, allowedUsers: [] },
     feishu:   { enabled: false, appId: '', appSecret: '', allowedUsers: [] },
     teams:    { enabled: false, tenantId: '', clientId: '', selfOnly: true, allowedUsers: [], pollInterval: 5 },
   },
@@ -2570,8 +2638,29 @@ watch(() => form.im.teams?.enabled, async (enabled) => {
 
 
 // ── Models Page: New left sidebar logic ────────────────────────────────
-const modelsLeftNav = ref('empty')  // 'empty' | providerId | 'global' | 'utility'
+// (modelsLeftNav is forward-declared near the onboarding watcher above)
+const providerAdvancedOpen = ref(false)
+watch(modelsLeftNav, () => {
+  providerAdvancedOpen.value = false
+  modelsFetchedOnce.value = false
+  savedModelsMsg.value = ''
+  testResultNew.value = null
+  testUtilityModelResult.value = null
+})
 const showAddProviderModal = ref(false)
+
+// Onboarding: auto-open the add-provider modal if entering addProvider phase
+if (configOnboardingPhase.value === 'addProvider') {
+  showAddProviderModal.value = true
+}
+
+// Onboarding: when add-provider modal closes after adding, move to configure phase
+watch(showAddProviderModal, (val) => {
+  if (!val && configOnboardingPhase.value === 'addProvider' && modelsLeftNav.value && modelsLeftNav.value !== 'empty') {
+    configOnboardingPhase.value = 'configureProvider'
+  }
+})
+
 const showDeleteConfirm = ref(false)
 const deleteConfirmId = ref(null)
 const deleteConfirmName = ref('')
@@ -2586,6 +2675,7 @@ const showProviderKey = ref(false)
 // Selected provider model fetching state
 const providerModelsFetching = ref(false)
 const providerModelsFetchError = ref('')
+const modelsFetchedOnce = ref(false) // tracks if user clicked "Fetch Models" at least once
 const providerModelFilter = ref('')
 
 const providerPresetOptions = [
@@ -2725,7 +2815,8 @@ async function fetchProviderModels() {
   providerModelsFetchError.value = ''
   try {
     const success = await modelsStore.fetchModelsForProvider(selectedProvider.value.id)
-    if (!success) providerModelsFetchError.value = 'Fetch failed — check API key and Base URL.'
+    if (success) modelsFetchedOnce.value = true
+    else providerModelsFetchError.value = 'Fetch failed — check API key and Base URL.'
   } catch (err) { providerModelsFetchError.value = err.message }
   finally { providerModelsFetching.value = false }
 }
@@ -2746,18 +2837,13 @@ onMounted(async () => {
   const c = JSON.parse(JSON.stringify(configStore.config))
   delete c.defaultProvider
   
-  // Legacy provider objects (for backward compat during transition)
-  
   if (c.voiceCall)    Object.assign(form.voiceCall, c.voiceCall)
   if (c.smtp)         Object.assign(form.smtp, c.smtp)
   if (c.utilityModel) Object.assign(form.utilityModel, c.utilityModel)
-  
-  // Initialize left nav if providers exist
+
+  // Initialize left nav
   if (c.providers && c.providers.length > 0) {
     modelsLeftNav.value = c.providers[0].id
-  } else if (c.anthropic?.apiKey || c.openrouter?.apiKey || c.openai?.apiKey || c.deepseek?.apiKey) {
-    // Legacy config exists, migrate
-    modelsLeftNav.value = 'global'
   } else {
     modelsLeftNav.value = 'empty'
   }
@@ -2770,6 +2856,7 @@ onMounted(async () => {
     },
     whatsapp: {
       enabled:      c.im?.whatsapp?.enabled      ?? false,
+      selfOnly:     c.im?.whatsapp?.selfOnly     !== false,  // default true
       allowedUsers: c.im?.whatsapp?.allowedUsers ?? [],
     },
     feishu: {
@@ -2923,9 +3010,9 @@ async function saveGeneral() {
     await configStore.saveEnvPath('artifactPath', String(form.artifactPath))
     // Save skillsPath to config (merged into Paths section)
     await configStore.saveEnvPath('skillsPath', String(form.skillsPath))
-    savedGeneralMsg.value = { ok: true, text: 'Saved — restart app for data path changes' }
+    savedGeneralMsg.value = { ok: true, text: t('config.savedDataPathRestart') }
   } catch (err) {
-    savedGeneralMsg.value = { ok: false, text: err.message || 'Save failed' }
+    savedGeneralMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
   } finally {
     savingGeneral.value = false
     setTimeout(() => { savedGeneralMsg.value = '' }, 4000)
@@ -2933,10 +3020,18 @@ async function saveGeneral() {
 }
 
 async function saveModels() {
-  if (!form.utilityModel.provider || !form.utilityModel.model) {
-    savedModelsMsg.value = { ok: false, text: 'Utility Model is required — select a provider and model in Global Model Settings' }
-    setTimeout(() => { savedModelsMsg.value = '' }, 5000)
-    return
+  // Validate utility model when on utility page: must be filled AND tested
+  if (modelsLeftNav.value === 'utility') {
+    if (!form.utilityModel.provider || !form.utilityModel.model) {
+      savedModelsMsg.value = { ok: false, text: t('config.utilityModelRequired') }
+      setTimeout(() => { savedModelsMsg.value = '' }, 5000)
+      return
+    }
+    if (!testUtilityModelResult.value?.ok) {
+      savedModelsMsg.value = { ok: false, text: t('config.utilityModelTestFirst') }
+      setTimeout(() => { savedModelsMsg.value = '' }, 5000)
+      return
+    }
   }
   savingModels.value = true
   try {
@@ -2949,9 +3044,19 @@ async function saveModels() {
     // Include providers from configStore
     modelFields.providers = JSON.parse(JSON.stringify(configStore.config.providers))
     await configStore.saveConfig(modelFields)
-    savedModelsMsg.value = { ok: true, text: 'Saved successfully' }
+    savedModelsMsg.value = { ok: true, text: t('common.successSaved') }
+    // Onboarding transitions after successful save
+    if (configOnboardingPhase.value === 'configureProvider' && configStore.isConfigured) {
+      // Provider saved successfully → move to utility model
+      configOnboardingPhase.value = 'configureUtility'
+      modelsLeftNav.value = 'utility'
+    } else if (configOnboardingPhase.value === 'configureUtility' && modelFields.utilityModel?.provider && modelFields.utilityModel?.model) {
+      // Utility model saved → navigate to agents onboarding
+      configOnboardingPhase.value = 'idle'
+      setTimeout(() => router.push({ path: '/agents', query: { onboarding: '1' } }), 600)
+    }
   } catch (err) {
-    savedModelsMsg.value = { ok: false, text: err.message || 'Save failed' }
+    savedModelsMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
   } finally {
     savingModels.value = false
     setTimeout(() => { savedModelsMsg.value = '' }, 3000)
@@ -2962,9 +3067,9 @@ async function saveSkills() {
   savingSkills.value = true
   try {
     await configStore.saveEnvPath('skillsPath', String(form.skillsPath))
-    savedSkillsMsg.value = { ok: true, text: 'Saved successfully' }
+    savedSkillsMsg.value = { ok: true, text: t('common.successSaved') }
   } catch (err) {
-    savedSkillsMsg.value = { ok: false, text: err.message || 'Save failed' }
+    savedSkillsMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
   } finally {
     savingSkills.value = false
     setTimeout(() => { savedSkillsMsg.value = '' }, 3000)
@@ -2977,9 +3082,9 @@ async function saveKnowledge() {
     if (window.electronAPI?.knowledge?.saveConfig) {
       await window.electronAPI.knowledge.saveConfig({ pineconeApiKey: form.pineconeApiKey, ragEnabled: form.ragEnabled })
     }
-    savedKnowledgeMsg.value = { ok: true, text: 'Saved successfully' }
+    savedKnowledgeMsg.value = { ok: true, text: t('common.successSaved') }
   } catch (err) {
-    savedKnowledgeMsg.value = { ok: false, text: err.message || 'Save failed' }
+    savedKnowledgeMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
   } finally {
     savingKnowledge.value = false
     setTimeout(() => { savedKnowledgeMsg.value = '' }, 3000)
@@ -2990,9 +3095,9 @@ async function saveVoice() {
   savingVoice.value = true
   try {
     await configStore.saveConfig({ voiceCall: JSON.parse(JSON.stringify(form.voiceCall)) })
-    savedVoiceMsg.value = { ok: true, text: 'Saved successfully' }
+    savedVoiceMsg.value = { ok: true, text: t('common.successSaved') }
   } catch (err) {
-    savedVoiceMsg.value = { ok: false, text: err.message || 'Save failed' }
+    savedVoiceMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
   } finally {
     savingVoice.value = false
     setTimeout(() => { savedVoiceMsg.value = null }, 3000)
@@ -3079,9 +3184,9 @@ async function saveEmail() {
   savingEmail.value = true
   try {
     await configStore.saveConfig({ smtp: JSON.parse(JSON.stringify(form.smtp)) })
-    savedEmailMsg.value = { ok: true, text: 'Saved successfully' }
+    savedEmailMsg.value = { ok: true, text: t('common.successSaved') }
   } catch (err) {
-    savedEmailMsg.value = { ok: false, text: err.message || 'Save failed' }
+    savedEmailMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
   } finally {
     savingEmail.value = false
     setTimeout(() => { savedEmailMsg.value = null }, 3000)
@@ -4546,6 +4651,20 @@ async function savePricing() {
   margin-bottom: 0.75rem;
   padding-top: 0.5rem;
 }
+
+.provider-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  padding: 0.375rem 0;
+}
+.provider-advanced-toggle:hover { color: var(--text-secondary); }
 
 .modal-backdrop {
   position: fixed;

@@ -48,12 +48,8 @@
     >
       <template #input>
         <div class="gp-input-area">
-          <div v-if="isGroupChat" class="gp-audience-panel">
-            <div class="gp-audience-header">
-              <span class="gp-audience-label">{{ t('chats.sendTo') }}</span>
-              <span class="gp-audience-status">{{ audienceStatusText }}</span>
-            </div>
-            <div class="gp-audience-options">
+          <div v-if="isGroupChat || groupActivityState.visible" class="gp-status-row">
+            <template v-if="isGroupChat">
               <button
                 class="gp-audience-chip"
                 :class="{ active: groupAudienceMode === 'auto' }"
@@ -70,25 +66,15 @@
               >
                 {{ t('chats.audienceAll') }}
               </button>
-              <button
-                v-for="agentId in chatAgentIds"
-                :key="agentId"
-                class="gp-audience-chip"
-                :class="{ active: isAudienceAgentSelected(agentId) }"
-                :title="t('chats.audienceManualHint')"
-                @click="toggleAudienceAgent(agentId)"
-              >
-                {{ agentsStore.getAgentById(agentId)?.name || 'Unknown' }}
-              </button>
+            </template>
+            <div
+              v-if="groupActivityState.visible"
+              class="gp-activity-bar"
+              :class="`gp-activity-bar--${groupActivityState.tone}`"
+            >
+              <span class="gp-activity-pulse"></span>
+              <span class="gp-activity-text">{{ groupActivityState.text }}</span>
             </div>
-          </div>
-          <div
-            v-if="groupActivityState.visible"
-            class="gp-activity-bar"
-            :class="`gp-activity-bar--${groupActivityState.tone}`"
-          >
-            <span class="gp-activity-pulse"></span>
-            <span class="gp-activity-text">{{ groupActivityState.text }}</span>
           </div>
           <!-- Attachment preview strip -->
           <div v-if="gpAttachments.length > 0" class="gp-attach-strip">
@@ -163,7 +149,7 @@
               :disabled="!gpInputText.trim() && gpAttachments.length === 0"
               class="gp-icon-btn gp-send-btn"
               :class="{ active: gpInputText.trim() || gpAttachments.length > 0 }"
-              aria-label="Send message"
+              :aria-label="t('chats.sendMessage')"
               :title="isRunning ? t('chats.sendQueued') : t('chats.sendMessage')"
             >
               <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -176,9 +162,9 @@
           <!-- Hint bar -->
           <div class="gp-hint-bar">
             <div class="gp-hint-left">
-              <span v-if="gpAttachments.length > 0" class="gp-att-count">{{ gpAttachments.length }} file{{ gpAttachments.length !== 1 ? 's' : '' }} attached</span>
+              <span v-if="gpAttachments.length > 0" class="gp-att-count">{{ t('chats.gridFilesAttached', { count: gpAttachments.length }) }}</span>
             </div>
-            <span class="gp-hint-right">↵ send · ⇧↵ newline</span>
+            <span class="gp-hint-right">{{ t('chats.gridSendHint') }}</span>
           </div>
         </div>
       </template>
@@ -195,11 +181,11 @@
             <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
           </svg>
         </div>
-        <span>Switch Chat</span>
+        <span>{{ t('chats.gridSwitchChat') }}</span>
       </div>
       <div class="gp-swap-search-wrap">
         <svg style="width:14px;height:14px;color:#6B7280;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <input v-model="swapSearch" type="text" placeholder="Search chats..." class="gp-swap-search" ref="swapSearchEl" />
+        <input v-model="swapSearch" type="text" :placeholder="t('chats.gridSearchChats')" class="gp-swap-search" ref="swapSearchEl" />
       </div>
       <div class="gp-swap-list">
         <template v-if="swapTree.length > 0">
@@ -215,20 +201,20 @@
               <template v-if="!collapsedFolders.has(node.id)">
                 <button v-for="c in node.children" :key="c.id" class="gp-swap-item gp-swap-item-indent" @click="doSwap(c.id)">
                   <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  <span class="gp-swap-item-title">{{ c.title || 'Untitled' }}</span>
-                  <span class="gp-swap-item-meta">{{ c.messages?.length ?? '?' }} msgs</span>
+                  <span class="gp-swap-item-title">{{ c.title || t('chats.gridUntitled') }}</span>
+                  <span class="gp-swap-item-meta">{{ t('chats.gridMsgs', { count: c.messages?.length ?? '?' }) }}</span>
                 </button>
               </template>
             </template>
             <!-- Root chat row -->
             <button v-else class="gp-swap-item" @click="doSwap(node.id)">
               <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              <span class="gp-swap-item-title">{{ node.title || 'Untitled' }}</span>
-              <span class="gp-swap-item-meta">{{ node.messages?.length ?? '?' }} msgs</span>
+              <span class="gp-swap-item-title">{{ node.title || t('chats.gridUntitled') }}</span>
+              <span class="gp-swap-item-meta">{{ t('chats.gridMsgs', { count: node.messages?.length ?? '?' }) }}</span>
             </button>
           </template>
         </template>
-        <div v-else class="gp-swap-empty">No other chats</div>
+        <div v-else class="gp-swap-empty">{{ t('chats.gridNoOtherChats') }}</div>
       </div>
     </div>
   </Teleport>
@@ -257,12 +243,9 @@ function filterByRequired(items, requiredIds) {
 }
 
 function resolveProviderCreds(cfg, providerType) {
-  if (cfg.providers && Array.isArray(cfg.providers)) {
-    const provider = cfg.providers.find(item => item.type === providerType || item.id === providerType)
-    if (provider) return { apiKey: provider.apiKey || '', baseURL: provider.baseURL || '', model: provider.model || '', type: provider.type || providerType }
-  }
-  const legacy = cfg[providerType]
-  if (legacy) return { apiKey: legacy.apiKey || '', baseURL: legacy.baseURL || '', model: legacy.model || '', type: providerType }
+  const providers = cfg.providers || []
+  const provider = providers.find(item => item.type === providerType || item.id === providerType)
+  if (provider) return { apiKey: provider.apiKey || '', baseURL: provider.baseURL || '', model: provider.model || '', type: provider.type || providerType }
   return { apiKey: '', baseURL: '', model: '', type: providerType }
 }
 
@@ -671,7 +654,7 @@ async function onSend(text, pendingAttachments = []) {
   // Build display content with attachment labels
   let displayContent = text || ''
   if (pendingAttachments.length > 0) {
-    const labels = pendingAttachments.map(a => `[Attached: ${a.name}]`).join(' ')
+    const labels = pendingAttachments.map(a => `[${t('chats.gridAttached', { name: a.name })}]`).join(' ')
     displayContent = displayContent ? `${displayContent}\n${labels}` : labels
   }
   const attachmentMeta = pendingAttachments.map(a => ({
@@ -679,7 +662,7 @@ async function onSend(text, pendingAttachments = []) {
   }))
   if (!window.electronAPI?.runAgent) {
     await chatsStore.addMessage(chatId, { role: 'user', content: displayContent, ...(attachmentMeta.length > 0 ? { attachments: attachmentMeta } : {}) })
-    await chatsStore.addMessage(chatId, { role: 'assistant', content: 'Agent loop is not available in browser mode.' })
+    await chatsStore.addMessage(chatId, { role: 'assistant', content: t('chats.gridBrowserMode') })
     return
   }
   await chatsStore.addMessage(chatId, { role: 'user', content: displayContent, ...(attachmentMeta.length > 0 ? { attachments: attachmentMeta } : {}) })
@@ -690,9 +673,7 @@ async function onSend(text, pendingAttachments = []) {
   const apiMessages = targetChat.messages.filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content)).map(m => ({ role: m.role, content: m.content }))
   const cfg = { ...configStore.config }
   const chatProvider = targetChat.provider || 'anthropic'
-  if (chatProvider === 'anthropic') { cfg.apiKey = cfg.anthropic?.apiKey || ''; cfg.baseURL = cfg.anthropic?.baseURL || '' }
-  else if (chatProvider === 'openrouter') { cfg.apiKey = cfg.openrouter?.apiKey || ''; cfg.baseURL = cfg.openrouter?.baseURL || '' }
-  else if (chatProvider === 'openai') { cfg.openaiApiKey = cfg.openai?.apiKey || ''; cfg.openaiBaseURL = cfg.openai?.baseURL || ''; cfg._resolvedProvider = 'openai'; cfg.defaultProvider = 'openai' }
+  applyProviderCredsToConfig(cfg, chatProvider)
   if (targetChat.model) cfg.customModel = targetChat.model
   if (targetChat.workingPath) cfg.chatWorkingPath = targetChat.workingPath
   if (targetChat.codingMode) cfg.codingMode = true
@@ -747,11 +728,11 @@ function _getLastActiveMessage() {
 
 function _applyInterrupt(chat, msg, type) {
   const inlineMarker = type === 'stop'
-    ? '[Request interrupted by user. Queue cleared.]'
-    : '[Request interrupted by user]'
+    ? t('chats.gridInterruptStop')
+    : t('chats.gridInterruptSteer')
   const bubbleText = type === 'stop'
-    ? 'Request stopped by user. Type a new message to continue.'
-    : 'Request interrupted by user.'
+    ? t('chats.gridRequestStopped')
+    : t('chats.gridRequestInterrupted')
 
   if (!msg) {
     chat?.messages?.push({
@@ -799,61 +780,32 @@ function deleteMessage(msg) {
   background: #FFFFFF;
 }
 
-.gp-audience-panel {
+.gp-status-row {
   display: flex;
-  flex-direction: column;
-  gap: 0.3125rem;
+  align-items: center;
+  gap: 0.25rem;
   margin-bottom: 0.375rem;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid #E5E5EA;
-  border-radius: 0.875rem;
-  background: linear-gradient(180deg, #FFFFFF 0%, #F9FAFB 100%);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}
-
-.gp-audience-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.625rem;
-}
-
-.gp-audience-label {
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #6B7280;
-}
-
-.gp-audience-status {
-  min-width: 0;
-  font-size: 0.72rem;
-  color: #374151;
-  text-align: right;
-}
-
-.gp-audience-options {
-  display: flex;
-  align-items: center;
-  gap: 0.3125rem;
-  flex-wrap: wrap;
+  padding: 0.25rem 0.375rem;
+  border-radius: 9999px;
+  background: #F0F4FF;
 }
 
 .gp-audience-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 1.625rem;
-  padding: 0.1875rem 0.625rem;
+  min-height: 1.375rem;
+  padding: 0.125rem 0.5rem;
   border-radius: 9999px;
   border: 1px solid #E5E5EA;
   background: #FFFFFF;
   color: #4B5563;
-  font-size: 0.72rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .gp-audience-chip:hover {
@@ -872,13 +824,11 @@ function deleteMessage(msg) {
 .gp-activity-bar {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.375rem;
-  min-height: 2rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.875rem;
+  gap: 0.375rem;
+  margin-left: auto;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
   border: 1px solid transparent;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 .gp-activity-bar--routing {
@@ -907,8 +857,8 @@ function deleteMessage(msg) {
 }
 
 .gp-activity-pulse {
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.375rem;
+  height: 0.375rem;
   border-radius: 9999px;
   background: currentColor;
   box-shadow: 0 0 0 0 currentColor;
@@ -916,9 +866,11 @@ function deleteMessage(msg) {
 }
 
 .gp-activity-text {
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @keyframes gpActivityPulse {

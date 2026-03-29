@@ -89,7 +89,7 @@ const props = defineProps({
   compact: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update:modelValue', 'send', 'stop', 'focus', 'blur', 'attach'])
+const emit = defineEmits(['update:modelValue', 'send', 'stop', 'escape', 'focus', 'blur', 'attach'])
 
 const agentsStore = useAgentsStore()
 const { t } = useI18n()
@@ -181,10 +181,18 @@ function onKeydown(e) {
       return
     } else if (e.key === 'Escape') {
       e.preventDefault()
+      e.stopPropagation() // Prevent global handler from also firing
       showMentionPopup.value = false
       tooltip.visible = false
       return
     }
+  }
+  // Escape when mention popup is closed → pass through to parent for interrupt/retrieve
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    e.stopPropagation() // Prevent global handler from double-firing escapeRetrieve
+    emit('escape')
+    return
   }
   // Enter without modifiers sends the message
   if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {

@@ -11,9 +11,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron": "node scripts/run-electron.js",
-    "dist:win": "npm run build && npx electron-builder --win --publish=never",
-    "dist:mac": "npm run build && npx electron-builder --mac --publish=never",
-    "dist:all": "npm run build && npx electron-builder --win --mac --publish=never",
+    "dist:win": "npm run build && node scripts/compile-bytecode.js && npx electron-builder --win --publish=never && node scripts/compile-bytecode.js --restore",
+    "dist:mac": "npm run build && node scripts/compile-bytecode.js && npx electron-builder --mac --publish=never && node scripts/compile-bytecode.js --restore",
+    "dist:all": "npm run build && node scripts/compile-bytecode.js && npx electron-builder --win --mac --publish=never && node scripts/compile-bytecode.js --restore",
     "bundle:mcporter": "cd ../mcporter && node_modules/.bin/tsc -p tsconfig.build.json && cd ../ClankAI && node_modules/.bin/esbuild ../mcporter/src/index.ts --bundle --format=esm --platform=node --main-fields=module,main \"--banner:js=import { createRequire as __cjsRequire } from 'module'; const require = __cjsRequire(import.meta.url);\" --outfile=electron/agent/mcp/mcporter-bundle.mjs"
   },
   "build": {
@@ -103,6 +103,7 @@
     "@tiptap/vue-3": "^3.20.0",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "adm-zip": "^0.5.16",
+    "bytenode": "^1.5.7",
     "docx": "^9.6.0",
     "dompurify": "^3.1.0",
     "exceljs": "^4.4.0",

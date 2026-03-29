@@ -39,7 +39,7 @@
           </button>
           <button
             @click="newChat()"
-            class="chat-sidebar-new-btn"
+            class="chat-sidebar-new-btn chat-new-btn"
             :aria-label="t('chats.newChat')"
             :title="t('chats.newChat')"
           >
@@ -308,14 +308,11 @@
           <span style="color:#9CA3AF; font-size:var(--fs-small); white-space:nowrap;">
             {{ formatTokenCount(activeContextMetrics.inputTokens) }} in / {{ formatTokenCount(activeContextMetrics.outputTokens) }} out
           </span>
-          <!-- Inspect button -->
+          <!-- Inspect button — always clickable -->
           <button
             @click="inspectContext"
-            :disabled="!hasContextData"
             class="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
-            :style="hasContextData
-              ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
-              : 'background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
+            style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
@@ -326,15 +323,15 @@
           <!-- Compact button -->
           <button
             @click="compactContext"
-            :disabled="isCompacting || (!activeRunning && !hasContextData)"
+            :disabled="isCompacting || (!activeRunning && !hasMessages)"
             class="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
             :style="isCompacting
               ? 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'
-              : (activeRunning || hasContextData)
+              : (activeRunning || hasMessages)
                 ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
                 : 'background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
-            @mouseenter="e => { if (!isCompacting && (activeRunning || hasContextData)) e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }"
-            @mouseleave="e => { if (!isCompacting && (activeRunning || hasContextData)) e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }"
+            @mouseenter="e => { if (!isCompacting && (activeRunning || hasMessages)) e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }"
+            @mouseleave="e => { if (!isCompacting && (activeRunning || hasMessages)) e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }"
             :title="isCompacting ? t('chats.compacting') : activeRunning ? t('chats.compactOnNext') : t('chats.compactContextWindow')"
           >
             <svg v-if="isCompacting" class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -353,6 +350,7 @@
           :visible="showContextInspector"
           :chatId="chatsStore.activeChatId"
           :contextMetrics="activeContextMetrics"
+          :perAgentContextMetrics="activePerAgentMetrics"
           :debugLogs="debugLog"
           @close="showContextInspector = false"
         />
@@ -414,7 +412,7 @@
           @send="handleChatWindowSend"
           @resend-message="handleResendMessage"
           @retry-waiting-indicator="handleRetryWaitingIndicator"
-          @stop="stopAgent(chatsStore.activeChatId)"
+          @escape-retrieve="escapeRetrieve(chatsStore.activeChatId)"
           @quote="quoteMessage"
           @quote-image="handleQuoteImage"
           @delete-message="requestDeleteMessage"
@@ -423,39 +421,31 @@
           :on-refine-plan="refinePlan"
         >
           <template #input>
-            <!-- Queued prompts list -->
+            <!-- Interrupt confirmation bar -->
             <div
-              v-if="pendingQueue.length > 0"
-              class="shrink-0 px-4 py-2 space-y-1.5"
-              style="background:#F5F5F5; border-top:1px solid #E5E5EA;"
+              v-if="pendingInterrupt.visible"
+              class="chat-interrupt-bar"
             >
-              <div class="flex items-center gap-1.5" style="color:#6B7280; font-size:var(--fs-small); font-weight:600;">
-                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <div class="chat-interrupt-bar-content">
+                <svg class="w-4 h-4 shrink-0" style="color:#F59E0B;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                 </svg>
-                Queued ({{ pendingQueue.length }})
+                <span class="chat-interrupt-bar-text">
+                  {{ t('chats.interruptCountdown', { seconds: pendingInterrupt.countdown }) }}
+                </span>
               </div>
-              <div
-                v-for="(item, idx) in pendingQueue"
-                :key="idx"
-                class="flex items-center gap-2 px-3 py-1.5 rounded-lg"
-                style="background:#FFFFFF; color:#6B7280; border:1px solid #E5E5EA; font-size:var(--fs-small);"
-              >
-                <span class="shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#fff; font-size:10px; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);">{{ idx + 1 }}</span>
-                <span class="flex-1 truncate">{{ item.text.slice(0, 80) }}{{ item.text.length > 80 ? '…' : '' }}</span>
-                <span v-if="item._targetAgent" class="shrink-0" style="opacity:0.6; font-size:10px;">→ {{ item._targetAgent }}</span>
-                <span v-if="item.attachments?.length" style="opacity:0.7;">{{ item.attachments.length }} file{{ item.attachments.length !== 1 ? 's' : '' }}</span>
+              <div class="chat-interrupt-bar-actions">
                 <button
-                  @click="removeFromQueue(idx)"
-                  class="shrink-0 cursor-pointer"
-                  style="color:#9CA3AF; opacity:0.5;"
-                  @mouseenter="e => e.currentTarget.style.opacity='1'"
-                  @mouseleave="e => e.currentTarget.style.opacity='0.5'"
-                  title="Remove from queue"
+                  class="chat-interrupt-btn chat-interrupt-btn--primary"
+                  @click="confirmInterrupt"
                 >
-                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
+                  {{ t('chats.interruptAndSend') }} ({{ pendingInterrupt.countdown }})
+                </button>
+                <button
+                  class="chat-interrupt-btn chat-interrupt-btn--ghost"
+                  @click="cancelInterrupt"
+                >
+                  {{ t('common.cancel') }}
                 </button>
               </div>
             </div>
@@ -601,22 +591,25 @@
                   :isGroupChat="isGroupChat"
                   :isRunning="activeRunning"
                   @send="sendMessage"
+                  @escape="escapeRetrieve(chatsStore.activeChatId)"
                   @focus="inputFocused = true"
                   @blur="onInputBlur"
                   @attach="atts => attachments.push(...atts)"
                 />
-                <!-- Stop button (visible while running) -->
+                <!-- Escape retrieve button (visible while running) -->
                 <template v-if="activeRunning">
                   <button
-                    @click="stopAgent(chatsStore.activeChatId)"
+                    @click="escapeRetrieve(chatsStore.activeChatId)"
                     class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
                     style="background:rgba(255,59,48,0.08); color:#FF3B30; box-shadow:0 1px 3px rgba(0,0,0,0.04);"
                     @mouseenter="e => e.currentTarget.style.background='rgba(255,59,48,0.12)'"
                     @mouseleave="e => e.currentTarget.style.background='rgba(255,59,48,0.08)'"
-                    aria-label="Stop agent"
-                    title="Stop (Esc) — interrupt and clear queue"
+                    :aria-label="t('chats.escapeRetrieve')"
+                    :title="t('chats.escapeRetrieve')"
                   >
-                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
+                    </svg>
                   </button>
                 </template>
                 <!-- Send button (always visible) -->
@@ -628,7 +621,7 @@
                     ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
                     : 'background:#E5E5EA; color:#9CA3AF; cursor:not-allowed;'"
                   aria-label="Send message"
-                  :title="activeRunning ? 'Queue message (will send after current run)' : 'Send message'"
+                  :title="t('chats.sendMessageBtn')"
                 >
                   <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <line x1="22" y1="2" x2="11" y2="13"/>
@@ -736,6 +729,18 @@
       @close="showRenameIconPicker = false"
     />
   </div>
+
+  <!-- No User Agent warning -->
+  <ConfirmModal
+    v-if="newChatBlockedNoUserAgent"
+    :visible="true"
+    :title="t('chats.noUserAgent', 'User Agent Required')"
+    :message="t('chats.noUserAgentMessage', 'Please create a User Agent first on the Agents page before starting a chat.')"
+    confirm-text="Go to Agents"
+    confirm-class="primary"
+    @confirm="newChatBlockedNoUserAgent = false; $router.push('/agents')"
+    @close="newChatBlockedNoUserAgent = false"
+  />
 
   <!-- New Chat Modal -->
   <NewChatModal
@@ -853,11 +858,42 @@
       <div v-if="mentionTooltip.text" class="agent-header-tooltip-text">{{ mentionTooltip.text }}</div>
     </div>
   </Teleport>
+
+  <!-- Onboarding: guide card alongside New Chat modal / agent picker (noPanels — modal has own backdrop) -->
+  <OnboardingOverlay
+    v-if="chatOnboardingPhase === 'setupChat'"
+    :title="t('onboarding.setupChatTitle')"
+    :description="t('onboarding.setupChatDesc')"
+    :target-selector="showNewChatAgentPopover || showNewChatUserPopover ? '.ncp-dialog' : '.modal-dialog-container'"
+    :padding="16"
+    no-panels
+    :steps="[
+      { label: t('onboarding.chatStep1'), done: newChatAgentIds.length > 0 },
+      { label: t('onboarding.chatStep2'), done: !!newChatUserAgentId },
+      { label: t('onboarding.chatStep3'), done: false },
+    ]"
+    :current-step="3"
+    :total-steps="3"
+    @skip="skipChatOnboarding"
+  />
+
+  <!-- Onboarding: completion message -->
+  <OnboardingOverlay
+    v-if="chatOnboardingPhase === 'complete'"
+    :title="t('onboarding.chatComplete')"
+    :description="t('onboarding.chatCompleteDesc')"
+    target-selector=".chat-header"
+    :padding="12"
+    :current-step="3"
+    :total-steps="3"
+    @skip="chatOnboardingPhase = 'idle'; configStore.saveConfig({ onboardingCompleted: true })"
+  />
 </template>
 
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, onUnmounted, onActivated, onDeactivated, onErrorCaptured, watch, toRaw } from 'vue'
 defineOptions({ name: 'ChatsView', inheritAttrs: false })
+import { useRoute, useRouter } from 'vue-router'
 import { useChatsStore } from '../stores/chats'
 import { useSkillsStore } from '../stores/skills'
 import { useConfigStore } from '../stores/config'
@@ -885,6 +921,7 @@ import ChatMentionInput from '../components/chat/ChatMentionInput.vue'
 import ChatSettingsModal from '../components/chat/ChatSettingsModal.vue'
 import NewChatModal from '../components/chat/NewChatModal.vue'
 import ContextInspectorModal from '../components/chat/ContextInspectorModal.vue'
+import OnboardingOverlay from '../components/agents/OnboardingOverlay.vue'
 import { useVoiceRecording } from '../composables/useVoiceRecording'
 import { useChatTree } from '../composables/useChatTree'
 import { useMessageOps } from '../composables/useMessageOps'
@@ -908,6 +945,18 @@ const knowledgeStore = useKnowledgeStore()
 const voiceStore = useVoiceStore()
 const focusModeStore = useFocusModeStore()
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
+
+// ── Chat onboarding state (watchers registered after useChatTree to avoid TDZ) ──
+const chatOnboardingPhase = ref('idle') // 'idle' | 'setupChat' | 'complete'
+const _prevChatCount = ref(0)
+
+function skipChatOnboarding() {
+  chatOnboardingPhase.value = 'idle'
+  configStore.saveConfig({ onboardingCompleted: true })
+}
+
 const enabledSkillObjects = computed(() => {
   const agent = currentSingleAgent.value
   if (!agent) return skillsStore.allSkillObjects
@@ -958,7 +1007,7 @@ function triggerMemoryExtractionOnSwitch(leavingChatId) {
 
   const agentPrompts = {
     systemAgentId: sysId || '__default_system__',
-    userAgentId: usrId || '__default_user__',
+    userAgentId: usrId || agentsStore.defaultUserAgent?.id || '__default_user__',
   }
 
   try {
@@ -1018,9 +1067,23 @@ const {
   onNewChatIconSelect, selectNewChatUserAgent, isNewChatUserSelected,
   clearNewChatUserSelection, removeNewChatSystemAgent, toggleNewChatAgent,
   toggleNcpCat, toggleNupCat, toggleNewChatFolderExpand,
-  newChat, confirmNewChat, cancelNewChat,
+  newChat, newChatBlockedNoUserAgent, confirmNewChat, cancelNewChat,
   confirmDeleteTarget, requestDeleteChat, requestRemoveGroupAgent, executeConfirmedDelete,
 } = useChatTree({ mentionInputRef })
+
+// ── Chat onboarding watchers (must be after useChatTree so showNewChatModal is defined) ──
+watch(() => chatsStore.chats.length, (len) => {
+  if (len > _prevChatCount.value && chatOnboardingPhase.value === 'setupChat') {
+    chatOnboardingPhase.value = 'complete'
+    setTimeout(() => {
+      if (chatOnboardingPhase.value === 'complete') {
+        chatOnboardingPhase.value = 'idle'
+        configStore.saveConfig({ onboardingCompleted: true })
+      }
+    }, 5000)
+  }
+  _prevChatCount.value = len
+})
 
 const messagesEl = ref(null)
 const chatWindowRef = ref(null)
@@ -1095,16 +1158,8 @@ const groupAudienceMode = computed({
   }
 })
 
-// perChatQueue lives in useSendMessage but useChunkHandler needs it first.
-// Create it here and pass to both composables.
-const perChatQueue = reactive(new Map())
 // stopStreamingTimer wrapper — actual impl wired after useSendMessage call
 let _stopStreamingTimerImpl = () => {}
-// processQueuedMessage wrapper — wired after useSendMessage call
-let _processQueuedMessageRef = null
-function _processQueuedMessageWrapper(...args) {
-  return _processQueuedMessageRef?.(...args)
-}
 
 const {
   perChatStreamingMsgId,
@@ -1123,13 +1178,11 @@ const {
   waitForAgentEnd,
   handleChunk,
 } = useChunkHandler({
-  perChatQueue,
   scrollToBottom,
   dbg,
   _fireGroupAgentsDirect: _fireGroupAgentsDirectWrapper,
   stickyTarget,
   stopStreamingTimer: () => _stopStreamingTimerImpl(),
-  processQueuedMessage: _processQueuedMessageWrapper,
 })
 
 const {
@@ -1151,7 +1204,9 @@ _fireGroupAgentsDirectRef = _fireGroupAgentsDirect
 // Per-chat state — reads from the active chat object in the store (must be before useSendMessage)
 const activeRunning = computed(() => chatsStore.activeChat?.isRunning ?? false)
 const activeContextMetrics = computed(() => chatsStore.activeChat?.contextMetrics ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 200000, percentage: 0, compactionCount: 0 })
+const activePerAgentMetrics = computed(() => chatsStore.activeChat?.perAgentContextMetrics ?? {})
 const hasContextData = computed(() => activeContextMetrics.value.inputTokens > 0)
+const hasMessages = computed(() => (chatsStore.activeChat?.messages?.length ?? 0) > 0)
 const activeSystemAgentIds = computed(() => {
   const chat = chatsStore.activeChat
   if (!chat) return []
@@ -1163,7 +1218,7 @@ const activeSystemAgentIds = computed(() => {
 // ── Send message orchestration ──
 const {
   sendMessage, stopAgent, approvePlan, rejectPlan, refinePlan, compactContext,
-  pendingQueue, removeFromQueue, processQueuedMessage,
+  pendingInterrupt, confirmInterrupt, cancelInterrupt, escapeRetrieve,
   _saveDraftForChat, _restoreDraftForChat,
   _codingModeContext, isCompacting,
   startStreamingTimer, stopStreamingTimer,
@@ -1176,7 +1231,6 @@ const {
   streamingSeconds, historyContextSources, _clearHistoryCountdown,
   applyProviderCredsToConfig, _fireGroupAgentsDirect,
   activeRunning, activeSystemAgentIds, enabledSkillObjects, stickyTarget,
-  perChatQueue,  // created above, shared with useChunkHandler
   programmaticScroll: {
     increment: () => { programmaticScrollCount++ },
     decrement: () => { programmaticScrollCount = Math.max(0, programmaticScrollCount - 1) },
@@ -1184,8 +1238,6 @@ const {
 })
 // Wire the stopStreamingTimer wrapper now that useSendMessage has provided it
 _stopStreamingTimerImpl = stopStreamingTimer
-// Wire the processQueuedMessage wrapper now that useSendMessage has provided it
-_processQueuedMessageRef = processQueuedMessage
 
 // Group chat popover state moved to ChatHeader
 const showGroupAgentConfigId = ref(null)
@@ -1613,7 +1665,7 @@ function handleGlobalKeydown(e) {
   }
   if (e.key === 'Escape' && activeRunning.value) {
     e.preventDefault()
-    stopAgent(chatsStore.activeChatId)
+    escapeRetrieve(chatsStore.activeChatId)
   }
 }
 
@@ -1686,6 +1738,29 @@ watch(
 // KeepAlive lifecycle: fires every time the user navigates back to /chats
 onActivated(() => {
   if (voiceStore.isCallActive && voiceStore.isPip) voiceStore.setPip(false)
+
+  // Detect onboarding query — auto-open new chat modal (only if user agent exists)
+  if (route.query.onboarding === '1') {
+    const hasUserAgent = agentsStore.userAgents.some(a => !a.isBuiltin)
+    if (!hasUserAgent) {
+      // Can't create chat without user agent — redirect back to agents
+      router.replace({ path: '/agents', query: { onboarding: '1' } })
+    } else {
+      chatOnboardingPhase.value = 'setupChat'
+      router.replace({ path: '/chats', query: {} })
+      nextTick(() => {
+        newChat()
+        // Pre-fill first chat during onboarding
+        nextTick(() => {
+          newChatName.value = t('onboarding.firstChatName')
+          const customSystem = agentsStore.systemAgents.filter(a => !a.isBuiltin).map(a => a.id)
+          if (customSystem.length) newChatAgentIds.value = customSystem
+          const defaultUser = agentsStore.defaultUserAgent
+          if (defaultUser) newChatUserAgentId.value = defaultUser.id
+        })
+      })
+    }
+  }
 })
 
 // KeepAlive lifecycle: fires when user navigates away — keep mic/TTS running, just show PiP
@@ -2509,6 +2584,70 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   border-radius: 1.125rem;
 }
 
+/* ── Interrupt bar ──────────────────────────────────────────────────────── */
+.chat-interrupt-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  background: #FFFBEB;
+  border-top: 1px solid #FDE68A;
+  flex-shrink: 0;
+  animation: interrupt-slide-in 0.15s ease-out;
+}
+@keyframes interrupt-slide-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.chat-interrupt-bar-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.chat-interrupt-bar-text {
+  font-size: var(--fs-small, 0.8125rem);
+  font-weight: 500;
+  color: #92400E;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-interrupt-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+.chat-interrupt-btn {
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: var(--fs-small, 0.8125rem);
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+.chat-interrupt-btn--primary {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.chat-interrupt-btn--primary:hover {
+  opacity: 0.9;
+}
+.chat-interrupt-btn--ghost {
+  background: transparent;
+  color: #6B7280;
+  border: 1px solid #D1D5DB;
+}
+.chat-interrupt-btn--ghost:hover {
+  background: #F3F4F6;
+  color: #374151;
+}
+
 /* ── Input area ─────────────────────────────────────────────────────────── */
 .chat-input-area {
   padding: 0.75rem 1.25rem 1rem;
@@ -2578,7 +2717,9 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
 
 .chat-group-status-row--input {
   margin: 0 0 0.55rem;
-  padding: 0;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.75rem;
+  background: #F0F4FF;
 }
 
 .chat-audience-inline {

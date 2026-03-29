@@ -15,12 +15,12 @@
           </svg>
         </div>
         <h2 style="font-family:'Inter',sans-serif; font-size:var(--fs-page-title); font-weight:700; color:#1A1A1A; margin:0 0 8px;">
-          Documents
+          {{ t('notes.documents') }}
         </h2>
         <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; margin:0 0 24px; line-height:1.6;">
-          Select a folder to use as your vault. All files will be available for viewing, with rich editing for Markdown and draw.io diagrams.
+          {{ t('notes.vaultDesc') }}
         </p>
-        <AppButton size="compact" @click="store.pickVault()">
+        <AppButton size="compact" style="margin: 0 auto; width: fit-content;" @click="store.pickVault()">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
@@ -90,7 +90,7 @@
             :class="{ 'root-drag-over': rootDragOver }"
           >
             <div v-if="store.fileTree.length === 0" class="px-4 py-8 text-center">
-              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">No files found</p>
+              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">{{ t('notes.noFilesFound') }}</p>
             </div>
             <TreeNode
               v-for="node in store.fileTree"
@@ -115,8 +115,8 @@
           <button
             @click="docTreeCollapsed = !docTreeCollapsed"
             class="doc-tree-expand-tab"
-            :title="docTreeCollapsed ? 'Expand file tree' : 'Collapse file tree'"
-            :aria-label="docTreeCollapsed ? 'Expand file tree' : 'Collapse file tree'"
+            :title="docTreeCollapsed ? t('notes.expandTree') : t('notes.collapseTree')"
+            :aria-label="docTreeCollapsed ? t('notes.expandTree') : t('notes.collapseTree')"
           >
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
@@ -131,7 +131,7 @@
               <svg class="mx-auto mb-3 animate-spin" style="width:32px;height:32px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M21 12a9 9 0 1 1-6.2-8.6"/>
               </svg>
-              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">Opening file...</p>
+              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">{{ t('notes.openingFile') }}</p>
             </div>
           </div>
 
@@ -147,7 +147,7 @@
                 </svg>
               </div>
               <p style="font-family:'Inter',sans-serif; font-size:var(--fs-subtitle); font-weight:600; color:#1A1A1A; margin:0 0 6px;">
-                Unable to open file
+                {{ t('notes.unableToOpen') }}
               </p>
               <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#6B7280; margin:0 0 16px; line-height:1.5;">
                 {{ store.fileError }}
@@ -158,7 +158,7 @@
                 style="background:#F5F5F5; border:1px solid #E5E5EA; color:#6B7280; font-family:'Inter',sans-serif;"
                 @mouseenter="e => { e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A' }"
                 @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#6B7280' }"
-              >Dismiss</button>
+              >{{ t('notes.dismiss') }}</button>
             </div>
           </div>
 
@@ -168,7 +168,7 @@
               <svg class="mx-auto mb-3" style="width:48px;height:48px;color:#D1D1D6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
               </svg>
-              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">Select a file to view</p>
+              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">{{ t('notes.selectFileToView') }}</p>
             </div>
           </div>
 
@@ -583,7 +583,7 @@
                     </div>
                     <svg v-if="p.id === selectedAgentId" style="width:16px;height:16px;flex-shrink:0;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                   </button>
-                  <div v-if="agentsStore.agentsInCategory(cat.id).length === 0" class="ch-cat-empty">No agents</div>
+                  <div v-if="agentsStore.agentsInCategory(cat.id).length === 0" class="ch-cat-empty">{{ t('notes.noAgents') }}</div>
                 </div>
               </div>
               <!-- All section -->
@@ -1938,7 +1938,7 @@ async function onFormattedPaste(e) {
     if (imageItem) {
       e.preventDefault()
       const blob = imageItem.getAsFile()
-      if (!blob) { showLinkError('Could not read image from clipboard'); return }
+      if (!blob) { showLinkError(t('notes.couldNotReadImage')); return }
       try {
         const base64 = await blobToBase64(blob)
         const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg')
@@ -2062,7 +2062,7 @@ function onSearchReplaceOne({ search, replacement, matchCase, wholeWord, single,
     if (!ref?.performSearchReplace) return
     const { replaced } = ref.performSearchReplace(search, replacement, { ...opts, replaceAll: false })
     onSearchCountRequest({ query: search, ...opts })
-    searchBarRef.value?.showFeedback(replaced ? `${replaced} replaced` : 'Not found', replaced > 0)
+    searchBarRef.value?.showFeedback(replaced ? t('notes.replaced', { count: replaced }) : t('notes.notFound'), replaced > 0)
   }
 }
 
@@ -2078,16 +2078,16 @@ function onSearchReplaceAll({ search, replacement, matchCase, wholeWord }) {
       const replaced = original.match(re)?.length || 0
       editorContent.value = original.replace(re, replacement)
       searchBarRef.value?.recompute()
-      searchBarRef.value?.showFeedback(`${replaced} replaced`, replaced > 0)
+      searchBarRef.value?.showFeedback(t('notes.replaced', { count: replaced }), replaced > 0)
     } catch {
-      searchBarRef.value?.showFeedback('Invalid pattern', false)
+      searchBarRef.value?.showFeedback(t('notes.invalidPattern'), false)
     }
   } else {
     const ref = _getBinaryEditorRef()
     if (!ref?.performSearchReplace) return
     const { replaced } = ref.performSearchReplace(search, replacement, { ...opts, replaceAll: true })
     onSearchCountRequest({ query: search, ...opts })
-    searchBarRef.value?.showFeedback(replaced ? `${replaced} replaced` : 'Not found', replaced > 0)
+    searchBarRef.value?.showFeedback(replaced ? t('notes.replaced', { count: replaced }) : t('notes.notFound'), replaced > 0)
   }
 }
 
@@ -2329,7 +2329,7 @@ async function executeDelete() {
     if (result?.error) throw new Error(result.error)
     confirmDeleteTarget.value = null
   } catch (err) {
-    deleteError.value = err.message || 'Failed to delete'
+    deleteError.value = err.message || t('notes.failedToDelete')
   } finally {
     deleting.value = false
   }

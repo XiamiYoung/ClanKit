@@ -2545,6 +2545,16 @@ export function getAgentTemplates(locale = 'en') {
   return (locale || 'en').startsWith('zh') ? ZH_TEMPLATES : EN_TEMPLATES
 }
 
+export const PROFESSIONAL_TEMPLATE_IDS = ['engineering-team', 'design-team', 'support-team']
+
+export const ENTERTAINMENT_TEMPLATE_IDS_EN = ['fictional-icons', 'screen-legends', 'crime-and-power', 'virtual-girlfriends', 'virtual-boyfriends']
+
+export const ENTERTAINMENT_TEMPLATE_IDS_ZH = ['chinese-internet-legends', 'imperial-emperors', 'martial-arts-legends', 'wuxia-heroes', 'fictional-legends-zh', 'screen-classics-zh', 'virtual-girlfriends-zh', 'virtual-boyfriends-zh']
+
+export function getEntertainmentTemplateIds(locale = 'en') {
+  return (locale || 'en').startsWith('zh') ? ENTERTAINMENT_TEMPLATE_IDS_ZH : ENTERTAINMENT_TEMPLATE_IDS_EN
+}
+
 export function generateAgentsFromDescription(description, language = 'en') {
   return {
     category: { name: '', emoji: '📂' },

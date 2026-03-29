@@ -84,19 +84,7 @@ Rules:
   updatedAt: 0,
 }
 
-const BUILTIN_USER_AGENT = {
-  id: BUILTIN_USER_AGENT_ID,
-  type: 'user',
-  name: 'Default User',
-  avatar: 'a8',
-  description: 'A general user profile with no specific preferences.',
-  prompt: `The user is a general user with no specific role or preference set.
-Respond in a clear, helpful manner suitable for a broad audience.`,
-  isDefault: true,
-  isBuiltin: true,
-  createdAt: 0,
-  updatedAt: 0,
-}
+// BUILTIN_USER_AGENT removed — user must create their own via onboarding
 
 export const useAgentsStore = defineStore('agents', () => {
   const agents     = ref([])
@@ -229,14 +217,9 @@ export const useAgentsStore = defineStore('agents', () => {
       list.push({ ...BUILTIN_DOC_EDITOR_AGENT })
     }
 
-    // Ensure built-in user agent exists
+    // Remove legacy built-in default user agent from disk data
     const usrIdx = list.findIndex(p => p.id === BUILTIN_USER_AGENT_ID)
-    if (usrIdx >= 0) {
-      list[usrIdx] = { ...list[usrIdx], isBuiltin: true }
-    } else {
-      const lastSysIdx = list.reduce((acc, p, i) => p.type === 'system' ? i : acc, -1)
-      list.splice(lastSysIdx + 1, 0, { ...BUILTIN_USER_AGENT })
-    }
+    if (usrIdx >= 0) list.splice(usrIdx, 1)
 
     // Backfill optional agent fields
     for (const p of list) {
@@ -258,8 +241,8 @@ export const useAgentsStore = defineStore('agents', () => {
       if (sys) sys.isDefault = true
     }
     if (!list.some(p => p.type === 'user' && p.isDefault)) {
-      const usr = list.find(p => p.id === BUILTIN_USER_AGENT_ID)
-      if (usr) usr.isDefault = true
+      const firstUser = list.find(p => p.type === 'user')
+      if (firstUser) firstUser.isDefault = true
     }
 
     agents.value     = list

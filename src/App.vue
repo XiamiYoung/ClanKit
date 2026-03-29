@@ -43,7 +43,7 @@
   <MinibarOverlay />
 
   <!-- Setup Wizard for first-time users -->
-  <SetupWizard :visible="showSetupWizard" @close="setupWizardDismissed = true" @complete="handleSetupComplete" />
+  <SetupWizard :visible="showSetupWizard" @close="handleWizardDismiss" @complete="handleSetupComplete" />
 </template>
 
 <script setup>
@@ -89,10 +89,9 @@ const voiceStore = useVoiceStore()
 
 const configLoaded = ref(false)
 const bannerDismissed = ref(false)
-const setupWizardDismissed = ref(false)
 
 const showSetupWizard = computed(() => {
-  return configLoaded.value && !configStore.isConfigured && !setupWizardDismissed.value
+  return configLoaded.value && !configStore.isConfigured && !configStore.config.setupDismissed
 })
 
 // Handle quick-send from minibar — runs here so it works even when ChatsView is unmounted
@@ -115,9 +114,51 @@ function handleToggleMute() {
   if (window.electronAPI?.voice?.mute) window.electronAPI.voice.mute({ muted: newMuted })
 }
 
-function handleSetupComplete() {
-  setupWizardDismissed.value = true
-  configStore.loadConfig()
+async function handleWizardDismiss() {
+  await configStore.saveConfig({ setupDismissed: true, onboardingCompleted: true })
+}
+
+async function handleSetupComplete() {
+  await configStore.loadConfig()
+}
+
+// Resume onboarding at the right step based on what's incomplete
+function resumeOnboarding() {
+  const cfg = configStore.config
+  if (!cfg.setupDismissed || cfg.onboardingCompleted) return
+
+  if (!configStore.isConfigured) {
+    router.push({ path: '/config', query: { onboarding: '1', tab: 'models' } })
+    return
+  }
+
+  const um = configStore.config.utilityModel
+  if (!um?.provider || !um?.model) {
+    router.push({ path: '/config', query: { onboarding: '1', tab: 'models' } })
+    return
+  }
+
+  const hasUserAgent = agentsStore.userAgents.some(a => !a.isBuiltin)
+  if (!hasUserAgent) {
+    router.push({ path: '/agents', query: { onboarding: '1' } })
+    return
+  }
+
+  const hasSystemAgent = agentsStore.systemAgents.some(a => !a.isBuiltin)
+  if (!hasSystemAgent) {
+    router.push({ path: '/agents', query: { onboarding: '1', phase: 'system' } })
+    return
+  }
+
+  // Check if user has created at least one chat
+  const hasChats = chatsStore.chats.length > 0
+  if (!hasChats) {
+    router.push({ path: '/chats', query: { onboarding: '1' } })
+    return
+  }
+
+  // All steps complete — mark onboarding done
+  configStore.saveConfig({ onboardingCompleted: true })
 }
 
 onMounted(async () => {
@@ -129,7 +170,7 @@ onMounted(async () => {
   modelsStore.loadFromDisk()
 
   // Fire all store loads concurrently — none blocks the UI
-  Promise.all([
+  await Promise.all([
     chatsStore.loadChats().then(() => {
       // Initialize the persistent agent chunk listener after chats are available
       chatsStore.initChunkListener()
@@ -143,6 +184,11 @@ onMounted(async () => {
     obsidianStore.loadConfig(),
     knowledgeStore.loadConfig()
   ])
+
+  // Resume onboarding if incomplete (after all stores loaded so we can check agents)
+  if (!showSetupWizard.value) {
+    resumeOnboarding()
+  }
 })
 </script>
 

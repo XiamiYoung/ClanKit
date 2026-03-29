@@ -407,7 +407,6 @@
     >
       <div class="ch-config-tooltip-row"><span class="cct-key">{{ t('chats.chatSettingsPath') }}</span><span class="cct-val">{{ effectiveWorkingPath }}</span></div>
       <div class="ch-config-tooltip-row"><span class="cct-key">{{ t('chats.chatSettingsAgentRounds') }}</span><span class="cct-val">{{ effectiveAgentRounds }}</span></div>
-      <div class="ch-config-tooltip-row"><span class="cct-key">{{ t('chats.chatSettingsMaxTokens') }}</span><span class="cct-val">{{ effectiveMaxOutputTokens.toLocaleString() }}</span></div>
     </div>
   </Teleport>
 
@@ -541,18 +540,18 @@ const canStartCall = computed(() => {
   return true
 })
 const callButtonTooltip = computed(() => {
-  if (voiceStore.isCallActive) return 'Call already in progress'
+  if (voiceStore.isCallActive) return t('chats.callAlreadyInProgress')
   const count = activeSystemAgentIds.value.length
-  if (count === 0) return 'Select an agent to start a call'
-  if (count > 1) return 'Voice call requires exactly one agent'
-  if (!configStore.config.voiceCall?.whisperApiKey) return 'Whisper API key not configured — go to Configuration → Voice Call'
-  return 'Start voice call'
+  if (count === 0) return t('chats.selectAgentToCall')
+  if (count > 1) return t('chats.voiceCallRequiresOne')
+  if (!configStore.config.voiceCall?.whisperApiKey) return t('chats.whisperNotConfigured')
+  return t('chats.startVoiceCall')
 })
 const callTtsModeLabel = computed(() => {
   const mode = configStore.config.voiceCall?.ttsMode || 'browser'
-  if (mode === 'openai-hd') return 'OpenAI TTS HD'
-  if (mode === 'openai') return 'OpenAI TTS'
-  return 'Browser (free)'
+  if (mode === 'openai-hd') return t('chats.openaiTtsHd')
+  if (mode === 'openai') return t('chats.openaiTts')
+  return t('chats.browserTtsFree')
 })
 
 function startCall() {
@@ -773,10 +772,8 @@ function onSysAvatarClick(pid) {
 function _resolveAgentProviderModel(agentId) {
   const agent = agentsStore.getAgentById(agentId)
   if (!agent) return ''
-  // Per-chat override first
-  const override = chat.value?.agentModelOverrides?.[agentId] || chat.value?.personaModelOverrides?.[agentId]
-  const providerId = override?.provider || agent.providerId
-  const modelId = override?.model || agent.modelId
+  const providerId = agent.providerId
+  const modelId = agent.modelId
   if (!providerId && !modelId) return ''
   const providers = configStore.config?.providers || []
   const found = providers.find(p => p.id === providerId || p.type === providerId)
@@ -853,9 +850,6 @@ const effectiveAgentRounds = computed(() => {
   return chat.value?.maxAgentRounds ?? 10
 })
 
-const effectiveMaxOutputTokens = computed(() => {
-  return chat.value?.maxOutputTokens ?? configStore.config.maxOutputTokens ?? 32768
-})
 
 </script>
 

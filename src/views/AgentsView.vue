@@ -12,6 +12,25 @@
         </AppButton>
       </div>
       <p class="agents-subtitle">{{ t('agents.pageDescription') }}</p>
+      <!-- Top-level agent type tabs -->
+      <div class="agents-tab-bar">
+        <button
+          class="agents-tab" :class="{ active: selectedView.agentType === 'system' }"
+          @click="switchAgentType('system')"
+        >
+          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1M9 16h0M15 16h0"/></svg>
+          {{ t('agents.systemAgents') }}
+          <span class="agents-tab-count">{{ agentsStore.systemAgents.length }}</span>
+        </button>
+        <button
+          class="agents-tab" :class="{ active: selectedView.agentType === 'user' }"
+          @click="switchAgentType('user')"
+        >
+          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a7.5 7.5 0 0 1 13 0"/></svg>
+          {{ t('agents.userAgents') }}
+          <span class="agents-tab-count">{{ agentsStore.userAgents.length }}</span>
+        </button>
+      </div>
     </div>
 
     <!-- Shared header row spanning full width -->
@@ -57,7 +76,7 @@
               </svg>
             </AppButton>
           </template>
-          <AppButton v-if="selectedView.type !== 'category'" size="icon" @click="openGroupCreator" :title="t('agents.groupCreator.addMultiple', 'Add Multiple Agents')">
+          <AppButton v-if="selectedView.type !== 'category' && selectedView.agentType === 'system'" size="icon" @click="openGroupCreator" :title="t('agents.groupCreator.addMultiple', 'Add Multiple Agents')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
@@ -75,18 +94,13 @@
       <!-- ── Left Nav ───────────────────────────────────────────────────── -->
       <nav class="agents-nav" :style="{ width: navWidth + 'px' }">
 
-        <!-- System section -->
-        <div class="nav-section nav-section--half nav-section--first">
-          <div class="nav-section-header">
-            <span class="nav-section-label">{{ t('agents.systemAgents') }}</span>
-          </div>
-
-          <!-- All System -->
-          <div class="nav-all-wrap" :class="{ active: selectedView.type === 'all' && selectedView.agentType === 'system' }">
+        <div class="nav-section">
+          <!-- All -->
+          <div class="nav-all-wrap" :class="{ active: selectedView.type === 'all' }">
             <button
               class="nav-item nav-item--all"
-              :class="{ active: selectedView.type === 'all' && selectedView.agentType === 'system' }"
-              @click="selectView({ type: 'all', agentType: 'system' })"
+              :class="{ active: selectedView.type === 'all' }"
+              @click="selectView({ type: 'all', agentType: selectedView.agentType })"
             >
               <span class="nav-item-icon">
                 <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -94,12 +108,12 @@
                 </svg>
               </span>
               <span class="nav-item-label">{{ t('common.all') }}</span>
-              <span class="nav-item-count">{{ agentsStore.systemAgents.length }}</span>
+              <span class="nav-item-count">{{ selectedView.agentType === 'system' ? agentsStore.systemAgents.length : agentsStore.userAgents.length }}</span>
             </button>
           </div>
 
-          <!-- System categories -->
-          <template v-for="cat in agentsStore.systemCategories" :key="cat.id">
+          <!-- Categories for active tab -->
+          <template v-for="cat in activeCategories" :key="cat.id">
             <div
               class="nav-item-wrap nav-cat-wrap"
               :class="{ 'drag-over': dragOverCategoryId === cat.id, 'drag-reject': dragRejectCategoryId === cat.id, 'cat-drag-over': catDragOverId === cat.id, 'cat-dragging': draggingCatId === cat.id }"
@@ -113,72 +127,9 @@
               <button
                 class="nav-item nav-cat-btn"
                 :class="{ active: selectedView.type === 'category' && selectedView.categoryId === cat.id }"
-                @click="selectView({ type: 'category', categoryId: cat.id, agentType: 'system' })"
+                @click="selectView({ type: 'category', categoryId: cat.id, agentType: selectedView.agentType })"
                 @mouseenter="showNavTooltip($event, cat.name)"
                 @mouseleave="hideNavTooltip"
-              >
-                <span class="nav-item-emoji">{{ cat.emoji }}</span>
-                <span class="nav-item-label">{{ cat.name }}</span>
-              </button>
-              <div class="nav-cat-right">
-                <span class="nav-cat-count nav-item-count">{{ agentsStore.agentsInCategory(cat.id).length }}</span>
-                <div class="nav-item-actions nav-cat-actions">
-                  <button class="nav-icon-btn" title="Rename" @click.stop="openRenameCategory(cat)">
-                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  </button>
-                  <button
-                    class="nav-icon-btn nav-icon-btn-danger"
-                    title="Delete category"
-                    @click.stop="tryDeleteCategory(cat)"
-                  >
-                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </template>
-
-        </div>
-
-        <!-- User section -->
-        <div class="nav-section nav-section--half nav-section--user">
-          <div class="nav-section-header">
-            <span class="nav-section-label">{{ t('agents.userAgents') }}</span>
-          </div>
-
-          <!-- All User -->
-          <div class="nav-all-wrap" :class="{ active: selectedView.type === 'all' && selectedView.agentType === 'user' }">
-            <button
-              class="nav-item nav-item--all"
-              :class="{ active: selectedView.type === 'all' && selectedView.agentType === 'user' }"
-              @click="selectView({ type: 'all', agentType: 'user' })"
-            >
-              <span class="nav-item-icon">
-                <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-                </svg>
-              </span>
-              <span class="nav-item-label">{{ t('common.all') }}</span>
-              <span class="nav-item-count">{{ agentsStore.userAgents.length }}</span>
-            </button>
-          </div>
-
-          <!-- User categories -->
-          <template v-for="cat in agentsStore.userCategories" :key="cat.id">
-            <div
-              class="nav-item-wrap nav-cat-wrap"
-              :class="{ 'drag-over': dragOverCategoryId === cat.id, 'drag-reject': dragRejectCategoryId === cat.id, 'cat-drag-over': catDragOverId === cat.id, 'cat-dragging': draggingCatId === cat.id }"
-              draggable="true"
-              @dragstart="onCatDragStart($event, cat)"
-              @dragend="onCatDragEnd"
-              @dragover="draggingCatId ? onCatDragOver($event, cat) : onCategoryDragOver($event, cat)"
-              @dragleave="draggingCatId ? onCatDragLeave(cat) : onCategoryDragLeave(cat)"
-              @drop="draggingCatId ? onCatDrop($event, cat) : onCategoryDrop($event, cat)"
-            >
-              <button
-                class="nav-item nav-cat-btn"
-                :class="{ active: selectedView.type === 'category' && selectedView.categoryId === cat.id }"
-                @click="selectView({ type: 'category', categoryId: cat.id, agentType: 'user' })"
               >
                 <span class="nav-item-emoji">{{ cat.emoji }}</span>
                 <span class="nav-item-label">{{ cat.name }}</span>
@@ -270,6 +221,7 @@
     <!-- Agent Body Viewer Modal (create + edit) -->
     <AgentBodyViewer
       v-if="bodyViewerAgent"
+      ref="bodyViewerRef"
       :agent-id="bodyViewerAgent.id"
       :agent-type="bodyViewerAgent.type === 'system' ? 'system' : 'users'"
       :agent-name="bodyViewerAgent.name"
@@ -339,11 +291,66 @@
     <AgentGroupCreator
       v-if="showGroupCreator"
       :agent-type="selectedView.agentType"
-      @close="showGroupCreator = false"
+      :initial-tab="groupCreatorInitialTab"
+      :highlight-category="groupCreatorHighlightCategory"
+      @close="showGroupCreator = false; groupCreatorInitialTab = ''; groupCreatorHighlightCategory = ''"
       @created="onAgentsCreated"
     />
 
   </div>
+
+  <!-- Onboarding: spotlight on header + create button area -->
+  <OnboardingOverlay
+    v-if="onboardingPhase === 'userAgentCreate' && !bodyViewerAgent"
+    :title="t('onboarding.createUserAgentTitle')"
+    :description="t('onboarding.createUserAgentDesc')"
+    target-selector=".shared-header-content"
+    :padding="12"
+    :current-step="2"
+    :total-steps="3"
+    @skip="skipOnboarding"
+  />
+
+  <!-- Onboarding: guide card alongside modal (after modal opens) -->
+  <OnboardingOverlay
+    v-if="onboardingPhase === 'userAgentCreate' && bodyViewerAgent"
+    :title="t('onboarding.fillUserAgentTitle')"
+    :description="t('onboarding.fillUserAgentDesc')"
+    target-selector=".bv-modal"
+    :padding="16"
+    :steps="userAgentFormSteps"
+    :current-step="2"
+    :total-steps="3"
+    @skip="skipOnboarding"
+  />
+
+  <!-- Onboarding: multi-user agent tip (between user agent and system agent) -->
+  <Teleport to="body" v-if="onboardingPhase === 'multiUserTip'">
+    <div class="ob-overlay" style="z-index: 9998;">
+      <div class="ob-panel" style="inset:0;"></div>
+      <div class="ob-tip-center">
+        <div class="ob-tip-icon">💡</div>
+        <h3 class="ob-tip-title">{{ t('onboarding.multiUserAgentTitle') }}</h3>
+        <p class="ob-tip-desc">{{ t('onboarding.multiUserAgentDesc') }}</p>
+        <div class="ob-tip-actions">
+          <button class="ob-tip-btn secondary" @click="skipOnboarding">{{ t('onboarding.configureLater') }}</button>
+          <button class="ob-tip-btn primary" @click="advanceFromMultiUserTip">{{ t('common.next', 'Next') }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Onboarding: guide card alongside system agent group creator -->
+  <OnboardingOverlay
+    v-if="onboardingPhase === 'systemAgentTemplates' && showGroupCreator"
+    :title="t('onboarding.systemAgentTitle')"
+    :description="t('onboarding.systemAgentDesc')"
+    target-selector=".agc-modal"
+    :padding="16"
+    :current-step="3"
+    :total-steps="3"
+    @skip="skipOnboarding"
+  />
 
   <!-- Nav item name tooltip -->
   <Teleport to="body">
@@ -357,8 +364,9 @@
 
 <script setup>
 defineOptions({ inheritAttrs: false })
-import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, computed, reactive, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
+import { useRoute, useRouter } from 'vue-router'
 import { useAgentsStore } from '../stores/agents'
 import { useTasksStore } from '../stores/tasks'
 import { useConfigStore } from '../stores/config'
@@ -369,9 +377,12 @@ import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import CategoryModal from '../components/agents/CategoryModal.vue'
 import AgentGroupCreator from '../components/agents/AgentGroupCreator.vue'
+import OnboardingOverlay from '../components/agents/OnboardingOverlay.vue'
 import { useI18n } from '../i18n/useI18n'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 
 const agentsStore = useAgentsStore()
 const tasksStore = useTasksStore()
@@ -406,6 +417,30 @@ function resolveDefaultProviderModel() {
 onMounted(async () => {
   await agentsStore.loadAgents()
   await tasksStore.loadPlans()
+
+  if (route.query.onboarding === '1') {
+    if (route.query.phase === 'system') {
+      // Skip directly to system agent templates
+      onboardingPhase.value = 'systemAgentTemplates'
+      selectedView.agentType = 'system'
+      selectedView.type = 'all'
+      showGroupCreator.value = true
+      groupCreatorInitialTab.value = 'templates'
+    } else {
+      // Start with user agent creation
+      onboardingPhase.value = 'userAgentCreate'
+      selectedView.agentType = 'user'
+      selectedView.type = 'all'
+    }
+    router.replace({ path: '/agents', query: {} })
+  } else if (route.query.openGroupCreator === '1') {
+    // Direct group creator open (non-onboarding)
+    showGroupCreator.value = true
+    selectedView.agentType = 'system'
+    groupCreatorInitialTab.value = route.query.tab || 'templates'
+    groupCreatorHighlightCategory.value = route.query.highlight || ''
+    router.replace({ path: '/agents', query: {} })
+  }
 })
 
 async function refreshAgents() {
@@ -478,6 +513,21 @@ function selectView(view) {
   exitSelectMode()
 }
 
+function switchAgentType(type) {
+  if (selectedView.agentType === type) return
+  selectedView.agentType = type
+  selectedView.type = 'all'
+  selectedView.categoryId = null
+  filterQuery.value = ''
+  exitSelectMode()
+}
+
+const activeCategories = computed(() => {
+  return selectedView.agentType === 'system'
+    ? agentsStore.systemCategories
+    : agentsStore.userCategories
+})
+
 const currentViewTitle = computed(() => {
   if (selectedView.type === 'all') return 'Agents'
   const cat = agentsStore.getCategoryById(selectedView.categoryId)
@@ -516,6 +566,7 @@ const visibleAgents = computed(() => {
 
 // ── AgentBodyViewer (create + edit) ───────────────────────────────────────
 const bodyViewerAgent = ref(null)
+const bodyViewerRef = ref(null)
 
 function openBodyViewer(agent) {
   bodyViewerAgent.value = { ...agent }
@@ -543,6 +594,11 @@ function createNew(type) {
 
 async function onBodyViewerUpdate(updates) {
   if (!bodyViewerAgent.value) return
+  // Track user agent creation during onboarding
+  // All mandatory fields are enforced by AgentBodyViewer validation
+  if (onboardingPhase.value === 'userAgentCreate') {
+    onboardingUserAgentCreated.value = true
+  }
   const updated = { ...bodyViewerAgent.value }
   delete updated.isNew
   Object.assign(updated, updates)
@@ -570,7 +626,7 @@ async function executeDelete() {
 const categoryModal = reactive({ open: false, mode: 'create', catType: 'system', initial: null, editId: null })
 
 function openCreateCategory() {
-  Object.assign(categoryModal, { open: true, mode: 'create', catType: 'system', initial: { name: '', emoji: '📁' }, editId: null })
+  Object.assign(categoryModal, { open: true, mode: 'create', catType: selectedView.agentType, initial: { name: '', emoji: '📁' }, editId: null })
 }
 
 function openRenameCategory(cat) {
@@ -589,6 +645,86 @@ async function onCategoryModalConfirm({ name, emoji, type }) {
 }
 
 const showGroupCreator = ref(false)
+const groupCreatorInitialTab = ref('')
+const groupCreatorHighlightCategory = ref('')
+
+// ── Onboarding state machine ───────────────────────────────────────────────
+const onboardingPhase = ref('idle') // 'idle' | 'userAgentCreate' | 'multiUserTip' | 'systemAgentTemplates'
+const onboardingUserAgentCreated = ref(false)
+
+// Transition: user agent created → show multi-user tip
+watch(bodyViewerAgent, (val) => {
+  if (val === null && onboardingPhase.value === 'userAgentCreate' && onboardingUserAgentCreated.value) {
+    onboardingPhase.value = 'multiUserTip'
+    onboardingUserAgentCreated.value = false
+  }
+})
+
+function advanceFromMultiUserTip() {
+  onboardingPhase.value = 'systemAgentTemplates'
+  selectedView.agentType = 'system'
+  selectedView.type = 'all'
+  showGroupCreator.value = true
+  groupCreatorInitialTab.value = 'templates'
+}
+
+// Transition: group creator closed → pause to show results, then navigate to chat
+watch(showGroupCreator, (val) => {
+  if (!val && onboardingPhase.value === 'systemAgentTemplates') {
+    onboardingPhase.value = 'idle'
+    // Let user see the newly created agents for 1.5 seconds before navigating
+    setTimeout(() => {
+      router.push({ path: '/chats', query: { onboarding: '1' } })
+    }, 1500)
+  }
+})
+
+function skipOnboarding() {
+  onboardingPhase.value = 'idle'
+  showGroupCreator.value = false
+  bodyViewerAgent.value = null
+  configStore.saveConfig({ onboardingCompleted: true })
+}
+
+// User agent form steps — polled from exposed refs for reliable reactivity
+const userAgentFormSteps = ref([])
+let _formPollId = null
+
+// Read exposed ref value — handles both unwrapped (string) and raw Ref
+function readExposed(bv, key) {
+  const v = bv[key]
+  if (v == null) return ''
+  return typeof v === 'object' && 'value' in v ? (v.value ?? '') : (v ?? '')
+}
+
+watch(bodyViewerAgent, (val) => {
+  if (_formPollId) { clearInterval(_formPollId); _formPollId = null }
+  if (val && onboardingPhase.value === 'userAgentCreate') {
+    const poll = () => {
+      const bv = bodyViewerRef.value
+      if (!bv) return
+      const name = String(readExposed(bv, 'draftName')).trim()
+      const desc = String(readExposed(bv, 'draftDescription')).trim()
+      const prompt = String(readExposed(bv, 'draftPrompt')).trim()
+      const avatar = readExposed(bv, 'draftAvatar')
+      userAgentFormSteps.value = [
+        { label: t('onboarding.userStep1'), done: !!name },
+        { label: t('onboarding.userStep2'), done: !!desc },
+        { label: t('onboarding.userStep3'), done: !!prompt },
+        { label: t('onboarding.userStep4'), done: !!avatar },
+      ]
+    }
+    setTimeout(poll, 200)
+    _formPollId = setInterval(poll, 400)
+  } else {
+    userAgentFormSteps.value = []
+  }
+})
+
+onBeforeUnmount(() => {
+  if (_formPollId) { clearInterval(_formPollId); _formPollId = null }
+})
+
 const confirmDeleteCategory = ref(null)
 const deleteCategoryError   = ref(null)
 
@@ -811,6 +947,53 @@ function isDeleteButtonDisabled(agent) {
   margin: 0.25rem 0 0;
 }
 
+/* ── Top-level tab bar ──────────────────────────────────────────────────── */
+.agents-tab-bar {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.875rem;
+  border-bottom: 1.5px solid #E5E5EA;
+  padding-bottom: 0;
+}
+.agents-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  border: none;
+  background: transparent;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  color: #9CA3AF;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1.5px;
+  border-radius: 0.375rem 0.375rem 0 0;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.agents-tab:hover {
+  color: #374151;
+  background: rgba(0,0,0,0.03);
+}
+.agents-tab.active {
+  color: #1A1A1A;
+  font-weight: 600;
+  border-bottom-color: #1A1A1A;
+}
+.agents-tab-count {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 9999px;
+  background: rgba(0,0,0,0.06);
+  line-height: 1.4;
+}
+.agents-tab.active .agents-tab-count {
+  background: rgba(0,0,0,0.1);
+  color: #1A1A1A;
+}
+
 /* ── Shared header ───────────────────────────────────────────────────────── */
 .shared-header {
   display: flex;
@@ -863,19 +1046,12 @@ function isDeleteButtonDisabled(agent) {
   gap: 0;
 }
 
-/* Each half section takes exactly 50% of nav height, scrolls independently */
-.nav-section--half {
+/* Nav section fills available height and scrolls */
+.agents-nav .nav-section {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  
-}
-
-.nav-section--first { padding-top: 0.625rem; }
-
-/* Top border for user section acting as divider */
-.nav-section--user {
-  border-top: 1px solid #E5E5EA;
+  padding-top: 0.625rem;
 }
 
 /* ── Nav resize handle ───────────────────────────────────────────────────── */
@@ -1429,5 +1605,68 @@ function isDeleteButtonDisabled(agent) {
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   pointer-events: none;
   z-index: 9999;
+}
+
+/* Onboarding tip card (centered) */
+.ob-tip-center {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(26rem, 90vw);
+  padding: 1.5rem;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 1rem;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+  z-index: 2;
+  pointer-events: auto;
+  text-align: center;
+  animation: ob-card-enter 0.25s ease-out;
+}
+.ob-tip-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+.ob-tip-title {
+  font-size: var(--fs-section, 1.25rem);
+  font-weight: 600;
+  color: #FFFFFF;
+  margin: 0 0 0.5rem;
+}
+.ob-tip-desc {
+  font-size: var(--fs-body, 0.9375rem);
+  color: #9CA3AF;
+  margin: 0 0 1.25rem;
+  line-height: 1.5;
+}
+.ob-tip-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.ob-tip-btn {
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.5rem;
+  font-size: var(--fs-secondary, 0.875rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.ob-tip-btn.primary {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.ob-tip-btn.primary:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+}
+.ob-tip-btn.secondary {
+  background: transparent;
+  border: 1px solid #2A2A2A;
+  color: #6B7280;
+}
+.ob-tip-btn.secondary:hover {
+  border-color: #4B5563;
+  color: #9CA3AF;
 }
 </style>

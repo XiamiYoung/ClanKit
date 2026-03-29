@@ -85,9 +85,117 @@
                 </tr>
               </tbody>
             </table>
+            <!-- Per-agent breakdown for group chats -->
+            <template v-if="perAgentEntries.length > 1">
+              <div class="mt-2 pt-2" style="border-top:1px solid #E5E5EA;">
+                <p style="color:#9CA3AF; font-size:var(--fs-small); margin-bottom:0.25rem;">
+                  {{ t('chats.aggregateAcross').replace('{n}', perAgentEntries.length) }}
+                </p>
+                <button
+                  @click="showPerAgentBreakdown = !showPerAgentBreakdown"
+                  class="flex items-center gap-1.5 cursor-pointer mt-1 mb-1"
+                  style="color:#007AFF; font-size:var(--fs-small); background:none; border:none; padding:0;"
+                >
+                  <svg class="w-3.5 h-3.5 transition-transform" :style="showPerAgentBreakdown ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                  {{ t('chats.perAgentBreakdown') }}
+                </button>
+                <div v-if="showPerAgentBreakdown" class="space-y-1">
+                  <div
+                    v-for="entry in perAgentEntries"
+                    :key="entry.agentId"
+                    class="flex items-center gap-3 px-3 py-1.5 rounded-lg"
+                    style="background:#F9FAFB; font-size:var(--fs-small);"
+                  >
+                    <span class="font-medium" style="color:#1A1A1A; min-width:6rem;">{{ entry.agentName }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace; color:#6B7280;">
+                      {{ (entry.inputTokens ?? 0).toLocaleString() }} in
+                    </span>
+                    <span style="font-family:'JetBrains Mono',monospace; color:#6B7280;">
+                      {{ (entry.outputTokens ?? 0).toLocaleString() }} out
+                    </span>
+                    <span style="font-family:'JetBrains Mono',monospace; color:#6B7280;">
+                      {{ Math.round(entry.percentage ?? 0) }}%
+                    </span>
+                    <span v-if="entry.compactionCount" style="font-family:'JetBrains Mono',monospace; color:#F59E0B;">
+                      {{ entry.compactionCount }} compact
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
 
+        <!-- ═══ GROUP CHAT: per-agent sections ═══ -->
+        <template v-if="groupAgentSnaps.length > 1">
+          <div
+            v-for="(snap, si) in groupAgentSnaps" :key="snap.agentId || si"
+            style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;"
+          >
+            <button
+              @click="expandedAgentSnap[si] = !expandedAgentSnap[si]"
+              class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
+              style="background:#F2F2F7;"
+              @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
+              @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
+            >
+              <div class="flex items-center gap-2">
+                <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ snap.agentName }}</span>
+                <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
+                  {{ snap.model || 'default' }}
+                </span>
+              </div>
+              <svg class="w-4 h-4 transition-transform" :style="expandedAgentSnap[si] ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            <div v-if="expandedAgentSnap[si]" style="border-top:1px solid #E5E5EA;">
+              <!-- System Prompt -->
+              <div class="px-4 py-3" style="border-bottom:1px solid #F5F5F5;">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:rgba(0,122,255,0.1); color:#0056CC;">{{ t('chats.systemPrompt') }}</span>
+                  <span style="color:#9CA3AF; font-size:var(--fs-small);">{{ snap.systemPrompt ? snap.systemPrompt.length.toLocaleString() + ' ' + t('chats.chars') : '-' }}</span>
+                </div>
+                <pre v-if="snap.systemPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ snap.systemPrompt }}</pre>
+              </div>
+              <!-- Messages -->
+              <div class="px-4 py-3" style="border-bottom:1px solid #F5F5F5;">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#FEF3C7; color:#92400E;">{{ t('chats.messages') }}</span>
+                  <span style="color:#9CA3AF; font-size:var(--fs-small);">{{ snap.messages?.length ?? 0 }}</span>
+                </div>
+                <div v-if="snap.messages?.length" style="max-height:200px; overflow-y:auto;">
+                  <div v-for="(msg, mi) in snap.messages" :key="mi" class="mb-1">
+                    <span class="text-xs font-medium" :style="msg.role === 'user' ? 'color:#0056CC;' : 'color:#065F46;'">{{ msg.role }}</span>
+                    <span class="text-xs ml-1" style="color:#9CA3AF;">{{ msg.contentLength?.toLocaleString() }} {{ t('chats.chars') }}</span>
+                    <div class="text-xs cursor-pointer mt-0.5" style="font-family:'JetBrains Mono',monospace; color:#6B7280;" @click="expandedMessages[`${si}-${mi}`] = !expandedMessages[`${si}-${mi}`]">
+                      <pre v-if="expandedMessages[`${si}-${mi}`]" class="whitespace-pre-wrap leading-relaxed overflow-x-auto" style="max-height:200px; overflow-y:auto;">{{ msg.fullContent }}</pre>
+                      <span v-else>{{ msg.contentPreview }}<span v-if="msg.contentLength > 200" style="color:#007AFF;"> ...</span></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- Tools -->
+              <div class="px-4 py-3">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#E0E7FF; color:#3730A3;">{{ t('chats.tools') }}</span>
+                  <span style="color:#9CA3AF; font-size:var(--fs-small);">{{ snap.tools?.length ?? 0 }}</span>
+                </div>
+                <div v-if="snap.tools?.length" style="max-height:150px; overflow-y:auto;">
+                  <div v-for="(tool, ti) in snap.tools" :key="ti" class="mb-0.5">
+                    <span class="text-xs font-medium" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A;">{{ tool.name }}</span>
+                    <span v-if="tool.description" class="text-xs ml-1" style="color:#9CA3AF;">{{ tool.description.slice(0, 80) }}{{ tool.description.length > 80 ? '...' : '' }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- ═══ SINGLE AGENT: original sections ═══ -->
+        <template v-else>
         <!-- System Prompt section -->
         <div style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
           <button
@@ -100,7 +208,7 @@
             <div class="flex items-center gap-2">
               <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.systemPrompt') }}</span>
               <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                {{ contextSnapshot ? (contextSnapshot.systemPrompt?.length ?? 0).toLocaleString() + ' ' + t('chats.chars') : t('chats.notYetLoaded') }}
+                {{ contextSnapshot?.systemPrompt ? contextSnapshot.systemPrompt.length.toLocaleString() + ' ' + t('chats.chars') : t('chats.notYetLoaded') }}
               </span>
             </div>
             <svg class="w-4 h-4 transition-transform" :style="inspectorSections.system ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
@@ -109,7 +217,7 @@
           </button>
           <div v-if="inspectorSections.system" class="px-4 py-3" style="border-top:1px solid #E5E5EA;">
             <pre v-if="contextSnapshot?.systemPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:300px; overflow-y:auto;">{{ contextSnapshot.systemPrompt }}</pre>
-            <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">{{ t('chats.availableAfterFirstMessage') }}</p>
+            <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">{{ t('chats.snapshotCapturedDuringRun') }}</p>
           </div>
         </div>
 
@@ -144,7 +252,7 @@
                 <span v-if="inspectorAgents.systemAgentName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorAgents.systemAgentName }}</span>
               </div>
               <pre v-if="inspectorAgents.systemAgentPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorAgents.systemAgentPrompt }}</pre>
-              <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">{{ t('chats.promptAvailableAfterFirstMessage') }}</p>
+              <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">{{ t('chats.snapshotCapturedDuringRun') }}</p>
             </div>
             <!-- User agent -->
             <div v-if="inspectorAgents.userAgentPrompt || inspectorAgents.userAgentName" class="px-4 py-3">
@@ -153,7 +261,7 @@
                 <span v-if="inspectorAgents.userAgentName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorAgents.userAgentName }}</span>
               </div>
               <pre v-if="inspectorAgents.userAgentPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorAgents.userAgentPrompt }}</pre>
-              <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">{{ t('chats.promptAvailableAfterFirstMessage') }}</p>
+              <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">{{ t('chats.snapshotCapturedDuringRun') }}</p>
             </div>
           </div>
         </div>
@@ -170,7 +278,7 @@
             <div class="flex items-center gap-2">
               <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.messages') }}</span>
               <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                {{ contextSnapshot?.messages?.length ?? 0 }}
+                {{ effectiveMessages.length }}
               </span>
             </div>
             <svg class="w-4 h-4 transition-transform" :style="inspectorSections.messages ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
@@ -178,12 +286,12 @@
             </svg>
           </button>
           <div v-if="inspectorSections.messages" style="border-top:1px solid #E5E5EA; max-height:400px; overflow-y:auto;">
-            <template v-if="contextSnapshot?.messages?.length">
+            <template v-if="effectiveMessages.length">
               <div
-                v-for="(msg, idx) in contextSnapshot.messages"
+                v-for="(msg, idx) in effectiveMessages"
                 :key="idx"
                 class="px-4 py-2.5"
-                :style="idx < contextSnapshot.messages.length - 1 ? 'border-bottom:1px solid #F5F5F5;' : ''"
+                :style="idx < effectiveMessages.length - 1 ? 'border-bottom:1px solid #F5F5F5;' : ''"
               >
                 <div class="flex items-center gap-2 mb-1">
                   <span
@@ -204,12 +312,15 @@
                 </div>
               </div>
             </template>
-            <div v-else class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">{{ contextSnapshot ? t('chats.noMessages') : t('chats.availableAfterFirstMessage') }}</div>
+            <div v-else class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">{{ t('chats.noMessages') }}</div>
           </div>
         </div>
 
         <!-- Tools section -->
-        <div style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
+        </template>
+
+        <!-- Tools section (always shown, shared in group mode since per-agent tools shown above) -->
+        <div v-if="groupAgentSnaps.length <= 1" style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
           <button
             @click="inspectorSections.tools = !inspectorSections.tools"
             class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
@@ -239,7 +350,7 @@
                 <p v-if="tool.description" class="mt-0.5 text-xs" style="color:#9CA3AF;">{{ tool.description.slice(0, 150) }}{{ tool.description.length > 150 ? '...' : '' }}</p>
               </div>
             </template>
-            <div v-else class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">{{ contextSnapshot ? t('chats.noTools') : t('chats.availableAfterFirstMessage') }}</div>
+            <div v-else class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">{{ contextSnapshot ? t('chats.noTools') : t('chats.snapshotCapturedDuringRun') }}</div>
           </div>
         </div>
 
@@ -299,12 +410,12 @@ import { useChatsStore }  from '../../stores/chats'
 import { useConfigStore }  from '../../stores/config'
 import { useAgentsStore }  from '../../stores/agents'
 import { useI18n }         from '../../i18n/useI18n'
-import { resolveModelPrice, convertCurrencies } from '../../utils/pricing.js'
 
 const props = defineProps({
   visible:        Boolean,
   chatId:         String,
   contextMetrics: Object,   // activeContextMetrics from parent
+  perAgentContextMetrics: { type: Object, default: () => ({}) },
   debugLogs:      { type: Array, default: () => [] },
 })
 
@@ -320,6 +431,8 @@ const { t }       = useI18n()
 const inspectorUsage    = ref(null)
 const contextSnapshot   = ref(null)
 const expandedMessages  = reactive({})
+const showPerAgentBreakdown = ref(false)
+const expandedAgentSnap = reactive({})
 const inspectorSections = reactive({
   metrics: true, system: false, agents: false,
   messages: false, tools: false, debugLog: false, cost: true,
@@ -329,28 +442,23 @@ const debugLogEl = ref(null)
 const hasElectron = !!(typeof window !== 'undefined' && window.electronAPI)
 
 const debugModelId = computed(() => {
-  const a = configStore.config.anthropic || {}
-  return a.utilityModel || a.sonnetModel || '(unset)'
+  const um = configStore.config.utilityModel
+  if (um?.model) return um.model
+  const firstProvider = (configStore.config.providers || [])[0]
+  return firstProvider?.model || '(unset)'
 })
 
 // ── Computeds ───────────────────────────────────────────────────────────────
 
-const activeChatUsage = computed(() => {
-  const chat = chatsStore.activeChat
-  const base = inspectorUsage.value || chat?.usage || null
-  const m = chat?.contextMetrics
-  if (!m) return base
-  const liveWhisper = (m.whisperCalls || 0) + (m.whisperSecs || 0)
-  const liveVoice   = (m.voiceInputTokens || 0) + (m.voiceOutputTokens || 0)
-  if (!liveWhisper && !liveVoice) return base
-  return {
-    ...(base || {}),
-    whisperCalls:      Math.max(base?.whisperCalls      || 0, m.whisperCalls      || 0),
-    whisperSecs:       Math.max(base?.whisperSecs       || 0, m.whisperSecs       || 0),
-    voiceInputTokens:  Math.max(base?.voiceInputTokens  || 0, m.voiceInputTokens  || 0),
-    voiceOutputTokens: Math.max(base?.voiceOutputTokens || 0, m.voiceOutputTokens || 0),
-  }
+// Per-agent metrics entries for group chat breakdown
+const perAgentEntries = computed(() => {
+  const m = props.perAgentContextMetrics
+  if (!m || typeof m !== 'object') return []
+  return Object.entries(m).map(([agentId, data]) => ({ agentId, ...data }))
 })
+
+// Per-agent snapshots for group chat inspector (system prompt, messages, tools per agent)
+const groupAgentSnaps = computed(() => contextSnapshot.value?.agentSnapshots || [])
 
 // Resolved model for the active chat: agent modelId -> chat.model -> contextSnapshot
 const activeChatModel = computed(() => {
@@ -382,26 +490,6 @@ const inspectorAgents = computed(() => {
   }
 })
 
-const activeChatCost = computed(() => {
-  const usage = activeChatUsage.value
-  const chat  = chatsStore.activeChat
-  if (!usage || !chat) return null
-  const hasActivity = (usage.inputTokens || 0) + (usage.outputTokens || 0) + (usage.whisperCalls || 0) > 0
-  if (!hasActivity) return null
-  const modelId = activeChatModel.value
-  const price   = resolveModelPrice(modelId, configStore.config.pricing)
-  const M = 1_000_000
-  const inputUsd      = price ? (((usage.inputTokens  || 0) + (usage.voiceInputTokens  || 0)) / M) * (price.input      || 0) : 0
-  const outputUsd     = price ? (((usage.outputTokens || 0) + (usage.voiceOutputTokens || 0)) / M) * (price.output     || 0) : 0
-  const cacheWriteUsd = price ? ((usage.cacheCreationTokens || 0) / M) * (price.cacheWrite || 0) : 0
-  const cacheReadUsd  = price ? ((usage.cacheReadTokens     || 0) / M) * (price.cacheRead  || 0) : 0
-  const llmUsd = inputUsd + outputUsd + cacheWriteUsd + cacheReadUsd
-  const whisperPrice = resolveModelPrice('whisper-1', configStore.config.pricing)
-  const whisperUsd   = ((usage.whisperSecs || 0)) * (whisperPrice?.perSec || 0.0001)
-  const usd = llmUsd + whisperUsd
-  const all = convertCurrencies(usd, configStore.config.pricing?.currencyRates)
-  return { usd, all, modelId, hasPricing: !!price, llmUsd, whisperUsd, inputUsd, outputUsd, cacheWriteUsd, cacheReadUsd }
-})
 
 // ── Data fetch ──────────────────────────────────────────────────────────────
 
@@ -410,9 +498,51 @@ async function refreshContextSnapshot() {
   if (!cid || !window.electronAPI?.getContextSnapshot) return
   try {
     const snap = await window.electronAPI.getContextSnapshot(cid)
-    if (snap) contextSnapshot.value = snap
+    if (snap) {
+      contextSnapshot.value = snap
+      // Persist a lightweight copy to the chat object for future sessions.
+      // Strip fullContent from messages to avoid bloating the JSON file.
+      const chat = chatsStore.activeChat
+      if (chat) {
+        chat.lastContextSnapshot = {
+          systemPrompt: snap.systemPrompt || null,
+          agents: snap.agents || null,
+          messages: (snap.messages || []).map(m => ({
+            role: m.role,
+            contentPreview: m.contentPreview,
+            contentLength: m.contentLength,
+          })),
+          tools: snap.tools || [],
+          model: snap.model || null,
+        }
+      }
+    } else {
+      // IPC returned null — try to restore from persisted chat data
+      const chat = chatsStore.activeChat
+      if (chat?.lastContextSnapshot) contextSnapshot.value = chat.lastContextSnapshot
+    }
   } catch {}
 }
+
+// Fallback messages from the chat store when snapshot has none
+const fallbackMessages = computed(() => {
+  const chat = chatsStore.activeChat
+  if (!chat?.messages?.length) return []
+  return chat.messages
+    .filter(m => !m.isWaitingIndicator && (m.role === 'user' || m.role === 'assistant'))
+    .map(m => ({
+      role: m.role,
+      contentPreview: (m.content || '').slice(0, 200),
+      contentLength: (m.content || '').length,
+      fullContent: m.content || '',
+    }))
+})
+
+// Effective message list: prefer snapshot, fall back to chat store
+const effectiveMessages = computed(() => {
+  if (contextSnapshot.value?.messages?.length) return contextSnapshot.value.messages
+  return fallbackMessages.value
+})
 
 async function fetchOnOpen() {
   Object.keys(expandedMessages).forEach(k => delete expandedMessages[k])

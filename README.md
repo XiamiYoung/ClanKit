@@ -61,6 +61,27 @@ Important: the full app behavior only works in the Electron window. Browser-only
 - npm run dist:all: package win + mac
 - npm run bundle:mcporter: rebuild bundled MCP transporter module
 
+## Packaging
+
+The dist scripts automatically compile Electron main-process JS to V8 bytecode before packaging, and restore the source files afterward:
+
+    npm run dist:win          # Windows NSIS installer
+    npm run dist:mac          # macOS DMG
+    npm run dist:all          # Both platforms
+
+Under the hood each dist command runs:
+
+1. `vite build` — build Vue renderer to dist/
+2. `node scripts/compile-bytecode.js` — compile 69 electron/ JS files to .jsc bytecode (backup originals)
+3. `electron-builder` — package app (asar contains only .jsc bytecode, not readable JS)
+4. `node scripts/compile-bytecode.js --restore` — restore original JS source for development
+
+Files kept as plaintext: main.js (entry point), preload.js, drawio-preload.js (Electron internal loading).
+
+To set the telemetry endpoint before packaging, create electron/build-config.json (gitignored):
+
+    { "telemetryEndpoint": "https://api.amy1230.win/report" }
+
 ## Routing
 
 Router uses hash history for Electron compatibility.

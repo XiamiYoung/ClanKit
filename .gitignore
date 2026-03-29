@@ -32,6 +32,8 @@ Thumbs.db
 # Electron
 release/
 dist-release/
+electron/build-config.json
+electron/.backup/
 
 # Backup files
 *.bak

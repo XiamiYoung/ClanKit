@@ -332,10 +332,6 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
       })
       if (result.success && result.audio) {
         // Record TTS character count for cost tracking
-        const chatId = chatsStore.activeChatId
-        if (chatId && text.length > 0) {
-          window.electronAPI?.voice?.accumulateUsage?.(chatId, { ttsChars: text.length })
-        }
         return `data:audio/${result.format || 'mp3'};base64,${result.audio}`
       }
     } catch { /* fall through — playback will use browser TTS */ }

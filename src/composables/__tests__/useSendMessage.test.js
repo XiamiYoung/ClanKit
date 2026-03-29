@@ -15,7 +15,6 @@ const mockChat = reactive({
   systemAgentId: 'agent1',
   userAgentId: null,
   groupAgentIds: [],
-  agentModelOverrides: {},
   permissionMode: 'inherit',
   chatAllowList: [],
   chatDangerOverrides: [],
@@ -109,7 +108,6 @@ function createSendMessage(overrides = {}) {
     activeSystemAgentIds: computed(() => ['agent1']),
     enabledSkillObjects: computed(() => []),
     stickyTarget: ref(null),
-    perChatQueue: reactive(new Map()),
     programmaticScroll: { increment: vi.fn(), decrement: vi.fn() },
     ...overrides,
   })
@@ -130,7 +128,6 @@ describe('useSendMessage', () => {
     mockChat.messages = []
     mockChat.systemAgentId = 'agent1'
     mockChat.groupAgentIds = []
-    mockChat.agentModelOverrides = {}
 
     mockChatsStore.activeChatId = 'chat-1'
     mockChatsStore.chats = [mockChat]
@@ -165,34 +162,29 @@ describe('useSendMessage', () => {
     expect(callArg.isGroup).toBe(false)
   })
 
-  // ─── 3. Queue when busy (single agent) ────────────────────────────────────
+  // ─── 3. Shows interrupt confirmation when busy ─────────────────────────────
 
-  it('queues message to perChatQueue when chat.isRunning is true (single agent)', async () => {
+  it('shows interrupt confirmation instead of sending when chat.isRunning is true', async () => {
     mockChat.isRunning = true
-    const inputText = ref('Queued message')
-    const perChatQueue = reactive(new Map())
+    const inputText = ref('New message')
     const activeRunning = computed(() => mockChat.isRunning)
-    const { sendMessage } = createSendMessage({ inputText, perChatQueue, activeRunning })
+    const { sendMessage, pendingInterrupt } = createSendMessage({ inputText, activeRunning })
 
     await sendMessage()
 
     // Should NOT call IPC
     expect(mockElectronAPI.sendMessage).not.toHaveBeenCalled()
-    // Should enqueue the message under chatId key
-    expect(perChatQueue.has('chat-1')).toBe(true)
-    expect(perChatQueue.get('chat-1')).toHaveLength(1)
-    expect(perChatQueue.get('chat-1')[0].text).toBe('Queued message')
-    // Input should be cleared after queuing
+    // Should show interrupt confirmation
+    expect(pendingInterrupt.visible).toBe(true)
+    expect(pendingInterrupt.text).toBe('New message')
+    expect(pendingInterrupt.countdown).toBe(3)
+    // Input should be cleared
     expect(inputText.value).toBe('')
   })
 
   // ─── 4. stopAgent clears everything ───────────────────────────────────────
 
-  it('clears queue, sets collaborationCancelled, clears runningAgentKeys, calls IPC stopAgent', async () => {
-    const perChatQueue = reactive(new Map())
-    perChatQueue.set('chat-1', [{ text: 'queued1', attachments: [] }])
-    perChatQueue.set('chat-1:agent1', [{ text: 'queued2', attachments: [] }])
-
+  it('sets collaborationCancelled, clears runningAgentKeys, calls IPC stopAgent', async () => {
     const collaborationCancelled = ref(false)
     const isInCollaborationLoop = ref(true)
     const runningAgentKeys = reactive(new Set(['chat-1:agent1', 'chat-1:agent2', 'chat-2:agent1']))
@@ -203,18 +195,12 @@ describe('useSendMessage', () => {
     ]
 
     const { stopAgent } = createSendMessage({
-      perChatQueue,
       collaborationCancelled,
       isInCollaborationLoop,
       runningAgentKeys,
     })
 
     await stopAgent('chat-1')
-
-    // Queue entries for chat-1 should be deleted
-    expect(perChatQueue.has('chat-1')).toBe(false)
-    expect(perChatQueue.has('chat-1:agent1')).toBe(false)
-    // Other chat queues should be untouched (none in this case)
 
     // collaborationCancelled should be set to true
     expect(collaborationCancelled.value).toBe(true)
@@ -292,54 +278,43 @@ describe('useSendMessage', () => {
     expect(quotedMessage.value).toBeNull()
   })
 
-  // ─── 7. removeFromQueue ───────────────────────────────────────────────────
+  // ─── 7. cancelInterrupt restores text to input ────────────────────────────
 
-  it('removes the correct item by index from perChatQueue', () => {
-    const perChatQueue = reactive(new Map())
-    perChatQueue.set('chat-1', [
-      { text: 'first', attachments: [] },
-      { text: 'second', attachments: [] },
-      { text: 'third', attachments: [] },
-    ])
-    const { removeFromQueue, pendingQueue } = createSendMessage({ perChatQueue })
+  it('cancelInterrupt puts message back in input box', async () => {
+    mockChat.isRunning = true
+    const inputText = ref('Interrupt me')
+    const attachments = ref([{ id: 'a1', name: 'file.png' }])
+    const activeRunning = computed(() => mockChat.isRunning)
+    const { sendMessage, pendingInterrupt, cancelInterrupt } = createSendMessage({ inputText, attachments, activeRunning })
 
-    // pendingQueue should reflect all 3 items
-    expect(pendingQueue.value).toHaveLength(3)
+    await sendMessage()
 
-    // Remove the middle item (index 1)
-    removeFromQueue(1)
+    // Interrupt bar should be visible
+    expect(pendingInterrupt.visible).toBe(true)
+    expect(pendingInterrupt.text).toBe('Interrupt me')
+    expect(pendingInterrupt.attachments).toHaveLength(1)
 
-    expect(pendingQueue.value).toHaveLength(2)
-    expect(pendingQueue.value[0].text).toBe('first')
-    expect(pendingQueue.value[1].text).toBe('third')
+    // Cancel interrupt
+    cancelInterrupt()
+
+    // Text and attachments should be restored to input
+    expect(inputText.value).toBe('Interrupt me')
+    expect(attachments.value).toHaveLength(1)
+    expect(pendingInterrupt.visible).toBe(false)
   })
 
-  it('removes queue key entirely when last item is removed', () => {
-    const perChatQueue = reactive(new Map())
-    perChatQueue.set('chat-1', [{ text: 'only one', attachments: [] }])
-    const { removeFromQueue } = createSendMessage({ perChatQueue })
+  // ─── 8. escapeRetrieve does nothing when not running ─────────────────────
 
-    removeFromQueue(0)
+  it('escapeRetrieve does nothing when agents are not running', () => {
+    mockChat.isRunning = false
+    mockChat.messages = [{ id: 'u1', role: 'user', content: 'Hello' }]
+    const inputText = ref('')
+    const { escapeRetrieve } = createSendMessage({ inputText })
 
-    expect(perChatQueue.has('chat-1')).toBe(false)
-  })
+    escapeRetrieve('chat-1')
 
-  // ─── 8. pendingQueue computed ─────────────────────────────────────────────
-
-  it('returns flattened items for active chat including per-agent keys', () => {
-    const perChatQueue = reactive(new Map())
-    perChatQueue.set('chat-1', [{ text: 'chat-level', attachments: [] }])
-    perChatQueue.set('chat-1:agent1', [{ text: 'agent1-msg', attachments: [] }])
-    perChatQueue.set('chat-2', [{ text: 'other-chat', attachments: [] }])
-
-    const { pendingQueue } = createSendMessage({ perChatQueue })
-
-    // Should include chat-1 and chat-1:agent1 items, but NOT chat-2
-    expect(pendingQueue.value).toHaveLength(2)
-    expect(pendingQueue.value[0].text).toBe('chat-level')
-    expect(pendingQueue.value[1].text).toBe('agent1-msg')
-    // per-agent items should carry agent name
-    expect(pendingQueue.value[1]._targetAgent).toBe('Agent One')
+    // Input should remain empty since agents were not running
+    expect(inputText.value).toBe('')
   })
 
   // ─── 9. rejectPlan ────────────────────────────────────────────────────────
@@ -394,21 +369,18 @@ describe('useSendMessage', () => {
 
     _applyInterrupt(chat, msg, 'stop')
 
-    expect(msg.content).toContain('[Request interrupted by user. Queue cleared.]')
+    expect(msg.content).toContain('[Request interrupted by user.]')
     expect(msg.streaming).toBe(false)
   })
 
-  it('removes empty message and adds system bubble when msg has no content', () => {
+  it('silently removes empty message without adding system bubble', () => {
     const { _applyInterrupt } = createSendMessage()
     const emptyMsg = { content: '', streaming: true }
     const chat = { messages: [emptyMsg] }
 
-    _applyInterrupt(chat, emptyMsg, 'pause')
+    _applyInterrupt(chat, emptyMsg, 'stop')
 
-    // Empty msg should be removed, system bubble added
-    expect(chat.messages).toHaveLength(1)
-    expect(chat.messages[0].role).toBe('system')
-    expect(chat.messages[0].interruptType).toBe('pause')
-    expect(chat.messages[0].content).toContain('Queued prompts will resume automatically')
+    // Empty msg should be removed silently — no system bubble
+    expect(chat.messages).toHaveLength(0)
   })
 })

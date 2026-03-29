@@ -29,12 +29,9 @@ export function useAgentCollaboration({
   // ── Provider credential helpers (still needed for compactContextStandalone) ───
 
   function resolveProviderCreds(cfg, providerType) {
-    if (cfg.providers && Array.isArray(cfg.providers)) {
-      const p = cfg.providers.find(p => p.type === providerType || p.id === providerType)
-      if (p) return { apiKey: p.apiKey || '', baseURL: p.baseURL || '', model: p.model || '', type: p.type || providerType }
-    }
-    const legacy = cfg[providerType]
-    if (legacy) return { apiKey: legacy.apiKey || '', baseURL: legacy.baseURL || '', model: legacy.model || '', type: providerType }
+    const providers = cfg.providers || []
+    const p = providers.find(p => p.type === providerType || p.id === providerType)
+    if (p) return { apiKey: p.apiKey || '', baseURL: p.baseURL || '', model: p.model || '', type: p.type || providerType }
     return { apiKey: '', baseURL: '', model: '', type: providerType }
   }
 
@@ -102,7 +99,7 @@ export function useAgentCollaboration({
       return
     }
 
-    const groupIds = targetChat.groupAgentIds || targetChat.groupPersonaIds || []
+    const groupIds = targetChat.groupAgentIds || []
 
     // Add user message (skip if caller already added it, e.g. idle/busy split in sendMessage)
     if (!opts.skipUserMessage) {
@@ -129,14 +126,12 @@ export function useAgentCollaboration({
       permissionMode: targetChat.permissionMode || 'inherit',
       chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
       chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
-      maxOutputTokens: targetChat.maxOutputTokens || null,
       maxAgentRounds: targetChat.maxAgentRounds ?? 10,
       workingPath: targetChat.workingPath || null,
       codingMode: !!targetChat.codingMode,
       claudeContext: null,
       userAgentId: targetChat.userAgentId || null,
       systemAgentId: agentIds[0] || null,
-      agentModelOverrides: JSON.parse(JSON.stringify(targetChat.agentModelOverrides || {})),
     }
 
     for (const id of agentIds) runningAgentKeys.add(`${chatId}:${id}`)

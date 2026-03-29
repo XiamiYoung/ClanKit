@@ -129,7 +129,7 @@ npm run electron
 
 ### Electron IPC Pattern
 
-- Main process exposes IPC handlers via `ipcMain.handle('channel', ...)` in `electron/main.js`
+- Main process exposes IPC handlers via `ipcMain.handle('channel', ...)` in `electron/ipc/` modules
 - Preload script (`electron/preload.js`) bridges channels to `window.electronAPI` via `contextBridge`
 - Renderer accesses IPC through `window.electronAPI.methodName()`
 - Namespaced IPC channels: `store:*`, `mcp:*`, `tools:*`, `agent:*`, `skills:*`, `knowledge:*`, `files:*`
@@ -156,47 +156,18 @@ npm run electron
 - Routes: `/chats`, `/agents`, `/skills`, `/knowledge`, `/mcp`, `/tools`, `/notes`, `/config`
 - Default redirect: `/` → `/chats`
 
-### Agent Model Architecture — Global Default vs Per-Chat Override
+### Agent Model Resolution
 
-**This logic is intentional and must not be changed without explicit developer confirmation.**
-
-#### Two separate layers
-
-| Layer | Storage location | Scope | Write path |
-|-------|-----------------|-------|------------|
-| **Global default** | `agents.json` → `agent.providerId` / `agent.modelId` | All chats that use this agent | Agents page → `AgentWizard.vue` → `agentsStore.saveAgent()` |
-| **Per-chat override** | `chats/{id}.json` → `chat.agentModelOverrides[agentId]` = `{ provider, model }` | This chat only | Chat header agent modal → `ChatHeader.vue` → `chatsStore.setChatAgentModelOverride()` |
-
-#### Priority at runtime (both desktop and IM bridge)
-
-```
-chat.agentModelOverrides[agentId]   ← highest priority (this chat only)
-  → agent.providerId / agent.modelId ← agent global default
-    → config.defaultProvider             ← global fallback
-```
-
-#### Key invariants — never break these
-
-1. **`AgentWizard.vue` is the only place that writes `agent.providerId` / `agent.modelId`** to `agents.json`. The chat agent modal (`ChatHeader.vue`) must never call `agentsStore.saveAgent()` with model fields.
-
-2. **`setChatAgentModelOverride(chatId, agentId, providerId, modelId)` in `chats.js`** is the only path for per-chat overrides. It writes `chat.agentModelOverrides[agentId] = { provider, model }`. Passing `null, null` clears the override and restores the agent default.
-
-3. **Never write a partial override** (`{ provider: x, model: null }`). The `ChatHeader` modal uses a local `draftOverrideProvider` ref to hold the in-flight provider selection, and only calls `setChatAgentModelOverride` once both provider **and** model are confirmed. See `ChatHeader.vue → openSysAgentConfig / draftOverrideProvider`.
-
-4. **Group chat: each agent has its own independent override.** `buildAgentRuns()` in `ChatsView.vue` iterates each `pid` and reads `targetChat.agentModelOverrides?.[pid]` separately, producing an independent `config` per agent.
-
-5. **Overrides are per-chat, never copied.** `createChatFromHistory()` in `chats.js` intentionally sets `agentModelOverrides: {}` — overrides must not propagate to new chats.
-
-6. **Display must reflect the active override.** `activeChatModel` computed in `ChatsView.vue` and `getAgentProviderLabel()` both read `agentModelOverrides` first, before falling back to `agent.modelId`. Do not simplify these to read only the agent global fields.
+Agent model is resolved from `agent.providerId` / `agent.modelId` in `agents.json`, with `config.defaultProvider` as global fallback. **`AgentWizard.vue` is the only place that writes model fields** to `agents.json`.
 
 ### Data Storage
 
-- All data stored in `~/.clankAI/` (configurable via `CLANKAI_DATA_PATH`)
+- All data stored in `%APPDATA%/clankai/data/` on Windows, `~/.config/clankai/data/` on Linux/macOS (configurable via `CLANKAI_DATA_PATH` in `.env`)
 - Files: `config.json`, `agents.json`, `mcp-servers.json`, `tools.json`, `knowledge.json`
 - Chats: `chats/index.json` (metadata) + `chats/{id}.json` (per-chat with messages)
 - Souls: `souls/{agentId}/{type}.md`
 
-All configuration lives in `config.json`. There is no `.env` file.
+All configuration lives in `config.json`. The `.env` file only stores `CLANKAI_DATA_PATH` (data directory override).
 
 ## Electron Agent Architecture
 
@@ -344,7 +315,7 @@ ShellTool.execute(toolCallId, params, signal, onUpdate)
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
-- **No hardcoded provider endpoints**: Never use `|| 'https://api.anthropic.com'`, `|| 'https://openrouter.ai/api'`, or any other provider URL as a fallback in source code. All endpoints must come from user configuration (`config.anthropic.baseURL`, `config.openrouter.baseURL`, `config.openai.baseURL`). If a baseURL is missing at runtime, throw an error or return early — do not silently fall back to an official URL. Placeholder text in `<input placeholder="...">` UI fields is exempt (display only, not used for requests).
+- **No hardcoded provider endpoints**: Never use `|| 'https://api.anthropic.com'`, `|| 'https://openrouter.ai/api'`, or any other provider URL as a fallback in source code. All endpoints must come from user configuration (`config.providers[]` entries). If a baseURL is missing at runtime, throw an error or return early — do not silently fall back to an official URL. Placeholder text in `<input placeholder="...">` UI fields is exempt (display only, not used for requests).
 
 ## Workflow Orchestration
 

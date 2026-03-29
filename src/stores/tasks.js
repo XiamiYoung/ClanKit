@@ -122,44 +122,14 @@ export const useTasksStore = defineStore('tasks', () => {
 
     const providerId = agent.providerId || raw.defaultProvider || 'anthropic'
 
-    // Check if providerId is a UUID referencing config.providers[]
-    const customProvider = (raw.providers || []).find(p => p.id === providerId)
-    if (customProvider) {
+    // Find provider by ID or type in config.providers[]
+    const providers = raw.providers || []
+    const matchedProvider = providers.find(p => p.id === providerId || p.type === providerId)
+    if (matchedProvider) {
       cfg.provider = {
-        ...customProvider,
-        model: agent.modelId || customProvider.model,
+        ...matchedProvider,
+        model: agent.modelId || matchedProvider.model,
       }
-      return JSON.parse(JSON.stringify(cfg))
-    }
-
-    // Legacy string-based provider
-    const provider = providerId
-
-    if (provider === 'anthropic') {
-      cfg.apiKey  = raw.anthropic?.apiKey  || ''
-      cfg.baseURL = raw.anthropic?.baseURL || ''
-    } else if (provider === 'openrouter') {
-      cfg.apiKey  = raw.openrouter?.apiKey  || ''
-      cfg.baseURL = raw.openrouter?.baseURL || ''
-    } else if (provider === 'openai') {
-      cfg.openaiApiKey  = raw.openai?.apiKey  || ''
-      cfg.openaiBaseURL = raw.openai?.baseURL || ''
-      cfg._resolvedProvider = 'openai'
-      cfg.defaultProvider   = 'openai'
-      delete cfg._directAuth
-    } else if (provider === 'deepseek') {
-      cfg.openaiApiKey  = raw.deepseek?.apiKey  || ''
-      cfg.openaiBaseURL = (raw.deepseek?.baseURL || '').replace(/\/+$/, '')
-      cfg._resolvedProvider = 'openai'
-      cfg._directAuth       = true
-      cfg.defaultProvider   = 'openai'
-    }
-
-    if (agent.modelId) {
-      if (provider === 'anthropic')       cfg.anthropic   = { ...cfg.anthropic,   activeModel:  agent.modelId }
-      else if (provider === 'openrouter') cfg.openrouter  = { ...cfg.openrouter,  defaultModel: agent.modelId }
-      else if (provider === 'openai')     cfg.openai      = { ...cfg.openai,      model:        agent.modelId }
-      else if (provider === 'deepseek')   cfg.deepseek    = { ...cfg.deepseek,    model:        agent.modelId }
     }
 
     return JSON.parse(JSON.stringify(cfg))
@@ -324,7 +294,6 @@ export const useTasksStore = defineStore('tasks', () => {
       chatPermissionMode: permissionMode,
       chatAllowList: JSON.parse(JSON.stringify(allowList)),
       chatDangerOverrides: [],
-      maxOutputTokens: null,
       knowledgeConfig: { ragEnabled: false },
     })
   }

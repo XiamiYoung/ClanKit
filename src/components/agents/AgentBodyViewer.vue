@@ -521,15 +521,34 @@
 
                 <!-- Avatar picker (inline in right panel) -->
                 <div v-else-if="activePanel === 'avatar' && !isBuiltinSystemAgent" class="bv-detail-body bv-avatar-panel">
-                  <!-- Style tabs -->
-                  <div class="bv-av-tabs">
-                    <button
-                      v-for="style in avatarStyles"
-                      :key="style.key"
-                      class="bv-av-tab"
-                      :class="{ active: avatarStyleKey === style.key }"
-                      @click="switchAvatarStyle(style.key)"
-                    >{{ style.label }}</button>
+                  <!-- Style selector with filter -->
+                  <div class="bv-av-style-row">
+                    <div class="bv-av-combo" :class="{ open: avatarComboOpen }">
+                      <input
+                        ref="avatarComboInputRef"
+                        type="text"
+                        class="bv-av-combo-input"
+                        v-model="avatarComboFilter"
+                        :placeholder="currentAvatarStyleLabel"
+                        @focus="avatarComboOpen = true"
+                        @click="avatarComboOpen = true"
+                        @input="avatarComboOpen = true"
+                        @blur="delayCloseAvatarCombo"
+                      />
+                      <button class="bv-av-combo-toggle" type="button" @mousedown.prevent="toggleAvatarCombo">
+                        <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                      </button>
+                      <div v-if="avatarComboOpen" class="bv-av-combo-list">
+                        <button
+                          v-for="style in filteredAvatarStyles"
+                          :key="style.key"
+                          class="bv-av-combo-option"
+                          :class="{ active: avatarStyleKey === style.key }"
+                          @mousedown.prevent="switchAvatarStyle(style.key); avatarComboOpen = false; avatarComboFilter = ''"
+                        >{{ style.label }}</button>
+                        <div v-if="filteredAvatarStyles.length === 0" class="bv-av-combo-empty">No matches</div>
+                      </div>
+                    </div>
                   </div>
                   <!-- Upload button -->
                   <label class="bv-av-upload-btn">
@@ -772,6 +791,56 @@ const draftPrompt      = ref(props.agentPrompt || '')
 const draftAvatar      = ref(props.agentAvatar || null)
 const draftVoiceId     = ref(props.agentVoiceId || 'alloy')
 
+// Pre-fill prompt template for new user agents (markdown format matching system agent templates)
+if (props.isNew && props.agentType !== 'system' && !draftPrompt.value) {
+  const isZh = configStore.config.language === 'zh'
+  draftPrompt.value = isZh
+    ? `## 基本信息
+- **性别**:
+- **年龄**:
+- **职业**:
+
+## 背景
+- **经验**:
+- **专业领域**:
+
+## 性格与偏好
+- **性格**:
+- **沟通方式**:
+- **感兴趣的话题**:
+- **不感兴趣的话题**:
+
+## AI 沟通规则
+-
+`
+    : `## Basic Info
+- **Gender**:
+- **Age**:
+- **Occupation**:
+
+## Background
+- **Experience**:
+- **Domain expertise**:
+
+## Personality & Preferences
+- **Personality**:
+- **Communication style**:
+- **Interested topics**:
+- **Not interested topics**:
+
+## AI Communication Rules
+-
+`
+}
+
+// Expose draft field state for onboarding tracking
+defineExpose({
+  draftName,
+  draftDescription,
+  draftPrompt,
+  draftAvatar,
+})
+
 const draftRequiredToolIds          = ref([...(props.agentRequiredToolIds || [])])
 const draftRequiredSkillIds         = ref([...(props.agentRequiredSkillIds || [])])
 const draftRequiredMcpServerIds     = ref([...(props.agentRequiredMcpServerIds || [])])
@@ -801,6 +870,21 @@ const fallbackInitial  = computed(() => (draftName.value || '?').charAt(0).toUpp
 
 // ── Inline avatar picker state ──────────────────────────────────────────────
 const avatarStyles     = STYLES
+const avatarComboOpen  = ref(false)
+const avatarComboFilter = ref('')
+const currentAvatarStyleLabel = computed(() => STYLES.find(s => s.key === avatarStyleKey.value)?.label || 'Select style')
+const avatarComboInputRef = ref(null)
+function delayCloseAvatarCombo() { setTimeout(() => { avatarComboOpen.value = false }, 150) }
+function toggleAvatarCombo() {
+  avatarComboOpen.value = !avatarComboOpen.value
+  if (avatarComboOpen.value) nextTick(() => avatarComboInputRef.value?.focus())
+}
+
+const filteredAvatarStyles = computed(() => {
+  const q = avatarComboFilter.value.toLowerCase()
+  if (!q) return STYLES
+  return STYLES.filter(s => s.label.toLowerCase().includes(q))
+})
 const avatarBatchCache = new Map()
 const avatarStyleKey   = ref('avataaars')
 const avatarPage       = ref(0)
@@ -1274,8 +1358,17 @@ function saveAll() {
     saveError.value = t('agents.nameTooLong')
     return
   }
-  if (props.agentType === 'system' && !draftPrompt.value.trim()) {
+  if (!draftPrompt.value.trim()) {
     saveError.value = t('agents.promptRequired')
+    return
+  }
+  if (!draftDescription.value.trim()) {
+    saveError.value = t('agents.descriptionRequired', 'Description is required')
+    return
+  }
+  if (!draftAvatar.value) {
+    activePanel.value = 'avatar'
+    saveError.value = t('agents.avatarRequired', 'Please select an avatar')
     return
   }
   if (props.agentType === 'system') {
@@ -2060,22 +2153,92 @@ function saveAll() {
 /* ── Inline Avatar Picker Panel ──────────────────────────────────────────── */
 .bv-avatar-panel { gap: 0.625rem; }
 
-.bv-av-tabs {
-  display: flex; flex-wrap: wrap; gap: 0.25rem;
-  max-height: 5rem; overflow-y: auto; flex-shrink: 0;
+.bv-av-style-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
-.bv-av-tab {
-  padding: 0.2rem 0.625rem; border-radius: 9999px;
-  border: 1px solid #2A2A2A; background: #1A1A1A;
-  color: #6B7280; font-family: 'Inter', sans-serif;
-  font-size: var(--fs-small); font-weight: 600;
-  cursor: pointer; white-space: nowrap; transition: all 0.12s;
+.bv-av-combo {
+  position: relative;
+  flex: 1;
 }
-.bv-av-tab:hover:not(.active) { background: #222; color: #D1D5DB; border-color: #374151; }
-.bv-av-tab.active {
+.bv-av-combo-input {
+  width: 100%;
+  padding: 0.375rem 2rem 0.375rem 0.625rem;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF; border-color: #4B5563;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.5rem;
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 600;
+  outline: none;
+  transition: border-color 0.15s;
 }
+.bv-av-combo-input::placeholder { color: #FFFFFF; }
+.bv-av-combo-input:focus { border-color: #4B5563; }
+.bv-av-combo-input:focus::placeholder { color: #6B7280; }
+.bv-av-combo-toggle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: #6B7280;
+  cursor: pointer;
+  border-radius: 0 0.5rem 0.5rem 0;
+  transition: color 0.15s;
+}
+.bv-av-combo-toggle:hover { color: #FFFFFF; }
+.bv-av-combo-toggle svg { transition: transform 0.15s; }
+.bv-av-combo.open .bv-av-combo-toggle svg { transform: rotate(180deg); }
+.bv-av-combo-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 2px;
+  background: #1A1A1A;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.5rem;
+  max-height: 12rem;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.bv-av-combo-option {
+  display: block;
+  width: 100%;
+  padding: 0.375rem 0.625rem;
+  background: transparent;
+  border: none;
+  color: #D1D5DB;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.bv-av-combo-option:hover { background: #222; color: #FFFFFF; }
+.bv-av-combo-option.active {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF; font-weight: 600;
+}
+.bv-av-combo-empty {
+  padding: 0.5rem 0.625rem;
+  color: #6B7280;
+  font-size: var(--fs-caption);
+  text-align: center;
+}
+.bv-av-combo-list::-webkit-scrollbar { width: 4px; }
+.bv-av-combo-list::-webkit-scrollbar-track { background: transparent; }
+.bv-av-combo-list::-webkit-scrollbar-thumb { background: #333; border-radius: 9999px; }
 
 .bv-av-upload-btn {
   display: inline-flex; align-items: center; gap: 0.375rem;
@@ -2174,17 +2337,14 @@ function saveAll() {
 .bv-left::-webkit-scrollbar,
 .bv-detail-body::-webkit-scrollbar,
 .bv-av-grid::-webkit-scrollbar,
-.bv-av-tabs::-webkit-scrollbar,
 .bv-model-list::-webkit-scrollbar { width: 4px; }
 .bv-left::-webkit-scrollbar-track,
 .bv-detail-body::-webkit-scrollbar-track,
 .bv-av-grid::-webkit-scrollbar-track,
-.bv-av-tabs::-webkit-scrollbar-track,
 .bv-model-list::-webkit-scrollbar-track { background: transparent; }
 .bv-left::-webkit-scrollbar-thumb,
 .bv-detail-body::-webkit-scrollbar-thumb,
 .bv-av-grid::-webkit-scrollbar-thumb,
-.bv-av-tabs::-webkit-scrollbar-thumb,
 .bv-model-list::-webkit-scrollbar-thumb { background: #333; border-radius: 9999px; }
 
 .bv-ctx-warn {

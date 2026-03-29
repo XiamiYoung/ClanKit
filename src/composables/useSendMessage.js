@@ -31,7 +31,6 @@ export function useSendMessage({
   activeSystemAgentIds,
   enabledSkillObjects,
   stickyTarget,
-  perChatQueue,  // reactive Map — created by caller, shared with useChunkHandler
   programmaticScroll,
 }) {
   const chatsStore = useChatsStore()
@@ -42,21 +41,8 @@ export function useSendMessage({
   const { t } = useI18n()
 
   // ── Internal state ──────────────────────────────────────────────────────────
-  const pendingQueue = computed(() => {
-    const cid = chatsStore.activeChatId
-    if (!cid) return []
-    const items = []
-    for (const [key, queue] of perChatQueue) {
-      if (key === cid || key.startsWith(cid + ':')) {
-        const agentId = key.includes(':') ? key.split(':').slice(1).join(':') : null
-        const agentName = agentId ? agentsStore.getAgentById(agentId)?.name : null
-        for (const item of queue) {
-          items.push({ ...item, _queueKey: key, _targetAgent: agentName })
-        }
-      }
-    }
-    return items
-  })
+  const pendingInterrupt = reactive({ text: '', attachments: [], visible: false, countdown: 0 })
+  let _interruptTimerId = null
 
   const perChatDrafts = new Map() // chatId → { text, attachments }
   let streamingTimer = null
@@ -89,65 +75,89 @@ export function useSendMessage({
     attachments.value = draft?.attachments ? [...draft.attachments] : []
   }
 
-  // ── Queue management ────────────────────────────────────────────────────────
-  function removeFromQueue(idx) {
-    const items = pendingQueue.value
-    if (idx < 0 || idx >= items.length) return
-    const item = items[idx]
-    const queueKey = item._queueKey
-    if (!queueKey) return
-    const queue = perChatQueue.get(queueKey)
-    if (!queue) return
-    // Compute offset: count items from matching queue keys that precede this one
-    const cid = chatsStore.activeChatId
-    let offset = 0
-    for (const [key, q] of perChatQueue) {
-      if (key === queueKey) break
-      if (key === cid || key.startsWith(cid + ':')) offset += q.length
-    }
-    const innerIdx = idx - offset
-    if (innerIdx >= 0 && innerIdx < queue.length) {
-      queue.splice(innerIdx, 1)
-      if (queue.length === 0) perChatQueue.delete(queueKey)
-    }
+  // ── Interrupt management ─────────────────────────────────────────────────────
+  function _clearInterruptTimer() {
+    if (_interruptTimerId) { clearInterval(_interruptTimerId); _interruptTimerId = null }
   }
 
-  // ── Process queued message ──────────────────────────────────────────────────
-  // Called when a message completes (from sendMessage finally or useChunkHandler send_message_complete)
-  // Processes the next queued message in the queue for this chat.
-  async function processQueuedMessage(chatId, hasActiveAgents = false) {
-    if (hasActiveAgents) return // Don't process queue if agents are still running
-
-    let dequeued = false
-
-    // Try per-agent queues first (group chat)
-    for (const [key, agentQueue] of [...perChatQueue.entries()]) {
-      if (!key.startsWith(chatId + ':') || agentQueue.length === 0) continue
-      const agentId = key.split(':').slice(1).join(':')
-      const queued = agentQueue.shift()
-      if (agentQueue.length === 0) perChatQueue.delete(key)
-      dbg(`Processing queued prompt for agent ${agentId}: "${queued.text.slice(0,30)}…"`, 'info')
-      const targetChat = chatsStore.chats.find(c => c.id === chatId)
-      nextTick(() => _fireGroupAgentsDirect(chatId, targetChat, queued.text, [agentId], queued.attachments)
-        .catch(err => dbg(`_fireGroupAgentsDirect queue dequeue error: ${err.message}`, 'error')))
-      dequeued = true
-      break // One at a time; agent_end will pick up the next
-    }
-
-    // If no per-agent queue, try chat-level queue
-    if (!dequeued) {
-      const queue = perChatQueue.get(chatId)
-      if (queue && queue.length > 0) {
-        const queued = queue.shift()
-        if (queue.length === 0) perChatQueue.delete(chatId)
-        dbg(`Processing queued prompt (#${(queue?.length ?? 0) + 1} remaining): "${queued.text.slice(0,30)}…"`, 'info')
-        userScrolled.value = false
-        inputText.value = queued.text
-        attachments.value = queued.attachments || []
-        await nextTick()
-        sendMessage()
+  function showInterruptConfirm(text, capturedAttachments) {
+    _clearInterruptTimer()
+    pendingInterrupt.text = text
+    pendingInterrupt.attachments = [...capturedAttachments]
+    pendingInterrupt.countdown = 3
+    pendingInterrupt.visible = true
+    _interruptTimerId = setInterval(() => {
+      pendingInterrupt.countdown--
+      if (pendingInterrupt.countdown <= 0) {
+        confirmInterrupt()
       }
+    }, 1000)
+  }
+
+  async function confirmInterrupt() {
+    _clearInterruptTimer()
+    const text = pendingInterrupt.text
+    const atts = [...pendingInterrupt.attachments]
+    pendingInterrupt.visible = false
+    pendingInterrupt.text = ''
+    pendingInterrupt.attachments = []
+    pendingInterrupt.countdown = 0
+
+    const chatId = chatsStore.activeChatId
+    if (!chatId) return
+
+    // Stop all running agents first
+    await stopAgent(chatId)
+    // Wait briefly for stop to propagate
+    await new Promise(r => setTimeout(r, 100))
+
+    // Re-fill input and send
+    inputText.value = text
+    attachments.value = atts
+    await nextTick()
+    sendMessage()
+  }
+
+  function cancelInterrupt() {
+    _clearInterruptTimer()
+    // Put message back in input box
+    inputText.value = pendingInterrupt.text
+    attachments.value = [...pendingInterrupt.attachments]
+    pendingInterrupt.visible = false
+    pendingInterrupt.text = ''
+    pendingInterrupt.attachments = []
+    pendingInterrupt.countdown = 0
+    nextTick(() => mentionInputRef.value?.focus())
+  }
+
+  function escapeRetrieve(chatId) {
+    if (!chatId) chatId = chatsStore.activeChatId
+    const chat = chatsStore.chats.find(c => c.id === chatId)
+    if (!chat?.isRunning) return // Only works when agents are running
+
+    // Stop all running agents
+    stopAgent(chatId)
+
+    // Find the last user message
+    if (!chat.messages?.length) return
+    const lastUserMsg = [...chat.messages].reverse().find(m => m.role === 'user')
+    if (!lastUserMsg) return
+
+    // Extract text from message
+    const retrievedText = lastUserMsg.content || ''
+    const retrievedAttachments = lastUserMsg.attachments || []
+
+    // Prepend to input box (if already has content, add newline between)
+    if (inputText.value.trim()) {
+      inputText.value = retrievedText + '\n' + inputText.value
+    } else {
+      inputText.value = retrievedText
     }
+    // Restore attachments
+    if (retrievedAttachments.length > 0) {
+      attachments.value = [...retrievedAttachments, ...attachments.value]
+    }
+    nextTick(() => mentionInputRef.value?.focus())
   }
 
   // ── Last active message + interrupt helpers ─────────────────────────────────
@@ -159,50 +169,24 @@ export function useSendMessage({
   }
 
   // If the message has content: append inline marker (LLM sees it on resume).
-  // If the message is empty (agent stopped before outputting anything): delete the
-  // pointless placeholder and push a system bubble instead.
-  // type: 'pause' — queue preserved, will auto-continue
-  //       'stop'  — queue cleared, waiting for user input
-  function _applyInterrupt(chat, msg, type) {
-    const inlineMarker = type === 'stop'
-      ? '[Request interrupted by user. Queue cleared.]'
-      : '[Request interrupted by user]'
-    const bubbleText = type === 'stop'
-      ? 'Request stopped by user. Queue cleared — type a new message to continue.'
-      : 'Request interrupted by user. Queued prompts will resume automatically.'
-
-    if (!msg) {
-      chat?.messages?.push({
-        id: uuidv4(), role: 'system', interruptType: type, content: bubbleText,
-        segments: [{ type: 'text', content: bubbleText }],
-        streaming: false, timestamp: Date.now(),
-      })
-      return
-    }
+  // If the message is empty or a waiting indicator: silently remove it, no system bubble.
+  function _applyInterrupt(chat, msg, _type) {
+    if (!msg || !chat) return
 
     const hasContent = msg.content?.trim().length > 0
-    if (hasContent) {
-      msg.content += `\n\n${inlineMarker}`
+    if (hasContent && !msg.isWaitingIndicator) {
+      msg.content += '\n\n[Request interrupted by user.]'
       msg.streaming = false
     } else {
-      const idx = chat?.messages?.indexOf(msg) ?? -1
+      // Empty placeholder or waiting indicator — just remove silently
+      const idx = chat.messages?.indexOf(msg) ?? -1
       if (idx !== -1) chat.messages.splice(idx, 1)
-      chat?.messages?.push({
-        id: uuidv4(), role: 'system', interruptType: type, content: bubbleText,
-        segments: [{ type: 'text', content: bubbleText }],
-        streaming: false, timestamp: Date.now(),
-      })
     }
   }
 
   // ── Stop agent ──────────────────────────────────────────────────────────────
-  // Stop (hard stop): clear the queue first, then interrupt — nothing auto-runs afterwards.
   async function stopAgent(chatId) {
     if (!chatId) chatId = chatsStore.activeChatId
-    // Clear all queues for this chat (both chat-level and per-agent keys)
-    for (const key of [...perChatQueue.keys()]) {
-      if (key === chatId || key.startsWith(chatId + ':')) perChatQueue.delete(key)
-    }
     // Cancel collaboration loop and clear running agent tracking
     collaborationCancelled.value = true
     isInCollaborationLoop.value = false
@@ -210,8 +194,23 @@ export function useSendMessage({
       if (key.startsWith(chatId + ':')) runningAgentKeys.delete(key)
     }
     if (window.electronAPI?.stopAgent) await window.electronAPI.stopAgent(chatId)
-    const { chat, msg } = getLastActiveMessage(chatId)
-    _applyInterrupt(chat, msg, 'stop')
+
+    const chat = chatsStore.chats.find(c => c.id === chatId)
+    if (chat) {
+      // Remove waiting indicators silently
+      if (chat.messages) {
+        const waitIdx = chat.messages.findIndex(m => m.isWaitingIndicator)
+        if (waitIdx >= 0) chat.messages.splice(waitIdx, 1)
+      }
+      // Apply interrupt to any streaming assistant message (partial response)
+      const streamingMsg = chat.messages?.slice().reverse().find(m => m.streaming && m.role === 'assistant' && !m.isWaitingIndicator)
+      if (streamingMsg) _applyInterrupt(chat, streamingMsg, 'stop')
+      // Clear all running state immediately so UI updates
+      chat.isRunning = false
+      chat.isThinking = false
+      chat.isCallingTool = false
+      chat.currentToolCall = null
+    }
   }
 
   // ── sendMessage ─────────────────────────────────────────────────────────────
@@ -236,79 +235,20 @@ export function useSendMessage({
       quotedMessage.value = null
     }
 
-    // Queue the prompt if THIS chat's agent is already running — it will be picked up after completion
+    // If agents are running, show interrupt confirmation instead of sending directly
     const cid = chatsStore.activeChatId
     const thisChat = chatsStore.chats.find(c => c.id === cid)
     if (thisChat?.isRunning) {
       if (!cid) return
-      const groupIds = activeSystemAgentIds.value
-      const isGroup = groupIds.length > 1
-
-      if (isGroup) {
-        // ── Group chat: per-agent queue logic ──
-        const groupAgents = groupIds.map(id => agentsStore.getAgentById(id)).filter(Boolean)
-        const { mentions, mentionAll } = parseMentions(text, groupAgents)
-        let targetIds
-        if (mentionAll) {
-          targetIds = [...groupIds]
-        } else if (mentions.length > 0) {
-          targetIds = [...new Set(mentions)]
-        } else if (stickyTarget.value?.length > 0) {
-          targetIds = stickyTarget.value.filter(id => groupIds.includes(id))
-          if (targetIds.length === 0) targetIds = [...groupIds]
-        } else {
-          targetIds = [...groupIds]
-        }
-
-        // Capture attachments before clearing UI
-        const capturedAttachments = [...attachments.value]
-
-        // Split targets into idle (fire immediately) vs busy (queue for later)
-        const idleTargets = targetIds.filter(id => !runningAgentKeys.has(`${cid}:${id}`))
-        const busyTargets = targetIds.filter(id => runningAgentKeys.has(`${cid}:${id}`))
-
-        // Queue messages for busy agents (per-agent key)
-        for (const id of busyTargets) {
-          const qKey = `${cid}:${id}`
-          if (!perChatQueue.has(qKey)) perChatQueue.set(qKey, [])
-          perChatQueue.get(qKey).push({ text, attachments: [...capturedAttachments] })
-          dbg(`Queued for busy agent ${agentsStore.getAgentById(id)?.name || id}: "${text.slice(0,30)}…"`, 'info')
-        }
-
-        // Fire idle agents immediately via runAgentAdditional (does NOT stop existing loops)
-        if (idleTargets.length > 0) {
-          // Add user message once, then fire with skipUserMessage
-          await chatsStore.addMessage(cid, {
-            role: 'user',
-            content: text,
-            ...(capturedAttachments.length > 0 ? { attachments: capturedAttachments } : {}),
-          })
-          dbg(`Firing idle agents: ${idleTargets.map(id => agentsStore.getAgentById(id)?.name || id).join(', ')}`)
-          _fireGroupAgentsDirect(cid, thisChat, text, idleTargets, capturedAttachments, { skipUserMessage: true })
-            .catch(err => dbg(`_fireGroupAgentsDirect idle fire error: ${err.message}`, 'error'))
-        }
-
-        // Clear UI immediately
-        inputText.value = ''
-        attachments.value = []
-        perChatDrafts.delete(cid)
-        mentionInputRef.value?.resetHeight()
-        userScrolled.value = false
-        scrollToBottom(true, cid)
-        return
-      }
-
-      // ── Single agent: queue as before ──
-      if (!perChatQueue.has(cid)) perChatQueue.set(cid, [])
-      perChatQueue.get(cid).push({ text, attachments: [...attachments.value] })
+      // Capture attachments before clearing UI
+      const capturedAttachments = [...attachments.value]
       inputText.value = ''
       attachments.value = []
       perChatDrafts.delete(cid)
       mentionInputRef.value?.resetHeight()
-      // Resume auto-scroll: user sent a new prompt, so re-engage scrolling for the current stream
-      userScrolled.value = false
-      scrollToBottom(true, cid)
-      dbg(`Prompt queued (#${perChatQueue.get(cid).length}): "${text.slice(0,30)}…"`, 'info')
+      // Show interrupt confirmation bar with 3s countdown
+      showInterruptConfirm(text, capturedAttachments)
+      dbg(`Interrupt confirm shown: "${text.slice(0,30)}…"`, 'info')
       return
     }
 
@@ -450,6 +390,9 @@ export function useSendMessage({
       streamingTimer = setInterval(() => { streamingSeconds.value++ }, 1000)
     }
 
+    // Mark running BEFORE nextTick so Escape/Stop buttons appear with the wavebar
+    targetChat.isRunning = true
+
     // Release the guard and force-scroll to show the new messages
     programmaticScroll.decrement()
     scrollToBottom(true)
@@ -457,8 +400,6 @@ export function useSendMessage({
     // Flush Vue's DOM update so the streaming bubble (spinner) renders immediately
     // before the synchronous config-building work below blocks the JS thread.
     await nextTick()
-
-    targetChat.isRunning = true
 
     // Build messages for API — keep _agentId/_userAgentId metadata so the single-agent
     // path can prefix messages from previous agents (identity-aware history).
@@ -509,6 +450,15 @@ export function useSendMessage({
     // Chunks are handled by the persistent handleChunk listener registered in onMounted
 
     try {
+      // Guard: if user pressed Escape/Stop during config building (between isRunning=true
+      // and this point), abort before sending the IPC call. Without this, stopAgent clears
+      // Vue state but the IPC fires afterwards, starting an unstoppable agent loop.
+      if (collaborationCancelled.value || !targetChat.isRunning) {
+        dbg('sendMessage aborted: user interrupted during setup', 'info')
+        clearWaitingIndicator()
+        return // falls through to finally block for cleanup
+      }
+
       if (isGroup) {
         // Set isInCollaborationLoop BEFORE calling IPC so agent_end events
         // during the first round don't prematurely clear isRunning.
@@ -536,7 +486,6 @@ export function useSendMessage({
           permissionMode: targetChat.permissionMode || 'inherit',
           chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
           chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
-          maxOutputTokens: targetChat.maxOutputTokens || null,
           maxAgentRounds: targetChat.maxAgentRounds ?? 10,
           workingPath: targetChat.workingPath || null,
           codingMode: !!targetChat.codingMode,
@@ -545,7 +494,6 @@ export function useSendMessage({
           systemAgentId: isGroup ? null : (activeSystemAgentIds.value[0] || targetChat.systemAgentId || null),
           groupAudienceMode: targetChat.groupAudienceMode || 'auto',
           groupAudienceAgentIds: JSON.parse(JSON.stringify(targetChat.groupAudienceAgentIds || [])),
-          agentModelOverrides: JSON.parse(JSON.stringify(targetChat.agentModelOverrides || {})),
           modelContextWindows: modelsStore.getAllContextWindows(),
         },
       }).catch(err => dbg(`sendMessage IPC error: ${err.message}`, 'error'))
@@ -666,10 +614,7 @@ export function useSendMessage({
 
       }
 
-      // Pick up next queued prompt (defers to useChunkHandler send_message_complete)
-      // This is kept as a safety net for immediate IPC returns, but the primary
-      // queue trigger now happens in useChunkHandler when send_message_complete arrives.
-      // await processQueuedMessage(chatId, hasActiveAgents)
+      // (queue system removed — interrupt & steer replaces queuing)
     }
     } catch (outerErr) {
       // Catch errors from addMessage, activeChat access, etc.
@@ -887,6 +832,11 @@ export function useSendMessage({
     }
   }
 
+  // ── Queue stubs (queue system removed — interrupt & steer replaces queuing) ──
+  const pendingQueue = computed(() => [])
+  function removeFromQueue() {}
+  function processQueuedMessage() {}
+
   // ── Return public API ───────────────────────────────────────────────────────
   return {
     sendMessage,
@@ -895,6 +845,10 @@ export function useSendMessage({
     rejectPlan,
     refinePlan,
     compactContext,
+    pendingInterrupt,
+    confirmInterrupt,
+    cancelInterrupt,
+    escapeRetrieve,
     pendingQueue,
     removeFromQueue,
     processQueuedMessage,

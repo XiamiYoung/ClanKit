@@ -72,7 +72,6 @@ export const PROVIDER_PRESETS = {
 
 export const useConfigStore = defineStore('config', () => {
   const config = ref({
-    maxOutputTokens: 32768,
     utilityModel: {
       provider: '',
       model: '',
@@ -141,11 +140,6 @@ export const useConfigStore = defineStore('config', () => {
       ttsMode: 'browser',
       isActive: false,
     },
-    pricing: {
-      models: {},
-      modelPriceMap: {},
-      currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 },
-    },
     im: {
       telegram: { enabled: false, botToken: '', allowedUsers: [] },
       whatsapp: { enabled: false, allowedUsers: [] },
@@ -154,12 +148,14 @@ export const useConfigStore = defineStore('config', () => {
     },
     language: 'en',
     demoMode: true,
+    setupDismissed: false,
+    onboardingCompleted: false,
   })
 
   function createProvider(presetType, name = null) {
     const preset = PROVIDER_PRESETS[presetType] || PROVIDER_PRESETS.custom
     const settings = {
-      maxOutputTokens: config.value.maxOutputTokens,
+      maxOutputTokens: preset.hardLimits?.maxOutputTokens || 32768,
     }
     if (presetType === 'anthropic') {
       settings.opusModel = 'claude-opus-latest'
@@ -190,7 +186,7 @@ export const useConfigStore = defineStore('config', () => {
     delete sanitizedSettings.temperature
     delete sanitizedSettings.topP
     if (sanitizedSettings.maxOutputTokens == null) {
-      sanitizedSettings.maxOutputTokens = config.value.maxOutputTokens
+      sanitizedSettings.maxOutputTokens = 32768
     }
     return {
       ...provider,
@@ -230,19 +226,10 @@ export const useConfigStore = defineStore('config', () => {
     const defaults = config.value
     const saved = await storage.getConfig()
 
-    if (saved.providers && Array.isArray(saved.providers) && saved.providers.length > 0) {
-      config.value = {
-        ...defaults,
-        ...saved,
-        providers: saved.providers.map(sanitizeProviderSettings),
-      }
-    } else {
-      const migratedProviders = migrateLegacyConfig(saved)
-      config.value = {
-        ...defaults,
-        ...saved,
-        providers: migratedProviders,
-      }
+    config.value = {
+      ...defaults,
+      ...saved,
+      providers: (saved.providers || []).map(sanitizeProviderSettings),
     }
 
     const savedSandbox = saved?.sandboxConfig || {}
@@ -264,9 +251,6 @@ export const useConfigStore = defineStore('config', () => {
     if (saved?.utilityModel) {
       config.value.utilityModel = { ...defaults.utilityModel, ...saved.utilityModel }
     }
-    if (saved?.pricing) {
-      config.value.pricing = { models: {}, modelPriceMap: {}, currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 }, ...saved.pricing }
-    }
     if (saved?.im) {
       config.value.im = {
         telegram: { ...defaults.im.telegram, ...(saved.im?.telegram || {}) },
@@ -279,69 +263,6 @@ export const useConfigStore = defineStore('config', () => {
     await loadEnvPaths()
   }
 
-  function migrateLegacyConfig(saved) {
-    const providers = []
-
-    if (saved?.anthropic?.apiKey) {
-      providers.push({
-        id: uuidv4(),
-        name: 'Anthropic',
-        type: 'anthropic',
-        apiKey: saved.anthropic.apiKey,
-        baseURL: saved.anthropic.baseURL || 'https://api.anthropic.com',
-        model: saved.anthropic.sonnetModel || 'claude-sonnet-latest',
-        settings: { maxOutputTokens: config.value.maxOutputTokens },
-        isActive: saved.anthropic.isActive || false,
-        testedAt: saved.anthropic.testedAt || null,
-      })
-    }
-
-    if (saved?.openrouter?.apiKey) {
-      providers.push({
-        id: uuidv4(),
-        name: 'OpenRouter',
-        type: 'openrouter',
-        apiKey: saved.openrouter.apiKey,
-        baseURL: saved.openrouter.baseURL || 'https://openrouter.ai/api',
-        model: '',
-        settings: { maxOutputTokens: config.value.maxOutputTokens },
-        isActive: saved.openrouter.isActive || false,
-        testedAt: saved.openrouter.testedAt || null,
-      })
-    }
-
-    if (saved?.openai?.apiKey) {
-      providers.push({
-        id: uuidv4(),
-        name: 'OpenAI Compatible',
-        type: 'openai',
-        apiKey: saved.openai.apiKey,
-        baseURL: saved.openai.baseURL || '',
-        model: '',
-        settings: { maxOutputTokens: config.value.maxOutputTokens },
-        isActive: saved.openai.isActive || false,
-        testedAt: saved.openai.testedAt || null,
-      })
-    }
-
-    if (saved?.deepseek?.apiKey) {
-      providers.push({
-        id: uuidv4(),
-        name: 'DeepSeek',
-        type: 'deepseek',
-        apiKey: saved.deepseek.apiKey,
-        baseURL: saved.deepseek.baseURL || 'https://api.deepseek.com',
-        model: 'deepseek-chat',
-        settings: {
-          maxOutputTokens: saved.deepseek.maxTokens || 8192
-        },
-        isActive: saved.deepseek.isActive || false,
-        testedAt: saved.deepseek.testedAt || null,
-      })
-    }
-
-    return providers
-  }
 
   async function loadEnvPaths() {
     if (!window.electronAPI?.getEnvPaths) return

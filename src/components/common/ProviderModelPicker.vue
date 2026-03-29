@@ -29,22 +29,34 @@
     <!-- Provider read-only label (modelOnly mode) -->
     <div v-else class="pmp-provider-readonly">{{ providerLabel }}</div>
 
-    <!-- Model dropdown (disabled until provider selected) -->
-    <div class="pmp-select-wrap" :class="{ disabled: !provider }">
-      <button class="pmp-trigger" :class="{ 'pmp-selected': model }" :disabled="!provider || disabled" @click="toggleModelMenu">
-        <span>{{ model || 'Select Model' }}</span>
+    <!-- Model combobox (disabled until provider selected) -->
+    <div class="pmp-select-wrap pmp-combo-wrap" :class="{ disabled: !provider, open: showModelMenu }">
+      <input
+        ref="modelInputRef"
+        type="text"
+        class="pmp-combo-input"
+        :class="{ 'pmp-selected': model }"
+        :value="showModelMenu ? modelSearch : (model || '')"
+        :placeholder="model || 'Select Model'"
+        :disabled="!provider || disabled"
+        @focus="openModelCombo"
+        @click="openModelCombo"
+        @input="modelSearch = $event.target.value; showModelMenu = true"
+        @blur="delayCloseModelMenu"
+      />
+      <button class="pmp-combo-toggle" type="button" :disabled="!provider || disabled" @mousedown.prevent="toggleModelMenu">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <div v-if="showModelMenu && provider" class="pmp-menu pmp-menu-model">
-        <input v-if="provider !== 'anthropic'" v-model="modelSearch" placeholder="Search models..." class="pmp-search" @mousedown.stop />
         <div v-if="modelsLoading" class="pmp-loading">Loading...</div>
         <button
           v-for="m in filteredModels"
           :key="m.id"
           class="pmp-option"
           :class="{ active: model === m.id }"
-          @click="selectModel(m.id)"
+          @mousedown.prevent="selectModel(m.id)"
         >{{ m.id }}</button>
+        <div v-if="!modelsLoading && filteredModels.length === 0" class="pmp-empty">No matching models</div>
       </div>
     </div>
   </div>
@@ -77,6 +89,7 @@ const modelsStore = useModelsStore()
 const router = useRouter()
 
 const rootRef = ref(null)
+const modelInputRef = ref(null)
 const showProviderMenu = ref(false)
 const showModelMenu = ref(false)
 const modelSearch = ref('')
@@ -130,6 +143,17 @@ function selectProvider(type) {
 function selectModel(id) {
   emit('update:model', id)
   showModelMenu.value = false
+  modelSearch.value = ''
+}
+
+function openModelCombo() {
+  showProviderMenu.value = false
+  showModelMenu.value = true
+  modelSearch.value = ''
+}
+
+function delayCloseModelMenu() {
+  setTimeout(() => { showModelMenu.value = false }, 150)
 }
 
 function clearSelection() {
@@ -320,4 +344,57 @@ onUnmounted(() => document.removeEventListener('mousedown', onOutsideClick))
 .pmp-menu { scrollbar-width: thin; }
 .pmp-menu::-webkit-scrollbar { width: 4px; }
 .pmp-menu::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+
+/* Model combobox input */
+.pmp-combo-wrap { position: relative; }
+.pmp-combo-input {
+  width: 100%;
+  padding: 0.375rem 2rem 0.375rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  outline: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+.pmp-combo-input:focus { border-color: var(--text-primary); }
+.pmp-combo-input.pmp-selected {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border-color: transparent;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+.pmp-combo-input.pmp-selected:focus {
+  border-color: #4B5563;
+}
+.pmp-combo-input::placeholder { color: var(--text-muted); }
+.pmp-combo-input.pmp-selected::placeholder { color: #FFFFFF; }
+.pmp-combo-input.pmp-selected:focus::placeholder { color: #9CA3AF; }
+
+.pmp-combo-toggle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  transition: color 0.15s;
+}
+.pmp-combo-toggle:hover { color: var(--text-primary); }
+.pmp-combo-wrap.open .pmp-combo-toggle svg { transform: rotate(180deg); }
+.pmp-combo-wrap .pmp-combo-toggle:disabled { pointer-events: none; opacity: 0.4; }
+/* Selected state — white toggle icon */
+.pmp-combo-input.pmp-selected ~ .pmp-combo-toggle { color: rgba(255,255,255,0.6); }
+.pmp-combo-input.pmp-selected ~ .pmp-combo-toggle:hover { color: #FFFFFF; }
 </style>

@@ -519,7 +519,16 @@ export function useChatTree({ mentionInputRef } = {}) {
   }
 
   // folderId: null = root, undefined = use active folder context
+  const newChatBlockedNoUserAgent = ref(false)
+
   function newChat(folderId) {
+    // Block chat creation if no user agent exists
+    const hasUserAgent = agentsStore.userAgents.some(a => !a.isBuiltin)
+    if (!hasUserAgent) {
+      newChatBlockedNoUserAgent.value = true
+      return
+    }
+    newChatBlockedNoUserAgent.value = false
     const resolvedFolder = folderId !== undefined ? folderId : (chatsStore.activeFolderId?.value ?? null)
     showNewChatModal.value = true
     newChatName.value = ''
@@ -721,7 +730,7 @@ export function useChatTree({ mentionInputRef } = {}) {
     toggleNcpCat,
     toggleNupCat,
     toggleNewChatFolderExpand,
-    newChat,
+    newChat, newChatBlockedNoUserAgent,
     confirmNewChat,
     cancelNewChat,
     // Delete confirm
