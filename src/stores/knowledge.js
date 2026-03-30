@@ -104,6 +104,21 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
       })
       if (result.success) {
         indexes.value = result.indexes || []
+        // Prune indexConfigs entries that no longer exist in Pinecone
+        const liveNames = new Set(indexes.value.map(i => i.name))
+        const staleKeys = Object.keys(indexConfigs.value).filter(k => !liveNames.has(k))
+        if (staleKeys.length > 0) {
+          const updated = { ...indexConfigs.value }
+          for (const k of staleKeys) delete updated[k]
+          indexConfigs.value = updated
+          await saveConfig()
+          // Also clean agent references to removed indexes
+          try {
+            const { useAgentsStore } = await import('./agents')
+            const agentsStore = useAgentsStore()
+            await agentsStore.cleanStaleKnowledgeRefs(Object.keys(indexConfigs.value))
+          } catch {}
+        }
       }
     } catch (err) {
       console.error('Failed to fetch indexes:', err)

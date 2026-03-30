@@ -415,9 +415,10 @@ class AgentLoop {
         isOpenAI:   um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek',
         directAuth: um.provider === 'openai_official' || um.provider === 'deepseek',
       })
-      logger.agent(`[AgentLoop] memory flush triggered (${reason})`, { agentId })
+      const agentLabel = agentPrompts?.groupChatContext?.agentName || agentId
+      logger.agent(`[AgentLoop] memory flush triggered (${reason})`, { agent: agentLabel })
       const flushMeta = this.config.chatId ? { chatId: this.config.chatId } : {}
-      await flusher.run(conversationMessages, agentId, logsDir, flushMeta).catch(err =>
+      await flusher.run(conversationMessages, agentId, logsDir, flushMeta, agentLabel).catch(err =>
         logger.error('[AgentLoop] flush error (non-fatal)', err.message)
       )
       turnsSinceFlush = 0
@@ -809,8 +810,23 @@ class AgentLoop {
         }
 
         // ── Snapshot context for inspector ──
+        // Build memory sections explicitly so the frontend never has to parse
+        // them out of the assembled string (soul files may contain their own ## headings).
+        const _memorySections = []
+        if (userMd)          _memorySections.push({ title: 'User Profile',        content: userMd })
+        if (agentMemoryMd)   _memorySections.push({ title: 'My Knowledge Base',   content: agentMemoryMd })
+        if (yesterdayLogMd || todayLogMd) {
+          const logParts = []
+          if (yesterdayLogMd) logParts.push(`### Yesterday\n${yesterdayLogMd.trim()}`)
+          if (todayLogMd)     logParts.push(`### Today\n${todayLogMd.trim()}`)
+          _memorySections.push({ title: 'Recent Session Logs', content: logParts.join('\n\n') })
+        }
+        if (historicalContext) _memorySections.push({ title: 'Relevant Past Context', content: historicalContext })
+
         this.contextSnapshot = {
           systemPrompt,
+          systemPromptCore: spb.stripInfraFromPrompt(systemPrompt),
+          memorySections: _memorySections,
           agents: {
             systemAgentPrompt: agentPrompts?.systemAgentPrompt || null,
             userAgentPrompt: agentPrompts?.userAgentPrompt || null,

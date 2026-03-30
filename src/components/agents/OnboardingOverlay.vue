@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div class="ob-overlay" style="z-index: 9998;">
+    <div class="ob-overlay" :style="{ zIndex: noPanels ? 201 : 9998 }">
       <!-- 4-panel click blocker + visual dimming (skip when noPanels — e.g. modal already has backdrop) -->
       <template v-if="!noPanels && targetRect">
         <div class="ob-panel" :style="panelTop"></div>

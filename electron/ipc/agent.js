@@ -260,7 +260,7 @@ function _buildAgentKnowledgeConfig(agent, knowledgeCfg) {
   const includeAllIndexes = agent?.id === '__default_system__' && agent?.isBuiltin
   const indexConfigs = {}
   for (const [name, cfg] of Object.entries(knowledgeCfg.indexConfigs || {})) {
-    if (includeAllIndexes || requiredIds.includes(name)) indexConfigs[name] = { ...cfg, enabled: true }
+    if ((includeAllIndexes || requiredIds.includes(name)) && cfg.enabled) indexConfigs[name] = { ...cfg }
   }
   if (Object.keys(indexConfigs).length === 0) return null
   return {
@@ -2518,6 +2518,13 @@ ipcMain.handle('agent:send-message', async (event, {
       if (!isGroup) {
         // Single-agent path: run via runGroupRound (same infra, single element list)
         await runGroupRound(agentRuns, messages || [], pendingAttachments || [], trackMessages, fullCfg)
+
+        // Collect snapshot for the inspector (same pattern as group path)
+        const run = agentRuns[0]
+        if (run) {
+          const snap = lastContextSnapshots.get(`${chatId}:${run.agentId}`)
+          if (snap) lastContextSnapshots.set(chatId, snap)
+        }
 
         // Memory extraction
         const prevCount = lastExtractedMsgCount.get(chatId) || 0

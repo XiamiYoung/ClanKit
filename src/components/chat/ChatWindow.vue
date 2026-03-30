@@ -253,6 +253,20 @@
         </div>
       </template>
 
+      <!-- Scroll to bottom floating button -->
+      <Transition name="cw-scroll-btn">
+        <button
+          v-if="userScrolled && chat?.messages?.length"
+          class="cw-scroll-to-bottom"
+          @click="forceScrollToBottom"
+          :title="t('chats.scrollToBottom')"
+          :aria-label="t('chats.scrollToBottom')"
+        >
+          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </Transition>
     </div>
 
     <!-- Input area: use default slot for custom input, or built-in basic input -->
@@ -713,6 +727,11 @@ function onScroll() {
   if (!el) return
   const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
   userScrolled.value = distFromBottom > 60
+}
+
+function forceScrollToBottom() {
+  userScrolled.value = false
+  scrollToBottom(true)
 }
 
 // Watch message count changes for auto-scroll
@@ -1467,6 +1486,43 @@ defineExpose({ scrollToBottom })
 }
 .cw-btn.send.active:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .cw-btn:disabled { cursor: not-allowed; }
+
+/* ── Scroll to bottom floating button ── */
+.cw-scroll-to-bottom {
+  position: sticky;
+  bottom: 0.75rem;
+  align-self: flex-end;
+  margin-right: 0.75rem;
+  margin-top: -2.5rem;
+  z-index: 20;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.12);
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.cw-scroll-to-bottom:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.15);
+  transform: scale(1.08);
+}
+.cw-scroll-btn-enter-active,
+.cw-scroll-btn-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.cw-scroll-btn-enter-from,
+.cw-scroll-btn-leave-to {
+  opacity: 0;
+  transform: translateY(0.5rem);
+}
 </style>
 
 <!-- Unscoped styles for teleported avatar tooltip -->

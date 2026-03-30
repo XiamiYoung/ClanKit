@@ -194,6 +194,19 @@ export const useToolsStore = defineStore('tools', () => {
     }
     tools.value = tools.value.filter(t => t.id !== id)
     await persist()
+    // Remove stale references from all agents
+    try {
+      const { useAgentsStore } = await import('./agents')
+      const agentsStore = useAgentsStore()
+      let affected = 0
+      for (const agent of agentsStore.agents) {
+        if (agent.requiredToolIds?.includes(id)) {
+          agent.requiredToolIds = agent.requiredToolIds.filter(tid => tid !== id)
+          affected++
+        }
+      }
+      if (affected > 0) await agentsStore.persist()
+    } catch {}
   }
 
   async function persist() {

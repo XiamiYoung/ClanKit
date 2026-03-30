@@ -41,13 +41,14 @@ class MemoryFlush {
    * @param {object} [meta]    Optional metadata: { chatId, chatTitle }
    * @returns {boolean} true if flush succeeded
    */
-  async run(messages, agentId, logsDir, meta = {}) {
+  async run(messages, agentId, logsDir, meta = {}, agentLabel = null) {
+    const label = agentLabel || agentId
     if (!this.model || !this.apiKey || !this.baseURL) {
-      logger.debug('[MemoryFlush] skip: utility model not configured', { agentId })
+      logger.debug('[MemoryFlush] skip: utility model not configured', { agent: label })
       return false
     }
     if (!messages || messages.length < 2) {
-      logger.debug('[MemoryFlush] skip: not enough messages', { agentId })
+      logger.debug('[MemoryFlush] skip: not enough messages', { agent: label })
       return false
     }
 
@@ -68,16 +69,16 @@ class MemoryFlush {
       }
 
       if (!summary || summary.trim() === '(no significant events)') {
-        logger.debug('[MemoryFlush] nothing to flush', { agentId })
+        logger.debug('[MemoryFlush] nothing to flush', { agent: label })
         return false
       }
 
       this._appendToLog(logsDir, summary, agentId, meta)
-      logger.agent('[MemoryFlush] flushed', { agentId, lines: summary.split('\n').length })
+      logger.agent('[MemoryFlush] flushed', { agent: label, lines: summary.split('\n').length })
       return true
 
     } catch (err) {
-      logger.error('[MemoryFlush] failed (non-fatal)', { agentId, error: err.message })
+      logger.error('[MemoryFlush] failed (non-fatal)', { agent: label, error: err.message })
       return false
     }
   }

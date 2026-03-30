@@ -641,6 +641,7 @@
                       :value="chatPermissionMode"
                       @change="(e) => updateChatPermissionMode(e.target.value)"
                       class="permission-mode-select"
+                      :class="'pms-' + chatPermissionMode"
                       :title="permissionModeTitle"
                     >
                       <option value="inherit">{{ t('chats.inherit') }}</option>
@@ -649,7 +650,7 @@
                     </select>
                   </div>
                   <!-- Status Info -->
-                  <span class="text-xs" style="color:#9CA3AF; white-space:nowrap;">
+                  <span v-if="!isGroupChat && !gridMode" class="text-xs" style="color:#9CA3AF; white-space:nowrap;">
                     {{ enabledSkills.length }} {{ t('chats.statusSkills') }}{{ enabledToolsCount > 0 ? ', ' + enabledToolsCount + ' ' + t('chats.statusTools') : '' }}{{ enabledMcpCount > 0 ? ', ' + enabledMcpCount + ' MCP' : '' }}{{ enabledKnowledgeCount > 0 ? ', ' + enabledKnowledgeCount + ' RAG' : '' }}
                   </span>
                   <span v-if="attachments.length > 0" style="color:#1A1A1A; font-weight:500; font-size:0.75rem;">
@@ -1382,7 +1383,8 @@ const enabledKnowledgeCount = computed(() => {
   const agent = currentSingleAgent.value
   if (!agent) return Object.values(knowledgeStore.indexConfigs).filter(c => c.enabled).length
   const required = agent.requiredKnowledgeBaseIds
-  return (required && required.length > 0) ? required.length : 0
+  if (!required?.length) return 0
+  return required.filter(id => knowledgeStore.indexConfigs[id]?.enabled).length
 })
 
 // ── Permission mode for quick selector in status bar ──
@@ -3161,7 +3163,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   padding: 0.3rem 0.5rem 0.3rem 0.375rem;
   min-height: 1.375rem;
   border-radius: 0.375rem;
-  border: 1px solid #D1D5DB;
+  border: 1px solid transparent;
   background-color: #FFFFFF;
   color: #1A1A1A;
   font-weight: 500;
@@ -3173,19 +3175,25 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   background-repeat: no-repeat;
   background-position: right 0.375rem center;
   padding-right: 1.5rem;
-  max-width: 110px;
-  min-width: 90px;
+  min-width: fit-content;
   vertical-align: middle;
 }
 
+.permission-mode-select.pms-inherit {
+  color: #92400E; background-color: #FEF3C7;
+}
+.permission-mode-select.pms-chat_only {
+  color: #047857; background-color: #ECFDF5;
+}
+.permission-mode-select.pms-all_permissions {
+  color: #B91C1C; background-color: #FEF2F2;
+}
 .permission-mode-select:hover {
-  border-color: #60A5FA;
-  background-color: #F3F4F6;
+  opacity: 0.85;
 }
 
 .permission-mode-select:focus {
-  border-color: #3B82F6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  outline: none;
 }
 
 .permission-mode-select option {

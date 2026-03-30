@@ -42,8 +42,10 @@ electron/.backup/
 # docs
 docs/
 
-# Scripts
-scripts/
+# Scripts (ignore all except whitelisted)
+scripts/*
+!scripts/run-electron.js
+!scripts/compile-bytecode.js
 
 # Docs
 docs/

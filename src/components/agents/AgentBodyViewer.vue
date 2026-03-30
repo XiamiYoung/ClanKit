@@ -42,7 +42,7 @@
             <div class="bv-field">
               <label class="bv-field-label">{{ t('agents.name') }}<span v-if="!readOnly" class="bv-required">*</span></label>
               <div v-if="readOnly" class="bv-readonly-text">{{ draftName || '—' }}</div>
-              <input v-else v-model="draftName" type="text" class="bv-input" maxlength="30" :class="{ error: saveError && (!draftName.trim() || draftName.trim().length > 30 || /\s/.test(draftName.trim())) }" :placeholder="t('agents.agentNamePlaceholder')" spellcheck="false" @input="saveError = ''" />
+              <input v-else v-model="draftName" type="text" class="bv-input" maxlength="30" :class="{ error: saveError && (!draftName.trim() || draftName.trim().length > 30) }" :placeholder="t('agents.agentNamePlaceholder')" spellcheck="false" @input="saveError = ''" @blur="draftName = draftName.trim()" />
             </div>
 
             <!-- Description -->
@@ -55,7 +55,7 @@
                 </AppButton>
               </div>
               <div v-if="readOnly" class="bv-readonly-text bv-readonly-multiline">{{ draftDescription || '—' }}</div>
-              <textarea v-else v-model="draftDescription" class="bv-textarea" rows="3" :placeholder="t('agents.descriptionPlaceholder')" spellcheck="false"></textarea>
+              <textarea v-else v-model="draftDescription" class="bv-textarea" rows="3" :placeholder="t('agents.descriptionPlaceholder')" spellcheck="false" @blur="draftDescription = draftDescription.trim()"></textarea>
             </div>
 
             <span v-if="aiError && !readOnly" class="bv-ai-error">{{ aiError }}</span>
@@ -81,6 +81,7 @@
                 :placeholder="agentType === 'system' ? t('agents.systemPromptPlaceholder') : t('agents.userPromptPlaceholder')"
                 spellcheck="false"
                 @input="saveError = ''"
+                @blur="draftPrompt = draftPrompt.trim()"
               ></textarea>
             </div>
 
@@ -450,12 +451,17 @@
                         <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                         {{ locale.value === 'zh' ? `已选 ${draftRequiredKnowledgeBaseIds.length} 个知识库，超过建议上限 ${CAP_LIMITS.knowledge}，可能影响准确度并增加 cost` : `${draftRequiredKnowledgeBaseIds.length} knowledge bases selected — over the recommended limit of ${CAP_LIMITS.knowledge}. This may reduce accuracy and increase cost.` }}
                       </div>
+                      <div v-if="disabledAssignedKnowledge.length > 0" class="bv-cap-disabled-badges">
+                        <span v-for="id in disabledAssignedKnowledge" :key="id" class="bv-cap-disabled-badge">
+                          <svg style="width:11px;height:11px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                          {{ id }}
+                        </span>
+                      </div>
                       <div class="bv-cap-list">
                         <label v-for="kb in filteredKnowledge" :key="kb.id" class="bv-cap-item">
                           <input type="checkbox" :value="kb.id" v-model="draftRequiredKnowledgeBaseIds" />
                           <div class="bv-cap-text">
                             <span class="bv-cap-name">{{ kb.name }}</span>
-                            <span v-if="kb.description" class="bv-cap-desc">{{ kb.description }}</span>
                           </div>
                         </label>
                       </div>
@@ -651,7 +657,7 @@
                   <div class="bv-summary-content">
                     <span class="bv-summary-label">{{ t('agents.knowledge') }}</span>
                     <span class="bv-summary-value" :class="{ muted: draftRequiredKnowledgeBaseIds.length === 0 }">
-                      {{ draftRequiredKnowledgeBaseIds.length === 0 ? (locale.value === 'zh' ? '未分配' : 'None') : (locale.value === 'zh' ? draftRequiredKnowledgeBaseIds.length + ' 项' : draftRequiredKnowledgeBaseIds.length + ' assigned') }}
+                      {{ draftRequiredKnowledgeBaseIds.length === 0 ? (locale.value === 'zh' ? '未分配' : 'None') : (locale.value === 'zh' ? draftRequiredKnowledgeBaseIds.length + ' 项' : draftRequiredKnowledgeBaseIds.length + ' assigned') }}{{ disabledAssignedKnowledge.length > 0 ? (locale.value === 'zh' ? `（${disabledAssignedKnowledge.length} 已禁用）` : ` (${disabledAssignedKnowledge.length} disabled)`) : '' }}
                     </span>
                   </div>
                   <svg class="bv-summary-chevron" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
@@ -1149,9 +1155,18 @@ const availableSkills = computed(() => skillsStore.skills || [])
 const availableMcpServers = computed(() => mcpStore.servers || [])
 const availableKnowledgeBases = computed(() => {
   const configs = knowledgeStore.indexConfigs || {}
-  return Object.entries(configs).map(([name, cfg]) => ({
-    id: name, name, description: cfg.enabled ? 'Enabled' : 'Disabled',
-  }))
+  return Object.entries(configs)
+    .filter(([, cfg]) => cfg.enabled)
+    .map(([name]) => ({ id: name, name }))
+})
+
+// Assigned indexes that are currently disabled — shown as read-only badges
+const disabledAssignedKnowledge = computed(() => {
+  const configs = knowledgeStore.indexConfigs || {}
+  return (draftRequiredKnowledgeBaseIds.value || []).filter(id => {
+    const cfg = configs[id]
+    return cfg && !cfg.enabled
+  })
 })
 
 function toggleSelectAll(panel) {
@@ -1346,23 +1361,22 @@ const saveError = ref('')
 
 function saveAll() {
   saveError.value = ''
-  if (!draftName.value.trim()) {
+  draftName.value = draftName.value.trim()
+  draftDescription.value = draftDescription.value.trim()
+  draftPrompt.value = draftPrompt.value.trim()
+  if (!draftName.value) {
     saveError.value = t('agents.nameRequired')
     return
   }
-  if (/\s/.test(draftName.value.trim())) {
-    saveError.value = t('agents.nameNoSpaces')
-    return
-  }
-  if (draftName.value.trim().length > 30) {
+  if (draftName.value.length > 30) {
     saveError.value = t('agents.nameTooLong')
     return
   }
-  if (!draftPrompt.value.trim()) {
+  if (!draftPrompt.value) {
     saveError.value = t('agents.promptRequired')
     return
   }
-  if (!draftDescription.value.trim()) {
+  if (!draftDescription.value) {
     saveError.value = t('agents.descriptionRequired', 'Description is required')
     return
   }
@@ -1417,10 +1431,6 @@ function saveAll() {
     saveError.value = t('agents.duplicateName', { name: duplicate.name })
     return
   }
-  // Trim fields in place so UI reflects cleaned values
-  draftName.value = draftName.value.trim()
-  draftDescription.value = draftDescription.value.trim()
-  draftPrompt.value = draftPrompt.value.trim()
   emit('update-agent', {
     name:        draftName.value,
     avatar:      draftAvatar.value,
@@ -1938,6 +1948,16 @@ function saveAll() {
 .bv-cap-desc {
   font-size: 0.6875rem; color: #6B7280; line-height: 1.3;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.bv-cap-disabled-badges {
+  display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.375rem;
+}
+.bv-cap-disabled-badge {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.125rem 0.5rem; border-radius: 9999px;
+  background: rgba(107,114,128,0.1); border: 1px solid rgba(107,114,128,0.2);
+  color: #6B7280; font-size: 0.6875rem;
+  cursor: default; user-select: none;
 }
 
 

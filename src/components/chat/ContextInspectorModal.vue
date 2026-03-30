@@ -2,421 +2,421 @@
   <div
     v-if="visible"
     class="fixed inset-0 z-50 flex items-center justify-center"
-    style="background:rgba(0,0,0,0.3);"
+    style="background:rgba(0,0,0,0.6);"
   >
     <div
-      class="relative flex flex-col rounded-2xl overflow-hidden"
-      style="background:#FFFFFF; border:1px solid #E5E5EA; border-radius:16px; width:80vw; max-height:85vh; box-shadow:0 8px 32px rgba(0,0,0,0.12);"
+      class="relative flex flex-col"
+      style="background:#111111; border:1px solid #2A2A2A; border-radius:16px; width:82vw; max-height:88vh; box-shadow:0 16px 48px rgba(0,0,0,0.7); overflow:hidden;"
     >
-      <!-- Header -->
-      <div class="flex items-center justify-between px-5 py-3 shrink-0" style="border-bottom:1px solid #E5E5EA;">
+      <!-- ── Header ── -->
+      <div class="flex items-center justify-between px-5 py-3 shrink-0" style="border-bottom:1px solid #2A2A2A;">
         <div class="flex items-center gap-2">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
           </svg>
-          <span class="font-semibold" style="font-family:'Inter',sans-serif; color:#1A1A1A; font-size:var(--fs-subtitle);">{{ t('chats.contextInspector') }}</span>
-          <span
-            v-if="activeChatModel"
-            class="px-1.5 py-0.5 rounded-full"
-            style="background:#F5F5F5; color:#6B7280; font-size:var(--fs-small);"
-          >{{ activeChatModel }}</span>
+          <span class="font-semibold" style="color:#F5F5F5; font-size:var(--fs-subtitle);">{{ t('chats.contextInspector') }}</span>
         </div>
-        <button
-          @click="$emit('close')"
-          class="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors"
-          style="color:#9CA3AF;"
-          @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
-          @mouseleave="e => e.currentTarget.style.background=''"
-        >
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-      </div>
-
-      <!-- Body -->
-      <div class="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-        <!-- Metrics section (expanded by default) -->
-        <div style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
+        <div class="flex items-center gap-1.5">
           <button
-            @click="inspectorSections.metrics = !inspectorSections.metrics"
-            class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-            style="background:#F2F2F7;"
-            @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
-            @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
+            @click="debugDialogOpen = true"
+            class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer"
+            style="color:#6B7280; font-size:var(--fs-small);"
+            @mouseenter="e => e.currentTarget.style.background='#1E1E1E'"
+            @mouseleave="e => e.currentTarget.style.background=''"
           >
-            <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.metrics') }}</span>
-            <svg class="w-4 h-4 transition-transform" :style="inspectorSections.metrics ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.5" fill="currentColor" stroke="none"/><line x1="13" y1="8.5" x2="19" y2="8.5"/><line x1="13" y1="15.5" x2="19" y2="15.5"/>
+            </svg>
+            <span>{{ t('chats.debugLog') }}</span>
+            <span v-if="debugLogs.length" style="color:#374151;">{{ debugLogs.length }}</span>
+          </button>
+          <button
+            @click="$emit('close')"
+            class="w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer"
+            style="color:#6B7280;"
+            @mouseenter="e => e.currentTarget.style.background='#1E1E1E'"
+            @mouseleave="e => e.currentTarget.style.background=''"
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
-          <div v-if="inspectorSections.metrics" class="px-4 py-3" style="border-top:1px solid #E5E5EA;">
-            <table style="width:100%; font-size:var(--fs-body); color:#1A1A1A;">
+        </div>
+      </div>
+
+      <!-- ── Body ── -->
+      <div class="overflow-y-auto px-4 py-3 space-y-2" style="height:70vh;">
+
+        <!-- Metrics -->
+        <div style="border:1px solid #2A2A2A; border-radius:12px; overflow:hidden;">
+          <button
+            @click="metricsOpen = !metricsOpen"
+            class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer"
+            style="background:#161616;"
+            @mouseenter="e => e.currentTarget.style.background='#1A1A1A'"
+            @mouseleave="e => e.currentTarget.style.background='#161616'"
+          >
+            <span style="color:#E5E5EA; font-size:var(--fs-body); font-weight:600;">{{ t('chats.metrics') }}</span>
+            <svg class="w-4 h-4 transition-transform" :style="metricsOpen ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#4B5563" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div v-if="metricsOpen" class="px-4 py-3" style="border-top:1px solid #2A2A2A;">
+            <table style="width:100%; font-size:var(--fs-body);">
               <tbody>
-                <tr style="border-bottom:1px solid #F5F5F5;">
-                  <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.inputTokens') }}</td>
-                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ contextMetrics.inputTokens?.toLocaleString() ?? '0' }}</td>
+                <tr style="border-bottom:1px solid #1E1E1E;">
+                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.inputTokens') }}</td>
+                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ (aggregateMetrics.inputTokens ?? 0).toLocaleString() }}</td>
                 </tr>
-                <tr style="border-bottom:1px solid #F5F5F5;">
-                  <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.maxTokens') }}</td>
-                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (contextMetrics.maxTokens ?? 0).toLocaleString() }}</td>
+                <tr style="border-bottom:1px solid #1E1E1E;">
+                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.maxTokens') }}</td>
+                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ (aggregateMetrics.maxTokens ?? 0).toLocaleString() }}</td>
                 </tr>
-                <tr style="border-bottom:1px solid #F5F5F5;">
-                  <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.context') }}</td>
-                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ Math.round(contextMetrics.percentage) }}%</td>
+                <tr style="border-bottom:1px solid #1E1E1E;">
+                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.context') }}</td>
+                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;"
+                    :style="(aggregateMetrics.percentage ?? 0) > 85 ? 'color:#f87171;' : (aggregateMetrics.percentage ?? 0) > 65 ? 'color:#fbbf24;' : 'color:#E5E5EA;'">
+                    {{ Math.round(aggregateMetrics.percentage ?? 0) }}%
+                  </td>
                 </tr>
-                <tr :style="(contextMetrics.voiceInputTokens || contextMetrics.voiceOutputTokens) ? 'border-bottom:1px solid #F5F5F5;' : ''">
-                  <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.compactions') }}</td>
-                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ contextMetrics.compactionCount ?? 0 }}</td>
+                <tr :style="(contextMetrics.voiceInputTokens || contextMetrics.voiceOutputTokens) ? 'border-bottom:1px solid #1E1E1E;' : ''">
+                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.compactions') }}</td>
+                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ aggregateMetrics.compactionCount ?? 0 }}</td>
                 </tr>
                 <template v-if="contextMetrics.voiceInputTokens || contextMetrics.voiceOutputTokens">
-                  <tr style="border-bottom:1px solid #F5F5F5;">
-                    <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.voiceIn') }}</td>
-                    <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (contextMetrics.voiceInputTokens ?? 0).toLocaleString() }} {{ t('chats.tok') }}</td>
+                  <tr style="border-bottom:1px solid #1E1E1E;">
+                    <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.voiceIn') }}</td>
+                    <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ (contextMetrics.voiceInputTokens ?? 0).toLocaleString() }} {{ t('chats.tok') }}</td>
                   </tr>
-                  <tr :style="(contextMetrics.whisperCalls) ? 'border-bottom:1px solid #F5F5F5;' : ''">
-                    <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.voiceOut') }}</td>
-                    <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ (contextMetrics.voiceOutputTokens ?? 0).toLocaleString() }} {{ t('chats.tok') }}</td>
+                  <tr :style="contextMetrics.whisperCalls ? 'border-bottom:1px solid #1E1E1E;' : ''">
+                    <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.voiceOut') }}</td>
+                    <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ (contextMetrics.voiceOutputTokens ?? 0).toLocaleString() }} {{ t('chats.tok') }}</td>
                   </tr>
                 </template>
                 <tr v-if="contextMetrics.whisperCalls">
-                  <td class="py-1.5 pr-4" style="color:#9CA3AF; white-space:nowrap;">{{ t('chats.whisperStt') }}</td>
-                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;">{{ contextMetrics.whisperCalls }} {{ t('chats.rounds') }}, {{ (contextMetrics.whisperSecs ?? 0).toFixed(1) }}{{ t('chats.audioUnit') }}</td>
+                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.whisperStt') }}</td>
+                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ contextMetrics.whisperCalls }} {{ t('chats.rounds') }}, {{ (contextMetrics.whisperSecs ?? 0).toFixed(1) }}{{ t('chats.audioUnit') }}</td>
                 </tr>
               </tbody>
             </table>
-            <!-- Per-agent breakdown for group chats -->
-            <template v-if="perAgentEntries.length > 1">
-              <div class="mt-2 pt-2" style="border-top:1px solid #E5E5EA;">
-                <p style="color:#9CA3AF; font-size:var(--fs-small); margin-bottom:0.25rem;">
-                  {{ t('chats.aggregateAcross').replace('{n}', perAgentEntries.length) }}
-                </p>
+          </div>
+        </div>
+
+        <!-- ── Main tab bar ── -->
+        <div class="flex" style="border:1px solid #2A2A2A; border-radius:12px; overflow:hidden;">
+          <button
+            @click="mainTab = 'user'"
+            class="flex-1 py-2 text-center cursor-pointer transition-colors"
+            style="font-size:var(--fs-body); font-weight:600;"
+            :style="mainTab === 'user'
+              ? 'background:#1E1E1E; color:#E5E5EA; border-right:1px solid #2A2A2A;'
+              : 'background:#161616; color:#4B5563; border-right:1px solid #2A2A2A;'"
+          >{{ t('chats.userPersona') }}</button>
+          <button
+            @click="mainTab = 'system'"
+            class="flex-1 py-2 text-center cursor-pointer transition-colors"
+            style="font-size:var(--fs-body); font-weight:600;"
+            :style="mainTab === 'system'
+              ? 'background:#1E1E1E; color:#E5E5EA;'
+              : 'background:#161616; color:#4B5563;'"
+          >{{ agentCards.length === 1 ? (agentCards[0].name || t('chats.systemAgent')) : t('chats.agents') }}</button>
+        </div>
+
+        <!-- ── User Persona tab ── -->
+        <template v-if="mainTab === 'user'">
+          <div style="border:1px solid #2A2A2A; border-radius:12px; overflow:hidden;">
+            <!-- Agent name row -->
+            <div class="flex items-center gap-2 px-4 py-3" style="border-bottom:1px solid #222222;">
+              <template v-if="userPersonaData.agent">
+                <span class="font-semibold" style="color:#E5E5EA; font-size:var(--fs-body);">{{ userPersonaData.agent.name }}</span>
+                <span v-if="userPersonaData.agent.modelId" style="color:#4B5563; font-size:var(--fs-small); font-family:'JetBrains Mono',monospace;">{{ userPersonaData.agent.modelId }}</span>
+              </template>
+              <p v-else style="color:#4B5563; font-size:var(--fs-small);">{{ t('chats.noUserPersona') }}</p>
+            </div>
+
+            <!-- Pre-## block (identity/base prompt): always visible inline -->
+            <div
+              v-if="userPersonaData.rawSections.length && userPersonaData.rawSections[0].title === null"
+              class="px-4 py-3"
+              :style="(userPersonaData.rawSections.length > 1 || userPersonaData.memorySections.length) ? 'border-bottom:1px solid #222222;' : ''"
+            >
+              <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; max-height:220px; overflow-y:auto; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ userPersonaData.rawSections[0].content }}</pre>
+            </div>
+            <div v-else-if="!userPersonaData.rawSections.length" class="px-4 py-3" :style="userPersonaData.memorySections.length ? 'border-bottom:1px solid #222222;' : ''">
+              <p style="color:#374151; font-size:var(--fs-small);">{{ t('chats.snapshotCapturedDuringRun') }}</p>
+            </div>
+
+            <!-- ## sections from user agent's own prompt -->
+            <template
+              v-for="(sec, si) in userPersonaData.rawSections.filter(s => s.title !== null)"
+              :key="'ur-' + si"
+            >
+              <div style="border-bottom:1px solid #222222;">
                 <button
-                  @click="showPerAgentBreakdown = !showPerAgentBreakdown"
-                  class="flex items-center gap-1.5 cursor-pointer mt-1 mb-1"
-                  style="color:#007AFF; font-size:var(--fs-small); background:none; border:none; padding:0;"
+                  @click="toggleSection('user-raw', si)"
+                  class="w-full flex items-center justify-between px-4 py-2 cursor-pointer"
+                  style="background:transparent;"
+                  @mouseenter="e => e.currentTarget.style.background='#161616'"
+                  @mouseleave="e => e.currentTarget.style.background='transparent'"
                 >
-                  <svg class="w-3.5 h-3.5 transition-transform" :style="showPerAgentBreakdown ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="6 9 12 15 18 9"/>
-                  </svg>
-                  {{ t('chats.perAgentBreakdown') }}
+                  <span style="color:#6B7280; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">{{ sec.title }}</span>
+                  <svg class="w-3.5 h-3.5 transition-transform" :style="isSectionOpen('user-raw', si) ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#4B5563" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
-                <div v-if="showPerAgentBreakdown" class="space-y-1">
-                  <div
-                    v-for="entry in perAgentEntries"
-                    :key="entry.agentId"
-                    class="flex items-center gap-3 px-3 py-1.5 rounded-lg"
-                    style="background:#F9FAFB; font-size:var(--fs-small);"
-                  >
-                    <span class="font-medium" style="color:#1A1A1A; min-width:6rem;">{{ entry.agentName }}</span>
-                    <span style="font-family:'JetBrains Mono',monospace; color:#6B7280;">
-                      {{ (entry.inputTokens ?? 0).toLocaleString() }} in
-                    </span>
-                    <span style="font-family:'JetBrains Mono',monospace; color:#6B7280;">
-                      {{ (entry.outputTokens ?? 0).toLocaleString() }} out
-                    </span>
-                    <span style="font-family:'JetBrains Mono',monospace; color:#6B7280;">
-                      {{ Math.round(entry.percentage ?? 0) }}%
-                    </span>
-                    <span v-if="entry.compactionCount" style="font-family:'JetBrains Mono',monospace; color:#F59E0B;">
-                      {{ entry.compactionCount }} compact
-                    </span>
+                <div v-if="isSectionOpen('user-raw', si)" class="px-4 pb-3" style="border-top:1px solid #1A1A1A;">
+                  <div style="margin-top:0.75rem;" class="space-y-2">
+                    <template v-for="(sub, ssi) in parseSubSections(sec.content)" :key="ssi">
+                      <p v-if="sub.subTitle" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; padding-top:0.25rem;">{{ sub.subTitle }}</p>
+                      <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; max-height:280px; overflow-y:auto; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ sub.content }}</pre>
+                    </template>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Injected memory sections from system prompt (e.g. ## User Profile) -->
+            <template v-for="(sec, si) in userPersonaData.memorySections" :key="'um-' + si">
+              <div :style="si < userPersonaData.memorySections.length - 1 ? 'border-bottom:1px solid #222222;' : ''">
+                <button
+                  @click="toggleSection('user-mem', si)"
+                  class="w-full flex items-center justify-between px-4 py-2 cursor-pointer"
+                  style="background:transparent;"
+                  @mouseenter="e => e.currentTarget.style.background='#161616'"
+                  @mouseleave="e => e.currentTarget.style.background='transparent'"
+                >
+                  <span style="color:#6B7280; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">{{ sec.title }}</span>
+                  <svg class="w-3.5 h-3.5 transition-transform" :style="isSectionOpen('user-mem', si) ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#4B5563" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div v-if="isSectionOpen('user-mem', si)" class="px-4 pb-3" style="border-top:1px solid #1A1A1A;">
+                  <div style="margin-top:0.75rem;" class="space-y-2">
+                    <template v-for="(sub, ssi) in parseSubSections(sec.content)" :key="ssi">
+                      <p v-if="sub.subTitle" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; padding-top:0.25rem;">{{ sub.subTitle }}</p>
+                      <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; max-height:280px; overflow-y:auto; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ sub.content }}</pre>
+                    </template>
                   </div>
                 </div>
               </div>
             </template>
           </div>
-        </div>
+        </template>
 
-        <!-- ═══ GROUP CHAT: per-agent sections ═══ -->
-        <template v-if="groupAgentSnaps.length > 1">
-          <div
-            v-for="(snap, si) in groupAgentSnaps" :key="snap.agentId || si"
-            style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;"
-          >
+        <!-- ── System Agent(s) tab ── -->
+        <template v-if="mainTab === 'system'">
+
+          <!-- Secondary agent tabs (group chat only) -->
+          <div v-if="agentCards.length > 1" class="flex gap-1 flex-wrap">
             <button
-              @click="expandedAgentSnap[si] = !expandedAgentSnap[si]"
-              class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-              style="background:#F2F2F7;"
-              @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
-              @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
-            >
-              <div class="flex items-center gap-2">
-                <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ snap.agentName }}</span>
-                <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                  {{ snap.model || 'default' }}
-                </span>
+              v-for="(card, idx) in agentCards"
+              :key="card.agentId || idx"
+              @click="selectedAgentIdx = idx"
+              class="px-3 py-1.5 rounded-lg cursor-pointer text-sm transition-colors"
+              :style="selectedAgentIdx === idx
+                ? 'background:#1E1E1E; color:#E5E5EA; border:1px solid #3A3A3A;'
+                : 'background:#161616; color:#4B5563; border:1px solid #2A2A2A;'"
+            >{{ card.name }}</button>
+          </div>
+
+          <!-- Current agent content -->
+          <div v-if="currentCard" style="border:1px solid #2A2A2A; border-radius:12px; overflow:hidden;">
+
+            <!-- Agent name row -->
+            <div class="flex items-center gap-2 px-4 py-3" style="border-bottom:1px solid #222222;">
+              <span class="font-semibold" style="color:#E5E5EA; font-size:var(--fs-body);">{{ currentCard.name }}</span>
+              <span v-if="currentCard.model" style="color:#4B5563; font-size:var(--fs-small); font-family:'JetBrains Mono',monospace;">{{ currentCard.model }}</span>
+            </div>
+
+            <!-- Per-agent metrics row -->
+            <div class="px-4 py-3" style="border-bottom:1px solid #222222;">
+              <p class="mb-2" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">{{ t('chats.metrics') }}</p>
+              <div class="flex items-center gap-5 flex-wrap" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small);">
+                <span style="color:#6B7280;">in <span style="color:#E5E5EA; font-weight:600;">{{ (currentCard.metrics?.inputTokens ?? 0).toLocaleString() }}</span></span>
+                <span style="color:#6B7280;">out <span style="color:#E5E5EA; font-weight:600;">{{ (currentCard.metrics?.outputTokens ?? 0).toLocaleString() }}</span></span>
+                <span style="color:#6B7280;">ctx <span :style="(currentCard.metrics?.percentage ?? 0) > 85 ? 'color:#f87171;font-weight:600;' : (currentCard.metrics?.percentage ?? 0) > 65 ? 'color:#fbbf24;font-weight:600;' : 'color:#E5E5EA;font-weight:600;'">{{ Math.round(currentCard.metrics?.percentage ?? 0) }}%</span></span>
+                <span v-if="currentCard.metrics?.compactionCount" style="color:#fbbf24; font-weight:600;">{{ currentCard.metrics.compactionCount }} compact</span>
               </div>
-              <svg class="w-4 h-4 transition-transform" :style="expandedAgentSnap[si] ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </button>
-            <div v-if="expandedAgentSnap[si]" style="border-top:1px solid #E5E5EA;">
-              <!-- System Prompt -->
-              <div class="px-4 py-3" style="border-bottom:1px solid #F5F5F5;">
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:rgba(0,122,255,0.1); color:#0056CC;">{{ t('chats.systemPrompt') }}</span>
-                  <span style="color:#9CA3AF; font-size:var(--fs-small);">{{ snap.systemPrompt ? snap.systemPrompt.length.toLocaleString() + ' ' + t('chats.chars') : '-' }}</span>
-                </div>
-                <pre v-if="snap.systemPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ snap.systemPrompt }}</pre>
+            </div>
+
+            <!-- Prompt sections (dynamic, parsed from assembled prompt) -->
+            <template v-if="currentCard.promptSections.length">
+              <!-- First section (identity block, no ## header): always visible inline -->
+              <div v-if="currentCard.promptSections[0].title === null" class="px-4 py-3" style="border-bottom:1px solid #222222;">
+                <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; max-height:220px; overflow-y:auto; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ currentCard.promptSections[0].content }}</pre>
               </div>
-              <!-- Messages -->
-              <div class="px-4 py-3" style="border-bottom:1px solid #F5F5F5;">
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#FEF3C7; color:#92400E;">{{ t('chats.messages') }}</span>
-                  <span style="color:#9CA3AF; font-size:var(--fs-small);">{{ snap.messages?.length ?? 0 }}</span>
-                </div>
-                <div v-if="snap.messages?.length" style="max-height:200px; overflow-y:auto;">
-                  <div v-for="(msg, mi) in snap.messages" :key="mi" class="mb-1">
-                    <span class="text-xs font-medium" :style="msg.role === 'user' ? 'color:#0056CC;' : 'color:#065F46;'">{{ msg.role }}</span>
-                    <span class="text-xs ml-1" style="color:#9CA3AF;">{{ msg.contentLength?.toLocaleString() }} {{ t('chats.chars') }}</span>
-                    <div class="text-xs cursor-pointer mt-0.5" style="font-family:'JetBrains Mono',monospace; color:#6B7280;" @click="expandedMessages[`${si}-${mi}`] = !expandedMessages[`${si}-${mi}`]">
-                      <pre v-if="expandedMessages[`${si}-${mi}`]" class="whitespace-pre-wrap leading-relaxed overflow-x-auto" style="max-height:200px; overflow-y:auto;">{{ msg.fullContent }}</pre>
-                      <span v-else>{{ msg.contentPreview }}<span v-if="msg.contentLength > 200" style="color:#007AFF;"> ...</span></span>
+
+              <!-- Remaining ## sections: each collapsible -->
+              <template v-for="(sec, si) in currentCard.promptSections.slice(currentCard.promptSections[0].title === null ? 1 : 0)" :key="'sys-' + selectedAgentIdx + '-' + si">
+                <div :style="si < currentCard.promptSections.length - 2 ? 'border-bottom:1px solid #222222;' : 'border-bottom:1px solid #222222;'">
+                  <button
+                    @click="toggleSection('sys-' + selectedAgentIdx, si)"
+                    class="w-full flex items-center justify-between px-4 py-2 cursor-pointer"
+                    style="background:transparent;"
+                    @mouseenter="e => e.currentTarget.style.background='#161616'"
+                    @mouseleave="e => e.currentTarget.style.background='transparent'"
+                  >
+                    <span style="color:#6B7280; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">{{ sec.title }}</span>
+                    <svg class="w-3.5 h-3.5 transition-transform" :style="isSectionOpen('sys-' + selectedAgentIdx, si) ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#4B5563" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  <div v-if="isSectionOpen('sys-' + selectedAgentIdx, si)" class="px-4 pb-3" style="border-top:1px solid #1A1A1A;">
+                    <div style="margin-top:0.75rem;" class="space-y-2">
+                      <template v-for="(sub, ssi) in parseSubSections(sec.content)" :key="ssi">
+                        <p v-if="sub.subTitle" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; padding-top:0.25rem;">{{ sub.subTitle }}</p>
+                        <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; max-height:280px; overflow-y:auto; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ sub.content }}</pre>
+                      </template>
                     </div>
                   </div>
                 </div>
-              </div>
-              <!-- Tools -->
-              <div class="px-4 py-3">
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#E0E7FF; color:#3730A3;">{{ t('chats.tools') }}</span>
-                  <span style="color:#9CA3AF; font-size:var(--fs-small);">{{ snap.tools?.length ?? 0 }}</span>
-                </div>
-                <div v-if="snap.tools?.length" style="max-height:150px; overflow-y:auto;">
-                  <div v-for="(tool, ti) in snap.tools" :key="ti" class="mb-0.5">
-                    <span class="text-xs font-medium" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A;">{{ tool.name }}</span>
-                    <span v-if="tool.description" class="text-xs ml-1" style="color:#9CA3AF;">{{ tool.description.slice(0, 80) }}{{ tool.description.length > 80 ? '...' : '' }}</span>
+              </template>
+            </template>
+            <div v-else class="px-4 py-3" style="border-bottom:1px solid #222222;">
+              <p style="color:#374151; font-size:var(--fs-small);">{{ t('chats.snapshotCapturedDuringRun') }}</p>
+            </div>
+
+            <!-- Memory sections (My Knowledge Base, Recent Session Logs, Relevant Past Context) -->
+            <template v-for="(sec, si) in currentCard.memorySections" :key="'mem-' + selectedAgentIdx + '-' + si">
+              <div style="border-bottom:1px solid #222222;">
+                <button
+                  @click="toggleSection('mem-' + selectedAgentIdx, si)"
+                  class="w-full flex items-center justify-between px-4 py-2 cursor-pointer"
+                  style="background:transparent;"
+                  @mouseenter="e => e.currentTarget.style.background='#161616'"
+                  @mouseleave="e => e.currentTarget.style.background='transparent'"
+                >
+                  <span style="color:#6B7280; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">{{ sec.title }}</span>
+                  <svg class="w-3.5 h-3.5 transition-transform" :style="isSectionOpen('mem-' + selectedAgentIdx, si) ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#4B5563" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div v-if="isSectionOpen('mem-' + selectedAgentIdx, si)" class="px-4 pb-3" style="border-top:1px solid #1A1A1A;">
+                  <div style="margin-top:0.75rem;" class="space-y-2">
+                    <template v-for="(sub, ssi) in parseSubSections(sec.content)" :key="ssi">
+                      <p v-if="sub.subTitle" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; padding-top:0.25rem;">{{ sub.subTitle }}</p>
+                      <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; max-height:280px; overflow-y:auto; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ sub.content }}</pre>
+                    </template>
                   </div>
                 </div>
               </div>
+            </template>
+
+            <!-- Skills -->
+            <div class="px-4 py-3" style="border-bottom:1px solid #222222;">
+              <p class="mb-2" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">{{ t('chats.skillsLabel') }} ({{ currentCard.skills.length }})</p>
+              <div v-if="currentCard.skills.length" class="flex flex-wrap gap-1.5">
+                <span v-for="skill in currentCard.skills" :key="skill.id" class="px-2 py-0.5 rounded text-xs" style="background:#1E1E1E; color:#9CA3AF; border:1px solid #2A2A2A;">{{ skill.name }}</span>
+              </div>
+              <span v-else style="color:#374151; font-size:var(--fs-small);">—</span>
             </div>
+
+            <!-- Tools -->
+            <div class="px-4 py-3" style="border-bottom:1px solid #222222;">
+              <p class="mb-2" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">{{ t('chats.tools') }} ({{ currentCard.tools.length }})</p>
+              <div v-if="currentCard.tools.length" class="flex flex-wrap gap-1.5">
+                <span v-for="tool in currentCard.tools" :key="tool.id" class="px-2 py-0.5 rounded text-xs" style="background:#1E1E1E; color:#9CA3AF; border:1px solid #2A2A2A;">{{ tool.name }}</span>
+              </div>
+              <span v-else style="color:#374151; font-size:var(--fs-small);">—</span>
+            </div>
+
+            <!-- MCP -->
+            <div class="px-4 py-3" style="border-bottom:1px solid #222222;">
+              <p class="mb-2" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">{{ t('chats.mcpLabel') }} ({{ currentCard.mcpServers.length }})</p>
+              <div v-if="currentCard.mcpServers.length" class="flex flex-wrap gap-1.5">
+                <span v-for="srv in currentCard.mcpServers" :key="srv.id" class="px-2 py-0.5 rounded text-xs" style="background:#1E1E1E; color:#9CA3AF; border:1px solid #2A2A2A;">{{ srv.name }}</span>
+              </div>
+              <span v-else style="color:#374151; font-size:var(--fs-small);">—</span>
+            </div>
+
+            <!-- RAG -->
+            <div class="px-4 py-3">
+              <p class="mb-2" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">{{ t('chats.ragLabel') }} ({{ currentCard.knowledgeBases.length }})</p>
+              <div v-if="currentCard.knowledgeBases.length" class="flex flex-wrap gap-1.5">
+                <span v-for="kb in currentCard.knowledgeBases" :key="kb" class="px-2 py-0.5 rounded text-xs" style="background:#1E1E1E; color:#9CA3AF; border:1px solid #2A2A2A;">{{ kb }}</span>
+              </div>
+              <span v-else style="color:#374151; font-size:var(--fs-small);">—</span>
+            </div>
+
           </div>
         </template>
 
-        <!-- ═══ SINGLE AGENT: original sections ═══ -->
-        <template v-else>
-        <!-- System Prompt section -->
-        <div style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
-          <button
-            @click="inspectorSections.system = !inspectorSections.system"
-            class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-            style="background:#F2F2F7;"
-            @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
-            @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
-          >
-            <div class="flex items-center gap-2">
-              <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.systemPrompt') }}</span>
-              <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                {{ contextSnapshot?.systemPrompt ? contextSnapshot.systemPrompt.length.toLocaleString() + ' ' + t('chats.chars') : t('chats.notYetLoaded') }}
-              </span>
-            </div>
-            <svg class="w-4 h-4 transition-transform" :style="inspectorSections.system ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-          <div v-if="inspectorSections.system" class="px-4 py-3" style="border-top:1px solid #E5E5EA;">
-            <pre v-if="contextSnapshot?.systemPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:300px; overflow-y:auto;">{{ contextSnapshot.systemPrompt }}</pre>
-            <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">{{ t('chats.snapshotCapturedDuringRun') }}</p>
-          </div>
-        </div>
-
-        <!-- Agents section — uses store data before first message, snapshot prompts after -->
-        <div v-if="inspectorAgents" style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
-          <button
-            @click="inspectorSections.agents = !inspectorSections.agents"
-            class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-            style="background:#F2F2F7;"
-            @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
-            @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
-          >
-            <div class="flex items-center gap-2">
-              <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.agents') }}</span>
-              <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                {{ (inspectorAgents.systemAgentPrompt || inspectorAgents.systemAgentName ? 1 : 0) + (inspectorAgents.userAgentPrompt || inspectorAgents.userAgentName ? 1 : 0) }} {{ t('chats.active') }}
-              </span>
-            </div>
-            <svg class="w-4 h-4 transition-transform" :style="inspectorSections.agents ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-          <div v-if="inspectorSections.agents" style="border-top:1px solid #E5E5EA;">
-            <!-- System agent -->
-            <div
-              v-if="inspectorAgents.systemAgentPrompt || inspectorAgents.systemAgentName"
-              class="px-4 py-3"
-              :style="(inspectorAgents.userAgentPrompt || inspectorAgents.userAgentName) ? 'border-bottom:1px solid #F5F5F5;' : ''"
-            >
-              <div class="flex items-center gap-2 mb-1.5">
-                <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:rgba(0,122,255,0.1); color:#0056CC;">{{ t('chats.systemAgent') }}</span>
-                <span v-if="inspectorAgents.systemAgentName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorAgents.systemAgentName }}</span>
-              </div>
-              <pre v-if="inspectorAgents.systemAgentPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorAgents.systemAgentPrompt }}</pre>
-              <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">{{ t('chats.snapshotCapturedDuringRun') }}</p>
-            </div>
-            <!-- User agent -->
-            <div v-if="inspectorAgents.userAgentPrompt || inspectorAgents.userAgentName" class="px-4 py-3">
-              <div class="flex items-center gap-2 mb-1.5">
-                <span class="px-1.5 py-0.5 rounded text-xs font-medium" style="background:#D1FAE5; color:#065F46;">{{ t('chats.userAgent') }}</span>
-                <span v-if="inspectorAgents.userAgentName" style="color:#6B7280; font-size:var(--fs-small);">{{ inspectorAgents.userAgentName }}</span>
-              </div>
-              <pre v-if="inspectorAgents.userAgentPrompt" class="whitespace-pre-wrap text-xs leading-relaxed overflow-x-auto" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A; max-height:200px; overflow-y:auto;">{{ inspectorAgents.userAgentPrompt }}</pre>
-              <p v-else style="color:#9CA3AF; font-size:var(--fs-small);">{{ t('chats.snapshotCapturedDuringRun') }}</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Messages section -->
-        <div style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
-          <button
-            @click="inspectorSections.messages = !inspectorSections.messages"
-            class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-            style="background:#F2F2F7;"
-            @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
-            @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
-          >
-            <div class="flex items-center gap-2">
-              <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.messages') }}</span>
-              <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                {{ effectiveMessages.length }}
-              </span>
-            </div>
-            <svg class="w-4 h-4 transition-transform" :style="inspectorSections.messages ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-          <div v-if="inspectorSections.messages" style="border-top:1px solid #E5E5EA; max-height:400px; overflow-y:auto;">
-            <template v-if="effectiveMessages.length">
-              <div
-                v-for="(msg, idx) in effectiveMessages"
-                :key="idx"
-                class="px-4 py-2.5"
-                :style="idx < effectiveMessages.length - 1 ? 'border-bottom:1px solid #F5F5F5;' : ''"
-              >
-                <div class="flex items-center gap-2 mb-1">
-                  <span
-                    class="px-1.5 py-0.5 rounded text-xs font-medium"
-                    :style="msg.role === 'user'
-                      ? 'background:rgba(0,122,255,0.1); color:#0056CC;'
-                      : 'background:#D1FAE5; color:#065F46;'"
-                  >{{ msg.role }}</span>
-                  <span style="color:#9CA3AF; font-size:var(--fs-small);">{{ msg.contentLength?.toLocaleString() }} {{ t('chats.chars') }}</span>
-                </div>
-                <div
-                  class="text-xs cursor-pointer"
-                  style="font-family:'JetBrains Mono',monospace; color:#6B7280;"
-                  @click="expandedMessages[idx] = !expandedMessages[idx]"
-                >
-                  <pre v-if="expandedMessages[idx]" class="whitespace-pre-wrap leading-relaxed overflow-x-auto" style="max-height:300px; overflow-y:auto;">{{ msg.fullContent }}</pre>
-                  <span v-else>{{ msg.contentPreview }}<span v-if="msg.contentLength > 200" style="color:#007AFF;"> ... ({{ t('chats.clickToExpand') }})</span></span>
-                </div>
-              </div>
-            </template>
-            <div v-else class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">{{ t('chats.noMessages') }}</div>
-          </div>
-        </div>
-
-        <!-- Tools section -->
-        </template>
-
-        <!-- Tools section (always shown, shared in group mode since per-agent tools shown above) -->
-        <div v-if="groupAgentSnaps.length <= 1" style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
-          <button
-            @click="inspectorSections.tools = !inspectorSections.tools"
-            class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-            style="background:#F2F2F7;"
-            @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
-            @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
-          >
-            <div class="flex items-center gap-2">
-              <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.tools') }}</span>
-              <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                {{ contextSnapshot?.tools?.length ?? 0 }}
-              </span>
-            </div>
-            <svg class="w-4 h-4 transition-transform" :style="inspectorSections.tools ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-          <div v-if="inspectorSections.tools" style="border-top:1px solid #E5E5EA; max-height:300px; overflow-y:auto;">
-            <template v-if="contextSnapshot?.tools?.length">
-              <div
-                v-for="(tool, idx) in contextSnapshot.tools"
-                :key="idx"
-                class="px-4 py-2"
-                :style="idx < contextSnapshot.tools.length - 1 ? 'border-bottom:1px solid #F5F5F5;' : ''"
-              >
-                <span class="font-medium text-xs" style="font-family:'JetBrains Mono',monospace; color:#1A1A1A;">{{ tool.name }}</span>
-                <p v-if="tool.description" class="mt-0.5 text-xs" style="color:#9CA3AF;">{{ tool.description.slice(0, 150) }}{{ tool.description.length > 150 ? '...' : '' }}</p>
-              </div>
-            </template>
-            <div v-else class="px-4 py-3" style="color:#9CA3AF; font-size:var(--fs-body);">{{ contextSnapshot ? t('chats.noTools') : t('chats.snapshotCapturedDuringRun') }}</div>
-          </div>
-        </div>
-
-        <!-- Debug Log section -->
-        <div style="border:1px solid #E5E5EA; border-radius:16px; overflow:hidden;">
-          <button
-            @click="inspectorSections.debugLog = !inspectorSections.debugLog"
-            class="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-            style="background:#F2F2F7;"
-            @mouseenter="e => e.currentTarget.style.background='#F5F5F5'"
-            @mouseleave="e => e.currentTarget.style.background='#F2F2F7'"
-          >
-            <div class="flex items-center gap-2">
-              <span class="font-medium" style="color:#1A1A1A; font-size:var(--fs-body);">{{ t('chats.debugLog') }}</span>
-              <span class="px-1.5 py-0.5 rounded-full" style="background:#F5F5F5; color:#9CA3AF; font-size:var(--fs-small);">
-                {{ debugLogs.length }} {{ t('chats.entries') }}
-              </span>
-            </div>
-            <svg class="w-4 h-4 transition-transform" :style="inspectorSections.debugLog ? 'transform:rotate(180deg)' : ''" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-          <div v-if="inspectorSections.debugLog" style="border-top:1px solid #E5E5EA;">
-            <!-- Info bar -->
-            <div class="px-4 py-2 flex items-center gap-3 flex-wrap" style="background:#F2F2F7; border-bottom:1px solid #F5F5F5;">
-              <span style="font-size:var(--fs-small); color:#9CA3AF;">
-                {{ t('chats.electron') }}: <span :style="hasElectron ? 'color:#007AFF; font-weight:600;' : 'color:#dc2626; font-weight:600;'">{{ hasElectron ? t('chats.yes') : t('chats.no') }}</span>
-              </span>
-              <span style="font-size:var(--fs-small); color:#9CA3AF;">
-                {{ t('chats.modelLabel') }} <span style="color:#1A1A1A; font-weight:600;">{{ debugModelId }}</span>
-              </span>
-            </div>
-            <!-- Log entries (last 100) -->
-            <div ref="debugLogEl" style="max-height:300px; overflow-y:auto; background:#1A1A1A; font-family:'JetBrains Mono',monospace;">
-              <div class="px-3 py-2 space-y-0.5">
-                <div v-if="debugLogs.length === 0" style="color:#6B7280; font-size:var(--fs-secondary);">{{ t('chats.noEventsYet') }}</div>
-                <div
-                  v-for="(entry, i) in debugLogs.slice(-100)"
-                  :key="i"
-                  style="font-size:var(--fs-secondary);"
-                  :style="entry.level === 'error' ? 'color:#f87171;' : entry.level === 'warn' ? 'color:#fbbf24;' : entry.level === 'success' ? 'color:#86efac;' : entry.level === 'chunk' ? 'color:#93c5fd;' : 'color:#E5E5EA;'"
-                >
-                  <span style="color:#6B7280; margin-right:6px; font-size:var(--fs-caption);">{{ entry.time }}</span>{{ entry.msg }}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
+
+  <!-- ── Debug Log dialog ── -->
+  <Teleport to="body">
+    <div
+      v-if="debugDialogOpen"
+      class="fixed inset-0 flex items-center justify-center"
+      style="z-index:60; background:rgba(0,0,0,0.7);"
+      @click.self="debugDialogOpen = false"
+    >
+      <div
+        class="flex flex-col"
+        style="background:#0A0A0A; border:1px solid #2A2A2A; border-radius:16px; width:72vw; height:72vh; box-shadow:0 20px 60px rgba(0,0,0,0.8); overflow:hidden;"
+      >
+        <div class="flex items-center justify-between px-5 py-3 shrink-0" style="border-bottom:1px solid #1E1E1E;">
+          <div class="flex items-center gap-3">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#6B7280" stroke="none"/><circle cx="8.5" cy="15.5" r="1.5" fill="#6B7280" stroke="none"/><line x1="13" y1="8.5" x2="19" y2="8.5"/><line x1="13" y1="15.5" x2="19" y2="15.5"/>
+            </svg>
+            <span class="font-semibold" style="color:#E5E5EA; font-size:var(--fs-subtitle);">{{ t('chats.debugLog') }}</span>
+            <span style="color:#374151; font-size:var(--fs-small);">{{ debugLogs.length }} {{ t('chats.entries') }}</span>
+          </div>
+          <button
+            @click="debugDialogOpen = false"
+            class="w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer"
+            style="color:#6B7280;"
+            @mouseenter="e => e.currentTarget.style.background='#1A1A1A'"
+            @mouseleave="e => e.currentTarget.style.background=''"
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div
+          ref="debugLogEl"
+          class="flex-1 overflow-y-auto px-4 py-3"
+          style="font-family:'JetBrains Mono',monospace;"
+          @scroll="onDebugScroll"
+        >
+          <div v-if="debugLogs.length === 0" style="color:#374151; font-size:var(--fs-secondary);">{{ t('chats.noEventsYet') }}</div>
+          <div
+            v-for="(entry, i) in debugLogs"
+            :key="i"
+            class="py-0.5"
+            style="font-size:var(--fs-secondary); line-height:1.6;"
+            :style="entry.level === 'error' ? 'color:#f87171;' : entry.level === 'warn' ? 'color:#fbbf24;' : entry.level === 'success' ? 'color:#34d399;' : entry.level === 'chunk' ? 'color:#60a5fa;' : 'color:#6B7280;'"
+          >
+            <span style="color:#2D2D2D; margin-right:8px; user-select:none;">{{ entry.time }}</span>{{ entry.msg }}
+          </div>
+        </div>
+        <div v-if="!autoScroll" class="flex justify-center py-2 shrink-0" style="border-top:1px solid #1A1A1A;">
+          <button
+            @click="resumeAutoScroll"
+            class="flex items-center gap-1.5 px-3 py-1 rounded-full cursor-pointer text-xs"
+            style="background:#1E1E1E; color:#6B7280; border:1px solid #2A2A2A;"
+            @mouseenter="e => e.currentTarget.style.background='#252525'"
+            @mouseleave="e => e.currentTarget.style.background='#1E1E1E'"
+          >
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            scroll to latest
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useChatsStore }  from '../../stores/chats'
-import { useConfigStore }  from '../../stores/config'
-import { useAgentsStore }  from '../../stores/agents'
-import { useI18n }         from '../../i18n/useI18n'
+import { useConfigStore } from '../../stores/config'
+import { useAgentsStore } from '../../stores/agents'
+import { useSkillsStore } from '../../stores/skills'
+import { useToolsStore }  from '../../stores/tools'
+import { useMcpStore }    from '../../stores/mcp'
+import { useI18n }        from '../../i18n/useI18n'
 
 const props = defineProps({
-  visible:        Boolean,
-  chatId:         String,
-  contextMetrics: Object,   // activeContextMetrics from parent
+  visible:                Boolean,
+  chatId:                 String,
+  contextMetrics:         { type: Object, default: () => ({}) },
   perAgentContextMetrics: { type: Object, default: () => ({}) },
-  debugLogs:      { type: Array, default: () => [] },
+  debugLogs:              { type: Array,  default: () => [] },
 })
 
 const emit = defineEmits(['close'])
@@ -424,160 +424,209 @@ const emit = defineEmits(['close'])
 const chatsStore  = useChatsStore()
 const configStore = useConfigStore()
 const agentsStore = useAgentsStore()
+const skillsStore = useSkillsStore()
+const toolsStore  = useToolsStore()
+const mcpStore    = useMcpStore()
 const { t }       = useI18n()
 
-// ── Internal state ──────────────────────────────────────────────────────────
+// ── UI state ──────────────────────────────────────────────────────────────────
 
-const inspectorUsage    = ref(null)
-const contextSnapshot   = ref(null)
-const expandedMessages  = reactive({})
-const showPerAgentBreakdown = ref(false)
-const expandedAgentSnap = reactive({})
-const inspectorSections = reactive({
-  metrics: true, system: false, agents: false,
-  messages: false, tools: false, debugLog: false, cost: true,
-})
-const debugLogEl = ref(null)
+const contextSnapshot  = ref(null)
+const metricsOpen      = ref(true)
+const mainTab          = ref('user')
+const selectedAgentIdx = ref(0)
+const sectionState     = reactive({}) // key: `${group}-${idx}` → bool (open)
+const debugDialogOpen  = ref(false)
+const debugLogEl       = ref(null)
+const autoScroll       = ref(true)
 
 const hasElectron = !!(typeof window !== 'undefined' && window.electronAPI)
 
-const debugModelId = computed(() => {
-  const um = configStore.config.utilityModel
-  if (um?.model) return um.model
-  const firstProvider = (configStore.config.providers || [])[0]
-  return firstProvider?.model || '(unset)'
+// ── Section expand helpers ────────────────────────────────────────────────────
+
+function sectionKey(group, idx) { return `${group}:${idx}` }
+function isSectionOpen(group, idx) { return !!sectionState[sectionKey(group, idx)] }
+function toggleSection(group, idx) {
+  const k = sectionKey(group, idx)
+  sectionState[k] = !sectionState[k]
+}
+
+// ── Sub-section parser (### headers within a section body) ───────────────────
+// Returns [{ subTitle: string|null, content: string }]
+
+function parseSubSections(content) {
+  if (!content) return []
+  const text = content.replace(/\r\n/g, '\n').trim()
+  if (!text.includes('\n### ') && !text.startsWith('### ')) return [{ subTitle: null, content: text }]
+  const parts = text.split(/\n(?=### )/)
+  return parts.map(part => {
+    const trimmed = part.trim()
+    if (!trimmed) return null
+    const m = trimmed.match(/^### (.+?)(?:\n|$)/)
+    if (m) return { subTitle: m[1].trim(), content: trimmed.slice(m[0].length).trim() }
+    return { subTitle: null, content: trimmed }
+  }).filter(Boolean)
+}
+
+// ── Prompt section parser ─────────────────────────────────────────────────────
+// Splits a prompt string on `## ` headings (with optional `---` separator before).
+// Returns [{ title: string|null, content: string }]
+
+function parsePromptSections(prompt) {
+  if (!prompt) return []
+  const text = prompt.replace(/\r\n/g, '\n').trim()
+  // Normalize "---\n## " into "\n## " so splitting is uniform
+  const normalized = text.replace(/\n---+\n(?=## )/g, '\n')
+  const parts = normalized.split(/\n(?=## )/)
+  return parts.map(part => {
+    const trimmed = part.trim()
+    if (!trimmed) return null
+    const m = trimmed.match(/^## (.+?)(?:\n|$)/)
+    if (m) return { title: m[1].trim(), content: trimmed.slice(m[0].length).trim() }
+    return { title: null, content: trimmed }
+  }).filter(Boolean)
+}
+
+// ── Aggregate metrics ─────────────────────────────────────────────────────────
+
+const aggregateMetrics = computed(() => {
+  const entries = Object.values(props.perAgentContextMetrics || {})
+  if (entries.length === 0) return props.contextMetrics || {}
+  const maxTokens       = props.contextMetrics?.maxTokens || entries[0]?.maxTokens || 0
+  const inputTokens     = entries.reduce((s, e) => s + (e.inputTokens    || 0), 0)
+  const outputTokens    = entries.reduce((s, e) => s + (e.outputTokens   || 0), 0)
+  const compactionCount = entries.reduce((s, e) => s + (e.compactionCount || 0), 0)
+  const percentage      = maxTokens > 0 ? (inputTokens / maxTokens) * 100 : 0
+  return { inputTokens, outputTokens, maxTokens, compactionCount, percentage }
 })
 
-// ── Computeds ───────────────────────────────────────────────────────────────
+// ── Chat agent IDs ────────────────────────────────────────────────────────────
 
-// Per-agent metrics entries for group chat breakdown
-const perAgentEntries = computed(() => {
-  const m = props.perAgentContextMetrics
-  if (!m || typeof m !== 'object') return []
-  return Object.entries(m).map(([agentId, data]) => ({ agentId, ...data }))
-})
-
-// Per-agent snapshots for group chat inspector (system prompt, messages, tools per agent)
-const groupAgentSnaps = computed(() => contextSnapshot.value?.agentSnapshots || [])
-
-// Resolved model for the active chat: agent modelId -> chat.model -> contextSnapshot
-const activeChatModel = computed(() => {
+const chatAgentIds = computed(() => {
   const chat = chatsStore.activeChat
-  if (!chat) return ''
-  const agentId = (chat.groupAgentIds?.length > 0 ? chat.groupAgentIds[0] : null)
-    || chat.systemAgentId
-  const agent = agentId ? agentsStore.getAgentById(agentId) : null
-  return agent?.modelId || chat.model || contextSnapshot.value?.model || ''
+  if (!chat) return []
+  if (chat.groupAgentIds?.length > 0) return chat.groupAgentIds
+  if (chat.systemAgentId) return [chat.systemAgentId]
+  return []
 })
 
-// Agent info for the inspector — prefers snapshot data (has prompts), falls back to store (has names)
-const inspectorAgents = computed(() => {
-  if (contextSnapshot.value?.agents?.systemAgentPrompt || contextSnapshot.value?.agents?.userAgentPrompt) {
-    return contextSnapshot.value.agents
-  }
+// ── Agent cards ───────────────────────────────────────────────────────────────
+
+const agentCards = computed(() => {
+  const snaps = contextSnapshot.value?.agentSnapshots || []
+  const snapMap = {}
+  snaps.forEach(s => { if (s.agentId) snapMap[s.agentId] = s })
+  const isSingle = chatAgentIds.value.length === 1
+
+  return chatAgentIds.value.map(agentId => {
+    const agent = agentsStore.getAgentById(agentId)
+    // Single-agent: use the top-level snapshot; group: use per-agent snap
+    const snap = snapMap[agentId] || (isSingle ? contextSnapshot.value : null)
+    const metrics = props.perAgentContextMetrics?.[agentId] || null
+
+    const skills = (agent?.requiredSkillIds || [])
+      .map(id => skillsStore.skills.find(s => s.id === id)).filter(Boolean)
+      .map(s => ({ id: s.id, name: s.name }))
+    const tools = (agent?.requiredToolIds || [])
+      .map(id => toolsStore.tools.find(t => t.id === id)).filter(Boolean)
+      .map(t => ({ id: t.id, name: t.name }))
+    const mcpServers = (agent?.requiredMcpServerIds || [])
+      .map(id => mcpStore.servers.find(s => s.id === id)).filter(Boolean)
+      .map(s => ({ id: s.id, name: s.name }))
+    const knowledgeBases = agent?.requiredKnowledgeBaseIds || []
+
+    const chat  = chatsStore.activeChat
+    const model = snap?.model || agent?.modelId || chat?.model || ''
+
+    // Use the raw agent base prompt (before memory injection).
+    // systemPromptCore still contains ## Session entries from log files which break the parser.
+    // snap.agents.systemAgentPrompt is the clean identity/guidelines text only.
+    const rawCore = snap?.agents?.systemAgentPrompt || agent?.prompt || null
+    const promptSections = parsePromptSections(rawCore)
+
+    // Memory sections are stored explicitly in the snapshot (structured, no parsing needed).
+    // 'User Profile' belongs in the User Persona tab; the rest (Knowledge Base, Logs, Past Context) shown here.
+    const USER_TAB_TITLES = new Set(['User Profile'])
+    const memorySections = (snap?.memorySections || []).filter(s => !USER_TAB_TITLES.has(s.title))
+
+    return { agentId, name: agent?.name || snap?.agentName || agentId, model, metrics, promptSections, memorySections, skills, tools, mcpServers, knowledgeBases }
+  })
+})
+
+const currentCard = computed(() => agentCards.value[selectedAgentIdx.value] || agentCards.value[0] || null)
+
+// ── User persona data ─────────────────────────────────────────────────────────
+
+const userPersonaData = computed(() => {
   const chat = chatsStore.activeChat
-  if (!chat) return null
-  const sysId = (chat.groupAgentIds?.length > 0 ? chat.groupAgentIds[0] : null) || chat.systemAgentId
-  const sysAgent = sysId ? agentsStore.getAgentById(sysId) : agentsStore.defaultSystemAgent
-  const usrId = chat.userAgentId
-  const usrAgent = usrId ? agentsStore.getAgentById(usrId) : agentsStore.defaultUserAgent
-  if (!sysAgent && !usrAgent) return null
-  return {
-    systemAgentName: sysAgent?.name || null,
-    systemAgentPrompt: null,
-    userAgentName: usrAgent?.name || null,
-    userAgentPrompt: null,
+  const uid  = chat?.userAgentId
+  const agent = uid ? agentsStore.getAgentById(uid) : agentsStore.defaultUserAgent
+
+  const isSingle = chatAgentIds.value.length === 1
+  const snaps = contextSnapshot.value?.agentSnapshots || []
+  const firstSnap = snaps[0] || (isSingle ? contextSnapshot.value : null)
+
+  // Raw user agent prompt: prefer snapshot, fall back to agent definition
+  const rawPrompt = firstSnap?.agents?.userAgentPrompt || agent?.prompt || null
+
+  // Parse user agent's own prompt into sections (may contain ## headings)
+  const rawSections = parsePromptSections(rawPrompt)
+
+  // Show all memory sections from the snapshot (User Profile, My Knowledge Base, session logs, past context)
+  const memorySections = firstSnap?.memorySections || []
+
+  return { agent, rawSections, memorySections }
+})
+
+// ── Debug log ─────────────────────────────────────────────────────────────────
+
+function onDebugScroll() {
+  const el = debugLogEl.value
+  if (!el) return
+  autoScroll.value = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+}
+
+function resumeAutoScroll() {
+  autoScroll.value = true
+  nextTick(() => { if (debugLogEl.value) debugLogEl.value.scrollTop = debugLogEl.value.scrollHeight })
+}
+
+watch(() => props.debugLogs.length, () => {
+  if (debugDialogOpen.value && autoScroll.value)
+    nextTick(() => { if (debugLogEl.value) debugLogEl.value.scrollTop = debugLogEl.value.scrollHeight })
+})
+
+watch(debugDialogOpen, (open) => {
+  if (open) {
+    autoScroll.value = true
+    nextTick(() => { if (debugLogEl.value) debugLogEl.value.scrollTop = debugLogEl.value.scrollHeight })
   }
 })
 
-
-// ── Data fetch ──────────────────────────────────────────────────────────────
+// ── Data fetch ────────────────────────────────────────────────────────────────
 
 async function refreshContextSnapshot() {
   const cid = props.chatId
   if (!cid || !window.electronAPI?.getContextSnapshot) return
   try {
     const snap = await window.electronAPI.getContextSnapshot(cid)
-    if (snap) {
-      contextSnapshot.value = snap
-      // Persist a lightweight copy to the chat object for future sessions.
-      // Strip fullContent from messages to avoid bloating the JSON file.
-      const chat = chatsStore.activeChat
-      if (chat) {
-        chat.lastContextSnapshot = {
-          systemPrompt: snap.systemPrompt || null,
-          agents: snap.agents || null,
-          messages: (snap.messages || []).map(m => ({
-            role: m.role,
-            contentPreview: m.contentPreview,
-            contentLength: m.contentLength,
-          })),
-          tools: snap.tools || [],
-          model: snap.model || null,
-        }
-      }
-    } else {
-      // IPC returned null — try to restore from persisted chat data
-      const chat = chatsStore.activeChat
-      if (chat?.lastContextSnapshot) contextSnapshot.value = chat.lastContextSnapshot
-    }
+    contextSnapshot.value = snap || chatsStore.activeChat?.lastContextSnapshot || null
   } catch {}
 }
 
-// Fallback messages from the chat store when snapshot has none
-const fallbackMessages = computed(() => {
-  const chat = chatsStore.activeChat
-  if (!chat?.messages?.length) return []
-  return chat.messages
-    .filter(m => !m.isWaitingIndicator && (m.role === 'user' || m.role === 'assistant'))
-    .map(m => ({
-      role: m.role,
-      contentPreview: (m.content || '').slice(0, 200),
-      contentLength: (m.content || '').length,
-      fullContent: m.content || '',
-    }))
-})
-
-// Effective message list: prefer snapshot, fall back to chat store
-const effectiveMessages = computed(() => {
-  if (contextSnapshot.value?.messages?.length) return contextSnapshot.value.messages
-  return fallbackMessages.value
-})
-
-async function fetchOnOpen() {
-  Object.keys(expandedMessages).forEach(k => delete expandedMessages[k])
-  const [, freshChat] = await Promise.all([
-    refreshContextSnapshot(),
-    window.electronAPI.getChat(props.chatId),
-  ])
-  if (freshChat?.usage) inspectorUsage.value = freshChat.usage
-}
-
-// ── Debug log auto-scroll ───────────────────────────────────────────────────
-
-function scrollDebugToBottom() {
-  nextTick(() => {
-    if (debugLogEl.value) debugLogEl.value.scrollTop = debugLogEl.value.scrollHeight
-  })
-}
-
-watch(() => props.debugLogs, () => { if (inspectorSections.debugLog) scrollDebugToBottom() }, { deep: true })
-watch(() => inspectorSections.debugLog, (open) => { if (open) scrollDebugToBottom() })
-
-// ── Lifecycle watchers ──────────────────────────────────────────────────────
-
-// When modal opens: fetch snapshot + usage; auto-scroll debug log if open
 watch(() => props.visible, (open) => {
   if (open) {
-    fetchOnOpen()
-    if (inspectorSections.debugLog) scrollDebugToBottom()
+    refreshContextSnapshot()
   } else {
-    inspectorUsage.value = null
+    contextSnapshot.value = null
+    selectedAgentIdx.value = 0
+    Object.keys(sectionState).forEach(k => delete sectionState[k])
+    debugDialogOpen.value = false
   }
 })
 
-// Refresh inspector snapshot when context metrics update during an open inspector
 watch(() => props.contextMetrics?.inputTokens, () => {
   if (props.visible) refreshContextSnapshot()
 })
+
 </script>

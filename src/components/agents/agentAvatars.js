@@ -10,6 +10,7 @@ import { createAvatar } from '@dicebear/core'
 import * as avataaarsStyle from '@dicebear/avataaars'
 import * as collection from '@dicebear/collection'
 import { BUILTIN_SYSTEM_ICON_ID } from '../../stores/agents'
+import systemIconUrl from '@/assets/icon.png'
 
 // ── Style catalogue ────────────────────────────────────────────────────────
 
@@ -130,7 +131,7 @@ function resolveStyle(styleKey) {
  */
 export function getAvatarDataUri(id) {
   if (!id) return null
-  if (id === BUILTIN_SYSTEM_ICON_ID) return '/icon.png'
+  if (id === BUILTIN_SYSTEM_ICON_ID) return systemIconUrl
   // Custom uploaded image — stored as a data URI directly
   if (id.startsWith('data:')) return id
   if (svgCache.has(id)) return svgCache.get(id)

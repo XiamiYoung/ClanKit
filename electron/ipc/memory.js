@@ -69,7 +69,7 @@ function register({ lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtracti
               isOpenAI:   um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek',
               directAuth: um.provider === 'openai_official' || um.provider === 'deepseek',
             })
-            flusher.run(messages, agentId, logsDir).catch(err =>
+            flusher.run(messages, agentId, logsDir, {}, agentPrompts?.groupChatContext?.agentName || agentId).catch(err =>
               logger.error('[memory:extract-on-chat-switch] flush error', err.message)
             )
           }

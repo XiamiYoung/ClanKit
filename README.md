@@ -69,6 +69,10 @@ The dist scripts automatically compile Electron main-process JS to V8 bytecode b
     npm run dist:mac          # macOS DMG
     npm run dist:all          # Both platforms
 
+On Windows without a code signing certificate, skip code signing to avoid symlink errors:
+
+    set CSC_IDENTITY_AUTO_DISCOVERY=false && npm run dist:win
+
 Under the hood each dist command runs:
 
 1. `vite build` — build Vue renderer to dist/

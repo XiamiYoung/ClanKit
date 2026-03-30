@@ -88,6 +88,19 @@ export const useMcpStore = defineStore('mcp', () => {
   async function deleteServer(id) {
     servers.value = servers.value.filter(s => s.id !== id)
     await persist()
+    // Remove stale references from all agents
+    try {
+      const { useAgentsStore } = await import('./agents')
+      const agentsStore = useAgentsStore()
+      let affected = 0
+      for (const agent of agentsStore.agents) {
+        if (agent.requiredMcpServerIds?.includes(id)) {
+          agent.requiredMcpServerIds = agent.requiredMcpServerIds.filter(sid => sid !== id)
+          affected++
+        }
+      }
+      if (affected > 0) await agentsStore.persist()
+    } catch {}
   }
 
   /**

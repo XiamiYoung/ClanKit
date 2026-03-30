@@ -70,7 +70,7 @@ if (process.platform === 'linux') {
 const { app, BrowserWindow, ipcMain, dialog, shell, screen, protocol, net, session, Menu } = require('electron')
 const os = require('os')
 const { execFile } = require('child_process')
-const { logger, LOG_DIR } = require('./logger')
+const { logger } = require('./logger')
 const imBridge = require('./im-bridge')
 const { mcpManager } = require('./agent/mcp/McpManager')
 const ipcWindow = require('./ipc/window')
@@ -233,15 +233,7 @@ function ensureDataDir() {
   logger.setLogDir(path.join(DATA_DIR, 'logs'))
 
   if (!fs.existsSync(DATA_DIR)) {
-    try {
-      fs.mkdirSync(DATA_DIR, { recursive: true })
-    } catch (err) {
-      const fallback = app.getPath('userData')
-      logger.warn(`Cannot create ${DATA_DIR} (${err.code}), falling back to ${fallback}`)
-      DATA_DIR = fallback
-      initDataPaths()
-      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-    }
+    fs.mkdirSync(DATA_DIR, { recursive: true })
   }
 
 
@@ -350,185 +342,11 @@ async function migrateChatsIfNeeded() {
   }
 }
 
-// --- Migration: .env user data -> JSON files ----------------------------------
-async function migrateEnvDataIfNeeded() {
-  // a) Migrate config values from .env -> config.json (one-time seed)
-  const cfg = readJSON(CONFIG_FILE, {})
-  // Migrate flat keys -> nested structure if config still has old flat layout
-  if (cfg.apiKey || cfg.openrouterApiKey || cfg.openaiApiKey) {
-    if (!cfg.anthropic) cfg.anthropic = {}
-    if (!cfg.openrouter) cfg.openrouter = {}
-    if (!cfg.openai) cfg.openai = {}
-    const flatToNested = {
-      apiKey:       ['anthropic', 'apiKey'],
-      baseURL:      ['anthropic', 'baseURL'],
-      sonnetModel:  ['anthropic', 'sonnetModel'],
-      opusModel:    ['anthropic', 'opusModel'],
-      haikuModel:   ['anthropic', 'haikuModel'],
-      activeModel:  ['anthropic', 'activeModel'],
-      openrouterApiKey:      ['openrouter', 'apiKey'],
-      openrouterBaseURL:     ['openrouter', 'baseURL'],
-      openrouterDefaultModel:['openrouter', 'defaultModel'],
-      openaiApiKey:          ['openai', 'apiKey'],
-      openaiBaseURL:         ['openai', 'baseURL'],
-      openaiModel:           ['openai', 'model'],
-      openaiDefaultModel:    ['openai', 'openaiDefaultModel'],
-    }
-    let migrated = false
-    for (const [flatKey, [group, nestedKey]] of Object.entries(flatToNested)) {
-      if (cfg[flatKey] !== undefined && cfg[flatKey] !== '') {
-        if (!cfg[group][nestedKey]) {
-          cfg[group][nestedKey] = cfg[flatKey]
-          migrated = true
-        }
-        delete cfg[flatKey]
-      }
-    }
-    if (migrated) {
-      writeJSON(CONFIG_FILE, cfg)
-      logger.info('Migrated flat config keys to nested provider structure')
-    }
-  }
-  if (!cfg.anthropic?.apiKey) {
-    let changed = false
-    // Env -> nested config migration
-    const envMap = {
-      'anthropic.apiKey':      'ANTHROPIC_API_KEY',
-      'anthropic.baseURL':     'ANTHROPIC_BASE_URL',
-      'anthropic.sonnetModel': 'ANTHROPIC_DEFAULT_SONNET_MODEL',
-      'anthropic.opusModel':   'ANTHROPIC_DEFAULT_OPUS_MODEL',
-      'anthropic.haikuModel':  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-      'openrouter.apiKey':     'OPENROUTER_API_KEY',
-      'openrouter.baseURL':    'OPENROUTER_BASE_URL',
-      'openai.apiKey':         'OPENAI_API_KEY',
-      'openai.baseURL':        'OPENAI_BASE_URL',
-      pineconeApiKey:          'PINECONE_API_KEY'
-    }
-    if (!cfg.anthropic)  cfg.anthropic = {}
-    if (!cfg.openrouter) cfg.openrouter = {}
-    if (!cfg.openai)     cfg.openai = {}
-    for (const [cfgPath, envKey] of Object.entries(envMap)) {
-      const envVal = process.env[envKey]
-      if (!envVal) continue
-      if (cfgPath.includes('.')) {
-        const [group, key] = cfgPath.split('.')
-        if (!cfg[group][key]) { cfg[group][key] = envVal; changed = true }
-      } else {
-        if (!cfg[cfgPath]) { cfg[cfgPath] = envVal; changed = true }
-      }
-    }
-    // Also migrate pineconeApiKey from knowledge.json (old location) -> config.json
-    const knowledge = readJSON(KNOWLEDGE_FILE, {})
-    if (knowledge.pineconeApiKey && !cfg.pineconeApiKey) {
-      cfg.pineconeApiKey = knowledge.pineconeApiKey
-      delete knowledge.pineconeApiKey
-      writeJSON(KNOWLEDGE_FILE, knowledge)
-      changed = true
-    }
-    if (changed) {
-      writeJSON(CONFIG_FILE, cfg)
-      logger.info('Migrated env/user data into config.json')
-    }
-  } else {
-    // Config already has anthropic.apiKey -- still check if pineconeApiKey needs moving from knowledge.json
-    const knowledge = readJSON(KNOWLEDGE_FILE, {})
-    if (knowledge.pineconeApiKey) {
-      if (!cfg.pineconeApiKey) cfg.pineconeApiKey = knowledge.pineconeApiKey
-      delete knowledge.pineconeApiKey
-      writeJSON(KNOWLEDGE_FILE, knowledge)
-      writeJSON(CONFIG_FILE, cfg)
-      logger.info('Migrated pineconeApiKey from knowledge.json to config.json')
-    }
-  }
-
-  // b) Migrate MCP_SERVERS env var -> mcp-servers.json
-  const mcpData = readJSON(MCP_SERVERS_FILE, null)
-  if ((mcpData === null || (typeof mcpData === 'object' && Object.keys(mcpData).length === 0)) && process.env.MCP_SERVERS) {
-    try {
-      const parsed = JSON.parse(process.env.MCP_SERVERS)
-      if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-        writeJSON(MCP_SERVERS_FILE, parsed)
-        logger.info('Migrated MCP_SERVERS from .env to mcp-servers.json')
-      }
-    } catch (err) {
-      logger.error('Failed to parse MCP_SERVERS env var:', err.message)
-    }
-  }
-
-  // c) Migrate HTTP_TOOLS env var -> tools.json
-  const toolsData = readJSON(TOOLS_FILE, null)
-  if (toolsData === null && process.env.HTTP_TOOLS) {
-    try {
-      const parsed = JSON.parse(process.env.HTTP_TOOLS)
-      if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-        writeJSON(TOOLS_FILE, parsed)
-        logger.info('Migrated HTTP_TOOLS from .env to tools.json')
-      }
-    } catch (err) {
-      logger.error('Failed to parse HTTP_TOOLS env var:', err.message)
-    }
-  }
-
-  // d) Migrate dataPath from config.json -> .env (one-time)
-  const cfgForDp = readJSON(CONFIG_FILE, {})
-  if (cfgForDp.dataPath && cfgForDp.dataPath !== DEFAULT_DATA_PATH) {
-    // Write to .env if not already there
-    if (!process.env.CLANKAI_DATA_PATH) {
-      let envLines = []
-      if (fs.existsSync(ENV_FILE)) {
-        envLines = fs.readFileSync(ENV_FILE, 'utf8').split('\n')
-      }
-      const hasLine = envLines.some(l => l.trim().startsWith('CLANKAI_DATA_PATH='))
-      if (!hasLine) {
-        envLines.push('# Data directory for ClankAI', `CLANKAI_DATA_PATH=${cfgForDp.dataPath}`)
-        fs.writeFileSync(ENV_FILE, envLines.join('\n'), 'utf8')
-        logger.info('Migrated dataPath from config.json to .env:', cfgForDp.dataPath)
-      }
-    }
-    // Remove dataPath from config.json
-    delete cfgForDp.dataPath
-    writeJSON(CONFIG_FILE, cfgForDp)
-    logger.info('Removed dataPath from config.json (now lives in .env)')
-  } else if (cfgForDp.dataPath) {
-    // It was the default -- just remove it from config.json, no need to write to .env
-    delete cfgForDp.dataPath
-    writeJSON(CONFIG_FILE, cfgForDp)
-  }
-
-}
 
 
 // --- Default Data -----------------------------------------------------------
 const DEFAULT_CONFIG = {
-  providers: [],  // New dynamic providers array
-  anthropic: {    // Legacy structure for backward compat
-    apiKey:       '',
-    baseURL:      '',
-    sonnetModel:  'claude-sonnet-4-5',
-    opusModel:    'claude-opus-4-6',
-    haikuModel:   'claude-haiku-3-5',
-    isActive:     false,
-    testedAt:     null,
-  },
-  openrouter: {
-    apiKey:  '',
-    baseURL: '',
-    isActive:     false,
-    testedAt:     null,
-  },
-  openai: {
-    apiKey:       '',
-    baseURL:      '',
-    isActive:     false,
-    testedAt:     null,
-  },
-  deepseek: {
-    apiKey:       '',
-    baseURL:      '',
-    isActive:     false,
-    testedAt:     null,
-    maxTokens:    8192,
-  },
+  providers: [],
   utilityModel: {
     provider: '',
     model:    '',
@@ -554,7 +372,8 @@ const DEFAULT_CONFIG = {
       { id: 'danger-7', pattern: 'dd if=/dev/zero *', description: 'Disk wipe' },
       { id: 'danger-8', pattern: 'mkfs.*', description: 'Format filesystem' },
     ]
-  }
+  },
+  telemetryOptOut: true
 }
 
 
@@ -601,7 +420,7 @@ function createWindow() {
   // Publish to shared windowRef so extracted IPC modules can access it
   require('./lib/windowRef').set(mainWindow)
 
-  mainWindow.once('ready-to-show', () => mainWindow.show())
+  mainWindow.once('ready-to-show', () => { mainWindow.maximize(); mainWindow.show() })
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173')
@@ -755,9 +574,6 @@ protocol.registerSchemesAsPrivileged([{
 }])
 
 app.whenReady().then(async () => {
-  const t0 = Date.now()
-  logger.info('startup: app.whenReady fired')
-
   // Handle vault-asset:// requests -> serve files from disk
   // URL format: vault-asset:///absolute/path/to/file
   protocol.handle('vault-asset', (request) => {
@@ -768,20 +584,13 @@ app.whenReady().then(async () => {
   ensureDataDir()
   // Initialize the shared dataStore module so extracted IPC modules can use ds.paths()
   require('./lib/dataStore').init()
-  logger.info(`startup: ensureDataDir done +${Date.now()-t0}ms`)
 
   await migrateChatsIfNeeded()
-  logger.info(`startup: migrateChatsIfNeeded done +${Date.now()-t0}ms`)
-
-  await migrateEnvDataIfNeeded()
-  logger.info(`startup: migrateEnvDataIfNeeded done +${Date.now()-t0}ms`)
 
   createWindow()
-  logger.info(`startup: createWindow done +${Date.now()-t0}ms`)
 
   // Register all IPC handlers (must be after dataStore.init() and createWindow())
   ipcAgent = require('./ipc').registerAll({ DEFAULT_CONFIG, imBridge, mcpManager }).ipcAgent
-  logger.info(`startup: registerAll done +${Date.now()-t0}ms`)
 
   // Anonymous install telemetry (async, non-blocking, silent on failure)
   require('./lib/telemetry').sendInstallPing().catch(() => {})
@@ -822,7 +631,6 @@ app.whenReady().then(async () => {
   // ── Task Scheduler ──────────────────────────────────────────────────────────
   const taskScheduler = require('./task-scheduler')
   taskScheduler.init(() => DATA_DIR, () => mainWindow)
-  logger.info(`startup: taskScheduler.init done +${Date.now()-t0}ms`)
 
   // ── IM Bridge ──────────────────────────────────────────────────────────────
   // setMainWindow is synchronous and fast — do it immediately so the bridge
@@ -842,13 +650,7 @@ app.whenReady().then(async () => {
     )
   })
 
-  // ── Renderer load timing ──────────────────────────────────────────────────
-  mainWindow.webContents.once('did-finish-load', () => {
-    logger.info(`startup: renderer did-finish-load +${Date.now()-t0}ms`)
-  })
-  mainWindow.webContents.once('dom-ready', () => {
-    logger.info(`startup: renderer dom-ready +${Date.now()-t0}ms`)
-  })
+
 
   // -- Content Security Policy --
   // Only apply restrictive CSP to the app's own pages, not to external sites
@@ -879,7 +681,6 @@ app.whenReady().then(async () => {
     }
   })
 
-  logger.info(`startup: all init done +${Date.now()-t0}ms. Log dir: ${LOG_DIR}`)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

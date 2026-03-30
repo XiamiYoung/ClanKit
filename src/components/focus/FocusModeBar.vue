@@ -6,7 +6,7 @@
     @mousedown="onBarMousedown"
   >
     <!-- App icon -->
-    <img src="/icon.png" alt="" class="focus-bar-icon" />
+    <img :src="appIconUrl" alt="" class="focus-bar-icon" />
 
     <div class="focus-bar-sep" />
 
@@ -61,6 +61,7 @@
 
 <script setup>
 import { ref, computed, onUnmounted } from 'vue'
+import appIconUrl from '@/assets/icon.png'
 import { useFocusModeStore } from '../../stores/focusMode'
 import { useI18n } from '../../i18n/useI18n'
 

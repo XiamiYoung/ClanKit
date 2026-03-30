@@ -8,7 +8,7 @@
     <div :style="{ position: 'relative', padding: isCollapsed ? '1.25rem 0' : '1rem 1.25rem', borderBottom: '1px solid #F0F0F0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', pointerEvents: focusModeStore.justExited ? 'none' : undefined }">
       <div ref="logoWrapRef" class="logo-wrap" @mouseenter="onLogoHover" @mouseleave="onLogoLeave" @mousemove="onLogoMouseMove" @click="onLogoClick">
         <img
-          src="/icon.png"
+          :src="appIconUrl"
           alt="ClankAI"
           :class="[isCollapsed ? 'w-12 h-12 rounded-xl' : 'w-20 h-20 rounded-2xl', 'logo-img', logoAnimClass]"
           style="object-fit:contain;flex-shrink:0;"
@@ -145,6 +145,34 @@
       @cancel="showPrivacyModal = false"
     />
 
+    <!-- Demo modal -->
+    <Teleport to="body">
+      <div v-if="showDemoModal" class="demo-modal-backdrop" @click.self="showDemoModal = false">
+        <div class="demo-modal">
+          <div class="demo-modal-header">
+            <span style="font-weight:600;font-size:0.875rem;">Demo Mode</span>
+            <button class="demo-modal-close" @click="showDemoModal = false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="demo-modal-body">
+            <label class="demo-toggle-row">
+              <span style="font-size:0.8125rem;color:#374151;">Demo Mode</span>
+              <button
+                class="demo-switch"
+                :class="{ active: configStore.config.demoMode !== false }"
+                @click="configStore.saveConfig({ demoMode: !configStore.config.demoMode })"
+                role="switch"
+                :aria-checked="configStore.config.demoMode !== false"
+              >
+                <span class="demo-switch-thumb" />
+              </button>
+            </label>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Help / About button in title bar -->
     <Teleport v-if="titlebarHelpTarget" :to="titlebarHelpTarget">
       <button
@@ -164,7 +192,7 @@
       <div v-if="showHelpPopover" class="help-popover-backdrop" @click="showHelpPopover = false"></div>
       <div v-if="showHelpPopover" class="help-popover" :style="helpPopoverStyle">
         <div class="help-popover-header">
-          <img src="/icon.png" alt="ClankAI" style="width:2rem;height:2rem;border-radius:0.5rem;" />
+          <img :src="appIconUrl" alt="ClankAI" style="width:2rem;height:2rem;border-radius:0.5rem;" />
           <div style="flex:1;">
             <div style="font-weight:700;font-size:0.875rem;color:#1A1A1A;">ClankAI</div>
             <div style="font-size:0.6875rem;color:#999;">{{ t('app.tagline') }}</div>
@@ -172,6 +200,11 @@
           <button class="help-privacy-btn" :title="t('nav.privacy')" @click="showPrivacyModal = true; showHelpPopover = false">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </button>
+          <button class="help-privacy-btn" title="Demo" @click="showDemoModal = true; showHelpPopover = false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 3h6v2H9zM12 5v5"/><path d="M5.5 21h13a1 1 0 0 0 .87-1.5L14 10H10L4.63 19.5A1 1 0 0 0 5.5 21z"/>
             </svg>
           </button>
         </div>
@@ -187,6 +220,7 @@
 
 <script setup>
 import { defineComponent, h, ref, nextTick, watch, onMounted, onUnmounted, onUpdated, computed } from 'vue'
+import appIconUrl from '@/assets/icon.png'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useVoiceStore } from '../../stores/voice'
 import { useFocusModeStore } from '../../stores/focusMode'
@@ -247,6 +281,7 @@ const agentCapabilitiesOpen = ref(false)
 const titlebarFocusTarget = ref(null)
 const titlebarHelpTarget = ref(null)
 const showPrivacyModal = ref(false)
+const showDemoModal = ref(false)
 const showHelpPopover = ref(false)
 const helpBtnRef = ref(null)
 const helpPopoverStyle = ref({})
@@ -1591,6 +1626,41 @@ const NavItem = defineComponent({
   background: #F5F5F5;
   color: #1A1A1A;
 }
+
+.demo-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+}
+.demo-modal {
+  background: #fff; border-radius: 0.75rem; width: 20rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+.demo-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.75rem 1rem; border-bottom: 1px solid #F0F0F0;
+}
+.demo-modal-close {
+  display: flex; align-items: center; justify-content: center;
+  width: 1.5rem; height: 1.5rem; border: none; background: transparent;
+  color: #999; border-radius: 0.25rem; cursor: pointer;
+}
+.demo-modal-close:hover { background: #F5F5F5; color: #1A1A1A; }
+.demo-modal-body { padding: 1rem; }
+.demo-toggle-row {
+  display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+}
+.demo-switch {
+  position: relative; width: 2.25rem; height: 1.25rem; border-radius: 9999px;
+  background: #D1D5DB; border: none; cursor: pointer; transition: background 0.2s;
+  padding: 0;
+}
+.demo-switch.active { background: #1A1A1A; }
+.demo-switch-thumb {
+  position: absolute; top: 0.125rem; left: 0.125rem;
+  width: 1rem; height: 1rem; border-radius: 50%;
+  background: #fff; transition: transform 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+.demo-switch.active .demo-switch-thumb { transform: translateX(1rem); }
 
 .help-popover-body {
   padding: 0.5rem 0.875rem 0.625rem;

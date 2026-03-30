@@ -28,14 +28,7 @@ function init() {
   logger.setLogDir(path.join(DATA_DIR, 'logs'))
 
   if (!fs.existsSync(DATA_DIR)) {
-    try {
-      fs.mkdirSync(DATA_DIR, { recursive: true })
-    } catch (err) {
-      const fallback = app.getPath('userData')
-      logger.warn(`Cannot create ${DATA_DIR} (${err.code}), falling back to ${fallback}`)
-      DATA_DIR = fallback
-      process.env.CLANKAI_DATA_PATH = DATA_DIR
-    }
+    fs.mkdirSync(DATA_DIR, { recursive: true })
   }
 
   const CHATS_DIR        = path.join(DATA_DIR, 'chats')

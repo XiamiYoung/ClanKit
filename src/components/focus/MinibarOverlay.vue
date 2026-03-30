@@ -2,7 +2,7 @@
   <Teleport to="body">
     <div v-if="focusModeStore.isMinibarMode" class="minibar-bar minibar-bar--enter" ref="barEl" @mousedown="onBarDragStart">
       <!-- Logo -->
-      <img src="/icon.png" class="minibar-icon" alt="ClankAI" draggable="false" @dragstart.prevent />
+      <img :src="appIconUrl" class="minibar-icon" alt="ClankAI" draggable="false" @dragstart.prevent />
       <div class="minibar-sep" />
 
       <!-- Shared content (count, plan, ticker, compose) -->
@@ -23,6 +23,7 @@
 
 <script setup>
 import { ref, watch, nextTick, onUnmounted } from 'vue'
+import appIconUrl from '@/assets/icon.png'
 import { useFocusModeStore } from '../../stores/focusMode'
 import { useI18n } from '../../i18n/useI18n'
 import MinibarContent from './MinibarContent.vue'

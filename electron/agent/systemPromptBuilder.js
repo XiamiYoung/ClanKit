@@ -370,4 +370,37 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
   return system
 }
 
-module.exports = { buildSystemPrompt, readSoulFile, prepareSoulContent, extractKeySections, readFileIfExists, SOUL_KEY_SECTIONS }
+/**
+ * Strip infrastructure sections from a full system prompt so only
+ * identity/character/memory content remains.  The removed sections are:
+ *   - SKILLS: ...  (single line)
+ *   - MCP SERVERS: ...  (single line)
+ *   - ## Your Assigned Tools  (block until next ## heading or end)
+ *   - ## Knowledge Context  (block until next ## heading or end)
+ * These are displayed in their own dedicated UI panels.
+ */
+function stripInfraFromPrompt(fullPrompt) {
+  if (!fullPrompt) return fullPrompt
+  let out = fullPrompt
+  // Single-line entries produced by the builder
+  out = out.replace(/\nSKILLS: [^\n]*/g, '')
+  out = out.replace(/\nMCP SERVERS: [^\n]*/g, '')
+  // Multi-line ## blocks — strip infra + memory sections (memory stored separately in snapshot)
+  const STRIP_SECTIONS = [
+    'Your Assigned Tools',
+    'Knowledge Context',
+    'User Profile',
+    'My Knowledge Base',
+    'Recent Session Logs',
+    'Relevant Past Context',
+  ]
+  for (const title of STRIP_SECTIONS) {
+    const re = new RegExp(`\\n## ${title.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}[\\s\\S]*?(?=\\n## |\\n---|\\n[A-Z]{4,}\\b|$)`, 'g')
+    out = out.replace(re, '')
+  }
+  // Collapse excess blank lines left behind
+  out = out.replace(/\n{3,}/g, '\n\n')
+  return out.trim()
+}
+
+module.exports = { buildSystemPrompt, stripInfraFromPrompt, readSoulFile, prepareSoulContent, extractKeySections, readFileIfExists, SOUL_KEY_SECTIONS }

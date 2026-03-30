@@ -157,6 +157,10 @@ export function useSendMessage({
     if (retrievedAttachments.length > 0) {
       attachments.value = [...retrievedAttachments, ...attachments.value]
     }
+
+    // Remove the user message bubble since it's back in the input
+    chatsStore.deleteMessage(chatId, lastUserMsg.id)
+
     nextTick(() => mentionInputRef.value?.focus())
   }
 

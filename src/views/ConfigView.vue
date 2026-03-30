@@ -124,29 +124,6 @@
             </div>
           </div>
 
-          <!-- Skills Path -->
-          <div class="config-card">
-            <div class="form-section-header">
-              <div class="section-icon-sm">
-                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-                </svg>
-              </div>
-              <h3 class="form-section-title">{{ t('config.skillsPath') }}</h3>
-            </div>
-            <div class="form-group" style="margin-bottom:0;">
-              <div class="input-with-trailing-btn">
-                <input id="skillsPath" v-model="form.skillsPath" type="text" placeholder="~/.claude/skills" class="field font-mono" />
-                <button class="open-folder-btn" @click="openInExplorer(form.skillsPath || '~/.claude/skills')" title="Open in file explorer">
-                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                  </svg>
-                </button>
-              </div>
-              <p class="hint">{{ t('config.skillsPathHint') }}</p>
-            </div>
-          </div>
-
           <div class="save-row">
             <AppButton size="save" @click="saveGeneral" :disabled="savingGeneral" :loading="savingGeneral">
               <svg v-if="!savingGeneral" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -500,7 +477,45 @@
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <!-- Knowledge (AI > Knowledge) -->
+        <!-- Skills (AI > Skills) -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <template v-if="activeTopTab === 'ai' && activeSubTab === 'skills'">
+          <div class="config-card">
+            <div class="form-section-header">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+              </div>
+              <h3 class="form-section-title">{{ t('config.skillsPath') }}</h3>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <div class="input-with-trailing-btn">
+                <input id="skillsPath" v-model="form.skillsPath" type="text" :placeholder="defaultSkillsPath" class="field font-mono" />
+                <button class="open-folder-btn" @click="openInExplorer(form.skillsPath || defaultSkillsPath)" title="Open in file explorer">
+                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  </svg>
+                </button>
+              </div>
+              <p class="hint">{{ t('config.skillsPathHint') }}</p>
+            </div>
+          </div>
+          <div class="save-row">
+            <AppButton size="save" @click="saveSkillsPath" :disabled="savingSkillsPath" :loading="savingSkillsPath">
+              <svg v-if="!savingSkillsPath" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+              </svg>
+            </AppButton>
+            <span v-if="savedSkillsPathMsg" class="save-indicator" :class="savedSkillsPathMsg.ok ? 'success' : 'error'">
+              <svg v-if="savedSkillsPathMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              {{ savedSkillsPathMsg.text }}
+            </span>
+          </div>
+        </template>
+
         <!-- ════════════════════════════════════════════════════════════════ -->
         <!-- Knowledge (AI > Knowledge) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
@@ -1794,33 +1809,7 @@
                 </div>
               </div>
 
-              <div class="form-divider" />
-
-              <!-- Demo Mode -->
-              <div class="im-bridge-row">
-                <svg style="width:15px;height:15px;flex-shrink:0;color:var(--text-muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                <div class="im-bridge-info">
-                  <span class="im-bridge-name">
-                    {{ t('config.demoMode') }}
-                    <span
-                      class="demo-info-icon"
-                      @mouseenter="onDemoInfoHover"
-                      @mouseleave="onDemoInfoLeave"
-                    >
-                      <svg style="width:12px;height:12px;vertical-align:-1px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                    </span>
-                  </span>
-                  <span class="im-bridge-sub idle">{{ t('config.demoModeDesc') }}</span>
-                </div>
-                <label class="im-toggle" @click.stop>
-                  <input type="checkbox" :checked="!!configStore.config.demoMode"
-                    @change="configStore.config.demoMode = $event.target.checked; configStore.saveConfig(configStore.config)" />
-                  <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
-                </label>
-              </div>
-              <Teleport to="body">
-                <div v-if="showDemoTooltip" class="demo-tooltip" :style="{ left: demoTooltipPos.x + 'px', top: demoTooltipPos.y + 'px' }" v-html="demoTooltipHtml" />
-              </Teleport>
+              <!-- Demo Mode (hidden) -->
             </div>
           </template>
 
@@ -2212,8 +2201,14 @@ const defaultArtifactPath = computed(() => {
   const dp = form.dataPath || defaultDataPath.value
   return dp ? `${dp}/artifact` : ''
 })
+const defaultSkillsPath = computed(() => {
+  const dp = form.dataPath || defaultDataPath.value
+  return dp ? `${dp}/skills` : ''
+})
 const savingGeneral = ref(false)
 const savedGeneralMsg = ref('')
+const savingSkillsPath = ref(false)
+const savedSkillsPathMsg = ref(null)
 
 // ── Tab icon components ─────────────────────────────────────────────────────
 const IconGeneral = defineComponent({
@@ -2297,6 +2292,7 @@ const subTabsGeneral = computed(() => [
 const subTabsAI = computed(() => [
   { value: 'models',    label: t('config.models'),    icon: IconModels    },
   { value: 'voice',     label: t('config.voice'),     icon: IconVoice     },
+  { value: 'skills',    label: t('config.skillsPath'), icon: IconSkills   },
   { value: 'knowledge', label: t('config.knowledge'), icon: IconKnowledge },
 ])
 
@@ -2312,7 +2308,7 @@ watch(() => route.query.tab, (tab) => {
   if (tab === 'knowledge') { activeTopTab.value = 'ai'; activeSubTab.value = 'knowledge'; return }
   if (tab === 'security') { activeTopTab.value = 'general'; activeSubTab.value = 'security'; return }
   if (tab === 'email') { activeTopTab.value = 'general'; activeSubTab.value = 'email'; return }
-  if (tab === 'skills') { activeTopTab.value = 'general'; activeSubTab.value = 'paths'; return }
+  if (tab === 'skills') { activeTopTab.value = 'ai'; activeSubTab.value = 'skills'; return }
 }, { immediate: true })
 
 // Forward-declared here (before onboarding watcher) to avoid TDZ;
@@ -2350,7 +2346,8 @@ function switchTopTab(tab) {
 function getSubTabStatus(subTab) {
   switch (subTab) {
     case 'language':  return form.language ? 'configured' : 'empty'
-    case 'paths':     return (form.dataPath || form.artifactPath || form.skillsPath) ? 'configured' : 'empty'
+    case 'paths':     return (form.dataPath || form.artifactPath) ? 'configured' : 'empty'
+    case 'skills':    return form.skillsPath ? 'configured' : 'empty'
     case 'security':  return 'configured'
     case 'email':     return form.smtp?.host ? 'configured' : 'empty'
     case 'im':        return (form.im?.telegram?.botToken || form.im?.whatsapp?.enabled || form.im?.feishu?.appId) ? 'configured' : 'empty'
@@ -2748,8 +2745,18 @@ function openAddProvider(preset) {
 }
 
 function confirmAddProvider() {
-  const name = addProviderPreset.value === 'custom' ? (addProviderName.value || 'Custom') : null
-  const newProvider = configStore.addProvider(addProviderPreset.value, name)
+  const preset = addProviderPreset.value
+  // Non-custom presets: if a provider of the same type already exists, select it instead of creating a duplicate
+  if (preset !== 'custom') {
+    const existing = configStore.config.providers.find(p => p.type === preset)
+    if (existing) {
+      modelsLeftNav.value = existing.id
+      showAddProviderModal.value = false
+      return
+    }
+  }
+  const name = preset === 'custom' ? (addProviderName.value || 'Custom') : null
+  const newProvider = configStore.addProvider(preset, name)
   modelsLeftNav.value = newProvider.id
   showAddProviderModal.value = false
 }
@@ -3008,14 +3015,25 @@ async function saveGeneral() {
     }
     // Save artifactPath to .env
     await configStore.saveEnvPath('artifactPath', String(form.artifactPath))
-    // Save skillsPath to config (merged into Paths section)
-    await configStore.saveEnvPath('skillsPath', String(form.skillsPath))
     savedGeneralMsg.value = { ok: true, text: t('config.savedDataPathRestart') }
   } catch (err) {
     savedGeneralMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
   } finally {
     savingGeneral.value = false
     setTimeout(() => { savedGeneralMsg.value = '' }, 4000)
+  }
+}
+
+async function saveSkillsPath() {
+  savingSkillsPath.value = true
+  try {
+    await configStore.saveEnvPath('skillsPath', String(form.skillsPath))
+    savedSkillsPathMsg.value = { ok: true, text: t('config.saved') }
+  } catch (err) {
+    savedSkillsPathMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
+  } finally {
+    savingSkillsPath.value = false
+    setTimeout(() => { savedSkillsPathMsg.value = null }, 4000)
   }
 }
 

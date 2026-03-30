@@ -159,30 +159,15 @@ function register({ DEFAULT_CONFIG }) {
     }
     let providers = saved.providers || []
     if (providers.length > 0) providers = providers.map(sanitizeProvider)
-    if (providers.length === 0) {
+    if (providers.length === 0 && process.env.ANTHROPIC_API_KEY) {
+      // Seed from environment variables on fresh install
       const { v4: uuidv4 } = require('uuid')
-      providers = []
-      if (saved.anthropic?.apiKey) {
-        providers.push({ id: uuidv4(), name: 'Anthropic', type: 'anthropic', apiKey: saved.anthropic.apiKey, baseURL: saved.anthropic.baseURL || 'https://api.anthropic.com', model: saved.anthropic.sonnetModel || 'claude-sonnet-4-5', settings: { maxOutputTokens: 32768 }, isActive: saved.anthropic.isActive || false, testedAt: saved.anthropic.testedAt || null })
-      }
-      if (saved.openrouter?.apiKey) {
-        providers.push({ id: uuidv4(), name: 'OpenRouter', type: 'openrouter', apiKey: saved.openrouter.apiKey, baseURL: saved.openrouter.baseURL || 'https://openrouter.ai/api', model: '', settings: { maxOutputTokens: 32768 }, isActive: saved.openrouter.isActive || false, testedAt: saved.openrouter.testedAt || null })
-      }
-      if (saved.openai?.apiKey) {
-        providers.push({ id: uuidv4(), name: 'OpenAI Compatible', type: 'openai', apiKey: saved.openai.apiKey, baseURL: saved.openai.baseURL || '', model: '', settings: { maxOutputTokens: 32768 }, isActive: saved.openai.isActive || false, testedAt: saved.openai.testedAt || null })
-      }
-      if (saved.deepseek?.apiKey) {
-        providers.push({ id: uuidv4(), name: 'DeepSeek', type: 'deepseek', apiKey: saved.deepseek.apiKey, baseURL: saved.deepseek.baseURL || 'https://api.deepseek.com', model: 'deepseek-chat', settings: { maxOutputTokens: saved.deepseek.maxTokens || 8192 }, isActive: saved.deepseek.isActive || false, testedAt: saved.deepseek.testedAt || null })
-      }
+      providers.push({ id: uuidv4(), name: 'Anthropic', type: 'anthropic', apiKey: process.env.ANTHROPIC_API_KEY, baseURL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com', model: 'claude-sonnet-4-5', settings: { maxOutputTokens: 32768, opusModel: 'claude-opus-4-6', haikuModel: 'claude-haiku-4-5' }, isActive: true, testedAt: null })
     }
     const nonEmpty = Object.fromEntries(Object.entries(saved).filter(([, v]) => v !== '' && v !== null && v !== undefined))
     const savedSandbox = saved.sandboxConfig || {}
     const result = {
       ...DEFAULT_CONFIG, ...nonEmpty, providers,
-      anthropic:    { ...DEFAULT_CONFIG.anthropic,    ...saved.anthropic },
-      openrouter:   { ...DEFAULT_CONFIG.openrouter,   ...saved.openrouter },
-      openai:       { ...DEFAULT_CONFIG.openai,       ...saved.openai },
-      deepseek:     { ...DEFAULT_CONFIG.deepseek,     ...saved.deepseek },
       utilityModel: { ...DEFAULT_CONFIG.utilityModel, ...saved.utilityModel },
       sandboxConfig: {
         ...DEFAULT_CONFIG.sandboxConfig, ...savedSandbox,
@@ -200,9 +185,6 @@ function register({ DEFAULT_CONFIG }) {
     const existing = ds.readJSON(p().CONFIG_FILE, {})
     const merged = {
       ...existing, ...config,
-      anthropic:  { ...(existing.anthropic || {}),  ...(config.anthropic || {}) },
-      openrouter: { ...(existing.openrouter || {}), ...(config.openrouter || {}) },
-      openai:     { ...(existing.openai || {}),     ...(config.openai || {}) },
       providers: config.providers || existing.providers || [],
       smtp:       { ...(existing.smtp || {}),       ...(config.smtp || {}) },
     }

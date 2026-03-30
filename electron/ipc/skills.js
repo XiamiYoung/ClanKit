@@ -31,11 +31,8 @@ function resolveSkillsPath(configPath) {
     }
     return normalizePath(p)
   }
-  // Default: ~/.claude/skills on Linux, %APPDATA%\Claude\skills on Windows
-  if (process.platform === 'win32') {
-    return path.join(process.env.APPDATA || '', 'Claude', 'skills')
-  }
-  return path.join(os.homedir(), '.claude', 'skills')
+  // Default: CLANKAI_DATA_PATH/skills
+  return path.join(ds.paths().base, 'skills')
 }
 
 /**
@@ -513,7 +510,7 @@ function register() {
    */
   ipcMain.handle('skills:install-remote', async (_, sourceId, skillId, skillUrl, skillsPath) => {
     // Use provided skillsPath, or fallback to default
-    const skillsDir = skillsPath || path.join(app.getPath('userData'), 'skills')
+    const skillsDir = skillsPath || path.join(ds.paths().DATA_DIR, 'skills')
     const tempDir = path.join(os.tmpdir(), `skill-${skillId}-${Date.now()}`)
 
     // Normalize clawhub web page URLs -> actual zip download endpoint

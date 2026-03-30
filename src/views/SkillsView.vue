@@ -115,7 +115,7 @@
             {{ t('skills.skillFolderHint') }}
           </p>
           <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">
-            Skills path: <code style="background:#F5F5F5; padding:0.125rem 0.375rem; border-radius:0.25rem; font-size:0.875em;">{{ configStore.config.skillsPath || '~/.claude/skills' }}</code>
+            Skills path: <code style="background:#F5F5F5; padding:0.125rem 0.375rem; border-radius:0.25rem; font-size:0.875em;">{{ configStore.config.skillsPath || (configStore.config.dataPath ? configStore.config.dataPath + '/skills' : 'CLANKAI_DATA_PATH/skills') }}</code>
           </p>
         </div>
       </div>
