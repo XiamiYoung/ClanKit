@@ -50,5 +50,11 @@ scripts/*
 # Docs
 docs/
 
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+
 # playwright
 .playwright-mcp/
