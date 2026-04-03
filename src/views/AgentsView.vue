@@ -81,6 +81,11 @@
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
           </AppButton>
+          <AppButton v-if="selectedView.type !== 'category' && selectedView.agentType === 'system'" size="icon" @click="showImportWizard = true" :title="t('agents.import.title')">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </AppButton>
           <AppButton v-if="selectedView.type !== 'category'" size="icon" @click="createNew(selectedView.agentType)" :title="t('agents.newAgent')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </AppButton>
@@ -352,6 +357,13 @@
     @skip="skipOnboarding"
   />
 
+  <!-- Import Wizard -->
+  <AgentImportWizard
+    v-if="showImportWizard"
+    @close="showImportWizard = false"
+    @created="onAgentImported"
+  />
+
   <!-- Nav item name tooltip -->
   <Teleport to="body">
     <div
@@ -378,6 +390,7 @@ import AppButton from '../components/common/AppButton.vue'
 import CategoryModal from '../components/agents/CategoryModal.vue'
 import AgentGroupCreator from '../components/agents/AgentGroupCreator.vue'
 import OnboardingOverlay from '../components/agents/OnboardingOverlay.vue'
+import AgentImportWizard from '../components/agents/AgentImportWizard.vue'
 import { useI18n } from '../i18n/useI18n'
 
 const { t } = useI18n()
@@ -389,6 +402,12 @@ const tasksStore = useTasksStore()
 const configStore = useConfigStore()
 const refreshing = ref(false)
 const newlyAddedIds = ref(new Set())
+const showImportWizard = ref(false)
+
+function onAgentImported() {
+  showImportWizard.value = false
+  agentsStore.loadAgents()
+}
 
 function resolveDefaultProviderModel() {
   const cfg = configStore.config || {}

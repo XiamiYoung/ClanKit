@@ -536,7 +536,6 @@ const isGroupChat = computed(() => chat.value?.isGroupChat ?? false)
 const canStartCall = computed(() => {
   if (voiceStore.isCallActive) return false
   if (activeSystemAgentIds.value.length !== 1) return false
-  if (!configStore.config.voiceCall?.whisperApiKey) return false
   return true
 })
 const callButtonTooltip = computed(() => {
@@ -544,7 +543,6 @@ const callButtonTooltip = computed(() => {
   const count = activeSystemAgentIds.value.length
   if (count === 0) return t('chats.selectAgentToCall')
   if (count > 1) return t('chats.voiceCallRequiresOne')
-  if (!configStore.config.voiceCall?.whisperApiKey) return t('chats.whisperNotConfigured')
   return t('chats.startVoiceCall')
 })
 const callTtsModeLabel = computed(() => {

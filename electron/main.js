@@ -701,6 +701,8 @@ app.on('before-quit', async (e) => {
     }
   }
 
+  // Stop local voice server if running
+  try { await require('./ipc/voice').stopLocalServer() } catch (err) { logger.error('LocalVoiceServer cleanup error:', err.message) }
   // Stop MCP subprocesses and IM bridge
   try { await mcpManager.stopAll() } catch (err) { logger.error('MCP cleanup error:', err.message) }
   imBridge.stop()

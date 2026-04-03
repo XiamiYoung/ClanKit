@@ -200,6 +200,32 @@
                 {{ t('notes.aiAssistant') }}
               </button>
 
+              <!-- Read-aloud button (reads current document via TTS) -->
+              <button
+                v-if="!isDrawio && !isImage && !isPptx && !isDocx && !isXlsx"
+                class="docs-speak-btn"
+                :class="{ active: docSpeakingActive, loading: docSpeakLoading }"
+                @click="handleDocSpeak"
+                :title="docSpeakingActive || docSpeakLoading ? t('chats.stopSpeaking') : t('chats.speakMessage')"
+              >
+                <!-- Loading: spinner -->
+                <svg v-if="docSpeakLoading" class="animate-spin" style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M21 12a9 9 0 1 1-6.2-8.6"/>
+                </svg>
+                <!-- Playing: waveform animation -->
+                <svg v-else-if="docSpeakingActive" style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="4" y="8" width="3" height="8" rx="1"><animate attributeName="height" values="8;16;8" dur="0.8s" repeatCount="indefinite"/><animate attributeName="y" values="8;4;8" dur="0.8s" repeatCount="indefinite"/></rect>
+                  <rect x="10.5" y="6" width="3" height="12" rx="1"><animate attributeName="height" values="12;6;12" dur="0.8s" begin="0.2s" repeatCount="indefinite"/><animate attributeName="y" values="6;9;6" dur="0.8s" begin="0.2s" repeatCount="indefinite"/></rect>
+                  <rect x="17" y="8" width="3" height="8" rx="1"><animate attributeName="height" values="8;14;8" dur="0.8s" begin="0.4s" repeatCount="indefinite"/><animate attributeName="y" values="8;5;8" dur="0.4s" begin="0.4s" repeatCount="indefinite"/></rect>
+                </svg>
+                <!-- Idle: speaker icon -->
+                <svg v-else style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                </svg>
+                {{ docSpeakingActive || docSpeakLoading ? t('chats.stopSpeaking') : t('chats.speakMessage') }}
+              </button>
+
               <div class="ml-auto flex items-center gap-2">
                 <!-- Mode toggle (markdown only) — iOS-style switch with state label -->
                 <div v-if="isMarkdown" class="docs-mode-switch" @click="editMode = !editMode" :title="editMode ? t('notes.switchToFormatted') : t('notes.switchToSource')">
@@ -787,6 +813,7 @@ import { useKnowledgeStore } from '../stores/knowledge'
 import { useAiMagic } from '../composables/useAiMagic'
 import { getAvatarDataUri } from '../components/agents/agentAvatars'
 import { useFocusModeStore } from '../stores/focusMode'
+import { useVoiceStore } from '../stores/voice'
 import { useI18n } from '../i18n/useI18n'
 
 const { t } = useI18n()
@@ -799,6 +826,7 @@ const store = useObsidianStore()
 const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 const focusModeStore = useFocusModeStore()
+const voiceStore = useVoiceStore()
 
 // This instance should render the floating AI panel only when:
 // - it IS the embedded focus-mode instance, OR
@@ -816,6 +844,86 @@ const {
   updateSelection: updateAiDocSelection, updateFileContent: updateAiDocFileContent,
   getReplacementInfo, markApplied: markAiDocApplied, markReverted: markAiDocReverted,
 } = useAiMagic()
+
+// ── Document read-aloud ──────────────────────────────────────────────────
+const docSpeakingActive = ref(false)
+const docSpeakLoading = ref(false)
+let _docSpeakAudioEl = null
+
+function stopDocSpeak() {
+  docSpeakLoading.value = false
+  docSpeakingActive.value = false
+  if (_docSpeakAudioEl) { _docSpeakAudioEl.pause(); _docSpeakAudioEl = null }
+  if (window.speechSynthesis) window.speechSynthesis.cancel()
+}
+
+async function handleDocSpeak() {
+  if (docSpeakingActive.value || docSpeakLoading.value) { stopDocSpeak(); return }
+
+  const rawContent = editorContent.value || store.activeFile?.content || ''
+  if (!rawContent.trim()) return
+
+  // Strip markdown syntax for cleaner TTS
+  let text = rawContent
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/[#*`_~\[\]()>]/g, '')
+    .replace(/\n{2,}/g, '\n')
+    .trim()
+    .slice(0, 3000)
+  if (!text) return
+
+  docSpeakLoading.value = true
+  try {
+    const vc = configStore.config.voiceCall || {}
+
+    const playAudio = async (result) => {
+      if (!result?.success || !result.audio) return false
+      _docSpeakAudioEl = new Audio(`data:audio/${result.format || 'mp3'};base64,${result.audio}`)
+      const speakerId = voiceStore.selectedSpeakerId
+      if (speakerId && typeof _docSpeakAudioEl.setSinkId === 'function') {
+        _docSpeakAudioEl.setSinkId(speakerId).catch(() => {})
+      }
+      _docSpeakAudioEl.onended = () => stopDocSpeak()
+      _docSpeakAudioEl.onerror = () => stopDocSpeak()
+      docSpeakLoading.value = false
+      docSpeakingActive.value = true
+      await _docSpeakAudioEl.play()
+      return true
+    }
+
+    if (vc.mode === 'local' && window.electronAPI?.voice?.localTts) {
+      const voice = vc.local?.ttsVoice || 'zh-CN-XiaoxiaoNeural'
+      const result = await window.electronAPI.voice.localTts({ text, voice, language: vc.language || 'auto' })
+      if (docSpeakLoading.value && await playAudio(result)) return
+      // Local server not running or failed — do not fall through
+      stopDocSpeak(); return
+    }
+
+    const useOpenAITts = (vc.mode === 'openai' || vc.ttsMode === 'openai' || vc.ttsMode === 'openai-hd')
+      && vc.whisperApiKey && vc.whisperBaseURL && window.electronAPI?.voice?.tts
+    if (useOpenAITts && docSpeakLoading.value) {
+      const result = await window.electronAPI.voice.tts({
+        text, apiKey: vc.whisperApiKey, baseURL: vc.whisperBaseURL,
+        model: vc.ttsMode === 'openai-hd' ? 'tts-1-hd' : 'tts-1', voice: 'alloy',
+      })
+      if (docSpeakLoading.value && await playAudio(result)) return
+      stopDocSpeak(); return
+    }
+
+    // No mode configured — browser TTS as last resort
+    if (window.speechSynthesis && docSpeakLoading.value) {
+      docSpeakLoading.value = false
+      docSpeakingActive.value = true
+      const utterance = new SpeechSynthesisUtterance(text.slice(0, 500))
+      utterance.onend = () => stopDocSpeak()
+      utterance.onerror = () => stopDocSpeak()
+      window.speechSynthesis.speak(utterance)
+    } else if (docSpeakLoading.value) {
+      stopDocSpeak()
+    }
+  } catch { stopDocSpeak() }
+}
+// ──────────────────────────────────────────────────────────────────────────
 
 /** Close the panel and turn off the AI Doc switch. */
 function closeAiDoc() {
@@ -1291,6 +1399,7 @@ watch(editorContent, (val) => {
 })
 
 onBeforeUnmount(() => {
+  stopDocSpeak()
   // Flush any pending save
   if (store.activeFile?.dirty) store.saveFile()
   document.removeEventListener('keydown', onGlobalKeydown, true)
@@ -1743,6 +1852,20 @@ watch(() => store.activeFile?.path, (newPath, oldPath) => {
     _pendingBinaryContent = null
     hasSelection.value = false
     searchBarOpen.value = false
+
+    // Fix stale internal TOC anchor links when opening a markdown file
+    if (newPath && newPath.endsWith('.md')) {
+      nextTick(() => {
+        const content = store.activeFile?.content || editorContent.value
+        if (!content) return
+        const fixed = fixTocLinks(content)
+        if (fixed !== content) {
+          editorContent.value = fixed
+          store.updateContent(fixed)
+          store.saveFile()
+        }
+      })
+    }
   }
   if (newPath && aiDocEnabled.value && !isDrawio.value && !isImage.value) {
     // Use nextTick to ensure activeFile.content is loaded
@@ -1776,6 +1899,52 @@ function slugify(text) {
     .trim()
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
+}
+
+/**
+ * Scan markdown content for internal anchor links ([text](#anchor)) and fix
+ * any anchors that don't match an actual heading ID. External links are untouched.
+ * Returns the fixed content (unchanged if no fixes needed).
+ */
+function fixTocLinks(md) {
+  // Extract all heading slugs from the document
+  const headingSlugs = new Set()
+  const headingLines = []
+  const headingRe = /^#{1,6}\s+(.+)$/gm
+  let hm
+  while ((hm = headingRe.exec(md)) !== null) {
+    const raw = hm[1].replace(/<[^>]+>/g, '').trim()
+    const slug = slugify(raw)
+    headingSlugs.add(slug)
+    headingLines.push({ raw, slug })
+  }
+  if (headingLines.length === 0) return md
+
+  // Replace internal anchor links whose target doesn't exist.
+  // Matches [link text](#anchor) but not ![image](#anchor) or external URLs.
+  return md.replace(/(?<!!)\[([^\]]*)\]\(#([^)]+)\)/g, (full, linkText, anchor) => {
+    const decoded = decodeURIComponent(anchor)
+    // Already valid — leave alone
+    if (headingSlugs.has(decoded)) return full
+
+    // Try to find the best match by slugifying the link text itself
+    const textSlug = slugify(linkText)
+    if (headingSlugs.has(textSlug)) {
+      return `[${linkText}](#${textSlug})`
+    }
+
+    // Fuzzy fallback: heading whose slug or raw text partially matches
+    const fuzzy = headingLines.find(h =>
+      h.slug.includes(textSlug) || textSlug.includes(h.slug) ||
+      h.raw.toLowerCase().includes(linkText.toLowerCase())
+    )
+    if (fuzzy) {
+      return `[${linkText}](#${fuzzy.slug})`
+    }
+
+    // No match found — leave link unchanged rather than breaking it further
+    return full
+  })
 }
 
 // Markdown rendering — custom renderers for images and headings
@@ -2120,11 +2289,9 @@ async function handlePreviewClick(e) {
   e.stopPropagation()
 
   const href = el.getAttribute('href') || ''
-  const fullUrl = el.href // resolved by browser
 
-  // Anchor link (same page #fragment) — must be checked before external URL
-  // because in dev mode el.href resolves to http://localhost:...#fragment.
-  // marked URL-encodes hrefs, so decode before getElementById lookup.
+  // 1. Same-page anchor (#fragment) — check before external URL because
+  //    in dev mode el.href resolves to http://localhost:...#fragment.
   if (href.startsWith('#')) {
     const id = decodeURIComponent(href.slice(1))
     const target = document.getElementById(id)
@@ -2132,33 +2299,41 @@ async function handlePreviewClick(e) {
     return
   }
 
-  // External URL — open in system browser
-  if (fullUrl.startsWith('http://') || fullUrl.startsWith('https://')) {
+  // 2. Internal .md link — must be checked BEFORE external URL check because
+  //    the browser resolves relative paths to http://localhost:.../*.md which
+  //    would otherwise be caught by the external URL branch.
+  if (href.endsWith('.md') || href.includes('.md#')) {
+    const decoded = decodeURIComponent(href)
+    const [mdPath, anchor] = decoded.split('#')
+    const cleanPath = mdPath.replace(/^\.\//, '')
+    const currentDir = store.activeFile?.path?.replace(/[/\\][^/\\]+$/, '') || store.vaultPath
+    const resolved = cleanPath.startsWith('/')
+      ? store.vaultPath + cleanPath
+      : currentDir + '/' + cleanPath
     try {
-      if (window.electronAPI?.openExternal) {
-        const res = await window.electronAPI.openExternal(fullUrl)
-        if (res?.error) showLinkError(`Could not open link: ${res.error}`)
-      } else {
-        window.open(fullUrl, '_blank')
+      await store.openFile(resolved, cleanPath.split('/').pop())
+      if (anchor) {
+        await nextTick()
+        const target = document.getElementById(decodeURIComponent(anchor))
+        if (target) target.scrollIntoView({ behavior: 'smooth' })
       }
     } catch (err) {
-      showLinkError(`Failed to open link: ${err.message}`)
+      showLinkError(`Could not open note: ${mdPath}`)
     }
     return
   }
 
-  // Internal .md link — try to open within vault
-  if (href.endsWith('.md') || href.includes('.md#')) {
-    const mdPath = href.split('#')[0]
-    // Resolve relative to current file's directory
-    const currentDir = store.activeFile?.path?.replace(/[/\\][^/\\]+$/, '') || store.vaultPath
-    const resolved = mdPath.startsWith('/')
-      ? store.vaultPath + mdPath
-      : currentDir + '/' + mdPath
+  // 3. True external URL — open in system browser
+  if (href.startsWith('http://') || href.startsWith('https://')) {
     try {
-      await store.openFile(resolved, mdPath.split('/').pop())
+      if (window.electronAPI?.openExternal) {
+        const res = await window.electronAPI.openExternal(href)
+        if (res?.error) showLinkError(`Could not open link: ${res.error}`)
+      } else {
+        window.open(href, '_blank')
+      }
     } catch (err) {
-      showLinkError(`Could not open note: ${mdPath}`)
+      showLinkError(`Failed to open link: ${err.message}`)
     }
     return
   }
@@ -3111,6 +3286,40 @@ defineExpose({ docTreeCollapsed })
 .docs-hdr-btn--err:hover {
   background: #DC2626;
   border-color: #DC2626;
+}
+
+/* ── Read-aloud button (similar to ai-doc-toggle-btn) ── */
+.docs-speak-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid #F59E0B;
+  background: rgba(245, 158, 11, 0.08);
+  color: #D97706;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+.docs-speak-btn:hover:not(.active) {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #D97706;
+}
+.docs-speak-btn.active {
+  background: linear-gradient(135deg, #92400E 0%, #B45309 40%, #D97706 100%);
+  border-color: transparent;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(180, 83, 9, 0.35), 0 1px 3px rgba(180, 83, 9, 0.2);
+}
+.docs-speak-btn.loading {
+  background: rgba(245, 158, 11, 0.06);
+  border-color: #FCD34D;
+  color: #D97706;
 }
 
 

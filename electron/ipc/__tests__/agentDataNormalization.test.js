@@ -4,7 +4,11 @@
  * All functions tested here are imported from REAL production modules:
  * - dataNormalizers.js — used by agent:send-message and agent:run-additional
  * - chunkAccumulator.js — used by runGroupRound for collaboration loop
+ * - messageConverter.js — expandToolHistory, sliceToLastNTurns
  */
+import { describe, it, expect } from 'vitest'
+import { createRequire } from 'module'
+const require = createRequire(import.meta.url)
 
 const { normalizeAgents, normalizeTools, normalizeMcpServers } = require('../../agent/dataNormalizers')
 
@@ -250,5 +254,34 @@ describe('createChunkAccumulator (real production code)', () => {
   it('starts empty', () => {
     const acc = createChunkAccumulator()
     expect(acc.getText()).toBe('')
+  })
+})
+
+
+// ── sliceToLastNTurns ────────────────────────────────────────────────────────
+
+const { sliceToLastNTurns } = require('../../agent/messageConverter')
+
+describe('sliceToLastNTurns', () => {
+  it('keeps all messages when turns <= n', () => {
+    const msgs = [
+      { role: 'user', content: 'a' },
+      { role: 'assistant', content: 'b' },
+    ]
+    expect(sliceToLastNTurns(msgs, 5)).toEqual(msgs)
+  })
+
+  it('still counts regular user messages as turns', () => {
+    const msgs = [
+      { role: 'user', content: 'a' },
+      { role: 'assistant', content: 'b' },
+      { role: 'user', content: 'c' },
+      { role: 'assistant', content: 'd' },
+    ]
+    const result = sliceToLastNTurns(msgs, 1)
+    expect(result).toEqual([
+      { role: 'user', content: 'c' },
+      { role: 'assistant', content: 'd' },
+    ])
   })
 })

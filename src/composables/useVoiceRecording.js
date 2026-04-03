@@ -9,11 +9,19 @@ import { useConfigStore } from '../stores/config'
 import { useAgentsStore } from '../stores/agents'
 import { useChatsStore } from '../stores/chats'
 
+import { ref } from 'vue'
+
 export function useVoiceRecording({ inputText, sendMessage } = {}) {
   const voiceStore = useVoiceStore()
   const configStore = useConfigStore()
   const agentsStore = useAgentsStore()
   const chatsStore = useChatsStore()
+
+  // Exposed error state for voice config dialogs
+  const voiceServerError = ref('')  // 'SERVER_NOT_RUNNING' | 'VOICE_DISABLED' | 'WHISPER_NOT_CONFIGURED'
+  function _showVoiceError(code) {
+    voiceServerError.value = code
+  }
 
   // ── Voice call ──
   async function handleStartCall(chatId) {
@@ -45,8 +53,17 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
       content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
     }))
 
-    // Resolve Whisper config
+    // Resolve voice mode config
     const vc = configStore.config.voiceCall || {}
+    const voiceMode = vc.mode || 'disabled'
+
+    // Pre-check: voice mode must be configured
+    if (voiceMode === 'disabled') {
+      _showVoiceError('VOICE_DISABLED')
+      return
+    }
+
+    // Whisper config (used when mode is 'openai' or unset)
     const whisperConfig = {
       apiKey: vc.whisperApiKey || '',
       baseURL: vc.whisperBaseURL || 'https://api.openai.com',
@@ -54,12 +71,32 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
       language: vc.language || '',
     }
 
-    // Update voice store
+    // Pre-check: verify local server is running BEFORE showing call overlay
+    if (voiceMode === 'local') {
+      try {
+        const health = await window.electronAPI?.voice?.localHealth()
+        if (!health?.running) {
+          _showVoiceError('SERVER_NOT_RUNNING')
+          return
+        }
+      } catch {
+        _showVoiceError('SERVER_NOT_RUNNING')
+        return
+      }
+    }
+
+    // Pre-check: OpenAI mode needs whisper API key
+    if (voiceMode === 'openai' && !whisperConfig.apiKey) {
+      _showVoiceError('WHISPER_NOT_CONFIGURED')
+      return
+    }
+
+    // Update voice store (shows call overlay)
     voiceStore.startCall(chatId, agentId, agent?.name || 'AI', chatModel)
 
     // Start backend voice session
     if (window.electronAPI?.voice?.start) {
-      await window.electronAPI.voice.start({
+      const startPayload = {
         chatId,
         agentId,
         history,
@@ -76,8 +113,19 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
           description: userAgent?.description,
           systemPrompt: userAgent?.systemPrompt,
         },
-        whisperConfig,
-      })
+      }
+
+      if (voiceMode === 'local') {
+        startPayload.sttMode = 'local'
+        startPayload.localConfig = {
+          serverURL: `http://127.0.0.1:${vc.local?.serverPort || 8199}`,
+        }
+      } else {
+        startPayload.sttMode = 'openai'
+        startPayload.whisperConfig = whisperConfig
+      }
+
+      await window.electronAPI.voice.start(startPayload)
     }
 
     // Subscribe to voice events
@@ -158,9 +206,63 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
         }
         const blob = new Blob(chunks, { type: 'audio/webm' })
         chunks = []
-        const arrayBuf = await blob.arrayBuffer()
+
+        // For local STT: convert webm → WAV in browser (avoids slow ffmpeg on server)
+        const vc = configStore.config.voiceCall || {}
+        const useLocalWav = vc.mode === 'local'
+        let arrayBuf
+        let mimeType = 'audio/webm'
+
+        if (useLocalWav) {
+          try {
+            const webmBuf = await blob.arrayBuffer()
+            const audioBuf = await actx.decodeAudioData(webmBuf.slice(0)) // slice to avoid detached buffer
+            const pcm = audioBuf.getChannelData(0) // mono
+            const sampleRate = 16000
+            // Resample if needed
+            let samples = pcm
+            if (audioBuf.sampleRate !== sampleRate) {
+              const ratio = audioBuf.sampleRate / sampleRate
+              const newLen = Math.round(pcm.length / ratio)
+              samples = new Float32Array(newLen)
+              for (let i = 0; i < newLen; i++) {
+                samples[i] = pcm[Math.round(i * ratio)] || 0
+              }
+            }
+            // Encode WAV
+            const wavBuf = new ArrayBuffer(44 + samples.length * 2)
+            const view = new DataView(wavBuf)
+            const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)) }
+            writeStr(0, 'RIFF')
+            view.setUint32(4, 36 + samples.length * 2, true)
+            writeStr(8, 'WAVE')
+            writeStr(12, 'fmt ')
+            view.setUint32(16, 16, true)
+            view.setUint16(20, 1, true) // PCM
+            view.setUint16(22, 1, true) // mono
+            view.setUint32(24, sampleRate, true)
+            view.setUint32(28, sampleRate * 2, true)
+            view.setUint16(32, 2, true)
+            view.setUint16(34, 16, true)
+            writeStr(36, 'data')
+            view.setUint32(40, samples.length * 2, true)
+            for (let i = 0; i < samples.length; i++) {
+              const s = Math.max(-1, Math.min(1, samples[i]))
+              view.setInt16(44 + i * 2, s * 0x7FFF, true)
+            }
+            arrayBuf = wavBuf
+            mimeType = 'audio/wav'
+          } catch {
+            // Fallback to webm if browser decoding fails
+            arrayBuf = await blob.arrayBuffer()
+          }
+        } else {
+          arrayBuf = await blob.arrayBuffer()
+        }
+
         if (window.electronAPI?.voice?.audioChunk && voiceStore.isCallActive) {
-          window.electronAPI.voice.audioChunk(Array.from(new Uint8Array(arrayBuf)))
+          voiceStore.setStatus('processing')  // show "thinking" immediately while backend processes
+          window.electronAPI.voice.audioChunk(Array.from(new Uint8Array(arrayBuf)), mimeType)
         }
       }
 
@@ -257,8 +359,9 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
           // tries to set 'standby' but that's now blocked, so the VAD does it instead
           // once the mic is idle (not cooldown, not speaking).
           const s = voiceStore.status
-          const backendIdle = s !== 'speaking' && s !== 'idle' && Date.now() >= micCooldownUntil
-          if ((s === 'listening' || s === 'processing') && backendIdle) {
+          // Only transition listening → standby (silence after speech).
+          // Never override 'processing' or 'speaking' — those are managed by backend/TTS.
+          if (s === 'listening' && Date.now() >= micCooldownUntil) {
             voiceStore.setStatus('standby')
           }
         }
@@ -315,9 +418,29 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
   }
 
   // Fetch TTS audio now (does NOT wait for previous sentence to finish).
-  // Returns a Promise that resolves to { audioUrl } for OpenAI TTS, or null for browser TTS.
+  // Returns a Promise that resolves to a data URL for API/local TTS, or null for browser TTS.
   async function _fetchTTSAudio(text) {
     const vc = configStore.config.voiceCall || {}
+
+    // Local TTS (Edge-TTS) — when voice mode is 'local'
+    if (vc.mode === 'local' && window.electronAPI?.voice?.localTts) {
+      try {
+        // Per-agent voice overrides global default
+        const agent = agentsStore.getAgentById(voiceStore.activeAgentId)
+        const edgeVoice = agent?.voiceId || vc.local?.ttsVoice || 'zh-CN-XiaoxiaoNeural'
+        const result = await window.electronAPI.voice.localTts({
+          text,
+          voice: edgeVoice,
+          language: vc.language || 'auto',
+        })
+        if (result.success && result.audio) {
+          return `data:audio/${result.format || 'wav'};base64,${result.audio}`
+        }
+      } catch { /* fall through to browser TTS */ }
+      return null
+    }
+
+    // OpenAI TTS — when voice mode is 'openai' (or legacy unset)
     const useOpenAITTS = (vc.ttsMode === 'openai' || vc.ttsMode === 'openai-hd') && vc.whisperApiKey
     if (!useOpenAITTS || !window.electronAPI?.voice?.tts) return null
     try {
@@ -331,7 +454,6 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
         voice: voiceId,
       })
       if (result.success && result.audio) {
-        // Record TTS character count for cost tracking
         return `data:audio/${result.format || 'mp3'};base64,${result.audio}`
       }
     } catch { /* fall through — playback will use browser TTS */ }
@@ -543,6 +665,7 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
 
   return {
     handleStartCall,
+    voiceServerError,
     setupVoiceListeners,
     cleanupVoiceListeners,
     addVoiceMessageToChat,

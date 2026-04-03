@@ -8,6 +8,26 @@ import { useModelsStore } from '../stores/models'
 import { parseMentions } from '../utils/mentions'
 import { useI18n } from '../i18n/useI18n'
 
+/**
+ * Build a tool execution log string from tool segments.
+ * Appended to assistant message content so the LLM can see previous tool
+ * interactions and learn from failures across turns.
+ * @param {Array} toolSegs - Array of {type:'tool', name, input, output} segments
+ * @returns {string} Tool log text to append, or '' if no tool segments
+ */
+const TOOL_ERROR_RE = /Error|error|Traceback|ENOENT|not found|command not|fatal:|No such file|Invalid switch|ModuleNotFoundError|ImportError|No module named|exit.code[:\s]+[1-9]/i
+export function buildToolLog(toolSegs) {
+  if (!toolSegs || toolSegs.length === 0) return ''
+  const log = toolSegs.map((s, i) => {
+    const outStr = String(s.output || '')
+    const ok = outStr && !TOOL_ERROR_RE.test(outStr.slice(0, 300))
+    const inputSummary = typeof s.input === 'string' ? s.input.slice(0, 500) : JSON.stringify(s.input || {}).slice(0, 500)
+    const outputSummary = outStr.slice(0, 200)
+    return `${i + 1}. ${ok ? '✓' : '✗'} ${s.name}(${inputSummary}) → ${outputSummary}`
+  }).join('\n')
+  return `\n\n[Tool execution log from this response:\n${log}\n]`
+}
+
 export function useSendMessage({
   inputText,
   attachments,
@@ -130,18 +150,35 @@ export function useSendMessage({
     nextTick(() => mentionInputRef.value?.focus())
   }
 
+  let _escapeRetrieving = false
   function escapeRetrieve(chatId) {
+    if (_escapeRetrieving) return // Block re-entrant calls (rapid ESC presses)
     if (!chatId) chatId = chatsStore.activeChatId
     const chat = chatsStore.chats.find(c => c.id === chatId)
     if (!chat?.isRunning) return // Only works when agents are running
 
+    _escapeRetrieving = true
+
+    // Check if agent already started producing text BEFORE stopAgent mutates messages.
+    // agent_step alone (thinking indicator) does NOT count — only actual text content does.
+    const streamingMsg = chat.messages?.length
+      ? [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming && !m.isWaitingIndicator)
+      : null
+    const agentHasText = streamingMsg && streamingMsg.content?.trim().length > 0
+
     // Stop all running agents
     stopAgent(chatId)
 
-    // Find the last user message
-    if (!chat.messages?.length) return
+    if (agentHasText) {
+      // Agent already produced text — keep both user and assistant bubbles, just stop
+      _escapeRetrieving = false
+      return
+    }
+
+    // Agent hasn't produced text — recall user message to input and delete both bubbles
+    if (!chat.messages?.length) { _escapeRetrieving = false; return }
     const lastUserMsg = [...chat.messages].reverse().find(m => m.role === 'user')
-    if (!lastUserMsg) return
+    if (!lastUserMsg) { _escapeRetrieving = false; return }
 
     // Extract text from message
     const retrievedText = lastUserMsg.content || ''
@@ -162,6 +199,7 @@ export function useSendMessage({
     chatsStore.deleteMessage(chatId, lastUserMsg.id)
 
     nextTick(() => mentionInputRef.value?.focus())
+    _escapeRetrieving = false
   }
 
   // ── Last active message + interrupt helpers ─────────────────────────────────
@@ -415,7 +453,16 @@ export function useSendMessage({
         if (m.role === 'assistant' && !m.streaming) return !!(m.content || m.segments?.length)
         return false
       })
-      .map(m => ({ role: m.role, content: m.content, _agentId: m.agentId || null, _userAgentId: m.userAgentId || null }))
+      .map(m => {
+        let content = m.content || ''
+        // Inject tool execution log so the LLM can see previous tool interactions
+        // and learn from failures across turns (avoid repeating the same mistakes).
+        const toolSegs = (m.segments || []).filter(s => s.type === 'tool' && !s._fromLog)
+        if (toolSegs.length > 0) {
+          content += buildToolLog(toolSegs)
+        }
+        return { role: m.role, content, _agentId: m.agentId || null, _userAgentId: m.userAgentId || null }
+      })
       .filter(m => !!m.content)
 
     // Resolve agent for this run — use activeSystemAgentIds (honours groupAgentIds fallback)

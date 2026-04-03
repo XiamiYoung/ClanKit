@@ -95,7 +95,7 @@ function readFileIfExists(filePath) {
  * @param {string|null} userSoulContent      Soul content for the user agent
  * @param {string|null} systemSoulContent    Soul content for the system agent
  * @param {Array|null}  participantSouls     Soul content for group participants
- * @param {object} memoryContext { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, historicalContext }
+ * @param {object} memoryContext { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, todayDate, yesterdayDate, historicalContext }
  * @param {object|null} ragContext           RAG retrieval results
  * @returns {string} The assembled system prompt
  */
@@ -336,7 +336,7 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
   }
 
   // ── Memory context injection ──
-  const { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, historicalContext } = memoryContext
+  const { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, todayDate, yesterdayDate, historicalContext } = memoryContext
 
   if (userMd) {
     system += `\n\n## User Profile\n${prepareSoulContent(userMd)}`
@@ -347,8 +347,8 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
   }
 
   const logSections = []
-  if (yesterdayLogMd) logSections.push(`### Yesterday\n${yesterdayLogMd.trim()}`)
-  if (todayLogMd)     logSections.push(`### Today\n${todayLogMd.trim()}`)
+  if (yesterdayLogMd) logSections.push(`### ${yesterdayDate || 'Yesterday'} (Yesterday)\n${yesterdayLogMd.trim()}`)
+  if (todayLogMd)     logSections.push(`### ${todayDate || 'Today'} (Today)\n${todayLogMd.trim()}`)
   if (logSections.length > 0) {
     system += `\n\n## Recent Session Logs\n${logSections.join('\n\n')}`
   }

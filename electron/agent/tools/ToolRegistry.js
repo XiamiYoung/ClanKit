@@ -146,7 +146,7 @@ class ToolRegistry {
    * Returns the unified { content, details } result from the tool,
    * or falls back to a plain error object if the tool is not found.
    */
-  async execute(toolName, toolInput, toolCallId = '', onUpdate = null) {
+  async execute(toolName, toolInput, toolCallId = '', onUpdate = null, signal = null) {
     const tool = this.tools.get(toolName)
     if (!tool) {
       logger.warn('ToolRegistry: unknown tool', toolName)
@@ -159,7 +159,7 @@ class ToolRegistry {
     })
 
     try {
-      return await tool.execute(toolCallId, toolInput, null, onUpdate)
+      return await tool.execute(toolCallId, toolInput, signal, onUpdate)
     } catch (err) {
       logger.error('ToolRegistry: execution error', toolName, err.message)
       return { content: [{ type: 'text', text: `Error: ${err.message}` }], details: {}, isError: true }

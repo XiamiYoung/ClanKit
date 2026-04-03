@@ -106,12 +106,12 @@
             </button>
           </div>
           <!-- Diff lines -->
-          <div style="background:#0d1117; max-height:400px; overflow-y:auto;">
+          <div style="background:#0d1117; max-height:400px; overflow:auto;">
             <div v-if="!expandedDiffs[i]">
               <div v-for="(line, li) in (getDiff(i, seg).slice(0, 8))" :key="li" class="flex" :style="diffLineStyle(line.type)">
                 <span style="width:2.5rem; padding:0 8px; color:#484f58; font-family:monospace; font-size:0.72rem; text-align:right; user-select:none; border-right:1px solid #21262d;">{{ line.lineNo }}</span>
                 <span style="width:1rem; padding:0 4px; font-family:monospace; font-size:0.72rem; text-align:center;">{{ diffMarker(line.type) }}</span>
-                <span style="flex:1; padding:0 8px; font-family:monospace; font-size:0.72rem; white-space:pre; overflow-x:auto;">{{ line.content }}</span>
+                <span style="flex:1; padding:0 8px; font-family:monospace; font-size:0.72rem; white-space:pre;">{{ line.content }}</span>
               </div>
               <div v-if="getDiff(i, seg).length > 8" class="flex items-center justify-center py-1.5 cursor-pointer" style="background:#161b22; color:#58a6ff; font-size:0.72rem;" @click.stop="expandedDiffs[i] = true">
                 {{ t('chats.showAllLines', { count: getDiff(i, seg).length }) }} ▼
@@ -121,7 +121,7 @@
               <div v-for="(line, li) in getDiff(i, seg)" :key="li" class="flex" :style="diffLineStyle(line.type)">
                 <span style="width:2.5rem; padding:0 8px; color:#484f58; font-family:monospace; font-size:0.72rem; text-align:right; user-select:none; border-right:1px solid #21262d;">{{ line.lineNo }}</span>
                 <span style="width:1rem; padding:0 4px; font-family:monospace; font-size:0.72rem; text-align:center;">{{ diffMarker(line.type) }}</span>
-                <span style="flex:1; padding:0 8px; font-family:monospace; font-size:0.72rem; white-space:pre; overflow-x:auto;">{{ line.content }}</span>
+                <span style="flex:1; padding:0 8px; font-family:monospace; font-size:0.72rem; white-space:pre;">{{ line.content }}</span>
               </div>
               <div class="flex items-center justify-center py-1.5 cursor-pointer" style="background:#161b22; color:#58a6ff; font-size:0.72rem;" @click.stop="expandedDiffs[i] = false">
                 {{ t('chats.showLess') }} ▲
@@ -174,15 +174,15 @@
         <!-- Expanded body — shown when running OR manually expanded -->
         <div v-if="isToolExpanded(i, seg)" style="background:#FAFAFA; border-top:1px solid #E5E5EA;">
           <!-- Input -->
-          <div v-if="seg.input && Object.keys(seg.input).length > 0" class="px-3 py-2">
+          <div v-if="seg.input && (typeof seg.input === 'string' ? seg.input.length > 0 : Object.keys(seg.input).length > 0)" class="px-3 py-2">
             <div class="flex items-center justify-between mb-1">
               <span style="font-size:0.7rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em;">{{ t('chats.input') }}</span>
-              <button @click.stop="copyBlock('input-'+i, JSON.stringify(seg.input, null, 2))" class="flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer" style="background:#F5F5F5; border:1px solid #E5E5EA; color:#9CA3AF; font-size:0.68rem;">
+              <button @click.stop="copyBlock('input-'+i, formatInput(seg.input))" class="flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer" style="background:#F5F5F5; border:1px solid #E5E5EA; color:#9CA3AF; font-size:0.68rem;">
                 {{ copiedBlock === 'input-'+i ? '✓ ' + t('common.copied') : '⎘ ' + t('common.copy') }}
               </button>
             </div>
-            <pre class="rounded-xl p-2 overflow-x-auto" style="background:#1C1C1E; color:#E5E5EA; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px;">{{ expandedInputs[i] || JSON.stringify(seg.input, null, 2).length <= 50 ? JSON.stringify(seg.input, null, 2) : JSON.stringify(seg.input, null, 2).slice(0, 50) + '…' }}</pre>
-            <button v-if="JSON.stringify(seg.input, null, 2).length > 50" @click.stop="expandedInputs[i] = !expandedInputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#007AFF; background:none; border:none; padding:0;">{{ expandedInputs[i] ? t('chats.showLess') + ' ▲' : t('chats.viewFull') + ' ▼' }}</button>
+            <pre class="rounded-xl p-2 overflow-x-auto" style="background:#1C1C1E; color:#E5E5EA; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px;">{{ expandedInputs[i] || formatInput(seg.input).length <= 50 ? formatInput(seg.input) : formatInput(seg.input).slice(0, 50) + '…' }}</pre>
+            <button v-if="formatInput(seg.input).length > 50" @click.stop="expandedInputs[i] = !expandedInputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#007AFF; background:none; border:none; padding:0;">{{ expandedInputs[i] ? t('chats.showLess') + ' ▲' : t('chats.viewFull') + ' ▼' }}</button>
           </div>
           <!-- Tool images are rendered via the standalone inline image segment below -->
           <!-- Live streaming output (visible while tool is running) -->
@@ -190,7 +190,7 @@
             <div class="flex items-center mb-1">
               <span style="font-size:0.7rem; font-weight:600; color:#d97706; text-transform:uppercase; letter-spacing:0.05em;">live output</span>
             </div>
-            <pre class="tool-streaming-pre rounded-xl p-2 overflow-x-auto" style="background:#1C1C1E; color:#34D399; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px; max-height:300px; overflow-y:auto;">{{ seg.streamingOutput }}</pre>
+            <pre :ref="el => setLivePreRef(i, el)" @scroll="onLiveOutputScroll(i)" class="tool-streaming-pre rounded-xl p-2 overflow-x-auto" style="background:#1C1C1E; color:#34D399; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px; max-height:300px; overflow-y:auto;">{{ seg.streamingOutput }}</pre>
           </div>
           <!-- Output (final result after tool completes) -->
           <div v-if="seg.output !== undefined" class="px-3 py-2" style="border-top:1px solid #E5E5EA;">
@@ -323,7 +323,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch, watchEffect, onBeforeUnmount, toRaw } from 'vue'
+import { ref, computed, reactive, watch, watchEffect, onUpdated, onBeforeUnmount, toRaw, nextTick } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import BabylonViewer from './BabylonViewer.vue'
@@ -410,6 +410,41 @@ watch(() => props.message.streaming, (streaming) => {
 }, { immediate: true })
 
 onBeforeUnmount(stopTimer)
+
+// ── Live output <pre> auto-scroll ───────────────────────────────────────────
+// Track which segment indices the user has manually scrolled up (suppress auto-scroll)
+const liveOutputUserScrolled = reactive(new Set())
+// Map of segment index → <pre> DOM element (set via template ref callback)
+const livePreRefs = reactive(new Map())
+
+function setLivePreRef(idx, el) {
+  if (el) livePreRefs.set(idx, el)
+  else livePreRefs.delete(idx)
+}
+
+function onLiveOutputScroll(idx) {
+  const el = livePreRefs.get(idx)
+  if (!el) return
+  const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+  if (distFromBottom > 30) {
+    liveOutputUserScrolled.add(idx)
+  } else {
+    liveOutputUserScrolled.delete(idx)
+  }
+}
+
+// Auto-scroll live output <pre> elements after each render update
+onUpdated(() => {
+  const segs = props.message.segments || []
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i]
+    if (seg.type === 'tool' && seg.output === undefined && seg.streamingOutput) {
+      if (liveOutputUserScrolled.has(i)) continue
+      const el = livePreRefs.get(i)
+      if (el) el.scrollTop = el.scrollHeight
+    }
+  }
+})
 
 function formatDuration(ms) {
   const totalSec = Math.round(ms / 1000)
@@ -775,6 +810,7 @@ function toolDisplayName(seg) {
 
 function toolSummary(seg) {
   if (!seg.input) return ''
+  if (typeof seg.input === 'string') return seg.input.slice(0, 80)
   if (seg.name === 'execute_shell') {
     const cmd = seg.input.command || ''
     const rawArgs = seg.input.args || []
@@ -809,6 +845,10 @@ function toolSummary(seg) {
   if (seg.input.command) parts.push(seg.input.command)
   if (seg.input.action) parts.push(seg.input.action)
   return parts.join('  ').slice(0, 80)
+}
+
+function formatInput(input) {
+  return typeof input === 'string' ? input : JSON.stringify(input, null, 2)
 }
 
 async function copyBlock(key, text) {

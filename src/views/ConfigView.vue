@@ -578,259 +578,464 @@
         <!-- ════════════════════════════════════════════════════════════════ -->
         <template v-if="activeTopTab === 'ai' && activeSubTab === 'voice'">
 
-          <!-- Whisper STT -->
+          <!-- ═══ Voice Mode Selector ═══ -->
           <div class="config-card">
             <div class="form-section-header">
               <div class="section-icon-sm">
                 <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
               </div>
-              <h3 class="form-section-title">{{ t('config.whisperSTT') }}</h3>
+              <h3 class="form-section-title">{{ t('config.voiceMode') }}</h3>
             </div>
-            <p class="hint" style="margin-bottom:1rem;">
-              {{ t('config.voiceCallsUseWhisper') }}
-            </p>
-
-            <!-- API Key -->
-            <div class="form-group">
-              <label for="whisperApiKey" class="form-label">
-                {{ t('config.openAIAPIKey') }}
-                <span class="form-label-hint">{{ t('config.forWhisperSTT') }}</span>
-              </label>
-              <div class="input-with-action">
-                <input
-                  id="whisperApiKey"
-                  v-model="form.voiceCall.whisperApiKey"
-                  :type="showWhisperKey ? 'text' : 'password'"
-                  placeholder="sk-..."
-                  class="field font-mono"
-                />
-                <button @click="showWhisperKey = !showWhisperKey" class="field-action-btn" :aria-label="showWhisperKey ? 'Hide key' : 'Show key'">
-                  <svg v-if="!showWhisperKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                  </svg>
-                  <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                    <line x1="1" y1="1" x2="23" y2="23"/>
-                  </svg>
-                </button>
+            <p class="hint" style="margin-bottom:1rem;">{{ t('config.voiceModeHint') }}</p>
+            <div class="tts-option-list">
+              <!-- Disabled -->
+              <div class="tts-option" :class="{ active: (form.voiceCall.mode || 'disabled') === 'disabled' }" @click="form.voiceCall.mode = 'disabled'">
+                <div class="tts-option-left">
+                  <div class="tts-option-icon">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                  </div>
+                  <div>
+                    <div class="tts-option-name">{{ t('config.voiceDisabled') }}</div>
+                    <div class="tts-option-desc">{{ t('config.voiceDisabledDesc') }}</div>
+                  </div>
+                </div>
               </div>
-              <p class="hint">{{ t('config.whisperApiKeyHint') }}</p>
-            </div>
-
-            <!-- Base URL -->
-            <div class="form-group">
-              <label for="whisperBaseURL" class="form-label">
-                {{ t('config.baseURL') }}
-                <span class="form-label-hint">{{ t('config.optional') }}</span>
-              </label>
-              <input id="whisperBaseURL" v-model="form.voiceCall.whisperBaseURL" type="url" placeholder="https://api.openai.com" class="field font-mono" />
-              <p class="hint">{{ t('config.baseURLHint') }}</p>
-            </div>
-
-            <!-- Direct Auth Mode -->
-            <div class="form-group">
-              <label class="checkbox-label">
-                <input type="checkbox" v-model="form.voiceCall.whisperDirectAuth" class="checkbox" />
-                <span>{{ t('config.directAuthMode') }}</span>
-              </label>
-              <p class="hint">{{ t('config.directAuthModeHint') }}</p>
-            </div>
-
-            <!-- STT Language -->
-            <div class="form-group">
-              <label for="whisperLanguage" class="form-label">
-                {{ t('config.sttLanguage') }}
-                <span class="form-label-hint">{{ t('config.recommendedNoiseReduction') }}</span>
-              </label>
-              <input id="whisperLanguage" v-model="form.voiceCall.language" type="text" placeholder="e.g. en, zh, ja, fr (leave blank for auto)" class="field font-mono" />
-              <p class="hint">{{ t('config.sttLanguageHint') }}</p>
-            </div>
-
-            <!-- Test -->
-            <div class="form-divider"></div>
-            <div class="test-connection-row">
-              <div>
-                <p class="form-section-title">{{ t('config.test') }}</p>
-                <p class="hint" style="margin-top:2px;">{{ t('config.verifyWhisperEndpoint') }}</p>
+              <!-- Local -->
+              <div class="tts-option" :class="{ active: form.voiceCall.mode === 'local' }" @click="form.voiceCall.mode = 'local'; checkLocalServerIfNeeded()">
+                <div class="tts-option-left">
+                  <div class="tts-option-icon">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                  </div>
+                  <div>
+                    <div class="tts-option-name">{{ t('config.voiceLocal') }} <span class="sec-mode-badge">{{ t('config.localFree') }}</span></div>
+                    <div class="tts-option-desc">{{ t('config.voiceLocalDesc') }}</div>
+                  </div>
+                </div>
               </div>
-              <AppButton size="icon" @click="testWhisperConnection" :disabled="testingWhisper || !form.voiceCall.whisperApiKey" :loading="testingWhisper" :title="testingWhisper ? t('config.testing') : t('config.test')"><svg v-if="!testingWhisper" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
-            </div>
-            <div v-if="testResultWhisper" class="test-result" :class="testResultWhisper.ok ? 'success' : 'error'" style="margin-top:10px;">
-              <svg v-if="testResultWhisper.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              <svg v-else class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span>{{ testResultWhisper.message }}</span>
-            </div>
-          </div>
-
-          <!-- Microphone Sensitivity (VAD) -->
-          <div class="config-card">
-            <div class="form-section-header">
-              <div class="section-icon-sm">
-                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-              </div>
-              <h3 class="form-section-title">{{ t('config.microphoneSensitivity') }}</h3>
-            </div>
-            <p class="hint" style="margin-bottom:1rem;">
-              {{ t('config.vadSensitivityHint') }}
-            </p>
-
-            <div class="vad-grid">
-              <!-- Amplitude threshold -->
-              <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label">
-                  {{ t('config.amplitudeThreshold') }}
-                  <span class="form-label-hint">Current: {{ form.voiceCall.vadAmplitude }}</span>
-                </label>
-                <input
-                  type="range" min="0.005" max="0.06" step="0.001"
-                  v-model.number="form.voiceCall.vadAmplitude"
-                  class="vad-slider"
-                />
-                <div class="vad-slider-labels"><span>{{ t('config.sensitive') }}</span><span>{{ t('config.selective') }}</span></div>
-                <p class="hint">{{ t('config.amplitudeHint') }}</p>
-              </div>
-
-              <!-- Silence duration -->
-              <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label">
-                  {{ t('config.silenceCutoff') }}
-                  <span class="form-label-hint">Current: {{ form.voiceCall.vadSilenceMs }}ms</span>
-                </label>
-                <input
-                  type="range" min="300" max="2000" step="50"
-                  v-model.number="form.voiceCall.vadSilenceMs"
-                  class="vad-slider"
-                />
-                <div class="vad-slider-labels"><span>{{ t('config.faster') }} (300ms)</span><span>{{ t('config.slower') }} (2000ms)</span></div>
-                <p class="hint">{{ t('config.silenceHint') }}</p>
-              </div>
-
-              <!-- Min speech frames -->
-              <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label">
-                  {{ t('config.minSpeechFrames') }}
-                  <span class="form-label-hint">Current: {{ form.voiceCall.vadSpeechFrames }} (~{{ Math.round(form.voiceCall.vadSpeechFrames / 60 * 1000) }}ms)</span>
-                </label>
-                <input
-                  type="range" min="5" max="60" step="1"
-                  v-model.number="form.voiceCall.vadSpeechFrames"
-                  class="vad-slider"
-                />
-                <div class="vad-slider-labels"><span>5 frames</span><span>60 frames</span></div>
-                <p class="hint">{{ t('config.speechFramesHint') }}</p>
-              </div>
-
-              <!-- Voice band ratio -->
-              <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label">
-                  {{ t('config.voiceBandRatio') }}
-                  <span class="form-label-hint">Current: {{ Math.round(form.voiceCall.vadVoiceBandRatio * 100) }}%</span>
-                </label>
-                <input
-                  type="range" min="0.05" max="0.6" step="0.01"
-                  v-model.number="form.voiceCall.vadVoiceBandRatio"
-                  class="vad-slider"
-                />
-                <div class="vad-slider-labels"><span>{{ t('config.permissive') }} (5%)</span><span>{{ t('config.strict') }} (60%)</span></div>
-                <p class="hint">{{ t('config.voiceBandHint') }}</p>
-              </div>
-
-              <!-- Proximity multiplier -->
-              <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label">
-                  {{ t('config.backgroundNoiseRejection') }}
-                  <span class="form-label-hint">Current: {{ form.voiceCall.vadProximityMult }}×</span>
-                </label>
-                <input
-                  type="range" min="1.2" max="5" step="0.1"
-                  v-model.number="form.voiceCall.vadProximityMult"
-                  class="vad-slider"
-                />
-                <div class="vad-slider-labels"><span>{{ t('config.relaxed') }} (1.2×)</span><span>{{ t('config.strict') }} (5×)</span></div>
-                <p class="hint">{{ t('config.backgroundNoiseHint') }}</p>
+              <!-- OpenAI -->
+              <div class="tts-option" :class="{ active: form.voiceCall.mode === 'openai' }" @click="form.voiceCall.mode = 'openai'">
+                <div class="tts-option-left">
+                  <div class="tts-option-icon">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                  </div>
+                  <div>
+                    <div class="tts-option-name">{{ t('config.voiceOpenAI') }} <span class="tts-cost-badge">{{ t('config.whisperSttCost') }}</span></div>
+                    <div class="tts-option-desc">{{ t('config.voiceOpenAIDesc') }}</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- Text-to-Speech -->
-          <div class="config-card">
-            <div class="form-section-header">
-              <div class="section-icon-sm">
-                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          <!-- ═══ LOCAL MODE: Python Environment ═══ -->
+          <template v-if="form.voiceCall.mode === 'local'">
+            <!-- Local Server Control (first — most used) -->
+            <div class="config-card">
+              <div class="form-section-header">
+                <div class="section-icon-sm">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                </div>
+                <h3 class="form-section-title">{{ t('config.localServer') }}</h3>
               </div>
-              <h3 class="form-section-title">{{ t('config.textToSpeech') }}</h3>
-            </div>
-            <div class="form-group" style="margin-bottom:0;">
-              <label class="form-label">{{ t('config.ttsMode') }}</label>
-              <div class="tts-option-list">
 
-                <!-- Browser -->
-                <div class="tts-option" :class="{ active: (form.voiceCall.ttsMode || 'browser') === 'browser' }" @click="form.voiceCall.ttsMode = 'browser'">
-                  <div class="tts-option-left">
-                    <div class="tts-option-icon">
-                      <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <div class="tts-option-name">{{ t('config.browser') }} <span class="sec-mode-badge">{{ t('config.browserFree') }}</span></div>
-                      <div class="tts-option-desc">{{ t('config.browserDesc') }}</div>
-                    </div>
-                  </div>
-                  <button class="tts-demo-btn" :class="{ playing: demoingTts === 'browser' }" @click.stop="demoTts('browser')" :disabled="demoingTts !== null" :title="t('config.demo')">
-                    <svg v-if="demoingTts !== 'browser'" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                    {{ demoingTts === 'browser' ? t('config.playing') : t('config.demo') }}
-                  </button>
-                </div>
-
-                <!-- OpenAI TTS -->
-                <div class="tts-option" :class="{ active: form.voiceCall.ttsMode === 'openai' }" @click="form.voiceCall.ttsMode = 'openai'">
-                  <div class="tts-option-left">
-                    <div class="tts-option-icon">
-                      <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <div class="tts-option-name">{{ t('config.openaiTTS') }} <span class="tts-cost-badge">{{ t('config.openaiTTSCost') }}</span></div>
-                      <div class="tts-option-desc">{{ t('config.openaiTTSDesc') }}</div>
-                    </div>
-                  </div>
-                  <button class="tts-demo-btn" :class="{ playing: demoingTts === 'openai' }" @click.stop="demoTts('openai')" :disabled="demoingTts !== null || !form.voiceCall.whisperApiKey" :title="t('config.demo')">
-                    <svg v-if="demoingTts !== 'openai'" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                    {{ demoingTts === 'openai' ? t('config.playing') : t('config.demo') }}
-                  </button>
-                </div>
-
-                <!-- OpenAI HD -->
-                <div class="tts-option" :class="{ active: form.voiceCall.ttsMode === 'openai-hd' }" @click="form.voiceCall.ttsMode = 'openai-hd'">
-                  <div class="tts-option-left">
-                    <div class="tts-option-icon">
-                      <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <div class="tts-option-name">{{ t('config.openaiHD') }} <span class="tts-cost-badge">{{ t('config.openaiHDCost') }}</span></div>
-                      <div class="tts-option-desc">{{ t('config.openaiHDDesc') }}</div>
-                    </div>
-                  </div>
-                  <button class="tts-demo-btn" :class="{ playing: demoingTts === 'openai-hd' }" @click.stop="demoTts('openai-hd')" :disabled="demoingTts !== null || !form.voiceCall.whisperApiKey" :title="t('config.demo')">
-                    <svg v-if="demoingTts !== 'openai-hd'" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                    {{ demoingTts === 'openai-hd' ? t('config.playing') : t('config.demo') }}
-                  </button>
-                </div>
-
+              <div class="form-group">
+                <label class="form-label">{{ t('config.serverPort') }}</label>
+                <input v-model.number="form.voiceCall.local.serverPort" type="number" min="1024" max="65535" placeholder="8199" class="field font-mono" style="max-width:8rem;" />
+                <p class="hint">{{ t('config.serverPortHint') }}</p>
               </div>
-              <p v-if="(form.voiceCall.ttsMode === 'openai' || form.voiceCall.ttsMode === 'openai-hd') && !form.voiceCall.whisperApiKey" class="hint" style="margin-top:8px; color:#EF4444;">
-                {{ t('config.enterWhisperKeyForDemo') }}
+
+              <div class="form-divider"></div>
+              <div class="test-connection-row">
+                <div>
+                  <p class="form-section-title">
+                    <span v-if="localServerRunning" style="color:#10B981;">{{ t('config.serverRunning').replace('{port}', form.voiceCall.local.serverPort || 8199) }}</span>
+                    <span v-else style="color:var(--c-text-muted);">{{ t('config.serverStopped') }}</span>
+                  </p>
+                  <p v-if="localServerRunning && localServerHealth" class="hint" style="margin-top:2px; display:flex; align-items:center; gap:0.5rem;">
+                    <span :style="{ color: localServerHealth.gpu ? '#10B981' : 'var(--c-text-muted)' }">{{ localServerHealth.gpu ? 'CUDA GPU' : 'CPU' }}</span>
+                    <span>· STT: {{ localServerHealth.stt_model || '–' }}</span>
+                    <span>· TTS: Edge-TTS</span>
+                  </p>
+                </div>
+                <div style="display:flex; gap:0.5rem;">
+                  <AppButton v-if="!localServerRunning" size="compact" @click="startLocalServer" :disabled="startingLocalServer" :loading="startingLocalServer">
+                    {{ startingLocalServer ? t('config.startingServer') : t('config.startServer') }}
+                  </AppButton>
+                  <AppButton v-else size="compact" @click="stopLocalServer">{{ t('config.stopServer') }}</AppButton>
+                  <AppButton size="compact" @click="testLocalVoice" :disabled="testingLocal || !localServerRunning" :loading="testingLocal">
+                    {{ testingLocal ? t('config.testingLocal') : t('config.testLocal') }}
+                  </AppButton>
+                </div>
+              </div>
+              <p v-if="startingLocalServer" class="hint" style="margin-top:0.5rem; display:flex; align-items:center; gap:0.35rem;">
+                <svg class="icon-sm spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+                {{ localServerStep || t('voice.serverStarting') }}
               </p>
-              <p class="hint" style="margin-top:6px; font-size:var(--fs-small);">{{ t('config.whisperSttCost') }}</p>
+              <p v-if="!localServerRunning && !startingLocalServer" class="hint" style="margin-top:0.35rem;">{{ t('voice.serverStartHint') }}</p>
+              <div v-if="testResultLocal" class="test-result" :class="testResultLocal.ok ? 'success' : 'error'" style="margin-top:10px;">
+                <svg v-if="testResultLocal.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-else class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>{{ testResultLocal.message }}</span>
+              </div>
             </div>
-          </div>
+
+            <!-- Setup Environment -->
+            <div class="config-card">
+              <div class="form-section-header">
+                <div class="section-icon-sm">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                </div>
+                <h3 class="form-section-title">{{ t('config.setupEnvironment') }}</h3>
+              </div>
+
+              <!-- Install path -->
+              <div class="form-group">
+                <label class="form-label">{{ t('config.installPath') }}</label>
+                <input v-model="form.voiceCall.local.installPath" type="text" class="field font-mono" />
+                <p class="hint">{{ t('config.installPathHint') }}</p>
+              </div>
+
+              <!-- Model source — must be selected before setup -->
+              <div class="form-group">
+                <label class="form-label">{{ t('config.modelSource') }}</label>
+                <select v-model="form.voiceCall.local.modelSource" class="field" style="max-width:16rem;">
+                  <option value="modelscope">ModelScope</option>
+                  <option value="huggingface">HuggingFace</option>
+                </select>
+                <p class="hint">{{ t('config.modelSourceHint') }}</p>
+              </div>
+
+              <!-- GPU detection (informational, not blocking) -->
+              <div class="form-group">
+                <label class="form-label">{{ t('config.gpuStatus') }}</label>
+                <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.25rem;">
+                  <span v-if="gpuDetecting" style="color:var(--c-text-muted); display:flex; align-items:center; gap:0.35rem;">
+                    <svg class="icon-sm spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+                    {{ t('config.gpuDetecting') }}
+                  </span>
+                  <span v-else-if="gpuInfo" :style="{ color: gpuInfo.available && gpuInfo.cudaSupported ? '#10B981' : gpuInfo.available ? '#F59E0B' : 'var(--c-text-muted)' }">
+                    {{ gpuInfo.available && gpuInfo.cudaSupported ? '✓' : gpuInfo.available ? '⚠' : '–' }}
+                    {{ gpuInfo.available ? gpuInfo.name : t('config.gpuNotFound') }}
+                    <span v-if="gpuInfo.vram" style="color:var(--c-text-muted);"> · {{ gpuInfo.vram }}</span>
+                    <span v-if="gpuInfo.hint" style="color:#F59E0B; display:block; font-size:var(--fs-small); margin-top:2px;">{{ gpuInfo.hint }}</span>
+                  </span>
+                  <AppButton size="compact" @click="detectGPU" :disabled="gpuDetecting">{{ t('config.gpuDetect') }}</AppButton>
+                </div>
+                <p class="hint" style="margin-top:0.35rem;">{{ t('config.gpuHint') }}</p>
+              </div>
+
+              <div class="form-divider"></div>
+              <div class="test-connection-row">
+                <div>
+                  <p class="form-section-title" style="display:flex; align-items:center; gap:0.5rem;">
+                    <span v-if="localEnvChecking" style="color:var(--c-text-muted); display:flex; align-items:center; gap:0.35rem;">
+                      <svg class="icon-sm spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+                      {{ t('config.checkingEnv') }}
+                    </span>
+                    <span v-else-if="form.voiceCall.local.isReady" style="color:#10B981;">{{ t('config.envReady') }}</span>
+                    <span v-else style="color:var(--c-text-muted);">{{ t('config.envNotReady') }}</span>
+                  </p>
+                  <div v-if="localEnvDetail && !form.voiceCall.local.isReady && !localEnvChecking" style="margin-top:4px;">
+                    <p class="hint" style="display:flex; align-items:center; gap:0.35rem;">
+                      <span :style="{ color: localEnvDetail.packages ? '#10B981' : '#EF4444' }">{{ localEnvDetail.packages ? '✓' : '✗' }} Packages</span>
+                      <span :style="{ color: localEnvDetail.sttModel ? '#10B981' : '#EF4444' }">{{ localEnvDetail.sttModel ? '✓' : '✗' }} STT Model</span>
+                    </p>
+                  </div>
+                  <p v-if="localEnvCheckLog" class="hint" style="margin-top:2px; font-family:var(--ff-mono); font-size:var(--fs-small);">{{ localEnvCheckLog }}</p>
+                  <p v-else-if="!localEnvDetail" class="hint" style="margin-top:2px;">Python + SenseVoice (STT) + Edge-TTS + PyTorch CUDA</p>
+                </div>
+                <div style="display:flex; gap:0.5rem;">
+                  <AppButton size="compact" @click="setupLocalEnv" :disabled="settingUpLocalEnv || localEnvChecking" :loading="settingUpLocalEnv">
+                    {{ settingUpLocalEnv ? t('config.settingUpEnv') : t('config.setupEnvironment') }}
+                  </AppButton>
+                  <AppButton v-if="form.voiceCall.local.isReady || (localEnvDetail && localEnvDetail.packages)" size="compact" style="color:#EF4444;" @click="removeLocalEnv" :disabled="settingUpLocalEnv || removingLocalEnv" :loading="removingLocalEnv">
+                    {{ removingLocalEnv ? t('config.removingEnv') : t('config.removeEnv') }}
+                  </AppButton>
+                </div>
+              </div>
+
+              <!-- Setup progress -->
+              <div v-if="localSetupProgress" style="margin-top:0.75rem;">
+                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.25rem;">
+                  <div style="flex:1; height:4px; background:var(--c-border); border-radius:2px; overflow:hidden;">
+                    <div style="height:100%; background:linear-gradient(135deg, #0F0F0F, #374151); transition:width 0.3s;" :style="{ width: Math.max(0, localSetupProgress.progress) + '%' }"></div>
+                  </div>
+                  <span style="font-size:var(--fs-small); color:var(--c-text-muted); min-width:3rem; text-align:right;">{{ localSetupProgress.progress }}%</span>
+                </div>
+                <p class="hint">{{ localSetupProgress.message }}</p>
+              </div>
+              <div v-if="localSetupError" class="test-result error" style="margin-top:10px;">
+                <svg class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>{{ localSetupError }}</span>
+              </div>
+            </div>
+
+            <!-- Local STT Settings -->
+            <div class="config-card">
+              <div class="form-section-header">
+                <div class="section-icon-sm">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                </div>
+                <h3 class="form-section-title">{{ t('config.localSTT') }}</h3>
+              </div>
+              <p class="hint" style="margin-bottom:1rem;">{{ t('config.localSTTHint') }}</p>
+
+              <div class="form-group">
+                <label class="form-label">{{ t('config.sttModelLabel') }}</label>
+                <select v-model="form.voiceCall.local.sttModel" class="field">
+                  <option value="SenseVoiceSmall">SenseVoice-Small (600MB)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">
+                  {{ t('config.sttLanguage') }}
+                  <span class="form-label-hint">{{ t('config.optional') }}</span>
+                </label>
+                <input v-model="form.voiceCall.language" type="text" placeholder="e.g. en, zh, ja, auto" class="field font-mono" />
+              </div>
+            </div>
+
+            <!-- TTS Voice Selection (Edge-TTS) -->
+            <div class="config-card">
+              <div class="form-section-header">
+                <div class="section-icon-sm">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <h3 class="form-section-title" style="margin: 0;">{{ t('config.ttsVoice') }}</h3>
+                  <span class="info-tooltip-wrapper" style="position: relative; display: inline-block; flex-shrink: 0;">
+                    <svg class="icon-xs" style="cursor:pointer; color:var(--c-text-muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="8" x2="12" y2="12"/>
+                      <circle cx="12" cy="16" r="1"/>
+                    </svg>
+                    <span class="edge-tts-tooltip" style="
+                      display:none;
+                      position:absolute;
+                      left: 100%;
+                      top: 50%;
+                      transform: translateY(-50%);
+                      background: #18181b;
+                      color: #fff;
+                      border-radius: 0.5rem;
+                      box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+                      padding: 0.75rem 1rem;
+                      font-size: 0.95rem;
+                      min-width: 340px;
+                      z-index: 100;
+                      white-space: normal;
+                      margin-left: 0.5rem;
+                      pointer-events: auto;
+                    ">
+                      <span v-if="configStore.config.language==='zh'">
+                        微软 TTS API 限制：<br>
+                        · 每分钟请求数、字符数有限制<br>
+                        · 免费层：每分钟约 20 请求/5000 字符，每天 50 万字符<br>
+                        · 超出限制会返回 429 错误
+                      </span>
+                      <span v-else>
+                        Microsoft TTS API rate limits:<br>
+                        · Requests and characters per minute are limited<br>
+                        · Free tier: ~20 requests/5000 chars per min, 500,000 chars per day<br>
+                        · Exceeding limits returns 429 error
+                      </span>
+                    </span>
+                  </span>
+                </div>
+              </div>
+              <p class="hint" style="margin-bottom:1rem;">{{ t('config.ttsVoiceHint') }}</p>
+
+              <div class="form-group">
+                <label class="form-label">{{ t('config.defaultVoice') }}</label>
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                  <select v-model="form.voiceCall.local.ttsVoice" class="field" style="flex:1; max-width:20rem;">
+                    <optgroup v-for="group in edgeVoiceGroups" :key="group.locale" :label="group.locale === 'zh-CN' ? t('common.chinese') : group.locale === 'en-US' ? t('common.english') : group.locale">
+                      <option v-for="v in group.voices" :key="v.id" :value="v.id">
+                        {{ v.name }} · {{ v.gender === 'Female' ? t('common.female') : t('common.male') }} · {{ v.locale === 'zh-CN' ? t('common.chinese') : v.locale === 'en-US' ? t('common.english') : v.locale }}
+                      </option>
+                    </optgroup>
+                  </select>
+                  <AppButton size="compact" @click="previewVoice(form.voiceCall.local.ttsVoice)" :disabled="previewingVoice || previewAudioPlaying" :loading="previewingVoice">
+                    <svg v-if="previewAudioPlaying" style="width:12px;height:12px;display:inline-block;vertical-align:middle;margin-right:3px;" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="4" y="8" width="3" height="8" rx="1"><animate attributeName="height" values="8;16;8" dur="0.8s" repeatCount="indefinite"/><animate attributeName="y" values="8;4;8" dur="0.8s" repeatCount="indefinite"/></rect>
+                      <rect x="10.5" y="6" width="3" height="12" rx="1"><animate attributeName="height" values="12;6;12" dur="0.8s" begin="0.2s" repeatCount="indefinite"/><animate attributeName="y" values="6;9;6" dur="0.8s" begin="0.2s" repeatCount="indefinite"/></rect>
+                      <rect x="17" y="8" width="3" height="8" rx="1"><animate attributeName="height" values="8;14;8" dur="0.8s" begin="0.4s" repeatCount="indefinite"/><animate attributeName="y" values="8;5;8" dur="0.4s" begin="0.4s" repeatCount="indefinite"/></rect>
+                    </svg>
+                    {{ previewAudioPlaying ? t('chats.stopSpeaking') : previewingVoice ? '...' : '▶ ' + t('config.preview') }}
+                  </AppButton>
+                </div>
+              </div>
+            </div>
+
+          </template>
+
+          <!-- ═══ OPENAI MODE: Existing Whisper STT + TTS ═══ -->
+          <template v-if="form.voiceCall.mode === 'openai'">
+            <!-- Whisper STT -->
+            <div class="config-card">
+              <div class="form-section-header">
+                <div class="section-icon-sm">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                </div>
+                <h3 class="form-section-title">{{ t('config.whisperSTT') }}</h3>
+              </div>
+              <p class="hint" style="margin-bottom:1rem;">{{ t('config.voiceCallsUseWhisper') }}</p>
+
+              <div class="form-group">
+                <label for="whisperApiKey" class="form-label">{{ t('config.openAIAPIKey') }} <span class="form-label-hint">{{ t('config.forWhisperSTT') }}</span></label>
+                <div class="input-with-action">
+                  <input id="whisperApiKey" v-model="form.voiceCall.whisperApiKey" :type="showWhisperKey ? 'text' : 'password'" placeholder="sk-..." class="field font-mono" />
+                  <button @click="showWhisperKey = !showWhisperKey" class="field-action-btn" :aria-label="showWhisperKey ? 'Hide key' : 'Show key'">
+                    <svg v-if="!showWhisperKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  </button>
+                </div>
+                <p class="hint">{{ t('config.whisperApiKeyHint') }}</p>
+              </div>
+
+              <div class="form-group">
+                <label for="whisperBaseURL" class="form-label">{{ t('config.baseURL') }} <span class="form-label-hint">{{ t('config.optional') }}</span></label>
+                <input id="whisperBaseURL" v-model="form.voiceCall.whisperBaseURL" type="url" placeholder="https://api.openai.com" class="field font-mono" />
+                <p class="hint">{{ t('config.baseURLHint') }}</p>
+              </div>
+
+              <div class="form-group">
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                  <label class="im-toggle" @click.stop>
+                    <input type="checkbox" v-model="form.voiceCall.whisperDirectAuth" @change="configStore.saveConfig({ voiceCall: voiceConfigToSave() })" />
+                    <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                  </label>
+                  <span class="form-label" style="margin-bottom:0">{{ t('config.directAuthMode') }}</span>
+                </div>
+                <p class="hint">{{ t('config.directAuthModeHint') }}</p>
+              </div>
+
+              <div class="form-group">
+                <label for="whisperLanguage" class="form-label">{{ t('config.sttLanguage') }} <span class="form-label-hint">{{ t('config.recommendedNoiseReduction') }}</span></label>
+                <input id="whisperLanguage" v-model="form.voiceCall.language" type="text" placeholder="e.g. en, zh, ja, fr (leave blank for auto)" class="field font-mono" />
+                <p class="hint">{{ t('config.sttLanguageHint') }}</p>
+              </div>
+
+              <div class="form-divider"></div>
+              <div class="test-connection-row">
+                <div>
+                  <p class="form-section-title">{{ t('config.test') }}</p>
+                  <p class="hint" style="margin-top:2px;">{{ t('config.verifyWhisperEndpoint') }}</p>
+                </div>
+                <AppButton size="icon" @click="testWhisperConnection" :disabled="testingWhisper || !form.voiceCall.whisperApiKey" :loading="testingWhisper" :title="testingWhisper ? t('config.testing') : t('config.test')"><svg v-if="!testingWhisper" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
+              </div>
+              <div v-if="testResultWhisper" class="test-result" :class="testResultWhisper.ok ? 'success' : 'error'" style="margin-top:10px;">
+                <svg v-if="testResultWhisper.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-else class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>{{ testResultWhisper.message }}</span>
+              </div>
+            </div>
+
+            <!-- Text-to-Speech -->
+            <div class="config-card">
+              <div class="form-section-header">
+                <div class="section-icon-sm">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                </div>
+                <h3 class="form-section-title">{{ t('config.textToSpeech') }}</h3>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">{{ t('config.ttsMode') }}</label>
+                <div class="tts-option-list">
+                  <div class="tts-option" :class="{ active: (form.voiceCall.ttsMode || 'browser') === 'browser' }" @click="form.voiceCall.ttsMode = 'browser'">
+                    <div class="tts-option-left">
+                      <div class="tts-option-icon"><svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg></div>
+                      <div>
+                        <div class="tts-option-name">{{ t('config.browser') }} <span class="sec-mode-badge">{{ t('config.browserFree') }}</span></div>
+                        <div class="tts-option-desc">{{ t('config.browserDesc') }}</div>
+                      </div>
+                    </div>
+                    <button class="tts-demo-btn" :class="{ playing: demoingTts === 'browser' }" @click.stop="demoTts('browser')" :disabled="demoingTts !== null" :title="t('config.demo')">
+                      <svg v-if="demoingTts !== 'browser'" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                      <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                      {{ demoingTts === 'browser' ? t('config.playing') : t('config.demo') }}
+                    </button>
+                  </div>
+                  <div class="tts-option" :class="{ active: form.voiceCall.ttsMode === 'openai' }" @click="form.voiceCall.ttsMode = 'openai'">
+                    <div class="tts-option-left">
+                      <div class="tts-option-icon"><svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></div>
+                      <div>
+                        <div class="tts-option-name">{{ t('config.openaiTTS') }} <span class="tts-cost-badge">{{ t('config.openaiTTSCost') }}</span></div>
+                        <div class="tts-option-desc">{{ t('config.openaiTTSDesc') }}</div>
+                      </div>
+                    </div>
+                    <button class="tts-demo-btn" :class="{ playing: demoingTts === 'openai' }" @click.stop="demoTts('openai')" :disabled="demoingTts !== null || !form.voiceCall.whisperApiKey" :title="t('config.demo')">
+                      <svg v-if="demoingTts !== 'openai'" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                      <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                      {{ demoingTts === 'openai' ? t('config.playing') : t('config.demo') }}
+                    </button>
+                  </div>
+                  <div class="tts-option" :class="{ active: form.voiceCall.ttsMode === 'openai-hd' }" @click="form.voiceCall.ttsMode = 'openai-hd'">
+                    <div class="tts-option-left">
+                      <div class="tts-option-icon"><svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></div>
+                      <div>
+                        <div class="tts-option-name">{{ t('config.openaiHD') }} <span class="tts-cost-badge">{{ t('config.openaiHDCost') }}</span></div>
+                        <div class="tts-option-desc">{{ t('config.openaiHDDesc') }}</div>
+                      </div>
+                    </div>
+                    <button class="tts-demo-btn" :class="{ playing: demoingTts === 'openai-hd' }" @click.stop="demoTts('openai-hd')" :disabled="demoingTts !== null || !form.voiceCall.whisperApiKey" :title="t('config.demo')">
+                      <svg v-if="demoingTts !== 'openai-hd'" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                      <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                      {{ demoingTts === 'openai-hd' ? t('config.playing') : t('config.demo') }}
+                    </button>
+                  </div>
+                </div>
+                <p v-if="(form.voiceCall.ttsMode === 'openai' || form.voiceCall.ttsMode === 'openai-hd') && !form.voiceCall.whisperApiKey" class="hint" style="margin-top:8px; color:#EF4444;">{{ t('config.enterWhisperKeyForDemo') }}</p>
+                <p class="hint" style="margin-top:6px; font-size:var(--fs-small);">{{ t('config.whisperSttCost') }}</p>
+              </div>
+            </div>
+          </template>
+
+          <!-- ═══ SHARED: Microphone Sensitivity (VAD) — shown when mode is not disabled ═══ -->
+          <template v-if="form.voiceCall.mode === 'local' || form.voiceCall.mode === 'openai'">
+            <div class="config-card">
+              <div class="form-section-header">
+                <div class="section-icon-sm">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                </div>
+                <h3 class="form-section-title">{{ t('config.microphoneSensitivity') }}</h3>
+              </div>
+              <p class="hint" style="margin-bottom:1rem;">{{ t('config.vadSensitivityHint') }}</p>
+              <div class="vad-grid">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label">{{ t('config.amplitudeThreshold') }} <span class="form-label-hint">Current: {{ form.voiceCall.vadAmplitude }}</span></label>
+                  <input type="range" min="0.005" max="0.06" step="0.001" v-model.number="form.voiceCall.vadAmplitude" class="vad-slider" />
+                  <div class="vad-slider-labels"><span>{{ t('config.sensitive') }}</span><span>{{ t('config.selective') }}</span></div>
+                  <p class="hint">{{ t('config.amplitudeHint') }}</p>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label">{{ t('config.silenceCutoff') }} <span class="form-label-hint">Current: {{ form.voiceCall.vadSilenceMs }}ms</span></label>
+                  <input type="range" min="300" max="2000" step="50" v-model.number="form.voiceCall.vadSilenceMs" class="vad-slider" />
+                  <div class="vad-slider-labels"><span>{{ t('config.faster') }} (300ms)</span><span>{{ t('config.slower') }} (2000ms)</span></div>
+                  <p class="hint">{{ t('config.silenceHint') }}</p>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label">{{ t('config.minSpeechFrames') }} <span class="form-label-hint">Current: {{ form.voiceCall.vadSpeechFrames }} (~{{ Math.round(form.voiceCall.vadSpeechFrames / 60 * 1000) }}ms)</span></label>
+                  <input type="range" min="5" max="60" step="1" v-model.number="form.voiceCall.vadSpeechFrames" class="vad-slider" />
+                  <div class="vad-slider-labels"><span>5 frames</span><span>60 frames</span></div>
+                  <p class="hint">{{ t('config.speechFramesHint') }}</p>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label">{{ t('config.voiceBandRatio') }} <span class="form-label-hint">Current: {{ Math.round(form.voiceCall.vadVoiceBandRatio * 100) }}%</span></label>
+                  <input type="range" min="0.05" max="0.6" step="0.01" v-model.number="form.voiceCall.vadVoiceBandRatio" class="vad-slider" />
+                  <div class="vad-slider-labels"><span>{{ t('config.permissive') }} (5%)</span><span>{{ t('config.strict') }} (60%)</span></div>
+                  <p class="hint">{{ t('config.voiceBandHint') }}</p>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label">{{ t('config.backgroundNoiseRejection') }} <span class="form-label-hint">Current: {{ form.voiceCall.vadProximityMult }}×</span></label>
+                  <input type="range" min="1.2" max="5" step="0.1" v-model.number="form.voiceCall.vadProximityMult" class="vad-slider" />
+                  <div class="vad-slider-labels"><span>{{ t('config.relaxed') }} (1.2×)</span><span>{{ t('config.strict') }} (5×)</span></div>
+                  <p class="hint">{{ t('config.backgroundNoiseHint') }}</p>
+                </div>
+              </div>
+            </div>
+          </template>
 
           <div class="save-row">
             <AppButton size="save" @click="saveVoice" :disabled="savingVoice" :loading="savingVoice">
@@ -2002,6 +2207,17 @@
     @close="showDeleteConfirm = false"
   />
 
+  <ConfirmModal
+    :visible="showPreviewVoiceError"
+    :title="t('config.localTestFailed')"
+    :message="previewVoiceErrorMsg || t('config.envSetupFailed')"
+    :confirm-text="t('common.goToConfig')"
+    :cancel-text="t('common.close')"
+    confirm-class="primary"
+    @confirm="showPreviewVoiceError = false; router.push('/config')"
+    @close="showPreviewVoiceError = false"
+  />
+
   <!-- Onboarding: spotlight on Add Provider modal content -->
   <OnboardingOverlay
     v-if="configOnboardingPhase === 'addProvider' && showAddProviderModal"
@@ -2144,6 +2360,103 @@ const testingWhisper = ref(false)
 const testResultWhisper = ref(null)
 const demoingTts = ref(null)   // 'browser' | 'openai' | 'openai-hd' | null
 let _demoAudio = null           // current HTMLAudioElement for OpenAI TTS
+// Edge-TTS voices — builtin defaults + full list from server
+import { EDGE_VOICES as BUILTIN_EDGE_VOICES } from '../utils/edgeVoices'
+const edgeVoices = ref(BUILTIN_EDGE_VOICES)
+const previewingVoice = ref(false)
+const previewAudioPlaying = ref(false)
+const showPreviewVoiceError = ref(false)
+const previewVoiceErrorMsg = ref('')
+const edgeVoiceGroups = computed(() => {
+  const localeOrder = ['zh-CN', 'en-US']
+  const groups = {}
+  for (const v of edgeVoices.value) {
+    const loc = v.locale || 'other'
+    if (!groups[loc]) groups[loc] = { locale: loc, voices: [] }
+    groups[loc].voices.push(v)
+  }
+  return localeOrder
+    .filter(l => groups[l])
+    .map(l => groups[l])
+    .concat(Object.values(groups).filter(g => !localeOrder.includes(g.locale)))
+})
+
+async function loadEdgeVoices() {
+  try {
+    const result = await window.electronAPI.voice.edgeVoices()
+    if (result?.voices?.length) {
+      // Only show zh-CN and en-US voices, normalize names to our friendly format
+      edgeVoices.value = result.voices
+        .filter(v => v.locale === 'zh-CN' || v.locale === 'en-US')
+        .map(v => {
+          const known = BUILTIN_EDGE_VOICES.find(b => b.id === v.id)
+          if (known) return { ...v, name: known.name }
+          // Strip "Microsoft Foo Online (Natural) - Language (Country)" → "Foo"
+          const cleaned = (v.name || v.id)
+            .replace(/^Microsoft\s+/, '')
+            .replace(/\s+Online\s*\([^)]*\)\s*-\s*.+$/, '')
+            .trim()
+          return { ...v, name: cleaned }
+        })
+    }
+  } catch {}
+}
+
+async function previewVoice(voiceId) {
+  if (!voiceId || previewingVoice.value || previewAudioPlaying.value) return
+  previewingVoice.value = true
+  previewVoiceErrorMsg.value = ''
+  try {
+    const result = await window.electronAPI.voice.edgePreview({ voice: voiceId })
+    if (result?.success && result.audio) {
+      const audio = new Audio(`data:audio/mpeg;base64,${result.audio}`)
+      previewingVoice.value = false
+      previewAudioPlaying.value = true
+      audio.onended = () => { previewAudioPlaying.value = false }
+      audio.onerror = () => { previewAudioPlaying.value = false }
+      setTimeout(() => { audio.play().catch(e => console.warn('[audio:play]', e.message)) }, 50)
+    } else if (result?.error) {
+      console.warn('[voice:preview]', result.error)
+      previewVoiceErrorMsg.value = result.error
+      showPreviewVoiceError.value = true
+    }
+  } catch (e) {
+    console.warn('[voice:preview] failed:', e.message)
+    previewVoiceErrorMsg.value = e.message || 'Preview failed'
+    showPreviewVoiceError.value = true
+  } finally {
+    previewingVoice.value = false
+  }
+}
+
+// GPU detection
+const gpuDetecting = ref(false)
+const gpuInfo = ref(null) // { available, name, vram }
+
+async function detectGPU() {
+  gpuDetecting.value = true
+  gpuInfo.value = null
+  try {
+    const result = await window.electronAPI.voice.detectGPU()
+    gpuInfo.value = result
+  } catch {
+    gpuInfo.value = { available: false, name: t('config.gpuDetectFailed') }
+  } finally {
+    gpuDetecting.value = false
+  }
+}
+
+// Local voice state
+const removingLocalEnv = ref(false)
+const localServerRunning = ref(false)
+const localServerHealth = ref(null)  // { gpu, stt_model, tts_engine }
+const localServerStep = ref('')
+const localSetupProgress = ref(null)   // { step, progress, message }
+const localSetupError = ref(null)
+const settingUpLocalEnv = ref(false)
+const startingLocalServer = ref(false)
+const testingLocal = ref(false)
+const testResultLocal = ref(null)
 
 // Email tab state
 const showSmtpPass = ref(false)
@@ -2593,6 +2906,16 @@ const form = reactive({
   dataPath:            '',
   artifactPath:        '',
   voiceCall: {
+    mode: 'disabled',
+    local: {
+      installPath: '',
+      sttModel: 'SenseVoiceSmall',
+      ttsVoice: 'zh-CN-XiaoxiaoNeural',
+      modelSource: 'modelscope',
+      device: 'cuda',
+      serverPort: 8199,
+      isReady: false,
+    },
     whisperApiKey:  '',
     whisperBaseURL: '',
     whisperDirectAuth: false,
@@ -2642,6 +2965,8 @@ watch(modelsLeftNav, () => {
   modelsFetchedOnce.value = false
   savedModelsMsg.value = ''
   testResultNew.value = null
+  testingProviderNew.value = false
+  providerModelsFetchError.value = ''
   testUtilityModelResult.value = null
 })
 const showAddProviderModal = ref(false)
@@ -2782,6 +3107,7 @@ function confirmDeleteProvider() {
 
 async function testProviderNew() {
   if (!selectedProvider.value || testingProviderNew.value) return
+  const myProviderId = selectedProvider.value.id
   testingProviderNew.value = true
   testResultNew.value = null
   try {
@@ -2792,6 +3118,8 @@ async function testProviderNew() {
       baseURL: selectedProvider.value.baseURL,
       utilityModel: model,
     })
+    // Guard: user may have switched providers while the request was in-flight
+    if (selectedProvider.value?.id !== myProviderId) return
     if (res.success) {
       selectedProvider.value.isActive = true
       selectedProvider.value.testedAt = Date.now()
@@ -2802,9 +3130,12 @@ async function testProviderNew() {
     }
     await configStore.saveConfig({ providers: configStore.config.providers })
   } catch (err) {
+    if (selectedProvider.value?.id !== myProviderId) return
     testResultNew.value = { ok: false, message: err.message || 'Test failed' }
   } finally {
-    testingProviderNew.value = false
+    if (selectedProvider.value?.id === myProviderId) {
+      testingProviderNew.value = false
+    }
   }
 }
 
@@ -2847,6 +3178,12 @@ onMounted(async () => {
   if (c.voiceCall)    Object.assign(form.voiceCall, c.voiceCall)
   if (c.smtp)         Object.assign(form.smtp, c.smtp)
   if (c.utilityModel) Object.assign(form.utilityModel, c.utilityModel)
+
+  // Check local voice server status immediately after config loaded
+  if (form.voiceCall.mode === 'local') {
+    checkLocalServerIfNeeded()
+    detectGPU()
+  }
 
   // Initialize left nav
   if (c.providers && c.providers.length > 0) {
@@ -2994,6 +3331,8 @@ onActivated(async () => {
   if (imStatus.value?.teamsAuth?.connected) {
     teamsAuthStatus.value = { connected: true, displayName: imStatus.value.teamsAuth.userDisplayName, userId: imStatus.value.teamsAuth.userId || '' }
   }
+
+  // Check local voice server status (after config loaded into form)
 })
 
 onUnmounted(() => {
@@ -3109,10 +3448,194 @@ async function saveKnowledge() {
   }
 }
 
+// ── Local Voice helpers ──────────────────────────────────────────────────
+const defaultLocalInstallPath = ref('')
+
+async function loadDefaultInstallPath() {
+  try {
+    const result = await window.electronAPI.getDataPath()
+    const dir = result?.dataPath || result?.defaultDataPath || ''
+    const sep = result?.platform === 'win32' ? '\\' : '/'
+    defaultLocalInstallPath.value = dir + sep + 'local-voice-env'
+    // Set the actual form value if not already customized
+    if (!form.voiceCall.local.installPath) {
+      form.voiceCall.local.installPath = defaultLocalInstallPath.value
+    }
+  } catch {}
+}
+loadDefaultInstallPath()
+
+const localEnvDetail = ref(null)  // { packages, sttModel, ttsModel, reason }
+const localEnvChecking = ref(false)
+const localEnvCheckLog = ref('')
+
+function voiceConfigToSave() {
+  const v = JSON.parse(JSON.stringify(form.voiceCall))
+  delete v.local?.isReady  // always computed at runtime, never persisted
+  return v
+}
+
+async function checkLocalServerIfNeeded() {
+  localEnvChecking.value = true
+  localEnvCheckLog.value = ''
+  try {
+    localEnvCheckLog.value = 'Checking Python venv...'
+    const envCheck = await window.electronAPI.voice.localCheckEnv()
+    localEnvDetail.value = envCheck
+    form.voiceCall.local.isReady = envCheck.ready
+    if (envCheck.ready) {
+      localEnvCheckLog.value = t('config.envReady')
+    } else {
+      localEnvCheckLog.value = envCheck.reason || t('config.envNotReady')
+    }
+    // Also check server health
+    const health = await window.electronAPI.voice.localHealth()
+    localServerRunning.value = !!health?.running
+    localServerHealth.value = health?.running ? health : null
+    // Restore starting state if server is mid-startup (user navigated away and back)
+    if (health?.starting) {
+      startingLocalServer.value = true
+      localServerStep.value = t('voice.serverStarting')
+      // Poll until server becomes ready (since the original startLocalServer call is gone)
+      const pollReady = setInterval(async () => {
+        try {
+          const h = await window.electronAPI.voice.localHealth()
+          if (h?.running) {
+            clearInterval(pollReady)
+            startingLocalServer.value = false
+            localServerStep.value = ''
+            localServerRunning.value = true
+            localServerHealth.value = h
+                  loadEdgeVoices()
+          } else if (!h?.starting) {
+            // Server process died during startup
+            clearInterval(pollReady)
+            startingLocalServer.value = false
+            localServerStep.value = ''
+            testResultLocal.value = { ok: false, message: 'Server startup failed' }
+          }
+        } catch {}
+      }, 2000)
+    }
+    if (localServerRunning.value) {
+      localEnvCheckLog.value += ' · Server running'
+      loadEdgeVoices()
+    }
+  } catch (err) {
+    localEnvCheckLog.value = `Check failed: ${err.message}`
+  } finally {
+    localEnvChecking.value = false
+  }
+}
+
+async function setupLocalEnv() {
+  settingUpLocalEnv.value = true
+  localSetupProgress.value = null
+  localSetupError.value = null
+  // Save installPath to config first so all operations use the same path
+  await configStore.saveConfig({ voiceCall: voiceConfigToSave() })
+  // Mark as not ready during setup — will be set to true only on success
+  form.voiceCall.local.isReady = false
+  const cleanup = window.electronAPI.voice.onSetupProgress((data) => {
+    localSetupProgress.value = data
+    if (data.step === 'error') localSetupError.value = data.message
+  })
+  try {
+    const result = await window.electronAPI.voice.localSetupEnv()
+    if (result.success) {
+      form.voiceCall.local.isReady = true
+    } else {
+      form.voiceCall.local.isReady = false
+      localSetupError.value = result.error
+    }
+    await configStore.saveConfig({ voiceCall: voiceConfigToSave() })
+  } catch (err) {
+    localSetupError.value = err.message
+  } finally {
+    settingUpLocalEnv.value = false
+    cleanup()
+  }
+}
+
+
+async function startLocalServer() {
+  startingLocalServer.value = true
+  localServerStep.value = t('voice.serverStarting')
+  // Show step updates by polling server stdout via health check
+  const stepTimer = setInterval(async () => {
+    try {
+      const h = await window.electronAPI.voice.localHealth()
+      if (h?.stt_model && !h?.tts_model) localServerStep.value = t('voice.loadingTTS')
+      else if (!h?.stt_model) localServerStep.value = t('voice.loadingSTT')
+    } catch {}
+  }, 2000)
+  try {
+    await saveVoice()
+    const result = await window.electronAPI.voice.localStartServer()
+    localServerRunning.value = result.success
+    if (result.success) {
+      localServerStep.value = t('voice.serverReady')
+      loadEdgeVoices()
+      // Fetch health for device mode display
+      try { localServerHealth.value = await window.electronAPI.voice.localHealth() } catch {}
+    }
+    if (!result.success) {
+      const msg = result.error === 'ENV_NOT_SETUP' ? t('config.envNotSetupError') : result.error
+      testResultLocal.value = { ok: false, message: msg }
+    }
+  } catch (err) {
+    testResultLocal.value = { ok: false, message: err.message }
+  } finally {
+    clearInterval(stepTimer)
+    localServerStep.value = ''
+    startingLocalServer.value = false
+  }
+}
+
+async function stopLocalServer() {
+  await window.electronAPI.voice.localStopServer()
+  localServerRunning.value = false
+  localServerHealth.value = null
+}
+
+async function removeLocalEnv() {
+  removingLocalEnv.value = true
+  try {
+    // Stop server first
+    if (localServerRunning.value) await stopLocalServer()
+    await window.electronAPI.voice.removeLocalEnv()
+    form.voiceCall.local.isReady = false
+    localEnvDetail.value = null
+    localEnvCheckLog.value = ''
+  } catch (err) {
+    testResultLocal.value = { ok: false, message: err.message }
+  } finally {
+    removingLocalEnv.value = false
+  }
+}
+
+async function testLocalVoice() {
+  testingLocal.value = true
+  testResultLocal.value = null
+  try {
+    const result = await window.electronAPI.voice.localTest()
+    if (result.success) {
+      const gpuMsg = result.gpu ? t('config.gpuDetected') : t('config.gpuNotDetected')
+      testResultLocal.value = { ok: true, message: `${t('config.localTestSuccess')} ${gpuMsg}` }
+    } else {
+      testResultLocal.value = { ok: false, message: result.error || t('config.localTestFailed') }
+    }
+  } catch (err) {
+    testResultLocal.value = { ok: false, message: err.message }
+  } finally {
+    testingLocal.value = false
+  }
+}
+
 async function saveVoice() {
   savingVoice.value = true
   try {
-    await configStore.saveConfig({ voiceCall: JSON.parse(JSON.stringify(form.voiceCall)) })
+    await configStore.saveConfig({ voiceCall: voiceConfigToSave() })
     savedVoiceMsg.value = { ok: true, text: t('common.successSaved') }
   } catch (err) {
     savedVoiceMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
@@ -3137,7 +3660,7 @@ async function testWhisperConnection() {
     if (resp.ok) {
       testResultWhisper.value = { ok: true, message: 'Connected — Whisper API key is valid' }
       form.voiceCall.isActive = true
-      await configStore.saveConfig({ voiceCall: JSON.parse(JSON.stringify(form.voiceCall)) })
+      await configStore.saveConfig({ voiceCall: voiceConfigToSave() })
     } else {
       const body = await resp.text()
       testResultWhisper.value = { ok: false, message: `API error ${resp.status}: ${body.slice(0, 120)}` }
@@ -4390,6 +4913,10 @@ async function savePricing() {
 }
 .cv-model-item.active .cv-model-ctx { color: #E5E7EB; background: rgba(255,255,255,0.12); }
 
+.info-tooltip-wrapper:hover .edge-tts-tooltip,
+.edge-tts-tooltip:hover { display: block !important; }
+.edge-tts-tooltip a { color: #60a5fa; text-decoration: underline; cursor: pointer; }
+
 .demo-info-icon:hover { opacity: 1; }
 </style>
 
@@ -4753,4 +5280,6 @@ async function savePricing() {
 }
 .demo-tooltip ul { list-style: disc; }
 .demo-tooltip li { margin: 0.1rem 0; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>

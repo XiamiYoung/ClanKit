@@ -103,11 +103,20 @@ export const useModelsStore = defineStore('models', () => {
         if (!result.success) return false
         models = result.models
 
-      } else if (type === 'minimax' || type === 'custom') {
-        // Try OpenAI-compatible endpoint
+      } else if (type === 'minimax') {
+        // MiniMax uses proxy path + x-api-key header
         if (!window.electronAPI?.fetchOpenAIModels || !provider.baseURL) return false
         const result = await window.electronAPI.fetchOpenAIModels({
           apiKey: provider.apiKey, baseURL: provider.baseURL, type: 'openai',
+        })
+        if (!result.success) return false
+        models = result.models
+
+      } else if (type === 'custom') {
+        // Custom providers use direct endpoint (base/models) + Bearer auth
+        if (!window.electronAPI?.fetchOpenAIModels || !provider.baseURL) return false
+        const result = await window.electronAPI.fetchOpenAIModels({
+          apiKey: provider.apiKey, baseURL: provider.baseURL, type: 'custom',
         })
         if (!result.success) return false
         models = result.models

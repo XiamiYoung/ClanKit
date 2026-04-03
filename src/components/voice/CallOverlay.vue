@@ -110,6 +110,9 @@ import { useVoiceStore } from '../../stores/voice'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import { getAvatarDataUri } from '../agents/agentAvatars'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const voiceStore = useVoiceStore()
 const agentsStore = useAgentsStore()
@@ -121,10 +124,11 @@ const panelEl = ref(null)
 const micDevices = ref([])
 const speakerDevices = ref([])
 
-const panelPos = ref({ left: 24, top: 24 })
+const panelPos = ref(null) // null = centered, { left, top } = user-dragged position
 let _drag = null
 
 const panelStyle = computed(() => {
+  if (!panelPos.value) return { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }
   return { left: panelPos.value.left + 'px', top: panelPos.value.top + 'px', transform: 'none' }
 })
 
@@ -137,18 +141,16 @@ const agentAvatar = computed(() => {
 
 const statusClass = computed(() => {
   const s = voiceStore.status
-  if (s === 'speaking') return 'speaking'
   if (s === 'listening') return 'listening'
-  if (s === 'processing') return 'processing'
+  if (s === 'processing' || s === 'speaking') return 'processing'
   return ''
 })
 
 const statusLabel = computed(() => {
   const s = voiceStore.status
-  if (s === 'listening') return 'Listening'
-  if (s === 'processing') return 'Thinking'
-  if (s === 'speaking') return 'Speaking'
-  return 'On call'
+  if (s === 'listening') return t('voice.listening')
+  if (s === 'processing' || s === 'speaking') return t('voice.thinking')
+  return t('voice.idle')
 })
 
 const defaultMicLabel = computed(() => {
@@ -161,7 +163,13 @@ const defaultSpeakerLabel = computed(() => {
 
 function onDragStart(e) {
   if (e.button !== 0) return
-  _drag = { startX: e.clientX, startY: e.clientY, startLeft: panelPos.value.left, startTop: panelPos.value.top }
+  // If still centered (null pos), compute actual position from element
+  if (!panelPos.value && panelEl.value) {
+    const rect = panelEl.value.getBoundingClientRect()
+    panelPos.value = { left: rect.left, top: rect.top }
+  }
+  const pos = panelPos.value || { left: 0, top: 0 }
+  _drag = { startX: e.clientX, startY: e.clientY, startLeft: pos.left, startTop: pos.top }
   document.addEventListener('mousemove', onDragMove)
   document.addEventListener('mouseup', onDragEnd)
 }

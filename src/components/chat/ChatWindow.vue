@@ -175,6 +175,32 @@
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                 </svg>
               </button>
+              <!-- Speak button -->
+              <button
+                v-if="msg.role === 'assistant' && msg.content"
+                @click="emit('speak-message', msg)"
+                class="cw-msg-action-btn"
+                :class="{ 'opacity-40 cursor-not-allowed': !voiceConfigured }"
+                :disabled="!voiceConfigured"
+                :title="!voiceConfigured ? t('chats.speakNeedsVoice') : props.speakingMsgId === msg.id ? t('chats.stopSpeaking') : t('chats.speakMessage')"
+                :aria-label="t('chats.speakMessage')"
+              >
+                <!-- Loading: TTS IPC in progress -->
+                <svg v-if="props.speakingMsgId === msg.id && props.ttsPlayingMsgId !== msg.id" class="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M21 12a9 9 0 1 1-6.2-8.6"/>
+                </svg>
+                <!-- Playing: audio waveform -->
+                <svg v-else-if="props.ttsPlayingMsgId === msg.id" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="4" y="8" width="3" height="8" rx="1"><animate attributeName="height" values="8;16;8" dur="0.8s" repeatCount="indefinite"/><animate attributeName="y" values="8;4;8" dur="0.8s" repeatCount="indefinite"/></rect>
+                  <rect x="10.5" y="6" width="3" height="12" rx="1"><animate attributeName="height" values="12;6;12" dur="0.8s" begin="0.2s" repeatCount="indefinite"/><animate attributeName="y" values="6;9;6" dur="0.8s" begin="0.2s" repeatCount="indefinite"/></rect>
+                  <rect x="17" y="8" width="3" height="8" rx="1"><animate attributeName="height" values="8;14;8" dur="0.8s" begin="0.4s" repeatCount="indefinite"/><animate attributeName="y" values="8;5;8" dur="0.4s" begin="0.4s" repeatCount="indefinite"/></rect>
+                </svg>
+                <!-- Idle: speaker icon -->
+                <svg v-else class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                </svg>
+              </button>
               <!-- Delete button -->
               <button
                 v-if="showDelete"
@@ -253,20 +279,35 @@
         </div>
       </template>
 
-      <!-- Scroll to bottom floating button -->
-      <Transition name="cw-scroll-btn">
-        <button
-          v-if="userScrolled && chat?.messages?.length"
-          class="cw-scroll-to-bottom"
-          @click="forceScrollToBottom"
-          :title="t('chats.scrollToBottom')"
-          :aria-label="t('chats.scrollToBottom')"
-        >
-          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-        </button>
-      </Transition>
+      <!-- Floating scroll buttons -->
+      <div class="cw-scroll-buttons">
+        <Transition name="cw-scroll-btn-up">
+          <button
+            v-if="showScrollToTop && chat?.messages?.length"
+            class="cw-scroll-btn-float"
+            @click="scrollToTop"
+            :title="t('chats.scrollToTop')"
+            :aria-label="t('chats.scrollToTop')"
+          >
+            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="18 15 12 9 6 15"/>
+            </svg>
+          </button>
+        </Transition>
+        <Transition name="cw-scroll-btn">
+          <button
+            v-if="userScrolled && chat?.messages?.length"
+            class="cw-scroll-btn-float"
+            @click="forceScrollToBottom"
+            :title="t('chats.scrollToBottom')"
+            :aria-label="t('chats.scrollToBottom')"
+          >
+            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </Transition>
+      </div>
     </div>
 
     <!-- Input area: use default slot for custom input, or built-in basic input -->
@@ -344,7 +385,7 @@
           <template v-if="isRunning">
             <button @click.stop="emit('escape-retrieve')" class="cw-btn escape" :aria-label="t('chats.escapeRetrieve')" :title="t('chats.escapeRetrieve')">
               <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
+                <circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor"/>
               </svg>
             </button>
           </template>
@@ -357,8 +398,8 @@
             :aria-label="t('chats.sendMessageBtn')"
             :title="t('chats.sendMessageBtn')"
           >
-            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>
             </svg>
           </button>
         </div>
@@ -410,17 +451,26 @@ const props = defineProps({
   chatId: { type: String, required: true },
   showQuote: { type: Boolean, default: false },
   showDelete: { type: Boolean, default: false },
+  speakingMsgId: { type: String, default: '' },
+  ttsPlayingMsgId: { type: String, default: '' },
   onApprovePlan: { type: Function, default: null },
   onRejectPlan:  { type: Function, default: null },
   onRefinePlan:  { type: Function, default: null },
 })
 
-const emit = defineEmits(['send', 'stop', 'escape-retrieve', 'quote', 'delete-message', 'send-with-attachments', 'resend-message', 'quote-image', 'retry-waiting-indicator'])
+const emit = defineEmits(['send', 'stop', 'escape-retrieve', 'quote', 'delete-message', 'send-with-attachments', 'resend-message', 'quote-image', 'retry-waiting-indicator', 'speak-message'])
 
 const chatsStore = useChatsStore()
 const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 const { t } = useI18n()
+
+const voiceConfigured = computed(() => {
+  const vc = configStore.config.voiceCall || {}
+  if (vc.mode === 'local') return true  // server check happens at speak time
+  if (vc.mode === 'openai') return true  // browser TTS fallback always available
+  return false  // mode disabled
+})
 
 const messagesEl = ref(null)
 const inputEl = ref(null)
@@ -430,6 +480,8 @@ const defaultInputText = ref('')
 const copiedId = ref(null)
 const attachments = ref([])
 const userScrolled = ref(false)
+const showScrollToTop = ref(false)
+const isLoadingHistory = ref(false)
 let programmaticScrollCount = 0
 const visibleLimit = ref(25)
 const quotedMessage = ref(null)
@@ -574,24 +626,37 @@ const hasHiddenMessages = computed(() => {
 const isLoadingSegment = ref(false)
 
 async function loadMoreMessages() {
+  const el = messagesEl.value
   const all = (chat.value?.messages ?? []).filter(m => !m.hidden)
   if (all.length > visibleLimit.value) {
     // Still have in-memory messages to show — just reveal more
+    const oldScrollHeight = el?.scrollHeight ?? 0
+    isLoadingHistory.value = true
     visibleLimit.value += 25
+    await nextTick()
+    await nextTick()
+    if (el) el.scrollTop += el.scrollHeight - oldScrollHeight
+    isLoadingHistory.value = false
     return
   }
   // All in-memory messages are visible — try to load older segment from disk
   if (isLoadingSegment.value) return
   isLoadingSegment.value = true
+  const oldScrollHeight = el?.scrollHeight ?? 0
+  isLoadingHistory.value = true
   try {
     const loaded = await chatsStore.loadOlderSegments(props.chatId)
     if (loaded) {
       // Show all messages including newly loaded ones (they're prepended)
       const newAll = (chat.value?.messages ?? []).filter(m => !m.hidden)
       visibleLimit.value = newAll.length
+      await nextTick()
+      await nextTick()
+      if (el) el.scrollTop += el.scrollHeight - oldScrollHeight
     }
   } finally {
     isLoadingSegment.value = false
+    isLoadingHistory.value = false
   }
 }
 
@@ -727,6 +792,7 @@ function onScroll() {
   if (!el) return
   const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
   userScrolled.value = distFromBottom > 60
+  showScrollToTop.value = el.scrollTop > 200
 }
 
 function forceScrollToBottom() {
@@ -734,8 +800,15 @@ function forceScrollToBottom() {
   scrollToBottom(true)
 }
 
-// Watch message count changes for auto-scroll
-watch(() => chat.value?.messages?.length, () => { scrollToBottom() }, { flush: 'post' })
+function scrollToTop() {
+  if (!messagesEl.value) return
+  messagesEl.value.scrollTo({ top: 0, behavior: 'smooth' })
+  userScrolled.value = true
+  showScrollToTop.value = false
+}
+
+// Watch message count changes for auto-scroll (skip during history loading)
+watch(() => chat.value?.messages?.length, () => { if (!isLoadingHistory.value) scrollToBottom() }, { flush: 'post' })
 // Watch last message content/segments for streaming auto-scroll.
 // Group chat agents stream via segments (content stays ''), so we must also
 // track total segment count across recent messages.
@@ -763,6 +836,7 @@ watch(() => chat.value?.messages, (msgs, oldMsgs) => {
 // Reset scroll state when chatId changes
 watch(() => props.chatId, async () => {
   userScrolled.value = false
+  showScrollToTop.value = false
   visibleLimit.value = 25
   // Ensure messages are loaded before scrolling
   await chatsStore.ensureMessages(props.chatId)
@@ -804,8 +878,8 @@ function setupVisibilityDetection() {
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => {
         // When container is resized (e.g., coming back from another view)
-        // and there are messages, scroll to bottom
-        if (chat.value?.messages?.length > 0) {
+        // and there are messages, scroll to bottom (skip during history loading)
+        if (chat.value?.messages?.length > 0 && !isLoadingHistory.value) {
           scrollToBottom(true)
         }
       })
@@ -1487,14 +1561,20 @@ defineExpose({ scrollToBottom })
 .cw-btn.send.active:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .cw-btn:disabled { cursor: not-allowed; }
 
-/* ── Scroll to bottom floating button ── */
-.cw-scroll-to-bottom {
+/* ── Floating scroll buttons ── */
+.cw-scroll-buttons {
   position: sticky;
   bottom: 0.75rem;
   align-self: flex-end;
   margin-right: 0.75rem;
   margin-top: -2.5rem;
   z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  pointer-events: none;
+}
+.cw-scroll-btn-float {
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1508,12 +1588,14 @@ defineExpose({ scrollToBottom })
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.12);
   transition: all 0.15s ease;
   flex-shrink: 0;
+  pointer-events: auto;
 }
-.cw-scroll-to-bottom:hover {
+.cw-scroll-btn-float:hover {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.15);
   transform: scale(1.08);
 }
+/* scroll-to-bottom transition */
 .cw-scroll-btn-enter-active,
 .cw-scroll-btn-leave-active {
   transition: opacity 0.2s ease, transform 0.2s ease;
@@ -1522,6 +1604,16 @@ defineExpose({ scrollToBottom })
 .cw-scroll-btn-leave-to {
   opacity: 0;
   transform: translateY(0.5rem);
+}
+/* scroll-to-top transition */
+.cw-scroll-btn-up-enter-active,
+.cw-scroll-btn-up-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.cw-scroll-btn-up-enter-from,
+.cw-scroll-btn-up-leave-to {
+  opacity: 0;
+  transform: translateY(-0.5rem);
 }
 </style>
 

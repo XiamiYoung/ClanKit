@@ -2,6 +2,7 @@ import { ref, reactive } from 'vue'
 import { useChatsStore } from '../stores/chats'
 import { useAgentsStore } from '../stores/agents'
 import { v4 as uuidv4 } from 'uuid'
+import { parseToolLogBlock, deduplicateToolSegments } from '../utils/parseToolLog'
 
 /**
  * Streaming chunk handler: manages per-chat streaming state, segment flushing,
@@ -223,6 +224,33 @@ export function useChunkHandler({
             msg.segments = finalSegs.map(s => ({ ...s }))
             msg.content = finalSegs.filter(s => s.type === 'text').map(s => s.content).join('')
           }
+          // ── Post-processing: parse tool execution log text into tool segments ──
+          // DeepSeek and some OpenAI-compatible models echo the buildToolLog() text
+          // as part of their streamed response. Detect and convert to real tool segments.
+          const toolLogResult = parseToolLogBlock(msg.content)
+          if (toolLogResult) {
+            const existingTools = msg.segments.filter(s => s.type === 'tool' && !s._fromLog)
+            const uniqueParsed = deduplicateToolSegments(existingTools, toolLogResult.parsedTools)
+            // Rebuild segments: replace text content, keep non-text segs, append parsed tools
+            const newSegs = []
+            let textReplaced = false
+            for (const seg of msg.segments) {
+              if (seg.type === 'text') {
+                if (!textReplaced) {
+                  if (toolLogResult.cleanedText) {
+                    newSegs.push({ type: 'text', content: toolLogResult.cleanedText })
+                  }
+                  textReplaced = true
+                }
+              } else {
+                newSegs.push(seg)
+              }
+            }
+            newSegs.push(...uniqueParsed)
+            msg.segments = newSegs
+            msg.content = toolLogResult.cleanedText
+          }
+
           msg.streaming = false
           if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
           // If no text content: distinguish user-initiated stop from real error.
@@ -374,7 +402,7 @@ export function useChunkHandler({
         targetChat.currentToolCall = chunk.name || null
       }
       const segments = perChatStreamingSegments.get(routeKey) || []
-      segments.push({ type: 'tool', name: chunk.name, input: chunk.input ?? {}, output: undefined })
+      segments.push({ type: 'tool', name: chunk.name, input: chunk.input ?? {}, output: undefined, toolCallId: chunk.toolCallId || null })
       perChatStreamingSegments.set(routeKey, segments)
       flushSegments(routeKey)
       scrollToBottom(false, cId)
@@ -388,11 +416,12 @@ export function useChunkHandler({
       const outputText = typeof chunk.result === 'string' ? chunk.result : JSON.stringify(chunk.result, null, 2)
       if (toolSeg) {
         toolSeg.output = outputText
+        if (chunk.toolCallId && !toolSeg.toolCallId) toolSeg.toolCallId = chunk.toolCallId
       } else if (chunk.name) {
         // No pending tool seg — this result arrived out-of-band (e.g. subagent auto todo update).
         // Append a fully-formed tool segment so the todo panel and tool list stay up to date.
         const segments = perChatStreamingSegments.get(routeKey) || []
-        segments.push({ type: 'tool', name: chunk.name, input: chunk.input ?? {}, output: outputText })
+        segments.push({ type: 'tool', name: chunk.name, input: chunk.input ?? {}, output: outputText, toolCallId: chunk.toolCallId || null })
         perChatStreamingSegments.set(routeKey, segments)
       }
       // Images — push a single inline image segment (deduplicated)
@@ -414,6 +443,8 @@ export function useChunkHandler({
       scrollToBottom(false, cId)
     } else if (chunk.type === 'tool_output') {
       // Live streaming output from a running tool (e.g. shell stdout/stderr)
+      // Defense in depth: skip stale chunks after user stopped the agent
+      if (collaborationCancelled.value || !targetChat.isRunning) return
       const toolSeg = lastToolSeg(routeKey)
       if (toolSeg) {
         toolSeg.streamingOutput = (toolSeg.streamingOutput || '') + (chunk.text || '')

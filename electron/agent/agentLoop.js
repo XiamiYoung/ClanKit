@@ -283,6 +283,10 @@ class AgentLoop {
     return this.contextSnapshot
   }
 
+  getLoadedSkills() {
+    return this.loadedSkills || new Map()
+  }
+
   /**
    * Standalone compaction — makes one API call with compaction enabled
    * to compress the conversation history. Works when the agent loop is NOT running.
@@ -293,6 +297,7 @@ class AgentLoop {
     this.toolRegistry.loadForAgents(enabledAgents || [])
 
     this.skillPrompts = new Map()
+    this.loadedSkills = new Map()  // tracks skills actually loaded by LLM via load_skill tool
     for (const skill of enabledSkills || []) {
       if (typeof skill !== 'string' && skill.systemPrompt) {
         this.skillPrompts.set(skill.id, skill.systemPrompt)
@@ -434,6 +439,7 @@ class AgentLoop {
 
     // Store full skill prompts for lazy loading via load_skill tool
     this.skillPrompts = new Map()
+    this.loadedSkills = new Map()  // tracks skills actually loaded by LLM via load_skill tool
     for (const skill of enabledSkills || []) {
       if (typeof skill !== 'string' && skill.systemPrompt) {
         this.skillPrompts.set(skill.id, skill.systemPrompt)
@@ -467,14 +473,14 @@ class AgentLoop {
     let userMd         = null
     let todayLogMd     = null
     let yesterdayLogMd = null
+    const now       = new Date()
+    const today     = now.toISOString().slice(0, 10)
+    const yesterday = new Date(now - 86400000).toISOString().slice(0, 10)
 
     if (memoryDir && agentPrompts?.systemAgentId) {
       const agentId   = agentPrompts.systemAgentId
       const agentDir  = path.join(memoryDir, 'agents', agentId)
       const logsDir   = path.join(agentDir, 'memory')
-      const now       = new Date()
-      const today     = now.toISOString().slice(0, 10)
-      const yesterday = new Date(now - 86400000).toISOString().slice(0, 10)
 
       agentMemoryMd   = readFileIfExists(path.join(agentDir, 'MEMORY.md'))
       todayLogMd      = readFileIfExists(path.join(logsDir, `${today}.md`))
@@ -516,7 +522,7 @@ class AgentLoop {
     const systemPrompt = this.buildSystemPrompt(
       enabledAgents, enabledSkills, agentPrompts,
       userSoulContent, systemSoulContent, participantSouls,
-      { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, historicalContext },
+      { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, todayDate: today, yesterdayDate: yesterday, historicalContext },
       this.ragContext
     )
 
@@ -817,8 +823,8 @@ class AgentLoop {
         if (agentMemoryMd)   _memorySections.push({ title: 'My Knowledge Base',   content: agentMemoryMd })
         if (yesterdayLogMd || todayLogMd) {
           const logParts = []
-          if (yesterdayLogMd) logParts.push(`### Yesterday\n${yesterdayLogMd.trim()}`)
-          if (todayLogMd)     logParts.push(`### Today\n${todayLogMd.trim()}`)
+          if (yesterdayLogMd) logParts.push(`### ${yesterday} (Yesterday)\n${yesterdayLogMd.trim()}`)
+          if (todayLogMd)     logParts.push(`### ${today} (Today)\n${todayLogMd.trim()}`)
           _memorySections.push({ title: 'Recent Session Logs', content: logParts.join('\n\n') })
         }
         if (historicalContext) _memorySections.push({ title: 'Relevant Past Context', content: historicalContext })
@@ -1439,15 +1445,18 @@ class AgentLoop {
                 .map(async (block) => {
                   const toolName  = block.name
                   const toolInput = block.input
-                  onChunk({ type: 'tool_call', name: toolName, input: toolInput })
+                  onChunk({ type: 'tool_call', name: toolName, input: toolInput, toolCallId: block.id })
 
                   let result
                   if (toolName === 'load_skill') {
                     const skillId = toolInput.skill_id
                     const prompt = this.skillPrompts.get(skillId)
-                    result = prompt
-                      ? { success: true, skill_id: skillId, content: prompt }
-                      : { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
+                    if (prompt) {
+                      this.loadedSkills.set(skillId, prompt)
+                      result = { success: true, skill_id: skillId, content: prompt }
+                    } else {
+                      result = { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
+                    }
                   } else if (toolName === 'dispatch_subagent') {
                     result = await this.subAgentManager.dispatch(toolInput, (progress) => {
                       onChunk({ type: 'subagent_progress', ...progress })
@@ -1461,8 +1470,8 @@ class AgentLoop {
                         const todoInput = { action: 'update', chatId: todoChatId, id: toolInput.todo_id, status: todoStatus }
                         const todoResult = await this.toolRegistry.execute('todo_manager', todoInput)
                         logger.agent('todo auto-update result', { todoId: toolInput.todo_id, result: JSON.stringify(uiResult(todoResult)).slice(0, 120) })
-                        onChunk({ type: 'tool_call', name: 'todo_manager', input: todoInput })
-                        onChunk({ type: 'tool_result', name: 'todo_manager', result: uiResult(todoResult) })
+                        onChunk({ type: 'tool_call', name: 'todo_manager', input: todoInput, toolCallId: `auto_todo_${Date.now()}` })
+                        onChunk({ type: 'tool_result', name: 'todo_manager', result: uiResult(todoResult), toolCallId: `auto_todo_${Date.now()}` })
                       } catch (e) { logger.error('todo auto-update failed', e.message) }
                     }
                   } else if (toolName === 'dispatch_subagents') {
@@ -1512,13 +1521,13 @@ class AgentLoop {
                     } else {
                       result = await this.toolRegistry.execute(toolName, toolInput, block.id, (update) => {
                         onChunk({ type: 'tool_output', name: toolName, text: update.text, stream: update.type })
-                      })
+                      }, this._abortController.signal)
                     }
                   }
                   const mcpImages = result?._mcpImages || result?.details?.images
                   if (result?._mcpImages) delete result._mcpImages
                   if (result?.details?.images) delete result.details.images  // prevent uiResult from double-spreading images
-                  onChunk({ type: 'tool_result', name: toolName, result: uiResult(result), ...(mcpImages ? { images: mcpImages } : {}) })
+                  onChunk({ type: 'tool_result', name: toolName, result: uiResult(result), toolCallId: block.id, ...(mcpImages ? { images: mcpImages } : {}) })
                   return { tool_call_id: block.id, content: serializeToolResult(result, toolName) }
                 })
               ),
@@ -1743,7 +1752,7 @@ class AgentLoop {
                   const toolName  = block.name
                   const toolInput = block.input
 
-                  onChunk({ type: 'tool_call', name: toolName, input: toolInput })
+                  onChunk({ type: 'tool_call', name: toolName, input: toolInput, toolCallId: block.id })
 
                   let result
 
@@ -1751,6 +1760,7 @@ class AgentLoop {
                     const skillId = toolInput.skill_id
                     const prompt = this.skillPrompts.get(skillId)
                     if (prompt) {
+                      this.loadedSkills.set(skillId, prompt)
                       logger.agent('load_skill', { skillId, promptLen: prompt.length })
                       result = { success: true, skill_id: skillId, content: prompt }
                     } else {
@@ -1769,8 +1779,8 @@ class AgentLoop {
                         const todoInput = { action: 'update', chatId: todoChatId, id: toolInput.todo_id, status: todoStatus }
                         const todoResult = await this.toolRegistry.execute('todo_manager', todoInput)
                         logger.agent('todo auto-update result', { todoId: toolInput.todo_id, result: JSON.stringify(uiResult(todoResult)).slice(0, 120) })
-                        onChunk({ type: 'tool_call', name: 'todo_manager', input: todoInput })
-                        onChunk({ type: 'tool_result', name: 'todo_manager', result: uiResult(todoResult) })
+                        onChunk({ type: 'tool_call', name: 'todo_manager', input: todoInput, toolCallId: `auto_todo_${Date.now()}` })
+                        onChunk({ type: 'tool_result', name: 'todo_manager', result: uiResult(todoResult), toolCallId: `auto_todo_${Date.now()}` })
                       } catch (e) { logger.error('todo auto-update failed', e.message) }
                     }
                   } else if (toolName === 'dispatch_subagents') {
@@ -1820,14 +1830,14 @@ class AgentLoop {
                     } else {
                       result = await this.toolRegistry.execute(toolName, toolInput, block.id, (update) => {
                         onChunk({ type: 'tool_output', name: toolName, text: update.text, stream: update.type })
-                      })
+                      }, this._abortController.signal)
                     }
                   }
 
                   const mcpImages = result?._mcpImages || result?.details?.images
                   if (result?._mcpImages) delete result._mcpImages
                   if (result?.details?.images) delete result.details.images  // prevent uiResult from double-spreading images
-                  onChunk({ type: 'tool_result', name: toolName, result: uiResult(result), ...(mcpImages ? { images: mcpImages } : {}) })
+                  onChunk({ type: 'tool_result', name: toolName, result: uiResult(result), toolCallId: block.id, ...(mcpImages ? { images: mcpImages } : {}) })
                   return { type: 'tool_result', tool_use_id: block.id, content: serializeToolResult(result, toolName) }
                 })
               ),

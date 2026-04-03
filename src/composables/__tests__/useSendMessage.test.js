@@ -384,3 +384,115 @@ describe('useSendMessage', () => {
     expect(chat.messages).toHaveLength(0)
   })
 })
+
+
+// ── buildToolLog (tool history injection) ────────────────────────────────────
+
+import { buildToolLog } from '../useSendMessage'
+
+describe('buildToolLog', () => {
+  it('returns empty string for empty/null segments', () => {
+    expect(buildToolLog(null)).toBe('')
+    expect(buildToolLog([])).toBe('')
+    expect(buildToolLog(undefined)).toBe('')
+  })
+
+  it('marks successful tool calls with ✓', () => {
+    const segs = [{ name: 'execute_shell', input: { command: 'ls' }, output: 'file.txt\ndir/' }]
+    const log = buildToolLog(segs)
+    expect(log).toContain('1. ✓ execute_shell')
+    expect(log).toContain('file.txt')
+  })
+
+  it('marks failed tool calls with ✗ for common error patterns', () => {
+    const errorOutputs = [
+      'Error: spawn cd ENOENT',
+      'Traceback (most recent call last):',
+      'ModuleNotFoundError: No module named foo',
+      'fatal: not a git repository',
+      '/bin/bash: python: command not found',
+      'No such file or directory',
+      'FIND: Invalid switch',
+      'ImportError: cannot import name xyz',
+    ]
+    for (const output of errorOutputs) {
+      const segs = [{ name: 'shell', input: {}, output }]
+      const log = buildToolLog(segs)
+      expect(log).toContain('1. ✗ shell'), `Should mark as error: ${output}`
+    }
+  })
+
+  it('marks non-zero exit codes as errors', () => {
+    // Real tool output format: JSON with exit_code field
+    const segs = [{ name: 'shell', input: {}, output: '{\n  "text": "FIND: Invalid switch",\n  "exit_code": 2\n}' }]
+    const log = buildToolLog(segs)
+    expect(log).toContain('✗')
+  })
+
+  it('includes full input up to 500 chars (not truncated at 120)', () => {
+    const longCmd = 'cd /d Z:\\home\\young\\.claude && python -m skills.jira.scripts.jira_cli search --jql project=RNDDS ORDER BY created DESC --max-results 5 --fields summary,status,assignee,priority'
+    const segs = [{
+      name: 'execute_shell',
+      input: { command: 'cmd', args: ['/c', longCmd] },
+      output: 'Found 5 issues',
+    }]
+    const log = buildToolLog(segs)
+    // The full command should be visible (it's ~190 chars as JSON, well under 500)
+    expect(log).toContain('project=RNDDS')
+    expect(log).toContain('ORDER BY created DESC')
+    expect(log).toContain('--max-results 5')
+  })
+
+  it('shows both failed and successful commands so LLM can see the difference', () => {
+    const segs = [
+      {
+        name: 'execute_shell',
+        input: { command: 'cmd', args: ['/c', 'python -m jira search --jql "project = RNDDS"'] },
+        output: 'Error: Validation error: The quoted string has not been completed',
+      },
+      {
+        name: 'execute_shell',
+        input: { command: 'cmd', args: ['/c', 'python -m jira search --jql project=RNDDS'] },
+        output: 'Found 5 issue(s)',
+      },
+    ]
+    const log = buildToolLog(segs)
+    // Failed: with quotes (JSON-escaped as \")
+    expect(log).toContain('1. ✗')
+    expect(log).toContain('\\"project = RNDDS\\"')
+    // Succeeded: without quotes
+    expect(log).toContain('2. ✓')
+    expect(log).toContain('project=RNDDS')
+  })
+
+  it('wraps output in [Tool execution log...] block', () => {
+    const segs = [{ name: 'test_tool', input: {}, output: 'ok' }]
+    const log = buildToolLog(segs)
+    expect(log).toMatch(/^\n\n\[Tool execution log from this response:\n/)
+    expect(log).toMatch(/\n\]$/)
+  })
+
+  it('handles multiple tool calls in sequence', () => {
+    const segs = [
+      { name: 'load_skill', input: { skill_id: 'jira' }, output: '{"success":true}' },
+      { name: 'execute_shell', input: { command: 'cd' }, output: 'Error: ENOENT' },
+      { name: 'execute_shell', input: { command: 'bash' }, output: 'success' },
+    ]
+    const log = buildToolLog(segs)
+    expect(log).toContain('1. ✓ load_skill')
+    expect(log).toContain('2. ✗ execute_shell')
+    expect(log).toContain('3. ✓ execute_shell')
+  })
+
+  it('handles string input format', () => {
+    const segs = [{ name: 'tool', input: 'raw string input that is quite long', output: 'ok' }]
+    const log = buildToolLog(segs)
+    expect(log).toContain('raw string input')
+  })
+
+  it('handles missing/undefined output gracefully', () => {
+    const segs = [{ name: 'tool', input: {}, output: undefined }]
+    const log = buildToolLog(segs)
+    expect(log).toContain('1. ✗ tool') // no output = error
+  })
+})

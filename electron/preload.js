@@ -193,7 +193,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   voice: {
     start:      (params)   => ipcRenderer.invoke('voice:start', params),
     stop:       ()         => ipcRenderer.invoke('voice:stop'),
-    audioChunk: (buffer)   => ipcRenderer.invoke('voice:audio-chunk', buffer),
+    audioChunk: (buffer, mimeType) => ipcRenderer.invoke('voice:audio-chunk', buffer, mimeType),
     mute:               (params)  => ipcRenderer.invoke('voice:mute', params),
     notifyTaskComplete: (summary) => ipcRenderer.invoke('voice:task-complete', summary),
     updateHistory:      (history) => ipcRenderer.invoke('voice:update-history', history),
@@ -205,6 +205,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onUsage:        (cb) => { ipcRenderer.on('voice:usage', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:usage') },
     tts:            (params) => ipcRenderer.invoke('voice:tts', params),
     accumulateUsage:(chatId, usage) => ipcRenderer.invoke('agent:accumulate-voice-usage', { chatId, usage }),
+    // Local voice (SenseVoice STT + Edge-TTS)
+    localSetupEnv:     ()      => ipcRenderer.invoke('voice:local-setup-env'),
+    localCheckEnv:     ()      => ipcRenderer.invoke('voice:local-check-env'),
+    localStartServer:  ()      => ipcRenderer.invoke('voice:local-start-server'),
+    localStopServer:   ()      => ipcRenderer.invoke('voice:local-stop-server'),
+    localHealth:       ()      => ipcRenderer.invoke('voice:local-health'),
+    detectGPU:         ()      => ipcRenderer.invoke('voice:detect-gpu'),
+    removeLocalEnv:    ()      => ipcRenderer.invoke('voice:remove-local-env'),
+    localTts:          (params)=> ipcRenderer.invoke('voice:local-tts', params),
+    localTest:         ()      => ipcRenderer.invoke('voice:local-test'),
+    edgeVoices:        ()      => ipcRenderer.invoke('voice:edge-voices'),
+    edgePreview:       (params)=> ipcRenderer.invoke('voice:edge-preview', params),
+    onSetupProgress:   (cb)    => { ipcRenderer.on('voice:setup-progress', (_e, d) => cb(d)); return () => ipcRenderer.removeAllListeners('voice:setup-progress') },
+  },
+
+  // ── Agent Import (Chat History → Create Agent) ─────────────────────────────
+  agentImport: {
+    checkEnv:        ()       => ipcRenderer.invoke('agent:import-check-env'),
+    setupEnv:        ()       => ipcRenderer.invoke('agent:import-setup-env'),
+    pickFile:        ()       => ipcRenderer.invoke('agent:import-pick-file'),
+    pickDir:         ()       => ipcRenderer.invoke('agent:import-pick-dir'),
+    decryptWeChat:   (p)      => ipcRenderer.invoke('agent:import-decrypt-wechat', p),
+    listContacts:    (p)      => ipcRenderer.invoke('agent:import-list-contacts', p),
+    extractMessages: (params) => ipcRenderer.invoke('agent:import-extract-messages', params),
+    analyze:         (params) => ipcRenderer.invoke('agent:import-analyze', params),
+    writeMemories:   (params) => ipcRenderer.invoke('agent:import-write-memories', params),
+    saveHistory:     (params) => ipcRenderer.invoke('agent:import-save-history', params),
+    cleanup:         ()       => ipcRenderer.invoke('agent:import-cleanup'),
+    onProgress:      (cb)     => {
+      ipcRenderer.on('agent:import-progress', (_e, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('agent:import-progress')
+    },
   },
 
   // ── Window ─────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 // Orchestrates STT (Whisper) → LLM → text pipeline. TTS handled by renderer (SpeechSynthesis).
 
 const WhisperSTT = require('./WhisperSTT')
+const { logger } = require('../../logger')
 
 class VoiceSession {
   constructor(opts) {
@@ -27,9 +28,12 @@ class VoiceSession {
     this._pendingAudio = null   // latest audio chunk received while busy — replaces any earlier pending
     this._currentLLMAbort = null // AbortController.abort bound to the active LLM stream
 
-    // Whisper STT
+    // STT — pluggable: local (SenseVoice) or API (Whisper)
     this.whisperConfig = opts.whisperConfig || {}
-    if (opts.whisperConfig?.apiKey) {
+    if (opts.sttMode === 'local' && opts.localConfig?.serverURL) {
+      const LocalSTT = require('./LocalSTT')
+      this.stt = new LocalSTT({ serverURL: opts.localConfig.serverURL })
+    } else if (opts.whisperConfig?.apiKey) {
       this.stt = new WhisperSTT({
         apiKey: opts.whisperConfig.apiKey,
         baseURL: opts.whisperConfig.baseURL,
@@ -57,7 +61,8 @@ class VoiceSession {
   }
 
   // Called with raw audio from renderer mic capture
-  async processAudio(audioBuffer) {
+  async processAudio(audioBuffer, mimeType) {
+    this._lastMimeType = mimeType || 'audio/webm'
     if (!this.active || this.muted) return
     if (!this.stt) {
       this.onError('Whisper STT not configured — add OpenAI API key in Voice Call settings')
@@ -89,13 +94,16 @@ class VoiceSession {
     try {
       this._voiceBusy = true
       this.onStatus('processing')
+      const t0 = Date.now()
 
       const sttOpts = {}
       if (this.whisperConfig?.language) sttOpts.language = this.whisperConfig.language
       const agentName = this.agent?.name
       if (agentName) sttOpts.prompt = `Conversation with ${agentName}.`
 
-      const sttResult = await this.stt.transcribe(audioBuffer, 'audio/webm', sttOpts)
+      const sttResult = await this.stt.transcribe(audioBuffer, this._lastMimeType || 'audio/webm', sttOpts)
+      const tSTT = Date.now()
+      logger.info(`[voice:timing] STT=${tSTT - t0}ms text="${(sttResult?.text || '').slice(0, 50)}"`)
 
       const transcript = sttResult?.text || ''
       const whisperSecs = sttResult?.durationSecs || 0
@@ -105,7 +113,7 @@ class VoiceSession {
       }
       if (whisperSecs > 0) this.onUsage({ whisperCalls: 1, whisperSecs })
       this.onTranscript(transcript)
-      await this._processTranscript(transcript)
+      await this._processTranscript(transcript, t0)
     } catch (err) {
       if (err.name === 'AbortError') {
         // turn preempted — no action needed
@@ -119,7 +127,8 @@ class VoiceSession {
     }
   }
 
-  async _processTranscript(transcript) {
+  async _processTranscript(transcript, turnStart) {
+    const tLLMStart = Date.now()
     const systemMsg = this._buildSystemMessage()
     // Voice agent only owns its own conversationHistory as dialogue turns.
     // Chat history is injected as a read-only context block in the system message
@@ -135,11 +144,12 @@ class VoiceSession {
     // for the full response. First audio plays ~200-400ms into generation.
     let sentenceBuf = ''
     let taskStarted = false
+    let firstChunkAt = null
     let firstSentenceAt = null
 
     const onChunk = (delta) => {
       if (!this.active) return
-      // Once <task> begins, stop piping to TTS — the rest is JSON, not speech
+      if (!firstChunkAt) firstChunkAt = Date.now()
       if (!taskStarted && sentenceBuf.includes('<task>')) {
         taskStarted = true
         const clean = sentenceBuf.replace(/<task>.*$/, '').trim()
@@ -151,13 +161,15 @@ class VoiceSession {
 
       sentenceBuf += delta
 
-      // Flush complete sentences — covers English (.!?) and CJK (Chinese/Japanese/Korean)
       const re = /([^.!?。！？]*[.!?。！？]+\s*)/y
       let m, consumed = 0
       while ((m = re.exec(sentenceBuf)) !== null) {
         const s = m[1].trim()
         if (s) {
-          if (!firstSentenceAt) firstSentenceAt = Date.now()
+          if (!firstSentenceAt) {
+            firstSentenceAt = Date.now()
+            logger.info(`[voice:timing] LLM first-sentence=${firstSentenceAt - tLLMStart}ms (turn=${firstSentenceAt - (turnStart || tLLMStart)}ms) "${s.slice(0, 40)}"`)
+          }
           this.onAiText(s)
         }
         consumed = re.lastIndex
@@ -168,7 +180,18 @@ class VoiceSession {
     const abortController = new AbortController()
     this._currentLLMAbort = () => abortController.abort()
 
-    const llmResult = await this.llmCall(messages, this.voiceConfig, { onChunk, signal: abortController.signal })
+    let llmResult
+    try {
+      llmResult = await this.llmCall(messages, this.voiceConfig, { onChunk, signal: abortController.signal })
+    } catch (llmErr) {
+      logger.error(`[voice:llmCall] ERROR: ${llmErr.message}`)
+      this.onError(llmErr.message || 'LLM call failed')
+      if (this.active) this.onStatus('standby')
+      return
+    }
+    const tLLMEnd = Date.now()
+    logger.info(`[voice:timing] LLM total=${tLLMEnd - tLLMStart}ms first-chunk=${firstChunkAt ? firstChunkAt - tLLMStart : 'n/a'}ms`)
+    logger.info(`[voice:timing] TURN total=${tLLMEnd - (turnStart || tLLMStart)}ms (STT+LLM)`)
 
     const aiResponse = llmResult?.text ?? ''
     if (!aiResponse || !this.active) {
@@ -349,31 +372,34 @@ You are the voice of a capable AI assistant. You speak, and a powerful agent han
 ### NEVER say you can't do something.
 Never say "I can't", "I'm unable to", "I don't have access to", "I'm a voice-only interface", or anything that reveals your limitations. If a task requires action, delegate it silently and confirm naturally.
 
-### Answer directly (no task tag) ONLY for pure conversation:
+### Answer directly (no task tag) — this is the DEFAULT:
+Most user messages should be answered directly in voice. This includes:
 - Greetings, small talk, goodbyes
-- Simple factual questions you can answer from memory/context
-- Opinions, preferences, short clarifications
-- Acknowledging what was just said
+- Questions (factual, opinion, knowledge, stories, jokes, explanations)
+- Requests for content (tell me a joke, tell me a story, explain something)
+- Preferences, clarifications, follow-ups
+- Anything you can answer by speaking
 
-### Delegate everything else using the task tag:
-For ANY request involving action, lookup, creation, editing, sending, searching, running, or anything beyond a spoken reply — delegate immediately. This includes:
+### Delegate with task tag — ONLY for tool/action operations:
+Use <task> ONLY when the user explicitly asks you to perform an action that requires tools, external services, or file operations. Examples:
 - Sending emails, messages, or notifications
-- Creating, editing, or deleting files, code, documents, models
-- Searching the web, knowledge base, or calendar
-- Running commands, scripts, or workflows
-- Using any tool, app, or external service
-- Any multi-step or follow-up task
+- Creating, editing, or deleting files or code
+- Running commands or scripts
+- Searching the web (NOT answering from knowledge)
 
-### Delegation format — use EXACTLY this:
+If in doubt, answer directly. Do NOT use <task> for conversation, knowledge questions, stories, or creative requests.
+
+### Task format (only when needed):
 <task>{"instruction": "complete, self-contained description of what to do"}</task>
 
-Say a brief natural acknowledgment first (1 sentence max), then emit the task tag immediately after. Never explain what you are doing or why. Never attempt the task yourself.
+Say a brief acknowledgment first, then emit the task tag. Never use task for things you can answer by speaking.
 
 ### Examples:
 User: "Send that to my email" → "On it." <task>{"instruction": "Send the last assistant message to the user's email"}</task>
-User: "Search for the latest news on AI" → "Let me pull that up." <task>{"instruction": "Search the web for the latest AI news and summarise the top results"}</task>
-User: "What's the weather like?" → "Checking now." <task>{"instruction": "Look up the current weather for the user's location"}</task>
-User: "What did we just talk about?" → Answer directly from context, no task tag.`)
+User: "Tell me a joke" → Answer directly with a joke. No task tag.
+User: "Tell me a story about a dragon" → Answer directly with the story. No task tag.
+User: "Search for the latest news on AI" → "Let me look that up." <task>{"instruction": "Search the web for the latest AI news"}</task>
+User: "What did we just talk about?" → Answer directly from context.`)
 
     return {
       role: 'system',

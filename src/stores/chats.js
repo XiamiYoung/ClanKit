@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { storage } from '../services/storage'
 import { en, zh } from '../i18n'
+import { parseToolLogBlock, deduplicateToolSegments } from '../utils/parseToolLog'
 
 const NEW_CHAT_TITLES = new Set([
   en.chats.newChat,
@@ -161,6 +162,47 @@ export const useChatsStore = defineStore('chats', () => {
               }
             }
           }
+          // Migrate: parse tool execution log text into proper tool segments
+          // (for messages saved before the parseToolLog parser was added)
+          for (const msg of chat.messages) {
+            if (msg.role !== 'assistant') continue
+            const segs = msg.segments
+            if (!segs || segs.length === 0) {
+              // Legacy messages with content but no segments
+              if (msg.content && msg.content.includes('[Tool execution log from this response:')) {
+                const result = parseToolLogBlock(msg.content)
+                if (result) {
+                  const newSegs = []
+                  if (result.cleanedText) newSegs.push({ type: 'text', content: result.cleanedText })
+                  newSegs.push(...result.parsedTools)
+                  msg.segments = newSegs
+                  msg.content = result.cleanedText
+                }
+              }
+              continue
+            }
+            const textContent = segs.filter(s => s.type === 'text').map(s => s.content).join('')
+            if (!textContent.includes('[Tool execution log from this response:')) continue
+            const result = parseToolLogBlock(textContent)
+            if (!result) continue
+            const existingTools = segs.filter(s => s.type === 'tool' && !s._fromLog)
+            const uniqueParsed = deduplicateToolSegments(existingTools, result.parsedTools)
+            const newSegs = []
+            let textReplaced = false
+            for (const seg of segs) {
+              if (seg.type === 'text') {
+                if (!textReplaced) {
+                  if (result.cleanedText) newSegs.push({ type: 'text', content: result.cleanedText })
+                  textReplaced = true
+                }
+              } else {
+                newSegs.push(seg)
+              }
+            }
+            newSegs.push(...uniqueParsed)
+            msg.segments = newSegs
+            msg.content = result.cleanedText
+          }
           if (full.contextMetrics) chat.contextMetrics = full.contextMetrics
           if (full.perAgentContextMetrics) chat.perAgentContextMetrics = full.perAgentContextMetrics
           if (full.lastContextSnapshot) chat.lastContextSnapshot = full.lastContextSnapshot
@@ -222,6 +264,8 @@ export const useChatsStore = defineStore('chats', () => {
         } else {
           chatTree.value = _deduplicateTree(wrapTree(index))
         }
+        // Collapse all folders first, then only expand ancestors of the active chat
+        _collapseAllFolders(chatTree.value)
         // Restore last active chat, or fall back to the first chat
         const allChats = flattenChats(chatTree.value)
         let restoredId = null
@@ -451,6 +495,16 @@ export const useChatsStore = defineStore('chats', () => {
     // Persist last active chat so it restores on next app launch
     try { localStorage.setItem('clankai_lastActiveChatId', id || '') } catch {}
     ensureMessages(id)  // fire-and-forget: UI shows loading indicator, never blocks
+  }
+
+  // Collapse all folders in the tree (used on load to reset expand state)
+  function _collapseAllFolders(nodes) {
+    for (const node of nodes) {
+      if (node.type === 'folder') {
+        node.expanded = false
+        if (node.children?.length) _collapseAllFolders(node.children)
+      }
+    }
   }
 
   // Expand all ancestor folders for a given chat so it's visible in the tree

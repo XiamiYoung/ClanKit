@@ -416,6 +416,9 @@
           @quote="quoteMessage"
           @quote-image="handleQuoteImage"
           @delete-message="requestDeleteMessage"
+          @speak-message="handleSpeakMessage"
+          :speakingMsgId="speakingMsgId"
+          :ttsPlayingMsgId="ttsPlayingMsgId"
           :on-approve-plan="approvePlan"
           :on-reject-plan="rejectPlan"
           :on-refine-plan="refinePlan"
@@ -608,7 +611,7 @@
                     :title="t('chats.escapeRetrieve')"
                   >
                     <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
+                      <circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor"/>
                     </svg>
                   </button>
                 </template>
@@ -623,9 +626,8 @@
                   aria-label="Send message"
                   :title="t('chats.sendMessageBtn')"
                 >
-                  <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <line x1="22" y1="2" x2="11" y2="13"/>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                  <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>
                   </svg>
                 </button>
               </div>
@@ -838,6 +840,18 @@
     @close="folderNonEmptyAlert = null"
   />
 
+  <ConfirmModal
+    v-if="voiceServerError"
+    :visible="true"
+    :title="voiceErrorTitle"
+    :message="voiceErrorMsg"
+    :confirm-text="t('common.goToConfig')"
+    confirm-class="primary"
+    :cancel-text="t('common.close')"
+    @confirm="voiceServerError = ''; $router.push('/config')"
+    @close="voiceServerError = ''"
+  />
+
   <!-- Tree item name tooltip (teleported — escapes sidebar overflow clip) -->
   <Teleport to="body">
     <div
@@ -972,6 +986,7 @@ const inputText = ref('')
 // inputText moved here; sendMessage is a function declaration (hoisted).
 const {
   handleStartCall,
+  voiceServerError,
   setupVoiceListeners,
   cleanupVoiceListeners,
   addVoiceMessageToChat,
@@ -982,6 +997,146 @@ const {
   startMicCapture,
   stopMicCapture,
 } = useVoiceRecording({ inputText, sendMessage: (...args) => sendMessage(...args) })
+
+const speakingMsgId = ref('')
+const ttsPlayingMsgId = ref('')
+let _speakAudioEl = null
+
+// Stop playback when the user switches to a different chat
+watch(() => chatsStore.activeChatId, () => { stopSpeakMessage() })
+
+function resolveSpeakAgentId(msg) {
+  if (msg?.agentId && agentsStore.getAgentById(msg.agentId)) return msg.agentId
+
+  const chat = chatsStore.chats.find(c => c.id === chatsStore.activeChatId)
+  if (chat?.groupAgentIds?.length) return chat.groupAgentIds[0]
+
+  return chat?.systemAgentId || agentsStore.defaultSystemAgent?.id || null
+}
+
+async function playSpeakAudio(result) {
+  if (!result?.success || !result.audio) return false
+
+  _speakAudioEl = new Audio(`data:audio/${result.format || 'mp3'};base64,${result.audio}`)
+  const speakerId = voiceStore.selectedSpeakerId
+  if (speakerId && typeof _speakAudioEl.setSinkId === 'function') {
+    _speakAudioEl.setSinkId(speakerId).catch(() => {})
+  }
+  _speakAudioEl.onended = () => stopSpeakMessage()
+  _speakAudioEl.onerror = () => stopSpeakMessage()
+  ttsPlayingMsgId.value = speakingMsgId.value
+  await _speakAudioEl.play()
+  return true
+}
+
+async function handleSpeakMessage(msg) {
+  if (!msg?.content) return
+
+  // If already speaking this message, stop
+  if (speakingMsgId.value === msg.id) {
+    stopSpeakMessage()
+    return
+  }
+  // Stop any previous speech
+  stopSpeakMessage()
+
+  // Extract plain text only (skip tool calls, images, etc.)
+  let text = ''
+  if (msg.segments) {
+    text = msg.segments
+      .filter(s => s.type === 'text')
+      .map(s => s.content || '')
+      .join(' ')
+  } else if (typeof msg.content === 'string') {
+    text = msg.content
+  }
+  // Strip markdown
+  text = text.replace(/```[\s\S]*?```/g, '').replace(/[#*`_~\[\]()>|]/g, '').replace(/\n{2,}/g, '\n').trim().slice(0, 3000)
+  if (!text) return
+
+  speakingMsgId.value = msg.id
+
+  try {
+    const vc = configStore.config.voiceCall || {}
+    const agentId = resolveSpeakAgentId(msg)
+    const agent = agentId ? agentsStore.getAgentById(agentId) : null
+
+    if (vc.mode === 'local') {
+      if (!window.electronAPI?.voice?.localTts) {
+        voiceServerError.value = 'SERVER_NOT_RUNNING'
+        stopSpeakMessage()
+        return
+      }
+      const voice = agent?.voiceId || vc.local?.ttsVoice || 'zh-CN-XiaoxiaoNeural'
+      const result = await window.electronAPI.voice.localTts({ text, voice, language: vc.language || 'auto' })
+      if (speakingMsgId.value === msg.id && await playSpeakAudio(result)) {
+        return
+      }
+      // Local TTS failed — show config dialog like voice call path
+      voiceServerError.value = 'SERVER_NOT_RUNNING'
+      stopSpeakMessage()
+      return
+    }
+
+    const openAiMode = (vc.mode === 'openai' || vc.ttsMode === 'openai' || vc.ttsMode === 'openai-hd')
+    const useOpenAITts = (vc.mode === 'openai' || vc.ttsMode === 'openai' || vc.ttsMode === 'openai-hd')
+      && vc.whisperApiKey
+      && vc.whisperBaseURL
+      && window.electronAPI?.voice?.tts
+
+    if (openAiMode && !useOpenAITts) {
+      voiceServerError.value = 'WHISPER_NOT_CONFIGURED'
+      stopSpeakMessage()
+      return
+    }
+
+    if (useOpenAITts && speakingMsgId.value === msg.id) {
+      const result = await window.electronAPI.voice.tts({
+        text,
+        apiKey: vc.whisperApiKey,
+        baseURL: vc.whisperBaseURL,
+        model: vc.ttsMode === 'openai-hd' ? 'tts-1-hd' : 'tts-1',
+        voice: agent?.voiceId || 'alloy',
+      })
+      if (speakingMsgId.value === msg.id && await playSpeakAudio(result)) {
+        return
+      }
+      voiceServerError.value = 'WHISPER_NOT_CONFIGURED'
+      stopSpeakMessage()
+      return
+    }
+
+    // No configured mode — browser TTS as last resort
+    if (window.speechSynthesis && speakingMsgId.value === msg.id) {
+      const utterance = new SpeechSynthesisUtterance(text.slice(0, 500))
+      utterance.onend = () => stopSpeakMessage()
+      utterance.onerror = () => stopSpeakMessage()
+      window.speechSynthesis.speak(utterance)
+    }
+  } catch {
+    stopSpeakMessage()
+  }
+}
+
+function stopSpeakMessage() {
+  speakingMsgId.value = ''
+  ttsPlayingMsgId.value = ''
+  if (_speakAudioEl) { _speakAudioEl.pause(); _speakAudioEl = null }
+  if (window.speechSynthesis) window.speechSynthesis.cancel()
+}
+
+const voiceErrorTitle = computed(() => {
+  const code = voiceServerError.value
+  if (code === 'VOICE_DISABLED') return t('voice.voiceDisabledTitle')
+  if (code === 'WHISPER_NOT_CONFIGURED') return t('voice.whisperNotConfiguredTitle')
+  return t('voice.serverNotRunningTitle')
+})
+const voiceErrorMsg = computed(() => {
+  const code = voiceServerError.value
+  if (code === 'VOICE_DISABLED') return t('voice.voiceDisabledMsg')
+  if (code === 'WHISPER_NOT_CONFIGURED') return t('voice.whisperNotConfiguredMsg')
+  return t('voice.serverNotRunningMsg')
+})
 
 
 // ── Memory saved notification ──────────────────────────────────────────────

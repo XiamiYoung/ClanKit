@@ -113,12 +113,13 @@ class MemoryFlush {
       defaultProvider:   'openai',
       _directAuth:       this.directAuth,
     }
-    const client = new OpenAIClient(cfg).getClient()
+    const openAIClient = new OpenAIClient(cfg)
+    const client = openAIClient.getClient()
     // Strip extra fields (e.g. timestamp) — some providers reject unknown properties
     const cleanMsgs = messages.map(m => ({ role: m.role, content: m.content }))
     const response = await client.chat.completions.create({
       model: this.model,
-      max_tokens: 512,
+      ...openAIClient.tokenLimit(512),
       messages: [
         { role: 'system', content: FLUSH_SYSTEM },
         ...cleanMsgs,
@@ -142,7 +143,7 @@ class MemoryFlush {
       : ''
     const chatTag  = meta.chatId    ? ` | chat:${meta.chatId.slice(0, 8)}` : ''
     const titleTag = firstBullet    ? ` | "${firstBullet}"` : ''
-    const heading  = `\n## Session ${timeStamp}${chatTag}${titleTag}\n`
+    const heading  = `\n## Session ${today} ${timeStamp}${chatTag}${titleTag}\n`
 
     const body = bullets
       .map(l => l.startsWith('-') ? l : `- ${l}`)

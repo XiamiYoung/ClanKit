@@ -45,8 +45,39 @@ const activeLoops = new Map()          // chatId -> AgentLoop
 const activeLoopMeta = new Map()       // same key as activeLoops → { chatId, agentId, agentName, isGroup }
 const pendingStops = new Set()         // chatIds where stop was requested before loop existed
 const lastContextSnapshots = new Map() // chatId -> snapshot
+const chatLoadedSkills = new Map()     // chatId -> Map(skillId -> content) — persists load_skill results across turns
 const lastExtractedMsgCount = new Map() // chatId -> message count at last extraction
 const pendingMemoryFacts = new Map()    // chatId -> Array of pending fact objects (medium-confidence)
+
+/**
+ * Build synthetic skill-injection message pair from a Map of loaded skills.
+ * Returns an array of two messages (user + assistant) if skills exist, empty array otherwise.
+ */
+function _buildSkillInjectionMessages(loadedSkills) {
+  if (!loadedSkills || loadedSkills.size === 0) return []
+  const skillEntries = []
+  for (const [id, content] of loadedSkills) {
+    skillEntries.push(`[SKILL: ${id}]\n${content}`)
+  }
+  return [
+    { role: 'user', content: skillEntries.join('\n\n---\n\n') },
+    { role: 'assistant', content: 'Skills loaded. I will follow these instructions.' },
+  ]
+}
+
+/**
+ * Prepend skill-injection messages to each agentRun's messages array.
+ * Mutates the runs in-place.
+ */
+function _injectSkillsIntoRuns(agentRuns, loadedSkills) {
+  const skillMessages = _buildSkillInjectionMessages(loadedSkills)
+  if (skillMessages.length === 0) return
+  for (const run of agentRuns) {
+    if (run.messages) {
+      run.messages = [...skillMessages, ...run.messages]
+    }
+  }
+}
 
 /** Read a soul file from disk. Returns null if not found. */
 function readSoulFileSync(agentId, agentType) {
@@ -440,7 +471,8 @@ function _buildIdentityAwareMessages(rawMessages, currentSysId, currentUsrId, ag
         content = `[Previous User]: ${content}`
       }
     }
-    return { role: m.role, content }
+    const result = { role: m.role, content }
+    return result
   })
 }
 
@@ -2020,7 +2052,7 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
       return { success: false, error: 'Missing required field: baseURL' }
     }
 
-    const isOpenAI = provider === 'openai' || provider === 'openai_official' || provider === 'deepseek' || provider === 'minimax'
+    const isOpenAI = provider === 'openai' || provider === 'openai_official' || provider === 'deepseek' || provider === 'minimax' || provider === 'custom'
 
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
@@ -2030,7 +2062,8 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
         customModel: utilityModel,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
-        ...(provider === 'openai_official' || provider === 'deepseek' || provider === 'minimax' ? { _directAuth: true } : {}),
+        // custom providers talk directly to their endpoint (no proxy wrapper)
+        ...(provider === 'openai_official' || provider === 'deepseek' || provider === 'minimax' || provider === 'custom' ? { _directAuth: true } : {}),
       }
       cfg.provider = { type: provider }
       const client = new OpenAIClient(cfg)
@@ -2125,7 +2158,7 @@ ipcMain.handle('agent:send-message', async (event, {
   }
 
   // ── Helper: run a batch of agentRuns concurrently ─────────────────────────
-  async function runGroupRound(runList, roundMessages, attachments, trackMessages, fullCfg) {
+  async function runGroupRound(runList, roundMessages, attachments, trackMessages, fullCfg, allLoadedSkills) {
     const baseMessages = [...roundMessages]
 
     for (const run of runList) {
@@ -2239,7 +2272,7 @@ ipcMain.handle('agent:send-message', async (event, {
             run.httpTools ?? [],
             runRagContext
           )
-          return { agentId: run.agentId, agentName: run.agentName, success: true, result, text: accumulator.getText() }
+          return { agentId: run.agentId, agentName: run.agentName, success: true, result, text: accumulator.getText(), loadedSkills: loop.getLoadedSkills() }
         } catch (err) {
           // Include last user message and any accumulated LLM response in error log
           const lastUserMsg = [...(run.messages || baseMessages)].reverse().find(m => m.role === 'user')
@@ -2284,16 +2317,26 @@ ipcMain.handle('agent:send-message', async (event, {
       } else {
         logger.agent(`[collab-debug] runGroupRound result has NO text for agentId=${r.agentId}`, { chatId })
       }
+      // Accumulate skills that were actually loaded by the LLM via load_skill tool
+      if (r.loadedSkills && r.loadedSkills.size > 0) {
+        if (allLoadedSkills) {
+          for (const [id, content] of r.loadedSkills) allLoadedSkills.set(id, content)
+        }
+        // Persist to per-chat cache so subsequent user messages reuse loaded skills
+        if (!chatLoadedSkills.has(chatId)) chatLoadedSkills.set(chatId, new Map())
+        const chatCache = chatLoadedSkills.get(chatId)
+        for (const [id, content] of r.loadedSkills) chatCache.set(id, content)
+      }
     }
 
     return results
   }
 
-  function buildGroupApiMessages(responderId, sourceMessages, groupAgentsList, allAgents) {
+  function buildGroupApiMessages(responderId, sourceMessages, groupAgentsList, allAgents, loadedSkills) {
     const currentUserAgentId = targetChatMeta.userAgentId || null
     const agentsById = Object.fromEntries((allAgents || []).map(a => [a.id, a]))
 
-    return sourceMessages
+    const messages = sourceMessages
       .filter(m => (m.role === 'user' && !!m.content) || (m.role === 'assistant' && !!m.content))
       .map(m => {
         if (m.role === 'assistant' && m.agentId && m.agentId !== responderId) {
@@ -2306,10 +2349,18 @@ ipcMain.handle('agent:send-message', async (event, {
         }
         return { role: m.role, content: m.content }
       })
+
+    // Inject previously loaded skill content so subsequent rounds don't re-call load_skill
+    const skillMessages = _buildSkillInjectionMessages(loadedSkills)
+    if (skillMessages.length > 0) {
+      messages.unshift(...skillMessages)
+    }
+
+    return messages
   }
 
   // ── Collaboration loop ─────────────────────────────────────────────────────
-  async function triggerCollaboration(trackMessages, groupAgents, groupIdsArr, allData, fullCfg, iterationCount, prevMsgCount) {
+  async function triggerCollaboration(trackMessages, groupAgents, groupIdsArr, allData, fullCfg, iterationCount, prevMsgCount, allLoadedSkills) {
     const MAX_ITERATIONS = Math.min(100, Math.max(1, targetChatMeta.maxAgentRounds ?? 10))
 
     const newMessages = trackMessages.slice(prevMsgCount)
@@ -2364,7 +2415,7 @@ ipcMain.handle('agent:send-message', async (event, {
       const agent = groupAgents.find(a => a.id === pid)
       if (!agent) continue
 
-      const seqApiMessages = buildGroupApiMessages(pid, trackMessages, groupAgents, allData.agents)
+      const seqApiMessages = buildGroupApiMessages(pid, trackMessages, groupAgents, allData.agents, allLoadedSkills)
 
       if (iterationCount >= 2 && seqApiMessages.length > 0) {
         const originalPrompt = trackMessages.find(m => m.role === 'user')?.content?.slice(0, 500) || ''
@@ -2387,14 +2438,14 @@ ipcMain.handle('agent:send-message', async (event, {
       }
 
       const roundRuns = _buildAgentRuns([pid], groupIdsArr, fullCfg, seqApiMessages, targetChatMeta, allData)
-      await runGroupRound(roundRuns, seqApiMessages, [], trackMessages, fullCfg)
+      await runGroupRound(roundRuns, seqApiMessages, [], trackMessages, fullCfg, allLoadedSkills)
 
       if (!event.sender.isDestroyed()) {
         event.sender.send('agent:chunk', { chatId, chunk: { type: 'collaboration_round_done', agentId: pid } })
       }
     }
 
-    await triggerCollaboration(trackMessages, groupAgents, groupIdsArr, allData, fullCfg, iterationCount + 1, nextLength)
+    await triggerCollaboration(trackMessages, groupAgents, groupIdsArr, allData, fullCfg, iterationCount + 1, nextLength, allLoadedSkills)
   }
 
   // ── Fire async — return immediately to Vue ─────────────────────────────────
@@ -2508,6 +2559,10 @@ ipcMain.handle('agent:send-message', async (event, {
         return
       }
 
+      // Tracks skills actually loaded by LLM via load_skill tool — persists across collaboration rounds
+      // Seed from per-chat cache so subsequent user messages reuse previously loaded skills
+      const allLoadedSkills = new Map(chatLoadedSkills.get(chatId) || [])
+
       // ── Echo explicit audience selection for completion event ─────────────
       const newStickyTargetIds = isGroup
         ? ((targetChatMeta?.groupAudienceMode === 'manual' && Array.isArray(targetChatMeta?.groupAudienceAgentIds))
@@ -2515,9 +2570,17 @@ ipcMain.handle('agent:send-message', async (event, {
           : [])
         : (stickyTargetIds || [])
 
+      // Inject previously loaded skill content into each agentRun's messages
+      // so the LLM sees skill history and doesn't re-call load_skill on subsequent turns.
+      // Must inject into run.messages (not effectiveMessages) because _buildAgentRuns sets
+      // run.messages which overrides baseMessages inside runGroupRound.
+      _injectSkillsIntoRuns(agentRuns, allLoadedSkills)
+
+      let effectiveMessages = messages || []
+
       if (!isGroup) {
         // Single-agent path: run via runGroupRound (same infra, single element list)
-        await runGroupRound(agentRuns, messages || [], pendingAttachments || [], trackMessages, fullCfg)
+        await runGroupRound(agentRuns, effectiveMessages, pendingAttachments || [], trackMessages, fullCfg, allLoadedSkills)
 
         // Collect snapshot for the inspector (same pattern as group path)
         const run = agentRuns[0]
@@ -2580,22 +2643,22 @@ ipcMain.handle('agent:send-message', async (event, {
 
       const msgCountBeforeRun = trackMessages.length
 
-      await runGroupRound(firstRoundRuns, messages || [], pendingAttachments || [], trackMessages, fullCfg)
+      await runGroupRound(firstRoundRuns, effectiveMessages, pendingAttachments || [], trackMessages, fullCfg, allLoadedSkills)
 
       // Run sequential dependents if executionMode is sequential
       if (executionMode === 'sequential') {
         const firstRoundIds = new Set(firstRoundRuns.map(r => r.agentId))
         const remainingRuns = agentRuns.filter(r => !firstRoundIds.has(r.agentId))
         for (const run of remainingRuns) {
-          const seqApiMessages = buildGroupApiMessages(run.agentId, trackMessages, groupAgents, allData.agents)
-          await runGroupRound([run], seqApiMessages, [], trackMessages, fullCfg)
+          const seqApiMessages = buildGroupApiMessages(run.agentId, trackMessages, groupAgents, allData.agents, allLoadedSkills)
+          await runGroupRound([run], seqApiMessages, [], trackMessages, fullCfg, allLoadedSkills)
         }
       }
 
       // Collaboration loop
       if (groupAgents.length >= 2) {
         logger.agent(`[collab-debug] entering collaboration. groupAgents=${groupAgents.length} trackMessages=${trackMessages.length} newSince=${trackMessages.length - msgCountBeforeRun}`, { chatId })
-        await triggerCollaboration(trackMessages, groupAgents, effectiveGroupIds, allData, fullCfg, 0, msgCountBeforeRun)
+        await triggerCollaboration(trackMessages, groupAgents, effectiveGroupIds, allData, fullCfg, 0, msgCountBeforeRun, allLoadedSkills)
       }
 
       // Combine per-agent snapshots into a single chatId snapshot for the inspector
@@ -2634,4 +2697,4 @@ ipcMain.handle('agent:send-message', async (event, {
 
 }
 
-module.exports = { register, activeLoops, activeLoopMeta, lastContextSnapshots, lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtraction, _runStartupIndexRecovery, readSoulFileSync }
+module.exports = { register, activeLoops, activeLoopMeta, lastContextSnapshots, lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtraction, _runStartupIndexRecovery, readSoulFileSync, chatLoadedSkills, _buildSkillInjectionMessages, _injectSkillsIntoRuns }

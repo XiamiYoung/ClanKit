@@ -12,12 +12,21 @@ export function detectAgentLanguage(description = '', prompt = '', appLanguage =
 }
 
 export function extractJsonPayload(text = '') {
-  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  const trimmed = text.trim()
+  // If the text itself starts with '{', use it directly — do NOT apply fence extraction,
+  // because the prompt field inside the JSON may contain ```...``` blocks that would
+  // fool the fence regex into returning the wrong content.
+  if (trimmed.startsWith('{')) {
+    const end = trimmed.lastIndexOf('}')
+    return end > 0 ? trimmed.slice(0, end + 1) : trimmed
+  }
+  // Otherwise look for a ```json ... ``` or ``` ... ``` wrapper around the JSON object
+  const match = trimmed.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
   if (match) return match[1].trim()
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  if (start >= 0 && end > start) return text.slice(start, end + 1)
-  return text.trim()
+  const start = trimmed.indexOf('{')
+  const end = trimmed.lastIndexOf('}')
+  if (start >= 0 && end > start) return trimmed.slice(start, end + 1)
+  return trimmed
 }
 
 export function getCharacterPromptSections(lang) {

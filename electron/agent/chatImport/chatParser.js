@@ -1,0 +1,263 @@
+'use strict'
+
+/**
+ * chatParser.js — Node.js parsers for WhatsApp and plain-text chat exports.
+ * WeChat and iMessage are handled via Python (wechat_parser.py).
+ */
+
+const fs = require('fs')
+const path = require('path')
+
+// WhatsApp export regex patterns (3 format variants)
+// iOS:     [DD/MM/YYYY, HH:MM:SS] Name: message
+// Android: DD/MM/YYYY, HH:MM - Name: message
+// US:      M/D/YY, H:MM AM/PM - Name: message
+const WA_PATTERNS = [
+  /^\[(\d{1,2}\/\d{1,2}\/\d{2,4}),\s*\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?\]\s+(.+?):\s+(.*)$/,
+  /^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s*\d{1,2}:\d{2}(?:\s*[AP]M)?\s+-\s+(.+?):\s+(.*)$/,
+  /^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s*\d{1,2}:\d{2}\s*[AP]M\s+-\s+(.+?):\s+(.*)$/,
+]
+
+// System messages to skip
+const WA_SYSTEM_RE = /^(Messages and calls are end-to-end encrypted|This message was deleted|<Media omitted>|image omitted|video omitted|audio omitted|GIF omitted|document omitted|sticker omitted|Contact card omitted)/i
+
+/**
+ * Parse a single WhatsApp export line. Returns { timestamp, sender, content } or null.
+ */
+function parseWhatsAppLine(line) {
+  for (const re of WA_PATTERNS) {
+    const m = line.match(re)
+    if (m) {
+      return { timestamp: m[1], sender: m[2].trim(), content: m[3].trim() }
+    }
+  }
+  return null
+}
+
+/**
+ * Extract messages from a WhatsApp .txt export file.
+ * Also handles .zip (single .txt inside) via adm-zip.
+ * @param {string} filePath - path to .txt or .zip file
+ * @param {function} [onProgress] - optional (pct, msg) callback
+ * @returns {{ messages: Array, warning?: string }}
+ */
+function extractWhatsAppMessages(filePath, onProgress) {
+  let text
+
+  if (filePath.endsWith('.zip')) {
+    const AdmZip = require('adm-zip')
+    const zip = new AdmZip(filePath)
+    const entries = zip.getEntries().filter(e => e.entryName.endsWith('.txt'))
+    if (entries.length === 0) throw new Error('No .txt file found inside the ZIP.')
+    text = zip.readAsText(entries[0])
+    onProgress && onProgress(20, `Extracted ${entries[0].entryName} from ZIP`)
+  } else {
+    text = fs.readFileSync(filePath, 'utf8')
+    onProgress && onProgress(20, 'Read export file')
+  }
+
+  return parseWhatsAppText(text, onProgress)
+}
+
+/**
+ * Parse WhatsApp text content (already loaded as string).
+ */
+function parseWhatsAppText(text, onProgress) {
+  const lines = text.split('\n')
+  const messages = []
+  let current = null
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    const parsed = parseWhatsAppLine(line)
+    if (parsed) {
+      if (current) messages.push(current)
+      if (WA_SYSTEM_RE.test(parsed.content)) {
+        current = null
+        continue
+      }
+      current = parsed
+    } else if (current) {
+      // Continuation of previous message
+      current.content += '\n' + line
+    }
+  }
+  if (current) messages.push(current)
+
+  onProgress && onProgress(80, `Parsed ${messages.length} messages`)
+
+  if (messages.length === 0) {
+    return { messages: [], warning: 'No messages could be parsed. Check the file format.' }
+  }
+  return { messages }
+}
+
+/**
+ * Parse a generic plain-text paste.
+ * Tries common formats:
+ *   - "Name: message" (each line)
+ *   - "[timestamp] Name: message"
+ *   - "Name\nmessage\n---" (block format)
+ * @param {string} text
+ * @param {function} [onProgress]
+ * @returns {{ messages: Array, warning?: string }}
+ */
+function extractPlainTextMessages(text, onProgress) {
+  const lines = text.split('\n')
+  const messages = []
+
+  // Try "Name: content" pattern with optional leading timestamp
+  const lineRe = /^(?:\[?[\d\/\-: ,APM]+\]?\s+)?([^:：\n]{1,40})[：:]\s+(.+)$/
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const m = trimmed.match(lineRe)
+    if (m) {
+      messages.push({ sender: m[1].trim(), content: m[2].trim(), timestamp: null })
+    }
+  }
+
+  onProgress && onProgress(80, `Parsed ${messages.length} messages`)
+
+  if (messages.length === 0) {
+    // Fallback: treat every non-empty line as an unknown-sender message
+    const fallback = lines
+      .map(l => l.trim())
+      .filter(Boolean)
+      .map(l => ({ sender: 'unknown', content: l, timestamp: null }))
+    return {
+      messages: fallback,
+      warning: 'Could not detect sender names. All lines treated as messages.',
+    }
+  }
+  return { messages }
+}
+
+/**
+ * Classify raw messages into categories.
+ * JS port of wechat_parser.py classify_messages().
+ *
+ * @param {Array<{sender: string, content: string}>} messages
+ * @param {string} targetName - the name of "them" (the person being studied)
+ * @returns {object} classified dict
+ */
+function classifyMessages(messages, targetName) {
+  // Determine which sender is "them"
+  const senders = {}
+  for (const m of messages) {
+    senders[m.sender] = (senders[m.sender] || 0) + 1
+  }
+
+  // "them" is the sender matching targetName (case-insensitive partial match)
+  // or, if targetName not found, the most frequent non-"me" sender
+  let themSender = null
+  const nameLower = (targetName || '').toLowerCase()
+  for (const s of Object.keys(senders)) {
+    if (nameLower && s.toLowerCase().includes(nameLower)) {
+      themSender = s
+      break
+    }
+  }
+  if (!themSender) {
+    // Pick highest-frequency sender that isn't "me/我/I"
+    const mePat = /^(me|我|i|myself)$/i
+    const candidates = Object.entries(senders)
+      .filter(([s]) => !mePat.test(s))
+      .sort((a, b) => b[1] - a[1])
+    themSender = candidates[0]?.[0] || null
+  }
+
+  // Normalize to them/me
+  const normalized = messages.map(m => ({
+    ...m,
+    sender: themSender && m.sender === themSender ? 'them' : 'me',
+  }))
+
+  // Long messages (>= 50 chars from them)
+  const long_messages = normalized
+    .filter(m => m.sender === 'them' && m.content.length >= 50)
+    .slice(0, 30)
+
+  // Conflict messages — heuristic: contain conflict keywords
+  const conflictKw = /生气|吵|算了|随便|你自己|不想说|冷战|分手|烦|滚|去死|hate|angry|fight|upset|whatever|forget it|leave me|don't talk/i
+  const conflict_messages = normalized
+    .filter(m => conflictKw.test(m.content))
+    .slice(0, 20)
+
+  // Sweet messages — heuristic: contain affectionate keywords
+  const sweetKw = /喜欢|爱你|想你|宝|亲爱|心|❤|love|miss you|like you|baby|babe|honey|cute|sweet/i
+  const sweet_messages = normalized
+    .filter(m => sweetKw.test(m.content))
+    .slice(0, 20)
+
+  // Daily messages (recent, from them, short)
+  const daily_messages = normalized
+    .filter(m => m.sender === 'them' && m.content.length < 50)
+    .slice(-50)
+
+  // All messages (recent 200, full conversation)
+  const all_messages = normalized.slice(-200)
+
+  const total_their_count = normalized.filter(m => m.sender === 'them').length
+
+  return {
+    long_messages,
+    conflict_messages,
+    sweet_messages,
+    daily_messages,
+    all_messages,
+    total_their_count,
+    total_count: messages.length,
+    target_name: targetName,
+  }
+}
+
+/**
+ * Build the message block string for the AI prompt.
+ * JS port of wechat_parser.py format_output() with capped samples.
+ *
+ * @param {object} classified - result of classifyMessages()
+ * @param {string} targetName
+ * @returns {string}
+ */
+function buildMessageBlock(classified, targetName) {
+  const name = targetName || 'Them'
+  const lines = []
+
+  const fmt = (msgs, label) => {
+    if (!msgs || msgs.length === 0) return
+    lines.push(`\n## ${label} (${msgs.length})\n`)
+    for (const m of msgs) {
+      const sender = m.sender === 'them' ? name : 'Me'
+      const ts = m.timestamp ? `[${m.timestamp}] ` : ''
+      lines.push(`${ts}${sender}: ${m.content}`)
+    }
+  }
+
+  fmt(classified.long_messages, 'Long Messages (Their Detailed Expressions)')
+  fmt(classified.conflict_messages, 'Conflict Messages')
+  fmt(classified.sweet_messages, 'Sweet / Affectionate Messages')
+  fmt(classified.daily_messages, 'Daily Chat Samples')
+
+  const all = classified.all_messages || []
+  if (all.length > 0) {
+    lines.push(`\n## Recent Conversation (last ${all.length} messages, chronological)\n`)
+    for (const m of all) {
+      const sender = m.sender === 'them' ? name : 'Me'
+      const ts = m.timestamp ? `[${m.timestamp}] ` : ''
+      lines.push(`${ts}${sender}: ${m.content}`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
+module.exports = {
+  extractWhatsAppMessages,
+  extractPlainTextMessages,
+  classifyMessages,
+  buildMessageBlock,
+}

@@ -42,7 +42,7 @@
             <div class="bv-field">
               <label class="bv-field-label">{{ t('agents.name') }}<span v-if="!readOnly" class="bv-required">*</span></label>
               <div v-if="readOnly" class="bv-readonly-text">{{ draftName || '—' }}</div>
-              <input v-else v-model="draftName" type="text" class="bv-input" maxlength="30" :class="{ error: saveError && (!draftName.trim() || draftName.trim().length > 30) }" :placeholder="t('agents.agentNamePlaceholder')" spellcheck="false" @input="saveError = ''" @blur="draftName = draftName.trim()" />
+              <input v-else v-model="draftName" type="text" class="bv-input" maxlength="50" :class="{ error: saveError && (!draftName.trim() || draftName.trim().length > 50) }" :placeholder="t('agents.agentNamePlaceholder')" spellcheck="false" @input="saveError = ''" @blur="draftName = draftName.trim()" />
             </div>
 
             <!-- Description -->
@@ -511,17 +511,40 @@
                   <template v-if="readOnly">
                     <div class="bv-ro-section">
                       <div class="bv-ro-label">{{ t('agents.voice') }}</div>
-                      <div class="bv-ro-value">{{ voiceOptions.find(v => v.value === draftVoiceId)?.label || draftVoiceId }}</div>
-                      <div class="bv-ro-hint">{{ voiceOptions.find(v => v.value === draftVoiceId)?.desc || '' }}</div>
+                      <div class="bv-ro-value">{{ currentVoiceLabel }}</div>
                     </div>
                   </template>
                   <template v-else>
-                    <div class="bv-voice-grid">
-                      <button v-for="v in voiceOptions" :key="v.value" class="bv-voice-card" :class="{ active: draftVoiceId === v.value }" @click="draftVoiceId = v.value">
-                        <span class="bv-voice-name">{{ v.label }}</span>
-                        <span class="bv-voice-desc">{{ v.desc }}</span>
-                      </button>
+                    <!-- No voice mode configured -->
+                    <div v-if="!availableVoiceModes.length" style="padding:1rem; color:var(--c-text-muted); text-align:center;">
+                      <p>{{ t('agents.voiceNotConfigured') }}</p>
+                      <p class="hint" style="margin-top:0.5rem;">{{ t('agents.voiceNotConfiguredHint') }}</p>
                     </div>
+                    <template v-else>
+                      <!-- Voice mode selector (only show if multiple modes available) -->
+                      <div v-if="availableVoiceModes.length > 1" class="bv-field-group">
+                        <label class="bv-field-label">{{ t('agents.voiceMode') }}</label>
+                        <select v-model="draftVoiceMode" class="bv-field-select">
+                          <option v-for="m in availableVoiceModes" :key="m.id" :value="m.id">{{ m.name }}</option>
+                        </select>
+                      </div>
+                      <!-- Voice list -->
+                      <div class="bv-field-group">
+                        <label class="bv-field-label">{{ t('agents.voiceSelect') }}</label>
+                        <div class="bv-voice-grid">
+                          <button v-for="v in currentVoiceList" :key="v.id" class="bv-voice-card" :class="{ active: draftVoiceId === v.id }" @click="draftVoiceId = v.id">
+                            <span class="bv-voice-name">{{ v.name }}</span>
+                            <span class="bv-voice-desc">{{ v.gender === 'Female' ? t('common.female') : v.gender === 'Male' ? t('common.male') : '' }} · {{ v.locale === 'zh-CN' ? t('common.chinese') : v.locale === 'en-US' ? t('common.english') : v.locale || '' }}</span>
+                          </button>
+                        </div>
+                      </div>
+                      <!-- Preview -->
+                      <div v-if="draftVoiceId" style="margin-top:0.75rem;">
+                        <AppButton size="compact" :loading="previewingAgentVoice" :disabled="previewingAgentVoice" @click="previewAgentVoice">
+                          {{ previewingAgentVoice ? t('agents.voicePreview') : '▶ ' + t('agents.voicePreview') }}
+                        </AppButton>
+                      </div>
+                    </template>
                   </template>
                 </div>
 
@@ -609,7 +632,7 @@
                   <span class="bv-summary-icon">🎤</span>
                   <div class="bv-summary-content">
                     <span class="bv-summary-label">{{ t('agents.voice') }}</span>
-                    <span class="bv-summary-value">{{ voiceOptions.find(v => v.value === draftVoiceId)?.label || draftVoiceId }}</span>
+                    <span class="bv-summary-value">{{ currentVoiceLabel }}</span>
                   </div>
                   <svg class="bv-summary-chevron" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
                 </div>
@@ -795,7 +818,7 @@ const draftName        = ref(props.agentName || '')
 const draftDescription = ref(props.agentDescription || '')
 const draftPrompt      = ref(props.agentPrompt || '')
 const draftAvatar      = ref(props.agentAvatar || null)
-const draftVoiceId     = ref(props.agentVoiceId || 'alloy')
+const draftVoiceId     = ref(props.agentVoiceId || '')
 
 // Pre-fill prompt template for new user agents (markdown format matching system agent templates)
 if (props.isNew && props.agentType !== 'system' && !draftPrompt.value) {
@@ -1004,14 +1027,59 @@ onMounted(() => {
 })
 
 // ── Voice options ──────────────────────────────────────────────────────────
-const voiceOptions = [
-  { value: 'alloy',   label: 'Alloy',   desc: 'Neutral, balanced' },
-  { value: 'echo',    label: 'Echo',     desc: 'Warm, rounded' },
-  { value: 'fable',   label: 'Fable',    desc: 'Expressive, British' },
-  { value: 'onyx',    label: 'Onyx',     desc: 'Deep, authoritative' },
-  { value: 'nova',    label: 'Nova',     desc: 'Friendly, upbeat' },
-  { value: 'shimmer', label: 'Shimmer',  desc: 'Clear, gentle' },
-]
+import { EDGE_VOICES, OPENAI_VOICES } from '../../utils/edgeVoices'
+
+const draftVoiceMode = ref('') // 'local' or 'openai'
+const previewingAgentVoice = ref(false)
+
+const availableVoiceModes = computed(() => {
+  const vc = configStore.config.voiceCall || {}
+  const modes = []
+  if (vc.mode === 'local') modes.push({ id: 'local', name: 'Edge-TTS' })
+  if (vc.mode === 'openai' || (vc.whisperApiKey && vc.ttsMode && vc.ttsMode !== 'browser')) modes.push({ id: 'openai', name: 'OpenAI TTS' })
+  // Auto-select first available mode
+  if (modes.length && !draftVoiceMode.value) draftVoiceMode.value = modes[0].id
+  return modes
+})
+
+const currentVoiceList = computed(() => {
+  if (draftVoiceMode.value === 'openai') return OPENAI_VOICES
+  return EDGE_VOICES
+})
+
+const currentVoiceLabel = computed(() => {
+  const all = [...EDGE_VOICES, ...OPENAI_VOICES]
+  const found = all.find(v => v.id === draftVoiceId.value)
+  return found ? found.name : draftVoiceId.value || '–'
+})
+
+async function previewAgentVoice() {
+  if (!draftVoiceId.value || previewingAgentVoice.value) return
+  previewingAgentVoice.value = true
+  try {
+    if (draftVoiceMode.value === 'local' && window.electronAPI?.voice?.edgePreview) {
+      const result = await window.electronAPI.voice.edgePreview({ voice: draftVoiceId.value })
+      if (result?.success && result.audio) {
+        const audio = new Audio(`data:audio/mpeg;base64,${result.audio}`)
+        await audio.play()
+      }
+    } else if (draftVoiceMode.value === 'openai' && window.electronAPI?.voice?.tts) {
+      const vc = configStore.config.voiceCall || {}
+      const result = await window.electronAPI.voice.tts({
+        text: 'Hello, this is a voice preview.',
+        apiKey: vc.whisperApiKey,
+        baseURL: vc.whisperBaseURL || 'https://api.openai.com',
+        model: 'tts-1',
+        voice: draftVoiceId.value,
+      })
+      if (result?.success && result.audio) {
+        const audio = new Audio(`data:audio/${result.format || 'mp3'};base64,${result.audio}`)
+        await audio.play()
+      }
+    }
+  } catch {}
+  previewingAgentVoice.value = false
+}
 
 // ── Provider / model ───────────────────────────────────────────────────────
 const activeProviderOptions = computed(() => {
@@ -1259,6 +1327,42 @@ async function generateFromDescription() {
 }
 
 /**
+ * Escape literal newlines/tabs inside JSON string values.
+ * Walks the text char-by-char, toggling an "inside string" flag and
+ * replacing bare \n / \r / \t with their JSON escape sequences.
+ * Handles backslash-escape sequences correctly (skips the next char).
+ */
+function repairJsonStrings(text) {
+  let result = ''
+  let inString = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inString) {
+      if (ch === '\\') {
+        // Pass escape sequence through unchanged
+        result += ch + (text[i + 1] || '')
+        i++
+      } else if (ch === '"') {
+        inString = false
+        result += ch
+      } else if (ch === '\n') {
+        result += '\\n'
+      } else if (ch === '\r') {
+        result += '\\r'
+      } else if (ch === '\t') {
+        result += '\\t'
+      } else {
+        result += ch
+      }
+    } else {
+      if (ch === '"') inString = true
+      result += ch
+    }
+  }
+  return result
+}
+
+/**
  * Robust JSON parser for AI-generated agent definitions.
  * Handles markdown fences, smart quotes, trailing commas, and
  * broken "prompt" fields with unescaped newlines/quotes.
@@ -1266,13 +1370,17 @@ async function generateFromDescription() {
 function robustParseAgentJSON(rawText) {
   let extracted = extractJsonPayload(rawText)
 
-  // Normalize smart quotes and trailing commas
+  // Build candidate variants: original, repaired, smart-quote-normalized, trailing-comma-stripped
+  const normalize = s => s
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/,\s*([}\]])/g, '$1')
+
   const candidates = [
     extracted,
-    extracted
-      .replace(/[\u201C\u201D]/g, '"')
-      .replace(/[\u2018\u2019]/g, "'")
-      .replace(/,\s*([}\]])/g, '$1')
+    repairJsonStrings(extracted),
+    normalize(extracted),
+    repairJsonStrings(normalize(extracted)),
   ]
 
   for (const candidate of candidates) {
@@ -1283,8 +1391,9 @@ function robustParseAgentJSON(rawText) {
   try {
     const nameMatch = extracted.match(/"name"\s*:\s*"((?:[^"\\]|\\.)*)"/s)
     const descMatch = extracted.match(/"description"\s*:\s*"((?:[^"\\]|\\.)*)"/s)
-    // prompt field often contains unescaped newlines — grab everything between the last two top-level keys
-    const promptMatch = extracted.match(/"prompt"\s*:\s*"([\s\S]*)"\s*\}?\s*$/s)
+    // prompt field often contains unescaped newlines — grab everything up to last closing brace
+    const promptMatch = extracted.match(/"prompt"\s*:\s*"([\s\S]*?)"\s*[,}]/s)
+      || extracted.match(/"prompt"\s*:\s*"([\s\S]*)"\s*\}?\s*$/s)
     if (nameMatch || descMatch || promptMatch) {
       return {
         name: nameMatch ? nameMatch[1] : '',
@@ -1368,7 +1477,7 @@ function saveAll() {
     saveError.value = t('agents.nameRequired')
     return
   }
-  if (draftName.value.length > 30) {
+  if (draftName.value.length > 50) {
     saveError.value = t('agents.nameTooLong')
     return
   }

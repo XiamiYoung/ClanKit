@@ -21,6 +21,7 @@ function registerAll({ DEFAULT_CONFIG, imBridge, mcpManager } = {}) {
   require('./obsidian').register()
   require('./window').register()
   require('./voice').register()
+  require('./agentImport').register()
 
   // Agent must be last — it depends on store.accumulateUsage and knowledge.queryRAG
   const ipcAgent = require('./agent')

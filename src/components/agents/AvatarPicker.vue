@@ -117,7 +117,7 @@ function onFileUpload(event) {
 
 <style scoped>
 .avpicker-backdrop {
-  position: fixed; inset: 0; z-index: 200;
+  position: fixed; inset: 0; z-index: 2100;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   display: flex; align-items: center; justify-content: center;
