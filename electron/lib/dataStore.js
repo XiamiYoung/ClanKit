@@ -35,11 +35,15 @@ function init() {
   const MEMORY_DIR       = path.join(DATA_DIR, 'memory')
   const AGENT_MEMORY_DIR = path.join(MEMORY_DIR, 'agents')
   const USER_MEMORY_DIR  = path.join(MEMORY_DIR, 'users')
+  const KNOWLEDGE_DIR    = path.join(DATA_DIR, 'knowledge')
+  const MODELS_DIR       = path.join(DATA_DIR, 'models')
 
   // Ensure essential directories
   fs.mkdirSync(MEMORY_DIR,       { recursive: true })
   fs.mkdirSync(AGENT_MEMORY_DIR, { recursive: true })
   fs.mkdirSync(USER_MEMORY_DIR,  { recursive: true })
+  fs.mkdirSync(KNOWLEDGE_DIR,    { recursive: true })
+  fs.mkdirSync(MODELS_DIR,       { recursive: true })
 
   _paths = {
     DATA_DIR,
@@ -67,6 +71,8 @@ function init() {
     MEMORY_DIR,
     AGENT_MEMORY_DIR,
     USER_MEMORY_DIR,
+    KNOWLEDGE_DIR,
+    MODELS_DIR,
   }
 
   return _paths

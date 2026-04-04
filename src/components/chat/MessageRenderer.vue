@@ -68,14 +68,30 @@
     <!-- ── Segments loop ────────────────────────────────────────────────────── -->
     <template v-for="(seg, i) in message.segments" :key="i">
 
-      <!-- Text segment: always show if there's content -->
-      <div v-if="seg.type === 'text' && seg.content && !isIntermediateText(i)" 
-           class="prose-clankai" 
-           style="max-width:none;" 
-           v-html="renderMarkdown(seg.content)" 
-           @click="handleContentClick"
-           :data-segment-index="i"
-           :data-content-length="seg.content.length" />
+      <!-- Text segment: final response shown normally; intermediate shown collapsed -->
+      <template v-if="seg.type === 'text' && seg.content">
+        <!-- Intermediate text: collapsed by default, expandable -->
+        <div v-if="isIntermediateText(i)" style="margin:2px 0;">
+          <div @click="expandedThinking[i] = !expandedThinking[i]"
+               style="display:inline-flex; align-items:center; gap:4px; cursor:pointer; color:#6b7280; font-size:0.72rem; user-select:none;">
+            <span>{{ expandedThinking[i] ? '▼' : '▶' }}</span>
+            <span>{{ expandedThinking[i] ? $t('chats.hideThinking') : $t('chats.showThinking') }}</span>
+          </div>
+          <div v-if="expandedThinking[i]"
+               class="prose-clankai"
+               style="max-width:none; opacity:0.6; font-size:0.88em; margin-top:4px;"
+               v-html="renderMarkdown(seg.content)"
+               @click="handleContentClick" />
+        </div>
+        <!-- Final response text: always shown normally -->
+        <div v-else
+             class="prose-clankai"
+             style="max-width:none;"
+             v-html="renderMarkdown(seg.content)"
+             @click="handleContentClick"
+             :data-segment-index="i"
+             :data-content-length="seg.content.length" />
+      </template>
 
       <!-- File diff (file_operation write/append) -->
       <div v-else-if="seg.type === 'tool' && isFileWrite(seg)" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #d1d5db; font-size:0.78rem;">
@@ -503,7 +519,10 @@ function injectFilePathChips(html) {
 function renderMarkdown(text) {
   if (!text) return ''
   try {
-    const clean = stripBase64(String(text))
+    // Strip DeepSeek-style tool execution log blocks: [Tool execution log from this response: ... ]
+    // Match from the marker to either a standalone ] line or end of string
+    const stripped = String(text).replace(/\n?\[Tool execution log[\s\S]*?(?:\n\]|$)/g, '').trim()
+    const clean = stripBase64(stripped)
     const raw = marked.parse(clean, { breaks: true, gfm: true })
     const sanitized = DOMPurify.sanitize(raw)
     // Highlight @mentions using exact agent names from the store.
@@ -743,7 +762,8 @@ function parseOutput(seg) {
 }
 
 // ── Tool expand/collapse state ───────────────────────────────────────────────
-const expandedTools  = reactive({})   // manually toggled
+const expandedTools    = reactive({})   // manually toggled
+const expandedThinking = reactive({})   // intermediate text expand/collapse
 const expandedInputs  = reactive({})
 const expandedOutputs = reactive({})
 const expandedDiffs   = reactive({})
@@ -753,10 +773,36 @@ const copiedBlock     = ref(null)
 /**
  * Returns true if this text segment is "intermediate narration" — i.e. the model
  * said something like "Let me read the file:" right before calling a tool.
- * Currently disabled to ensure all messages are shown.
+ * Hides pre-tool-call thinking text that adds no value to the user.
  */
 function isIntermediateText(i) {
-  // Disabled: always show all text segments
+  const segs = props.message.segments
+  if (!segs) return false
+
+  // Find the next meaningful segment (skip empty text)
+  let next = null
+  for (let j = i + 1; j < segs.length; j++) {
+    const s = segs[j]
+    if (!s || (s.type === 'text' && !s.content)) continue
+    next = s
+    break
+  }
+
+  // Find the previous meaningful segment (skip empty text)
+  let prev = null
+  for (let j = i - 1; j >= 0; j--) {
+    const s = segs[j]
+    if (!s || (s.type === 'text' && !s.content)) continue
+    prev = s
+    break
+  }
+
+  // Text immediately before a tool call = pre-tool narration (hide)
+  if (next?.type === 'tool_call') return true
+
+  // Text between a tool result and the next tool call = between-tool narration (hide)
+  if (prev?.type === 'tool_result' && next?.type === 'tool_call') return true
+
   return false
 }
 

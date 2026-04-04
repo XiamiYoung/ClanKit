@@ -172,6 +172,8 @@ async function compile() {
     console.error('[bytecode] Some files failed to compile. Run --restore to undo.')
     process.exit(1)
   }
+
+  process.exit(0)
 }
 
 compile().catch(err => {

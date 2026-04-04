@@ -848,7 +848,7 @@
     :confirm-text="t('common.goToConfig')"
     confirm-class="primary"
     :cancel-text="t('common.close')"
-    @confirm="voiceServerError = ''; $router.push('/config')"
+    @confirm="voiceServerError = ''; $router.push('/config?tab=stt')"
     @close="voiceServerError = ''"
   />
 
@@ -1032,87 +1032,28 @@ async function playSpeakAudio(result) {
 async function handleSpeakMessage(msg) {
   if (!msg?.content) return
 
-  // If already speaking this message, stop
-  if (speakingMsgId.value === msg.id) {
-    stopSpeakMessage()
-    return
-  }
-  // Stop any previous speech
+  if (speakingMsgId.value === msg.id) { stopSpeakMessage(); return }
   stopSpeakMessage()
 
-  // Extract plain text only (skip tool calls, images, etc.)
   let text = ''
   if (msg.segments) {
-    text = msg.segments
-      .filter(s => s.type === 'text')
-      .map(s => s.content || '')
-      .join(' ')
+    text = msg.segments.filter(s => s.type === 'text').map(s => s.content || '').join(' ')
   } else if (typeof msg.content === 'string') {
     text = msg.content
   }
-  // Strip markdown
   text = text.replace(/```[\s\S]*?```/g, '').replace(/[#*`_~\[\]()>|]/g, '').replace(/\n{2,}/g, '\n').trim().slice(0, 3000)
   if (!text) return
 
   speakingMsgId.value = msg.id
-
   try {
-    const vc = configStore.config.voiceCall || {}
     const agentId = resolveSpeakAgentId(msg)
     const agent = agentId ? agentsStore.getAgentById(agentId) : null
 
-    if (vc.mode === 'local') {
-      if (!window.electronAPI?.voice?.localTts) {
-        voiceServerError.value = 'SERVER_NOT_RUNNING'
-        stopSpeakMessage()
-        return
-      }
-      const voice = agent?.voiceId || vc.local?.ttsVoice || 'zh-CN-XiaoxiaoNeural'
-      const result = await window.electronAPI.voice.localTts({ text, voice, language: vc.language || 'auto' })
-      if (speakingMsgId.value === msg.id && await playSpeakAudio(result)) {
-        return
-      }
-      // Local TTS failed — show config dialog like voice call path
-      voiceServerError.value = 'SERVER_NOT_RUNNING'
-      stopSpeakMessage()
-      return
-    }
-
-    const openAiMode = (vc.mode === 'openai' || vc.ttsMode === 'openai' || vc.ttsMode === 'openai-hd')
-    const useOpenAITts = (vc.mode === 'openai' || vc.ttsMode === 'openai' || vc.ttsMode === 'openai-hd')
-      && vc.whisperApiKey
-      && vc.whisperBaseURL
-      && window.electronAPI?.voice?.tts
-
-    if (openAiMode && !useOpenAITts) {
-      voiceServerError.value = 'WHISPER_NOT_CONFIGURED'
-      stopSpeakMessage()
-      return
-    }
-
-    if (useOpenAITts && speakingMsgId.value === msg.id) {
-      const result = await window.electronAPI.voice.tts({
-        text,
-        apiKey: vc.whisperApiKey,
-        baseURL: vc.whisperBaseURL,
-        model: vc.ttsMode === 'openai-hd' ? 'tts-1-hd' : 'tts-1',
-        voice: agent?.voiceId || 'alloy',
-      })
-      if (speakingMsgId.value === msg.id && await playSpeakAudio(result)) {
-        return
-      }
-      voiceServerError.value = 'WHISPER_NOT_CONFIGURED'
-      stopSpeakMessage()
-      return
-    }
-
-    // No configured mode — browser TTS as last resort
-    if (window.speechSynthesis && speakingMsgId.value === msg.id) {
-      const utterance = new SpeechSynthesisUtterance(text.slice(0, 500))
-      utterance.onend = () => stopSpeakMessage()
-      utterance.onerror = () => stopSpeakMessage()
-      window.speechSynthesis.speak(utterance)
-    }
+    const voice = agent?.voiceId
+    if (!voice) { stopSpeakMessage(); return }
+    const result = await window.electronAPI.voice.edgeTtsNode({ text, voice })
+    if (speakingMsgId.value === msg.id && await playSpeakAudio(result)) return
+    stopSpeakMessage()
   } catch {
     stopSpeakMessage()
   }
@@ -1122,7 +1063,6 @@ function stopSpeakMessage() {
   speakingMsgId.value = ''
   ttsPlayingMsgId.value = ''
   if (_speakAudioEl) { _speakAudioEl.pause(); _speakAudioEl = null }
-  if (window.speechSynthesis) window.speechSynthesis.cancel()
 }
 
 const voiceErrorTitle = computed(() => {
@@ -1536,10 +1476,10 @@ const enabledMcpCount = computed(() => {
 
 const enabledKnowledgeCount = computed(() => {
   const agent = currentSingleAgent.value
-  if (!agent) return Object.values(knowledgeStore.indexConfigs).filter(c => c.enabled).length
+  if (!agent) return Object.values(knowledgeStore.kbConfigs).filter(c => c.enabled !== false).length
   const required = agent.requiredKnowledgeBaseIds
   if (!required?.length) return 0
-  return required.filter(id => knowledgeStore.indexConfigs[id]?.enabled).length
+  return required.filter(id => knowledgeStore.kbConfigs[id]?.enabled !== false).length
 })
 
 // ── Permission mode for quick selector in status bar ──
@@ -1690,8 +1630,8 @@ const showRagPopover = ref(false)
 const ragChipWrap = ref(null)
 
 const ragEnabledCount = computed(() => {
-  const configs = knowledgeStore.indexConfigs
-  return Object.values(configs).filter(c => c.enabled).length
+  const configs = knowledgeStore.kbConfigs
+  return Object.values(configs).filter(c => c.enabled !== false).length
 })
 
 // Close popovers on outside click (agent header popovers now handled by ChatHeader)

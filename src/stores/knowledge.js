@@ -2,200 +2,151 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
 export const useKnowledgeStore = defineStore('knowledge', () => {
-  // Pinecone connection config (API key from .env, index from knowledge.json)
-  const pineconeApiKey = ref('')
-  const pineconeIndexName = ref('')
-  const connectionStatus = ref('disconnected') // 'disconnected' | 'connecting' | 'connected' | 'error'
-  const connectionError = ref('')
+  // Knowledge bases (local)
+  const knowledgeBases = ref([])         // [{ id, name, description, createdAt, documentCount }]
+  const selectedKbId = ref(null)
+  const isLoading = ref(false)
 
-  // Available indexes from Pinecone
-  const indexes = ref([])
-  const isLoadingIndexes = ref(false)
-
-  // Documents state
+  // Documents for selected KB
   const documents = ref([])
   const isLoadingDocs = ref(false)
   const isUploading = ref(false)
-  const uploadProgress = ref('')
+  const uploadProgress = ref(null)       // { stage, current, total, documentName }
 
-  // RAG toggle (enabled by default for all chats)
+  // RAG toggle
   const ragEnabled = ref(true)
 
-  // Embedding config
-  const embeddingProvider = ref('openai') // 'openai' | 'openrouter'
-  const embeddingModel = ref('text-embedding-3-small')
+  // Per-KB configs: { [kbId]: { enabled } }
+  const kbConfigs = ref({})
 
-  // Per-index configs: { [indexName]: { embeddingProvider, embeddingModel, enabled } }
-  const indexConfigs = ref({})
+  // Embedding model status (mirrors voice local env pattern)
+  const modelReady = ref(false)
+  const modelChecking = ref(false)
+  const modelSetupProgress = ref(null)   // { step, progress, message }
+  const modelSetupError = ref(null)
 
-  // Selected index stats
-  const indexStats = ref(null)
-
-  // Source files found in the selected index
-  const indexSources = ref([])
-  const isLoadingSources = ref(false)
-
-  // Computed: list of enabled indexes with their configs
-  const enabledIndexes = computed(() => {
-    return Object.entries(indexConfigs.value)
-      .filter(([, cfg]) => cfg.enabled)
-      .map(([name, cfg]) => ({ name, ...cfg }))
+  // Computed: enabled knowledge bases
+  const enabledKnowledgeBases = computed(() => {
+    return knowledgeBases.value.filter(kb => {
+      const cfg = kbConfigs.value[kb.id]
+      return cfg?.enabled !== false
+    })
   })
+
+  // ── Config ──────────────────────────────────────────────────────────────────
 
   async function loadConfig() {
     if (!window.electronAPI?.knowledge?.getConfig) return
     try {
       const config = await window.electronAPI.knowledge.getConfig()
-      pineconeApiKey.value = config.pineconeApiKey || ''
-      pineconeIndexName.value = config.pineconeIndexName || ''
       ragEnabled.value = config.ragEnabled !== false
-      indexConfigs.value = config.indexConfigs || {}
+      kbConfigs.value = config.knowledgeBases || {}
     } catch (err) {
       console.error('Failed to load knowledge config:', err)
     }
+    // Also load KB list so other views (AgentBodyViewer) can see available KBs
+    await loadKnowledgeBases()
   }
 
   async function saveConfig() {
     if (!window.electronAPI?.knowledge?.saveConfig) return
     try {
       await window.electronAPI.knowledge.saveConfig({
-        pineconeIndexName: pineconeIndexName.value,
         ragEnabled: ragEnabled.value,
-        indexConfigs: JSON.parse(JSON.stringify(indexConfigs.value))
+        knowledgeBases: JSON.parse(JSON.stringify(kbConfigs.value))
       })
     } catch (err) {
       console.error('Failed to save knowledge config:', err)
     }
   }
 
-  async function verifyConnection() {
-    if (!window.electronAPI?.knowledge?.verifyConnection) {
-      connectionStatus.value = 'error'
-      connectionError.value = 'Not running inside Electron'
-      return false
-    }
-    connectionStatus.value = 'connecting'
-    connectionError.value = ''
-    try {
-      const result = await window.electronAPI.knowledge.verifyConnection({
-        apiKey: pineconeApiKey.value
-      })
-      if (result.success) {
-        connectionStatus.value = 'connected'
-        return true
-      } else {
-        connectionStatus.value = 'error'
-        connectionError.value = result.error || 'Connection failed'
-        return false
-      }
-    } catch (err) {
-      connectionStatus.value = 'error'
-      connectionError.value = err.message
-      return false
-    }
-  }
+  // ── Knowledge Base CRUD ─────────────────────────────────────────────────────
 
-  async function fetchIndexes() {
-    if (!window.electronAPI?.knowledge?.listIndexes) return
-    isLoadingIndexes.value = true
+  async function loadKnowledgeBases() {
+    if (!window.electronAPI?.knowledge?.listKnowledgeBases) return
+    isLoading.value = true
     try {
-      const result = await window.electronAPI.knowledge.listIndexes({
-        apiKey: pineconeApiKey.value
-      })
+      const result = await window.electronAPI.knowledge.listKnowledgeBases()
       if (result.success) {
-        indexes.value = result.indexes || []
-        // Prune indexConfigs entries that no longer exist in Pinecone
-        const liveNames = new Set(indexes.value.map(i => i.name))
-        const staleKeys = Object.keys(indexConfigs.value).filter(k => !liveNames.has(k))
+        knowledgeBases.value = result.knowledgeBases || []
+        // Prune configs for deleted KBs
+        const liveIds = new Set(knowledgeBases.value.map(kb => kb.id))
+        const staleKeys = Object.keys(kbConfigs.value).filter(k => !liveIds.has(k))
         if (staleKeys.length > 0) {
-          const updated = { ...indexConfigs.value }
+          const updated = { ...kbConfigs.value }
           for (const k of staleKeys) delete updated[k]
-          indexConfigs.value = updated
+          kbConfigs.value = updated
           await saveConfig()
-          // Also clean agent references to removed indexes
-          try {
-            const { useAgentsStore } = await import('./agents')
-            const agentsStore = useAgentsStore()
-            await agentsStore.cleanStaleKnowledgeRefs(Object.keys(indexConfigs.value))
-          } catch {}
         }
       }
     } catch (err) {
-      console.error('Failed to fetch indexes:', err)
+      console.error('Failed to load knowledge bases:', err)
     } finally {
-      isLoadingIndexes.value = false
+      isLoading.value = false
     }
   }
 
-  async function selectIndex(indexName) {
-    pineconeIndexName.value = indexName
-    indexStats.value = null
-    indexSources.value = []
-    await saveConfig()
-    // Fetch stats for selected index
-    if (indexName && window.electronAPI?.knowledge?.describeIndex) {
-      try {
-        const result = await window.electronAPI.knowledge.describeIndex({
-          apiKey: pineconeApiKey.value,
-          indexName
-        })
-        if (result.success) {
-          indexStats.value = result.stats
-        }
-      } catch (err) {
-        console.error('Failed to describe index:', err)
-      }
-    }
-    await Promise.all([loadDocuments(), loadIndexSources()])
-  }
-
-  async function loadIndexSources() {
-    if (!window.electronAPI?.knowledge?.listSources) return
-    if (!pineconeApiKey.value || !pineconeIndexName.value) return
-    isLoadingSources.value = true
+  async function createKnowledgeBase(name, description) {
+    if (!window.electronAPI?.knowledge?.createKnowledgeBase) return null
     try {
-      const result = await window.electronAPI.knowledge.listSources({
-        apiKey: pineconeApiKey.value,
-        indexName: pineconeIndexName.value
-      })
+      const result = await window.electronAPI.knowledge.createKnowledgeBase({ name, description })
       if (result.success) {
-        indexSources.value = result.sources || []
+        await loadKnowledgeBases()
+        await loadConfig()
+        return result.knowledgeBase
       }
+      return null
     } catch (err) {
-      console.error('Failed to load index sources:', err)
-    } finally {
-      isLoadingSources.value = false
+      console.error('Failed to create knowledge base:', err)
+      return null
     }
   }
 
-  /** Full reload: re-read config from .env, verify, fetch indexes, restore selection */
-  async function refresh() {
-    await loadConfig()
-    if (!pineconeApiKey.value) {
-      connectionStatus.value = 'disconnected'
-      indexes.value = []
-      documents.value = []
-      indexStats.value = null
-      indexSources.value = []
-      return
-    }
-    const connected = await verifyConnection()
-    if (connected) {
-      await fetchIndexes()
-      if (pineconeIndexName.value) {
-        await selectIndex(pineconeIndexName.value)
+  async function deleteKnowledgeBase(kbId) {
+    if (!window.electronAPI?.knowledge?.deleteKnowledgeBase) return false
+    try {
+      const result = await window.electronAPI.knowledge.deleteKnowledgeBase({ kbId })
+      if (result.success) {
+        if (selectedKbId.value === kbId) {
+          selectedKbId.value = null
+          documents.value = []
+        }
+        await loadKnowledgeBases()
+        await loadConfig()
+        return true
       }
+      return false
+    } catch (err) {
+      console.error('Failed to delete knowledge base:', err)
+      return false
     }
   }
 
-  async function loadDocuments() {
+  async function selectKnowledgeBase(kbId) {
+    selectedKbId.value = kbId
+    documents.value = []
+    if (kbId) {
+      await loadDocuments(kbId)
+    }
+  }
+
+  async function toggleKbEnabled(kbId, enabled) {
+    const updated = { ...kbConfigs.value }
+    if (!updated[kbId]) updated[kbId] = { enabled }
+    else updated[kbId] = { ...updated[kbId], enabled }
+    kbConfigs.value = updated
+    await saveConfig()
+  }
+
+  // ── Documents ───────────────────────────────────────────────────────────────
+
+  async function loadDocuments(kbId) {
     if (!window.electronAPI?.knowledge?.listDocuments) return
+    const id = kbId || selectedKbId.value
+    if (!id) return
     isLoadingDocs.value = true
     try {
-      const result = await window.electronAPI.knowledge.listDocuments({
-        apiKey: pineconeApiKey.value,
-        indexName: pineconeIndexName.value
-      })
+      const result = await window.electronAPI.knowledge.listDocuments({ kbId: id })
       if (result.success) {
         documents.value = result.documents || []
       }
@@ -206,40 +157,43 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     }
   }
 
-  async function uploadFiles(filePaths) {
+  async function uploadFiles(kbId, filePaths) {
     if (!window.electronAPI?.knowledge?.uploadFiles) return { success: false, error: 'Not in Electron' }
+    const id = kbId || selectedKbId.value
+    if (!id) return { success: false, error: 'No knowledge base selected' }
+
     isUploading.value = true
-    uploadProgress.value = 'Preparing files...'
+    uploadProgress.value = null
+
+    // Listen for progress events
+    const cleanup = window.electronAPI.knowledge.onUploadProgress?.((data) => {
+      uploadProgress.value = data
+    })
+
     try {
-      const result = await window.electronAPI.knowledge.uploadFiles({
-        apiKey: pineconeApiKey.value,
-        indexName: pineconeIndexName.value,
-        filePaths
-      })
+      const result = await window.electronAPI.knowledge.uploadFiles({ kbId: id, filePaths })
       if (result.success) {
-        // Record the embedding config used for this index
-        await saveIndexEmbeddingConfig(pineconeIndexName.value)
-        await Promise.all([loadDocuments(), loadIndexSources()])
+        await loadDocuments(id)
+        await loadKnowledgeBases() // refresh document counts
       }
       return result
     } catch (err) {
       return { success: false, error: err.message }
     } finally {
       isUploading.value = false
-      uploadProgress.value = ''
+      uploadProgress.value = null
+      if (cleanup) cleanup()
     }
   }
 
-  async function deleteDocument(documentId) {
-    if (!window.electronAPI?.knowledge?.deleteDocument) return
+  async function deleteDocument(kbId, documentId) {
+    if (!window.electronAPI?.knowledge?.deleteDocument) return { success: false }
+    const id = kbId || selectedKbId.value
     try {
-      const result = await window.electronAPI.knowledge.deleteDocument({
-        apiKey: pineconeApiKey.value,
-        indexName: pineconeIndexName.value,
-        documentId
-      })
+      const result = await window.electronAPI.knowledge.deleteDocument({ kbId: id, documentId })
       if (result.success) {
         documents.value = documents.value.filter(d => d.id !== documentId)
+        await loadKnowledgeBases() // refresh counts
       }
       return result
     } catch (err) {
@@ -247,97 +201,95 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     }
   }
 
-  async function deleteSource(sourceName) {
-    if (!window.electronAPI?.knowledge?.deleteSource) return { success: false, error: 'Not in Electron' }
-    try {
-      const result = await window.electronAPI.knowledge.deleteSource({
-        apiKey: pineconeApiKey.value,
-        indexName: pineconeIndexName.value,
-        sourceName
-      })
-      // Always reload sources and docs from server after deletion attempt
-      await Promise.all([loadIndexSources(), loadDocuments()])
-      return result
-    } catch (err) {
-      return { success: false, error: err.message }
-    }
-  }
-
-  function getIndexConfig(indexName) {
-    return indexConfigs.value[indexName] || null
-  }
-
-  async function toggleIndexEnabled(indexName, enabled) {
-    const updated = { ...indexConfigs.value }
-    if (!updated[indexName]) {
-      updated[indexName] = {
-        embeddingProvider: embeddingProvider.value,
-        embeddingModel: embeddingModel.value,
-        enabled
-      }
-    } else {
-      updated[indexName] = { ...updated[indexName], enabled }
-    }
-    indexConfigs.value = updated
-    await saveConfig()
-  }
-
-  async function saveIndexEmbeddingConfig(indexName) {
-    const updated = { ...indexConfigs.value }
-    updated[indexName] = {
-      ...(updated[indexName] || {}),
-      embeddingProvider: embeddingProvider.value,
-      embeddingModel: embeddingModel.value,
-      enabled: updated[indexName]?.enabled !== false
-    }
-    indexConfigs.value = updated
-    await saveConfig()
-  }
-
-  async function queryKnowledge(query, topK = 5) {
-    if (!window.electronAPI?.knowledge?.query) return { success: false, error: 'Not in Electron' }
-    try {
-      const result = await window.electronAPI.knowledge.query({
-        query,
-        pineconeApiKey: pineconeApiKey.value,
-        pineconeIndexName: pineconeIndexName.value,
-        topK,
-        embeddingProvider: embeddingProvider.value,
-        embeddingModel: embeddingModel.value
-      })
-      return result
-    } catch (err) {
-      return { success: false, error: err.message }
-    }
-  }
-
-  async function getDocumentSummary(documentId) {
+  async function getDocumentSummary(kbId, documentId) {
     if (!window.electronAPI?.knowledge?.getDocumentSummary) return null
     try {
-      const result = await window.electronAPI.knowledge.getDocumentSummary({
-        apiKey: pineconeApiKey.value,
-        indexName: pineconeIndexName.value,
-        documentId
-      })
-      return result
+      return await window.electronAPI.knowledge.getDocumentSummary({ kbId, documentId })
     } catch (err) {
       return { success: false, error: err.message }
     }
+  }
+
+  // ── Query ───────────────────────────────────────────────────────────────────
+
+  async function queryKnowledge(kbId, query, topK = 5) {
+    if (!window.electronAPI?.knowledge?.query) return { success: false, error: 'Not in Electron' }
+    try {
+      return await window.electronAPI.knowledge.query({ query, knowledgeBaseId: kbId, topK })
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  }
+
+  // ── Embedding Model Management ──────────────────────────────────────────────
+
+  async function checkModel() {
+    if (!window.electronAPI?.knowledge?.checkModel) return
+    modelChecking.value = true
+    try {
+      const info = await window.electronAPI.knowledge.checkModel()
+      modelReady.value = info.ready
+    } catch (err) {
+      modelReady.value = false
+    } finally {
+      modelChecking.value = false
+    }
+  }
+
+  async function setupModel(source) {
+    if (!window.electronAPI?.knowledge?.setupModel) return { success: false }
+    modelSetupProgress.value = null
+    modelSetupError.value = null
+
+    const cleanup = window.electronAPI.knowledge.onSetupProgress?.((data) => {
+      modelSetupProgress.value = data
+      if (data.step === 'error') modelSetupError.value = data.message
+    })
+
+    try {
+      const result = await window.electronAPI.knowledge.setupModel({ source })
+      if (result.success) {
+        modelReady.value = true
+      } else {
+        modelSetupError.value = result.error
+      }
+      return result
+    } catch (err) {
+      modelSetupError.value = err.message
+      return { success: false, error: err.message }
+    } finally {
+      if (cleanup) cleanup()
+    }
+  }
+
+  async function removeModel() {
+    if (!window.electronAPI?.knowledge?.removeModel) return
+    try {
+      await window.electronAPI.knowledge.removeModel()
+      modelReady.value = false
+    } catch (err) {
+      console.error('Failed to remove model:', err)
+    }
+  }
+
+  // ── Refresh (full reload) ───────────────────────────────────────────────────
+
+  async function refresh() {
+    await loadConfig()
+    await Promise.all([loadKnowledgeBases(), checkModel()])
   }
 
   return {
-    pineconeApiKey, pineconeIndexName,
-    connectionStatus, connectionError,
-    indexes, isLoadingIndexes,
+    knowledgeBases, selectedKbId, isLoading,
     documents, isLoadingDocs, isUploading, uploadProgress,
-    ragEnabled, indexStats,
-    indexSources, isLoadingSources,
-    embeddingProvider, embeddingModel,
-    indexConfigs, enabledIndexes,
-    loadConfig, saveConfig, verifyConnection,
-    fetchIndexes, selectIndex, refresh,
-    loadDocuments, loadIndexSources, uploadFiles, deleteDocument, deleteSource, getDocumentSummary,
-    getIndexConfig, toggleIndexEnabled, saveIndexEmbeddingConfig,
-    queryKnowledge
+    ragEnabled, kbConfigs, enabledKnowledgeBases,
+    modelReady, modelChecking, modelSetupProgress, modelSetupError,
+    loadConfig, saveConfig,
+    loadKnowledgeBases, createKnowledgeBase, deleteKnowledgeBase,
+    selectKnowledgeBase, toggleKbEnabled,
+    loadDocuments, uploadFiles, deleteDocument, getDocumentSummary,
+    queryKnowledge,
+    checkModel, setupModel, removeModel,
+    refresh,
   }
 })

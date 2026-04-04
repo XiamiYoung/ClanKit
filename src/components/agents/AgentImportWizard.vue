@@ -309,6 +309,27 @@
               </div>
             </div>
 
+            <!-- Voice selection -->
+            <div class="field-group">
+              <label class="field-label">{{ t('agents.voice') }} <span style="color:var(--c-danger);">*</span></label>
+              <div class="iw-voice-row">
+                <select v-model="importVoiceId" class="field-select" style="flex:1;">
+                  <option v-for="v in EDGE_VOICES" :key="v.id" :value="v.id">
+                    {{ v.name }} — {{ v.gender === 'Female' ? t('common.female') : v.gender === 'Male' ? t('common.male') : '' }} · {{ v.locale === 'zh-CN' ? t('common.chinese') : t('common.english') }}
+                  </option>
+                </select>
+                <button
+                  class="iw-preview-btn"
+                  :disabled="previewingVoice"
+                  @click="previewImportVoice"
+                  :title="t('agents.voicePreview')"
+                >
+                  <svg v-if="previewingVoice" class="animate-spin" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
+                  <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                </button>
+              </div>
+            </div>
+
             <!-- Save chat history toggle -->
             <div class="memory-toggle-row">
               <label class="toggle-label">
@@ -366,7 +387,7 @@
             v-if="step === 4"
             size="compact"
             :loading="creating"
-            :disabled="!agentName.trim() || !generatedPrompt.trim() || !agentProviderType || !agentModelId"
+            :disabled="!agentName.trim() || !generatedPrompt.trim() || !agentProviderType || !agentModelId || !importVoiceId"
             @click="doCreateAgent"
             style="background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151); color: #fff;"
           >{{ t('agents.import.createAgent') }}</AppButton>
@@ -395,6 +416,7 @@ import { useModelsStore } from '../../stores/models'
 import AppButton from '../common/AppButton.vue'
 import AvatarPicker from './AvatarPicker.vue'
 import { generateRandomBatch, getAvatarDataUri } from './agentAvatars'
+import { EDGE_VOICES, getDefaultVoiceForLocale } from '../../utils/edgeVoices'
 
 const { t } = useI18n()
 const agentsStore = useAgentsStore()
@@ -609,9 +631,9 @@ async function doExtract() {
     extractMsg.value = data.message || ''
   })
 
-  // For WeChat with contact list: use selected contact + decrypted dir
+  // For WeChat with contact list: use wxid directly (avoids fragile display-name lookup)
   const resolvedContactName = (source.value === 'wechat' && selectedContact.value)
-    ? (selectedContact.value.remark || selectedContact.value.nickname || selectedContact.value.wxid)
+    ? selectedContact.value.wxid
     : contactName.value.trim()
 
   const resolvedDbDir = (source.value === 'wechat' && decryptedDir.value)
@@ -735,6 +757,28 @@ initAnalyzeModel()
 // ── Agent Provider / Model (for the created agent) ─────────────────────────
 const agentProviderType = ref('')
 const agentModelId = ref('')
+const importVoiceId = ref(getDefaultVoiceForLocale(configStore.language))
+const previewingVoice = ref(false)
+let _previewAudioEl = null
+
+async function previewImportVoice() {
+  if (!importVoiceId.value || previewingVoice.value) return
+  // Use agent description (first 200 chars) as preview text
+  const text = (agentDescription.value || agentName.value || 'Hello').slice(0, 200)
+  previewingVoice.value = true
+  try {
+    if (_previewAudioEl) { _previewAudioEl.pause(); _previewAudioEl = null }
+    const result = await window.electronAPI.voice.edgeTtsNode({ text, voice: importVoiceId.value })
+    if (result?.success && result.audio) {
+      _previewAudioEl = new Audio(`data:audio/${result.format || 'mp3'};base64,${result.audio}`)
+      _previewAudioEl.onended = () => { previewingVoice.value = false }
+      _previewAudioEl.onerror = () => { previewingVoice.value = false }
+      await _previewAudioEl.play()
+      return
+    }
+  } catch { /* ignore */ }
+  previewingVoice.value = false
+}
 
 const agentModelList = computed(() => {
   if (!agentProviderType.value) return []
@@ -912,6 +956,7 @@ async function doCreateAgent() {
     description: agentDescription.value.trim() || t('agents.import.importedFrom', { source: sourceLabel }),
     providerId: agentProviderType.value,
     modelId: agentModelId.value,
+    voiceId: importVoiceId.value,
   })
 
   // Save full chat history if enabled
@@ -1628,6 +1673,29 @@ onUnmounted(() => {
   font-size: 0.875rem;
   color: rgba(255,255,255,0.35);
 }
+
+/* Voice row */
+.iw-voice-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.iw-preview-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border: 1px solid #3A3A3A;
+  border-radius: 8px;
+  background: #111111;
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.iw-preview-btn:hover:not(:disabled) { border-color: #6366f1; background: #1A1A1A; }
+.iw-preview-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Utilities */
 .mt-1 { margin-top: 0.25rem; }

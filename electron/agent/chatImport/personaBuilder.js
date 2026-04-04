@@ -255,9 +255,22 @@ async function _callLLM(prompt, config, maxTokens = 8192) {
   const um = config.utilityModel
   const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
   const isOpenAI = ['openai', 'openai_official', 'deepseek'].includes(um.provider)
+  const isGoogle  = um.provider === 'google'
 
   try {
-    if (isOpenAI) {
+    if (isGoogle) {
+      const { GeminiClient } = require('../core/GeminiClient')
+      const gc = new GeminiClient({
+        provider: { apiKey: providerCfg.apiKey, model: um.model },
+        customModel: um.model,
+      })
+      const response = await gc.getClient().models.generateContent({
+        model: um.model,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: maxTokens },
+      })
+      return response.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || ''
+    } else if (isOpenAI) {
       const { OpenAIClient } = require('../core/OpenAIClient')
       const cfg = {
         openaiApiKey: providerCfg.apiKey,

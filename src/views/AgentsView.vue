@@ -392,6 +392,7 @@ import AgentGroupCreator from '../components/agents/AgentGroupCreator.vue'
 import OnboardingOverlay from '../components/agents/OnboardingOverlay.vue'
 import AgentImportWizard from '../components/agents/AgentImportWizard.vue'
 import { useI18n } from '../i18n/useI18n'
+import { getDefaultVoiceForLocale } from '../utils/edgeVoices'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -602,7 +603,7 @@ function createNew(type) {
     avatar: null,
     providerId,
     modelId,
-    voiceId: null,
+    voiceId: getDefaultVoiceForLocale(configStore.language),
     requiredToolIds: [],
     requiredSkillIds: [],
     requiredMcpServerIds: [],

@@ -119,7 +119,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     write:  (agentId, type, content) => ipcRenderer.invoke('souls:write', agentId, type, content),
     exists: (agentId, type) => ipcRenderer.invoke('souls:exists', agentId, type),
     list:   (type) => ipcRenderer.invoke('souls:list', type),
-    delete: (agentId, type) => ipcRenderer.invoke('souls:delete', agentId, type),
+    delete:          (agentId, type) => ipcRenderer.invoke('souls:delete', agentId, type),
+    deleteAgentData: (agentId, type) => ipcRenderer.invoke('souls:delete-agent-data', agentId, type),
   },
 
   // ── Memory Extraction ─────────────────────────────────────────────────
@@ -129,22 +130,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
     extractCollaboration: (params) => ipcRenderer.invoke('memory:extract-collaboration', params),
   },
 
-  // ── Knowledge / Pinecone RAG ─────────────────────────────────────────────
+  // ── Knowledge / Local RAG ────────────────────────────────────────────────
   knowledge: {
-    getConfig:           ()       => ipcRenderer.invoke('knowledge:get-config'),
-    saveConfig:          (config) => ipcRenderer.invoke('knowledge:save-config', config),
-    verifyConnection:    (params) => ipcRenderer.invoke('knowledge:verify-connection', params),
-    listIndexes:         (params) => ipcRenderer.invoke('knowledge:list-indexes', params),
-    describeIndex:       (params) => ipcRenderer.invoke('knowledge:describe-index', params),
-    listDocuments:       (params) => ipcRenderer.invoke('knowledge:list-documents', params),
-    listSources:         (params) => ipcRenderer.invoke('knowledge:list-sources', params),
-    pickFiles:           ()       => ipcRenderer.invoke('knowledge:pick-files'),
-    uploadFiles:         (params) => ipcRenderer.invoke('knowledge:upload-files', params),
-    deleteDocument:      (params) => ipcRenderer.invoke('knowledge:delete-document', params),
-    deleteSource:        (params) => ipcRenderer.invoke('knowledge:delete-source', params),
-    getDocumentSummary:  (params) => ipcRenderer.invoke('knowledge:get-document-summary', params),
-    generateEmbeddings:  (params) => ipcRenderer.invoke('knowledge:generate-embeddings', params),
-    query:               (params) => ipcRenderer.invoke('knowledge:query', params),
+    getConfig:            ()       => ipcRenderer.invoke('knowledge:get-config'),
+    saveConfig:           (config) => ipcRenderer.invoke('knowledge:save-config', config),
+    listKnowledgeBases:   ()       => ipcRenderer.invoke('knowledge:list-knowledge-bases'),
+    getKnowledgeBase:     (params) => ipcRenderer.invoke('knowledge:get-knowledge-base', params),
+    createKnowledgeBase:  (params) => ipcRenderer.invoke('knowledge:create-knowledge-base', params),
+    deleteKnowledgeBase:  (params) => ipcRenderer.invoke('knowledge:delete-knowledge-base', params),
+    listDocuments:        (params) => ipcRenderer.invoke('knowledge:list-documents', params),
+    pickFiles:            ()       => ipcRenderer.invoke('knowledge:pick-files'),
+    uploadFiles:          (params) => ipcRenderer.invoke('knowledge:upload-files', params),
+    deleteDocument:       (params) => ipcRenderer.invoke('knowledge:delete-document', params),
+    getDocumentSummary:   (params) => ipcRenderer.invoke('knowledge:get-document-summary', params),
+    query:                (params) => ipcRenderer.invoke('knowledge:query', params),
+    // Embedding model management (mirrors voice.localCheckEnv/localSetupEnv pattern)
+    checkModel:           ()       => ipcRenderer.invoke('knowledge:check-model'),
+    setupModel:           (params) => ipcRenderer.invoke('knowledge:setup-model', params),
+    removeModel:          ()       => ipcRenderer.invoke('knowledge:remove-model'),
+    onSetupProgress:      (cb)     => {
+      ipcRenderer.on('knowledge:setup-progress', (_e, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('knowledge:setup-progress')
+    },
+    onUploadProgress:     (cb)     => {
+      ipcRenderer.on('knowledge:upload-progress', (_e, data) => cb(data))
+      return () => ipcRenderer.removeAllListeners('knowledge:upload-progress')
+    },
   },
 
   // ── News RSS Feeds ─────────────────────────────────────────────────────
@@ -214,6 +225,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     detectGPU:         ()      => ipcRenderer.invoke('voice:detect-gpu'),
     removeLocalEnv:    ()      => ipcRenderer.invoke('voice:remove-local-env'),
     localTts:          (params)=> ipcRenderer.invoke('voice:local-tts', params),
+    edgeTtsNode:       (params)=> ipcRenderer.invoke('voice:edge-tts-node', params),
     localTest:         ()      => ipcRenderer.invoke('voice:local-test'),
     edgeVoices:        ()      => ipcRenderer.invoke('voice:edge-voices'),
     edgePreview:       (params)=> ipcRenderer.invoke('voice:edge-preview', params),

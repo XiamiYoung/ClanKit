@@ -10,8 +10,7 @@ const ds = require('../lib/dataStore')
 const { ensureAgentMemoryDirs, appendMemoryFile, getAgentLogPaths } = require('../lib/memoryHelpers')
 const { accumulateUtilityUsage } = require('../ipc/store')
 const { MemoryExtractor } = require('../agent/core/MemoryExtractor')
-const { MemoryFlush }    = require('../agent/core/MemoryFlush')
-const { ChatIndex }      = require('../memory/ChatIndex')
+const { HistoryIndex }   = require('../memory/HistoryIndex')
 
 /** Read a soul file from disk. Returns null if not found. */
 function readSoulFileSync(agentId, agentType) {
@@ -54,35 +53,14 @@ function register({ lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtracti
       // Run memory extraction (existing)
       await runMemoryExtraction(event, chatId, messages, config, agentPrompts, participants)
 
-      // Run memory flush (new) -- fire-and-forget, non-blocking
+      // Index this chat for history search
       const agentId = agentPrompts?.systemAgentId
-      if (agentId && messages && messages.length >= 2) {
-        const um = config.utilityModel
-        if (um?.provider && um?.model) {
-          const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
-          if (providerCfg?.apiKey && providerCfg?.baseURL) {
-            const { logsDir } = ensureAgentMemoryDirs(agentId)
-            const flusher = new MemoryFlush({
-              model:      um.model,
-              apiKey:     providerCfg.apiKey,
-              baseURL:    providerCfg.baseURL,
-              isOpenAI:   um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek',
-              directAuth: um.provider === 'openai_official' || um.provider === 'deepseek',
-            })
-            flusher.run(messages, agentId, logsDir, {}, agentPrompts?.groupChatContext?.agentName || agentId).catch(err =>
-              logger.error('[memory:extract-on-chat-switch] flush error', err.message)
-            )
-          }
-        }
-      }
-
-      // Index this chat for keyword search
       if (agentId && messages && messages.length > 0) {
         try {
-          const idx = new ChatIndex(ds.paths().AGENT_MEMORY_DIR)
+          const idx = new HistoryIndex(ds.paths().AGENT_MEMORY_DIR)
           idx.indexChat(chatId, messages, agentId)
         } catch (err) {
-          logger.error('[ChatIndex] indexing on switch failed', err.message)
+          logger.error('[HistoryIndex] indexing on switch failed', err.message)
         }
       }
 
@@ -99,15 +77,17 @@ function register({ lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtracti
       const um = config.utilityModel
       if (!um?.provider || !um?.model) return { success: true, count: 0 }
       const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
-      if (!providerCfg?.apiKey || !providerCfg?.baseURL) return { success: true, count: 0 }
+      if (!providerCfg?.apiKey) return { success: true, count: 0 }
+      if (!providerCfg?.baseURL && um.provider !== 'google') return { success: true, count: 0 }
 
       const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
       const extractor = new MemoryExtractor({
-        model: um.model,
-        apiKey: providerCfg.apiKey,
-        baseURL: providerCfg.baseURL,
+        model:        um.model,
+        apiKey:       providerCfg.apiKey,
+        baseURL:      providerCfg.baseURL,
         isOpenAI,
-        directAuth: um.provider === 'openai_official' || um.provider === 'deepseek',
+        directAuth:   um.provider === 'openai_official' || um.provider === 'deepseek',
+        providerType: um.provider,
       })
 
       // Read existing soul files for each participant

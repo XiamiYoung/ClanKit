@@ -111,6 +111,10 @@ function updateTimestamp(headerLines) {
 
 // ── SoulUpdateTool ─────────────────────────────────────────────────────────
 
+const COMPACTION_THRESHOLD = 4096 // bytes — trigger compaction above this
+const COMPACTION_COOLDOWN  = 300000 // ms — at most once per 5 minutes per agent
+const _compactionTimestamps = new Map() // agentId → last compaction time
+
 class SoulUpdateTool extends BaseTool {
   constructor(soulsDir) {
     super(
@@ -119,6 +123,88 @@ class SoulUpdateTool extends BaseTool {
       'update_soul_memory'
     )
     this.soulsDir = soulsDir
+    this._compactionConfig = null // { model, apiKey, baseURL, isOpenAI, directAuth }
+  }
+
+  /**
+   * Set utility model config for LLM-based compaction.
+   * Called by agentLoop after tool registration.
+   */
+  setCompactionConfig(config) {
+    this._compactionConfig = config
+  }
+
+  /**
+   * Async LLM-based soul file compaction. Merges duplicates, removes outdated entries,
+   * and consolidates the file to stay within a reasonable size.
+   * Fire-and-forget — errors are logged but never surface to the user.
+   */
+  async _runCompaction(filePath, agentId) {
+    const cfg = this._compactionConfig
+    if (!cfg?.model || !cfg?.apiKey) return
+
+    const content = fs.readFileSync(filePath, 'utf8')
+    const prompt = `You are a memory maintenance system. The following is an agent's soul/memory file in markdown format. It has grown too large and needs compaction.
+
+Rules:
+- Merge duplicate or near-duplicate entries into single entries
+- Remove entries that are clearly outdated or no longer relevant (e.g., "meeting tomorrow" from weeks ago)
+- Preserve ALL unique preferences, personality traits, corrections, and important facts
+- Keep the exact same markdown structure (## section headings, bullet points)
+- Keep the header (# Soul: ... and > Last updated: ...) unchanged
+- In Memory Updates Log, keep only the 10 most recent entries
+- Output ONLY the compacted markdown, nothing else
+
+Current soul file:
+${content}`
+
+    try {
+      let compacted
+      if (cfg.isOpenAI) {
+        const { OpenAIClient } = require('../core/OpenAIClient')
+        const client = new OpenAIClient({
+          openaiApiKey: cfg.apiKey,
+          openaiBaseURL: cfg.baseURL,
+          customModel: cfg.model,
+          _resolvedProvider: 'openai',
+          defaultProvider: 'openai',
+          ...(cfg.directAuth ? { _directAuth: true } : {}),
+          provider: { type: cfg.providerType || 'openai' },
+        })
+        const response = await client.getClient().chat.completions.create({
+          model: cfg.model,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+        })
+        compacted = response.choices?.[0]?.message?.content || ''
+      } else {
+        const { AnthropicClient } = require('../core/AnthropicClient')
+        const client = new AnthropicClient({
+          apiKey: cfg.apiKey,
+          baseURL: cfg.baseURL,
+          customModel: cfg.model,
+        }).getClient()
+        const response = await client.messages.create({
+          model: cfg.model,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+        })
+        compacted = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+      }
+
+      // Validate compaction result — must still be valid markdown with sections
+      if (compacted && compacted.includes('## ') && compacted.length > 100) {
+        const oldSize = Buffer.byteLength(content, 'utf8')
+        const newSize = Buffer.byteLength(compacted, 'utf8')
+        // Only apply if it actually reduced size
+        if (newSize < oldSize) {
+          fs.writeFileSync(filePath, compacted, 'utf8')
+          logger.info('[SoulTool] compaction complete', { agentId, oldSize, newSize, reduction: `${((1 - newSize / oldSize) * 100).toFixed(0)}%` })
+        }
+      }
+    } catch (err) {
+      logger.error('[SoulTool] compaction LLM call failed', err.message)
+    }
   }
 
   schema() {
@@ -168,10 +254,16 @@ class SoulUpdateTool extends BaseTool {
 
     switch (action) {
       case 'add': {
+        // Dedup: check if a similar entry already exists in this section
+        const entryLower = entry.toLowerCase().trim()
+        for (const line of sectionLines) {
+          const lineTrimmed = line.replace(/^-\s*/, '').toLowerCase().trim()
+          if (lineTrimmed && (lineTrimmed === entryLower || lineTrimmed.includes(entryLower) || entryLower.includes(lineTrimmed))) {
+            return this._ok(`Similar entry already exists in ${section}: "${line.trim()}"`, { agent_id, section, action: 'skipped_duplicate' })
+          }
+        }
         // Add entry as a bullet point
-        // Find last non-empty line to insert after
         let insertIdx = sectionLines.length
-        // Insert before trailing blank lines
         while (insertIdx > 0 && sectionLines[insertIdx - 1].trim() === '') insertIdx--
         sectionLines.splice(insertIdx, 0, `- ${entry}`)
         break
@@ -214,12 +306,27 @@ class SoulUpdateTool extends BaseTool {
     // Update timestamp
     updateTimestamp(headerLines)
 
-    // Append to Memory Updates Log
+    // Append to Memory Updates Log (keep last 20 entries)
     if (sections.has('Memory Updates Log')) {
       const logLines = sections.get('Memory Updates Log')
       let insertIdx = logLines.length
       while (insertIdx > 0 && logLines[insertIdx - 1].trim() === '') insertIdx--
       logLines.splice(insertIdx, 0, `- [${dateStamp()}] ${action}: ${entry}`)
+
+      // Trim to last 20 log entries
+      const MAX_LOG_ENTRIES = 50
+      const logEntries = logLines.filter(l => l.startsWith('- ['))
+      if (logEntries.length > MAX_LOG_ENTRIES) {
+        const toRemove = logEntries.length - MAX_LOG_ENTRIES
+        let removed = 0
+        for (let i = 0; i < logLines.length && removed < toRemove; i++) {
+          if (logLines[i].startsWith('- [')) {
+            logLines.splice(i, 1)
+            removed++
+            i-- // adjust index after splice
+          }
+        }
+      }
     }
 
     // Write back
@@ -228,7 +335,20 @@ class SoulUpdateTool extends BaseTool {
 
     logger.agent('SoulUpdateTool', { agent_id, agent_type, section, action, entry: entry.slice(0, 100) })
 
-    return this._ok(`Memory ${action}d in ${section}: ${entry}`, { agent_id, section, action })
+    const fileSize = Buffer.byteLength(newContent, 'utf8')
+
+    // Trigger async LLM compaction if file is too large
+    if (fileSize > COMPACTION_THRESHOLD && this._compactionConfig) {
+      const lastCompaction = _compactionTimestamps.get(agent_id) || 0
+      if (Date.now() - lastCompaction > COMPACTION_COOLDOWN) {
+        _compactionTimestamps.set(agent_id, Date.now())
+        this._runCompaction(filePath, agent_id).catch(err =>
+          logger.error('[SoulTool] compaction error (non-fatal)', err.message)
+        )
+      }
+    }
+
+    return this._ok(`Memory ${action}d in ${section}: ${entry}`, { agent_id, section, action, fileSize })
   }
 }
 

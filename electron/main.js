@@ -356,7 +356,6 @@ const DEFAULT_CONFIG = {
   skillsPath:        '',
   DoCPath:           '',
   artifactPath:      '',
-  pineconeApiKey:    '',
   maxOutputTokens: 32768,
   newsFeeds: [],
   sandboxConfig: {
@@ -583,7 +582,14 @@ app.whenReady().then(async () => {
 
   ensureDataDir()
   // Initialize the shared dataStore module so extracted IPC modules can use ds.paths()
-  require('./lib/dataStore').init()
+  const ds = require('./lib/dataStore')
+  ds.init()
+
+  // Initialize local RAG modules (path-only, no model loading)
+  const localEmbedding = require('./lib/localEmbedding')
+  const localVectorStore = require('./lib/localVectorStore')
+  localEmbedding.init(ds.paths().MODELS_DIR)
+  localVectorStore.init(ds.paths().DATA_DIR)
 
   await migrateChatsIfNeeded()
 

@@ -8,6 +8,7 @@ import { useToolsStore } from './tools'
 import { useMcpStore } from './mcp'
 import { useSkillsStore } from './skills'
 import { useKnowledgeStore } from './knowledge'
+import { getDefaultVoiceForLocale } from '../utils/edgeVoices'
 
 // ── Built-in agents (non-deletable) ─────────────────────────────────────
 export const BUILTIN_SYSTEM_AGENT_ID = '__default_system__'
@@ -35,7 +36,7 @@ function buildBuiltinSystemCopy(locale, utilityModel, capabilities) {
     requiredSkillIds: capabilities.requiredSkillIds,
     requiredMcpServerIds: capabilities.requiredMcpServerIds,
     requiredKnowledgeBaseIds: capabilities.requiredKnowledgeBaseIds,
-    voiceId: null,
+    voiceId: getDefaultVoiceForLocale(locale),
     isDefault: true,
     isBuiltin: true,
     createdAt: 0,
@@ -78,6 +79,7 @@ Rules:
 - Be precise — only change what's needed
 - For code, preserve functionality while improving readability
 - For partial selections, only modify the selected section`,
+  voiceId: 'en-US-AriaNeural',
   isDefault: false,
   isBuiltin: true,
   createdAt: 0,
@@ -112,7 +114,7 @@ export const useAgentsStore = defineStore('agents', () => {
       requiredToolIds: (toolsStore.tools || []).map(tool => tool.id),
       requiredSkillIds: (skillsStore.allSkillObjects || []).map(skill => skill.id),
       requiredMcpServerIds: (mcpStore.servers || []).map(server => server.id),
-      requiredKnowledgeBaseIds: Object.keys(knowledgeStore.indexConfigs || {}),
+      requiredKnowledgeBaseIds: (knowledgeStore.knowledgeBases || []).map(kb => kb.id),
     }
   }
 
@@ -227,7 +229,7 @@ export const useAgentsStore = defineStore('agents', () => {
       if (p.modelId === undefined) p.modelId = null
       if (p.enabledSkillIds === undefined) p.enabledSkillIds = null
       if (p.mcpServerIds === undefined) p.mcpServerIds = null
-      if (p.voiceId === undefined) p.voiceId = null
+      if (!p.voiceId) p.voiceId = getDefaultVoiceForLocale(configStore.language)
       if (!Array.isArray(p.requiredToolIds)) p.requiredToolIds = []
       if (!Array.isArray(p.requiredSkillIds)) p.requiredSkillIds = []
       if (!Array.isArray(p.requiredMcpServerIds)) p.requiredMcpServerIds = []
@@ -265,7 +267,7 @@ export const useAgentsStore = defineStore('agents', () => {
         updatedAt: Date.now(),
       }
     } else {
-      agents.value.push({
+      const newAgent = {
         id: uuidv4(),
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -276,7 +278,9 @@ export const useAgentsStore = defineStore('agents', () => {
         requiredMcpServerIds: [],
         requiredKnowledgeBaseIds: [],
         ...agent,
-      })
+      }
+      if (!newAgent.voiceId) newAgent.voiceId = getDefaultVoiceForLocale(configStore.language)
+      agents.value.push(newAgent)
     }
     await persist()
   }
@@ -286,10 +290,10 @@ export const useAgentsStore = defineStore('agents', () => {
     if (agent?.isBuiltin) return
     agents.value = agents.value.filter(p => p.id !== id)
     await persist()
-    // Clean up soul file (memory) for deleted agent
+    // Clean up soul file + memory directory for deleted agent
     try {
       const type = agent?.type === 'user' ? 'users' : 'system'
-      await window.electronAPI?.souls?.delete?.(id, type)
+      await window.electronAPI?.souls?.deleteAgentData?.(id, type)
     } catch { /* best-effort cleanup */ }
   }
 
@@ -396,7 +400,7 @@ export const useAgentsStore = defineStore('agents', () => {
       toolIds: (toolsStore.tools || []).map(tool => tool.id).join('|'),
       skillIds: (skillsStore.allSkillObjects || []).map(skill => skill.id).join('|'),
       mcpIds: (mcpStore.servers || []).map(server => server.id).join('|'),
-      knowledgeIds: Object.keys(knowledgeStore.indexConfigs || {}).join('|'),
+      knowledgeIds: (knowledgeStore.knowledgeBases || []).map(kb => kb.id).join('|'),
     }),
     () => {
       syncBuiltinSystemAgent(true)

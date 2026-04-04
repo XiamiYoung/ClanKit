@@ -195,7 +195,7 @@
                 </g>
 
                 <!-- VOICE (chin / mouth area) -->
-                <g v-if="agentType === 'system'" :key="'voice-hotspot'" class="bv-hotspot" :class="{ active: activePanel === 'voice' }" @click="togglePanel('voice')">
+                <g :key="'voice-hotspot'" class="bv-hotspot" :class="{ active: activePanel === 'voice' }" @click="togglePanel('voice')">
                   <line x1="178" y1="125" x2="232" y2="125" class="bv-hs-line"/>
                   <rect x="233" y="113" width="58" height="24" rx="12" class="bv-hs-label-bg"/>
                   <text x="262" y="129" text-anchor="middle" class="bv-hs-label">{{ t('agents.voice') }}</text>
@@ -628,7 +628,7 @@
                 </div>
 
                 <!-- Voice -->
-                <div v-if="agentType === 'system'" class="bv-summary-row clickable" @click="togglePanel('voice')">
+                <div class="bv-summary-row clickable" @click="togglePanel('voice')">
                   <span class="bv-summary-icon">🎤</span>
                   <div class="bv-summary-content">
                     <span class="bv-summary-label">{{ t('agents.voice') }}</span>
@@ -818,7 +818,7 @@ const draftName        = ref(props.agentName || '')
 const draftDescription = ref(props.agentDescription || '')
 const draftPrompt      = ref(props.agentPrompt || '')
 const draftAvatar      = ref(props.agentAvatar || null)
-const draftVoiceId     = ref(props.agentVoiceId || '')
+const draftVoiceId     = ref(props.agentVoiceId || getDefaultVoiceForLocale(configStore.config.language))
 
 // Pre-fill prompt template for new user agents (markdown format matching system agent templates)
 if (props.isNew && props.agentType !== 'system' && !draftPrompt.value) {
@@ -1027,7 +1027,7 @@ onMounted(() => {
 })
 
 // ── Voice options ──────────────────────────────────────────────────────────
-import { EDGE_VOICES, OPENAI_VOICES } from '../../utils/edgeVoices'
+import { EDGE_VOICES, OPENAI_VOICES, getDefaultVoiceForLocale } from '../../utils/edgeVoices'
 
 const draftVoiceMode = ref('') // 'local' or 'openai'
 const previewingAgentVoice = ref(false)
@@ -1035,10 +1035,12 @@ const previewingAgentVoice = ref(false)
 const availableVoiceModes = computed(() => {
   const vc = configStore.config.voiceCall || {}
   const modes = []
-  if (vc.mode === 'local') modes.push({ id: 'local', name: 'Edge-TTS' })
-  if (vc.mode === 'openai' || (vc.whisperApiKey && vc.ttsMode && vc.ttsMode !== 'browser')) modes.push({ id: 'openai', name: 'OpenAI TTS' })
-  // Auto-select first available mode
-  if (modes.length && !draftVoiceMode.value) draftVoiceMode.value = modes[0].id
+  // Edge-TTS is always available (no config required)
+  modes.push({ id: 'local', name: 'Edge-TTS' })
+  if (vc.whisperApiKey && vc.ttsMode && vc.ttsMode !== 'browser') {
+    modes.push({ id: 'openai', name: 'OpenAI TTS' })
+  }
+  if (!draftVoiceMode.value) draftVoiceMode.value = modes[0].id
   return modes
 })
 
@@ -1222,18 +1224,20 @@ const availableTools = computed(() => toolsStore.tools || [])
 const availableSkills = computed(() => skillsStore.skills || [])
 const availableMcpServers = computed(() => mcpStore.servers || [])
 const availableKnowledgeBases = computed(() => {
-  const configs = knowledgeStore.indexConfigs || {}
-  return Object.entries(configs)
-    .filter(([, cfg]) => cfg.enabled)
-    .map(([name]) => ({ id: name, name }))
+  return (knowledgeStore.knowledgeBases || [])
+    .filter(kb => {
+      const cfg = (knowledgeStore.kbConfigs || {})[kb.id]
+      return cfg?.enabled !== false
+    })
+    .map(kb => ({ id: kb.id, name: kb.name, description: kb.description }))
 })
 
-// Assigned indexes that are currently disabled — shown as read-only badges
+// Assigned KBs that are currently disabled — shown as read-only badges
 const disabledAssignedKnowledge = computed(() => {
-  const configs = knowledgeStore.indexConfigs || {}
+  const configs = knowledgeStore.kbConfigs || {}
   return (draftRequiredKnowledgeBaseIds.value || []).filter(id => {
     const cfg = configs[id]
-    return cfg && !cfg.enabled
+    return cfg && cfg.enabled === false
   })
 })
 
@@ -1538,6 +1542,11 @@ function saveAll() {
   )
   if (duplicate) {
     saveError.value = t('agents.duplicateName', { name: duplicate.name })
+    return
+  }
+  if (!draftVoiceId.value) {
+    activePanel.value = 'voice'
+    saveError.value = t('agents.voiceRequired')
     return
   }
   emit('update-agent', {

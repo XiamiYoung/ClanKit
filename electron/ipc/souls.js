@@ -66,6 +66,27 @@ function register() {
       return { success: false, error: err.message }
     }
   })
+
+  // Delete all data associated with an agent: soul file + memory directory
+  ipcMain.handle('souls:delete-agent-data', (_, agentId, type) => {
+    const errors = []
+    // 1. Soul file
+    try {
+      const filePath = path.join(ensureSoulsDir(type), `${agentId}.md`)
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    } catch (err) {
+      errors.push(`soul: ${err.message}`)
+    }
+    // 2. Agent memory directory (memory/agents/{agentId}/)
+    try {
+      const memDir = path.join(ds.paths().MEMORY_DIR, 'agents', agentId)
+      if (fs.existsSync(memDir)) fs.rmSync(memDir, { recursive: true, force: true })
+    } catch (err) {
+      errors.push(`memory: ${err.message}`)
+    }
+    if (errors.length) logger.warn('souls:delete-agent-data partial failure', { agentId, errors })
+    return { success: errors.length === 0, errors }
+  })
 }
 
 // Also export ensureSoulsDir for use by other IPC modules (memory, agent)

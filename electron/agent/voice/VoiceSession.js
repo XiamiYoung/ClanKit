@@ -28,9 +28,13 @@ class VoiceSession {
     this._pendingAudio = null   // latest audio chunk received while busy — replaces any earlier pending
     this._currentLLMAbort = null // AbortController.abort bound to the active LLM stream
 
-    // STT — pluggable: local (SenseVoice) or API (Whisper)
+    // STT — pluggable: local (SenseVoice via sherpa-onnx) or API (Whisper)
     this.whisperConfig = opts.whisperConfig || {}
-    if (opts.sttMode === 'local' && opts.localConfig?.serverURL) {
+    if (opts.sttMode === 'local' && opts.localConfig?.modelDir) {
+      const SherpaOnnxSTT = require('./SherpaOnnxSTT')
+      this.stt = new SherpaOnnxSTT({ modelDir: opts.localConfig.modelDir })
+    } else if (opts.sttMode === 'local' && opts.localConfig?.serverURL) {
+      // Legacy fallback: HTTP-based LocalSTT
       const LocalSTT = require('./LocalSTT')
       this.stt = new LocalSTT({ serverURL: opts.localConfig.serverURL })
     } else if (opts.whisperConfig?.apiKey) {

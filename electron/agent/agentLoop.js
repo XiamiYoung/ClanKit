@@ -25,12 +25,6 @@ const { mcpManager }       = require('./mcp/McpManager')
 const { PermissionGate }   = require('./tools/PermissionGate')
 
 const MAX_CONTEXT_TURNS = 20  // max user/assistant turn pairs sent to LLM
-const FLUSH_INTERVAL    = 10  // flush every N completed assistant turns
-
-
-
-const { MemoryFlush } = require('./core/MemoryFlush')
-const { ChatIndex }   = require('../memory/ChatIndex')
 
 // Extracted modules
 const spb = require('./systemPromptBuilder')
@@ -79,14 +73,26 @@ class AgentLoop {
     // If using new provider config structure
     if (config.provider && config.provider.type) {
       const pType = config.provider.type
-      isOpenAIProvider = (pType === 'openai' || pType === 'openai_official' || pType === 'deepseek' || pType === 'minimax' || pType === 'openrouter')
+      const customIsOpenAI = pType === 'custom' && config.provider.settings?.protocol !== 'anthropic'
+      isOpenAIProvider = (
+        pType === 'openai' || pType === 'openai_official' || pType === 'deepseek' ||
+        pType === 'minimax' || pType === 'openrouter' || pType === 'qwen' || pType === 'glm' ||
+        pType === 'mistral' || pType === 'groq' || pType === 'xai' || pType === 'ollama' ||
+        pType === 'moonshot' || pType === 'doubao' || customIsOpenAI
+      )
 
       // Normalize config for clients
       if (isOpenAIProvider) {
-        config.openaiApiKey = config.provider.apiKey
+        config.openaiApiKey = config.provider.apiKey || ''
         config.openaiBaseURL = config.provider.baseURL
         if (!config.customModel) config.customModel = config.provider.model
-        config._directAuth = (pType === 'openai_official' || pType === 'deepseek' || pType === 'minimax' || pType === 'openrouter')
+        // ollama needs no auth header; custom-openai inherits bearer
+        config._directAuth = (
+          pType === 'openai_official' || pType === 'deepseek' || pType === 'minimax' ||
+          pType === 'openrouter' || pType === 'qwen' || pType === 'glm' ||
+          pType === 'mistral' || pType === 'groq' || pType === 'xai' ||
+          pType === 'moonshot' || pType === 'doubao' || customIsOpenAI
+        )
       } else {
         config.apiKey = config.provider.apiKey
         config.baseURL = config.provider.baseURL
@@ -401,40 +407,28 @@ class AgentLoop {
     // Store HTTP tools for injection
     this.httpTools = httpTools || []
 
-    // ── Memory flush state ──
-    let turnsSinceFlush = 0
-
-    const runFlushIfNeeded = async (reason) => {
-      const agentId = agentPrompts?.systemAgentId
-      if (!agentId || !this.config.memoryDir) return
-      const logsDir = path.join(this.config.memoryDir, 'agents', agentId, 'memory')
-      const um = this.config.utilityModel
-      if (!um?.provider || !um?.model) return
-      const providerCfg = (this.config.providers || []).find(p => p.type === um.provider && p.isActive)
-      if (!providerCfg?.apiKey || !providerCfg?.baseURL) return
-
-      const flusher = new MemoryFlush({
-        model:      um.model,
-        apiKey:     providerCfg.apiKey,
-        baseURL:    providerCfg.baseURL,
-        isOpenAI:   um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek',
-        directAuth: um.provider === 'openai_official' || um.provider === 'deepseek',
-      })
-      const agentLabel = agentPrompts?.groupChatContext?.agentName || agentId
-      logger.agent(`[AgentLoop] memory flush triggered (${reason})`, { agent: agentLabel })
-      const flushMeta = this.config.chatId ? { chatId: this.config.chatId } : {}
-      await flusher.run(conversationMessages, agentId, logsDir, flushMeta, agentLabel).catch(err =>
-        logger.error('[AgentLoop] flush error (non-fatal)', err.message)
-      )
-      turnsSinceFlush = 0
-    }
-
     // Load tools for enabled agents
     this.toolRegistry.loadForAgents(enabledAgents || [])
 
-    // Register memory log tool for this agent (agent-specific, needs agentId)
+    // Register agent-specific tools
     if (this.config.memoryDir && agentPrompts?.systemAgentId) {
-      this.toolRegistry.registerMemoryLogTool(this.config.memoryDir, agentPrompts.systemAgentId)
+      this.toolRegistry.registerSearchHistoryTool(this.config.memoryDir, agentPrompts.systemAgentId)
+    }
+
+    // Set compaction config for soul file auto-compression
+    const um = this.config.utilityModel
+    if (um?.provider && um?.model) {
+      const providerCfg = (this.config.providers || []).find(p => p.type === um.provider && p.isActive)
+      if (providerCfg?.apiKey) {
+        this.toolRegistry.setSoulCompactionConfig({
+          model:        um.model,
+          apiKey:       providerCfg.apiKey,
+          baseURL:      providerCfg.baseURL,
+          isOpenAI:     um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek',
+          directAuth:   um.provider === 'openai_official' || um.provider === 'deepseek',
+          providerType: um.provider,
+        })
+      }
     }
 
     // Store full skill prompts for lazy loading via load_skill tool
@@ -467,62 +461,19 @@ class AgentLoop {
       }
     }
 
-    // ── Load per-agent memory files ──
-    const memoryDir    = this.config.memoryDir
-    let agentMemoryMd  = null
-    let userMd         = null
-    let todayLogMd     = null
-    let yesterdayLogMd = null
-    const now       = new Date()
-    const today     = now.toISOString().slice(0, 10)
-    const yesterday = new Date(now - 86400000).toISOString().slice(0, 10)
+    // ── Load user profile ──
+    const memoryDir = this.config.memoryDir
+    let userMd = null
 
-    if (memoryDir && agentPrompts?.systemAgentId) {
-      const agentId   = agentPrompts.systemAgentId
-      const agentDir  = path.join(memoryDir, 'agents', agentId)
-      const logsDir   = path.join(agentDir, 'memory')
-
-      agentMemoryMd   = readFileIfExists(path.join(agentDir, 'MEMORY.md'))
-      todayLogMd      = readFileIfExists(path.join(logsDir, `${today}.md`))
-      yesterdayLogMd  = readFileIfExists(path.join(logsDir, `${yesterday}.md`))
-    }
     if (memoryDir && agentPrompts?.userAgentId) {
       const userId = agentPrompts.userAgentId
       userMd = readFileIfExists(path.join(memoryDir, 'users', userId, 'USER.md'))
     }
 
-    // ── Search historical chats for relevant context ──
-    let historicalContext = null
-    if (memoryDir && agentPrompts?.systemAgentId) {
-      try {
-        const agentMemoryDir = path.join(memoryDir, 'agents')
-        const chatIdx = new ChatIndex(agentMemoryDir)
-        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
-        const query = typeof lastUserMsg?.content === 'string'
-          ? lastUserMsg.content.slice(0, 500)
-          : ''
-        if (query.trim().length > 20) {
-          const results = chatIdx.search(
-            query, agentPrompts.systemAgentId, 2,
-            { excludeChatId: this.config.chatId }
-          )
-          if (results.length > 0) {
-            // Format text for system prompt injection
-            historicalContext = results.map(r => r.text).join('\n\n---\n\n')
-            // Emit sources to UI so user can jump to original chat
-            const sources = results.map(r => ({ chatId: r.chatId, snippet: r.text.slice(0, 120) }))
-            onChunk({ type: 'history_context', sources })
-          }
-        }
-      } catch (err) {
-        logger.error('[AgentLoop] history search error (non-fatal)', err.message)
-      }
-    }
-
     const systemPrompt = this.buildSystemPrompt(
       enabledAgents, enabledSkills, agentPrompts,
       userSoulContent, systemSoulContent, participantSouls,
-      { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, todayDate: today, yesterdayDate: yesterday, historicalContext },
+      { userMd },
       this.ragContext
     )
 
@@ -820,14 +771,6 @@ class AgentLoop {
         // them out of the assembled string (soul files may contain their own ## headings).
         const _memorySections = []
         if (userMd)          _memorySections.push({ title: 'User Profile',        content: userMd })
-        if (agentMemoryMd)   _memorySections.push({ title: 'My Knowledge Base',   content: agentMemoryMd })
-        if (yesterdayLogMd || todayLogMd) {
-          const logParts = []
-          if (yesterdayLogMd) logParts.push(`### ${yesterday} (Yesterday)\n${yesterdayLogMd.trim()}`)
-          if (todayLogMd)     logParts.push(`### ${today} (Today)\n${todayLogMd.trim()}`)
-          _memorySections.push({ title: 'Recent Session Logs', content: logParts.join('\n\n') })
-        }
-        if (historicalContext) _memorySections.push({ title: 'Relevant Past Context', content: historicalContext })
 
         this.contextSnapshot = {
           systemPrompt,
@@ -879,7 +822,6 @@ class AgentLoop {
             iteration,
             inputTokens: this.contextManager.inputTokens
           })
-          await runFlushIfNeeded('exhausted')
           if (!this.isOpenAI) {
             Object.assign(createParams, this.contextManager.applyCompaction(createParams))
             this.contextManager.compactionCount++
@@ -898,17 +840,11 @@ class AgentLoop {
         if (this._compactionRequested) {
           this._compactionRequested = false
           if (!this.isOpenAI) {
-            await runFlushIfNeeded('manual-compact')
             logger.agent('Manual compaction requested', { inputTokens: this.contextManager.inputTokens })
             Object.assign(createParams, this.contextManager.applyCompaction(createParams))
             this.contextManager.compactionCount++
             onChunk({ type: 'compaction', message: 'Manual compaction applied' })
           }
-        }
-
-        // ── Memory flush before compaction ──
-        if (this.contextManager.shouldCompact()) {
-          await runFlushIfNeeded('pre-compaction')
         }
 
         // ── Prune tool results to reduce context ──
@@ -979,61 +915,123 @@ class AgentLoop {
         })
 
         if (this.isGoogle) {
-          // ── Google Gemini native API (non-streaming, supports inline image output) ──
+          // ── Google Gemini native API with tool calling support ──
           const gc = this.geminiClient.getClient()
           const contents = this._toGeminiContents(systemPrompt, conversationMessages)
           const geminiModelLower = (model || '').toLowerCase()
           const geminiImageCapable = geminiModelLower.includes('image')
-          const generateConfig = { model, contents }
+
+          // Convert tool definitions to Gemini functionDeclarations format
+          const geminiFunctionDeclarations = allToolsAnthropic.map(t => ({
+            name: t.name,
+            description: t.description || '',
+            parametersJsonSchema: t.input_schema || { type: 'object', properties: {} }
+          }))
+
+          const generateConfig = { model, contents, config: {} }
           if (geminiImageCapable) {
-            generateConfig.config = { responseModalities: ['TEXT', 'IMAGE'] }
+            generateConfig.config.responseModalities = ['TEXT', 'IMAGE']
             logger.agent('Gemini image-capable model detected', { model })
           }
-          let geminiResponse
-          try {
-            geminiResponse = await gc.models.generateContent(generateConfig)
-          } catch (geminiErr) {
-            logger.error('Gemini generateContent FAILED', geminiErr.message)
-            throw geminiErr
+          if (geminiFunctionDeclarations.length > 0) {
+            generateConfig.config.tools = [{ functionDeclarations: geminiFunctionDeclarations }]
           }
 
-          const parts = geminiResponse.candidates?.[0]?.content?.parts || []
-          const responseImages = []
+          // Tool calling loop — Gemini may request multiple rounds of function calls
+          const MAX_GEMINI_TOOL_ROUNDS = 10
+          let geminiToolRound = 0
 
-          for (const part of parts) {
-            if (part.text) {
-              finalText += part.text
-              onChunk({ type: 'text', text: part.text })
-            } else if (part.inlineData) {
-              responseImages.push({
-                data: part.inlineData.data,
-                mimeType: part.inlineData.mimeType || 'image/png'
+          while (!this.stopped && geminiToolRound < MAX_GEMINI_TOOL_ROUNDS) {
+            geminiToolRound++
+            let geminiResponse
+            try {
+              geminiResponse = await gc.models.generateContent(generateConfig)
+            } catch (geminiErr) {
+              logger.error('Gemini generateContent FAILED', geminiErr.message)
+              throw geminiErr
+            }
+
+            const parts = geminiResponse.candidates?.[0]?.content?.parts || []
+            const functionCalls = geminiResponse.functionCalls || []
+            const responseImages = []
+
+            for (const part of parts) {
+              if (part.text) {
+                finalText += part.text
+                onChunk({ type: 'text', text: part.text })
+              } else if (part.inlineData) {
+                responseImages.push({
+                  data: part.inlineData.data,
+                  mimeType: part.inlineData.mimeType || 'image/png'
+                })
+              }
+            }
+
+            if (responseImages.length > 0) {
+              onChunk({
+                type: 'tool_result',
+                name: '_image',
+                result: `[${responseImages.length} image(s) generated]`,
+                images: responseImages
               })
             }
+
+            logger.agent('Gemini response end', { iteration, round: geminiToolRound, parts: parts.length, functionCalls: functionCalls.length, images: responseImages.length })
+
+            // No function calls → done
+            if (functionCalls.length === 0) break
+
+            // Execute function calls
+            const functionResponseParts = []
+            for (const fc of functionCalls) {
+              const toolName = fc.name
+              const toolInput = fc.args || {}
+              onChunk({ type: 'tool_call', name: toolName, input: toolInput, toolCallId: fc.id || toolName })
+
+              let result
+              try {
+                // Route through the same tool execution paths as OpenAI
+                if (toolName === 'dispatch_subagent') {
+                  result = await this.subAgentManager.dispatch(toolInput, onChunk)
+                } else if (toolName === 'dispatch_subagents') {
+                  result = await this.subAgentManager.dispatchBatch(toolInput, onChunk, this.toolRegistry)
+                } else if (toolName === 'background_task') {
+                  result = await this.taskManager.execute(toolInput)
+                } else {
+                  result = await this.toolRegistry.execute(toolName, toolInput, fc.id || toolName, (update) => {
+                    onChunk({ type: 'tool_output', name: toolName, text: update.text, stream: update.type })
+                  }, this._abortController.signal)
+                }
+              } catch (toolErr) {
+                result = { content: [{ type: 'text', text: `Error: ${toolErr.message}` }] }
+              }
+
+              onChunk({ type: 'tool_result', name: toolName, result: uiResult(result), toolCallId: fc.id || toolName })
+              functionResponseParts.push({
+                functionResponse: {
+                  id: fc.id,
+                  name: toolName,
+                  response: { result: serializeToolResult(result, toolName) }
+                }
+              })
+            }
+
+            // Push model response + function results into contents for next round
+            contents.push({ role: 'model', parts })
+            contents.push({ role: 'user', parts: functionResponseParts })
+            generateConfig.contents = contents
           }
 
-          if (responseImages.length > 0) {
-            onChunk({
-              type: 'tool_result',
-              name: '_image',
-              result: `[${responseImages.length} image(s) generated]`,
-              images: responseImages
-            })
-          }
-
-          // Gemini doesn't support tool use — always end after one response
           assistantContent = [{ type: 'text', text: finalText }]
           conversationMessages.push({ role: 'assistant', content: finalText || '(image generated)' })
 
           // Rough token estimate for context tracking
           const estTokens = JSON.stringify(contents).length / 4
           this.contextManager.inputTokens = Math.ceil(estTokens)
-          // Estimate output tokens from response length
           this.contextManager.outputTokens = Math.ceil((finalText || '').length / 4)
           onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
 
-          logger.agent('Gemini response end', { iteration, parts: parts.length, images: responseImages.length })
-          break  // exit iteration loop — Gemini has no tool-use cycle
+          break  // exit main iteration loop
 
         } else if (this.isOpenAI) {
           // ── OpenAI-format streaming ──
@@ -1416,6 +1414,7 @@ class AgentLoop {
           conversationMessages.push(nativeAssistant)
 
           logger.agent('OpenAI stream end', { iteration, stopReason, textLen: finalText.length, tokens: this.contextManager.getMetrics() })
+          logger.debug('[AgentLoop] LLM text output', { iteration, textPreview: finalText.slice(-300) })
 
           // ── Handle tool_calls stop reason ──
           if ((stopReason === 'tool_calls' || stopReason === 'stop' && openaiToolCalls.length > 0) && !this.stopped) {
@@ -1536,6 +1535,7 @@ class AgentLoop {
 
             // Push tool results in OpenAI-native format — each as a separate `role: 'tool'` message
             for (const tr of toolResults) {
+              logger.debug('[AgentLoop] tool result → LLM', { tool_call_id: tr.tool_call_id, contentLen: tr.content?.length, contentPreview: (tr.content || '').slice(0, 200) })
               conversationMessages.push({
                 role: 'tool',
                 tool_call_id: tr.tool_call_id,
@@ -1856,11 +1856,7 @@ class AgentLoop {
             if (stopReason === 'max_tokens') {
               onChunk({ type: 'max_tokens_reached', limit: configuredMaxTokens })
             } else if (stopReason === 'end_turn') {
-              // Increment turn counter; trigger periodic flush
-              turnsSinceFlush++
-              if (turnsSinceFlush >= FLUSH_INTERVAL) {
-                await runFlushIfNeeded('interval')
-              }
+              // Normal end of turn — no action needed
             }
             break
           }

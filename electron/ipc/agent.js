@@ -23,8 +23,8 @@ const memHelpers = require('../lib/memoryHelpers')
 const { AgentLoop } = require('../agent/agentLoop')
 const { mcpManager } = require('../agent/mcp/McpManager')
 const { MemoryExtractor } = require('../agent/core/MemoryExtractor')
-const { MemoryFlush } = require('../agent/core/MemoryFlush')
-const { ChatIndex } = require('../memory/ChatIndex')
+
+const { HistoryIndex } = require('../memory/HistoryIndex')
 const { accumulateUsage, accumulateUtilityUsage } = require('./store')
 const { queryRAG } = require('./knowledge')
 const { createChunkAccumulator } = require('../agent/chunkAccumulator')
@@ -108,8 +108,12 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
       return
     }
     const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
-    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
-      logger.debug('[Memory] skip: provider missing apiKey/baseURL', { chatId, provider: um.provider })
+    if (!providerCfg?.apiKey) {
+      logger.debug('[Memory] skip: provider missing apiKey', { chatId, provider: um.provider })
+      return
+    }
+    if (!providerCfg?.baseURL && um.provider !== 'google') {
+      logger.debug('[Memory] skip: provider missing baseURL', { chatId, provider: um.provider })
       return
     }
 
@@ -117,11 +121,12 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
 
     const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
     const extractor = new MemoryExtractor({
-      model: um.model,
-      apiKey: providerCfg.apiKey,
-      baseURL: providerCfg.baseURL,
+      model:        um.model,
+      apiKey:       providerCfg.apiKey,
+      baseURL:      providerCfg.baseURL,
       isOpenAI,
-      directAuth: um.provider === 'openai_official' || um.provider === 'deepseek',
+      directAuth:   um.provider === 'openai_official' || um.provider === 'deepseek',
+      providerType: um.provider,
     })
 
     // Extract last user message + last assistant response
@@ -237,7 +242,7 @@ async function _runStartupIndexRecovery() {
       const agentId = meta.systemAgentId
       if (!agentId) continue
 
-      const chatIndexer = new ChatIndex(ds.paths().AGENT_MEMORY_DIR)
+      const chatIndexer = new HistoryIndex(ds.paths().AGENT_MEMORY_DIR)
       const indexed     = chatIndexer.getIndexedChatIds(agentId)
       if (indexed.has(meta.id)) continue
 
@@ -288,20 +293,14 @@ function _filterByRequired(items, requiredIds) {
 
 function _buildAgentKnowledgeConfig(agent, knowledgeCfg) {
   const requiredIds = agent?.requiredKnowledgeBaseIds ?? []
-  const includeAllIndexes = agent?.id === '__default_system__' && agent?.isBuiltin
-  const indexConfigs = {}
-  for (const [name, cfg] of Object.entries(knowledgeCfg.indexConfigs || {})) {
-    if ((includeAllIndexes || requiredIds.includes(name)) && cfg.enabled) indexConfigs[name] = { ...cfg }
+  const includeAll = agent?.id === '__default_system__' && agent?.isBuiltin
+  const kbConfigs = knowledgeCfg.knowledgeBases || {}
+  const enabledKbs = {}
+  for (const [kbId, cfg] of Object.entries(kbConfigs)) {
+    if ((includeAll || requiredIds.includes(kbId)) && cfg.enabled !== false) enabledKbs[kbId] = { ...cfg }
   }
-  if (Object.keys(indexConfigs).length === 0) return null
-  return {
-    ragEnabled: true,
-    pineconeApiKey: knowledgeCfg.pineconeApiKey || '',
-    pineconeIndexName: Object.keys(indexConfigs)[0],
-    embeddingProvider: knowledgeCfg.embeddingProvider || 'openai',
-    embeddingModel:    knowledgeCfg.embeddingModel    || 'text-embedding-3-small',
-    indexConfigs,
-  }
+  if (Object.keys(enabledKbs).length === 0) return null
+  return { ragEnabled: true, knowledgeBases: enabledKbs }
 }
 
 function _buildUserAgentPrompt(usrAgent) {
@@ -496,19 +495,17 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     }
   }
 
-  // -- RAG retrieval helper: query RAG for a given knowledgeConfig + messages --
+  // -- RAG retrieval helper: query local knowledge bases for a given config + messages --
   async function queryRagContext(kCfg, msgs) {
     if (!kCfg) return null
-    // Merge with file-based config so we always have the latest indexConfigs
+    // Merge with file-based config so we always have the latest knowledgeBases
     const fileCfg = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
-    const filePineconeKey = ds.readJSON(ds.paths().CONFIG_FILE, {}).pineconeApiKey || ''
-    if (!kCfg.pineconeApiKey && filePineconeKey) kCfg.pineconeApiKey = filePineconeKey
-    if (!kCfg.indexConfigs || Object.keys(kCfg.indexConfigs).length === 0) {
-      kCfg.indexConfigs = fileCfg.indexConfigs || {}
+    if (!kCfg.knowledgeBases || Object.keys(kCfg.knowledgeBases).length === 0) {
+      kCfg.knowledgeBases = fileCfg.knowledgeBases || {}
     }
     if (kCfg.ragEnabled === undefined) kCfg.ragEnabled = fileCfg.ragEnabled !== false
 
-    if (!kCfg.ragEnabled || !kCfg.pineconeApiKey) return null
+    if (!kCfg.ragEnabled) return null
 
     try {
       const lastUserMsg = [...msgs].reverse().find(m => m.role === 'user')
@@ -520,38 +517,22 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
 
       if (!queryText.trim()) return null
 
-      const idxConfigs = kCfg.indexConfigs || {}
-      const enabledIndexes = Object.entries(idxConfigs)
-        .filter(([, cfg]) => cfg.enabled)
-        .map(([name, cfg]) => ({ name, embeddingProvider: cfg.embeddingProvider, embeddingModel: cfg.embeddingModel }))
+      const enabledKbIds = Object.entries(kCfg.knowledgeBases || {})
+        .filter(([, cfg]) => cfg.enabled !== false)
+        .map(([kbId]) => kbId)
 
-      if (enabledIndexes.length === 0 && kCfg.pineconeIndexName) {
-        enabledIndexes.push({
-          name: kCfg.pineconeIndexName,
-          embeddingProvider: 'openai',
-          embeddingModel: 'text-embedding-3-small'
-        })
-      }
+      if (enabledKbIds.length === 0) return null
 
-      if (enabledIndexes.length === 0) return null
-
-      logger.agent('RAG query', { chatId, queryLen: queryText.length, indexes: enabledIndexes.map(i => i.name) })
+      logger.agent('RAG query', { chatId, queryLen: queryText.length, knowledgeBases: enabledKbIds })
       const allMatches = []
-      for (const idx of enabledIndexes) {
+      for (const kbId of enabledKbIds) {
         try {
-          const ragResult = await queryRAG({
-            query: queryText,
-            pineconeApiKey: kCfg.pineconeApiKey,
-            pineconeIndexName: idx.name,
-            topK: 5,
-            embeddingProvider: idx.embeddingProvider,
-            embeddingModel: idx.embeddingModel
-          })
+          const ragResult = await queryRAG({ query: queryText, knowledgeBaseId: kbId, topK: 5 })
           if (ragResult.success && ragResult.matches.length > 0) {
             allMatches.push(...ragResult.matches)
           }
-        } catch (idxErr) {
-          logger.error('RAG index query error (non-fatal)', { chatId, index: idx.name, error: idxErr.message })
+        } catch (kbErr) {
+          logger.error('RAG kb query error (non-fatal)', { chatId, kbId, error: kbErr.message })
         }
       }
       if (allMatches.length > 0) {
@@ -908,22 +889,19 @@ ipcMain.handle('agent:run-additional', async (event, {
           try {
             const kCfg = { ...run.knowledgeConfig }
             const fileCfg = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
-            if (!kCfg.pineconeApiKey && groupCfg.pineconeApiKey) kCfg.pineconeApiKey = groupCfg.pineconeApiKey
-            if (!kCfg.indexConfigs || Object.keys(kCfg.indexConfigs).length === 0) kCfg.indexConfigs = fileCfg.indexConfigs || {}
+            if (!kCfg.knowledgeBases || Object.keys(kCfg.knowledgeBases).length === 0) kCfg.knowledgeBases = fileCfg.knowledgeBases || {}
             if (kCfg.ragEnabled === undefined) kCfg.ragEnabled = fileCfg.ragEnabled !== false
-            if (!kCfg.ragEnabled || !kCfg.pineconeApiKey) return null
+            if (!kCfg.ragEnabled) return null
             const lastUserMsg = [...baseMessages].reverse().find(m => m.role === 'user')
             const queryText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content
               : (Array.isArray(lastUserMsg?.content) ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text).join(' ') : '')
             if (!queryText.trim()) return null
-            const idxConfigs = kCfg.indexConfigs || {}
-            const enabledIndexes = Object.entries(idxConfigs).filter(([, c]) => c.enabled).map(([name, c]) => ({ name, embeddingProvider: c.embeddingProvider, embeddingModel: c.embeddingModel }))
-            if (enabledIndexes.length === 0 && kCfg.pineconeIndexName) enabledIndexes.push({ name: kCfg.pineconeIndexName, embeddingProvider: 'openai', embeddingModel: 'text-embedding-3-small' })
-            if (enabledIndexes.length === 0) return null
+            const enabledKbIds = Object.entries(kCfg.knowledgeBases || {}).filter(([, c]) => c.enabled !== false).map(([kbId]) => kbId)
+            if (enabledKbIds.length === 0) return null
             const allMatches = []
-            for (const idx of enabledIndexes) {
+            for (const kbId of enabledKbIds) {
               try {
-                const r = await queryRAG({ query: queryText, pineconeApiKey: kCfg.pineconeApiKey, pineconeIndexName: idx.name, topK: 5, embeddingProvider: idx.embeddingProvider, embeddingModel: idx.embeddingModel })
+                const r = await queryRAG({ query: queryText, knowledgeBaseId: kbId, topK: 5 })
                 if (r.success && r.matches.length > 0) allMatches.push(...r.matches)
               } catch {}
             }
@@ -1365,35 +1343,25 @@ If you use tools to read or write files, use the exact file path above: ${fPath}
     // RAG retrieval (if enabled)
     let ragContext = null
     if (knowledgeConfig) {
-      const filePineconeKey = ds.readJSON(ds.paths().CONFIG_FILE, {}).pineconeApiKey || ''
-      if (!knowledgeConfig.pineconeApiKey && filePineconeKey) knowledgeConfig.pineconeApiKey = filePineconeKey
       const fileCfg = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
-      if (!knowledgeConfig.indexConfigs || Object.keys(knowledgeConfig.indexConfigs).length === 0) {
-        knowledgeConfig.indexConfigs = fileCfg.indexConfigs || {}
+      if (!knowledgeConfig.knowledgeBases || Object.keys(knowledgeConfig.knowledgeBases).length === 0) {
+        knowledgeConfig.knowledgeBases = fileCfg.knowledgeBases || {}
       }
       if (knowledgeConfig.ragEnabled === undefined) knowledgeConfig.ragEnabled = fileCfg.ragEnabled !== false
     }
-    if (knowledgeConfig?.ragEnabled && knowledgeConfig.pineconeApiKey) {
+    if (knowledgeConfig?.ragEnabled) {
       try {
         const lastUserMsg = [...chatMessages].reverse().find(m => m.role === 'user')
         const queryText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : ''
         if (queryText.trim()) {
-          const idxConfigs = knowledgeConfig.indexConfigs || {}
-          const enabledIndexes = Object.entries(idxConfigs)
-            .filter(([, cfg]) => cfg.enabled)
-            .map(([name, cfg]) => ({ name, embeddingProvider: cfg.embeddingProvider, embeddingModel: cfg.embeddingModel }))
-          if (enabledIndexes.length > 0) {
+          const enabledKbIds = Object.entries(knowledgeConfig.knowledgeBases || {})
+            .filter(([, cfg]) => cfg.enabled !== false)
+            .map(([kbId]) => kbId)
+          if (enabledKbIds.length > 0) {
             const allMatches = []
-            for (const idx of enabledIndexes) {
+            for (const kbId of enabledKbIds) {
               try {
-                const ragResult = await queryRAG({
-                  query: queryText.slice(0, 500),
-                  pineconeApiKey: knowledgeConfig.pineconeApiKey,
-                  pineconeIndexName: idx.name,
-                  topK: 3,
-                  embeddingProvider: idx.embeddingProvider,
-                  embeddingModel: idx.embeddingModel
-                })
+                const ragResult = await queryRAG({ query: queryText.slice(0, 500), knowledgeBaseId: kbId, topK: 3 })
                 if (ragResult.success && ragResult.matches.length > 0) {
                   allMatches.push(...ragResult.matches)
                 }
@@ -2220,23 +2188,19 @@ ipcMain.handle('agent:send-message', async (event, {
             try {
               const kCfg = { ...run.knowledgeConfig }
               const fileCfg = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
-              const filePineconeKey = fullCfg.pineconeApiKey || ''
-              if (!kCfg.pineconeApiKey && filePineconeKey) kCfg.pineconeApiKey = filePineconeKey
-              if (!kCfg.indexConfigs || Object.keys(kCfg.indexConfigs).length === 0) kCfg.indexConfigs = fileCfg.indexConfigs || {}
+              if (!kCfg.knowledgeBases || Object.keys(kCfg.knowledgeBases).length === 0) kCfg.knowledgeBases = fileCfg.knowledgeBases || {}
               if (kCfg.ragEnabled === undefined) kCfg.ragEnabled = fileCfg.ragEnabled !== false
-              if (!kCfg.ragEnabled || !kCfg.pineconeApiKey) return null
+              if (!kCfg.ragEnabled) return null
               const lastUserMsg = [...baseMessages].reverse().find(m => m.role === 'user')
               const queryText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content
                 : (Array.isArray(lastUserMsg?.content) ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text).join(' ') : '')
               if (!queryText.trim()) return null
-              const idxConfigs = kCfg.indexConfigs || {}
-              const enabledIndexes = Object.entries(idxConfigs).filter(([, c]) => c.enabled).map(([name, c]) => ({ name, embeddingProvider: c.embeddingProvider, embeddingModel: c.embeddingModel }))
-              if (enabledIndexes.length === 0 && kCfg.pineconeIndexName) enabledIndexes.push({ name: kCfg.pineconeIndexName, embeddingProvider: 'openai', embeddingModel: 'text-embedding-3-small' })
-              if (enabledIndexes.length === 0) return null
+              const enabledKbIds = Object.entries(kCfg.knowledgeBases || {}).filter(([, c]) => c.enabled !== false).map(([kbId]) => kbId)
+              if (enabledKbIds.length === 0) return null
               const allMatches = []
-              for (const idx of enabledIndexes) {
+              for (const kbId of enabledKbIds) {
                 try {
-                  const r = await queryRAG({ query: queryText, pineconeApiKey: kCfg.pineconeApiKey, pineconeIndexName: idx.name, topK: 5, embeddingProvider: idx.embeddingProvider, embeddingModel: idx.embeddingModel })
+                  const r = await queryRAG({ query: queryText, knowledgeBaseId: kbId, topK: 5 })
                   if (r.success && r.matches.length > 0) allMatches.push(...r.matches)
                 } catch {}
               }

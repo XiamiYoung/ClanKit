@@ -297,28 +297,10 @@ ipcMain.handle('agent:import-save-history', async (_event, { agentId, messages, 
     const fs = require('fs')
     fs.mkdirSync(agentMemDir, { recursive: true })
 
-    // 1. Save full messages as JSON
-    const historyPath = path.join(agentMemDir, 'imported_history.json')
-    const historyData = {
-      contactName: contactName || 'Unknown',
-      importedAt: new Date().toISOString(),
-      messageCount: messages.length,
-      messages,
-    }
-    fs.writeFileSync(historyPath, JSON.stringify(historyData, null, 0), 'utf8')
-    logger.info(`import-save-history: saved ${messages.length} messages to ${historyPath}`)
-
-    // 2. Index for ChatIndex keyword search (so agent can find relevant history at chat time)
-    const ChatIndex = require('../memory/ChatIndex')
-    const chatIndex = new ChatIndex(path.join(ds.paths().MEMORY_DIR, 'agents'))
-
-    // Convert to the format ChatIndex expects: [{role, content}]
-    const name = contactName || 'Them'
-    const indexMessages = messages.map(m => ({
-      role: m.sender === 'me' ? 'user' : 'assistant',
-      content: `[${m.timestamp || ''}] ${m.sender === 'me' ? 'Me' : name}: ${m.content}`,
-    }))
-    chatIndex.indexChat('imported-history', indexMessages, agentId)
+    // Index for history search (so agent can find relevant history at chat time)
+    const { HistoryIndex } = require('../memory/HistoryIndex')
+    const histIdx = new HistoryIndex(ds.paths().AGENT_MEMORY_DIR)
+    histIdx.indexImportedHistory(messages, agentId, contactName)
 
     return { success: true, saved: messages.length }
   } catch (err) {

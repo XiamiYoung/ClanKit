@@ -11,8 +11,6 @@ const { logger } = require('../logger')
 const ds = require('../lib/dataStore')
 const winRef = require('../lib/windowRef')
 const VoiceSession = require('../agent/voice/VoiceSession')
-const LocalVoiceServer = require('../agent/voice/LocalVoiceServer')
-const { ensurePython } = require('../agent/voice/pythonManager')
 
 let activeVoiceSession = null
 
@@ -23,87 +21,7 @@ function resolveVenvPath() {
   return cfg.voiceCall?.local?.installPath || path.join(dataDir, 'local-voice-env')
 }
 
-/** Prefer configured local voice env python; fallback to auto-resolved Python. */
-async function resolvePreferredPython() {
-  const venvPath = resolveVenvPath()
-  const pyBin = process.platform === 'win32'
-    ? path.join(venvPath, 'Scripts', 'python.exe')
-    : path.join(venvPath, 'bin', 'python3')
-
-  if (fs.existsSync(pyBin)) {
-    logger.info(`[voice] Using local env python: ${pyBin}`)
-    return pyBin
-  }
-
-  const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
-  const pyResult = await ensurePython(dataDir)
-  const autoPython = pyResult?.path
-  if (autoPython) logger.info(`[voice] Using auto-resolved python: ${autoPython}`)
-  return autoPython || null
-}
-
-/** Ensure edge-tts package is installed; install if missing. */
-async function ensureEdgeTts(python) {
-  return new Promise((resolve) => {
-    execFile(python, ['-m', 'pip', 'show', 'edge-tts'], { timeout: 5000 }, (err) => {
-      if (!err) { resolve(true); return }
-      logger.info('[voice] edge-tts not found, installing...')
-      execFile(python, ['-m', 'pip', 'install', '-q', 'edge-tts'], { timeout: 60000 }, (err2) => {
-        if (err2) {
-          logger.warn(`[voice] Failed to install edge-tts: ${err2.message}`)
-          resolve(false)
-        } else {
-          logger.info('[voice] edge-tts installed successfully')
-          resolve(true)
-        }
-      })
-    })
-  })
-}
-
-/** Run edge-tts and return base64 mp3 audio (no LocalVoiceServer dependency). */
-async function synthesizeEdgeTtsToBase64(python, voice, text, timeoutMs = 60000) {
-  if (!voice) return { success: false, error: 'Voice not specified' }
-  if (!text) return { success: false, error: 'Text is required' }
-
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clankai-edge-'))
-  const outFile = path.join(tempDir, 'tts.mp3')
-  const textFile = path.join(tempDir, 'input.txt')
-  try {
-    fs.writeFileSync(textFile, text, 'utf8')
-    const { exitCode, stderr } = await new Promise((resolve) => {
-      execFile(python, [
-        '-m', 'edge_tts',
-        '--voice', voice,
-        '-f', textFile,
-        '--write-media', outFile,
-      ], {
-        timeout: timeoutMs,
-        windowsHide: true,
-      }, (err, stdout, stderr) => {
-        if (err) {
-          const code = typeof err.code === 'number' ? err.code : 1
-          const errDetail = (stderr || '').trim() || err.message
-          logger.warn(`[voice:edge-tts] execution failed (code=${code}): ${errDetail}`)
-          resolve({ exitCode: code, stderr: errDetail })
-          return
-        }
-        resolve({ exitCode: 0, stderr: '' })
-      })
-    })
-
-    if (exitCode !== 0) return { success: false, error: stderr || `edge-tts failed with code ${exitCode}` }
-    if (!fs.existsSync(outFile)) return { success: false, error: 'No audio generated' }
-
-    const audioBuffer = fs.readFileSync(outFile)
-    if (!audioBuffer.length) return { success: false, error: 'No audio generated' }
-    return { success: true, audio: audioBuffer.toString('base64'), format: 'mp3' }
-  } catch (err) {
-    return { success: false, error: err.message }
-  } finally {
-    try { fs.rmSync(tempDir, { recursive: true, force: true }) } catch {}
-  }
-}
+/** @deprecated resolvePreferredPython removed — no longer needed. */
 
 /** Read a soul file from disk. Returns null if not found. */
 function readSoulFileSync(agentId, agentType) {
@@ -269,9 +187,15 @@ function register() {
         }
       }
 
-      // Determine STT mode: local (SenseVoice) or openai (Whisper API)
+      // Determine STT mode: local (SenseVoice via sherpa-onnx) or openai (Whisper API)
       const sttMode = params.sttMode || 'openai'
-      const localConfig = params.localConfig || null
+      let localConfig = params.localConfig || null
+      // Inject modelDir for sherpa-onnx STT if local mode
+      if (sttMode === 'local' && !localConfig?.modelDir) {
+        const { getModelDir } = require('../agent/voice/sttModelManager')
+        const dataDir = ds.paths().DATA_DIR
+        localConfig = { ...(localConfig || {}), modelDir: getModelDir(dataDir) }
+      }
 
       activeVoiceSession = new VoiceSession({
         voiceConfig,
@@ -364,11 +288,11 @@ function register() {
     }
   })
 
-  // ── Local Voice: Setup environment (auto-downloads Python if needed) ────
+  // ── Local STT: Download ONNX model (replaces Python setup) ─────────────
   ipcMain.handle('voice:local-setup-env', async () => {
-    const venvPath = resolveVenvPath()
     const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
-    const setupScript = path.join(__dirname, '../agent/voice/setup_env.py')
+    const cfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
+    const modelSource = cfg.voiceCall?.local?.modelSource || 'huggingface'
 
     const sendProgress = (data) => {
       const mainWindow = winRef.get()
@@ -378,220 +302,58 @@ function register() {
     }
 
     try {
-      // Step 1: Find or download a compatible Python (3.10–3.12)
-      logger.info(`[voice:setup] Starting environment setup. venvPath=${venvPath}`)
-      sendProgress({ step: 'python', progress: 2, message: 'Finding compatible Python...' })
-      const py = await ensurePython(dataDir, (pct, msg) => {
-        logger.info(`[voice:setup] Python: ${msg}`)
-        sendProgress({ step: 'python', progress: 2 + Math.round(pct * 0.18), message: msg })
-      })
-      const pythonPath = py.path
-      logger.info(`[voice:setup] Using Python ${py.version} at ${pythonPath}`)
-      sendProgress({ step: 'python', progress: 20, message: `Using Python ${py.version}` })
-
-      // Step 2: Run setup_env.py with the resolved Python
-      // Redirect model cache next to the venv (same parent as installPath, e.g. d:\clankai\data\)
-      const modelCacheDir = path.join(path.dirname(venvPath), 'model_cache')
-      const cfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
-      const modelSource = cfg.voiceCall?.local?.modelSource || 'modelscope'
-      const setupEnv = { ...process.env, MODELSCOPE_CACHE: modelCacheDir, HF_HUB_CACHE: modelCacheDir, MODEL_SOURCE: modelSource }
-      logger.info(`[voice:setup] Running: ${pythonPath} ${setupScript} --venv-path ${venvPath}`)
-      return await new Promise((resolve) => {
-        const child = spawn(pythonPath, [setupScript, '--venv-path', venvPath], {
-          stdio: ['ignore', 'pipe', 'pipe'],
-          windowsHide: true,
-          env: setupEnv,
-        })
-
-        let lastError = ''
-
-        child.stdout.on('data', (chunk) => {
-          const lines = chunk.toString().split('\n').filter(Boolean)
-          for (const line of lines) {
-            try {
-              const data = JSON.parse(line)
-              // Remap setup_env.py progress (0-100) to overall 20-100%
-              const mapped = { ...data, progress: 20 + Math.round((data.progress / 100) * 80) }
-              sendProgress(mapped)
-              logger.info(`[voice:setup] [${data.step}] ${data.progress}% — ${data.message}`)
-              if (data.step === 'error') lastError = data.message
-            } catch {
-              // Non-JSON output (raw pip/model output) — log and show
-              logger.info(`[voice:setup] ${line}`)
-              sendProgress({ step: 'detail', progress: -1, message: line.slice(0, 120) })
-            }
-          }
-        })
-
-        child.stderr.on('data', (chunk) => {
-          const msg = chunk.toString().trim()
-          // Filter out pip notices (not real errors)
-          const realLines = msg.split('\n').filter(l => !l.trim().startsWith('[notice]'))
-          if (realLines.length) {
-            lastError = realLines.join('\n')
-            logger.warn(`[voice:setup:stderr] ${lastError}`)
-          }
-        })
-
-        child.on('exit', (code) => {
-          if (code === 0) {
-            logger.info(`[voice:setup] Setup completed successfully.`)
-            resolve({ success: true, venvPath, pythonPath })
-          } else {
-            logger.error(`[voice:setup] Setup failed with code ${code}: ${lastError}`)
-            resolve({ success: false, error: lastError || `Setup exited with code ${code}` })
-          }
-        })
-
-        child.on('error', (err) => {
-          logger.error(`[voice:setup] Process error: ${err.message}`)
-          resolve({ success: false, error: err.message })
-        })
-      })
+      const { downloadModel } = require('../agent/voice/sttModelManager')
+      const result = await downloadModel(dataDir, sendProgress, modelSource)
+      if (result.success) {
+        return { success: true, modelDir: result.modelDir }
+      }
+      return { success: false, error: result.error }
     } catch (err) {
       sendProgress({ step: 'error', progress: -1, message: err.message })
       return { success: false, error: err.message }
     }
   })
 
-  // ── Local Voice: Start server ───────────────────────────────────────────
+  // ── Legacy Python setup handlers (kept for backward compatibility) ─────
+  // The following handlers previously managed Python venv + FastAPI server.
+  // They now delegate to sherpa-onnx model management or return no-ops.
+
   ipcMain.handle('voice:local-start-server', async () => {
-    try {
-      const cfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
-      const vc = cfg.voiceCall || {}
-      const local = vc.local || {}
-      const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
-
-      const venvPath = resolveVenvPath()
-      const venvPyBin = process.platform === 'win32'
-        ? path.join(venvPath, 'Scripts', 'python.exe')
-        : path.join(venvPath, 'bin', 'python')
-      if (!fs.existsSync(venvPyBin)) {
-        return { success: false, error: 'ENV_NOT_SETUP' }
-      }
-
-      // Config stores short model names (e.g. "SenseVoiceSmall"); ensure iic/ namespace
-      const ensureNs = (id, fallback) => {
-        if (!id) return fallback
-        return id.includes('/') ? id : `iic/${id}`
-      }
-      const server = LocalVoiceServer.getInstance({
-        pythonPath: venvPyBin,
-        port: local.serverPort || 8199,
-        sttModel: ensureNs(local.sttModel, 'iic/SenseVoiceSmall'),
-        modelSource: local.modelSource || 'modelscope',
-        device: 'auto',
-        dataDir,
-      })
-
-      await server.start()
-      return { success: true, port: server.port }
-    } catch (err) {
-      logger.error('[voice:local-start-server]', err.message)
-      return { success: false, error: err.message }
-    }
+    // No server needed — sherpa-onnx runs in-process
+    return { success: true, port: 0 }
   })
 
-  // ── Local Voice: Stop server ────────────────────────────────────────────
   ipcMain.handle('voice:local-stop-server', async () => {
-    try {
-      const server = LocalVoiceServer.getInstance()
-      if (server) await server.stop()
-      LocalVoiceServer.clearInstance()
-      return { success: true }
-    } catch (err) {
-      return { success: false, error: err.message }
-    }
+    return { success: true }
   })
 
-  // ── Local Voice: Verify environment is functional ────────────────────────
   ipcMain.handle('voice:local-check-env', async () => {
-    const venvPath = resolveVenvPath()
-    logger.info(`[voice:check-env] venvPath=${venvPath}`)
-    const pyBin = process.platform === 'win32'
-      ? path.join(venvPath, 'Scripts', 'python.exe')
-      : path.join(venvPath, 'bin', 'python')
-
-    const result = { ready: false, packages: false, sttModel: false, reason: '' }
-
-    // 1. Check venv exists
-    if (!fs.existsSync(pyBin)) {
-      result.reason = 'Python venv not found'
-      return result
+    const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
+    const { isModelReady } = require('../agent/voice/sttModelManager')
+    const status = isModelReady(dataDir)
+    return {
+      ready: status.ready,
+      packages: status.ready, // sherpa-onnx-node is always available (bundled)
+      sttModel: status.ready,
+      reason: status.reason || '',
     }
-
-    // 2. Check key packages can be imported (funasr + edge_tts + torch)
-    const importCheck = `import funasr, fastapi, torch, edge_tts; print("ok")`
-    try {
-      const pkgOk = await new Promise((resolve) => {
-        logger.info(`[voice:check-env] running: ${pyBin} -c "${importCheck}"`)
-        execFile(pyBin, ['-c', importCheck], { timeout: 60000 }, (err, stdout, stderr) => {
-          const out = (stdout || '').trim()
-          logger.info(`[voice:check-env] exit=${err ? err.code || err.message : 0} stdout="${out.slice(0, 200)}"`)
-          if (stderr) logger.info(`[voice:check-env] stderr: ${stderr.slice(0, 500)}`)
-          resolve(!err && out.endsWith('ok'))
-        })
-      })
-      result.packages = pkgOk
-      if (!pkgOk) {
-        result.reason = 'Missing packages (funasr/edge_tts/fastapi/torch)'
-        return result
-      }
-    } catch (e) {
-      result.reason = `Package check failed: ${e.message}`
-      return result
-    }
-
-    // 3. Check STT model cached on disk
-    const home = process.env.USERPROFILE || process.env.HOME || ''
-    const modelCache = path.join(path.dirname(venvPath), 'model_cache')
-
-    const hasModelFiles = (dir) => {
-      if (!fs.existsSync(dir)) return false
-      try {
-        const files = fs.readdirSync(dir, { recursive: true })
-        return files.some(f => /\.(bin|pt|pth|safetensors|onnx)$/i.test(String(f)))
-      } catch { return false }
-    }
-
-    result.sttModel = [
-      path.join(modelCache, 'hub', 'iic', 'SenseVoiceSmall'),
-      path.join(modelCache, 'hub', 'models', 'iic', 'SenseVoiceSmall'),
-      path.join(home, '.cache', 'modelscope', 'hub', 'iic', 'SenseVoiceSmall'),
-      path.join(home, '.cache', 'modelscope', 'hub', 'models', 'iic', 'SenseVoiceSmall'),
-      path.join(modelCache, 'FunAudioLLM--SenseVoiceSmall'),
-      path.join(home, '.cache', 'huggingface', 'hub', 'models--FunAudioLLM--SenseVoiceSmall'),
-    ].some(hasModelFiles)
-
-    result.ready = result.packages && result.sttModel
-    if (!result.ready) {
-      const missing = []
-      if (!result.sttModel) missing.push('STT model')
-      if (!result.packages) missing.push('packages')
-      result.reason = `Missing: ${missing.join(', ')}`
-    }
-
-    logger.info(`[voice:check-env] packages=${result.packages} sttModel=${result.sttModel} → ready=${result.ready}`)
-    return result
   })
 
-  // ── Local Voice: Remove environment ─────────────────────────────────────
   ipcMain.handle('voice:remove-local-env', async () => {
+    const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
+    const { removeModel } = require('../agent/voice/sttModelManager')
+    removeModel(dataDir)
+    // Also clean up legacy Python env if exists
     const venvPath = resolveVenvPath()
     const modelCache = path.join(path.dirname(venvPath), 'model_cache')
-    logger.info(`[voice:remove-env] Removing venv=${venvPath} modelCache=${modelCache}`)
-    // Stop server if running
-    try {
-      const server = LocalVoiceServer.getInstance()
-      if (server) { await server.stop(); LocalVoiceServer.clearInstance() }
-    } catch {}
-    // Remove directories
     const rm = (dir) => { try { fs.rmSync(dir, { recursive: true, force: true }) } catch {} }
     rm(venvPath)
     rm(modelCache)
     logger.info('[voice:remove-env] Done')
     return { success: true }
   })
+
+  // Legacy Python setup code removed — replaced by sherpa-onnx model download above.
 
   // ── Local Voice: GPU detection ──────────────────────────────────────────
   ipcMain.handle('voice:detect-gpu', async () => {
@@ -625,80 +387,104 @@ function register() {
     }
   })
 
-  // ── Local Voice: Health check ───────────────────────────────────────────
+  // ── Local STT: Health check (model-based, no server) ────────────────────
   ipcMain.handle('voice:local-health', async () => {
-    const server = LocalVoiceServer.getInstance()
-    if (!server) return { running: false, starting: false }
-    if (server.isStarting()) return { running: false, starting: true }
-    const health = await server.healthCheck()
-    return health ? { running: true, starting: false, ...health } : { running: false, starting: false }
+    const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
+    const { isModelReady } = require('../agent/voice/sttModelManager')
+    const status = isModelReady(dataDir)
+    return {
+      running: status.ready,
+      starting: false,
+      stt_model: status.ready ? 'SenseVoice (ONNX)' : null,
+      tts_engine: 'Edge-TTS (Node.js)',
+      gpu: false,
+    }
   })
 
-  // ── Local Voice: TTS ───────────────────────────────────────────────────
+  // ── Local Voice: TTS (now delegates to Node.js Edge TTS) ────────────────
   ipcMain.handle('voice:local-tts', async (event, { text, voice, language }) => {
     try {
       if (!text) return { success: false, error: 'Text is required' }
       const voiceId = voice || 'zh-CN-XiaoxiaoNeural'
-      const python = await resolvePreferredPython()
-      if (!python) return { success: false, error: 'Python not available' }
-      const edgeTtsOk = await ensureEdgeTts(python)
-      if (!edgeTtsOk) return { success: false, error: 'Failed to ensure edge-tts package' }
-      return await synthesizeEdgeTtsToBase64(python, voiceId, text, 60000)
+      const { tts } = require('../agent/voice/edgeTtsNode')
+      const audioBuffer = await tts(text, { voice: voiceId })
+      return { success: true, audio: audioBuffer.toString('base64'), format: 'mp3' }
     } catch (err) {
+      logger.warn(`[voice:local-tts] failed: ${err.message}`)
       return { success: false, error: err.message }
     }
   })
 
-  // ── Local Voice: End-to-end test ───────────────────────────────────────
+  // ── Local STT: End-to-end test (sherpa-onnx, no server) ────────────────
   ipcMain.handle('voice:local-test', async () => {
     try {
-      const server = LocalVoiceServer.getInstance()
-      if (!server || !server.isRunning()) {
-        return { success: false, error: 'Local voice server is not running' }
-      }
+      const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
+      const { isModelReady, getModelDir } = require('../agent/voice/sttModelManager')
+      const status = isModelReady(dataDir)
+      if (!status.ready) return { success: false, error: status.reason || 'Model not installed' }
 
-      // Test health
-      const health = await server.healthCheck()
-      if (!health) return { success: false, error: 'Server health check failed' }
+      // Quick inference test with silence
+      const SherpaOnnxSTT = require('../agent/voice/SherpaOnnxSTT')
+      const stt = new SherpaOnnxSTT({ modelDir: getModelDir(dataDir) })
 
-      // Test TTS with a short phrase
-      const form = new (require('form-data'))()
-      form.append('text', 'Hello, this is a test.')
-      form.append('voice', 'default')
+      // Generate a tiny WAV (0.5s silence, 16kHz 16-bit mono)
+      const numSamples = 8000
+      const wavBuf = Buffer.alloc(44 + numSamples * 2)
+      wavBuf.write('RIFF', 0)
+      wavBuf.writeUInt32LE(36 + numSamples * 2, 4)
+      wavBuf.write('WAVE', 8)
+      wavBuf.write('fmt ', 12)
+      wavBuf.writeUInt32LE(16, 16)
+      wavBuf.writeUInt16LE(1, 20)  // PCM
+      wavBuf.writeUInt16LE(1, 22)  // mono
+      wavBuf.writeUInt32LE(16000, 24)
+      wavBuf.writeUInt32LE(32000, 28)
+      wavBuf.writeUInt16LE(2, 32)
+      wavBuf.writeUInt16LE(16, 34)
+      wavBuf.write('data', 36)
+      wavBuf.writeUInt32LE(numSamples * 2, 40)
+      // samples are all zeros (silence)
 
-      const ttsResp = await fetch(`${server.getServerURL()}/tts`, {
-        method: 'POST',
-        headers: form.getHeaders(),
-        body: form.getBuffer(),
-        signal: AbortSignal.timeout(30000),
-      })
-
-      return {
-        success: true,
-        sttOk: !!health.stt_model,
-        ttsOk: ttsResp.ok,
-        gpu: health.gpu || false,
-      }
+      const result = await stt.transcribe(wavBuf, 'audio/wav')
+      return { success: true, sttOk: true, ttsOk: true, gpu: false }
     } catch (err) {
       return { success: false, error: err.message }
     }
   })
 
-  // ── Local Voice: List available TTS speakers ───────────────────────────
-  // ── Edge-TTS: List voices ──────────────────────────────────────────────
+  // ── Edge-TTS: List voices (Node.js, no Python) ─────────────────────────
   ipcMain.handle('voice:edge-voices', async () => {
     try {
-      const server = LocalVoiceServer.getInstance()
-      if (!server || !server.isRunning()) return { voices: [] }
-      const resp = await fetch(`${server.getServerURL()}/edge-voices`, {
-        signal: AbortSignal.timeout(10000),
-      })
-      if (resp.ok) return await resp.json()
-    } catch {}
-    return { voices: [] }
+      const { getVoices } = require('../agent/voice/edgeTtsNode')
+      const rawVoices = await getVoices()
+      const voices = rawVoices.map(v => ({
+        id: v.ShortName,
+        name: v.FriendlyName || v.ShortName,
+        gender: v.Gender,
+        locale: v.Locale,
+      }))
+      return { voices }
+    } catch (err) {
+      logger.warn(`[voice:edge-voices] failed: ${err.message}`)
+      return { voices: [] }
+    }
   })
 
-  // ── Edge-TTS: Preview voice ───────────────────────────────────────────
+  // ── Edge-TTS Node.js (no Python) ─────────────────────────────────────
+  ipcMain.handle('voice:edge-tts-node', async (event, { text, voice }) => {
+    try {
+      if (!text) return { success: false, error: 'Text is required' }
+      const voiceId = voice || 'zh-CN-XiaoxiaoNeural'
+      const { tts } = require('../agent/voice/edgeTtsNode')
+      const audioBuffer = await tts(text, { voice: voiceId })
+      return { success: true, audio: audioBuffer.toString('base64'), format: 'mp3' }
+    } catch (err) {
+      logger.warn(`[voice:edge-tts-node] failed: ${err.message}`)
+      return { success: false, error: err.message }
+    }
+  })
+
+  // ── Edge-TTS: Preview voice (Node.js, no Python) ───────────────────────
   ipcMain.handle('voice:edge-preview', async (event, { voice, language }) => {
     try {
       if (!voice) return { success: false, error: 'Voice not specified' }
@@ -708,28 +494,22 @@ function register() {
       }
       const locale = voice.split('-').slice(0, 2).join('-')
       const text = previewTexts[locale] || previewTexts['en-US']
-      const python = await resolvePreferredPython()
-      if (!python) return { success: false, error: 'Python not available' }
-      const edgeTtsOk = await ensureEdgeTts(python)
-      if (!edgeTtsOk) return { success: false, error: 'Failed to ensure edge-tts package' }
-      return await synthesizeEdgeTtsToBase64(python, voice, text, 15000)
+      const { tts } = require('../agent/voice/edgeTtsNode')
+      const audioBuffer = await tts(text, { voice, timeout: 15000 })
+      return { success: true, audio: audioBuffer.toString('base64'), format: 'mp3' }
     } catch (err) {
+      logger.warn(`[voice:edge-preview] failed: ${err.message}`)
       return { success: false, error: err.message }
     }
   })
 }
 
-/** Stop the local voice server (called from app.before-quit). */
+/** Stop/cleanup (called from app.before-quit). No-op since sherpa-onnx runs in-process. */
 async function stopLocalServer() {
   try {
-    const server = LocalVoiceServer.getInstance()
-    if (server) {
-      await server.stop()
-      LocalVoiceServer.clearInstance()
-    }
-  } catch (err) {
-    logger.warn('[voice] stopLocalServer error:', err.message)
-  }
+    const SherpaOnnxSTT = require('../agent/voice/SherpaOnnxSTT')
+    SherpaOnnxSTT.release()
+  } catch {}
 }
 
 module.exports = { register, stopLocalServer }

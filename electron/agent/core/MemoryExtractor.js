@@ -91,12 +91,13 @@ class MemoryExtractor {
    * @param {boolean} [opts.isOpenAI] — use OpenAI-compatible API (openai, deepseek, openrouter with OAI compat)
    * @param {boolean} [opts.directAuth] — use standard Bearer auth for direct OpenAI-compatible providers (e.g. DeepSeek)
    */
-  constructor({ model, apiKey, baseURL, isOpenAI = false, directAuth = false }) {
+  constructor({ model, apiKey, baseURL, isOpenAI = false, directAuth = false, providerType = null }) {
     this.model = model
     this.apiKey = apiKey
     this.baseURL = baseURL
     this.isOpenAI = isOpenAI
     this.directAuth = directAuth
+    this.isGoogle = providerType === 'google'
   }
 
   /**
@@ -121,7 +122,9 @@ class MemoryExtractor {
 
     try {
       let text
-      if (this.isOpenAI) {
+      if (this.isGoogle) {
+        text = await this._callGoogle(systemPrompt, userContent, MAX_TOKENS)
+      } else if (this.isOpenAI) {
         text = await this._extractOpenAI(systemPrompt, userContent)
       } else {
         text = await this._extractAnthropic(systemPrompt, userContent)
@@ -242,7 +245,9 @@ Respond with ONLY valid JSON (no markdown fences, no explanation):
 
     try {
       let text
-      if (this.isOpenAI) {
+      if (this.isGoogle) {
+        text = await this._callGoogle(systemPrompt, userContent, COLLAB_MAX_TOKENS)
+      } else if (this.isOpenAI) {
         text = await this._callOpenAI(systemPrompt, userContent, COLLAB_MAX_TOKENS)
       } else {
         text = await this._callAnthropic(systemPrompt, userContent, COLLAB_MAX_TOKENS)
@@ -281,6 +286,19 @@ Respond with ONLY valid JSON (no markdown fences, no explanation):
 
   async _extractOpenAI(systemPrompt, userContent) {
     return this._callOpenAI(systemPrompt, userContent, MAX_TOKENS)
+  }
+
+  async _callGoogle(systemPrompt, userContent, maxTokens) {
+    const { GeminiClient } = require('./GeminiClient')
+    const gc = new GeminiClient({ provider: { apiKey: this.apiKey, model: this.model }, customModel: this.model })
+    const response = await gc.getClient().models.generateContent({
+      model: this.model,
+      contents: [
+        { role: 'user', parts: [{ text: systemPrompt + '\n\n' + userContent }] },
+      ],
+      generationConfig: { maxOutputTokens: maxTokens },
+    })
+    return response.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || ''
   }
 
   async _callAnthropic(systemPrompt, userContent, maxTokens) {

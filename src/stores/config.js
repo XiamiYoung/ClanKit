@@ -10,7 +10,9 @@ export const PROVIDER_PRESETS = {
     auth: 'x-api-key',
     defaultBaseURL: 'https://api.anthropic.com',
     defaultModels: ['claude-sonnet-latest', 'claude-opus-latest', 'claude-haiku-latest'],
-    hardLimits: {}
+    hardLimits: {},
+    apiKeyUrl: 'https://console.anthropic.com/settings/keys',
+    freeInfo: { badge: 'paid', labelKey: 'onboarding.freeInfo.paid' },
   },
   openai_official: {
     name: 'OpenAI',
@@ -18,7 +20,9 @@ export const PROVIDER_PRESETS = {
     auth: 'bearer',
     defaultBaseURL: 'https://api.openai.com/v1',
     defaultModels: ['gpt-4o', 'gpt-4o-mini', 'o3-mini'],
-    hardLimits: {}
+    hardLimits: {},
+    apiKeyUrl: 'https://platform.openai.com/api-keys',
+    freeInfo: { badge: 'paid', labelKey: 'onboarding.freeInfo.paid' },
   },
   openai: {
     name: 'OpenAI Compatible',
@@ -26,7 +30,9 @@ export const PROVIDER_PRESETS = {
     auth: 'x-api-key',
     defaultBaseURL: '',
     defaultModels: [],
-    hardLimits: {}
+    hardLimits: {},
+    apiKeyUrl: null,
+    freeInfo: null,
   },
   openrouter: {
     name: 'OpenRouter',
@@ -34,7 +40,9 @@ export const PROVIDER_PRESETS = {
     auth: 'bearer',
     defaultBaseURL: 'https://openrouter.ai/api',
     defaultModels: [],
-    hardLimits: {}
+    hardLimits: {},
+    apiKeyUrl: 'https://openrouter.ai/keys',
+    freeInfo: { badge: 'free', labelKey: 'onboarding.freeInfo.openrouterFree' },
   },
   deepseek: {
     name: 'DeepSeek',
@@ -42,7 +50,9 @@ export const PROVIDER_PRESETS = {
     auth: 'bearer',
     defaultBaseURL: 'https://api.deepseek.com',
     defaultModels: ['deepseek-chat', 'deepseek-coder'],
-    hardLimits: { maxOutputTokens: 8192 }
+    hardLimits: { maxOutputTokens: 8192 },
+    apiKeyUrl: 'https://platform.deepseek.com/api-keys',
+    freeInfo: { badge: 'paid', labelKey: 'onboarding.freeInfo.deepseekPaid' },
   },
   google: {
     name: 'Google',
@@ -50,7 +60,9 @@ export const PROVIDER_PRESETS = {
     auth: 'bearer',
     defaultBaseURL: 'https://generativelanguage.googleapis.com',
     defaultModels: [],
-    hardLimits: {}
+    hardLimits: {},
+    apiKeyUrl: 'https://aistudio.google.com/api-keys',
+    freeInfo: { badge: 'free', labelKey: 'onboarding.freeInfo.googleFree' },
   },
   minimax: {
     name: 'MiniMax',
@@ -58,7 +70,89 @@ export const PROVIDER_PRESETS = {
     auth: 'bearer',
     defaultBaseURL: 'https://api.minimax.chat',
     defaultModels: [],
-    hardLimits: {}
+    hardLimits: {},
+    apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
+    freeInfo: { badge: 'paid', labelKey: 'onboarding.freeInfo.paid' },
+  },
+  qwen: {
+    name: 'Qwen',
+    type: 'qwen',
+    auth: 'bearer',
+    defaultBaseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    defaultModels: ['qwen-max', 'qwen-plus', 'qwen-turbo'],
+    hardLimits: {},
+    apiKeyUrl: 'https://bailian.console.aliyun.com/',
+    freeInfo: { badge: 'trial', labelKey: 'onboarding.freeInfo.qwenTrial' },
+  },
+  glm: {
+    name: 'GLM',
+    type: 'glm',
+    auth: 'bearer',
+    defaultBaseURL: 'https://open.bigmodel.cn/api/paas/v4',
+    defaultModels: ['glm-4', 'glm-4-flash', 'glm-3-turbo'],
+    hardLimits: {},
+    apiKeyUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
+    freeInfo: { badge: 'free', labelKey: 'onboarding.freeInfo.glmFree' },
+  },
+  mistral: {
+    name: 'Mistral',
+    type: 'mistral',
+    auth: 'bearer',
+    defaultBaseURL: 'https://api.mistral.ai/v1',
+    defaultModels: ['mistral-large-latest', 'mistral-small-latest', 'open-mixtral-8x7b'],
+    hardLimits: {},
+    apiKeyUrl: 'https://console.mistral.ai/api-keys',
+    freeInfo: { badge: 'paid', labelKey: 'onboarding.freeInfo.paid' },
+  },
+  groq: {
+    name: 'Groq',
+    type: 'groq',
+    auth: 'bearer',
+    defaultBaseURL: 'https://api.groq.com/openai/v1',
+    defaultModels: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
+    hardLimits: {},
+    apiKeyUrl: 'https://console.groq.com/keys',
+    freeInfo: { badge: 'free', labelKey: 'onboarding.freeInfo.groqFree' },
+  },
+  xai: {
+    name: 'xAI',
+    type: 'xai',
+    auth: 'bearer',
+    defaultBaseURL: 'https://api.x.ai/v1',
+    defaultModels: ['grok-3', 'grok-3-mini', 'grok-2'],
+    hardLimits: {},
+    apiKeyUrl: 'https://console.x.ai/',
+    freeInfo: { badge: 'paid', labelKey: 'onboarding.freeInfo.paid' },
+  },
+  ollama: {
+    name: 'Ollama',
+    type: 'ollama',
+    auth: 'none',
+    defaultBaseURL: 'http://localhost:11434/v1',
+    defaultModels: [],
+    hardLimits: {},
+    apiKeyUrl: 'https://ollama.com/download',
+    freeInfo: { badge: 'free', labelKey: 'onboarding.freeInfo.ollamaFree' },
+  },
+  moonshot: {
+    name: 'Moonshot',
+    type: 'moonshot',
+    auth: 'bearer',
+    defaultBaseURL: 'https://api.moonshot.cn/v1',
+    defaultModels: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+    hardLimits: {},
+    apiKeyUrl: 'https://platform.moonshot.cn/console/api-keys',
+    freeInfo: { badge: 'paid', labelKey: 'onboarding.freeInfo.paid' },
+  },
+  doubao: {
+    name: 'Doubao',
+    type: 'doubao',
+    auth: 'bearer',
+    defaultBaseURL: 'https://ark.cn-beijing.volces.com/api/v3',
+    defaultModels: [],
+    hardLimits: {},
+    apiKeyUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
+    freeInfo: { badge: 'paid', labelKey: 'onboarding.freeInfo.paid' },
   },
   custom: {
     name: 'Custom',
@@ -66,8 +160,10 @@ export const PROVIDER_PRESETS = {
     auth: 'bearer',
     defaultBaseURL: '',
     defaultModels: [],
-    hardLimits: {}
-  }
+    hardLimits: {},
+    apiKeyUrl: null,
+    freeInfo: null,
+  },
 }
 
 export const useConfigStore = defineStore('config', () => {
@@ -80,7 +176,6 @@ export const useConfigStore = defineStore('config', () => {
     skillsPath: '',
     DoCPath: '',
     artifactPath: '',
-    pineconeApiKey: '',
     defaultToolIds: null,
     defaultMcpServerIds: null,
     newsFeeds: [],
@@ -134,6 +229,7 @@ export const useConfigStore = defineStore('config', () => {
       userEmail: '',
     },
     voiceCall: {
+      ttsVoice: 'zh-CN-XiaoxiaoNeural',
       whisperApiKey: '',
       whisperBaseURL: '',
       whisperDirectAuth: false,
@@ -160,6 +256,9 @@ export const useConfigStore = defineStore('config', () => {
     if (presetType === 'anthropic') {
       settings.opusModel = 'claude-opus-latest'
       settings.haikuModel = 'claude-haiku-latest'
+    }
+    if (presetType === 'custom') {
+      settings.protocol = 'openai'
     }
     return {
       id: uuidv4(),
@@ -244,6 +343,10 @@ export const useConfigStore = defineStore('config', () => {
 
     if (saved?.voiceCall) {
       config.value.voiceCall = { ...defaults.voiceCall, ...saved.voiceCall }
+      // Migrate: local.ttsVoice → ttsVoice
+      if (!saved.voiceCall.ttsVoice && saved.voiceCall.local?.ttsVoice) {
+        config.value.voiceCall.ttsVoice = saved.voiceCall.local.ttsVoice
+      }
     }
     if (saved?.smtp) {
       config.value.smtp = { ...defaults.smtp, ...saved.smtp }

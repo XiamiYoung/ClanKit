@@ -206,7 +206,7 @@ This is the local data folder for the ClankAI desktop application. Its structure
   ├── mcp-servers.json     — MCP server definitions
   ├── tools.json           — HTTP tool definitions
   ├── agents.json          — AI agent definitions
-  ├── knowledge.json       — RAG/Pinecone knowledge config
+  ├── knowledge.json       — RAG knowledge config
   ├── chats/               — Per-chat message history
   ├── souls/               — Persistent memory files (system/, users/)
   └── artifact/            — AI-generated artifacts
@@ -336,25 +336,19 @@ For code files (source code, configs, scripts, tests), use the Coding Project Pa
   }
 
   // ── Memory context injection ──
-  const { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, todayDate, yesterdayDate, historicalContext } = memoryContext
+  const { userMd } = memoryContext
 
   if (userMd) {
     system += `\n\n## User Profile\n${prepareSoulContent(userMd)}`
   }
 
-  if (agentMemoryMd) {
-    system += `\n\n## My Knowledge Base\n${prepareSoulContent(agentMemoryMd)}`
-  }
+  // Current date — essential for LLMs to interpret relative dates ("去年", "last month", etc.)
+  const today = new Date().toISOString().slice(0, 10)
+  system += `\n\nCURRENT DATE: ${today}`
 
-  const logSections = []
-  if (yesterdayLogMd) logSections.push(`### ${yesterdayDate || 'Yesterday'} (Yesterday)\n${yesterdayLogMd.trim()}`)
-  if (todayLogMd)     logSections.push(`### ${todayDate || 'Today'} (Today)\n${todayLogMd.trim()}`)
-  if (logSections.length > 0) {
-    system += `\n\n## Recent Session Logs\n${logSections.join('\n\n')}`
-  }
-
-  if (historicalContext) {
-    system += `\n\n## Relevant Past Context\n_Retrieved from conversation history_\n\n${historicalContext}`
+  // Memory Recall instruction — guide the LLM to search history when needed
+  if (effectiveName) {
+    system += `\n\n## MEMORY RECALL\nYou have access to the \`search_chat_history\` tool which searches your past conversation records.\nWhen the user asks about prior conversations, specific dates, past topics, or anything that happened before:\n- Use search_chat_history to find relevant messages\n- You can search by keyword (query), date range (dateFrom/dateTo in YYYY-MM-DD), or both\n- Always search before answering from memory — your recall may be incomplete or inaccurate\n- IMPORTANT: After receiving search results, summarize the findings naturally in your own voice. Do NOT paste or echo the raw tool output in your response. Weave the facts into your reply as if recalling from memory.`
   }
 
   // ── RAG / Knowledge Context injection ──
@@ -390,9 +384,7 @@ function stripInfraFromPrompt(fullPrompt) {
     'Your Assigned Tools',
     'Knowledge Context',
     'User Profile',
-    'My Knowledge Base',
-    'Recent Session Logs',
-    'Relevant Past Context',
+    'MEMORY RECALL',
   ]
   for (const title of STRIP_SECTIONS) {
     const re = new RegExp(`\\n## ${title.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}[\\s\\S]*?(?=\\n## |\\n---|\\n[A-Z]{4,}\\b|$)`, 'g')

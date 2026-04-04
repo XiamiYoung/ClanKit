@@ -251,6 +251,25 @@ export function useChunkHandler({
             msg.content = toolLogResult.cleanedText
           }
 
+          // Strip tool result echo: if a text segment after a tool segment
+          // contains raw timestamps from search results, truncate the leaked portion.
+          if (msg.segments && msg.segments.length > 1) {
+            const toolResultPattern = /\s*(?:Me|User|Assistant|[\u4e00-\u9fff]+):\s*.+\\n\[\d{4}-\d{2}-\d{2}/
+            let sawTool = false
+            for (const seg of msg.segments) {
+              if (seg.type === 'tool') { sawTool = true; continue }
+              if (sawTool && seg.type === 'text' && seg.content) {
+                const match = seg.content.match(toolResultPattern)
+                if (match) {
+                  seg.content = seg.content.slice(0, match.index).trimEnd()
+                }
+              }
+            }
+            // Update msg.content to match cleaned segments
+            const textParts = msg.segments.filter(s => s.type === 'text' && s.content).map(s => s.content)
+            if (textParts.length > 0) msg.content = textParts.join('\n\n')
+          }
+
           msg.streaming = false
           if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
           // If no text content: distinguish user-initiated stop from real error.
@@ -364,7 +383,9 @@ export function useChunkHandler({
       if (!hasMsgId) {
       }
       targetChat.isThinking = false
-      lastTextSeg(routeKey).content += chunk.text
+      const seg = lastTextSeg(routeKey)
+      seg.content += chunk.text
+      console.debug('[ChunkHandler] text chunk', { routeKey, chunkLen: chunk.text.length, totalLen: seg.content.length, preview: chunk.text.slice(0, 80) })
       flushSegments(routeKey)
       scrollToBottom(false, cId)
     } else if (chunk.type === 'agent_step') {
@@ -407,6 +428,7 @@ export function useChunkHandler({
       flushSegments(routeKey)
       scrollToBottom(false, cId)
     } else if (chunk.type === 'tool_result') {
+      console.debug('[ChunkHandler] tool_result', { name: chunk.name, resultKeys: Object.keys(chunk.result || {}), resultPreview: JSON.stringify(chunk.result).slice(0, 200) })
       dbg(`tool_result: ${chunk.name} result=${JSON.stringify(chunk.result).slice(0,80)}`, 'warn')
       if (targetChat) {
         targetChat.isCallingTool = false

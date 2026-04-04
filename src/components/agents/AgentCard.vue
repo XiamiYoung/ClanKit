@@ -46,7 +46,7 @@
           <span v-if="agent.isBuiltin" class="agent-card-builtin-badge">{{ t('agents.builtin') }}</span>
           <span v-if="agent.voiceId" class="agent-card-voice-badge">
             <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
-            {{ agent.voiceId }}
+            {{ voiceLabel(agent.voiceId) }}
           </span>
         </div>
         <div class="agent-card-footer-right">
@@ -90,6 +90,13 @@ import { computed } from 'vue'
 import { getAvatarDataUri } from './agentAvatars'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
+import { EDGE_VOICES, OPENAI_VOICES } from '../../utils/edgeVoices'
+
+const _allVoices = [...EDGE_VOICES, ...OPENAI_VOICES]
+function voiceLabel(id) {
+  const v = _allVoices.find(v => v.id === id)
+  return v ? v.name : id
+}
 
 const { t } = useI18n()
 

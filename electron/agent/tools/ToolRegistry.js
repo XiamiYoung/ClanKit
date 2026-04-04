@@ -8,7 +8,7 @@
 const { logger } = require('../../logger')
 const { TodoTool }    = require('./TodoTool')
 const { SoulUpdateTool, SoulReadTool } = require('./SoulTool')
-const { MemoryLogTool } = require('./MemoryLogTool')
+const { SearchHistoryTool } = require('./SearchHistoryTool')
 
 // Map agent IDs → tool class (lazy — not instantiated until enabled)
 const TOOL_CLASS_MAP = {
@@ -36,15 +36,15 @@ function initSoulTools(soulsDir) {
   }
 }
 
-// MemoryLogTool — keyed by agentId since each instance is agent-specific
-const memoryLogToolCache = new Map() // agentId → MemoryLogTool
+// SearchHistoryTool — keyed by agentId, searches chat history via SQLite FTS5
+const searchHistoryToolCache = new Map()
 
-function getMemoryLogTool(memoryDir, agentId) {
+function getSearchHistoryTool(memoryDir, agentId) {
   if (!memoryDir || !agentId) return null
-  if (!memoryLogToolCache.has(agentId)) {
-    memoryLogToolCache.set(agentId, new MemoryLogTool(memoryDir, agentId))
+  if (!searchHistoryToolCache.has(agentId)) {
+    searchHistoryToolCache.set(agentId, new SearchHistoryTool(memoryDir, agentId))
   }
-  return memoryLogToolCache.get(agentId)
+  return searchHistoryToolCache.get(agentId)
 }
 
 class ToolRegistry {
@@ -127,13 +127,23 @@ class ToolRegistry {
   }
 
   /**
-   * Register (or re-register) the MemoryLogTool for a specific agent.
+   * Set utility model config for soul file compaction.
+   * Called by AgentLoop.run() once config is available.
+   */
+  setSoulCompactionConfig(config) {
+    if (soulUpdateTool && config) {
+      soulUpdateTool.setCompactionConfig(config)
+    }
+  }
+
+  /**
+   * Register SearchHistoryTool for a specific agent.
    * Called by AgentLoop.run() once systemAgentId is known.
    */
-  registerMemoryLogTool(memoryDir, agentId) {
+  registerSearchHistoryTool(memoryDir, agentId) {
     if (!memoryDir || !agentId) return
-    const tool = getMemoryLogTool(memoryDir, agentId)
-    if (tool) this.registerTool('read_memory_log', tool)
+    const tool = getSearchHistoryTool(memoryDir, agentId)
+    if (tool) this.registerTool('search_chat_history', tool)
   }
 
   /** Get tool definitions array for the API request */

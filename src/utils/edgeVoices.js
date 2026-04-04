@@ -13,6 +13,12 @@ export const EDGE_VOICES = [
   { id: 'en-US-EmmaNeural', name: 'Emma', gender: 'Female', locale: 'en-US' },
 ]
 
+// Return a sensible default voice based on the app language setting
+export function getDefaultVoiceForLocale(language) {
+  if (String(language || '').startsWith('zh')) return 'zh-CN-XiaoxiaoNeural'
+  return 'en-US-AriaNeural'
+}
+
 // OpenAI TTS voices (for OpenAI whisper mode)
 export const OPENAI_VOICES = [
   { id: 'alloy', name: 'Alloy', gender: 'Neutral' },

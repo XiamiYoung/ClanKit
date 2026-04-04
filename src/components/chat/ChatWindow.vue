@@ -466,10 +466,13 @@ const configStore = useConfigStore()
 const { t } = useI18n()
 
 const voiceConfigured = computed(() => {
-  const vc = configStore.config.voiceCall || {}
-  if (vc.mode === 'local') return true  // server check happens at speak time
-  if (vc.mode === 'openai') return true  // browser TTS fallback always available
-  return false  // mode disabled
+  const c = chatsStore.chats.find(ch => ch.id === props.chatId)
+  if (!c) return false
+  if (c.groupAgentIds?.length) {
+    return c.groupAgentIds.some(id => !!agentsStore.getAgentById(id)?.voiceId)
+  }
+  const agentId = c.systemAgentId || agentsStore.defaultSystemAgent?.id
+  return !!agentsStore.getAgentById(agentId)?.voiceId
 })
 
 const messagesEl = ref(null)

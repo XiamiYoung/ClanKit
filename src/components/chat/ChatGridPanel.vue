@@ -602,7 +602,7 @@ async function onMentionSend(text) {
             mcpServers: JSON.parse(JSON.stringify(filterByRequired(mcpStore.servers, agent.requiredMcpServerIds ?? []))),
             httpTools: JSON.parse(JSON.stringify(filterByRequired(toolsStore.tools, agent.requiredToolIds ?? []))),
 
-            knowledgeConfig: { ragEnabled: knowledgeStore.ragEnabled, pineconeApiKey: knowledgeStore.pineconeApiKey, pineconeIndexName: knowledgeStore.pineconeIndexName, embeddingProvider: knowledgeStore.embeddingProvider, embeddingModel: knowledgeStore.embeddingModel, indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs)) },
+            knowledgeConfig: { ragEnabled: knowledgeStore.ragEnabled, knowledgeBases: JSON.parse(JSON.stringify(knowledgeStore.kbConfigs || {})) },
           })
           const currentChat = chatsStore.chats.find(c => c.id === chatId)
           if (currentChat?.messages) {
@@ -696,7 +696,7 @@ async function onSend(text, pendingAttachments = []) {
       ...(pendingAttachments.length > 0 ? { currentAttachments: JSON.parse(JSON.stringify(pendingAttachments)) } : {}),
       mcpServers: JSON.parse(JSON.stringify(filterByRequired(mcpStore.servers, sysAgent?.requiredMcpServerIds ?? []))),
       httpTools: JSON.parse(JSON.stringify(filterByRequired(toolsStore.tools, sysAgent?.requiredToolIds ?? []))),
-      knowledgeConfig: { ragEnabled: knowledgeStore.ragEnabled, pineconeApiKey: knowledgeStore.pineconeApiKey, pineconeIndexName: knowledgeStore.pineconeIndexName, embeddingProvider: knowledgeStore.embeddingProvider, embeddingModel: knowledgeStore.embeddingModel, indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs)) },
+      knowledgeConfig: { ragEnabled: knowledgeStore.ragEnabled, knowledgeBases: JSON.parse(JSON.stringify(knowledgeStore.kbConfigs || {})) },
     })
     if (targetChat.messages) {
       const msg = targetChat.messages.find(m => m.id === streamingMsgId)

@@ -892,7 +892,7 @@ async function handleDocSpeak() {
     }
 
     if (vc.mode === 'local' && window.electronAPI?.voice?.localTts) {
-      const voice = vc.local?.ttsVoice || 'zh-CN-XiaoxiaoNeural'
+      const voice = vc.ttsVoice || vc.local?.ttsVoice || 'zh-CN-XiaoxiaoNeural'
       const result = await window.electronAPI.voice.localTts({ text, voice, language: vc.language || 'auto' })
       if (docSpeakLoading.value && await playAudio(result)) return
       // Local server not running or failed — do not fall through
@@ -1070,9 +1070,7 @@ async function sendAiDoc(userText) {
     httpTools: JSON.parse(JSON.stringify(toolsStore.tools || [])),
     knowledgeConfig: {
       ragEnabled: knowledgeStore.ragEnabled,
-      pineconeApiKey: knowledgeStore.pineconeApiKey,
-      pineconeIndexName: knowledgeStore.pineconeIndexName,
-      indexConfigs: JSON.parse(JSON.stringify(knowledgeStore.indexConfigs || {})),
+      knowledgeBases: JSON.parse(JSON.stringify(knowledgeStore.kbConfigs || {})),
     },
     permissionMode: aiDocPermissionMode.value,
   }

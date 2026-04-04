@@ -71,11 +71,11 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
       language: vc.language || '',
     }
 
-    // Pre-check: verify local server is running BEFORE showing call overlay
+    // Pre-check: verify local STT model is ready BEFORE showing call overlay
     if (voiceMode === 'local') {
       try {
-        const health = await window.electronAPI?.voice?.localHealth()
-        if (!health?.running) {
+        const envCheck = await window.electronAPI?.voice?.localCheckEnv()
+        if (!envCheck?.ready) {
           _showVoiceError('SERVER_NOT_RUNNING')
           return
         }
@@ -117,9 +117,7 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
 
       if (voiceMode === 'local') {
         startPayload.sttMode = 'local'
-        startPayload.localConfig = {
-          serverURL: `http://127.0.0.1:${vc.local?.serverPort || 8199}`,
-        }
+        startPayload.localConfig = {}
       } else {
         startPayload.sttMode = 'openai'
         startPayload.whisperConfig = whisperConfig
@@ -427,7 +425,7 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
       try {
         // Per-agent voice overrides global default
         const agent = agentsStore.getAgentById(voiceStore.activeAgentId)
-        const edgeVoice = agent?.voiceId || vc.local?.ttsVoice || 'zh-CN-XiaoxiaoNeural'
+        const edgeVoice = agent?.voiceId || vc.ttsVoice || vc.local?.ttsVoice || 'zh-CN-XiaoxiaoNeural'
         const result = await window.electronAPI.voice.localTts({
           text,
           voice: edgeVoice,

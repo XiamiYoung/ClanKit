@@ -836,8 +836,8 @@ const mcpTokenEstimate = computed(() =>
 )
 
 const ragEnabledCount = computed(() => {
-  const configs = knowledgeStore.indexConfigs
-  return Object.values(configs).filter(c => c.enabled).length
+  const configs = knowledgeStore.kbConfigs
+  return Object.values(configs).filter(c => c.enabled !== false).length
 })
 
 const effectiveWorkingPath = computed(() => {

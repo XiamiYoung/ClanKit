@@ -248,7 +248,7 @@ function register({ DEFAULT_CONFIG }) {
   })
 
   ipcMain.handle('store:get-agents', async () => ds.readJSONAsync(p().AGENTS_FILE, { categories: [], agents: [] }))
-  ipcMain.handle('store:save-agents', (_, data) => { ds.writeJSON(p().AGENTS_FILE, data); return true })
+  ipcMain.handle('store:save-agents', async (_, data) => { await ds.writeJSONAtomic(p().AGENTS_FILE, data); return true })
 }
 
 module.exports = { register, accumulateUsage, accumulateUtilityUsage }
