@@ -223,6 +223,13 @@
       </div>
     </div>
 
+    <!-- User Agent Setup Dialog -->
+    <UserAgentSetupDialog
+      v-if="showUserAgentSetup"
+      @close="showUserAgentSetup = false"
+      @confirm="onUserAgentSetupConfirm"
+    />
+
     <!-- Agent Body Viewer Modal (create + edit) -->
     <AgentBodyViewer
       v-if="bodyViewerAgent"
@@ -391,6 +398,7 @@ import CategoryModal from '../components/agents/CategoryModal.vue'
 import AgentGroupCreator from '../components/agents/AgentGroupCreator.vue'
 import OnboardingOverlay from '../components/agents/OnboardingOverlay.vue'
 import AgentImportWizard from '../components/agents/AgentImportWizard.vue'
+import UserAgentSetupDialog from '../components/agents/UserAgentSetupDialog.vue'
 import { useI18n } from '../i18n/useI18n'
 import { getDefaultVoiceForLocale } from '../utils/edgeVoices'
 
@@ -453,6 +461,11 @@ onMounted(async () => {
       selectedView.type = 'all'
     }
     router.replace({ path: '/agents', query: {} })
+  } else if (route.query.createUserAgent === '1') {
+    selectedView.agentType = 'user'
+    selectedView.type = 'all'
+    router.replace({ path: '/agents', query: {} })
+    createNew('user')
   } else if (route.query.openGroupCreator === '1') {
     // Direct group creator open (non-onboarding)
     showGroupCreator.value = true
@@ -587,19 +600,29 @@ const visibleAgents = computed(() => {
 // ── AgentBodyViewer (create + edit) ───────────────────────────────────────
 const bodyViewerAgent = ref(null)
 const bodyViewerRef = ref(null)
+const showUserAgentSetup = ref(false)
 
 function openBodyViewer(agent) {
   bodyViewerAgent.value = { ...agent }
 }
 
 function createNew(type) {
+  const resolvedType = type || selectedView.agentType
+  if (resolvedType === 'user') {
+    showUserAgentSetup.value = true
+    return
+  }
+  _openNewBodyViewer(resolvedType, {})
+}
+
+function _openNewBodyViewer(type, prefill) {
   const { providerId, modelId } = resolveDefaultProviderModel()
   bodyViewerAgent.value = {
     id: uuidv4(),
-    name: '',
-    type: type || selectedView.agentType,
-    description: '',
-    prompt: '',
+    name: prefill.name || '',
+    type,
+    description: prefill.description || '',
+    prompt: prefill.prompt || '',
     avatar: null,
     providerId,
     modelId,
@@ -610,6 +633,11 @@ function createNew(type) {
     requiredKnowledgeBaseIds: [],
     isNew: true,
   }
+}
+
+function onUserAgentSetupConfirm(data) {
+  showUserAgentSetup.value = false
+  _openNewBodyViewer('user', data)
 }
 
 async function onBodyViewerUpdate(updates) {

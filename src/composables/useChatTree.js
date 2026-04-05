@@ -6,7 +6,7 @@
  *
  * Extracted from ChatsView.vue.
  */
-import { ref, reactive, computed, watch, nextTick } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useChatsStore } from '../stores/chats'
 import { useAgentsStore } from '../stores/agents'
 import { useVoiceStore } from '../stores/voice'
@@ -63,11 +63,18 @@ export function useChatTree({ mentionInputRef } = {}) {
   // ── Resizable sidebar ──────────────────────────────────────────────────────
   function getDefaultSidebarWidth() {
     if (window.innerWidth >= 2560) return 340
-    if (window.innerWidth >= 1920) return 300
-    return 260
+    if (window.innerWidth >= 1920) return 280
+    return 240
   }
 
   const sidebarWidth = ref(getDefaultSidebarWidth())
+
+  function onTreeWindowResize() {
+    if (!isResizing.value) sidebarWidth.value = getDefaultSidebarWidth()
+  }
+  window.addEventListener('resize', onTreeWindowResize)
+  onUnmounted(() => window.removeEventListener('resize', onTreeWindowResize))
+
   const chatHeaderRef = ref(null)
   const chatSidebarCollapsed = ref(false)
   // Tracks the last-clicked tree node: { type: 'folder'|'chat', id }
@@ -106,7 +113,7 @@ export function useChatTree({ mentionInputRef } = {}) {
 
     function onMouseMove(e) {
       const delta = e.clientX - startX
-      const minW = window.innerWidth >= 2560 ? 200 : 180
+      const minW = window.innerWidth >= 2560 ? 200 : 160
       const maxW = window.innerWidth >= 2560 ? 480 : 400
       sidebarWidth.value = Math.max(minW, Math.min(maxW, startWidth + delta))
     }

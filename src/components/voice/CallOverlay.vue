@@ -29,7 +29,7 @@
           <button
             class="call-panel-icon-btn" :class="{ active: voiceStore.isMuted }"
             @click="toggleMute"
-            :title="voiceStore.isMuted ? 'Unmute' : 'Mute'"
+            :title="voiceStore.isMuted ? t('voice.unmute') : t('voice.mute')"
           >
             <svg v-if="!voiceStore.isMuted" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
@@ -45,7 +45,7 @@
           </button>
 
           <!-- End call -->
-          <button class="call-panel-close" @click="endCall" title="End Call">
+          <button class="call-panel-close" @click="endCall" :title="t('voice.endCall')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
             </svg>
@@ -55,7 +55,7 @@
 
       <!-- STT transcript — last thing you said -->
       <div v-if="voiceStore.lastTranscript" class="call-panel-transcript">
-        <span class="call-panel-transcript-label">You said</span>
+        <span class="call-panel-transcript-label">{{ t('voice.youSaid') }}</span>
         <span class="call-panel-transcript-text">{{ voiceStore.lastTranscript }}</span>
       </div>
 
@@ -72,7 +72,7 @@
             class="call-panel-device-select"
             :value="voiceStore.selectedMicId"
             @change="onMicChange"
-            title="Microphone"
+            :title="t('voice.microphone')"
           >
             <option value="">{{ defaultMicLabel }}</option>
             <option v-for="d in micDevices" :key="d.deviceId" :value="d.deviceId">
@@ -91,7 +91,7 @@
             class="call-panel-device-select"
             :value="voiceStore.selectedSpeakerId"
             @change="onSpeakerChange"
-            title="Speaker"
+            :title="t('voice.speaker')"
           >
             <option value="">{{ defaultSpeakerLabel }}</option>
             <option v-for="d in speakerDevices" :key="d.deviceId" :value="d.deviceId">
@@ -154,11 +154,11 @@ const statusLabel = computed(() => {
 })
 
 const defaultMicLabel = computed(() => {
-  return configStore.config?.voiceCall?.defaultMicLabel || 'Default Microphone'
+  return configStore.config?.voiceCall?.defaultMicLabel || t('voice.defaultMicrophone')
 })
 
 const defaultSpeakerLabel = computed(() => {
-  return configStore.config?.voiceCall?.defaultSpeakerLabel || 'Default Speaker'
+  return configStore.config?.voiceCall?.defaultSpeakerLabel || t('voice.defaultSpeaker')
 })
 
 function onDragStart(e) {

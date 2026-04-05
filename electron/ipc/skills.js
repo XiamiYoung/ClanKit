@@ -32,7 +32,7 @@ function resolveSkillsPath(configPath) {
     return normalizePath(p)
   }
   // Default: CLANKAI_DATA_PATH/skills
-  return path.join(ds.paths().base, 'skills')
+  return path.join(ds.paths().DATA_DIR, 'skills')
 }
 
 /**
@@ -79,7 +79,14 @@ function extractSummary(mdContent) {
 
 function register() {
   ipcMain.handle('skills:scan-dir', async (_, dirPath) => {
-    const dir = resolveSkillsPath(dirPath)
+    let dir
+    try {
+      dir = resolveSkillsPath(dirPath)
+    } catch (err) {
+      logger.error('skills:scan-dir resolveSkillsPath error', err.message)
+      return []
+    }
+    if (!dir) return []
     try {
       let entries
       try {
@@ -197,7 +204,14 @@ function register() {
   })
 
   ipcMain.handle('skills:load-all-prompts', async (_, dirPath) => {
-    const dir = resolveSkillsPath(dirPath)
+    let dir
+    try {
+      dir = resolveSkillsPath(dirPath)
+    } catch (err) {
+      logger.error('skills:load-all-prompts resolveSkillsPath error', err.message)
+      return []
+    }
+    if (!dir) return []
     try {
       let entries
       try {

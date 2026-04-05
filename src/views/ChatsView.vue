@@ -135,7 +135,7 @@
             <button
               v-if="hasFolders"
               class="chat-root-fold-btn"
-              :title="anyFolderExpanded ? 'Collapse all folders' : 'Expand all folders'"
+              :title="anyFolderExpanded ? t('chats.collapseAllFolders') : t('chats.expandAllFolders')"
               @click.stop="chatsStore.setAllFoldersExpanded(!anyFolderExpanded)"
             >
               <svg v-if="anyFolderExpanded" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -190,18 +190,18 @@
           </button>
           <button class="chat-ctx-item" @click="ctxNewFolder()">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-            New Folder
+            {{ t('chats.newFolder') }}
           </button>
           <!-- Folder-specific actions (rename / delete) -->
           <template v-if="treeCtxMenu.node?.type === 'folder'">
             <div style="height:1px; background:#2A2A2A; margin:4px 8px;"></div>
             <button class="chat-ctx-item" @click="openCtxDialog('rename', treeCtxMenu.node.name, treeCtxMenu.node.id, treeCtxMenu.x, treeCtxMenu.y)">
               <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-              Configure Folder
+              {{ t('chats.configureFolder') }}
             </button>
             <button class="chat-ctx-item chat-ctx-danger" @click="closeTreeCtxMenu(); doDeleteFolder(treeCtxMenu.node.id)">
               <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-              Delete Folder
+              {{ t('chats.deleteFolder') }}
             </button>
           </template>
         </div>
@@ -223,8 +223,8 @@
       :visible="folderModal.visible"
       :mode="folderModal.mode"
       :initial="folderModal.initial"
-      noun="Folder"
-      renameTitle="Configure Folder"
+      :noun="t('chats.folderNoun')"
+      :renameTitle="t('chats.configureFolder')"
       :showTypeSelector="false"
       @confirm="onFolderModalConfirm"
       @close="folderModal.visible = false"
@@ -268,8 +268,8 @@
           <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
           </svg>
-          <span style="font-size:var(--fs-body); font-weight:600;">Drop files here</span>
-          <span style="font-size:var(--fs-caption); opacity:0.7;">or paste file paths into the text area</span>
+          <span style="font-size:var(--fs-body); font-weight:600;">{{ t('chats.dropFilesHere') }}</span>
+          <span style="font-size:var(--fs-caption); opacity:0.7;">{{ t('chats.pasteFilePaths') }}</span>
         </div>
       </div>
 
@@ -580,8 +580,8 @@
                   style="background:#F5F5F5; color:#9CA3AF;"
                   @mouseenter="e => { if (!activeRunning) e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A'; }"
                   @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#9CA3AF'; }"
-                  aria-label="Attach files"
-                  title="Attach files or folders"
+                  :aria-label="t('chats.attachFiles')"
+                  :title="t('chats.attachFiles')"
                 >
                   <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
@@ -656,7 +656,7 @@
                     {{ enabledSkills.length }} {{ t('chats.statusSkills') }}{{ enabledToolsCount > 0 ? ', ' + enabledToolsCount + ' ' + t('chats.statusTools') : '' }}{{ enabledMcpCount > 0 ? ', ' + enabledMcpCount + ' MCP' : '' }}{{ enabledKnowledgeCount > 0 ? ', ' + enabledKnowledgeCount + ' RAG' : '' }}
                   </span>
                   <span v-if="attachments.length > 0" style="color:#1A1A1A; font-weight:500; font-size:0.75rem;">
-                    {{ attachments.length }} file{{ attachments.length !== 1 ? 's' : '' }} attached
+                    {{ attachments.length === 1 ? t('chats.filesAttached', { count: attachments.length }) : t('chats.filesAttachedPlural', { count: attachments.length }) }}
                   </span>
                 </div>
                 <p class="text-xs" style="color:#9CA3AF;">
@@ -680,7 +680,7 @@
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
           </div>
-          <p style="font-family:'Inter',sans-serif; font-size:var(--fs-subtitle); font-weight:600; color:#6B7280; margin:12px 0 0;">Select or create a chat to begin</p>
+          <button class="chat-empty-new-btn" @click="newChat()">{{ t('chats.selectOrCreate') }}</button>
         </template>
       </div>
     </div>
@@ -741,7 +741,7 @@
     :message="t('chats.noUserAgentMessage', 'Please create a User Agent first on the Agents page before starting a chat.')"
     confirm-text="Go to Agents"
     confirm-class="primary"
-    @confirm="newChatBlockedNoUserAgent = false; $router.push('/agents')"
+    @confirm="newChatBlockedNoUserAgent = false; $router.push({ path: '/agents', query: { createUserAgent: '1' } })"
     @close="newChatBlockedNoUserAgent = false"
   />
 
@@ -813,15 +813,15 @@
   <ConfirmModal
     v-if="confirmDeleteTarget"
     :visible="true"
-    :title="confirmDeleteTarget.type === 'message' ? 'Delete Message' : confirmDeleteTarget.type === 'chat' ? 'Delete Chat' : confirmDeleteTarget.type === 'folder' ? 'Delete Folder' : 'Remove Agent'"
+    :title="confirmDeleteTarget.type === 'message' ? t('chats.deleteMessage') : confirmDeleteTarget.type === 'chat' ? t('chats.deleteChat') : confirmDeleteTarget.type === 'folder' ? t('chats.deleteFolder') : t('chats.removeAgent')"
     :message="confirmDeleteTarget.type === 'message'
-      ? 'Are you sure you want to delete this message? It will be removed from the chat history and context window.'
+      ? t('chats.deleteMessageConfirm')
       : confirmDeleteTarget.type === 'chat'
-        ? `Are you sure you want to delete &quot;${confirmDeleteTarget.label}&quot;? This action cannot be undone.`
+        ? t('chats.deleteChatConfirm', { name: confirmDeleteTarget.label })
         : confirmDeleteTarget.type === 'folder'
-          ? `Delete the folder &quot;${confirmDeleteTarget.label}&quot;? The folder will be removed.`
-          : `Remove &quot;${confirmDeleteTarget.label}&quot; from this group chat?`"
-    :confirm-text="'Delete'"
+          ? t('chats.deleteFolderNonEmptyConfirm', { name: confirmDeleteTarget.label })
+          : t('chats.removeAgentConfirm', { name: confirmDeleteTarget.label })"
+    :confirm-text="t('common.delete')"
     confirm-class="danger"
     @confirm="executeConfirmedDelete"
     @close="confirmDeleteTarget = null"
@@ -831,11 +831,11 @@
   <!-- Non-empty folder alert -->
   <ConfirmModal
     v-if="folderNonEmptyAlert"
-    title="Cannot Delete Folder"
-    :message="`&quot;${folderNonEmptyAlert}&quot; is not empty. Only empty folders can be deleted — move or delete all chats and subfolders inside it first.`"
-    confirm-text="OK"
+    :title="t('chats.cannotDeleteFolder')"
+    :message="t('chats.folderNonEmptyAlert', { name: folderNonEmptyAlert })"
+    :confirm-text="t('common.ok')"
     confirm-class="primary"
-    cancel-text="Close"
+    :cancel-text="t('common.close')"
     @confirm="folderNonEmptyAlert = null"
     @close="folderNonEmptyAlert = null"
   />
@@ -2021,7 +2021,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
 
 /* ── Sidebar ────────────────────────────────────────────────────────────── */
 .chat-sidebar {
-  min-width: 11.25rem;
+  min-width: 10rem;
   max-width: 25rem;
   flex-shrink: 0;
   display: flex;
@@ -2545,6 +2545,24 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   gap: 1rem;
   text-align: center;
 }
+.chat-empty-new-btn {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border: 1px solid #374151;
+  border-radius: 0.5rem;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  color: #D1D5DB;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.chat-empty-new-btn:hover {
+  border-color: #6B7280;
+  color: #fff;
+}
+
 .chat-empty-icon {
   width: 4rem;
   height: 4rem;

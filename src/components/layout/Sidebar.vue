@@ -1,7 +1,7 @@
 <template>
   <nav
     class="flex flex-col shrink-0"
-    :style="{ width: isCollapsed ? '4rem' : '12.5rem', minWidth: isCollapsed ? '4rem' : '12.5rem', background: '#FFFFFF', height: '100%', overflow: 'hidden', position: 'relative', zIndex: 10, borderRight: '1px solid #E5E5EA', transition: 'width 0.2s ease, min-width 0.2s ease' }"
+    :style="{ width: isCollapsed ? '4rem' : sidebarWidthPx, minWidth: isCollapsed ? '4rem' : sidebarWidthPx, background: '#FFFFFF', height: '100%', overflow: 'hidden', position: 'relative', zIndex: 10, borderRight: isCollapsed ? '1px solid #E5E5EA' : 'none', transition: 'width 0.2s ease, min-width 0.2s ease' }"
     aria-label="Main navigation"
   >
     <!-- Logo / Header -->
@@ -51,7 +51,7 @@
             @mouseleave="isCollapsed ? hideNavTooltip() : undefined"
           >
             <IconChats style="width:18px;height:18px;flex-shrink:0;" />
-            <span v-if="!isCollapsed" style="font-size:var(--fs-secondary);font-weight:500;flex:1;">{{ t('nav.chats') }}</span>
+            <span v-if="!isCollapsed" style="font-size:var(--fs-secondary);font-weight:500;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t('nav.chats') }}</span>
           </RouterLink>
         </div>
         <NavItem to="/notes" :icon="IconNotes" :label="t('nav.aiDoc')"   :isCollapsed="isCollapsed" />
@@ -227,6 +227,12 @@ import { useFocusModeStore } from '../../stores/focusMode'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
 import PrivacyModal from '../common/PrivacyModal.vue'
+
+const props = defineProps({
+  width: { type: Number, default: 200 }
+})
+
+const sidebarWidthPx = computed(() => `${props.width}px`)
 
 const route = useRoute()
 const router = useRouter()
@@ -914,7 +920,7 @@ const IconLanguage = defineComponent({
   ])
 })
 
-defineExpose({ toggleCollapse })
+defineExpose({ toggleCollapse, isCollapsed })
 
 // ── NavItem Component ────────────────────────────────────────────────────────
 const NavItem = defineComponent({
@@ -937,7 +943,7 @@ const NavItem = defineComponent({
         default: () => {
           const children = [h(props.icon, { style: 'width:18px;height:18px;flex-shrink:0;' })]
           if (!props.isCollapsed) {
-            children.push(h('span', { style: 'font-size:var(--fs-secondary);font-weight:500;' }, props.label))
+            children.push(h('span', { style: 'font-size:var(--fs-secondary);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }, props.label))
           }
           return children
         }

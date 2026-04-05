@@ -7,13 +7,13 @@
           <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
         </svg>
       </div>
-      <span class="perm-title">Permission Required</span>
+      <span class="perm-title">{{ t('chats.permissionRequired') }}</span>
       <span v-if="resolved || seg.status !== 'pending'" class="perm-result-badge" :class="resolvedDecision === 'reject' || seg.status === 'rejected' ? 'badge-rejected' : 'badge-allowed'">
-        {{ resolvedDecision === 'reject' || seg.status === 'rejected' ? 'Rejected' : 'Allowed' }}
+        {{ resolvedDecision === 'reject' || seg.status === 'rejected' ? t('chats.permissionRejected') : t('chats.permissionAllowed') }}
       </span>
     </div>
     <div class="perm-body">
-      <p class="perm-description">The agent wants to run:</p>
+      <p class="perm-description">{{ t('chats.permissionWantsToRun') }}</p>
       <div class="perm-command">
         <span class="perm-tool-name">{{ seg.toolName }}</span>
         <span v-if="seg.command" class="perm-cmd-text">{{ seg.command }}</span>
@@ -21,13 +21,13 @@
     </div>
     <div v-if="!resolved && seg.status === 'pending'" class="perm-actions">
       <button class="perm-btn perm-btn-primary" @click="decide('allow-chat')">
-        Allow this chat
+        {{ t('chats.permissionAllowChat') }}
       </button>
       <button class="perm-btn perm-btn-secondary" @click="decide('allow-global')">
-        Allow all chats
+        {{ t('chats.permissionAllowAll') }}
       </button>
       <button class="perm-btn perm-btn-danger" @click="decide('reject')">
-        Reject
+        {{ t('chats.permissionReject') }}
       </button>
     </div>
   </div>
@@ -35,6 +35,9 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   seg: { type: Object, required: true }

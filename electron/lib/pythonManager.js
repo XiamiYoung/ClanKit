@@ -23,10 +23,9 @@ function _downloadUrl() {
   return `${base}/cpython-${PY_VERSION}+${PY_TAG}-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz`
 }
 
-/** Check if a Python binary is compatible (3.10–3.12) AND functional (can run venv + pip). */
-async function _checkPython(pythonPath) {
-  // Step 1: version check
-  const versionOk = await new Promise((resolve) => {
+/** Check if a Python binary is compatible (3.10–3.12). */
+async function _checkPythonVersion(pythonPath) {
+  return new Promise((resolve) => {
     execFile(pythonPath, ['--version'], { timeout: 5000 }, (err, stdout, stderr) => {
       if (err) return resolve(null)
       const match = (stdout || stderr || '').match(/Python\s+(3\.(\d+)\.\d+)/)
@@ -36,9 +35,17 @@ async function _checkPython(pythonPath) {
       resolve(match[1])
     })
   })
+}
+
+/**
+ * Check if a Python binary is compatible (3.10–3.12) AND functional (can run venv + pip).
+ * Used for system Python candidates only — portable downloads skip the capability check.
+ */
+async function _checkPython(pythonPath) {
+  const versionOk = await _checkPythonVersion(pythonPath)
   if (!versionOk) return { ok: false }
 
-  // Step 2: verify Python can actually run `python -m pip` and `python -m venv`
+  // Verify Python can actually run `python -m pip` and `python -m venv`.
   // Stripped-down installs (e.g. uv-managed) pass --version but crash on -m pip/venv
   // because runpy or other stdlib modules are broken/missing.
   const pipOk = await new Promise((resolve) => {
@@ -90,8 +97,8 @@ async function getPortablePython(dataDir) {
     : path.join(pyDir, 'python', 'bin', 'python3')
 
   if (!fs.existsSync(pyBin)) return null
-  const result = await _checkPython(pyBin)
-  if (result.ok) return { path: pyBin, version: result.version }
+  const version = await _checkPythonVersion(pyBin)
+  if (version) return { path: pyBin, version }
   return null
 }
 
@@ -145,14 +152,14 @@ async function downloadPortablePython(dataDir, onProgress = () => {}) {
     throw new Error(`Python binary not found after extraction: ${pyBin}`)
   }
 
-  const check = await _checkPython(pyBin)
-  if (!check.ok) {
-    throw new Error(`Downloaded Python is not compatible: ${check.version || 'unknown'}`)
+  const version = await _checkPythonVersion(pyBin)
+  if (!version) {
+    throw new Error(`Downloaded Python failed version check at: ${pyBin}`)
   }
 
-  onProgress(100, `Python ${check.version} ready.`)
+  onProgress(100, `Python ${version} ready.`)
   logger.info(`[pythonManager] Portable Python ready: ${pyBin}`)
-  return { path: pyBin, version: check.version }
+  return { path: pyBin, version }
 }
 
 /**

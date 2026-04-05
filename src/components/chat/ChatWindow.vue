@@ -234,13 +234,6 @@
                   </svg>
                 </span>
               </div>
-              <div v-if="msg.isWaitingIndicator" class="cw-thinking">
-                <span style="font-size:0.75rem; color:#6B7280; margin-right:8px;">{{ t('chats.waitingForResponse') }}</span>
-                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-              </div>
-              <div v-else-if="msg.streaming && (!msg.content && (!msg.segments || msg.segments.length === 0))" class="cw-thinking">
-                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-              </div>
               <div :class="msg.role === 'user' ? 'user-content' : 'prose-clankai'">
                 <MessageRenderer :message="msg" @quote-image="emit('quote-image', $event)" />
               </div>
@@ -800,7 +793,9 @@ function onScroll() {
 
 function forceScrollToBottom() {
   userScrolled.value = false
-  scrollToBottom(true)
+  if (messagesEl.value) {
+    messagesEl.value.scrollTo({ top: messagesEl.value.scrollHeight, behavior: 'smooth' })
+  }
 }
 
 function scrollToTop() {
@@ -1126,7 +1121,8 @@ defineExpose({ scrollToBottom })
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .cw-msg-avatar-fallback.user {
-  background: #007AFF;
+  background: linear-gradient(135deg, #5C4033, #8B6F5E);
+  box-shadow: 0 2px 8px rgba(92,64,51,0.2), 0 1px 3px rgba(0,0,0,0.08);
 }
 .cw-msg-name-chip {
   display: inline-block;
@@ -1140,12 +1136,12 @@ defineExpose({ scrollToBottom })
   white-space: nowrap;
 }
 .cw-msg-name-chip--user {
-  background: linear-gradient(135deg, #4338CA 0%, #6366F1 50%, #818CF8 100%);
-  color: #fff;
+  background: #6B5344;
+  color: #FFF8F0;
 }
 .cw-msg-name-chip--assistant {
-  background: #4B5563;
-  color: #fff;
+  background: #E8E3D8;
+  color: #6B5F4D;
 }
 .cw-system-banner {
   display: inline-flex;
@@ -1268,17 +1264,17 @@ defineExpose({ scrollToBottom })
 @media (prefers-reduced-motion: reduce) { .bubble-shake { animation: none; } }
 
 .cw-msg-bubble-user {
-  background: linear-gradient(135deg, #4338CA 0%, #6366F1 50%, #818CF8 100%);
-  color: #ffffff;
+  background: linear-gradient(135deg, #5C4033 0%, #8B6F5E 100%);
+  color: #FFF8F0;
   border-radius: 1.125rem;
-  box-shadow: 0 4px 16px rgba(99,102,241,0.3), 0 2px 8px rgba(67,56,202,0.2), 0 1px 3px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 16px rgba(92,64,51,0.25), 0 2px 6px rgba(92,64,51,0.15), 0 1px 3px rgba(0,0,0,0.08);
 }
-.cw-msg-bubble-user :deep(*) { color: #FFFFFF !important; }
+.cw-msg-bubble-user :deep(*) { color: #FFF8F0 !important; }
 .cw-msg-bubble-assistant {
-  background: #F4F4F8;
+  background: #FAF8F4;
   border: none;
-  color: #1A1A1A;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
+  color: #2C2520;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
   border-radius: 1.125rem;
 }
 .cw-msg-bubble-error {
@@ -1380,7 +1376,7 @@ defineExpose({ scrollToBottom })
 .cw-msg-timestamp {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-secondary);
-  color: #9CA3AF;
+  color: #B0A48E;
   margin-top: 0.1875rem;
 }
 
@@ -1447,12 +1443,8 @@ defineExpose({ scrollToBottom })
   50% { height: 0.95rem; opacity: 1; }
 }
 
-/* ── Thinking dots ── */
-.cw-thinking { display: flex; gap: 0.1875rem; padding: 0.25rem 0; }
-.cw-thinking .dot { width: 0.3125rem; height: 0.3125rem; border-radius: 50%; background: #9CA3AF; animation: cw-bounce 1s ease-in-out infinite; }
-.cw-thinking .dot:nth-child(2) { animation-delay: 0.15s; }
-.cw-thinking .dot:nth-child(3) { animation-delay: 0.3s; }
-@keyframes cw-bounce { 0%,80%,100%{transform:translateY(0);} 40%{transform:translateY(-4px);} }
+/* ── Inline wave (replaces thinking dots inside bubble) ── */
+.cw-inline-wave { display: flex; align-items: flex-end; gap: 0.125rem; height: 1.25rem; padding: 0.25rem 0; }
 
 /* ── Fade-in animation ── */
 @keyframes cw-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }

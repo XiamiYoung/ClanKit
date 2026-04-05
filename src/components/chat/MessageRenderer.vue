@@ -24,19 +24,19 @@
     <!-- ── Assistant message ────────────────────────────────────────────────── -->
     <template v-else>
     <!-- ── Todo List Panel (single, live) ───────────────────────────────────────── -->
-    <div v-if="latestTodos.length > 0" class="mb-3 rounded-xl overflow-hidden" style="border:1px solid #d4e4d4; background:#f8faf7;">
+    <div v-if="latestTodos.length > 0" class="mb-3 rounded-xl overflow-hidden" style="border:1px solid #3a5478; background:#f4f7fb;">
       <!-- Header -->
-      <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none" style="background:#eaf3ea; border-bottom:1px solid #d4e4d4;" @click="todoCollapsed = !todoCollapsed">
-        <span style="color:#4c8446; font-size:0.85rem;">☑</span>
-        <span style="font-size:0.8rem; font-weight:600; color:#3a6b35;">{{ t('chats.taskList') }}</span>
+      <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none" style="background:linear-gradient(135deg,#47648e,#24435e); border-bottom:1px solid #3a5478;" @click="todoCollapsed = !todoCollapsed">
+        <span style="color:#a8c8f0; font-size:0.85rem;">☑</span>
+        <span style="font-size:0.8rem; font-weight:600; color:#fff;">{{ t('chats.taskList') }}</span>
         <div class="flex gap-1.5 ml-2">
-          <span v-if="todoSummary.done > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#dcfce7; color:#15803d;">{{ todoSummary.done }} {{ t('chats.done') }}</span>
+          <span v-if="todoSummary.done > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:rgba(255,255,255,0.2); color:#fff;">{{ todoSummary.done }} {{ t('chats.done') }}</span>
           <span v-if="todoSummary.running > 0" class="px-1.5 py-0.5 rounded-full animate-pulse" style="font-size:0.7rem; background:#fef9c3; color:#a16207;">{{ todoSummary.running }} {{ t('chats.running') }}</span>
           <span v-if="todoSummary.blocked > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#fee2e2; color:#dc2626;">{{ todoSummary.blocked }} {{ t('chats.blocked') }}</span>
-          <span v-if="todoSummary.pending > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#F5F5F5; color:#9CA3AF;">{{ todoSummary.pending }} {{ t('chats.pending') }}</span>
+          <span v-if="todoSummary.pending > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:rgba(255,255,255,0.15); color:rgba(255,255,255,0.75);">{{ todoSummary.pending }} {{ t('chats.pending') }}</span>
         </div>
-        <span class="ml-auto" style="font-size:0.75rem; color:#6b7c6b;">{{ todoSummary.done }}/{{ latestTodos.length }}</span>
-        <span style="font-size:0.7rem; color:#9ca89c; margin-left:4px;">{{ todoCollapsed ? '▶' : '▼' }}</span>
+        <span class="ml-auto" style="font-size:0.75rem; color:rgba(255,255,255,0.8);">{{ todoSummary.done }}/{{ latestTodos.length }}</span>
+        <span style="font-size:0.7rem; color:rgba(255,255,255,0.6); margin-left:4px;">{{ todoCollapsed ? '▶' : '▼' }}</span>
       </div>
       <!-- Task rows -->
       <div v-if="!todoCollapsed">
@@ -91,14 +91,39 @@
              @click="handleContentClick"
              :data-segment-index="i"
              :data-content-length="seg.content.length" />
-      </template>
-
+      </template><div v-else-if="seg.type === 'tool' && isSoulTool(seg)" class="my-1.5 rounded-xl overflow-hidden" style="border:1px solid #E5E5EA; background:#FFFFFF;">
+        <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none"
+          :class="seg.output === undefined ? 'tool-header-running' : 'tool-header-done'"
+          @click="toggleTool(i, seg)">
+          <span style="font-size:0.85rem;">🧠</span>
+          <span style="font-size:0.78rem; font-weight:600; color:#374151;">{{ toolDisplayName(seg) }}</span>
+          <span class="flex-1 truncate" style="font-size:0.75rem; color:#6b7280;">{{ toolSummary(seg) }}</span>
+          <span v-if="seg.output === undefined" class="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full animate-pulse" style="background:#fef3c7; color:#d97706; font-size:0.7rem;">
+            <span class="inline-block w-1.5 h-1.5 rounded-full" style="background:#f59e0b;"></span>
+            {{ t('chats.running') }}
+          </span>
+          <span v-else class="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full" style="background:#dcfce7; color:#15803d; font-size:0.7rem;">
+            <span>✓</span> {{ t('chats.done') }}
+          </span>
+          <span style="font-size:0.7rem; color:#9CA3AF; margin-left:2px;">{{ isToolExpanded(i, seg) ? '▼' : '▶' }}</span>
+        </div>
+        <div v-if="isToolExpanded(i, seg)" style="background:#FAFAFA; border-top:1px solid #E5E5EA;">
+          <div v-if="seg.input && (typeof seg.input === 'string' ? seg.input.length > 0 : Object.keys(seg.input).length > 0)" class="px-3 py-2">
+            <span style="font-size:0.7rem; font-weight:600; color:#6b7280; text-transform:uppercase;">{{ t('chats.input') }}</span>
+            <pre class="rounded-xl p-2 overflow-x-auto mt-1" style="background:#1C1C1E; color:#E5E5EA; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px;">{{ formatInput(seg.input) }}</pre>
+          </div>
+          <div v-if="seg.output !== undefined" class="px-3 py-2" style="border-top:1px solid #E5E5EA;">
+            <span style="font-size:0.7rem; font-weight:600; color:#6b7280; text-transform:uppercase;">{{ t('chats.output') }}</span>
+            <pre class="rounded-xl p-2 overflow-x-auto mt-1" style="background:#1C1C1E; color:#E5E5EA; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px; max-height:200px; overflow-y:auto;">{{ String(seg.output).slice(0, 500) }}</pre>
+          </div>
+        </div>
+      </div><template v-else-if="(seg.type === 'tool' || seg.type === 'permission' || seg.type === 'warning') && !isSoulTool(seg) && processExpanded">
       <!-- File diff (file_operation write/append) -->
-      <div v-else-if="seg.type === 'tool' && isFileWrite(seg)" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #d1d5db; font-size:0.78rem;">
+      <div v-if="seg.type === 'tool' && isFileWrite(seg)" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #d1d5db; font-size:0.78rem;">
         <!-- Diff header -->
-        <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none" style="background:#1C1C1E; color:#E5E5EA;" @click="toggleTool(i, seg)">
+        <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none" :class="seg.output === undefined ? 'tool-file-header-running' : 'tool-file-header-done'" style="color:#E5E5EA;" @click="toggleTool(i, seg)">
           <span style="color:#60a5fa;">🔧</span>
-          <span style="font-size:0.75rem; font-weight:600;">file_operation</span>
+          <span style="font-size:0.75rem; font-weight:600;">{{ t('chats.toolFileOperation') }}</span>
           <span class="px-1.5 py-0.5 rounded" style="background:#374151; color:#9CA3AF; font-size:0.7rem; font-family:monospace;">{{ seg.input?.operation }}</span>
           <span v-if="seg.input?.path" class="px-1.5 py-0.5 rounded" style="background:#1e3a5f; color:#93c5fd; font-size:0.7rem; font-family:monospace;">{{ seg.input.path }}</span>
           <div class="ml-auto flex items-center gap-2">
@@ -152,15 +177,13 @@
         <!-- Header row — always visible -->
         <div
           class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none"
-          :style="seg.output === undefined
-            ? 'background:#fffbeb; ;'
-            : 'background:#F5F5F5; ;'"
+          :class="seg.output === undefined ? 'tool-header-running' : 'tool-header-done'"
           @click="toggleTool(i, seg)"
         >
           <!-- Icon -->
           <span style="font-size:0.85rem;">
             <span v-if="seg.name === 'execute_shell'">💻</span>
-            <span v-else-if="seg.name === 'dispatch_subagent'">🤖</span>
+            <span v-else-if="seg.name === 'dispatch_subagent' || seg.name === 'dispatch_subagents'">🤖</span>
             <span v-else-if="seg.name === 'background_task'">⚙️</span>
             <span v-else-if="seg.name === 'update_soul_memory' || seg.name === 'read_soul_memory'">🧠</span>
             <span v-else>🔧</span>
@@ -178,11 +201,17 @@
             <span class="inline-block w-1.5 h-1.5 rounded-full" style="background:#f59e0b;"></span>
             {{ t('chats.running') }}
           </span>
+          <span v-else-if="shellExitOk(seg) === false"
+            class="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full"
+            style="background:#fee2e2; color:#dc2626; font-size:0.7rem;">
+            <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            {{ t('common.failed') }}
+          </span>
           <span v-else
             class="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full"
             style="background:#dcfce7; color:#15803d; font-size:0.7rem;">
-            <span>✓</span>
-            {{ t('chats.done') }}
+            <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            {{ t('common.success') }}
           </span>
           <!-- Chevron -->
           <span style="font-size:0.7rem; color:#9CA3AF; margin-left:2px;">{{ isToolExpanded(i, seg) ? '▼' : '▶' }}</span>
@@ -204,7 +233,7 @@
           <!-- Live streaming output (visible while tool is running) -->
           <div v-if="seg.output === undefined && seg.streamingOutput" class="px-3 py-2" style="border-top:1px solid #E5E5EA;">
             <div class="flex items-center mb-1">
-              <span style="font-size:0.7rem; font-weight:600; color:#d97706; text-transform:uppercase; letter-spacing:0.05em;">live output</span>
+              <span style="font-size:0.7rem; font-weight:600; color:#d97706; text-transform:uppercase; letter-spacing:0.05em;">{{ t('chats.toolLiveOutput') }}</span>
             </div>
             <pre :ref="el => setLivePreRef(i, el)" @scroll="onLiveOutputScroll(i)" class="tool-streaming-pre rounded-xl p-2 overflow-x-auto" style="background:#1C1C1E; color:#34D399; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px; max-height:300px; overflow-y:auto;">{{ seg.streamingOutput }}</pre>
           </div>
@@ -216,7 +245,7 @@
                 {{ copiedBlock === 'output-'+i ? '✓ ' + t('common.copied') : '⎘ ' + t('common.copy') }}
               </button>
             </div>
-            <pre class="rounded-xl p-2 overflow-x-auto" style="background:#1C1C1E; color:#E5E5EA; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px;">{{ expandedOutputs[i] || String(seg.output).length <= 50 ? String(seg.output) : String(seg.output).slice(0, 50) + '…' }}</pre>
+            <pre class="rounded-xl p-2 overflow-x-auto" style="background:#1C1C1E; color:#E5E5EA; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px; max-height:300px; overflow-y:auto;">{{ expandedOutputs[i] || String(seg.output).length <= 50 ? String(seg.output) : String(seg.output).slice(0, 50) + '…' }}</pre>
             <button v-if="String(seg.output).length > 50" @click.stop="expandedOutputs[i] = !expandedOutputs[i]" class="mt-1 cursor-pointer" style="font-size:0.68rem; color:#007AFF; background:none; border:none; padding:0;">{{ expandedOutputs[i] ? t('chats.showLess') + ' ▲' : t('chats.viewFull') + ' ▼' }}</button>
           </div>
         </div>
@@ -244,8 +273,10 @@
         </span>
       </div>
 
-      <!-- Inline images — always visible in the message flow (base64 or URL) -->
-      <div v-else-if="seg.type === 'image' && seg.images && seg.images.length > 0" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #E5E5EA; background:#FFFFFF;">
+      </template>
+
+      <!-- Inline images — always visible -->
+      <div v-if="seg.type === 'image' && seg.images && seg.images.length > 0" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #E5E5EA; background:#FFFFFF;">
         <div class="px-3 py-2" style="background:#F5F5F5; border-bottom:1px solid #E5E5EA;">
           <span style="font-size:0.75rem; font-weight:600; color:#6B7280;">{{ t('chats.image') }}{{ seg.images.length > 1 ? 's' : '' }}</span>
           <span v-if="seg.source" style="font-size:0.7rem; color:#9CA3AF; margin-left:6px;">{{ t('chats.from') }} {{ seg.source }}</span>
@@ -280,17 +311,40 @@
       <!-- 3D models detected in assistant message -->
       <BabylonViewer v-for="url in modelUrls" :key="url" :src="url" />
 
+      <!-- ── Execution records header ── -->
+      <div v-if="hasProcessSegments"
+           class="steps-header"
+           :class="{ 'steps-header-running': message.streaming }"
+           @click="processExpanded = !processExpanded">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+          <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+        </svg>
+        <template v-if="message.streaming && !processExpanded">
+          <span>{{ t('chats.stepsRunning') }}</span>
+          <span v-if="isLlmThinking" class="steps-thinking-label">{{ t('chats.thinking') }}</span>
+          <div v-else-if="activeToolLabel" class="steps-ticker-clip">
+            <span class="steps-ticker-track" :key="activeToolLabel">{{ activeToolLabel }}</span>
+          </div>
+          <span class="steps-badge">{{ processSegmentCount }}</span>
+        </template>
+        <template v-else>
+          <span>{{ message.streaming ? t('chats.stepsRunning') : t('chats.executionSteps') }}</span>
+          <span class="steps-badge">{{ processSegmentCount }}</span>
+        </template>
+        <span class="steps-chevron" style="margin-left:auto;">{{ processExpanded ? '▼' : '▶' }}</span>
+      </div>
+
       <!-- Wave bar: outside segments block so it shows even with no content yet -->
-      <div v-if="message.streaming && !hasPendingPermission" class="flex items-center gap-3 mt-1 pl-1">
+      <div v-if="message.streaming && !hasPendingPermission" class="flex items-center gap-3 mt-1 pl-1 wavebar-scan">
         <div class="flex items-end gap-0.5 h-5">
-          <span v-for="n in 5" :key="n" class="wave-bar" :style="`--bar-color:#4c8446; --bar-glow:#4c844680; animation-delay:${(n-1)*0.13}s;`" />
+          <span v-for="n in 5" :key="n" class="wave-bar" :style="`--bar-color:${wavebarColor.bar}; --bar-glow:${wavebarColor.glow}; animation-delay:${(n-1)*0.13}s;`" />
         </div>
-        <div v-if="cachedTokens" class="flex items-center gap-1.5" style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:#6b9e65;">
+        <div v-if="cachedTokens" class="flex items-center gap-1.5 wavebar-tokens" :style="`font-family:'JetBrains Mono',monospace; font-size:0.7rem; --wb-color:${wavebarColor.bar}; --wb-bright:${wavebarColor.glow};`">
           <span>in {{ formatTokenCount(cachedTokens.input) }}</span>
           <span style="opacity:0.5;">·</span>
           <span>out {{ formatTokenCount(cachedTokens.output) }}</span>
           <span style="opacity:0.5;">·</span>
-          <span style="color:#4c8446; font-weight:600;">total {{ formatTokenCount(cachedTokens.total) }}</span>
+          <span style="font-weight:600;">total {{ formatTokenCount(cachedTokens.total) }}</span>
         </div>
       </div>
 
@@ -322,16 +376,16 @@
     </div> -->
 
     <!-- Duration label: live while streaming, final when done -->
-    <div v-if="message.streaming && message.streamingStartedAt && !hasPendingPermission" class="flex items-center gap-2 mt-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
+    <div v-if="message.streaming && message.streamingStartedAt && !hasPendingPermission" class="flex items-center gap-2 mt-1.5" style="color:#A09890; font-size:var(--fs-small);">
       <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <span>{{ t('chats.cookingFor') }} {{ formatDuration(elapsedMs) }}…</span>
     </div>
-    <div v-else-if="!message.streaming && message.durationMs" class="flex items-center gap-2 mt-1.5" style="color:#9CA3AF; font-size:var(--fs-small);">
+    <div v-else-if="!message.streaming && message.durationMs" class="flex items-center gap-2 mt-1.5" style="color:#A09890; font-size:var(--fs-small);">
       <svg class="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <span>{{ t('chats.cookedFor') }} {{ formatDuration(message.durationMs) }}</span>
       <template v-if="finalTokens">
-        <span style="opacity:0.4;">·</span>
-        <span style="font-family:'JetBrains Mono',monospace; color:#9CA3AF;">in {{ formatTokenCount(finalTokens.input) }} · out {{ formatTokenCount(finalTokens.output) }} · <span style="font-weight:600;">total {{ formatTokenCount(finalTokens.total) }}</span></span>
+        <span style="opacity:0.5;">·</span>
+        <span style="font-family:'JetBrains Mono',monospace; color:#A09890;">in {{ formatTokenCount(finalTokens.input) }} · out {{ formatTokenCount(finalTokens.output) }} · <span style="font-weight:600;">total {{ formatTokenCount(finalTokens.total) }}</span></span>
       </template>
     </div>
     </template>
@@ -420,12 +474,42 @@ const elapsedMs = computed(() => {
   return now.value - props.message.streamingStartedAt
 })
 
+// ── Wavebar color cycling ─────────────────────────────────────────────────
+const WAVEBAR_COLORS = [
+  { bar: '#4c8446', glow: '#4c844680' },  // green
+  { bar: '#2563eb', glow: '#2563eb80' },  // blue
+  { bar: '#7c3aed', glow: '#7c3aed80' },  // violet
+  { bar: '#db2777', glow: '#db277780' },  // pink
+  { bar: '#ea580c', glow: '#ea580c80' },  // orange
+  { bar: '#0891b2', glow: '#0891b280' },  // cyan
+  { bar: '#4f46e5', glow: '#4f46e580' },  // indigo
+  { bar: '#059669', glow: '#05966980' },  // emerald
+  { bar: '#d97706', glow: '#d9770680' },  // amber
+  { bar: '#e11d48', glow: '#e11d4880' },  // rose
+]
+const wavebarColorIdx = ref(0)
+let colorTimer = null
+const wavebarColor = computed(() => WAVEBAR_COLORS[wavebarColorIdx.value])
+
+function startColorCycle() {
+  if (colorTimer) return
+  wavebarColorIdx.value = Math.floor(Math.random() * WAVEBAR_COLORS.length)
+  colorTimer = setInterval(() => {
+    let next
+    do { next = Math.floor(Math.random() * WAVEBAR_COLORS.length) } while (next === wavebarColorIdx.value)
+    wavebarColorIdx.value = next
+  }, 3000)
+}
+function stopColorCycle() {
+  if (colorTimer) { clearInterval(colorTimer); colorTimer = null }
+}
+
 watch(() => props.message.streaming, (streaming) => {
-  if (streaming) startTimer()
-  else stopTimer()
+  if (streaming) { startTimer(); startColorCycle() }
+  else { stopTimer(); stopColorCycle() }
 }, { immediate: true })
 
-onBeforeUnmount(stopTimer)
+onBeforeUnmount(() => { stopTimer(); stopColorCycle() })
 
 // ── Live output <pre> auto-scroll ───────────────────────────────────────────
 // Track which segment indices the user has manually scrolled up (suppress auto-scroll)
@@ -488,7 +572,7 @@ function stripBase64(text) {
 // File-path regex: matches files with known extensions OR directory paths (trailing / or \)
 // Files:  ~/path/file.ext, /abs/path/file.ext, C:\path\file.ext, \\server\share\file.ext
 // Dirs:   ~/dir/sub/, /abs/path/dir/, C:\path\dir\, \\server\share\  (2+ segments)
-const FILE_PATH_RE = /(?:(?:~\/[\w.\/\-]+|\/(?:[\w.\-]+\/)+[\w.\-]+|[A-Z]:\\(?:[\w.\- ]+\\)*[\w.\-]+|\\\\[\w.\-]+(?:\\[\w.\-]+)+)\.(?:md|txt|json|js|ts|jsx|tsx|py|rb|go|rs|java|c|cpp|h|hpp|css|scss|html|xml|yaml|yml|toml|ini|cfg|conf|log|csv|sql|sh|bash|zsh|env|vue|svelte)|(?:~\/(?:[\w.\-]+\/)+|\/(?:[\w.\-]+\/){2,}|[A-Z]:\\(?:[\w.\- ]+\\){2,}|\\\\[\w.\-]+(?:\\[\w.\-]+)+\\)(?=[\s.,;:!?)'"}\]]|$))/g
+const FILE_PATH_RE = /(?:(?:~\/[\w.\/\-]+|\/(?:[\w.\-]+\/)+[\w.\-]+|[A-Z]:\\(?:[\w.\- ]+\\)*[\w.\-]+|\\\\[\w.\-]+(?:\\[\w.\-]+)+)\.(?:md|txt|json|jsx|tsx|toml|yaml|yml|html|scss|sass|bash|conf|java|svelte|vue|ts|js|py|rb|go|rs|cpp|hpp|css|xml|ini|cfg|log|csv|sql|zsh|env|sh|c|h)|(?:~\/(?:[\w.\-]+\/)+|\/(?:[\w.\-]+\/){2,}|[A-Z]:\\(?:[\w.\- ]+\\){2,}|\\\\[\w.\-]+(?:\\[\w.\-]+)+\\)(?=[\s.,;:!?)'"}\]]|$))/g
 
 function injectFilePathChips(html) {
   // Split HTML into tags vs text runs so we never match inside tags or <pre>/<a>
@@ -770,6 +854,53 @@ const expandedDiffs   = reactive({})
 const diffCache       = reactive({})
 const copiedBlock     = ref(null)
 
+// ── Execution records collapse ─
+const processExpanded = ref(false)
+
+function isSoulTool(seg) {
+  return seg.name === 'update_soul_memory' || seg.name === 'read_soul_memory'
+}
+// Visible = rendered inside the collapsible block (excludes hidden tools AND soul tools)
+function isVisibleProcessSegment(s) {
+  if (s.type === 'permission' || s.type === 'warning') return true
+  if (s.type === 'tool') return (isFileWrite(s) || !isHiddenTool(s)) && !isSoulTool(s)
+  return false
+}
+
+const hasProcessSegments = computed(() => {
+  const segs = props.message?.segments
+  if (!segs) return false
+  return segs.some(isVisibleProcessSegment)
+})
+const processSegmentCount = computed(() => {
+  const segs = props.message?.segments
+  if (!segs) return 0
+  return segs.filter(isVisibleProcessSegment).length
+})
+// Active tool label for the collapsed header — shows running or last completed
+const activeToolLabel = computed(() => {
+  const segs = props.message?.segments
+  if (!segs) return ''
+  let lastCompleted = ''
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i]
+    if (s.type !== 'tool') continue
+    const name = toolDisplayName(s)
+    const summary = toolSummary(s)
+    const label = summary ? `${name} — ${summary}` : name
+    if (s.output === undefined) return label  // currently running
+    lastCompleted = label
+  }
+  return lastCompleted  // fallback: last completed tool
+})
+// True when streaming but no tool is currently running — LLM is thinking between iterations
+const isLlmThinking = computed(() => {
+  if (!props.message.streaming) return false
+  const segs = props.message?.segments
+  if (!segs || segs.length === 0) return true // streaming, no segments yet
+  return !segs.some(s => s.type === 'tool' && s.output === undefined)
+})
+
 /**
  * Returns true if this text segment is "intermediate narration" — i.e. the model
  * said something like "Let me read the file:" right before calling a tool.
@@ -847,10 +978,22 @@ function isFileWrite(seg) {
   return seg.name === 'file_operation' &&
     seg.input && ['write', 'append'].includes(seg.input.operation)
 }
+function shellExitOk(seg) {
+  if (seg.name !== 'execute_shell' || seg.output === undefined) return null
+  const m = (seg.output || '').match(/\[exit code: (\d+)\]/)
+  return m ? m[1] === '0' : true
+}
 
 function toolDisplayName(seg) {
+  if (seg.name === 'execute_shell')    return t('chats.toolExecuteShell')
+  if (seg.name === 'dispatch_subagent') return t('chats.toolDispatchSubagent')
+  if (seg.name === 'dispatch_subagents') return t('chats.toolDispatchSubagent')
+  if (seg.name === 'background_task')  return t('chats.toolBackgroundTask')
+  if (seg.name === 'file_operation')   return t('chats.toolFileOperation')
   if (seg.name === 'update_soul_memory') return t('chats.toolUpdateMemory')
   if (seg.name === 'read_soul_memory') return t('chats.toolReadMemory')
+  if (seg.name === 'todo_manager') return t('chats.toolTodoManager')
+  if (seg.name === 'search_chat_history') return t('chats.toolSearchChatHistory')
   return seg.name
 }
 
@@ -862,18 +1005,21 @@ function toolSummary(seg) {
     const rawArgs = seg.input.args || []
     const args = Array.isArray(rawArgs) ? rawArgs.join(' ') : String(rawArgs)
     const cmdStr = (cmd + ' ' + args).trim()
-    // When done, show exit code + line count
-    if (seg.output !== undefined) {
-      const lines = (seg.output || '').split('\n').length
-      const exitMatch = (seg.output || '').match(/\[exit code: (\d+)\]/)
-      const exitCode = exitMatch ? exitMatch[1] : '0'
-      return `${cmdStr.slice(0, 40)}  ·  exit ${exitCode} · ${lines} lines`
-    }
+    if (seg.output !== undefined) return cmdStr.slice(0, 60)
     return cmdStr.slice(0, 80)
   }
   if (seg.name === 'dispatch_subagent') {
+    const spec = seg.input.specialization ? `[${seg.input.specialization}]` : ''
     const task = seg.input.task || ''
-    return task.length > 80 ? task.slice(0, 80) + '…' : task
+    const full = spec ? `${spec} ${task}` : task
+    return full.length > 80 ? full.slice(0, 80) + '…' : full
+  }
+  if (seg.name === 'dispatch_subagents') {
+    const agents = seg.input?.agents || []
+    if (agents.length === 0) return ''
+    const labels = agents.map(a => a.specialization ? `[${a.specialization}]` : '').filter(Boolean)
+    const tasks = agents.map(a => (a.task || '').slice(0, 30)).join(', ')
+    return labels.length > 0 ? `${labels.join(' ')} — ${tasks}` : tasks
   }
   if (seg.name === 'background_task') {
     if (seg.input.action === 'start') {
@@ -1168,7 +1314,8 @@ function diffMarker(type) {
   transform: scaleY(0.3);
   background: var(--bar-color);
   box-shadow: 0 0 0px var(--bar-glow);
-  animation: wave-oscillate 1.3s ease-in-out infinite, wave-hue 6s linear infinite;
+  animation: wave-oscillate 1.3s ease-in-out infinite;
+  transition: background 1s ease, box-shadow 1s ease;
 }
 @keyframes wave-oscillate {
   0%, 100% { transform: scaleY(0.3); opacity: 0.45; box-shadow: 0 0 0px var(--bar-glow); }
@@ -1203,6 +1350,169 @@ function diffMarker(type) {
 
 :deep(.file-path-btn:hover) {
   opacity: 1;
+}
+
+/* ── Spotlight scan animation ────────────────────────────────────────────────
+   Uses translateX (not background-position) so direction is unambiguously
+   left → right. mix-blend-mode makes the beam illuminate text/icons rather
+   than paint a colour block on top of them.
+   ─────────────────────────────────────────────────────────────────────────── */
+@keyframes beam-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(200%); }
+}
+
+/* Shared ::before beam — white spotlight, narrow falloff */
+.tool-header-running::before,
+.tool-file-header-running::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent           30%,
+    rgba(255,255,255,0.85) 50%,
+    transparent           70%
+  );
+  animation: beam-sweep 3.5s linear infinite;
+  pointer-events: none;
+}
+
+/* Light header (generic tools) — overlay brightens dark text/icons */
+.tool-header-running {
+  background: #fffbeb;
+  position: relative;
+  overflow: hidden;
+}
+.tool-header-running::before {
+  mix-blend-mode: overlay;
+}
+.tool-header-done {
+  background: #F5F5F5;
+}
+
+/* Dark header (file write) — screen brightens light text/icons on dark bg */
+.tool-file-header-running {
+  background: #1C1C1E;
+  position: relative;
+  overflow: hidden;
+}
+.tool-file-header-running::before {
+  mix-blend-mode: screen;
+}
+.tool-file-header-done {
+  background: #1C1C1E;
+}
+
+/* ── Execution Steps collapse header ────────────────────────────────────────── */
+.steps-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
+  color: #8C7E6A;
+  font-size: 0.72rem;
+  font-weight: 600;
+  margin: 0.5rem 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #EBE7DF;
+  border: none;
+  transition: background 1s ease, color 1s ease;
+  width: 100%;
+  overflow: hidden;
+}
+.steps-header svg { transition: stroke 1s ease; }
+.steps-header:hover {
+  background: #E3DED4;
+  color: #6B5F4D;
+}
+.steps-header:hover svg { stroke: #6B5F4D; }
+.steps-header-running {
+  background: #E8E3D8;
+  color: #3D2B1E;
+  font-weight: 700;
+}
+.steps-header-running svg { stroke: #3D2B1E; }
+.steps-header-running:hover {
+  background: #DED8CC;
+  color: #2C1A0E;
+}
+.steps-badge {
+  background: rgba(140,126,106,0.15);
+  color: #8C7E6A;
+  font-size: 0.67rem;
+  font-weight: 700;
+  padding: 0 5px;
+  border-radius: 99px;
+  line-height: 1.6;
+  transition: background 1s ease, color 1s ease;
+}
+.steps-chevron {
+  font-size: 0.65rem;
+  color: #B0A48E;
+  flex-shrink: 0;
+  transition: color 1s ease;
+}
+.steps-ticker-clip {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.steps-ticker-track {
+  padding-left: 100%;
+  white-space: nowrap;
+  will-change: transform;
+  flex-shrink: 0;
+  font-weight: 500;
+  animation: steps-ticker 12s linear infinite;
+}
+@keyframes steps-ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+.steps-thinking-label {
+  font-weight: 500;
+  font-style: italic;
+  opacity: 0.7;
+  animation: steps-thinking-pulse 1.5s ease-in-out infinite;
+}
+@keyframes steps-thinking-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.9; }
+}
+
+/* Wave bar row — text-only sweep via background-clip: no background changes */
+.wavebar-scan {
+  position: relative;
+  border-radius: 0.375rem;
+}
+
+/* Token text: bright spot sweeps left→right over the characters only */
+.wavebar-tokens {
+  background-image: linear-gradient(
+    90deg,
+    var(--wb-color, #4c8446) 25%,
+    var(--wb-bright, #4c844680) 50%,
+    var(--wb-color, #4c8446) 75%
+  );
+  background-size: 300% 100%;
+  background-position: 150% center;
+  -webkit-background-clip: text;
+  background-clip: text;
+  transition: background-image 1s ease;
+  -webkit-text-fill-color: transparent;
+  animation: wavebar-text-sweep 3.5s linear infinite;
+  line-height: 1;
+}
+
+@keyframes wavebar-text-sweep {
+  from { background-position: 150% center; }
+  to   { background-position: -50% center; }
 }
 
 </style>

@@ -68,6 +68,7 @@ if (process.platform === 'linux') {
 }
 
 const { app, BrowserWindow, ipcMain, dialog, shell, screen, protocol, net, session, Menu } = require('electron')
+const http = require('http')
 const os = require('os')
 const { execFile } = require('child_process')
 const { logger } = require('./logger')
@@ -594,6 +595,30 @@ app.whenReady().then(async () => {
   await migrateChatsIfNeeded()
 
   createWindow()
+
+  // ── Lazy local file server for HTML preview (started on first use) ──
+  const MIME_MAP = { '.html': 'text/html', '.htm': 'text/html', '.css': 'text/css', '.js': 'application/javascript', '.mjs': 'application/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.pdf': 'application/pdf' }
+  let _htmlServer = null
+  function _ensureHtmlServer() {
+    if (_htmlServer) return Promise.resolve(_htmlServer.address().port)
+    return new Promise((resolve) => {
+      _htmlServer = http.createServer((req, res) => {
+        let filePath = decodeURIComponent(req.url.replace(/\?.*$/, ''))
+        if (process.platform === 'win32' && /^\/[A-Za-z]:/.test(filePath)) filePath = filePath.slice(1)
+        fs.readFile(filePath, (err, data) => {
+          if (err) { res.writeHead(404); res.end('Not found'); return }
+          const ext = path.extname(filePath).toLowerCase()
+          res.writeHead(200, { 'Content-Type': MIME_MAP[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' })
+          res.end(data)
+        })
+      })
+      _htmlServer.listen(0, '127.0.0.1', () => {
+        logger.info(`[HtmlPreview] local file server on port ${_htmlServer.address().port}`)
+        resolve(_htmlServer.address().port)
+      })
+    })
+  }
+  ipcMain.handle('html-preview:port', () => _ensureHtmlServer())
 
   // Register all IPC handlers (must be after dataStore.init() and createWindow())
   ipcAgent = require('./ipc').registerAll({ DEFAULT_CONFIG, imBridge, mcpManager }).ipcAgent

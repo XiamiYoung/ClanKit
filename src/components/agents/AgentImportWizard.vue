@@ -106,7 +106,7 @@
                       {{ settingUp ? t('agents.import.settingUp') : t('agents.import.setupEnv') }}
                     </AppButton>
                   </div>
-                  <div v-if="setupLog.length > 0" class="progress-log" style="margin-left:1.75rem;">
+                  <div v-if="setupLog.length > 0" ref="setupLogEl" class="progress-log" style="margin-left:1.75rem;">
                     <div v-for="(l, i) in setupLog" :key="i" class="log-line">{{ l }}</div>
                   </div>
                   <p v-if="setupError" class="error-text" style="margin-left:1.75rem;">{{ setupError }}</p>
@@ -407,7 +407,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onUnmounted } from 'vue'
+import { ref, computed, reactive, watch, nextTick, onUnmounted } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { useI18n } from '../../i18n/useI18n'
 import { useAgentsStore } from '../../stores/agents'
@@ -496,6 +496,12 @@ const envReady = ref(false)
 const settingUp = ref(false)
 const setupLog = ref([])
 const setupError = ref('')
+const setupLogEl = ref(null)
+
+watch(setupLog, async () => {
+  await nextTick()
+  if (setupLogEl.value) setupLogEl.value.scrollTop = setupLogEl.value.scrollHeight
+}, { deep: true })
 
 async function checkEnv() {
   const res = await window.electronAPI.agentImport.checkEnv()
@@ -516,10 +522,10 @@ async function doSetupEnv() {
       envReady.value = true
       setupLog.value = []
     } else {
-      setupError.value = res?.error || 'Setup failed. Check the log for details.'
+      setupError.value = res?.error || t('agents.import.setupFailed')
     }
   } catch (err) {
-    setupError.value = err.message || 'Setup failed.'
+    setupError.value = err.message || t('agents.import.setupFailedGeneric')
   } finally {
     unsub()
     settingUp.value = false
@@ -604,7 +610,7 @@ async function doDecryptAndList() {
       source: 'wechat',
     })
     if (!listRes.success) {
-      extractError.value = listRes.error || 'Failed to load contacts.'
+      extractError.value = listRes.error || t('agents.import.loadContactsFailed')
       return
     }
 
@@ -653,7 +659,7 @@ async function doExtract() {
   extracting.value = false
 
   if (!res.success) {
-    extractError.value = res.error || 'Extraction failed.'
+    extractError.value = res.error || t('agents.import.extractionFailed')
     if (source.value === 'wechat' && !dbDir.value && !decryptedDir.value) {
       showDbDir.value = true
     }
@@ -876,7 +882,7 @@ async function doAnalyze() {
   analyzing.value = false
 
   if (!res.success) {
-    analyzeError.value = res.error || 'Analysis failed.'
+    analyzeError.value = res.error || t('agents.import.analysisFailed')
     return
   }
 

@@ -191,8 +191,10 @@ CORE TOOLS (always available):
   // ── ClankAI Data Directory ──
   // dataPath is injected by main.js (DATA_DIR) — single source of truth
   const dataPath = config.dataPath || require('../defaultDataPath').defaultDataPath()
-  // Artifact path priority: DoCPath (AI Doc folder) → explicit artifactPath → dataPath/artifact
-  const artifactPath = config.DoCPath || config.artifactPath || path.join(dataPath, 'artifact')
+  // DoCPath = AI Doc folder (readable documents: md, docx, pdf, pptx, txt, etc.)
+  // artifactPath = non-document output (exports, temp files, data, code snippets)
+  const aidocPath    = config.DoCPath || path.join(dataPath, 'clank_aidoc')
+  const artifactPath = config.artifactPath || path.join(dataPath, 'artifact')
   const codingPath = config.chatWorkingPath || ''
   const isCodingMode = !!(config.codingMode && codingPath)
   const skillsPath = config.skillsPath || ''
@@ -209,10 +211,14 @@ This is the local data folder for the ClankAI desktop application. Its structure
   ├── knowledge.json       — RAG knowledge config
   ├── chats/               — Per-chat message history
   ├── souls/               — Persistent memory files (system/, users/)
-  └── artifact/            — AI-generated artifacts
+  ├── clank_aidoc/         — AI Doc folder (readable documents)
+  └── artifact/            — AI-generated non-document output
 
-ARTIFACT PATH (default output directory): ${artifactPath}
-This is the default directory for generated files — reports, exports, temp files, and other non-document output. Create subdirectories as needed (e.g. ${artifactPath}/exports/). The directory is auto-created on first write.${isCodingMode ? `
+AI DOC PATH (primary directory for readable documents): ${aidocPath}
+This is where ALL readable documents live — Markdown (.md), Word (.docx), PDF (.pdf), PowerPoint (.pptx), plain text (.txt), Excel (.xlsx/.csv), HTML (.html), and similar human-readable formats. When the user asks you to create a document, report, note, summary, or any readable file, ALWAYS write it here (or a subfolder).
+
+ARTIFACT PATH (for non-document output only): ${artifactPath}
+This is for generated files that are NOT readable documents: exports, temp files, raw data dumps, generated code snippets, binary output. Do NOT put .md, .docx, .pdf, .pptx, .txt, .html or other readable documents here. Create subdirectories as needed (e.g. ${artifactPath}/exports/). The directory is auto-created on first write.${isCodingMode ? `
 
 CODING PROJECT PATH: ${codingPath}
 This chat is in CODING MODE. All code files (source code, configs, scripts, tests, etc.) MUST be created/edited within this project directory. Use this path as the root for any code-related file operations. Non-code output (documents, reports) still goes to the document path or artifact path above.` : ''}${skillsPath ? `
@@ -239,37 +245,39 @@ DATA FILE ROUTING — when the user asks you to create or modify app configurati
 - Always read the file first to understand existing content before writing. Preserve all existing entries.
 - After writing, tell the user to click Refresh on the relevant page (MCP / Tools / Agents / Knowledge / Tasks) to reload.`
 
-  // ── Document Path + File Placement Rules ──
-  const docPath = process.env.DOC_PATH || config.obsidianVaultPath || config.DoCPath
-  if (docPath) {
-    let subfolders = []
-    try {
-      const entries = fs.readdirSync(docPath, { withFileTypes: true })
-      subfolders = entries.filter(e => e.isDirectory()).map(e => e.name).sort()
-    } catch (err) {
-      logger.error('Failed to read doc path subfolders', err.message)
-    }
-
-    const subfolderList = subfolders.length > 0
-      ? subfolders.map(f => `  - ${f}/`).join('\n')
-      : '  (no subfolders)'
-
-    system += `\n\nDOCUMENT PATH (primary output for documents): ${docPath}
-This is the user's document folder. Subfolders:
-${subfolderList}
-
-DOCUMENT FILE PLACEMENT:
-When generating documents (.md, .docx, .pptx, slides, reports, notes, summaries, analyses, etc.), ALWAYS write them to the Document Path: ${docPath} by default. Choose an appropriate subfolder (${subfolders.length > 0 ? subfolders.join(', ') : 'root'}) or create a new one if needed.
-Fallback: if the Document Path is unavailable, write to ${artifactPath}/docs/ instead.
-For non-document files (temp files, exports, data), use the Artifact Path: ${artifactPath}.${isCodingMode ? `
-For code files (source code, configs, scripts, tests), use the Coding Project Path: ${codingPath}.` : ''}`
-  } else {
-    // No doc path configured — documents go to artifact path
-    system += `\n\nDOCUMENT & FILE PLACEMENT:
-When generating documents (.md, .docx, .pptx, slides, reports, notes, etc.), write them to ${artifactPath}/docs/.
-For other generated files (exports, data, temp), use ${artifactPath}.${isCodingMode ? `
-For code files (source code, configs, scripts, tests), use the Coding Project Path: ${codingPath}.` : ''}`
+  // ── Document Path subfolders (for file placement guidance) ──
+  // Priority: explicit obsidian vault override → aidocPath (already resolved above)
+  const effectiveDocPath = process.env.DOC_PATH || config.obsidianVaultPath || aidocPath
+  let docSubfolders = []
+  try {
+    const entries = fs.readdirSync(effectiveDocPath, { withFileTypes: true })
+    docSubfolders = entries.filter(e => e.isDirectory()).map(e => e.name).sort()
+  } catch (err) {
+    // Directory may not exist yet — that's fine
   }
+
+  const subfolderList = docSubfolders.length > 0
+    ? docSubfolders.map(f => `  - ${f}/`).join('\n')
+    : '  (no subfolders yet — create as needed)'
+
+  system += `\n\nFILE PLACEMENT RULES — CRITICAL: route every file to the correct path:
+1. READABLE DOCUMENTS → AI Doc Path: ${effectiveDocPath}
+   Includes: .md, .docx, .pdf, .pptx, .txt, .xlsx, .csv, .html and any human-readable report/note/summary.
+   The FINAL output (the document the user asked for) goes here.
+   Current subfolders:
+${subfolderList}
+   Choose an existing subfolder or create a new one as needed.
+
+2. SCRIPTS & NON-DOCUMENT OUTPUT → Artifact Path: ${artifactPath}
+   Includes ALL of the following, regardless of their purpose:
+   - Helper/utility scripts (.py, .js, .ts, .sh, .ps1, .rb, etc.) — even if written solely to generate a document
+   - Intermediate files, temp files, raw data dumps, exports, binary output
+   - Example: if you write verify_docx.py or convert.py to help produce a .docx, the .py goes here; the .docx goes to AI Doc Path above.
+   RULE: if the file is CODE (any script or program), it goes here — not in AI Doc Path.
+   IMPORTANT — when running a script that produces a document: hardcode or pass the output path as an absolute path pointing to AI Doc Path (${effectiveDocPath}), not a relative path. Relative paths resolve to the shell working directory, not the document folder.${isCodingMode ? `
+
+3. CODE FILES → Coding Project Path: ${codingPath}
+   Includes: source code, configs, scripts, tests that are part of the user's coding project. Use this as the project root.` : ''}`
 
   if (effectiveName) {
     system += `\n\nOPERATIONAL NOTES (secondary to your character — use these naturally, not robotically):

@@ -1,4 +1,5 @@
 import { defineComponent, ref, h } from 'vue'
+import { useI18n } from '../../i18n/useI18n'
 
 /**
  * Recursive tree node component for the chat sidebar.
@@ -28,6 +29,7 @@ const ChatTreeNodeView = defineComponent({
     'drop-into', 'drop-before', 'drop-after',
   ],
   setup(props, { emit }) {
+    const { t } = useI18n()
     const dragOver = ref(null) // 'top' | 'middle' | 'bottom' | null
     const hovered = ref(false)
 
@@ -280,7 +282,7 @@ const ChatTreeNodeView = defineComponent({
             }, [h('path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' }), h('circle', { cx: '8', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' }), h('circle', { cx: '12', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' }), h('circle', { cx: '16', cy: '10', r: '1', fill: 'currentColor', stroke: 'none' })]),
           h('span', { class: 'truncate flex-1', style: { fontWeight: isActive ? '600' : '500', color: isDark ? '#fff' : '#1A1A1A', transition: 'color 0.15s' } }, node.title),
           // Status chips
-          isPendingPermission && !isActive ? h('span', { class: 'chat-approval-chip' }, 'Approval') : null,
+          isPendingPermission && !isActive ? h('span', { class: 'chat-approval-chip' }, t('chats.permissionApproval')) : null,
           // Action buttons — always rendered, shown only on row hover via CSS
           h('div', { class: 'chat-sidebar-item-actions' }, [
             h('button', {

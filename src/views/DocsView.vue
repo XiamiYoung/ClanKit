@@ -38,22 +38,23 @@
             <div style="display:flex; align-items:center; gap:0.5rem;">
               <h1 class="docs-catalog-title">{{ t('notes.title') }}</h1>
               <span
-                class="catalog-count-badge truncate"
-                style="max-width:18rem;"
+                class="catalog-count-badge"
+                style="max-width:32rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
                 :title="store.vaultPath"
-              >{{ vaultName }}</span>
+              >{{ store.vaultPath }}</span>
             </div>
             <p class="docs-catalog-subtitle">{{ t('notes.filesFromVault') }}</p>
           </div>
           <div class="flex items-center gap-2">
-            <AppButton size="icon" @click="store.loadTree()" :title="t('common.refresh')">
+            <AppButton size="icon" @click="refreshAll" :title="t('common.refresh')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </AppButton>
-            <AppButton size="icon" @click="store.pickVault()" :title="t('notes.browseFolder')">
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            <!-- Info icon: tells user to go to Config → AI → AiDoc to change path -->
+            <div class="docs-path-info-btn" :title="t('notes.changePathHint')">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
               </svg>
-            </AppButton>
+            </div>
           </div>
         </div>
       </div>
@@ -227,8 +228,8 @@
               </button>
 
               <div class="ml-auto flex items-center gap-2">
-                <!-- Mode toggle (markdown only) — iOS-style switch with state label -->
-                <div v-if="isMarkdown" class="docs-mode-switch" @click="editMode = !editMode" :title="editMode ? t('notes.switchToFormatted') : t('notes.switchToSource')">
+                <!-- Mode toggle (markdown and HTML) — iOS-style switch with state label -->
+                <div v-if="isMarkdown || isHtml" class="docs-mode-switch" @click="editMode = !editMode" :title="editMode ? t('notes.switchToFormatted') : t('notes.switchToSource')">
                   <span class="docs-mode-state-label">{{ editMode ? t('notes.source') : t('notes.formatted') }}</span>
                   <div class="docs-mode-track" :class="{ on: editMode }">
                     <span class="docs-mode-thumb"></span>
@@ -391,6 +392,49 @@
                     @contextmenu="onEditorContextMenu"
                   />
                 </div>
+
+                <!-- HTML: Rendered mode (embedded webview with browser toolbar) -->
+                <div v-else-if="isHtml && !editMode" style="flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; padding:0.5rem;">
+                  <!-- Browser toolbar -->
+                  <div class="html-wv-toolbar">
+                    <button class="html-wv-btn" @click="htmlWvGoBack" :disabled="!htmlWvCanGoBack" :title="t('common.back')">
+                      <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <button class="html-wv-btn" @click="htmlWvGoForward" :disabled="!htmlWvCanGoForward" :title="t('common.forward')">
+                      <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                    <button v-if="htmlWvIsLoading" class="html-wv-btn" @click="htmlWvStop" :title="t('common.stop')">
+                      <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                    <button v-else class="html-wv-btn" @click="htmlWvReload" :title="t('common.reload')">
+                      <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    </button>
+                    <div class="html-wv-urlbar">
+                      <svg class="html-wv-url-icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                      <input class="html-wv-url-input" :value="htmlWvCurrentUrl" @keydown.enter="htmlWvNavigate($event.target.value)" spellcheck="false" />
+                      <div v-if="htmlWvIsLoading" class="html-wv-url-loader"></div>
+                    </div>
+                  </div>
+                  <webview
+                    ref="htmlWebviewRef"
+                    class="docs-html-preview"
+                    :src="htmlFileUrl"
+                    @dom-ready="onHtmlWvDomReady"
+                    @did-finish-load="onHtmlWvFinishLoad"
+                  ></webview>
+                </div>
+
+                <!-- HTML: Source mode (code editor) -->
+                <CodeViewer
+                  v-else-if="isHtml && editMode"
+                  ref="codeViewerRef"
+                  :content="store.activeFile.content"
+                  :file-name="store.activeFile.name"
+                  :theme="codeViewerTheme"
+                  @update:theme="codeViewerTheme = $event"
+                  @ai-edit="handleEditorAiEdit"
+                  @content-change="onCodeContentChange"
+                />
 
                 <!-- Image preview -->
                 <div
@@ -1252,6 +1296,76 @@ function startPanelResize(edge, e) {
 // Refs for editor child components (used for ai-edit integration)
 const codeViewerRef = ref(null)
 const codeViewerTheme = ref('dark')
+
+// ── HTML preview server port (lazy — only requested when first HTML file is opened) ──
+const htmlPreviewPort = ref(0)
+
+// ── HTML webview state ──
+const htmlWebviewRef = ref(null)
+const htmlWvCanGoBack = ref(false)
+const htmlWvCanGoForward = ref(false)
+const htmlWvIsLoading = ref(false)
+const htmlWvCurrentUrl = ref('')
+let _htmlWvCleanup = []
+
+function _attachHtmlWvListeners() {
+  _htmlWvCleanup.forEach(fn => fn())
+  _htmlWvCleanup = []
+  const wv = htmlWebviewRef.value
+  if (!wv) return
+  const onNavigate = (e) => { htmlWvCurrentUrl.value = e.url; htmlWvCanGoBack.value = wv.canGoBack(); htmlWvCanGoForward.value = wv.canGoForward() }
+  const onNavInPage = (e) => { if (e.isMainFrame) { htmlWvCurrentUrl.value = e.url; htmlWvCanGoBack.value = wv.canGoBack(); htmlWvCanGoForward.value = wv.canGoForward() } }
+  const onStart = () => { htmlWvIsLoading.value = true }
+  const onStop = () => { htmlWvIsLoading.value = false; htmlWvCanGoBack.value = wv.canGoBack(); htmlWvCanGoForward.value = wv.canGoForward() }
+  const onDomReady = () => {
+    htmlWvIsLoading.value = false; htmlWvCanGoBack.value = wv.canGoBack(); htmlWvCanGoForward.value = wv.canGoForward()
+  }
+  wv.addEventListener('did-navigate', onNavigate)
+  wv.addEventListener('did-navigate-in-page', onNavInPage)
+  wv.addEventListener('did-start-loading', onStart)
+  wv.addEventListener('did-stop-loading', onStop)
+  wv.addEventListener('dom-ready', onDomReady)
+  _htmlWvCleanup = [
+    () => wv.removeEventListener('did-navigate', onNavigate),
+    () => wv.removeEventListener('did-navigate-in-page', onNavInPage),
+    () => wv.removeEventListener('did-start-loading', onStart),
+    () => wv.removeEventListener('did-stop-loading', onStop),
+    () => wv.removeEventListener('dom-ready', onDomReady),
+  ]
+}
+
+function onHtmlWvDomReady() {
+  const wv = htmlWebviewRef.value
+  if (!wv) return
+  htmlWvIsLoading.value = false
+  htmlWvCanGoBack.value = wv.canGoBack()
+  htmlWvCanGoForward.value = wv.canGoForward()
+}
+
+function onHtmlWvFinishLoad() {
+  const wv = htmlWebviewRef.value
+  if (!wv) return
+  htmlWvIsLoading.value = false
+  htmlWvCanGoBack.value = wv.canGoBack()
+  htmlWvCanGoForward.value = wv.canGoForward()
+  htmlWvCurrentUrl.value = wv.getURL?.() || htmlWvCurrentUrl.value
+}
+
+function htmlWvGoBack() { htmlWebviewRef.value?.goBack() }
+function htmlWvGoForward() { htmlWebviewRef.value?.goForward() }
+function htmlWvReload() { htmlWebviewRef.value?.reloadIgnoringCache() }
+function htmlWvStop() { htmlWebviewRef.value?.stop() }
+function htmlWvNavigate(url) {
+  if (!url) return
+  htmlWebviewRef.value?.loadURL(url)
+}
+function htmlWvReloadFromDisk() {
+  // Re-read file from disk; content watch will trigger reloadIgnoringCache
+  if (store.activeFile?.path && isHtml.value) {
+    store.openFile(store.activeFile.path, store.activeFile.name)
+  }
+}
+
 const aiMagicPanelRef = ref(null)
 const docxEditorRef = ref(null)
 const pptxEditorRef = ref(null)
@@ -1262,7 +1376,7 @@ const searchBarRef = ref(null)
 // ── Search / Replace state ──
 const searchBarOpen = ref(false)
 
-const isTextFile = computed(() => isMarkdown.value || isTextLike.value)
+const isTextFile = computed(() => isMarkdown.value || isHtml.value || isTextLike.value)
 const searchFileType = computed(() => {
   if (isPptx.value) return 'pptx'
   if (isXlsx.value) return 'xlsx'
@@ -1313,6 +1427,42 @@ turndown.addRule('local-images', {
 })
 const isDrawio = computed(() => store.activeFile?.name?.endsWith('.drawio') ?? false)
 const isMarkdown = computed(() => store.activeFile?.name?.endsWith('.md') ?? false)
+const isHtml = computed(() => /\.html?$/i.test(store.activeFile?.name || ''))
+const htmlFileUrl = computed(() => {
+  if (!isHtml.value || !store.activeFile?.path || !htmlPreviewPort.value) return ''
+  const p = store.activeFile.path.replace(/\\/g, '/')
+  return `http://127.0.0.1:${htmlPreviewPort.value}/${encodeURI(p)}`
+})
+
+// Lazy-start the preview server only when an HTML file is first opened
+watch(isHtml, async (val) => {
+  if (val && !htmlPreviewPort.value) {
+    const port = await window.electronAPI?.htmlPreview?.getPort?.()
+    if (port) htmlPreviewPort.value = port
+  }
+}, { immediate: true })
+
+watch(htmlFileUrl, async (url) => {
+  if (url) {
+    htmlWvCurrentUrl.value = url
+    htmlWvCanGoBack.value = false
+    htmlWvCanGoForward.value = false
+    await nextTick()
+    _attachHtmlWvListeners()
+  } else {
+    _htmlWvCleanup.forEach(fn => fn())
+    _htmlWvCleanup = []
+    htmlWvIsLoading.value = false
+  }
+})
+
+// When same HTML file is re-opened (content updated), reload the webview
+watch(() => store.activeFile?.content, () => {
+  if (isHtml.value && !editMode.value) {
+    nextTick(() => htmlWebviewRef.value?.reload())
+  }
+})
+
 const isPptx = computed(() => /\.pptx?$/i.test(store.activeFile?.name || ''))
 const isDocx = computed(() => /\.docx?$/i.test(store.activeFile?.name || ''))
 const isXlsx = computed(() => /\.xlsx?$/i.test(store.activeFile?.name || ''))
@@ -1320,7 +1470,7 @@ const isXlsx = computed(() => /\.xlsx?$/i.test(store.activeFile?.name || ''))
 const CODE_EXTS = new Set([
   'js','ts','py','java','go','rs','c','cpp','h','cs','rb','php','swift','kt',
   'lua','sh','bash','zsh','ps1','sql','r','dart','scala','ex','vue','svelte',
-  'jsx','tsx','mjs','cjs','css','scss','less','html','xml','json','yaml','yml',
+  'jsx','tsx','mjs','cjs','css','scss','less','xml','json','yaml','yml',
   'toml','ini','cfg','conf','pl','svg','dockerfile','makefile','env','gitignore',
 ])
 const IMAGE_EXTS = new Set(['png','jpg','jpeg','gif','svg','webp','ico','bmp','tiff'])
@@ -1331,7 +1481,7 @@ const activeExt = computed(() => {
 })
 const isCode = computed(() => CODE_EXTS.has(activeExt.value))
 const isImage = computed(() => IMAGE_EXTS.has(activeExt.value))
-const isTextLike = computed(() => !isDrawio.value && !isMarkdown.value && !isImage.value && !isPptx.value && !isDocx.value && !isXlsx.value)
+const isTextLike = computed(() => !isDrawio.value && !isMarkdown.value && !isHtml.value && !isImage.value && !isPptx.value && !isDocx.value && !isXlsx.value)
 
 const IMAGE_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', ico: 'image/x-icon', tiff: 'image/tiff', svg: 'image/svg+xml' }
 const imageDataUri = computed(() => {
@@ -1499,6 +1649,14 @@ function toggleAiDoc() {
 }
 
 /** Explicit save — clears dirty flag without auto-save timer. */
+async function refreshAll() {
+  await store.loadTree()
+  if (store.activeFile?.path && !store.activeFile.binary) {
+    await store.openFile(store.activeFile.path, store.activeFile.name)
+    // HTML webview reload is handled by the content watch
+  }
+}
+
 async function saveFile() {
   if (saveStatus.value === 'saving') return
   if (_saveStatusTimer) clearTimeout(_saveStatusTimer)
@@ -1850,6 +2008,11 @@ watch(() => store.activeFile?.path, (newPath, oldPath) => {
     _pendingBinaryContent = null
     hasSelection.value = false
     searchBarOpen.value = false
+
+    // Default HTML files to rendered view
+    if (newPath && /\.html?$/i.test(newPath)) {
+      editMode.value = false
+    }
 
     // Fix stale internal TOC anchor links when opening a markdown file
     if (newPath && newPath.endsWith('.md')) {
@@ -2868,6 +3031,80 @@ defineExpose({ docTreeCollapsed })
 .prose-obsidian:focus {
   outline: none;
 }
+.html-wv-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background: #FFFFFF;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  flex-shrink: 0;
+}
+.html-wv-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.html-wv-btn:hover:not(:disabled) { background: #F5F5F5; color: #1A1A1A; }
+.html-wv-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.html-wv-urlbar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  background: #F2F2F7;
+  border: 1px solid #F0F0F0;
+  border-radius: var(--radius-sm);
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.html-wv-urlbar:focus-within { border-color: #1A1A1A; box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
+.html-wv-url-icon { color: #9CA3AF; flex-shrink: 0; }
+.html-wv-url-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: var(--fs-small);
+  color: #1A1A1A;
+  outline: none;
+}
+.html-wv-url-loader {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 2px; width: 100%;
+  background: linear-gradient(90deg, transparent, #374151, transparent);
+  animation: urlLoad 1.2s ease-in-out infinite;
+}
+@keyframes urlLoad {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.docs-html-preview {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: #FFFFFF;
+  display: flex;
+}
 .notes-source-editor {
   width: 95%;
   max-width: 95%;
@@ -3284,6 +3521,23 @@ defineExpose({ docTreeCollapsed })
 .docs-hdr-btn--err:hover {
   background: #DC2626;
   border-color: #DC2626;
+}
+
+/* ── Path info icon button ── */
+.docs-path-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.875rem;
+  height: 1.875rem;
+  border-radius: var(--radius-sm);
+  color: #9CA3AF;
+  cursor: default;
+  flex-shrink: 0;
+  position: relative;
+}
+.docs-path-info-btn:hover {
+  color: #6B7280;
 }
 
 /* ── Read-aloud button (similar to ai-doc-toggle-btn) ── */

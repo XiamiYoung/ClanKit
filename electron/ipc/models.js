@@ -126,9 +126,9 @@ ${modelIds.join('\n')}`
   ipcMain.handle('openai:fetch-models', async (_, { apiKey, baseURL, type }) => {
     if (!baseURL) return { success: false, error: 'OpenAI baseURL not configured', models: [] }
     const base = baseURL.replace(/\/+$/, '')
-    const isCompat = type === 'openai'
-    const url = isCompat ? base + '/proxy/openai/v1/models' : base + '/models'
-    const headers = isCompat
+    const isMinimax = type === 'minimax'
+    const url = isMinimax ? base + '/proxy/openai/v1/models' : base + '/models'
+    const headers = isMinimax
       ? { 'x-api-key': apiKey, 'Content-Type': 'application/json' }
       : { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
     try {

@@ -107,7 +107,18 @@ export const useModelsStore = defineStore('models', () => {
         // MiniMax uses proxy path + x-api-key header
         if (!window.electronAPI?.fetchOpenAIModels || !provider.baseURL) return false
         const result = await window.electronAPI.fetchOpenAIModels({
-          apiKey: provider.apiKey, baseURL: provider.baseURL, type: 'openai',
+          apiKey: provider.apiKey, baseURL: provider.baseURL, type: 'minimax',
+        })
+        if (!result.success) return false
+        models = result.models
+
+      } else if (type === 'qwen' || type === 'glm') {
+        // OpenAI-compatible providers — fall back to preset defaultBaseURL if user left it blank
+        const preset = configStore.PROVIDER_PRESETS?.[type]
+        const baseURL = provider.baseURL || preset?.defaultBaseURL
+        if (!window.electronAPI?.fetchOpenAIModels || !baseURL) return false
+        const result = await window.electronAPI.fetchOpenAIModels({
+          apiKey: provider.apiKey, baseURL, type: 'openai',
         })
         if (!result.success) return false
         models = result.models

@@ -123,9 +123,10 @@
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
                 <input id="artifactPath" v-model="form.artifactPath" type="text" :placeholder="defaultArtifactPath" class="field font-mono" />
-                <button class="open-folder-btn" @click="openInExplorer(form.artifactPath || defaultArtifactPath)" title="Open in file explorer">
+                <button class="open-folder-btn" @click="pickArtifactFolder" title="Select folder">
                   <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
                   </svg>
                 </button>
               </div>
@@ -415,7 +416,7 @@
                         <p class="hint" style="margin-top:2px;">{{ selectedProviderModels.length > 0 ? t('config.modelsLoaded', '', { count: selectedProviderModels.length }) : t('config.enterApiKeyFetchModels') }}</p>
                       </div>
                       <div style="display: flex; gap: 0.375rem; align-items: center;">
-                        <AppButton size="icon" @click="fetchProviderModels" :disabled="providerModelsFetching || !selectedProvider.apiKey || (selectedProvider.type !== 'google' && !selectedProvider.baseURL)" :loading="providerModelsFetching" :title="providerModelsFetching ? t('config.fetching') : t('config.fetchModels')"><svg v-if="!providerModelsFetching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/></svg></AppButton>
+                        <AppButton size="icon" @click="fetchProviderModels" :disabled="providerModelsFetching || !selectedProvider.apiKey || (selectedProvider.type !== 'google' && !selectedProvider.baseURL && !configStore.PROVIDER_PRESETS[selectedProvider.type]?.defaultBaseURL)" :loading="providerModelsFetching" :title="providerModelsFetching ? t('config.fetching') : t('config.fetchModels')"><svg v-if="!providerModelsFetching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/></svg></AppButton>
                         <AppButton v-if="selectedProviderModels.length > 0 && providerHasMissingContext" size="icon" @click="enrichProviderContext" :disabled="providerContextEnriching" :loading="providerContextEnriching" :title="t('config.aiFillContext')"><svg v-if="!providerContextEnriching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/></svg></AppButton>
                       </div>
                     </div>
@@ -553,6 +554,69 @@
               <svg v-if="savedSkillsPathMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               {{ savedSkillsPathMsg.text }}
+            </span>
+          </div>
+        </template>
+
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- AI Doc Path (AI > AiDoc) -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <template v-if="activeTopTab === 'ai' && activeSubTab === 'aidoc'">
+
+          <!-- AI Doc Path -->
+          <div class="config-card">
+            <div class="form-section-header">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+              </div>
+              <h3 class="form-section-title">{{ t('config.aidocPath') }}</h3>
+            </div>
+            <div class="form-group">
+              <div class="input-with-trailing-btn">
+                <input id="DoCPath" v-model="form.DoCPath" type="text" class="field font-mono" />
+                <button class="open-folder-btn" @click="openInExplorer(form.DoCPath || defaultAidocPath)" title="Open in file explorer">
+                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  </svg>
+                </button>
+              </div>
+              <p class="hint">{{ t('config.aidocPathHint') }}</p>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" style="font-size:0.75rem; color:var(--color-text-secondary);">{{ t('config.aidocFileTypes') }}</label>
+              <div style="display:flex; flex-wrap:wrap; gap:0.375rem; margin-top:0.375rem;">
+                <span v-for="ext in ['.md','.txt','.docx','.pdf','.pptx','.xlsx','.csv','.html']" :key="ext"
+                  style="font-size:0.7rem; font-family:monospace; background:var(--color-bg-secondary); border:1px solid var(--color-border); border-radius:4px; padding:2px 6px; color:var(--color-text-secondary);">{{ ext }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Artifact Path info -->
+          <div class="config-card" style="border-left: 3px solid var(--color-border);">
+            <div class="form-section-header">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>
+                </svg>
+              </div>
+              <h3 class="form-section-title">{{ t('config.artifactPathLabel') }}</h3>
+            </div>
+            <p class="hint" style="margin-bottom:0;">{{ t('config.artifactPathDescription') }}</p>
+          </div>
+
+          <div class="save-row">
+            <AppButton size="save" @click="saveAidocPath" :disabled="savingAidocPath" :loading="savingAidocPath">
+              <svg v-if="!savingAidocPath" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+              </svg>
+            </AppButton>
+            <span v-if="savedAidocPathMsg" class="save-indicator" :class="savedAidocPathMsg.ok ? 'success' : 'error'">
+              <svg v-if="savedAidocPathMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              {{ savedAidocPathMsg.text }}
             </span>
           </div>
         </template>
@@ -2420,18 +2484,25 @@ async function saveSecurity() {
 
 // General tab state
 const defaultDataPath = ref('')
+const osSep = (typeof window !== 'undefined' && window.electronAPI?.platform === 'win32') ? '\\' : '/'
 const defaultArtifactPath = computed(() => {
   const dp = form.dataPath || defaultDataPath.value
-  return dp ? `${dp}/artifact` : ''
+  return dp ? `${dp}${osSep}artifact` : ''
 })
 const defaultSkillsPath = computed(() => {
   const dp = form.dataPath || defaultDataPath.value
-  return dp ? `${dp}/skills` : ''
+  return dp ? `${dp}${osSep}skills` : ''
+})
+const defaultAidocPath = computed(() => {
+  const dp = form.dataPath || defaultDataPath.value
+  return dp ? `${dp}${osSep}clank_aidoc` : ''
 })
 const savingGeneral = ref(false)
 const savedGeneralMsg = ref('')
 const savingSkillsPath = ref(false)
 const savedSkillsPathMsg = ref(null)
+const savingAidocPath = ref(false)
+const savedAidocPathMsg = ref(null)
 
 // ── Tab icon components ─────────────────────────────────────────────────────
 const IconGeneral = defineComponent({
@@ -2505,6 +2576,15 @@ const IconPricing = defineComponent({
     h('path', { d: 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6' })
   ])
 })
+const IconAiDoc = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
+    h('polyline', { points: '14 2 14 8 20 8' }),
+    h('line', { x1: '16', y1: '13', x2: '8', y2: '13' }),
+    h('line', { x1: '16', y1: '17', x2: '8', y2: '17' }),
+    h('polyline', { points: '10 9 9 9 8 9' })
+  ])
+})
 // Top-level tabs (2 primary)
 const topTabs = computed(() => [
   { value: 'general', label: t('config.general'), icon: IconGeneral },
@@ -2534,6 +2614,7 @@ const subTabsAI = computed(() => {
   }
   items.push(
     { value: 'skills',    label: t('config.skillsPath'), icon: IconSkills   },
+    { value: 'aidoc',     label: t('config.aidocPath'),  icon: IconAiDoc    },
     { value: 'knowledge', label: t('config.knowledge'), icon: IconKnowledge },
   )
   return items
@@ -2559,6 +2640,9 @@ watch(() => route.query.tab, (tab) => {
 // Forward-declared here (before onboarding watcher) to avoid TDZ;
 // full watcher + related logic lives in the "Models Page" section below.
 const modelsLeftNav = ref('empty')  // 'empty' | providerId | 'global' | 'utility'
+const addProviderPreset = ref('anthropic')
+const addProviderName = ref('')
+const addProviderProtocol = ref('openai')
 
 // Onboarding: detect ?onboarding=1 and enter the right phase
 watch(() => route.query.onboarding, (val) => {
@@ -2598,6 +2682,7 @@ function getSubTabStatus(subTab) {
     case 'language':  return form.language ? 'configured' : 'empty'
     case 'paths':     return (form.dataPath || form.artifactPath) ? 'configured' : 'empty'
     case 'skills':    return form.skillsPath ? 'configured' : 'empty'
+    case 'aidoc':     return form.DoCPath ? 'configured' : 'empty'
     case 'security':  return 'configured'
     case 'email':     return form.smtp?.host ? 'configured' : 'empty'
     case 'im':        return (form.im?.telegram?.botToken || form.im?.whatsapp?.enabled || form.im?.feishu?.appId) ? 'configured' : 'empty'
@@ -2841,6 +2926,7 @@ const form = reactive({
     model:    '',
   },
   skillsPath:  '',
+  DoCPath:             '',
   ragEnabled:          true,
   dataPath:            '',
   artifactPath:        '',
@@ -2926,9 +3012,6 @@ watch(showAddProviderModal, (val) => {
 const showDeleteConfirm = ref(false)
 const deleteConfirmId = ref(null)
 const deleteConfirmName = ref('')
-const addProviderPreset = ref('anthropic')
-const addProviderName = ref('')
-const addProviderProtocol = ref('openai')
 const addProviderPresetInfo = computed(() => configStore.PROVIDER_PRESETS[addProviderPreset.value] || null)
 const testModelTemp = ref('')
 const selectedTestModel = ref('')
@@ -2989,7 +3072,8 @@ const canTestNew = computed(() => {
   if (selectedProvider.value.type === 'google') {
     return !!(selectedProvider.value.apiKey && selectedProvider.value.model)
   }
-  return !!(selectedProvider.value.apiKey && selectedProvider.value.baseURL && selectedProvider.value.model)
+  const hasBaseURL = !!(selectedProvider.value.baseURL || configStore.PROVIDER_PRESETS[selectedProvider.value.type]?.defaultBaseURL)
+  return !!(selectedProvider.value.apiKey && hasBaseURL && selectedProvider.value.model)
 })
 
 const selectedProviderModels = computed(() => {
@@ -3085,10 +3169,12 @@ async function testProviderNew() {
   testResultNew.value = null
   try {
     const model = selectedProvider.value.type === 'anthropic' ? selectedTestModel.value : selectedProvider.value.model
+    const baseURL = selectedProvider.value.baseURL ||
+      configStore.PROVIDER_PRESETS[selectedProvider.value.type]?.defaultBaseURL || ''
     const res = await window.electronAPI.testProvider({
       provider: selectedProvider.value.type,
       apiKey: selectedProvider.value.apiKey,
-      baseURL: selectedProvider.value.baseURL,
+      baseURL,
       utilityModel: model,
     })
     // Guard: user may have switched providers while the request was in-flight
@@ -3118,7 +3204,8 @@ async function fetchProviderModels() {
     return
   }
   const type = selectedProvider.value.type
-  if (type !== 'google' && !selectedProvider.value.baseURL) {
+  const hasDefaultBaseURL = !!configStore.PROVIDER_PRESETS[type]?.defaultBaseURL
+  if (type !== 'google' && !selectedProvider.value.baseURL && !hasDefaultBaseURL) {
     providerModelsFetchError.value = 'Enter API key and Base URL first.'
     return
   }
@@ -3215,8 +3302,9 @@ onMounted(async () => {
   // Load env-backed paths (skillsPath, artifactPath)
   if (window.electronAPI?.getEnvPaths) {
     const envPaths = await window.electronAPI.getEnvPaths()
-    form.skillsPath  = envPaths.skillsPath  || ''
+    form.skillsPath  = envPaths.skillsPath  || defaultSkillsPath.value
     form.artifactPath = envPaths.artifactPath || ''
+    form.DoCPath      = envPaths.DoCPath      || defaultAidocPath.value
   }
   // Load sandboxConfig for security tab
   const sc = c.sandboxConfig || {}
@@ -3313,6 +3401,11 @@ onUnmounted(() => {
   window.electronAPI?.im?.onTeamsAuthError?.(() => {})
 })
 
+async function pickArtifactFolder() {
+  const folder = await window.electronAPI?.obsidian?.pickFolder()
+  if (folder) form.artifactPath = folder
+}
+
 async function saveGeneral() {
   savingGeneral.value = true
   try {
@@ -3342,6 +3435,19 @@ async function saveSkillsPath() {
   } finally {
     savingSkillsPath.value = false
     setTimeout(() => { savedSkillsPathMsg.value = null }, 4000)
+  }
+}
+
+async function saveAidocPath() {
+  savingAidocPath.value = true
+  try {
+    await configStore.saveEnvPath('DoCPath', String(form.DoCPath))
+    savedAidocPathMsg.value = { ok: true, text: t('config.saved') }
+  } catch (err) {
+    savedAidocPathMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
+  } finally {
+    savingAidocPath.value = false
+    setTimeout(() => { savedAidocPathMsg.value = null }, 4000)
   }
 }
 

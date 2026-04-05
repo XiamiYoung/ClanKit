@@ -582,7 +582,7 @@
                   <!-- Upload button -->
                   <label class="bv-av-upload-btn">
                     <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    {{ locale.value === 'zh' ? '上传图片' : 'Upload Photo' }}
+                    {{ t('agents.uploadPhoto') }}
                     <input type="file" accept="image/*" style="display:none;" @change="onAvatarFileUpload" />
                   </label>
                   <!-- Avatar grid -->
@@ -613,7 +613,7 @@
 
               <!-- Default summary view -->
               <div v-else class="bv-summary-panel">
-                <div class="bv-summary-title">{{ locale.value === 'zh' ? '能力总览' : 'Agent Overview' }}</div>
+                <div class="bv-summary-title">{{ t('agents.agentOverview') }}</div>
 
                 <!-- AI Model -->
                 <div v-if="agentType === 'system'" class="bv-summary-row clickable" @click="togglePanel('model')">

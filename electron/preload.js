@@ -186,6 +186,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     copyFilesToDir: (sourcePaths, destDir) => ipcRenderer.invoke('obsidian:copy-files-to-dir', sourcePaths, destDir),
   },
 
+  // -- HTML Preview local server -----------------------------------------------
+  htmlPreview: {
+    getPort: () => ipcRenderer.invoke('html-preview:port'),
+  },
+
   // -- Coding Mode / Claude Context ------------------------------------------
   claude: {
     // One-shot: load and merge CLAUDE.md hierarchy for a given project path.

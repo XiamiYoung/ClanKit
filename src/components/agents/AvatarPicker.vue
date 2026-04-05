@@ -39,7 +39,7 @@
       <div class="avpicker-footer">
         <label class="avpicker-upload-btn" title="Upload a photo from your computer">
           <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Upload Photo
+          {{ t('agents.uploadPhoto') }}
           <input type="file" accept="image/*" style="display:none;" @change="onFileUpload" />
         </label>
         <div style="flex:1;"></div>
@@ -53,6 +53,9 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { STYLES, getAvatarDataUri, generateRandomBatch } from './agentAvatars'
+import { useI18n } from '../../i18n/useI18n'
+
+const { t } = useI18n()
 
 const BATCH_SIZE = 120  // avatars per style tab
 

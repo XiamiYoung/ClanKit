@@ -88,11 +88,13 @@ function applyProviderCredsToConfig(cfg, providerType) {
     cfg._resolvedProvider = undefined
     cfg.defaultProvider = undefined
   } else {
+    // All other OpenAI-compatible providers (qwen, glm, mistral, groq, xai, moonshot, doubao, ollama, custom, etc.)
+    // Use _directAuth so OpenAIClient sends standard Bearer auth instead of x-api-key proxy path
     cfg.openaiApiKey = apiKey
-    cfg.openaiBaseURL = baseURL
+    cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')
     cfg._resolvedProvider = 'openai'
+    cfg._directAuth = true
     cfg.defaultProvider = 'openai'
-    delete cfg._directAuth
     delete cfg.apiKey
     delete cfg.baseURL
   }
@@ -138,7 +140,7 @@ function validateLoopConfig(cfg) {
 
   if (providerType === 'google') return null
 
-  const isOpenAICompat = providerType === 'openai' || providerType === 'openai_official' || providerType === 'deepseek' || providerType === 'minimax' || providerType === 'openrouter'
+  const isOpenAICompat = providerType === 'openai' || providerType === 'openai_official' || providerType === 'deepseek' || providerType === 'minimax' || providerType === 'openrouter' || providerType === 'qwen' || providerType === 'glm' || providerType === 'mistral' || providerType === 'groq' || providerType === 'xai' || providerType === 'moonshot' || providerType === 'doubao' || providerType === 'ollama'
   if (isOpenAICompat) {
     const baseURL = cfg.openaiBaseURL || cfg.openai?.baseURL || cfg.baseURL || ''
     const apiKey = cfg.openaiApiKey || cfg.openai?.apiKey || cfg.apiKey || ''

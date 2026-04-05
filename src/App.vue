@@ -4,7 +4,12 @@
 
       <TitleBar @toggle-sidebar="sidebarRef?.toggleCollapse()" />
       <div class="flex flex-1 min-h-0 overflow-hidden">
-        <Sidebar ref="sidebarRef" />
+        <Sidebar ref="sidebarRef" :width="navSidebarWidth" />
+        <div
+          v-if="!sidebarRef?.isCollapsed"
+          class="nav-sidebar-resize"
+          @mousedown.prevent="startNavResize"
+        ></div>
         <main class="flex-1 min-w-0 overflow-hidden flex flex-col">
           <!-- Setup banner: shown when no provider is configured -->
           <div v-if="configLoaded && !configStore.isConfigured && !bannerDismissed" class="setup-banner">
@@ -47,7 +52,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useFocusModeStore } from './stores/focusMode'
 import { RouterView, useRouter, useRoute } from 'vue-router'
 import Sidebar  from './components/layout/Sidebar.vue'
@@ -89,6 +94,42 @@ const voiceStore = useVoiceStore()
 
 const configLoaded = ref(false)
 const bannerDismissed = ref(false)
+
+// ── Nav sidebar resize ──
+function getDefaultNavWidth() {
+  if (window.innerWidth >= 1920) return 200
+  if (window.innerWidth >= 1440) return 180
+  return 172
+}
+const navSidebarWidth = ref(getDefaultNavWidth())
+
+function onWindowResize() {
+  navSidebarWidth.value = getDefaultNavWidth()
+}
+window.addEventListener('resize', onWindowResize)
+onUnmounted(() => window.removeEventListener('resize', onWindowResize))
+
+function startNavResize(e) {
+  const startX = e.clientX
+  const startWidth = navSidebarWidth.value
+
+  function onMouseMove(ev) {
+    const delta = ev.clientX - startX
+    navSidebarWidth.value = Math.max(168, Math.min(256, startWidth + delta))
+  }
+
+  function onMouseUp() {
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+}
 
 const showSetupWizard = computed(() => {
   return configLoaded.value && !configStore.isConfigured && !configStore.config.setupDismissed
@@ -252,5 +293,21 @@ onMounted(async () => {
 
 .setup-banner-dismiss:hover {
   background: rgba(217, 119, 6, 0.12);
+}
+
+.nav-sidebar-resize {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  border-left: 1px solid #E5E5EA;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 5;
+}
+
+.nav-sidebar-resize:hover,
+.nav-sidebar-resize:active {
+  background: #D1D1D6;
 }
 </style>

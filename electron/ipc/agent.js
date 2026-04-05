@@ -2020,7 +2020,10 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
       return { success: false, error: 'Missing required field: baseURL' }
     }
 
-    const isOpenAI = provider === 'openai' || provider === 'openai_official' || provider === 'deepseek' || provider === 'minimax' || provider === 'custom'
+    const isOpenAI = provider === 'openai' || provider === 'openai_official' || provider === 'deepseek' ||
+      provider === 'minimax' || provider === 'custom' || provider === 'qwen' || provider === 'glm' ||
+      provider === 'mistral' || provider === 'groq' || provider === 'xai' || provider === 'moonshot' ||
+      provider === 'doubao' || provider === 'ollama'
 
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
@@ -2030,8 +2033,7 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
         customModel: utilityModel,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
-        // custom providers talk directly to their endpoint (no proxy wrapper)
-        ...(provider === 'openai_official' || provider === 'deepseek' || provider === 'minimax' || provider === 'custom' ? { _directAuth: true } : {}),
+        _directAuth: provider !== 'openai' && provider !== 'ollama',
       }
       cfg.provider = { type: provider }
       const client = new OpenAIClient(cfg)

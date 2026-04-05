@@ -280,6 +280,10 @@ export const useAgentsStore = defineStore('agents', () => {
         ...agent,
       }
       if (!newAgent.voiceId) newAgent.voiceId = getDefaultVoiceForLocale(configStore.language)
+      // Auto-set as default when it's the first user agent
+      if (newAgent.type === 'user' && !agents.value.some(p => p.type === 'user' && p.isDefault)) {
+        newAgent.isDefault = true
+      }
       agents.value.push(newAgent)
     }
     await persist()

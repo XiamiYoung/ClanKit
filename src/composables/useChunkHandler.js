@@ -385,7 +385,6 @@ export function useChunkHandler({
       targetChat.isThinking = false
       const seg = lastTextSeg(routeKey)
       seg.content += chunk.text
-      console.debug('[ChunkHandler] text chunk', { routeKey, chunkLen: chunk.text.length, totalLen: seg.content.length, preview: chunk.text.slice(0, 80) })
       flushSegments(routeKey)
       scrollToBottom(false, cId)
     } else if (chunk.type === 'agent_step') {
@@ -428,7 +427,6 @@ export function useChunkHandler({
       flushSegments(routeKey)
       scrollToBottom(false, cId)
     } else if (chunk.type === 'tool_result') {
-      console.debug('[ChunkHandler] tool_result', { name: chunk.name, resultKeys: Object.keys(chunk.result || {}), resultPreview: JSON.stringify(chunk.result).slice(0, 200) })
       dbg(`tool_result: ${chunk.name} result=${JSON.stringify(chunk.result).slice(0,80)}`, 'warn')
       if (targetChat) {
         targetChat.isCallingTool = false

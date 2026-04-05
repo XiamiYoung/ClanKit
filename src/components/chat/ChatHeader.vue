@@ -8,11 +8,11 @@
           <svg style="width:10px;height:10px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
           </svg>
-          Approval
+          {{ t('chats.permissionApproval') }}
         </span>
         <span v-else-if="isRunning" class="ch-status-badge ch-status-badge--running">
           <span class="ch-status-dot"></span>
-          Running
+          {{ t('chats.statusRunning') }}
         </span>
       </div>
       <!-- Centered chat title badge -->
