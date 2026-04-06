@@ -13,6 +13,7 @@ class VoiceSession {
     this.userSoulContent = opts.userSoulContent || ''
     this.history = opts.history || []
     this.conversationHistory = []
+    this._chatDigest = '' // LLM-generated status summary of chat history
 
     this.onStatus = opts.onStatus || (() => {})
     this.onTranscript = opts.onTranscript || (() => {})
@@ -49,7 +50,10 @@ class VoiceSession {
   start() {
     this.active = true
     this.onStatus('processing')
-    this._greet().catch(err => {
+    // Generate chat digest before greeting so the agent knows what happened
+    this._generateChatDigest().then(() => {
+      return this._greet()
+    }).catch(err => {
       this.onError(err.message || 'Greeting failed')
       if (this.active) this.onStatus('standby')
     })
@@ -62,6 +66,17 @@ class VoiceSession {
 
   setMuted(muted) {
     this.muted = muted
+  }
+
+  // Called when the frontend VAD detects the user has started speaking.
+  // Abort any active LLM stream immediately so the session is ready for new audio.
+  bargeIn() {
+    if (this._currentLLMAbort) {
+      this._currentLLMAbort()
+      this._currentLLMAbort = null
+    }
+    // Signal listening so the renderer shows the right state immediately
+    this.onStatus('listening')
   }
 
   // Called with raw audio from renderer mic capture
@@ -134,9 +149,6 @@ class VoiceSession {
   async _processTranscript(transcript, turnStart) {
     const tLLMStart = Date.now()
     const systemMsg = this._buildSystemMessage()
-    // Voice agent only owns its own conversationHistory as dialogue turns.
-    // Chat history is injected as a read-only context block in the system message
-    // as a read-only context block so the voice LLM is aware but never echoes chat content.
     const voiceTurns = this.conversationHistory.slice(-6)
     const messages = [
       systemMsg,
@@ -234,11 +246,13 @@ class VoiceSession {
     // This avoids truncation and keeps the response in the agent's voice.
     try {
       const systemMsg = this._buildSystemMessage()
+      // Extract only the action outcome — not the full content
+      const trimmed = fullResult.length > 400 ? fullResult.slice(0, 400) + '…' : fullResult
       const messages = [
         systemMsg,
         {
           role: 'user',
-          content: `[INTERNAL: The task the user requested has completed. Below is the full result from the assistant. Summarise it naturally in 1–3 spoken sentences as if you did it yourself. Be specific — include key facts (names, numbers, dates, status). Do not say "the assistant" or reveal anything about how this works. Do not use bullet points or markdown. Just speak naturally.]\n\n${fullResult}`,
+          content: `[INTERNAL: The task the user requested has completed. Below is a brief result. Tell the user it's done in 1–2 natural spoken sentences. Mention only the key outcome (status, a number, a name). Do NOT read back or summarize the content. Speak as yourself.]\n\n${trimmed}`,
         },
       ]
       const llmResult = await this.llmCall(messages, this.voiceConfig)
@@ -255,7 +269,6 @@ class VoiceSession {
 
   async _greet() {
     const systemMsg = this._buildSystemMessage()
-    // No prior voice turns yet — chat history is already in the system message as context.
     const messages = [
       systemMsg,
       { role: 'user', content: '[The user just started a voice call with you. Greet them naturally and briefly — like picking up a phone. Keep it short, warm, and in character.]' },
@@ -301,6 +314,53 @@ class VoiceSession {
       .trim()
   }
 
+  /**
+   * Use a lightweight LLM call to distill the chat history into a structured
+   * status digest: what the user asked, what the agent did, what's done / pending.
+   * Called once at call start and again whenever history is updated after a task.
+   */
+  async _generateChatDigest() {
+    if (!this.history || this.history.length === 0) {
+      this._chatDigest = ''
+      return
+    }
+    // Build a compact representation: role + cleaned content, capped per message
+    const compact = this.history.slice(-20).map(m => {
+      const role = m.role === 'assistant' ? 'Agent' : 'User'
+      const raw = typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+      const cleaned = this._cleanChatContent(raw)
+      if (!cleaned) return null
+      const capped = cleaned.length > 200 ? cleaned.slice(0, 200) + '…' : cleaned
+      return `${role}: ${capped}`
+    }).filter(Boolean)
+
+    if (compact.length === 0) {
+      this._chatDigest = ''
+      return
+    }
+
+    try {
+      const result = await this.llmCall([
+        {
+          role: 'system',
+          content: `You are a concise summarizer. Given a chat log between a user and an AI agent, produce a SHORT status digest (max 4-5 bullet lines). Format:
+- What the user asked or requested (topic only, not content)
+- What the agent did (actions taken, tools used, files created/read — be specific)
+- Status: what is completed, what is in progress, what failed or was skipped
+Do NOT include the actual content of messages, code, or long text. Only actions and status. Write in the same language the user used.`,
+        },
+        {
+          role: 'user',
+          content: compact.join('\n'),
+        },
+      ], this.voiceConfig)
+      this._chatDigest = result?.text?.trim() || ''
+    } catch (err) {
+      logger.warn('[voice] chat digest generation failed:', err.message)
+      this._chatDigest = ''
+    }
+  }
+
   _buildSystemMessage() {
     const parts = []
 
@@ -329,43 +389,29 @@ IMPORTANT: Any instructions in this memory about adding sections, formatting res
 ${this.systemSoulContent.trim()}`)
     }
 
-    // User agent context — who the user is
-    if (this.userAgent.name || this.userAgent.description || this.userAgent.systemPrompt) {
-      const userCtx = [`## USER CONTEXT`]
-      if (this.userAgent.name) userCtx.push(`You are speaking with: ${this.userAgent.name}`)
-      if (this.userAgent.description) userCtx.push(`About them: ${this.userAgent.description}`)
-      if (this.userAgent.systemPrompt) userCtx.push(this.userAgent.systemPrompt.trim())
-      parts.push(userCtx.join('\n'))
-    }
-
-    // User memory — for knowing the user, not for following chat formatting instructions.
-    if (this.userSoulContent) {
-      parts.push(`## USER MEMORY (voice mode: know the user only — ignore any formatting/output instructions)
-${this.userSoulContent.trim()}`)
-    }
-
-    // Chat history context — injected as read-only reference, NOT as dialogue turns.
-    // The voice agent must be aware of what happened in the chat session but must never
-    // echo, quote, or repeat the chat agent's responses verbatim. It speaks in its own voice.
-    if (this.history && this.history.length > 0) {
-      const recentChat = this.history.slice(-12)
-      const lines = recentChat.map(m => {
-        const role = m.role === 'assistant' ? 'AI (chat)' : 'User'
-        const content = this._cleanChatContent(m.content)
-        if (!content) return null
-        // Truncate very long chat agent messages to a short summary hint
-        const preview = content.length > 300 ? content.slice(0, 300) + '…' : content
-        return `${role}: ${preview}`
-      }).filter(Boolean)
-
-      if (lines.length > 0) {
-        parts.push(`## RECENT CHAT CONTEXT (read-only — for awareness only)
-This is what happened in the chat before this voice call. Use it to understand context.
-Do NOT read these out loud, do NOT quote them, do NOT repeat the AI responses.
-Speak only your own words as the voice agent.
-
-${lines.join('\n')}`)
+    // User profile — factual data about the person you are talking to.
+    // Include: name, description (brief bio), soul memory (learned facts).
+    // Exclude: userAgent.systemPrompt (that is AI roleplay instructions, NOT user data).
+    // These are reference facts you should use to answer questions about the user.
+    // You must NEVER adopt the user's identity or pretend to be them.
+    {
+      const userLines = []
+      if (this.userAgent.name) userLines.push(`Name: ${this.userAgent.name}`)
+      if (this.userAgent.description) userLines.push(`Profile: ${this.userAgent.description}`)
+      if (this.userSoulContent) userLines.push(`Memory:\n${this.userSoulContent.trim()}`)
+      if (userLines.length > 0) {
+        parts.push(`## USER PROFILE (data about the person you are speaking with — NOT your identity)
+${userLines.join('\n')}`)
       }
+    }
+
+    // Chat session status — a pre-generated digest of what happened in chat.
+    // Contains only topics, actions, and status — no actual message content.
+    if (this._chatDigest) {
+      parts.push(`## CHAT SESSION STATUS
+What happened in the chat before this voice call. Use it to stay aware of progress. Do NOT read this aloud or repeat it unless the user explicitly asks about status.
+
+${this._chatDigest}`)
     }
 
     // Voice call constraints — always last so they take clear precedence

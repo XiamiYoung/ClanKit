@@ -164,8 +164,7 @@ class ToolRegistry {
     }
 
     logger.agent('ToolRegistry: execute', {
-      tool: toolName,
-      input: JSON.stringify(toolInput).slice(0, 200)
+      tool: toolName
     })
 
     try {

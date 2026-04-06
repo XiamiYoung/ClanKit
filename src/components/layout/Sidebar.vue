@@ -54,7 +54,15 @@
             <span v-if="!isCollapsed" style="font-size:var(--fs-secondary);font-weight:500;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t('nav.chats') }}</span>
           </RouterLink>
         </div>
-        <NavItem to="/notes" :icon="IconNotes" :label="t('nav.aiDoc')"   :isCollapsed="isCollapsed" />
+        <div ref="notesHighlightRef">
+          <NavItem to="/notes" :icon="IconNotes" :label="t('nav.aiDoc')" :isCollapsed="isCollapsed" :highlight="obsidianStore.highlightNav" @click="obsidianStore.highlightNav = false" />
+        </div>
+        <Teleport to="body">
+          <div v-if="obsidianStore.highlightNav && !isCollapsed" class="nav-tour-tip-float" :style="notesHighlightTipPos">
+            <span class="nav-tour-tip-arrow">&#8592;</span>
+            <span>{{ t('nav.tourHint') }}</span>
+          </div>
+        </Teleport>
         <NavItem v-if="!configStore.config.demoMode" to="/news"  :icon="IconNews"  :label="t('news.title')"   :isCollapsed="isCollapsed" />
       </div>
 
@@ -202,11 +210,8 @@
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
           </button>
-          <button class="help-privacy-btn" title="Demo" @click="showDemoModal = true; showHelpPopover = false">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 3h6v2H9zM12 5v5"/><path d="M5.5 21h13a1 1 0 0 0 .87-1.5L14 10H10L4.63 19.5A1 1 0 0 0 5.5 21z"/>
-            </svg>
-          </button>
+          <!-- Demo button hidden — demo mode defaults to false -->
+
         </div>
         <div class="help-popover-body">
           <div class="help-row"><span class="help-label">{{ t('help.version') }}</span><span class="help-value">{{ appVersion }}</span></div>
@@ -225,6 +230,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useVoiceStore } from '../../stores/voice'
 import { useFocusModeStore } from '../../stores/focusMode'
 import { useConfigStore } from '../../stores/config'
+import { useObsidianStore } from '../../stores/obsidian'
 import { useI18n } from '../../i18n/useI18n'
 import PrivacyModal from '../common/PrivacyModal.vue'
 
@@ -239,6 +245,7 @@ const router = useRouter()
 const voiceStore = useVoiceStore()
 const focusModeStore = useFocusModeStore()
 const configStore = useConfigStore()
+const obsidianStore = useObsidianStore()
 const { t } = useI18n()
 
 function toggleFocusMode() {
@@ -291,6 +298,29 @@ const showDemoModal = ref(false)
 const showHelpPopover = ref(false)
 const helpBtnRef = ref(null)
 const helpPopoverStyle = ref({})
+
+// ── Notes highlight tip ──
+const notesHighlightRef = ref(null)
+const notesNavRect = ref(null)
+const notesHighlightTipPos = computed(() => {
+  if (!notesNavRect.value) return { display: 'none' }
+  return {
+    top: Math.round(notesNavRect.value.top + notesNavRect.value.height / 2) + 'px',
+    left: Math.round(notesNavRect.value.right + 10) + 'px',
+  }
+})
+
+watch(() => obsidianStore.highlightNav, (val) => {
+  if (val) {
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        if (notesHighlightRef.value) {
+          notesNavRect.value = notesHighlightRef.value.getBoundingClientRect()
+        }
+      })
+    })
+  }
+}, { immediate: true })
 
 const appVersion = window.electronAPI?.getAppVersion?.() || '—'
 const platformInfo = window.electronAPI?.getPlatformInfo?.() || { platform: '—' }
@@ -924,7 +954,7 @@ defineExpose({ toggleCollapse, isCollapsed })
 
 // ── NavItem Component ────────────────────────────────────────────────────────
 const NavItem = defineComponent({
-  props: { to: String, label: String, icon: Object, isCollapsed: { type: Boolean, default: false }, class: String },
+  props: { to: String, label: String, icon: Object, isCollapsed: { type: Boolean, default: false }, class: String, highlight: { type: Boolean, default: false } },
   setup(props) {
     return () => {
       const isActive = route.path === props.to || route.path.startsWith(props.to + '/')
@@ -933,6 +963,7 @@ const NavItem = defineComponent({
         class: [
           'nav-item',
           isActive ? 'nav-item-active' : 'nav-item-inactive',
+          props.highlight ? 'nav-item-highlight' : '',
           props.class
         ],
         style: props.isCollapsed ? 'justify-content:center;' : '',
@@ -1007,6 +1038,35 @@ const NavItem = defineComponent({
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.nav-item-highlight {
+  position: relative;
+}
+
+.nav-item-highlight::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0.375rem;
+  transform: translateY(-50%);
+  width: 0.375rem;
+  height: 0.375rem;
+  background: linear-gradient(135deg, #5C4033 0%, #8B6F5E 100%);
+  border-radius: 50%;
+  animation: nav-dot-blink 1s ease-in-out infinite;
+  box-shadow: 0 0 0.5rem rgba(92, 64, 51, 0.4);
+}
+
+@keyframes nav-dot-blink {
+  0%, 100% {
+    opacity: 0.4;
+    transform: translateY(-50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.4);
+  }
 }
 
 .nav-item-inactive {
@@ -1585,6 +1645,48 @@ const NavItem = defineComponent({
   border-radius: 0.375rem;
   box-shadow: 0 4px 12px rgba(0,0,0,0.25);
   pointer-events: none;
+}
+
+/* Tour highlight tip — fixed, positioned to the right of the nav item */
+.nav-tour-tip-float {
+  position: fixed;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: linear-gradient(135deg, #5C4033 0%, #8B6F5E 100%);
+  color: #FFF8F0;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.625rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(92, 64, 51, 0.4);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 99999;
+  animation: nav-float-shake 0.7s ease-in-out infinite;
+}
+
+.nav-tour-tip-arrow {
+  font-size: 1rem;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+@keyframes nav-float-shake {
+  0%, 100% {
+    transform: translateY(-50%) translateX(0);
+    opacity: 0.9;
+  }
+  30% {
+    transform: translateY(-50%) translateX(-0.3rem);
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(-50%) translateX(0.15rem);
+    opacity: 1;
+  }
 }
 
 /* Help popover — teleported to body */

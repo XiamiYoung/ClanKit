@@ -11,15 +11,15 @@
           @mousedown.prevent="startNavResize"
         ></div>
         <main class="flex-1 min-w-0 overflow-hidden flex flex-col">
-          <!-- Setup banner: shown when no provider is configured -->
-          <div v-if="configLoaded && !configStore.isConfigured && !bannerDismissed" class="setup-banner">
+          <!-- Setup banner: shown when wizard was skipped but not completed -->
+          <div v-if="showSetupBanner" class="setup-banner">
             <svg class="setup-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
               <line x1="12" y1="9" x2="12" y2="13"/>
               <line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
             <span class="setup-banner-text">{{ t('config.noProviderConfigured') }}</span>
-            <button class="setup-banner-btn" @click="router.push('/config')">{{ t('config.configureNow') }}</button>
+            <button class="setup-banner-btn" @click="reopenWizard">{{ t('config.configureNow') }}</button>
             <button class="setup-banner-dismiss" @click="bannerDismissed = true" title="Dismiss">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -99,7 +99,9 @@ const bannerDismissed = ref(false)
 function getDefaultNavWidth() {
   if (window.innerWidth >= 1920) return 200
   if (window.innerWidth >= 1440) return 180
-  return 172
+  if (window.innerWidth >= 1024) return 172
+  if (window.innerWidth >= 768) return 160
+  return 144
 }
 const navSidebarWidth = ref(getDefaultNavWidth())
 
@@ -132,8 +134,18 @@ function startNavResize(e) {
 }
 
 const showSetupWizard = computed(() => {
-  return configLoaded.value && !configStore.isConfigured && !configStore.config.setupDismissed
+  return configLoaded.value && !configStore.config.onboardingCompleted && !configStore.config.setupDismissed
 })
+
+const showSetupBanner = computed(() => {
+  return configLoaded.value && configStore.config.setupDismissed && !configStore.config.onboardingCompleted && !bannerDismissed.value
+})
+
+async function reopenWizard() {
+  // Reset setupDismissed + setupWizardStep to restart wizard from step 1
+  await configStore.saveConfig({ setupDismissed: false, setupWizardStep: 0 })
+  bannerDismissed.value = false
+}
 
 // Handle quick-send from minibar — runs here so it works even when ChatsView is unmounted
 watch(() => chatsStore.pendingMinibarSend, async (pending) => {
@@ -156,50 +168,11 @@ function handleToggleMute() {
 }
 
 async function handleWizardDismiss() {
-  await configStore.saveConfig({ setupDismissed: true, onboardingCompleted: true })
+  await configStore.saveConfig({ setupDismissed: true })
 }
 
 async function handleSetupComplete() {
   await configStore.loadConfig()
-}
-
-// Resume onboarding at the right step based on what's incomplete
-function resumeOnboarding() {
-  const cfg = configStore.config
-  if (!cfg.setupDismissed || cfg.onboardingCompleted) return
-
-  if (!configStore.isConfigured) {
-    router.push({ path: '/config', query: { onboarding: '1', tab: 'models' } })
-    return
-  }
-
-  const um = configStore.config.utilityModel
-  if (!um?.provider || !um?.model) {
-    router.push({ path: '/config', query: { onboarding: '1', tab: 'models' } })
-    return
-  }
-
-  const hasUserAgent = agentsStore.userAgents.some(a => !a.isBuiltin)
-  if (!hasUserAgent) {
-    router.push({ path: '/agents', query: { onboarding: '1' } })
-    return
-  }
-
-  const hasSystemAgent = agentsStore.systemAgents.some(a => !a.isBuiltin)
-  if (!hasSystemAgent) {
-    router.push({ path: '/agents', query: { onboarding: '1', phase: 'system' } })
-    return
-  }
-
-  // Check if user has created at least one chat
-  const hasChats = chatsStore.chats.length > 0
-  if (!hasChats) {
-    router.push({ path: '/chats', query: { onboarding: '1' } })
-    return
-  }
-
-  // All steps complete — mark onboarding done
-  configStore.saveConfig({ onboardingCompleted: true })
 }
 
 onMounted(async () => {
@@ -226,10 +199,6 @@ onMounted(async () => {
     knowledgeStore.loadConfig()
   ])
 
-  // Resume onboarding if incomplete (after all stores loaded so we can check agents)
-  if (!showSetupWizard.value) {
-    resumeOnboarding()
-  }
 })
 </script>
 

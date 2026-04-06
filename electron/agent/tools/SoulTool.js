@@ -333,7 +333,7 @@ ${content}`
     const newContent = serializeSoul(headerLines, sections)
     fs.writeFileSync(filePath, newContent, 'utf8')
 
-    logger.agent('SoulUpdateTool', { agent_id, agent_type, section, action, entry: entry.slice(0, 100) })
+    logger.agent('SoulUpdateTool', { agent_type, section, action })
 
     const fileSize = Buffer.byteLength(newContent, 'utf8')
 

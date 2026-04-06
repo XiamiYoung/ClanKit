@@ -2,20 +2,10 @@
 'use strict'
 const fs      = require('fs')
 const path    = require('path')
-const os      = require('os')
 const { v4: uuidv4 } = require('uuid')
 const { AgentLoop } = require('../agent/agentLoop')
 
-// Lazy: DATA_DIR is set by main.js via process.env after ensureDataDir()
-const { defaultDataPath } = require('../defaultDataPath')
-function getDataDir() {
-  const d = process.env.CLANKAI_DATA_PATH
-  return (d && d !== 'null') ? d : defaultDataPath()
-}
-function CHATS_DIR()   { return path.join(getDataDir(), 'chats') }
-function CHATS_INDEX() { return path.join(CHATS_DIR(), 'index.json') }
-function CONFIG_FILE() { return path.join(getDataDir(), 'config.json') }
-function AGENTS_FILE() { return path.join(getDataDir(), 'agents.json') }
+const ds = require('../lib/dataStore')
 
 function readJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return fallback }
@@ -29,7 +19,7 @@ function writeAtomic(filePath, data) {
 }
 
 function chatFile(chatId) {
-  return path.join(CHATS_DIR(), `${chatId}.json`)
+  return path.join(ds.paths().CHATS_DIR, `${chatId}.json`)
 }
 
 function loadMessages(chatId) {
@@ -46,7 +36,7 @@ function appendMessage(chatId, msg) {
   writeAtomic(chatFile(chatId), chat)
 
   try {
-    const index = readJSON(CHATS_INDEX(), [])
+    const index = readJSON(ds.paths().CHATS_INDEX_FILE, [])
     function touch(nodes) {
       for (const n of nodes) {
         if (n.id === chatId) { n.updatedAt = chat.updatedAt; return true }
@@ -55,7 +45,7 @@ function appendMessage(chatId, msg) {
       return false
     }
     touch(index)
-    writeAtomic(CHATS_INDEX(), index)
+    writeAtomic(ds.paths().CHATS_INDEX_FILE, index)
   } catch { /* non-fatal */ }
 }
 
@@ -77,7 +67,7 @@ function removeMessage(chatId, msgId) {
 }
 
 function readAgents() {
-  const data = readJSON(AGENTS_FILE(), [])
+  const data = readJSON(ds.paths().AGENTS_FILE, [])
   return Array.isArray(data) ? data : (data.agents || [])
 }
 
@@ -179,7 +169,7 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
   appendMessage(chatId, userMsg)
   notifyRenderer('im:chat-updated', { chatId })
 
-  const config   = readJSON(CONFIG_FILE(), {})
+  const config   = readJSON(ds.paths().CONFIG_FILE, {})
   const chat     = readJSON(chatFile(chatId), { id: chatId, messages: [] })
   const agents = readAgents()
 
@@ -219,8 +209,8 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
 
   const baseConfig = {
     ...config,
-    soulsDir:            path.join(getDataDir(), 'souls'),
-    dataPath:            getDataDir(),
+    soulsDir:            ds.paths().SOULS_DIR,
+    dataPath:            ds.paths().DATA_DIR,
     chatPermissionMode:  'all_permissions',
     chatAllowList:       [],
     chatDangerOverrides: [],
@@ -342,8 +332,8 @@ async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, noti
   const provider = config.defaultProvider || 'anthropic'
   const loopConfig = {
     ...config,
-    soulsDir:            path.join(getDataDir(), 'souls'),
-    dataPath:            getDataDir(),
+    soulsDir:            ds.paths().SOULS_DIR,
+    dataPath:            ds.paths().DATA_DIR,
     chatPermissionMode:  'all_permissions',
     chatAllowList:       [],
     chatDangerOverrides: [],

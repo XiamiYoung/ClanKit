@@ -190,7 +190,7 @@ CORE TOOLS (always available):
 
   // ── ClankAI Data Directory ──
   // dataPath is injected by main.js (DATA_DIR) — single source of truth
-  const dataPath = config.dataPath || require('../defaultDataPath').defaultDataPath()
+  const dataPath = config.dataPath || require('../lib/dataStore').paths().DATA_DIR
   // DoCPath = AI Doc folder (readable documents: md, docx, pdf, pptx, txt, etc.)
   // artifactPath = non-document output (exports, temp files, data, code snippets)
   const aidocPath    = config.DoCPath || path.join(dataPath, 'clank_aidoc')

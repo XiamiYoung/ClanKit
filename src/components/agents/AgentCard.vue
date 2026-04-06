@@ -25,6 +25,22 @@
       <!-- Description -->
       <p class="agent-card-desc">{{ agent.description || t('agents.noDescription') }}</p>
 
+      <!-- Capabilities row: Skills, Tools, MCP, RAG counts — always rendered for system agents to ensure consistent card height -->
+      <div v-if="agent.type !== 'user'" class="agent-capabilities-row">
+        <span v-if="agent.requiredSkillIds?.length > 0" class="capability-badge skills-badge">
+          ⚡ {{ agent.requiredSkillIds.length }} {{ t('agents.skills') }}
+        </span>
+        <span v-if="agent.requiredToolIds?.length > 0" class="capability-badge tools-badge">
+          🔧 {{ agent.requiredToolIds.length }} {{ t('agents.tools') }}
+        </span>
+        <span v-if="agent.requiredMcpServerIds?.length > 0" class="capability-badge mcp-badge">
+          🌐 {{ agent.requiredMcpServerIds.length }} {{ t('agents.mcp') }}
+        </span>
+        <span v-if="agent.requiredKnowledgeBaseIds?.length > 0" class="capability-badge rag-badge">
+          📚 {{ agent.requiredKnowledgeBaseIds.length }} {{ t('agents.knowledge') }}
+        </span>
+      </div>
+
       <!-- Provider + Model metadata — only shown for system agents -->
       <div v-if="agent.type !== 'user'" class="pc-model-meta">
         <template v-if="agent.providerId || agent.modelId">
@@ -174,6 +190,8 @@ const isNoProviderConfigured = computed(() => {
   }
   return true
 })
+
+
 </script>
 
 <style scoped>
@@ -227,8 +245,43 @@ const isNoProviderConfigured = computed(() => {
 .agent-card-desc {
   font-family: 'Inter', sans-serif; font-size: var(--fs-secondary); color: #6B7280;
   line-height: 1.55; margin: 0 0 0.625rem;
-  max-height: calc(var(--fs-secondary) * 1.55 * 2); /* 2 lines — matches default agent */
+  height: calc(var(--fs-secondary) * 1.55 * 2); /* fixed 2-line height for consistent card height */
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.agent-capabilities-row {
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 1.875rem;
+  margin-bottom: 0.5rem;
+}
+.capability-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 0.375rem;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.skills-badge {
+  background: #FEF3C7;
+  color: #92400E;
+}
+.tools-badge {
+  background: #D1FAE5;
+  color: #065F46;
+}
+.mcp-badge {
+  background: #E0E7FF;
+  color: #312E81;
+}
+.rag-badge {
+  background: #FCE7F3;
+  color: #831843;
 }
 .pc-model-meta {
   display: flex;
@@ -272,8 +325,9 @@ const isNoProviderConfigured = computed(() => {
 .agent-card-footer {
   border-top: 1px solid rgba(229, 229, 234, 0.5); padding-top: 0.75rem; margin-top: auto;
   display: flex; align-items: center; justify-content: space-between;
+  min-height: 2.875rem;
 }
-.agent-card-badges { display: flex; align-items: center; gap: 0.375rem; }
+.agent-card-badges { display: flex; align-items: center; gap: 0.375rem; flex-wrap: nowrap; overflow: hidden; }
 .agent-card-default-badge {
   font-family: 'Inter', sans-serif; font-size: 0.625rem; font-weight: 600;
   padding: 0.125rem 0.5rem; border-radius: 9999px;

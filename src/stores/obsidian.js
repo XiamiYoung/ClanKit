@@ -12,6 +12,7 @@ export const useObsidianStore = defineStore('obsidian', () => {
   const expandedFolders = ref({})  // { [path]: true }
   const fileLoading = ref(false)
   const fileError = ref('')        // non-empty string when open fails
+  const highlightNav = ref(false)  // one-time pulse on sidebar AI Docs item
 
   async function loadConfig() {
     const config = await window.electronAPI.obsidian.getConfig()
@@ -59,6 +60,10 @@ export const useObsidianStore = defineStore('obsidian', () => {
   async function setVault(folder) {
     vaultPath.value = folder
     await window.electronAPI.obsidian.saveConfig({ vaultPath: folder, lastOpenedDoc: null })
+    // Sync DoCPath to configStore so ConfigView picks it up
+    const { useConfigStore } = await import('./config')
+    const configStore = useConfigStore()
+    configStore.config.DoCPath = folder
     activeFile.value = null
     expandedFolders.value = {}
     await loadTree()
@@ -228,7 +233,7 @@ export const useObsidianStore = defineStore('obsidian', () => {
   }
 
   return {
-    vaultPath, fileTree, activeFile, expandedFolders, fileLoading, fileError,
+    vaultPath, fileTree, activeFile, expandedFolders, fileLoading, fileError, highlightNav,
     loadConfig, pickVault, setVaultManually, loadTree, openFile, openBinaryFile, saveFile, saveBinaryFile, updateContent,
     createFile, createDrawio, createDocx, createXlsx, createFolder, deleteItem, renameItem, toggleFolder
   }

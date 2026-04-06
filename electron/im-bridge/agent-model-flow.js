@@ -3,15 +3,7 @@
 'use strict'
 const fs   = require('fs')
 const path = require('path')
-const os   = require('os')
-
-// Lazy: DATA_DIR is set by main.js via process.env after ensureDataDir()
-const { defaultDataPath } = require('../defaultDataPath')
-function getDataDir() {
-  const d = process.env.CLANKAI_DATA_PATH
-  return (d && d !== 'null') ? d : defaultDataPath()
-}
-function AGENTS_FILE() { return path.join(getDataDir(), 'agents.json') }
+const ds   = require('../lib/dataStore')
 
 // In-memory flow state per session key (`${platform}:${channelId}`)
 const pendingFlows = new Map()
@@ -39,7 +31,7 @@ const DEFAULT_MODELS = {
 
 function readAgents() {
   try {
-    const data = JSON.parse(fs.readFileSync(AGENTS_FILE(), 'utf8'))
+    const data = JSON.parse(fs.readFileSync(ds.paths().AGENTS_FILE, 'utf8'))
     return Array.isArray(data) ? data : (data.agents || [])
   } catch { return [] }
 }
@@ -163,7 +155,7 @@ function handleCallback(key, cbQueryId, data, sendButtons, answerCallback) {
 
     agent.providerId = flow.selectedProvider
     agent.modelId    = model
-    writeAtomic(AGENTS_FILE(), agents)
+    writeAtomic(ds.paths().AGENTS_FILE, agents)
     pendingFlows.delete(key)
 
     sendButtons(

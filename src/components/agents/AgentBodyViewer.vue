@@ -356,11 +356,11 @@
                 <div v-else-if="activePanel === 'tools'" class="bv-detail-body">
                   <!-- Readonly: only selected items -->
                   <template v-if="readOnly">
-                    <div v-if="draftRequiredToolIds.length === 0" class="bv-detail-empty">{{ locale.value === 'zh' ? '未分配工具' : 'No tools assigned' }}</div>
+                    <div v-if="draftRequiredToolIds.length === 0" class="bv-detail-empty">{{ t('agents.notAssigned') }}</div>
                     <div v-else class="bv-ro-item-list">
                       <div v-for="id in draftRequiredToolIds" :key="id" class="bv-ro-item">
-                        <span class="bv-ro-item-name">{{ availableTools.find(t => t.id === id)?.name || id }}</span>
-                        <span class="bv-ro-item-desc">{{ availableTools.find(t => t.id === id)?.description || '' }}</span>
+                        <span class="bv-ro-item-name">{{ getToolLocalizedName(id) }}</span>
+                        <span class="bv-ro-item-desc">{{ getToolLocalizedDesc(id) }}</span>
                       </div>
                     </div>
                   </template>
@@ -382,8 +382,8 @@
                         <label v-for="tool in filteredTools" :key="tool.id" class="bv-cap-item">
                           <input type="checkbox" :value="tool.id" v-model="draftRequiredToolIds" />
                           <div class="bv-cap-text">
-                            <span class="bv-cap-name">{{ tool.name }}</span>
-                            <span v-if="tool.description || tool.category" class="bv-cap-desc">{{ tool.description || tool.category }}</span>
+                            <span class="bv-cap-name">{{ getToolLocalizedName(tool.id) }}</span>
+                            <span v-if="getToolLocalizedDesc(tool.id) || tool.category" class="bv-cap-desc">{{ getToolLocalizedDesc(tool.id) || tool.category }}</span>
                           </div>
                         </label>
                       </div>
@@ -394,7 +394,7 @@
                 <!-- Skills -->
                 <div v-else-if="activePanel === 'skills'" class="bv-detail-body">
                   <template v-if="readOnly">
-                    <div v-if="draftRequiredSkillIds.length === 0" class="bv-detail-empty">{{ locale.value === 'zh' ? '未分配技能' : 'No skills assigned' }}</div>
+                    <div v-if="draftRequiredSkillIds.length === 0" class="bv-detail-empty">{{ t('agents.notAssigned') }}</div>
                     <div v-else class="bv-ro-item-list">
                       <div v-for="id in draftRequiredSkillIds" :key="id" class="bv-ro-item">
                         <span class="bv-ro-item-name">{{ availableSkills.find(s => s.id === id)?.name || id }}</span>
@@ -431,7 +431,7 @@
                 <!-- Knowledge -->
                 <div v-else-if="activePanel === 'knowledge'" class="bv-detail-body">
                   <template v-if="readOnly">
-                    <div v-if="draftRequiredKnowledgeBaseIds.length === 0" class="bv-detail-empty">{{ locale.value === 'zh' ? '未分配知识库' : 'No knowledge bases assigned' }}</div>
+                    <div v-if="draftRequiredKnowledgeBaseIds.length === 0" class="bv-detail-empty">{{ t('agents.notAssigned') }}</div>
                     <div v-else class="bv-ro-item-list">
                       <div v-for="id in draftRequiredKnowledgeBaseIds" :key="id" class="bv-ro-item">
                         <span class="bv-ro-item-name">{{ id }}</span>
@@ -472,7 +472,7 @@
                 <!-- MCP -->
                 <div v-else-if="activePanel === 'mcp'" class="bv-detail-body">
                   <template v-if="readOnly">
-                    <div v-if="draftRequiredMcpServerIds.length === 0" class="bv-detail-empty">{{ locale.value === 'zh' ? '未分配 MCP 服务器' : 'No MCP servers assigned' }}</div>
+                    <div v-if="draftRequiredMcpServerIds.length === 0" class="bv-detail-empty">{{ t('agents.notAssigned') }}</div>
                     <div v-else class="bv-ro-item-list">
                       <div v-for="id in draftRequiredMcpServerIds" :key="id" class="bv-ro-item">
                         <span class="bv-ro-item-name">{{ availableMcpServers.find(s => s.id === id)?.name || id }}</span>
@@ -574,7 +574,7 @@
                           class="bv-av-combo-option"
                           :class="{ active: avatarStyleKey === style.key }"
                           @mousedown.prevent="switchAvatarStyle(style.key); avatarComboOpen = false; avatarComboFilter = ''"
-                        >{{ style.label }}</button>
+                        ><img :src="getAvatarDataUri(`${style.key}:preview_sample`)" style="width:1.25rem;height:1.25rem;border-radius:50%;flex-shrink:0;" /> {{ t(style.i18nKey) }}</button>
                         <div v-if="filteredAvatarStyles.length === 0" class="bv-av-combo-empty">No matches</div>
                       </div>
                     </div>
@@ -656,7 +656,7 @@
                   <div class="bv-summary-content">
                     <span class="bv-summary-label">{{ t('agents.tools') }}</span>
                     <span class="bv-summary-value" :class="{ muted: draftRequiredToolIds.length === 0 }">
-                      {{ draftRequiredToolIds.length === 0 ? (locale.value === 'zh' ? '未分配' : 'None') : (locale.value === 'zh' ? draftRequiredToolIds.length + ' 项' : draftRequiredToolIds.length + ' assigned') }}
+                      {{ draftRequiredToolIds.length === 0 ? t('agents.notAssigned') : (locale.value === 'zh' ? draftRequiredToolIds.length + t('agents.assigned') : draftRequiredToolIds.length + ' ' + t('agents.assigned')) }}
                     </span>
                   </div>
                   <svg class="bv-summary-chevron" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
@@ -668,7 +668,7 @@
                   <div class="bv-summary-content">
                     <span class="bv-summary-label">{{ t('agents.skills') }}</span>
                     <span class="bv-summary-value" :class="{ muted: draftRequiredSkillIds.length === 0 }">
-                      {{ draftRequiredSkillIds.length === 0 ? (locale.value === 'zh' ? '未分配' : 'None') : (locale.value === 'zh' ? draftRequiredSkillIds.length + ' 项' : draftRequiredSkillIds.length + ' assigned') }}
+                      {{ draftRequiredSkillIds.length === 0 ? t('agents.notAssigned') : (locale.value === 'zh' ? draftRequiredSkillIds.length + t('agents.assigned') : draftRequiredSkillIds.length + ' ' + t('agents.assigned')) }}
                     </span>
                   </div>
                   <svg class="bv-summary-chevron" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
@@ -680,7 +680,7 @@
                   <div class="bv-summary-content">
                     <span class="bv-summary-label">{{ t('agents.knowledge') }}</span>
                     <span class="bv-summary-value" :class="{ muted: draftRequiredKnowledgeBaseIds.length === 0 }">
-                      {{ draftRequiredKnowledgeBaseIds.length === 0 ? (locale.value === 'zh' ? '未分配' : 'None') : (locale.value === 'zh' ? draftRequiredKnowledgeBaseIds.length + ' 项' : draftRequiredKnowledgeBaseIds.length + ' assigned') }}{{ disabledAssignedKnowledge.length > 0 ? (locale.value === 'zh' ? `（${disabledAssignedKnowledge.length} 已禁用）` : ` (${disabledAssignedKnowledge.length} disabled)`) : '' }}
+                      {{ draftRequiredKnowledgeBaseIds.length === 0 ? t('agents.notAssigned') : (locale.value === 'zh' ? draftRequiredKnowledgeBaseIds.length + t('agents.assigned') : draftRequiredKnowledgeBaseIds.length + ' ' + t('agents.assigned')) }}{{ disabledAssignedKnowledge.length > 0 ? (locale.value === 'zh' ? `（${disabledAssignedKnowledge.length} ${t('agents.disabled')}）` : ` (${disabledAssignedKnowledge.length} ${t('agents.disabled')})`) : '' }}
                     </span>
                   </div>
                   <svg class="bv-summary-chevron" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
@@ -692,7 +692,7 @@
                   <div class="bv-summary-content">
                     <span class="bv-summary-label">{{ t('agents.mcp') }}</span>
                     <span class="bv-summary-value" :class="{ muted: draftRequiredMcpServerIds.length === 0 }">
-                      {{ draftRequiredMcpServerIds.length === 0 ? (locale.value === 'zh' ? '未分配' : 'None') : (locale.value === 'zh' ? draftRequiredMcpServerIds.length + ' 项' : draftRequiredMcpServerIds.length + ' assigned') }}
+                      {{ draftRequiredMcpServerIds.length === 0 ? t('agents.notAssigned') : (locale.value === 'zh' ? draftRequiredMcpServerIds.length + t('agents.assigned') : draftRequiredMcpServerIds.length + ' ' + t('agents.assigned')) }}
                     </span>
                   </div>
                   <svg class="bv-summary-chevron" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
@@ -901,7 +901,10 @@ const fallbackInitial  = computed(() => (draftName.value || '?').charAt(0).toUpp
 const avatarStyles     = STYLES
 const avatarComboOpen  = ref(false)
 const avatarComboFilter = ref('')
-const currentAvatarStyleLabel = computed(() => STYLES.find(s => s.key === avatarStyleKey.value)?.label || 'Select style')
+const currentAvatarStyleLabel = computed(() => {
+  const s = STYLES.find(s => s.key === avatarStyleKey.value)
+  return s ? t(s.i18nKey) : t(STYLES[0].i18nKey)
+})
 const avatarComboInputRef = ref(null)
 function delayCloseAvatarCombo() { setTimeout(() => { avatarComboOpen.value = false }, 150) }
 function toggleAvatarCombo() {
@@ -912,10 +915,10 @@ function toggleAvatarCombo() {
 const filteredAvatarStyles = computed(() => {
   const q = avatarComboFilter.value.toLowerCase()
   if (!q) return STYLES
-  return STYLES.filter(s => s.label.toLowerCase().includes(q))
+  return STYLES.filter(s => t(s.i18nKey).toLowerCase().includes(q) || s.key.toLowerCase().includes(q))
 })
 const avatarBatchCache = new Map()
-const avatarStyleKey   = ref('avataaars')
+const avatarStyleKey   = ref(STYLES[0].key)
 const avatarPage       = ref(0)
 const AVATAR_PAGE_SIZE = 24
 
@@ -1232,6 +1235,30 @@ const availableKnowledgeBases = computed(() => {
     .map(kb => ({ id: kb.id, name: kb.name, description: kb.description }))
 })
 
+// Helper: Get localized name for tool (use i18n if available, fallback to name)
+function getToolLocalizedName(toolId) {
+  const tool = availableTools.value.find(t => t.id === toolId)
+  if (!tool) return toolId
+  if (tool.i18nKey) {
+    try {
+      return t(tool.i18nKey + '.name')
+    } catch {}
+  }
+  return tool.name
+}
+
+// Helper: Get localized description for tool
+function getToolLocalizedDesc(toolId) {
+  const tool = availableTools.value.find(t => t.id === toolId)
+  if (!tool) return ''
+  if (tool.i18nKey) {
+    try {
+      return t(tool.i18nKey + '.description')
+    } catch {}
+  }
+  return tool.description || ''
+}
+
 // Assigned KBs that are currently disabled — shown as read-only badges
 const disabledAssignedKnowledge = computed(() => {
   const configs = knowledgeStore.kbConfigs || {}
@@ -1262,6 +1289,28 @@ function detectLanguage() {
   return detectAgentLanguage(draftDescription.value, draftPrompt.value, configStore.config?.language || 'en')
 }
 
+const _avatarStyleKeys = STYLES.map(s => s.key)
+const _validVoiceIds = EDGE_VOICES.map(v => v.id)
+
+function _avatarVoiceInstruction() {
+  const voiceList = EDGE_VOICES.map(v => `${v.id} (${v.name}, ${v.gender}, ${v.locale})`).join('; ')
+  return `\n\nAlso:\n1. Choose an avatar style. RULE: if the persona is a HUMAN, you MUST use "agents" (realistic digital persona portraits). Only use other styles for non-human personas: "bottts" for robots/AI, "funEmoji" for playful characters, "pixelArt" for retro/gaming, "bigEars"/"bigSmile" for cute cartoon animals, "shapes"/"rings" for abstract entities. Add an "avatarStyle" field.\n2. Choose the best voice from: [${voiceList}]. Add a "voiceId" field.`
+}
+
+function _applyAiAvatarVoice(data) {
+  // Avatar: only set if user hasn't manually picked one
+  if (!draftAvatar.value) {
+    const aiStyle = data?.avatarStyle && _avatarStyleKeys.includes(data.avatarStyle) ? data.avatarStyle : STYLES[0].key
+    const seed = draftName.value?.trim() || `${Date.now()}`
+    draftAvatar.value = `${aiStyle}:${seed}`
+  }
+  // Voice: only set if still on default
+  const defaultVoice = getDefaultVoiceForLocale(configStore.config?.language || 'en')
+  if (data?.voiceId && _validVoiceIds.includes(data.voiceId) && draftVoiceId.value === defaultVoice) {
+    draftVoiceId.value = data.voiceId
+  }
+}
+
 async function surpriseMe() {
   if (aiWorking.value) return
   aiWorking.value = true
@@ -1270,17 +1319,16 @@ async function surpriseMe() {
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))
     const lang = detectLanguage()
-    const res = await window.electronAPI.enhancePrompt({
-      prompt: buildAgentGenerationPrompt({ agentType: props.agentType === 'system' ? 'system' : 'user', lang }),
-      config,
-    })
+    let prompt = buildAgentGenerationPrompt({ agentType: props.agentType === 'system' ? 'system' : 'user', lang })
+    prompt += _avatarVoiceInstruction()
+    const res = await window.electronAPI.enhancePrompt({ prompt, config })
     if (res.success && res.text) {
       const data = robustParseAgentJSON(res.text)
       if (!data) { aiWorking.value = false; return }
       if (data.name) draftName.value = data.name
       if (data.description) draftDescription.value = String(data.description)
       if (data.prompt)      draftPrompt.value = typeof data.prompt === 'string' ? data.prompt : JSON.stringify(data.prompt, null, 2)
-      if (!draftAvatar.value) draftAvatar.value = `a${Math.floor(Math.random() * 36) + 1}`
+      _applyAiAvatarVoice(data)
     } else {
       aiError.value = res.error || 'Generation failed. Check utility model config.'
     }
@@ -1302,15 +1350,14 @@ async function generateFromDescription() {
     const lang = detectLanguage()
     const existingName = draftName.value?.trim()
 
-    const res = await window.electronAPI.enhancePrompt({
-      prompt: buildAgentGenerationPrompt({
-        agentType: props.agentType === 'system' ? 'system' : 'user',
-        description: desc,
-        lang,
-        existingName,
-      }),
-      config,
+    let prompt = buildAgentGenerationPrompt({
+      agentType: props.agentType === 'system' ? 'system' : 'user',
+      description: desc,
+      lang,
+      existingName,
     })
+    prompt += _avatarVoiceInstruction()
+    const res = await window.electronAPI.enhancePrompt({ prompt, config })
     if (res.success && res.text) {
       const data = robustParseAgentJSON(res.text)
       if (!data) { aiWorking.value = false; return }
@@ -1319,7 +1366,7 @@ async function generateFromDescription() {
       }
       if (data.description) draftDescription.value = String(data.description)
       if (data.prompt)      draftPrompt.value = typeof data.prompt === 'string' ? data.prompt : JSON.stringify(data.prompt, null, 2)
-      if (!draftAvatar.value) draftAvatar.value = `a${Math.floor(Math.random() * 36) + 1}`
+      _applyAiAvatarVoice(data)
     } else {
       aiError.value = res.error || 'Generation failed. Check utility model config.'
     }
@@ -2051,7 +2098,7 @@ function saveAll() {
 
 .bv-cap-item input[type="checkbox"] {
   width: 0.875rem; height: 0.875rem; flex-shrink: 0;
-  cursor: pointer; accent-color: #007AFF;
+  cursor: pointer; accent-color: #4B5563;
   margin-top: 0.125rem;
 }
 
@@ -2351,7 +2398,9 @@ function saveAll() {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 .bv-av-combo-option {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   width: 100%;
   padding: 0.375rem 0.625rem;
   background: transparent;

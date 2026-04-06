@@ -57,12 +57,12 @@ async function sendInstallPing() {
 
   // Check if user disabled telemetry
   try {
-    const config = dataStore.readJSON('config.json') || {}
+    const config = dataStore.readJSON(dataStore.paths().CONFIG_FILE, {})
     if (config.telemetryOptOut) return
   } catch (_) { /* proceed if config can't be read */ }
 
   // Skip if already sent successfully
-  const markerPath = path.join(dataStore.paths().base, '.telemetry_sent')
+  const markerPath = path.join(dataStore.paths().SETTINGS_DIR, '.telemetry_sent')
   if (fs.existsSync(markerPath)) return
 
   const appVersion = app.getVersion()

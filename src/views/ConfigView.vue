@@ -101,11 +101,25 @@
             </div>
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
-                <input id="dataPath" type="text" :value="form.dataPath || defaultDataPath" readonly class="field font-mono" style="background:#f5f5f5;" />
+                <input id="dataPath" v-model="form.dataPath" type="text" :placeholder="defaultDataPath" class="field font-mono" />
+                <button class="open-folder-btn" @click="pickDataFolder" title="Select folder">
+                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+                  </svg>
+                </button>
               </div>
               <p class="hint">
                 {{ t('config.dataPathHint') }} <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultDataPath }}</code>
               </p>
+              <div v-if="dataPathChanged" style="display:flex; gap:0.5rem; align-items:center; margin-top:0.75rem;">
+                <AppButton size="compact" @click="showDataPathWarning = true" :disabled="savingGeneral" :loading="savingGeneral">
+                  {{ t('config.dataPathApplyRestart') }}
+                </AppButton>
+                <button class="text-btn" style="font-size:0.8rem; color:var(--text-muted); cursor:pointer;" @click="form.dataPath = originalDataPath">
+                  {{ t('config.dataPathResetDefault') }}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -122,7 +136,7 @@
             </div>
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
-                <input id="artifactPath" v-model="form.artifactPath" type="text" :placeholder="defaultArtifactPath" class="field font-mono" />
+                <input id="artifactPath" :value="form.artifactPath || defaultArtifactPath" @input="form.artifactPath = $event.target.value" type="text" class="field font-mono" />
                 <button class="open-folder-btn" @click="pickArtifactFolder" title="Select folder">
                   <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -533,7 +547,7 @@
             </div>
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
-                <input id="skillsPath" v-model="form.skillsPath" type="text" :placeholder="defaultSkillsPath" class="field font-mono" />
+                <input id="skillsPath" :value="form.skillsPath || defaultSkillsPath" @input="form.skillsPath = $event.target.value" type="text" class="field font-mono" />
                 <button class="open-folder-btn" @click="openInExplorer(form.skillsPath || defaultSkillsPath)" title="Open in file explorer">
                   <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -575,10 +589,16 @@
             </div>
             <div class="form-group">
               <div class="input-with-trailing-btn">
-                <input id="DoCPath" v-model="form.DoCPath" type="text" class="field font-mono" />
-                <button class="open-folder-btn" @click="openInExplorer(form.DoCPath || defaultAidocPath)" title="Open in file explorer">
+                <input id="DoCPath" :value="form.DoCPath || defaultAidocPath" @input="form.DoCPath = $event.target.value" type="text" class="field font-mono" />
+                <button class="open-folder-btn" @click="pickAidocFolder" title="Select folder">
                   <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+                  </svg>
+                </button>
+                <button class="open-folder-btn" @click="openInExplorer(form.DoCPath || defaultAidocPath)" title="Open in file explorer">
+                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
                   </svg>
                 </button>
               </div>
@@ -2167,6 +2187,74 @@
     </div>
   </Teleport>
 
+  <!-- Data Path Change Warning Modal -->
+  <Teleport to="body">
+    <div v-if="showDataPathWarning" class="modal-backdrop" style="z-index:9999;">
+      <div class="modal-content" style="max-width:540px; width:90vw;">
+        <div class="modal-header">
+          <h3 class="modal-title" style="color:#EF4444; display:flex; align-items:center; gap:0.5rem;">
+            <svg style="width:20px;height:20px;" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            {{ t('config.dataPathWarningTitle') }}
+          </h3>
+        </div>
+        <div class="modal-body" style="padding:1rem 1.5rem;">
+          <p style="margin-bottom:1rem; color:var(--text-secondary); line-height:1.6;">{{ t('config.dataPathWarningBody') }}</p>
+
+          <!-- From / To paths -->
+          <div style="background:var(--bg-elevated, #f5f5f5); border-radius:0.5rem; padding:1rem; margin-bottom:0.75rem;">
+            <div style="display:flex; align-items:baseline; gap:0.5rem; margin-bottom:0.5rem;">
+              <span style="font-size:0.75rem; font-weight:700; color:var(--text-muted); white-space:nowrap; min-width:2.5rem;">FROM</span>
+              <code class="font-mono" style="font-size:0.75rem; word-break:break-all; user-select:all; color:var(--text-primary);">{{ dataPathFromTo.from }}</code>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:center; padding:0.15rem 0;">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+            </div>
+            <div style="display:flex; align-items:baseline; gap:0.5rem;">
+              <span style="font-size:0.75rem; font-weight:700; color:var(--text-muted); white-space:nowrap; min-width:2.5rem;">TO</span>
+              <code class="font-mono" style="font-size:0.75rem; word-break:break-all; user-select:all; color:var(--text-primary);">{{ dataPathFromTo.to }}</code>
+            </div>
+          </div>
+
+          <!-- Derived paths that will also change (only shown if they depend on data dir) -->
+          <div v-if="derivedPathsAffected.length > 0" style="background:#FEF9C3; border:1px solid #FDE047; border-radius:0.5rem; padding:0.75rem 1rem; margin-bottom:0.75rem; font-size:0.8rem; color:#78350F; line-height:1.6;">
+            <div style="font-weight:700; margin-bottom:0.35rem;">{{ t('config.dataPathWarningDerivedTitle') }}</div>
+            <div style="display:flex; flex-direction:column; gap:0.2rem;">
+              <span v-for="p in derivedPathsAffected" :key="p.label">
+                📁 {{ p.label }}: <code class="font-mono" style="font-size:0.72rem; user-select:all;">{{ p.newPath }}</code>
+              </span>
+            </div>
+          </div>
+
+          <!-- Copy command -->
+          <div style="background:var(--bg-elevated, #f5f5f5); border-radius:0.5rem; padding:1rem; margin-bottom:1rem;">
+            <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem; font-weight:600;">{{ t('config.dataPathWarningCopyCmd') }}</p>
+            <div style="display:flex; align-items:flex-start; gap:0.5rem;">
+              <code class="font-mono" style="font-size:0.75rem; flex:1; word-break:break-all; white-space:pre-wrap; line-height:1.6; user-select:all;">{{ dataPathCopyCommand }}</code>
+              <button
+                style="flex-shrink:0; padding:4px 8px; border:1px solid var(--border-primary, #ddd); border-radius:4px; background:transparent; cursor:pointer; font-size:0.7rem; color:var(--text-muted);"
+                @click="copyDataPathCmd"
+                :title="t('common.copy', 'Copy')"
+              >
+                <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="display:flex; gap:0.75rem; justify-content:flex-end; padding:1rem 1.5rem;">
+          <AppButton size="compact" variant="ghost" @click="showDataPathWarning = false">{{ t('config.dataPathWarningCancel') }}</AppButton>
+          <AppButton size="compact" @click="applyDataPathAndRestart" :loading="savingGeneral" style="background:#EF4444; border-color:#EF4444;">
+            {{ t('config.dataPathWarningConfirm') }}
+          </AppButton>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
   <!-- Delete Confirmation Modal -->
   <ConfirmModal
     :visible="showDeleteConfirm"
@@ -2191,41 +2279,6 @@
     @close="showPreviewVoiceError = false"
   />
 
-  <!-- Onboarding: spotlight on Add Provider modal content -->
-  <OnboardingOverlay
-    v-if="configOnboardingPhase === 'addProvider' && showAddProviderModal"
-    :title="t('onboarding.addProviderTitle')"
-    :description="t('onboarding.addProviderDesc')"
-    target-selector=".modal-content"
-    :padding="16"
-    :current-step="1"
-    :total-steps="3"
-    @skip="skipConfigOnboarding"
-  />
-
-  <!-- Onboarding: spotlight on provider form with step checklist -->
-  <OnboardingOverlay
-    v-if="configOnboardingPhase === 'configureProvider'"
-    :title="t('onboarding.configureProviderTitle')"
-    :description="t('onboarding.configureProviderDesc')"
-    target-selector=".models-right-content"
-    :steps="providerConfigSteps"
-    :current-step="1"
-    :total-steps="3"
-    @skip="skipConfigOnboarding"
-  />
-
-  <!-- Onboarding: spotlight on utility model config (extra padding for dropdown) -->
-  <OnboardingOverlay
-    v-if="configOnboardingPhase === 'configureUtility'"
-    :title="t('onboarding.configureUtilityTitle')"
-    :description="t('onboarding.configureUtilityDesc')"
-    target-selector=".models-right-content"
-    :padding="24"
-    :current-step="2"
-    :total-steps="3"
-    @skip="skipConfigOnboarding"
-  />
 </template>
 
 <script setup>
@@ -2239,7 +2292,6 @@ import AppButton from '../components/common/AppButton.vue'
 import ProviderModelPicker from '../components/common/ProviderModelPicker.vue'
 import ComboBox from '../components/common/ComboBox.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
-import OnboardingOverlay from '../components/agents/OnboardingOverlay.vue'
 import { useI18n } from '../i18n/useI18n'
 import { buildDemoTooltipHtml } from '../utils/demoMode.js'
 
@@ -2276,33 +2328,6 @@ const activeTopTab = ref('general')
 const activeProviderTab = ref('openai')
 
 // NOTE: route.query.tab watcher moved below activeSubTab definition to avoid TDZ error.
-
-// ── Onboarding state machine ───────────────────────────────────────────────
-const configOnboardingPhase = ref('idle') // 'idle' | 'addProvider' | 'configureProvider' | 'configureUtility'
-
-function skipConfigOnboarding() {
-  configOnboardingPhase.value = 'idle'
-  configStore.saveConfig({ onboardingCompleted: true })
-}
-
-// Provider config sub-steps for the onboarding checklist
-const providerConfigSteps = computed(() => {
-  const p = selectedProvider.value
-  if (!p) return []
-  const hasBaseURL = !!p.baseURL
-  const hasApiKey = !!p.apiKey
-  // "Fetch models" requires user to actually click Fetch and succeed
-  const modelReady = modelsFetchedOnce.value && !!p.model
-  const tested = !!p.testedAt
-  const saved = tested && p.isActive
-  return [
-    { label: t('onboarding.providerStep1'), done: hasBaseURL },
-    { label: t('onboarding.providerStep2'), done: hasApiKey },
-    { label: t('onboarding.providerStep3'), done: modelReady },
-    { label: t('onboarding.providerStep4'), done: tested },
-    { label: t('onboarding.providerStep5'), done: saved },
-  ]
-})
 
 // Per-tab save state
 const savingModels = ref(false)
@@ -2484,7 +2509,45 @@ async function saveSecurity() {
 
 // General tab state
 const defaultDataPath = ref('')
+const originalDataPath = ref('')
+const showDataPathWarning = ref(false)
 const osSep = (typeof window !== 'undefined' && window.electronAPI?.platform === 'win32') ? '\\' : '/'
+const isWindows = (typeof window !== 'undefined' && window.electronAPI?.platform === 'win32')
+const dataPathChanged = computed(() => {
+  const current = (form.dataPath || '').trim()
+  const original = (originalDataPath.value || '').trim()
+  return current !== original
+})
+const dataPathFromTo = computed(() => ({
+  from: originalDataPath.value || defaultDataPath.value,
+  to: (form.dataPath || '').trim() || defaultDataPath.value,
+}))
+const dataPathCopyCommand = computed(() => {
+  const { from, to } = dataPathFromTo.value
+  if (isWindows) {
+    return `xcopy /E /I "${from}" "${to}"`
+  }
+  return `cp -r "${from}" "${to}"`
+})
+// Paths that will change because they depend on the current data directory.
+// A path "depends" if it's empty (using default) or starts with the current DATA_DIR.
+const derivedPathsAffected = computed(() => {
+  const from = dataPathFromTo.value.from
+  const to = dataPathFromTo.value.to
+  const sep = osSep
+  const affected = []
+  const dependsOnDataDir = (custom) => !custom || custom.startsWith(from)
+  if (dependsOnDataDir(form.skillsPath)) {
+    affected.push({ label: t('config.skillsPath'), newPath: to + sep + 'skills' })
+  }
+  if (dependsOnDataDir(form.artifactPath)) {
+    affected.push({ label: t('config.artifactPath'), newPath: to + sep + 'artifact' })
+  }
+  if (dependsOnDataDir(form.DoCPath)) {
+    affected.push({ label: t('config.aidocPath'), newPath: to + sep + 'clank_aidoc' })
+  }
+  return affected
+})
 const defaultArtifactPath = computed(() => {
   const dp = form.dataPath || defaultDataPath.value
   return dp ? `${dp}${osSep}artifact` : ''
@@ -2643,30 +2706,6 @@ const modelsLeftNav = ref('empty')  // 'empty' | providerId | 'global' | 'utilit
 const addProviderPreset = ref('anthropic')
 const addProviderName = ref('')
 const addProviderProtocol = ref('openai')
-
-// Onboarding: detect ?onboarding=1 and enter the right phase
-watch(() => route.query.onboarding, (val) => {
-  if (val !== '1') return
-  activeTopTab.value = 'ai'
-  activeSubTab.value = 'models'
-  if (!configStore.isConfigured) {
-    configOnboardingPhase.value = 'addProvider'
-    // Pre-select recommended provider from wizard
-    const recommended = route.query.recommended
-    if (recommended && configStore.PROVIDER_PRESETS[recommended]) {
-      addProviderPreset.value = recommended
-    }
-    // showAddProviderModal opened below after it's defined (avoids TDZ)
-  } else if (!configStore.config.utilityModel?.provider || !configStore.config.utilityModel?.model) {
-    configOnboardingPhase.value = 'configureUtility'
-    modelsLeftNav.value = 'utility'
-  }
-  router.replace({ path: '/config', query: {} })
-}, { immediate: true })
-
-// Onboarding: provider→utility transition now happens in saveModels(), not here.
-// Removed isConfigured watcher — test sets isActive=true+saves, which triggered
-// premature jump before user clicked Save.
 
 const currentSubTabs = computed(() =>
   activeTopTab.value === 'general' ? subTabsGeneral.value : subTabsAI.value
@@ -2997,18 +3036,6 @@ watch(modelsLeftNav, () => {
 })
 const showAddProviderModal = ref(false)
 
-// Onboarding: auto-open the add-provider modal if entering addProvider phase
-if (configOnboardingPhase.value === 'addProvider') {
-  showAddProviderModal.value = true
-}
-
-// Onboarding: when add-provider modal closes after adding, move to configure phase
-watch(showAddProviderModal, (val) => {
-  if (!val && configOnboardingPhase.value === 'addProvider' && modelsLeftNav.value && modelsLeftNav.value !== 'empty') {
-    configOnboardingPhase.value = 'configureProvider'
-  }
-})
-
 const showDeleteConfirm = ref(false)
 const deleteConfirmId = ref(null)
 const deleteConfirmName = ref('')
@@ -3293,11 +3320,12 @@ onMounted(async () => {
   }
   // Check knowledge embedding model status
   await knowledgeStore.checkModel()
-  // Load data path from .env via main process
+  // Load data path from main process
   if (window.electronAPI?.getDataPath) {
     const info = await window.electronAPI.getDataPath()
     defaultDataPath.value = info.defaultDataPath || ''
     form.dataPath = info.dataPath || info.defaultDataPath || ''
+    originalDataPath.value = form.dataPath
   }
   // Load env-backed paths (skillsPath, artifactPath)
   if (window.electronAPI?.getEnvPaths) {
@@ -3401,22 +3429,50 @@ onUnmounted(() => {
   window.electronAPI?.im?.onTeamsAuthError?.(() => {})
 })
 
+async function pickDataFolder() {
+  const folder = await window.electronAPI?.obsidian?.pickFolder()
+  if (folder) form.dataPath = folder
+}
+
+function copyDataPathCmd() {
+  navigator.clipboard?.writeText(dataPathCopyCommand.value)
+}
+
 async function pickArtifactFolder() {
   const folder = await window.electronAPI?.obsidian?.pickFolder()
   if (folder) form.artifactPath = folder
 }
 
+async function pickAidocFolder() {
+  const folder = await window.electronAPI?.obsidian?.pickFolder()
+  if (folder) form.DoCPath = folder
+}
+
+async function applyDataPathAndRestart() {
+  savingGeneral.value = true
+  try {
+    const newPath = (form.dataPath || '').trim()
+    if (window.electronAPI?.saveDataPath) {
+      const result = await window.electronAPI.saveDataPath(newPath)
+      if (!result.success) throw new Error(result.error || 'Failed to save data path')
+    }
+    showDataPathWarning.value = false
+    // Relaunch the app so the new data path takes effect
+    await window.electronAPI?.relaunchApp?.()
+  } catch (err) {
+    savedGeneralMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
+    showDataPathWarning.value = false
+  } finally {
+    savingGeneral.value = false
+  }
+}
+
 async function saveGeneral() {
   savingGeneral.value = true
   try {
-    // Save dataPath to .env (not config.json)
-    if (window.electronAPI?.saveDataPath) {
-      const result = await window.electronAPI.saveDataPath(String(form.dataPath))
-      if (!result.success) throw new Error(result.error || 'Failed to save data path')
-    }
-    // Save artifactPath to .env
+    // Save artifactPath to config
     await configStore.saveEnvPath('artifactPath', String(form.artifactPath))
-    savedGeneralMsg.value = { ok: true, text: t('config.savedDataPathRestart') }
+    savedGeneralMsg.value = { ok: true, text: t('config.saved') }
   } catch (err) {
     savedGeneralMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
   } finally {
@@ -3477,16 +3533,6 @@ async function saveModels() {
     modelFields.providers = JSON.parse(JSON.stringify(configStore.config.providers))
     await configStore.saveConfig(modelFields)
     savedModelsMsg.value = { ok: true, text: t('common.successSaved') }
-    // Onboarding transitions after successful save
-    if (configOnboardingPhase.value === 'configureProvider' && configStore.isConfigured) {
-      // Provider saved successfully → move to utility model
-      configOnboardingPhase.value = 'configureUtility'
-      modelsLeftNav.value = 'utility'
-    } else if (configOnboardingPhase.value === 'configureUtility' && modelFields.utilityModel?.provider && modelFields.utilityModel?.model) {
-      // Utility model saved → navigate to agents onboarding
-      configOnboardingPhase.value = 'idle'
-      setTimeout(() => router.push({ path: '/agents', query: { onboarding: '1' } }), 600)
-    }
   } catch (err) {
     savedModelsMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
   } finally {

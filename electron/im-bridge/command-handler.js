@@ -2,27 +2,18 @@
 'use strict'
 const fs      = require('fs')
 const path    = require('path')
-const os      = require('os')
 const { v4: uuidv4 } = require('uuid')
 
-// Lazy: DATA_DIR is set by main.js via process.env after ensureDataDir()
-const { defaultDataPath } = require('../defaultDataPath')
-function getDataDir() {
-  const d = process.env.CLANKAI_DATA_PATH
-  return (d && d !== 'null') ? d : defaultDataPath()
-}
-function CHATS_DIR()   { return path.join(getDataDir(), 'chats') }
-function CHATS_INDEX() { return path.join(CHATS_DIR(), 'index.json') }
-function AGENTS_FILE() { return path.join(getDataDir(), 'agents.json') }
+const ds = require('../lib/dataStore')
 const PAGE_SIZE   = 20
 
 function readIndex() {
-  try { return JSON.parse(fs.readFileSync(CHATS_INDEX(), 'utf8')) } catch { return [] }
+  try { return JSON.parse(fs.readFileSync(ds.paths().CHATS_INDEX_FILE, 'utf8')) } catch { return [] }
 }
 
 function readAgents() {
   try {
-    const data = JSON.parse(fs.readFileSync(AGENTS_FILE(), 'utf8'))
+    const data = JSON.parse(fs.readFileSync(ds.paths().AGENTS_FILE, 'utf8'))
     return Array.isArray(data) ? data : (data.agents || [])
   } catch { return [] }
 }
@@ -188,7 +179,7 @@ function formatAgentDetail(agent) {
 const HISTORY_SIZE = 10
 
 function formatHistory(chatId, count) {
-  const chatPath = path.join(CHATS_DIR(), `${chatId}.json`)
+  const chatPath = path.join(ds.paths().CHATS_DIR, `${chatId}.json`)
   const chat = readJSON(chatPath, null)
   if (!chat) return { reply: 'Chat not found.' }
   const msgs = chat.messages || []
@@ -313,10 +304,10 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
       maxOutputTokens: null,
     }
 
-    writeAtomic(path.join(CHATS_DIR(), `${chatId}.json`), chat)
+    writeAtomic(path.join(ds.paths().CHATS_DIR, `${chatId}.json`), chat)
     const index = readIndex()
     index.unshift(indexEntry)
-    writeAtomic(CHATS_INDEX(), index)
+    writeAtomic(ds.paths().CHATS_INDEX_FILE, index)
     sessionStore.setActiveChatId(platform, channelId, chatId, '@' + channelId)
     notifyRenderer()
     return { reply: `Created and switched to: ${title}`, newChatId: chatId }

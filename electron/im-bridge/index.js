@@ -1,7 +1,6 @@
 // electron/im-bridge/index.js
 'use strict'
 const path             = require('path')
-const os               = require('os')
 const sessionStore     = require('./session-store')
 const commandHandler   = require('./command-handler')
 const messageRouter    = require('./message-router')
@@ -10,23 +9,9 @@ const whatsapp         = require('./adapters/whatsapp')
 const feishu           = require('./adapters/feishu')
 const teams            = require('./adapters/teams')
 
-// Lazy: DATA_DIR is set by main.js via process.env after ensureDataDir()
-const { defaultDataPath } = require('../defaultDataPath')
+const ds = require('../lib/dataStore')
 let _mainWindow = null
 let _config     = {}  // full config from config.json
-
-function getDataDir() {
-  const envPath = process.env.CLANKAI_DATA_PATH
-  let dataDir = envPath && envPath !== 'null' && envPath.trim() !== '' ? envPath : null
-  if (!dataDir) {
-    dataDir = defaultDataPath()
-  }
-  if (!dataDir || dataDir === 'null' || !path.isAbsolute(dataDir)) {
-    console.error('[im-bridge] Invalid DATA_DIR:', dataDir)
-    return null
-  }
-  return dataDir
-}
 
 /**
  * Resolve STT credentials from the Voice Call config section.
@@ -313,7 +298,7 @@ function start(fullConfig) {
   }
 
   if (_config.im?.teams?.enabled && _config.im?.teams?.clientId && _config.im?.teams?.tenantId) {
-    const dataDir = getDataDir()
+    const dataDir = ds.paths().DATA_DIR
     if (dataDir) {
       teams.start(
         {
@@ -337,7 +322,7 @@ function start(fullConfig) {
 }
 
 function _startWhatsApp() {
-  const dataDir = getDataDir()
+  const dataDir = ds.paths().DATA_DIR
   if (!dataDir) {
     console.error('[im-bridge] Cannot start WhatsApp: DATA_DIR is invalid')
     return
@@ -421,7 +406,7 @@ function startPlatform(platform) {
   } else if (platform === 'teams') {
     const cfg = _config.im?.teams || {}
     if (cfg.enabled && cfg.clientId && cfg.tenantId) {
-      const dataDir = getDataDir()
+      const dataDir = ds.paths().DATA_DIR
       if (dataDir) {
         teams.start(
           {
@@ -480,7 +465,7 @@ function getStatus() {
  * Called from the "Link Device" button in ConfigView.
  */
 function requestWhatsAppQR() {
-  const dataDir = getDataDir()
+  const dataDir = ds.paths().DATA_DIR
   if (!dataDir) {
     console.error('[im-bridge] Cannot request WhatsApp QR: DATA_DIR is invalid')
     return
@@ -509,7 +494,7 @@ function requestTeamsAuth(opts) {
     notifyRenderer('im:teams-auth-error', { error: 'Teams Client ID and Tenant ID are required.' })
     return
   }
-  const dataDir = getDataDir()
+  const dataDir = ds.paths().DATA_DIR
   if (!dataDir) {
     notifyRenderer('im:teams-auth-error', { error: 'Invalid data directory.' })
     return

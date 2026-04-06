@@ -173,7 +173,7 @@
       </div>
 
       <!-- Generic tool / background_task / dispatch_subagent — collapsible summary row -->
-      <div v-else-if="seg.type === 'tool' && !isHiddenTool(seg)" class="my-1.5 rounded-xl overflow-hidden" style="border:1px solid #E5E5EA; background:#FFFFFF;">
+      <div v-else-if="seg.type === 'tool' && (!isHiddenTool(seg) || seg.output === undefined)" class="my-1.5 rounded-xl overflow-hidden" style="border:1px solid #E5E5EA; background:#FFFFFF;">
         <!-- Header row — always visible -->
         <div
           class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none"
@@ -321,10 +321,17 @@
         </svg>
         <template v-if="message.streaming && !processExpanded">
           <span>{{ t('chats.stepsRunning') }}</span>
-          <span v-if="isLlmThinking" class="steps-thinking-label">{{ t('chats.thinking') }}</span>
-          <div v-else-if="activeToolLabel" class="steps-ticker-clip">
-            <span class="steps-ticker-track" :key="activeToolLabel">{{ activeToolLabel }}</span>
+          <div v-if="runningToolLabel" class="steps-ticker-clip">
+            <span class="steps-ticker-track" :key="runningToolLabel">
+              <span class="steps-ticker-highlight">{{ runningToolLabel }}</span>
+            </span>
           </div>
+          <div v-else-if="activeToolLabel" class="steps-ticker-clip">
+            <span class="steps-ticker-track" :key="activeToolLabel">
+              <span class="steps-ticker-highlight">{{ activeToolLabel }}</span>
+            </span>
+          </div>
+          <span v-else-if="isLlmThinking" class="steps-thinking-label">{{ t('chats.thinking') }}</span>
           <span class="steps-badge">{{ processSegmentCount }}</span>
         </template>
         <template v-else>
@@ -455,6 +462,11 @@ const hasPendingPermission = computed(() =>
   (props.message.segments || []).some(s => s.type === 'permission' && s.status === 'pending')
 )
 
+// Auto-expand execution steps when a permission prompt needs user attention
+watch(hasPendingPermission, (pending) => {
+  if (pending) processExpanded.value = true
+})
+
 // ── Live elapsed timer ─────────────────────────────────────────────────────
 const now = ref(Date.now())
 let timer = null
@@ -476,16 +488,13 @@ const elapsedMs = computed(() => {
 
 // ── Wavebar color cycling ─────────────────────────────────────────────────
 const WAVEBAR_COLORS = [
-  { bar: '#4c8446', glow: '#4c844680' },  // green
-  { bar: '#2563eb', glow: '#2563eb80' },  // blue
-  { bar: '#7c3aed', glow: '#7c3aed80' },  // violet
-  { bar: '#db2777', glow: '#db277780' },  // pink
-  { bar: '#ea580c', glow: '#ea580c80' },  // orange
-  { bar: '#0891b2', glow: '#0891b280' },  // cyan
-  { bar: '#4f46e5', glow: '#4f46e580' },  // indigo
-  { bar: '#059669', glow: '#05966980' },  // emerald
-  { bar: '#d97706', glow: '#d9770680' },  // amber
-  { bar: '#e11d48', glow: '#e11d4880' },  // rose
+  // User bubble (brown gradient) + assistant bubble (warm neutral) palette
+  { bar: '#8B6F5E', glow: '#8B6F5E80' },  // user bubble light
+  { bar: '#A8947D', glow: '#A8947D80' },  // assistant warm mid
+  { bar: '#BCA892', glow: '#BCA89280' },  // warm neutral
+  { bar: '#C9B8A3', glow: '#C9B8A380' },  // assistant warm light
+  { bar: '#D8CBB9', glow: '#D8CBB980' },  // assistant soft light
+  { bar: '#E5DCCD', glow: '#E5DCCD80' },  // softest beige
 ]
 const wavebarColorIdx = ref(0)
 let colorTimer = null
@@ -863,7 +872,7 @@ function isSoulTool(seg) {
 // Visible = rendered inside the collapsible block (excludes hidden tools AND soul tools)
 function isVisibleProcessSegment(s) {
   if (s.type === 'permission' || s.type === 'warning') return true
-  if (s.type === 'tool') return (isFileWrite(s) || !isHiddenTool(s)) && !isSoulTool(s)
+  if (s.type === 'tool') return (isFileWrite(s) || !isHiddenTool(s) || s.output === undefined) && !isSoulTool(s)
   return false
 }
 
@@ -884,7 +893,7 @@ const activeToolLabel = computed(() => {
   let lastCompleted = ''
   for (let i = 0; i < segs.length; i++) {
     const s = segs[i]
-    if (s.type !== 'tool') continue
+    if (s.type !== 'tool' || isSoulTool(s)) continue
     const name = toolDisplayName(s)
     const summary = toolSummary(s)
     const label = summary ? `${name} — ${summary}` : name
@@ -892,6 +901,20 @@ const activeToolLabel = computed(() => {
     lastCompleted = label
   }
   return lastCompleted  // fallback: last completed tool
+})
+
+const runningToolLabel = computed(() => {
+  const segs = props.message?.segments
+  if (!segs) return ''
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i]
+    if (s.type !== 'tool' || isSoulTool(s)) continue
+    if (s.output !== undefined) continue
+    const name = toolDisplayName(s)
+    const summary = toolSummary(s)
+    return summary ? `${name} — ${summary}` : name
+  }
+  return ''
 })
 // True when streaming but no tool is currently running — LLM is thinking between iterations
 const isLlmThinking = computed(() => {
@@ -1009,16 +1032,22 @@ function toolSummary(seg) {
     return cmdStr.slice(0, 80)
   }
   if (seg.name === 'dispatch_subagent') {
+    const agentName = seg.input.agentName || seg.input.agent || seg.input.subagent || ''
     const spec = seg.input.specialization ? `[${seg.input.specialization}]` : ''
     const task = seg.input.task || ''
-    const full = spec ? `${spec} ${task}` : task
+    const prefix = [agentName, spec].filter(Boolean).join(' ')
+    const full = prefix ? `${prefix} ${task}` : task
     return full.length > 80 ? full.slice(0, 80) + '…' : full
   }
   if (seg.name === 'dispatch_subagents') {
     const agents = seg.input?.agents || []
     if (agents.length === 0) return ''
-    const labels = agents.map(a => a.specialization ? `[${a.specialization}]` : '').filter(Boolean)
-    const tasks = agents.map(a => (a.task || '').slice(0, 30)).join(', ')
+    const labels = agents.map(a => {
+      const agentName = a.agentName || a.agent || a.subagent || ''
+      const spec = a.specialization ? `[${a.specialization}]` : ''
+      return [agentName, spec].filter(Boolean).join(' ')
+    }).filter(Boolean)
+    const tasks = agents.map(a => (a.task || '').slice(0, 30)).filter(Boolean).join(', ')
     return labels.length > 0 ? `${labels.join(' ')} — ${tasks}` : tasks
   }
   if (seg.name === 'background_task') {
@@ -1028,6 +1057,7 @@ function toolSummary(seg) {
       const args = Array.isArray(rawArgs) ? rawArgs.join(' ') : String(rawArgs)
       return (cmd + ' ' + args).trim().slice(0, 80)
     }
+    if (seg.input.taskId != null) return `${seg.input.action || ''} #${seg.input.taskId}`.trim()
     return seg.input.action || ''
   }
   // Generic: show key input fields
@@ -1471,9 +1501,32 @@ function diffMarker(type) {
   font-weight: 500;
   animation: steps-ticker 12s linear infinite;
 }
+.steps-ticker-highlight {
+  color: currentColor;
+  display: inline-block;
+}
+@supports (-webkit-background-clip: text) {
+  .steps-ticker-highlight {
+    background-image: linear-gradient(
+      90deg,
+      rgba(139, 111, 94, 0.7) 28%,
+      rgba(201, 184, 163, 1) 50%,
+      rgba(139, 111, 94, 0.7) 72%
+    );
+    background-size: 240% 100%;
+    background-position: 140% center;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: steps-text-sweep 2.8s linear infinite;
+  }
+}
 @keyframes steps-ticker {
   from { transform: translateX(0); }
   to   { transform: translateX(-100%); }
+}
+@keyframes steps-text-sweep {
+  from { background-position: 140% center; }
+  to { background-position: -40% center; }
 }
 .steps-thinking-label {
   font-weight: 500;

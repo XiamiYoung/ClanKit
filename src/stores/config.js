@@ -176,8 +176,6 @@ export const useConfigStore = defineStore('config', () => {
     skillsPath: '',
     DoCPath: '',
     artifactPath: '',
-    defaultToolIds: null,
-    defaultMcpServerIds: null,
     newsFeeds: [],
     feedSelection: [],
     skillHubSources: [
@@ -200,7 +198,6 @@ export const useConfigStore = defineStore('config', () => {
         description: 'Tencent official skill repository'
       }
     ],
-    remoteSkills: [],
     sandboxConfig: {
       defaultMode: 'sandbox',
       sandboxAllowList: [],
@@ -243,8 +240,9 @@ export const useConfigStore = defineStore('config', () => {
       teams: { enabled: false, tenantId: '', clientId: '', selfOnly: true, allowedUsers: [], pollInterval: 5 },
     },
     language: 'en',
-    demoMode: true,
+    demoMode: false,
     setupDismissed: false,
+    setupWizardStep: 0,
     onboardingCompleted: false,
   })
 
@@ -321,6 +319,8 @@ export const useConfigStore = defineStore('config', () => {
       .map(p => p.id)
   })
 
+  let _loaded = false
+
   async function loadConfig() {
     const defaults = config.value
     const saved = await storage.getConfig()
@@ -364,6 +364,7 @@ export const useConfigStore = defineStore('config', () => {
     }
 
     await loadEnvPaths()
+    _loaded = true
   }
 
 
@@ -385,6 +386,10 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   async function saveConfig(newConfig) {
+    if (!_loaded) {
+      console.warn('[CONFIG] saveConfig blocked — config not yet loaded, skipping to prevent data loss')
+      return
+    }
     const prev = config.value
     config.value = {
       ...prev,

@@ -16,7 +16,7 @@ let activeVoiceSession = null
 
 /** Resolve the venv path from saved config (single source of truth). */
 function resolveVenvPath() {
-  const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
+  const dataDir = ds.paths().DATA_DIR
   const cfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
   return cfg.voiceCall?.local?.installPath || path.join(dataDir, 'local-voice-env')
 }
@@ -76,7 +76,9 @@ function register() {
         activeVoiceSession = null
       }
 
-      // Load soul memory for both agents so the voice LLM has full context
+      // Load soul memory for both agents.
+      // systemSoulContent = system agent's personality/knowledge
+      // userSoulContent = factual profile data about the user (NOT roleplay instructions)
       const systemSoulContent = readSoulFileSync(agent?.id || agentId, 'system')
       const userSoulContent = readSoulFileSync(userAgent?.id, 'users')
 
@@ -98,6 +100,7 @@ function register() {
         const resolvedType = creds.type || providerType
         logger.info(`[voice:llmCall] lookup="${providerType}" → type=${resolvedType} hasKey=${!!creds.apiKey} model=${model}`)
 
+        const isGoogle = resolvedType === 'google'
         const isOpenAI = ['openai', 'openai_official', 'deepseek', 'minimax', 'openrouter'].includes(resolvedType)
         const clientCfg = {
           apiKey: creds.apiKey,
@@ -107,7 +110,50 @@ function register() {
           _directAuth: resolvedType !== 'anthropic',
         }
 
-        if (isOpenAI) {
+        if (isGoogle) {
+          // Google Gemini — use @google/genai SDK directly
+          const { GoogleGenAI } = require('@google/genai')
+          const genai = new GoogleGenAI({ apiKey: creds.apiKey })
+          const resolvedModel = model || creds.model || 'gemini-2.0-flash-001'
+
+          if (onChunk) {
+            const response = await genai.models.generateContentStream({
+              model: resolvedModel,
+              contents: messages.filter(m => m.role !== 'system').map(m => ({
+                role: m.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: m.content }],
+              })),
+              config: {
+                maxOutputTokens: 400,
+                systemInstruction: messages.find(m => m.role === 'system')?.content || undefined,
+              },
+            })
+            let fullText = ''
+            for await (const chunk of response) {
+              if (signal?.aborted) break
+              const delta = chunk.text || ''
+              if (delta) { fullText += delta; onChunk(delta) }
+            }
+            return { text: fullText, inputTokens: 0, outputTokens: 0 }
+          }
+
+          const response = await genai.models.generateContent({
+            model: resolvedModel,
+            contents: messages.filter(m => m.role !== 'system').map(m => ({
+              role: m.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: m.content }],
+            })),
+            config: {
+              maxOutputTokens: 400,
+              systemInstruction: messages.find(m => m.role === 'system')?.content || undefined,
+            },
+          })
+          return {
+            text: response.text || '',
+            inputTokens: response.usageMetadata?.promptTokenCount || 0,
+            outputTokens: response.usageMetadata?.candidatesTokenCount || 0,
+          }
+        } else if (isOpenAI) {
           const { OpenAIClient } = require('../agent/core/OpenAIClient')
           if (model) clientCfg.customModel = model
           const client = new OpenAIClient(clientCfg)
@@ -247,8 +293,19 @@ function register() {
     return { success: true }
   })
 
-  ipcMain.handle('voice:update-history', (event, history) => {
-    if (activeVoiceSession) activeVoiceSession.history = history || []
+  // Barge-in: user started speaking — abort active LLM stream immediately so the
+  // session is ready to process the new audio chunk when it arrives.
+  ipcMain.handle('voice:barge-in', () => {
+    if (activeVoiceSession) activeVoiceSession.bargeIn()
+    return { success: true }
+  })
+
+  ipcMain.handle('voice:update-history', async (event, history) => {
+    if (activeVoiceSession) {
+      activeVoiceSession.history = history || []
+      // Regenerate the status digest so voice agent stays aware of new actions
+      await activeVoiceSession._generateChatDigest()
+    }
     return { success: true }
   })
 
@@ -290,7 +347,7 @@ function register() {
 
   // ── Local STT: Download ONNX model (replaces Python setup) ─────────────
   ipcMain.handle('voice:local-setup-env', async () => {
-    const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
+    const dataDir = ds.paths().DATA_DIR
     const cfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
     const modelSource = cfg.voiceCall?.local?.modelSource || 'huggingface'
 
@@ -328,7 +385,7 @@ function register() {
   })
 
   ipcMain.handle('voice:local-check-env', async () => {
-    const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
+    const dataDir = ds.paths().DATA_DIR
     const { isModelReady } = require('../agent/voice/sttModelManager')
     const status = isModelReady(dataDir)
     return {
@@ -340,7 +397,7 @@ function register() {
   })
 
   ipcMain.handle('voice:remove-local-env', async () => {
-    const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
+    const dataDir = ds.paths().DATA_DIR
     const { removeModel } = require('../agent/voice/sttModelManager')
     removeModel(dataDir)
     // Also clean up legacy Python env if exists
@@ -389,7 +446,7 @@ function register() {
 
   // ── Local STT: Health check (model-based, no server) ────────────────────
   ipcMain.handle('voice:local-health', async () => {
-    const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
+    const dataDir = ds.paths().DATA_DIR
     const { isModelReady } = require('../agent/voice/sttModelManager')
     const status = isModelReady(dataDir)
     return {
@@ -418,7 +475,7 @@ function register() {
   // ── Local STT: End-to-end test (sherpa-onnx, no server) ────────────────
   ipcMain.handle('voice:local-test', async () => {
     try {
-      const dataDir = ds.paths().DATA_DIR || ds.paths().CONFIG_FILE.replace(/[/\\]config\.json$/, '')
+      const dataDir = ds.paths().DATA_DIR
       const { isModelReady, getModelDir } = require('../agent/voice/sttModelManager')
       const status = isModelReady(dataDir)
       if (!status.ready) return { success: false, error: status.reason || 'Model not installed' }
@@ -484,8 +541,122 @@ function register() {
     }
   })
 
+  // ── Edge-TTS: Chunked synthesis with pipeline playback ──────────────────
+
+  /** Split text into TTS-friendly chunks (paragraphs, with merge/split heuristics). */
+  function splitTextForTTS(text) {
+    // Split on double newlines (paragraphs)
+    let parts = text.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean)
+    if (parts.length === 0) return [text.trim()].filter(Boolean)
+
+    // Merge short paragraphs (<80 chars) with the next one
+    const merged = []
+    let buf = ''
+    for (const p of parts) {
+      if (buf) {
+        buf += '\n' + p
+        if (buf.length >= 80) { merged.push(buf); buf = '' }
+      } else if (p.length < 80) {
+        buf = p
+      } else {
+        merged.push(p)
+      }
+    }
+    if (buf) merged.push(buf)
+
+    // Split long chunks (>800 chars) at sentence boundaries
+    const result = []
+    for (const chunk of merged) {
+      if (chunk.length <= 800) { result.push(chunk); continue }
+      // Split at sentence-ending punctuation
+      const sentences = chunk.split(/(?<=[。！？.!?\n])\s*/).filter(Boolean)
+      let cur = ''
+      for (const s of sentences) {
+        if (cur.length + s.length > 800 && cur) { result.push(cur); cur = '' }
+        cur += (cur ? ' ' : '') + s
+      }
+      if (cur) result.push(cur)
+    }
+    return result.length > 0 ? result : [text.trim()].filter(Boolean)
+  }
+
+  const activeTtsSessions = new Map()
+
+  ipcMain.handle('voice:edge-tts-chunked', async (event, { text, voice, sessionId }) => {
+    try {
+      if (!text) return { success: false, error: 'Text is required' }
+      const voiceId = voice || 'zh-CN-XiaoxiaoNeural'
+      const { tts } = require('../agent/voice/edgeTtsNode')
+      const chunks = splitTextForTTS(text)
+
+      // Single chunk: return inline (same as voice:edge-tts-node)
+      if (chunks.length <= 1) {
+        const buf = await tts(chunks[0] || text, { voice: voiceId })
+        return { success: true, mode: 'single', audio: buf.toString('base64'), format: 'mp3' }
+      }
+
+      // Multi-chunk: parallel synthesis with concurrency limit
+      const sessionDir = path.join(os.tmpdir(), `clankai-tts-${sessionId}`)
+      await fs.promises.mkdir(sessionDir, { recursive: true })
+      activeTtsSessions.set(sessionId, { cancelled: false })
+
+      const CONCURRENCY = 3
+      const pending = new Set()
+
+      for (let i = 0; i < chunks.length; i++) {
+        if (activeTtsSessions.get(sessionId)?.cancelled) break
+
+        const idx = i
+        const promise = (async () => {
+          try {
+            const buf = await tts(chunks[idx], { voice: voiceId })
+            if (activeTtsSessions.get(sessionId)?.cancelled) return
+            const filePath = path.join(sessionDir, `${idx}.mp3`)
+            await fs.promises.writeFile(filePath, buf)
+            event.sender.send('voice:tts-chunk-ready', {
+              sessionId, index: idx, total: chunks.length, filePath,
+            })
+          } catch (err) {
+            logger.warn(`[tts-chunked] chunk ${idx} failed: ${err.message}`)
+          }
+        })()
+
+        pending.add(promise)
+        promise.finally(() => pending.delete(promise))
+        if (pending.size >= CONCURRENCY) await Promise.race(pending)
+      }
+
+      await Promise.allSettled([...pending])
+      activeTtsSessions.delete(sessionId)
+      return { success: true, mode: 'chunked', totalChunks: chunks.length, sessionDir }
+    } catch (err) {
+      logger.warn(`[voice:edge-tts-chunked] failed: ${err.message}`)
+      activeTtsSessions.delete(sessionId)
+      return { success: false, error: err.message }
+    }
+  })
+
+  ipcMain.handle('voice:edge-tts-cancel', (_, { sessionId }) => {
+    const session = activeTtsSessions.get(sessionId)
+    if (session) session.cancelled = true
+    activeTtsSessions.delete(sessionId)
+    return { success: true }
+  })
+
+  ipcMain.handle('voice:edge-tts-cleanup', async (_, { sessionDir }) => {
+    try {
+      if (sessionDir && sessionDir.includes('clankai-tts-')) {
+        await fs.promises.rm(sessionDir, { recursive: true, force: true })
+      }
+      return { success: true }
+    } catch (err) {
+      logger.warn(`[voice:edge-tts-cleanup] failed: ${err.message}`)
+      return { success: false, error: err.message }
+    }
+  })
+
   // ── Edge-TTS: Preview voice (Node.js, no Python) ───────────────────────
-  ipcMain.handle('voice:edge-preview', async (event, { voice, language }) => {
+  ipcMain.handle('voice:edge-preview', async (event, { voice, language, text: customText }) => {
     try {
       if (!voice) return { success: false, error: 'Voice not specified' }
       const previewTexts = {
@@ -493,7 +664,7 @@ function register() {
         'en-US': 'Hello, nice to meet you. How are you today?',
       }
       const locale = voice.split('-').slice(0, 2).join('-')
-      const text = previewTexts[locale] || previewTexts['en-US']
+      const text = customText || previewTexts[locale] || previewTexts['en-US']
       const { tts } = require('../agent/voice/edgeTtsNode')
       const audioBuffer = await tts(text, { voice, timeout: 15000 })
       return { success: true, audio: audioBuffer.toString('base64'), format: 'mp3' }

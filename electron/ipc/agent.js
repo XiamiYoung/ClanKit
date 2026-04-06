@@ -1452,13 +1452,29 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
       return { success: false, error: 'Utility model not configured. Set it in Config → AI → Models → Global Model Settings.' }
     }
     const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
-    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
-      return { success: false, error: `Utility model provider "${um.provider}" is missing apiKey or baseURL. Check provider configuration.` }
+    if (!providerCfg?.apiKey) {
+      return { success: false, error: `Utility model provider "${um.provider}" is missing apiKey. Check provider configuration.` }
+    }
+    if (um.provider !== 'google' && !providerCfg?.baseURL) {
+      return { success: false, error: `Utility model provider "${um.provider}" is missing baseURL. Check provider configuration.` }
     }
     // Use the global maxOutputTokens from config, capped at 4096 for utility calls.
     // The global setting reflects what models the user's providers actually support.
     const maxTokens = Math.min(config.maxOutputTokens || 4096, 4096)
-    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
+
+    if (um.provider === 'google') {
+      const { GoogleGenAI } = require('@google/genai')
+      const gc = new GoogleGenAI({ apiKey: providerCfg.apiKey })
+      const resp = await gc.models.generateContent({
+        model: um.model,
+        contents: prompt,
+      })
+      const text = resp.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      accumulateUtilityUsage(um.model, um.provider, 0, 0).catch(() => {})
+      return { success: true, text }
+    }
+
+    const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter'
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {

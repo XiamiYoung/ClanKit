@@ -180,7 +180,7 @@
                 v-if="msg.role === 'assistant' && msg.content"
                 @click="emit('speak-message', msg)"
                 class="cw-msg-action-btn"
-                :class="{ 'opacity-40 cursor-not-allowed': !voiceConfigured }"
+                :class="{ 'opacity-40 cursor-not-allowed': !voiceConfigured, 'cw-msg-action-btn-active': props.speakingMsgId === msg.id }"
                 :disabled="!voiceConfigured"
                 :title="!voiceConfigured ? t('chats.speakNeedsVoice') : props.speakingMsgId === msg.id ? t('chats.stopSpeaking') : t('chats.speakMessage')"
                 :aria-label="t('chats.speakMessage')"
@@ -594,7 +594,7 @@ function showAvatarTooltip(event, msg) {
   if (!agent) { avatarTooltip.visible = false; return }
   const rect = event.currentTarget.getBoundingClientRect()
   avatarTooltip.name = agent.name || (msg.role === 'user' ? 'User' : 'Assistant')
-  avatarTooltip.providerModel = agentId ? getMsgAssistantProviderModel(msg) : ''
+  avatarTooltip.providerModel = (msg.role !== 'user' && agentId) ? getMsgAssistantProviderModel(msg) : ''
   avatarTooltip.desc = agent.description || ''
   const tooltipMaxW = 448
   let left = rect.left + rect.width / 2
@@ -1211,6 +1211,9 @@ defineExpose({ scrollToBottom })
 }
 .group\/bubble:hover .cw-msg-action-btn {
   opacity: 1;
+}
+.cw-msg-action-btn-active {
+  opacity: 1 !important;
 }
 .cw-msg-action-btn:hover { background: #374151; }
 .cw-msg-action-btn-delete:hover { background: #DC2626; }

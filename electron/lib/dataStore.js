@@ -22,10 +22,34 @@ function paths() {
 
 // --- Initialization -----------------------------------------------------------
 function init() {
-  const DEFAULT_DATA_PATH = path.join(app.getPath('appData'), 'clankai', 'data')
-  let DATA_DIR = DEFAULT_DATA_PATH
+  // SETTINGS_DIR is FIXED — the only file here is settings.json (dataPath pointer)
+  const SETTINGS_DIR = path.join(app.getPath('appData'), 'clankai')
+  const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json')
+  const DEFAULT_DATA_PATH = path.join(SETTINGS_DIR, 'data')
+
+  if (!fs.existsSync(SETTINGS_DIR)) {
+    fs.mkdirSync(SETTINGS_DIR, { recursive: true })
+  }
+
+  // Read custom dataPath from settings.json (tiny pointer file)
+  let userDataPath = null
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))
+      if (settings.dataPath && typeof settings.dataPath === 'string' && settings.dataPath.trim()) {
+        userDataPath = settings.dataPath.trim()
+      }
+    }
+  } catch (err) {
+    logger.warn('Failed to read settings.json, using default data path:', err.message)
+  }
+
+  const DATA_DIR = userDataPath || DEFAULT_DATA_PATH
   process.env.CLANKAI_DATA_PATH = DATA_DIR
   logger.setLogDir(path.join(DATA_DIR, 'logs'))
+
+  // Always persist the resolved dataPath so settings.json is never empty
+  try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ dataPath: DATA_DIR }, null, 2), 'utf8') } catch {}
 
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -46,12 +70,14 @@ function init() {
   fs.mkdirSync(MODELS_DIR,       { recursive: true })
 
   _paths = {
+    SETTINGS_DIR,
+    SETTINGS_FILE,
     DATA_DIR,
     DEFAULT_DATA_PATH,
+    CONFIG_FILE:          path.join(DATA_DIR, 'config.json'),
     CHATS_FILE:           path.join(DATA_DIR, 'chats.json'),
     CHATS_DIR,
     CHATS_INDEX_FILE:     path.join(CHATS_DIR, 'index.json'),
-    CONFIG_FILE:          path.join(DATA_DIR, 'config.json'),
     AGENTS_FILE:          path.join(DATA_DIR, 'agents.json'),
     MCP_SERVERS_FILE:     path.join(DATA_DIR, 'mcp-servers.json'),
     TOOLS_FILE:           path.join(DATA_DIR, 'tools.json'),

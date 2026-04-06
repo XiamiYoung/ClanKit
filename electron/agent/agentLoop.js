@@ -907,7 +907,6 @@ class AgentLoop {
         logger.agent('stream start', {
           iteration,
           provider: this.isGoogle ? 'google' : (this.config.provider?.type || (this.isOpenAI ? 'openai-compat' : 'anthropic')),
-          model,
           maxTokens: configuredMaxTokens,
           msgs: createParams.messages.length,
           tools: allTools.length,
@@ -990,13 +989,51 @@ class AgentLoop {
 
               let result
               try {
-                // Route through the same tool execution paths as OpenAI
-                if (toolName === 'dispatch_subagent') {
+                // Route through the same tool execution paths as Anthropic/OpenAI
+                if (toolName === 'load_skill') {
+                  const skillId = toolInput.skill_id
+                  const prompt = this.skillPrompts.get(skillId)
+                  if (prompt) {
+                    this.loadedSkills.set(skillId, prompt)
+                    result = { success: true, skill_id: skillId, content: prompt }
+                  } else {
+                    result = { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
+                  }
+                } else if (toolName === 'dispatch_subagent') {
                   result = await this.subAgentManager.dispatch(toolInput, onChunk)
                 } else if (toolName === 'dispatch_subagents') {
                   result = await this.subAgentManager.dispatchBatch(toolInput, onChunk, this.toolRegistry)
                 } else if (toolName === 'background_task') {
                   result = await this.taskManager.execute(toolInput)
+                } else if (toolName === 'search_mcp_tools') {
+                  const requestedNames = toolInput.server_names || []
+                  const matched = (this.mcpServers || []).filter(s => requestedNames.includes(s.name))
+                  if (matched.length === 0) {
+                    const available = (this.mcpServers || []).map(s => s.name).join(', ')
+                    result = { success: false, error: `No servers matched: ${requestedNames.join(', ')}. Available: ${available}` }
+                  } else {
+                    const newTools = await _loadMcpTools(matched)
+                    result = newTools.length > 0
+                      ? { success: true, loaded: newTools.length, tools: newTools }
+                      : { success: false, error: `Servers found but no tools discovered: ${requestedNames.join(', ')}` }
+                  }
+                } else if (mcpToolMap.has(toolName)) {
+                  const { serverId, tool, serverConfig } = mcpToolMap.get(toolName)
+                  result = await this._executeMcpToolViaManager(serverId, tool.name, toolInput, serverConfig)
+                } else if (httpToolMap.has(toolName)) {
+                  result = await this._executeHttpTool(httpToolMap.get(toolName), toolInput)
+                } else if (smtpToolMap.has(toolName)) {
+                  result = await this._executeSmtpTool(toolInput)
+                } else if (codeToolMap.has(toolName)) {
+                  const codeTool = codeToolMap.get(toolName)
+                  result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
+                } else if (promptToolMap.has(toolName)) {
+                  const promptTool = promptToolMap.get(toolName)
+                  result = { success: true, data: promptTool.promptText || '' }
+                } else if (toolName === 'submit_plan') {
+                  onChunk({ type: 'plan_submitted', plan: toolInput })
+                  result = { success: true, status: 'awaiting_approval' }
+                  this._planPending = true
                 } else {
                   result = await this.toolRegistry.execute(toolName, toolInput, fc.id || toolName, (update) => {
                     onChunk({ type: 'tool_output', name: toolName, text: update.text, stream: update.type })
@@ -1020,6 +1057,12 @@ class AgentLoop {
             contents.push({ role: 'model', parts })
             contents.push({ role: 'user', parts: functionResponseParts })
             generateConfig.contents = contents
+
+            // If a plan was submitted, break the tool loop — wait for user approval
+            if (this._planPending) {
+              this._planPending = false
+              break
+            }
           }
 
           assistantContent = [{ type: 'text', text: finalText }]
@@ -1413,8 +1456,8 @@ class AgentLoop {
           if (streamedReasoningContent) nativeAssistant.reasoning_content = streamedReasoningContent
           conversationMessages.push(nativeAssistant)
 
-          logger.agent('OpenAI stream end', { iteration, stopReason, textLen: finalText.length, tokens: this.contextManager.getMetrics() })
-          logger.debug('[AgentLoop] LLM text output', { iteration, textPreview: finalText.slice(-300) })
+          logger.agent('OpenAI stream end', { iteration, stopReason, tokens: this.contextManager.getMetrics() })
+          logger.debug('[AgentLoop] LLM text output', { iteration })
 
           // ── Handle tool_calls stop reason ──
           if ((stopReason === 'tool_calls' || stopReason === 'stop' && openaiToolCalls.length > 0) && !this.stopped) {

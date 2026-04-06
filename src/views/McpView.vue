@@ -43,23 +43,20 @@
 
     <!-- Empty state -->
     <div v-if="mcpStore.servers.length === 0" class="flex-1 flex items-center justify-center mcp-grid-bg">
-      <div class="text-center" style="max-width:420px;">
-        <div
-          class="mx-auto mb-5 w-20 h-20 rounded-2xl flex items-center justify-center"
-          style="background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
-        >
-          <svg style="width:40px;height:40px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <EmptyStateGuide
+        :title="t('mcp.noServers')"
+        :description="t('mcp.emptyGuideDesc')"
+        :useCases="[t('mcp.emptyGuideUseCase1'), t('mcp.emptyGuideUseCase2'), t('mcp.emptyGuideUseCase3')]"
+        :ctaLabel="t('mcp.createViaChat')"
+        @create="startChatGuide(t('mcp.emptyGuideChatMsg'), t('mcp.title'))"
+      >
+        <template #icon>
+          <svg style="width:1.5rem;height:1.5rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
             <circle cx="12" cy="12" r="3"/>
           </svg>
-        </div>
-        <h2 style="font-family:'Inter',sans-serif; font-size:var(--fs-section); font-weight:700; color:#1A1A1A; margin:0 0 8px;">
-          {{ t('mcp.noServers') }}
-        </h2>
-        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; line-height:1.6; margin:0;">
-          {{ t('mcp.serversDiscoverHint') }}
-        </p>
-      </div>
+        </template>
+      </EmptyStateGuide>
     </div>
 
     <!-- No search results -->
@@ -327,8 +324,11 @@ import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import { useConfigStore } from '../stores/config'
 import { useI18n } from '../i18n/useI18n'
+import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
+import { useChatToCreate } from '../composables/useChatToCreate'
 
 const { t } = useI18n()
+const { startChatGuide } = useChatToCreate()
 
 const mcpStore = useMcpStore()
 const configStore = useConfigStore()
@@ -767,7 +767,7 @@ function cardGradient() {
 }
 .mcp-modal-desc-textarea {
   flex: 1;
-  min-height: 42vh;
+  min-height: 10.5vh;
   resize: vertical;
   font-size: var(--fs-body);
   background: #18181A;
@@ -910,6 +910,7 @@ function cardGradient() {
   border: 1px solid #2A2A2A; background: #111111;
   font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: var(--fs-small);
   color: #FFFFFF; outline: none; resize: vertical; transition: border-color 0.15s;
+  max-height: 20rem;
 }
 .form-textarea:focus { border-color: #4B5563; }
 .form-textarea::placeholder { color: #4B5563; }

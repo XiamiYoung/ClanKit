@@ -28,6 +28,14 @@
           </div>
         </div>
 
+        <!-- 💡 Info banner: Skills need to be assigned to System Agents -->
+        <div class="skills-info-banner">
+          <svg style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+          <span>{{ t('skills.needsAssignmentInfo') }}</span>
+        </div>
+
         <!-- Tabs -->
         <div class="catalog-tabs">
           <button
@@ -99,25 +107,26 @@
 
       <!-- Empty -->
       <div v-else-if="skillsStore.skills.length === 0" class="flex-1 flex items-center justify-center">
-        <div class="text-center" style="max-width:26.25rem;">
-          <div
-            class="mx-auto mb-5 w-20 h-20 rounded-2xl flex items-center justify-center"
-            style="margin-top:2rem; background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
-          >
-            <svg style="width:40px;height:40px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <EmptyStateGuide
+          :title="t('skills.noSkillsFound')"
+          :description="t('skills.emptyGuideDesc')"
+          :useCases="[t('skills.emptyGuideUseCase1'), t('skills.emptyGuideUseCase2'), t('skills.emptyGuideUseCase3')]"
+          :ctaLabel="t('skills.createViaChat')"
+          :secondaryLabel="t('skills.browseAndInstall')"
+          @create="startChatGuide(t('skills.emptyGuideChatMsg'), t('skills.title'))"
+          @secondary="switchTab('tencent')"
+        >
+          <template #icon>
+            <svg style="width:1.5rem;height:1.5rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
             </svg>
-          </div>
-          <h2 style="font-family:'Inter',sans-serif; font-size:var(--fs-section); font-weight:700; color:#1A1A1A; margin:0 0 0.5rem;">
-            {{ t('skills.noSkillsFound') }}
-          </h2>
-          <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; line-height:1.6; margin:0 0 1rem;">
-            {{ t('skills.skillFolderHint') }}
-          </p>
-          <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">
-            Skills path: <code style="background:#F5F5F5; padding:0.125rem 0.375rem; border-radius:0.25rem; font-size:0.875em;">{{ configStore.config.skillsPath || (configStore.config.dataPath ? configStore.config.dataPath + '/skills' : 'CLANKAI_DATA_PATH/skills') }}</code>
-          </p>
-        </div>
+          </template>
+          <template #secondaryIcon>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+            </svg>
+          </template>
+        </EmptyStateGuide>
       </div>
 
       <!-- Skills Grid -->
@@ -764,8 +773,11 @@ import { useSkillsStore } from '../stores/skills'
 import { useConfigStore } from '../stores/config'
 import { useI18n } from '../i18n/useI18n'
 import AppButton from '../components/common/AppButton.vue'
+import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
+import { useChatToCreate } from '../composables/useChatToCreate'
 
 const { t } = useI18n()
+const { startChatGuide } = useChatToCreate()
 const skillsStore = useSkillsStore()
 const configStore = useConfigStore()
 
@@ -1454,6 +1466,20 @@ const SkillTreeNode = defineComponent({
   line-height: 1.4;
 }
 
+/* ── Info banner ──────────────────────────────────────────────────────── */
+.skills-info-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: #EFF6FF;
+  border-bottom: 1px solid #BFDBFE;
+  color: #1E40AF;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  flex-shrink: 0;
+}
+
 /* ── Search bar ────────────────────────────────────────────────────────── */
 .catalog-search-wrap {
   position: relative;
@@ -1520,6 +1546,7 @@ const SkillTreeNode = defineComponent({
 /* ── Catalog Tabs ──────────────────────────────────────────────────────── */
 .catalog-tabs {
   display: flex;
+  justify-content: center;
   gap: 0.25rem;
   margin-top: 0.875rem;
   border-bottom: 1.5px solid #E5E5EA;
@@ -1528,13 +1555,14 @@ const SkillTreeNode = defineComponent({
 .catalog-tab {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.875rem;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
   border: none;
   background: transparent;
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 500;
+  font-size: 1.25rem;
+  font-weight: 600;
   color: #9CA3AF;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -1555,6 +1583,7 @@ const SkillTreeNode = defineComponent({
 /* ── Tencent sub-tab bar ──────────────────────────────────────────────── */
 .tencent-subtab-bar {
   display: flex;
+  justify-content: center;
   gap: 0.25rem;
   padding: 0.5rem 1.5rem;
   background: #FFFFFF;
@@ -1565,13 +1594,13 @@ const SkillTreeNode = defineComponent({
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.375rem 0.875rem;
+  padding: 0.5rem 1.125rem;
   border: 1.5px solid transparent;
   border-radius: 0.5rem;
   background: transparent;
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 500;
+  font-size: 1.25rem;
+  font-weight: 600;
   color: #9CA3AF;
   cursor: pointer;
   transition: all 0.15s ease;

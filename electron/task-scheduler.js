@@ -27,8 +27,9 @@ try {
 
 const { AgentLoop } = require('./agent/agentLoop')
 
+const ds = require('./lib/dataStore')
+
 // Getters set by init()
-let _getDataDir = null
 let _getMainWindow = null
 
 // Map of planId → cron task (for cron-type plans)
@@ -146,18 +147,18 @@ function _computeItemId(plan, triggeredBy) {
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
 function getPaths() {
-  const dir = _getDataDir()
+  const pp = ds.paths()
   return {
-    configFile:       path.join(dir, 'config.json'),
-    agentsFile:       path.join(dir, 'agents.json'),
-    tasksFile:        path.join(dir, 'tasks.json'),
-    plansFile:        path.join(dir, 'plans.json'),
-    taskRunsDir:      path.join(dir, 'task-runs'),
-    taskRunsIndex:    path.join(dir, 'task-runs', 'index.json'),
-    soulsDir:         path.join(dir, 'souls'),
-    taskCategoriesFile: path.join(dir, 'task-categories.json'),
-    planCategoriesFile: path.join(dir, 'plan-categories.json'),
-    aiTaskTreeFile:     path.join(dir, 'ai-task-tree.json'),
+    configFile:         pp.CONFIG_FILE,
+    agentsFile:         pp.AGENTS_FILE,
+    tasksFile:          pp.TASKS_FILE,
+    plansFile:          pp.PLANS_FILE,
+    taskRunsDir:        pp.TASK_RUNS_DIR,
+    taskRunsIndex:      pp.TASK_RUNS_INDEX,
+    soulsDir:           pp.SOULS_DIR,
+    taskCategoriesFile: pp.TASK_CATEGORIES_FILE,
+    planCategoriesFile: pp.PLAN_CATEGORIES_FILE,
+    aiTaskTreeFile:     pp.AI_TASK_TREE_FILE,
   }
 }
 
@@ -656,9 +657,9 @@ function unschedulePlan(planId) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-function init(getDataDir, getMainWindow) {
-  _getDataDir    = getDataDir
-  _getMainWindow = getMainWindow
+function init(getDataDir, getMainWindow, getSettingsDir) {
+  // getDataDir and getSettingsDir are no longer used — paths come from ds.paths()
+  _getMainWindow  = getMainWindow
 
   if (!cron) {
     logger.warn('[TaskScheduler] node-cron not available — scheduler disabled')

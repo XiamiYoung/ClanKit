@@ -24,41 +24,44 @@
       <!-- Header -->
       <div class="chat-sidebar-header">
         <span class="chat-sidebar-title">{{ t('nav.chats') }}</span>
-        <div class="flex items-center gap-1">
-          <!-- New Folder button -->
-          <button
-            @click="(e) => openCtxDialog('newFolder', '', selectedFolderId ?? chatsStore.activeFolderId ?? null, e.clientX, e.clientY)"
-            class="chat-sidebar-new-btn"
-            :aria-label="t('chats.newFolder', 'New folder')"
-            :title="t('chats.newFolder', 'New folder')"
-          >
-            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-              <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
-            </svg>
-          </button>
-          <button
-            @click="newChat()"
-            class="chat-sidebar-new-btn chat-new-btn"
-            :aria-label="t('chats.newChat')"
-            :title="t('chats.newChat')"
-          >
-            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-          </button>
-          <!-- Multi-chat grid view button -->
-          <button
-            @click="enterGridMode()"
-            class="chat-sidebar-new-btn"
-            aria-label="Multi-chat grid view"
-            title="Multi-chat grid view"
-          >
-            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-            </svg>
-          </button>
-        </div>
+      </div>
+
+      <!-- Action bar: New Folder, New Chat, Grid Mode -->
+      <div class="chat-sidebar-action-bar">
+        <!-- New Folder button -->
+        <button
+          @click="(e) => openCtxDialog('newFolder', '', selectedFolderId ?? chatsStore.activeFolderId ?? null)"
+          class="chat-sidebar-action-btn"
+          :aria-label="t('chats.newFolder')"
+          :title="t('chats.newFolder')"
+        >
+          <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+          </svg>
+        </button>
+        <!-- New Chat button -->
+        <button
+          @click="newChat()"
+          class="chat-sidebar-action-btn"
+          :aria-label="t('chats.newChat')"
+          :title="t('chats.newChat')"
+        >
+          <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+        <!-- Multi-chat grid view button -->
+        <button
+          @click="enterGridMode()"
+          class="chat-sidebar-action-btn"
+          :aria-label="t('chats.multiChatGridView')"
+          :title="t('chats.multiChatGridView')"
+        >
+          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+        </button>
       </div>
 
       <!-- Search Filter -->
@@ -874,35 +877,6 @@
     </div>
   </Teleport>
 
-  <!-- Onboarding: guide card alongside New Chat modal / agent picker (noPanels — modal has own backdrop) -->
-  <OnboardingOverlay
-    v-if="chatOnboardingPhase === 'setupChat'"
-    :title="t('onboarding.setupChatTitle')"
-    :description="t('onboarding.setupChatDesc')"
-    :target-selector="showNewChatAgentPopover || showNewChatUserPopover ? '.ncp-dialog' : '.modal-dialog-container'"
-    :padding="16"
-    no-panels
-    :steps="[
-      { label: t('onboarding.chatStep1'), done: newChatAgentIds.length > 0 },
-      { label: t('onboarding.chatStep2'), done: !!newChatUserAgentId },
-      { label: t('onboarding.chatStep3'), done: false },
-    ]"
-    :current-step="3"
-    :total-steps="3"
-    @skip="skipChatOnboarding"
-  />
-
-  <!-- Onboarding: completion message -->
-  <OnboardingOverlay
-    v-if="chatOnboardingPhase === 'complete'"
-    :title="t('onboarding.chatComplete')"
-    :description="t('onboarding.chatCompleteDesc')"
-    target-selector=".chat-header"
-    :padding="12"
-    :current-step="3"
-    :total-steps="3"
-    @skip="chatOnboardingPhase = 'idle'; configStore.saveConfig({ onboardingCompleted: true })"
-  />
 </template>
 
 <script setup>
@@ -917,6 +891,7 @@ import { useMcpStore } from '../stores/mcp'
 import { useToolsStore } from '../stores/tools'
 import { useModelsStore } from '../stores/models'
 import { useKnowledgeStore } from '../stores/knowledge'
+import { useObsidianStore } from '../stores/obsidian'
 import { useVoiceStore } from '../stores/voice'
 import { useFocusModeStore } from '../stores/focusMode'
 import { useI18n } from '../i18n/useI18n'
@@ -936,7 +911,6 @@ import ChatMentionInput from '../components/chat/ChatMentionInput.vue'
 import ChatSettingsModal from '../components/chat/ChatSettingsModal.vue'
 import NewChatModal from '../components/chat/NewChatModal.vue'
 import ContextInspectorModal from '../components/chat/ContextInspectorModal.vue'
-import OnboardingOverlay from '../components/agents/OnboardingOverlay.vue'
 import { useVoiceRecording } from '../composables/useVoiceRecording'
 import { useChatTree } from '../composables/useChatTree'
 import { useMessageOps } from '../composables/useMessageOps'
@@ -963,14 +937,6 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-// ── Chat onboarding state (watchers registered after useChatTree to avoid TDZ) ──
-const chatOnboardingPhase = ref('idle') // 'idle' | 'setupChat' | 'complete'
-const _prevChatCount = ref(0)
-
-function skipChatOnboarding() {
-  chatOnboardingPhase.value = 'idle'
-  configStore.saveConfig({ onboardingCompleted: true })
-}
 
 const enabledSkillObjects = computed(() => {
   const agent = currentSingleAgent.value
@@ -1002,31 +968,100 @@ const speakingMsgId = ref('')
 const ttsPlayingMsgId = ref('')
 let _speakAudioEl = null
 
+// ── Chunked TTS pipeline state ──
+let _ttsSessionId = null
+let _ttsSessionDir = null
+let _ttsChunks = new Map()   // index → filePath
+let _ttsTotal = 0
+let _ttsPlayingIdx = -1
+let _ttsChunkHandler = null  // raw IPC handler ref returned by onTtsChunkReady
+
 // Stop playback when the user switches to a different chat
 watch(() => chatsStore.activeChatId, () => { stopSpeakMessage() })
 
 function resolveSpeakAgentId(msg) {
   if (msg?.agentId && agentsStore.getAgentById(msg.agentId)) return msg.agentId
-
   const chat = chatsStore.chats.find(c => c.id === chatsStore.activeChatId)
   if (chat?.groupAgentIds?.length) return chat.groupAgentIds[0]
-
   return chat?.systemAgentId || agentsStore.defaultSystemAgent?.id || null
 }
 
-async function playSpeakAudio(result) {
-  if (!result?.success || !result.audio) return false
-
-  _speakAudioEl = new Audio(`data:audio/${result.format || 'mp3'};base64,${result.audio}`)
+function _playChunkAudio(audioUrl) {
+  _speakAudioEl = new Audio(audioUrl)
   const speakerId = voiceStore.selectedSpeakerId
   if (speakerId && typeof _speakAudioEl.setSinkId === 'function') {
     _speakAudioEl.setSinkId(speakerId).catch(() => {})
   }
-  _speakAudioEl.onended = () => stopSpeakMessage()
-  _speakAudioEl.onerror = () => stopSpeakMessage()
+  _speakAudioEl.onended = () => _ttsPlayNext()
+  _speakAudioEl.onerror = () => _ttsPlayNext()
   ttsPlayingMsgId.value = speakingMsgId.value
-  await _speakAudioEl.play()
-  return true
+  _speakAudioEl.play().catch(() => _ttsPlayNext())
+}
+
+function _fileToVaultUrl(filePath) {
+  // Convert OS path to vault-asset:// URL (handles Windows backslashes)
+  const normalized = filePath.replace(/\\/g, '/')
+  return `vault-asset://${normalized.startsWith('/') ? '' : '/'}${normalized}`
+}
+
+function _ttsPlayNext() {
+  // Clean up previous audio element
+  if (_speakAudioEl) { _speakAudioEl.pause(); _speakAudioEl = null }
+
+  const nextIdx = _ttsPlayingIdx + 1
+  if (nextIdx >= _ttsTotal) {
+    // All chunks played — cleanup
+    _ttsFinish()
+    return
+  }
+  const filePath = _ttsChunks.get(nextIdx)
+  if (filePath) {
+    _ttsPlayingIdx = nextIdx
+    _playChunkAudio(_fileToVaultUrl(filePath))
+  }
+  // else: chunk not ready yet — _ttsOnChunk will call _ttsPlayNext when it arrives
+}
+
+function _ttsOnChunk(data) {
+  if (data.sessionId !== _ttsSessionId) return
+  _ttsChunks.set(data.index, data.filePath)
+  if (data.total && !_ttsTotal) _ttsTotal = data.total
+
+  // Start playback when first 2 chunks are ready (or only 1 chunk total)
+  if (_ttsPlayingIdx === -1) {
+    const ready = _ttsChunks.has(0) && (_ttsTotal <= 1 || _ttsChunks.has(1))
+    if (ready) {
+      _ttsPlayingIdx = 0
+      _playChunkAudio(_fileToVaultUrl(_ttsChunks.get(0)))
+    }
+    return
+  }
+  // If we're waiting for the next chunk and it just arrived, play it
+  const waitingFor = _ttsPlayingIdx + 1
+  if (data.index === waitingFor && !_speakAudioEl) {
+    _ttsPlayingIdx = waitingFor
+    _playChunkAudio(_fileToVaultUrl(data.filePath))
+  }
+}
+
+function _ttsFinish() {
+  const dir = _ttsSessionDir
+  _ttsCleanupState()
+  speakingMsgId.value = ''
+  ttsPlayingMsgId.value = ''
+  if (dir) window.electronAPI?.voice?.edgeTtsCleanup?.({ sessionDir: dir })
+}
+
+function _ttsCleanupState() {
+  if (_ttsChunkHandler) {
+    window.electronAPI?.voice?.offTtsChunkReady?.(_ttsChunkHandler)
+    _ttsChunkHandler = null
+  }
+  _ttsChunks = new Map()
+  _ttsTotal = 0
+  _ttsPlayingIdx = -1
+  _ttsSessionId = null
+  _ttsSessionDir = null
 }
 
 async function handleSpeakMessage(msg) {
@@ -1037,33 +1072,91 @@ async function handleSpeakMessage(msg) {
 
   let text = ''
   if (msg.segments) {
-    text = msg.segments.filter(s => s.type === 'text').map(s => s.content || '').join(' ')
+    text = msg.segments.filter(s => s.type === 'text').map(s => s.content || '').join('\n\n')
   } else if (typeof msg.content === 'string') {
     text = msg.content
   }
-  text = text.replace(/```[\s\S]*?```/g, '').replace(/[#*`_~\[\]()>|]/g, '').replace(/\n{2,}/g, '\n').trim().slice(0, 3000)
+  // Clean markdown but preserve paragraph breaks for chunking
+  text = text.replace(/```[\s\S]*?```/g, '').replace(/[#*`_~\[\]()>|]/g, '').trim()
   if (!text) return
 
   speakingMsgId.value = msg.id
   try {
     const agentId = resolveSpeakAgentId(msg)
     const agent = agentId ? agentsStore.getAgentById(agentId) : null
-
     const voice = agent?.voiceId
     if (!voice) { stopSpeakMessage(); return }
-    const result = await window.electronAPI.voice.edgeTtsNode({ text, voice })
-    if (speakingMsgId.value === msg.id && await playSpeakAudio(result)) return
-    stopSpeakMessage()
+
+    const sessionId = crypto.randomUUID()
+    _ttsSessionId = sessionId
+
+    // Register chunk listener before invoking (events may arrive during await)
+    _ttsChunkHandler = window.electronAPI.voice.onTtsChunkReady(_ttsOnChunk)
+
+    const result = await window.electronAPI.voice.edgeTtsChunked({ text, voice, sessionId })
+    if (speakingMsgId.value !== msg.id) { stopSpeakMessage(); return }
+
+    if (!result?.success) { stopSpeakMessage(); return }
+
+    if (result.mode === 'single') {
+      // Short text — play directly
+      _ttsCleanupState()
+      _speakAudioEl = new Audio(`data:audio/${result.format || 'mp3'};base64,${result.audio}`)
+      const speakerId = voiceStore.selectedSpeakerId
+      if (speakerId && typeof _speakAudioEl.setSinkId === 'function') {
+        _speakAudioEl.setSinkId(speakerId).catch(() => {})
+      }
+      _speakAudioEl.onended = () => stopSpeakMessage()
+      _speakAudioEl.onerror = () => stopSpeakMessage()
+      ttsPlayingMsgId.value = speakingMsgId.value
+      await _speakAudioEl.play()
+    } else {
+      // Chunked — pipeline playback is driven by _ttsOnChunk events
+      _ttsTotal = result.totalChunks
+      _ttsSessionDir = result.sessionDir
+    }
   } catch {
     stopSpeakMessage()
   }
 }
 
 function stopSpeakMessage() {
+  const sid = _ttsSessionId
+  const dir = _ttsSessionDir
+  if (_speakAudioEl) { _speakAudioEl.pause(); _speakAudioEl = null }
+  _ttsCleanupState()
   speakingMsgId.value = ''
   ttsPlayingMsgId.value = ''
-  if (_speakAudioEl) { _speakAudioEl.pause(); _speakAudioEl = null }
+  // Cancel remaining synthesis and cleanup temp files
+  if (sid) window.electronAPI?.voice?.edgeTtsCancel?.({ sessionId: sid })
+  if (dir) window.electronAPI?.voice?.edgeTtsCleanup?.({ sessionDir: dir })
 }
+
+// Wizard first chat: auto-play TTS when agent stops running
+watch(() => {
+  const wid = chatsStore.wizardFirstChatId
+  if (!wid) return null
+  const chat = chatsStore.chats.find(c => c.id === wid)
+  return chat?.isRunning ?? null
+}, (isRunning, wasRunning) => {
+  if (wasRunning === true && isRunning === false) {
+    const wizardChatId = chatsStore.wizardFirstChatId
+    if (!wizardChatId) return
+    chatsStore.wizardFirstChatId = null
+    const chat = chatsStore.chats.find(c => c.id === wizardChatId)
+    if (!chat?.messages?.length) return
+    const lastAssistant = [...chat.messages].reverse().find(m => m.role === 'assistant' && !m.streaming)
+    if (lastAssistant) {
+      setTimeout(() => handleSpeakMessage(lastAssistant), 500)
+      // Highlight AI Docs nav after agent likely created a file
+      setTimeout(() => {
+        const obsStore = useObsidianStore()
+        obsStore.highlightNav = true
+        obsStore.loadTree()
+      }, 1000)
+    }
+  }
+})
 
 const voiceErrorTitle = computed(() => {
   const code = voiceServerError.value
@@ -1127,6 +1220,18 @@ watch(() => focusModeStore.pendingChatMessage, (msg) => {
   }
 })
 
+// Watch for input prefill from empty-state guides (useChatToCreate composable)
+watch(() => chatsStore.pendingInputPrefill, async (pending) => {
+  if (!pending) return
+  const { text, chatId } = pending
+  chatsStore.pendingInputPrefill = null
+  if (chatId) {
+    await chatsStore.setActiveChat(chatId)
+    await nextTick()
+  }
+  inputText.value = text
+})
+
 const inputEl = ref(null) // legacy: no longer bound to a DOM element; use mentionInputRef
 const mentionInputRef = ref(null)
 
@@ -1166,20 +1271,6 @@ const {
   newChat, newChatBlockedNoUserAgent, confirmNewChat, cancelNewChat,
   confirmDeleteTarget, requestDeleteChat, requestRemoveGroupAgent, executeConfirmedDelete,
 } = useChatTree({ mentionInputRef })
-
-// ── Chat onboarding watchers (must be after useChatTree so showNewChatModal is defined) ──
-watch(() => chatsStore.chats.length, (len) => {
-  if (len > _prevChatCount.value && chatOnboardingPhase.value === 'setupChat') {
-    chatOnboardingPhase.value = 'complete'
-    setTimeout(() => {
-      if (chatOnboardingPhase.value === 'complete') {
-        chatOnboardingPhase.value = 'idle'
-        configStore.saveConfig({ onboardingCompleted: true })
-      }
-    }, 5000)
-  }
-  _prevChatCount.value = len
-})
 
 const messagesEl = ref(null)
 const chatWindowRef = ref(null)
@@ -1835,29 +1926,6 @@ watch(
 // KeepAlive lifecycle: fires every time the user navigates back to /chats
 onActivated(() => {
   if (voiceStore.isCallActive && voiceStore.isPip) voiceStore.setPip(false)
-
-  // Detect onboarding query — auto-open new chat modal (only if user agent exists)
-  if (route.query.onboarding === '1') {
-    const hasUserAgent = agentsStore.userAgents.some(a => !a.isBuiltin)
-    if (!hasUserAgent) {
-      // Can't create chat without user agent — redirect back to agents
-      router.replace({ path: '/agents', query: { onboarding: '1' } })
-    } else {
-      chatOnboardingPhase.value = 'setupChat'
-      router.replace({ path: '/chats', query: {} })
-      nextTick(() => {
-        newChat()
-        // Pre-fill first chat during onboarding
-        nextTick(() => {
-          newChatName.value = t('onboarding.firstChatName')
-          const customSystem = agentsStore.systemAgents.filter(a => !a.isBuiltin).map(a => a.id)
-          if (customSystem.length) newChatAgentIds.value = customSystem
-          const defaultUser = agentsStore.defaultUserAgent
-          if (defaultUser) newChatUserAgentId.value = defaultUser.id
-        })
-      })
-    }
-  }
 })
 
 // KeepAlive lifecycle: fires when user navigates away — keep mic/TTS running, just show PiP
@@ -2070,7 +2138,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   padding: 0.875rem 1rem;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   border-bottom: 1px solid #E5E5EA;
 }
 .chat-sidebar-title {
@@ -2079,6 +2147,45 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   font-weight: 700;
   color: #1A1A1A;
 }
+
+/* ── Action bar below header ── */
+.chat-sidebar-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid #E5E5EA;
+  flex-shrink: 0;
+}
+
+.chat-sidebar-action-btn {
+  width: 1.875rem;
+  height: 1.875rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  flex-shrink: 0;
+}
+
+.chat-sidebar-action-btn:hover {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.16), 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.chat-sidebar-action-btn:active {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  transform: translateY(0);
+}
+
 .chat-sidebar-new-btn {
   width: 1.875rem;
   height: 1.875rem;

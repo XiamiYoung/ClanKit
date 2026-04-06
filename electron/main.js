@@ -83,55 +83,17 @@ logger.info('=== ClankAI starting ===')
 const isDev = process.env.ELECTRON_DEV === 'true'
 
 // --- Storage ----------------------------------------------------------------
-// DEFAULT_DATA_PATH will be set after app is ready
-let DEFAULT_DATA_PATH = null
-let DATA_DIR = null
-// Derived paths — re-computed by initDataPaths() if DATA_DIR changes at startup
-let CHATS_FILE, CHATS_DIR, CHATS_INDEX_FILE, CONFIG_FILE, AGENTS_FILE,
-    MCP_SERVERS_FILE, TOOLS_FILE, SOULS_DIR, KNOWLEDGE_FILE,
-    UTILITY_USAGE_FILE, TASKS_FILE, PLANS_FILE, TASK_RUNS_DIR, TASK_RUNS_INDEX,
-    TASK_CATEGORIES_FILE, PLAN_CATEGORIES_FILE, AI_TASK_TREE_FILE,
-    PLAZA_TOPICS_FILE, PLAZA_SESSIONS_DIR
-let MEMORY_DIR, AGENT_MEMORY_DIR, USER_MEMORY_DIR
-
-function initDataPaths() {
-  if (!DATA_DIR) {
-    DEFAULT_DATA_PATH = path.join(app.getPath('appData'), 'clankai', 'data')
-    DATA_DIR = DEFAULT_DATA_PATH
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true })
-    }
-  }
-  CHATS_FILE         = path.join(DATA_DIR, 'chats.json')
-  CHATS_DIR          = path.join(DATA_DIR, 'chats')
-  CHATS_INDEX_FILE   = path.join(CHATS_DIR, 'index.json')
-  CONFIG_FILE        = path.join(DATA_DIR, 'config.json')
-  AGENTS_FILE        = path.join(DATA_DIR, 'agents.json')
-  MCP_SERVERS_FILE   = path.join(DATA_DIR, 'mcp-servers.json')
-  TOOLS_FILE         = path.join(DATA_DIR, 'tools.json')
-  SOULS_DIR          = path.join(DATA_DIR, 'souls')
-  KNOWLEDGE_FILE     = path.join(DATA_DIR, 'knowledge.json')
-  UTILITY_USAGE_FILE = path.join(DATA_DIR, 'utility-usage.json')
-  TASKS_FILE         = path.join(DATA_DIR, 'tasks.json')
-  PLANS_FILE         = path.join(DATA_DIR, 'plans.json')
-  TASK_RUNS_DIR      = path.join(DATA_DIR, 'task-runs')
-  TASK_RUNS_INDEX    = path.join(DATA_DIR, 'task-runs', 'index.json')
-  TASK_CATEGORIES_FILE = path.join(DATA_DIR, 'task-categories.json')
-  PLAN_CATEGORIES_FILE = path.join(DATA_DIR, 'plan-categories.json')
-  AI_TASK_TREE_FILE    = path.join(DATA_DIR, 'ai-task-tree.json')
-  PLAZA_TOPICS_FILE    = path.join(DATA_DIR, 'plaza-topics.json')
-  PLAZA_SESSIONS_DIR   = path.join(DATA_DIR, 'plaza-sessions')
-  MEMORY_DIR           = path.join(DATA_DIR, 'memory')
-  AGENT_MEMORY_DIR     = path.join(MEMORY_DIR, 'agents')
-  USER_MEMORY_DIR      = path.join(MEMORY_DIR, 'users')
-}
+// dataStore.js is the SINGLE source of truth for all paths.
+// Shorthand accessor — available after ensureDataDir().
+const ds = require('./lib/dataStore')
+function p() { return ds.paths() }
 
 
 // --- Memory directory helpers ------------------------------------------------
 
 /** Ensure per-agent memory directories exist. Returns { memDir, logsDir }. */
 function ensureAgentMemoryDirs(agentId) {
-  const memDir  = path.join(AGENT_MEMORY_DIR, agentId)
+  const memDir  = path.join(p().AGENT_MEMORY_DIR, agentId)
   const logsDir = path.join(memDir, 'memory')
   fs.mkdirSync(logsDir, { recursive: true })
   return { memDir, logsDir }
@@ -139,7 +101,7 @@ function ensureAgentMemoryDirs(agentId) {
 
 /** Ensure user memory directory exists. Returns userDir path. */
 function ensureUserMemoryDir(userId) {
-  const userDir = path.join(USER_MEMORY_DIR, userId)
+  const userDir = path.join(p().USER_MEMORY_DIR, userId)
   fs.mkdirSync(userDir, { recursive: true })
   return userDir
 }
@@ -169,11 +131,11 @@ function appendMemoryEntry(agentId, userId, target, section, entry) {
   try {
     let filePath
     if (target === 'user') {
-      const userDir = path.join(USER_MEMORY_DIR, userId)
+      const userDir = path.join(p().USER_MEMORY_DIR, userId)
       fs.mkdirSync(userDir, { recursive: true })
       filePath = path.join(userDir, 'USER.md')
     } else {
-      const agentDir = path.join(AGENT_MEMORY_DIR, agentId)
+      const agentDir = path.join(p().AGENT_MEMORY_DIR, agentId)
       fs.mkdirSync(agentDir, { recursive: true })
       filePath = path.join(agentDir, 'MEMORY.md')
     }
@@ -214,7 +176,7 @@ function getAgentLogPaths(agentId) {
 // --- Env-backed path accessors -----------------------------------------------
 // These three paths are stored in config.json under CLANKAI_DATA_PATH.
 function getEnvPaths() {
-  const cfg = readJSON(CONFIG_FILE, {})
+  const cfg = readJSON(p().CONFIG_FILE, {})
   return {
     skillsPath:   cfg.skillsPath   || '',
     DoCPath:      cfg.DoCPath      || '',
@@ -224,24 +186,7 @@ function getEnvPaths() {
 
 
 function ensureDataDir() {
-  // Always use default path - no user customization
-  DEFAULT_DATA_PATH = path.join(app.getPath('appData'), 'clankai', 'data')
-  DATA_DIR = DEFAULT_DATA_PATH
-  initDataPaths()
-  // Publish DATA_DIR to env so sub-modules (im-bridge, agentLoop fallback) can find it
-  process.env.CLANKAI_DATA_PATH = DATA_DIR
-  // Redirect logs to DATA_DIR/logs now that the data path is known
-  logger.setLogDir(path.join(DATA_DIR, 'logs'))
-
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true })
-  }
-
-
-  // Ensure memory directories exist
-  fs.mkdirSync(MEMORY_DIR,       { recursive: true })
-  fs.mkdirSync(AGENT_MEMORY_DIR, { recursive: true })
-  fs.mkdirSync(USER_MEMORY_DIR,  { recursive: true })
+  ds.init()
 }
 
 function readJSON(file, fallback) {
@@ -293,9 +238,9 @@ function chatMetaFromChat(chat) {
 
 // --- Migration: monolithic chats.json -> per-chat files -----------------------
 async function migrateChatsIfNeeded() {
-  const chatsDir = CHATS_DIR
-  const indexFile = CHATS_INDEX_FILE
-  const oldFile = CHATS_FILE
+  const chatsDir = p().CHATS_DIR
+  const indexFile = p().CHATS_INDEX_FILE
+  const oldFile = p().CHATS_FILE
 
   if (fs.existsSync(chatsDir) && fs.existsSync(indexFile)) {
     // Already migrated -- clean up any leftover .tmp files
@@ -582,9 +527,6 @@ app.whenReady().then(async () => {
   })
 
   ensureDataDir()
-  // Initialize the shared dataStore module so extracted IPC modules can use ds.paths()
-  const ds = require('./lib/dataStore')
-  ds.init()
 
   // Initialize local RAG modules (path-only, no model loading)
   const localEmbedding = require('./lib/localEmbedding')
@@ -619,6 +561,11 @@ app.whenReady().then(async () => {
     })
   }
   ipcMain.handle('html-preview:port', () => _ensureHtmlServer())
+  ipcMain.handle('app:get-locale', () => {
+    const locale = app.getLocale()
+    console.log('[main] app.getLocale():', locale)
+    return locale
+  })
 
   // Register all IPC handlers (must be after dataStore.init() and createWindow())
   ipcAgent = require('./ipc').registerAll({ DEFAULT_CONFIG, imBridge, mcpManager }).ipcAgent
@@ -628,8 +575,8 @@ app.whenReady().then(async () => {
 
   // ── Clean up stale 'running' run entries from a previous session ────────────
   try {
-    if (fs.existsSync(TASK_RUNS_INDEX)) {
-      const runIndex = JSON.parse(fs.readFileSync(TASK_RUNS_INDEX, 'utf8'))
+    if (fs.existsSync(p().TASK_RUNS_INDEX)) {
+      const runIndex = JSON.parse(fs.readFileSync(p().TASK_RUNS_INDEX, 'utf8'))
       const stoppedAt = new Date().toISOString()
       let dirty = false
       for (const entry of runIndex) {
@@ -639,7 +586,7 @@ app.whenReady().then(async () => {
           entry.error       = 'Interrupted by app restart'
           dirty = true
           // Also patch the run detail file if it exists
-          const detailFile = path.join(TASK_RUNS_DIR, `${entry.id}.json`)
+          const detailFile = path.join(p().TASK_RUNS_DIR, `${entry.id}.json`)
           if (fs.existsSync(detailFile)) {
             try {
               const detail = JSON.parse(fs.readFileSync(detailFile, 'utf8'))
@@ -653,7 +600,7 @@ app.whenReady().then(async () => {
           }
         }
       }
-      if (dirty) fs.writeFileSync(TASK_RUNS_INDEX, JSON.stringify(runIndex, null, 2), 'utf8')
+      if (dirty) fs.writeFileSync(p().TASK_RUNS_INDEX, JSON.stringify(runIndex, null, 2), 'utf8')
     }
   } catch (err) {
     logger.warn('Failed to clean up stale run entries:', err.message)
@@ -661,14 +608,14 @@ app.whenReady().then(async () => {
 
   // ── Task Scheduler ──────────────────────────────────────────────────────────
   const taskScheduler = require('./task-scheduler')
-  taskScheduler.init(() => DATA_DIR, () => mainWindow)
+  taskScheduler.init(() => p().DATA_DIR, () => mainWindow, () => p().SETTINGS_DIR)
 
   // ── IM Bridge ──────────────────────────────────────────────────────────────
   // setMainWindow is synchronous and fast — do it immediately so the bridge
   // has the window reference before any IPC arrives.
   // imBridge.start() can take 1-2s (Telegram/WhatsApp session restore), so
   // defer it past the current event loop tick to avoid blocking main startup.
-  const _imCfg = readJSON(CONFIG_FILE, {})
+  const _imCfg = readJSON(p().CONFIG_FILE, {})
   imBridge.setMainWindow(mainWindow)
   if (_imCfg.im?.telegram?.enabled || _imCfg.im?.whatsapp?.enabled || _imCfg.im?.feishu?.enabled || _imCfg.im?.teams?.enabled) {
     setImmediate(() => imBridge.start(_imCfg))

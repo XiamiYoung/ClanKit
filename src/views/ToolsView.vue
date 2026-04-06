@@ -90,22 +90,19 @@
 
     <!-- Empty state -->
     <div v-if="toolsStore.tools.length === 0" class="flex-1 flex items-center justify-center tools-grid-bg">
-      <div class="text-center" style="max-width:420px;">
-        <div
-          class="mx-auto mb-5 w-20 h-20 rounded-2xl flex items-center justify-center"
-          style="background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
-        >
-          <svg style="width:40px;height:40px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <EmptyStateGuide
+        :title="t('tools.noTools')"
+        :description="t('tools.emptyGuideDesc')"
+        :useCases="[t('tools.emptyGuideUseCase1'), t('tools.emptyGuideUseCase2'), t('tools.emptyGuideUseCase3')]"
+        :ctaLabel="t('tools.createViaChat')"
+        @create="startChatGuide(t('tools.emptyGuideChatMsg'), t('tools.title'))"
+      >
+        <template #icon>
+          <svg style="width:1.5rem;height:1.5rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
           </svg>
-        </div>
-        <h2 style="font-family:'Inter',sans-serif; font-size:var(--fs-section); font-weight:700; color:#1A1A1A; margin:0 0 8px;">
-          {{ t('tools.noTools') }}
-        </h2>
-        <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF; line-height:1.6; margin:0;">
-          {{ t('tools.noToolsDesc') }}
-        </p>
-      </div>
+        </template>
+      </EmptyStateGuide>
     </div>
 
     <!-- No search/filter results -->
@@ -422,10 +419,13 @@ import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import { useConfigStore } from '../stores/config'
 import { useI18n } from '../i18n/useI18n'
+import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
+import { useChatToCreate } from '../composables/useChatToCreate'
 
 const toolsStore = useToolsStore()
 const configStore = useConfigStore()
 const { t } = useI18n()
+const { startChatGuide } = useChatToCreate()
 const refreshing = ref(false)
 
 // Resolve display name/description for built-in tools via i18n

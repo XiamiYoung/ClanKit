@@ -521,10 +521,16 @@ onUnmounted(() => {
 .mbc-call-end {
   display:flex; align-items:center; justify-content:center;
   width:1rem; height:1rem; border:none; border-radius:50%;
-  background:rgba(255,59,48,0.2); color:#FF6B6B; cursor:pointer; flex-shrink:0;
-  transition:background 0.15s ease,color 0.15s ease;
+  background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #2D2D2D 100%);
+  border:1px solid rgba(255,107,107,0.35);
+  color:#FF8A80; cursor:pointer; flex-shrink:0;
+  transition:background 0.15s ease,color 0.15s ease,border-color 0.15s ease;
 }
-.mbc-call-end:hover { background:rgba(255,59,48,0.45); color:#FFFFFF; }
+.mbc-call-end:hover {
+  background:linear-gradient(135deg, #1A1A1A 0%, #242424 40%, #333333 100%);
+  border-color: rgba(255,107,107,0.6);
+  color:#FFFFFF;
+}
 
 /* ── Ticker ───────────────────────────────────────────────────────────────── */
 .mbc-ticker-wrap {

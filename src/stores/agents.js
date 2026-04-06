@@ -44,6 +44,34 @@ function buildBuiltinSystemCopy(locale, utilityModel, capabilities) {
   }
 }
 
+function buildBuiltinDocEditorCopy(locale, utilityModel) {
+  const isChinese = String(locale || 'en').startsWith('zh')
+  const messages = isChinese ? zh : en
+  const builtinName = messages.agents.builtinDocEditorName || 'DocMaster'
+  const description = messages.agents.builtinDocEditorDescription || ''
+  const prompt = messages.agents.builtinDocEditorPrompt || ''
+
+  return {
+    id: BUILTIN_DOC_EDITOR_ID,
+    type: 'system',
+    name: builtinName,
+    avatar: 'a3',
+    description,
+    prompt,
+    providerId: utilityModel?.provider || null,
+    modelId: utilityModel?.model || null,
+    voiceId: getDefaultVoiceForLocale(locale),
+    isDefault: false,
+    isBuiltin: true,
+    createdAt: 0,
+    updatedAt: 0,
+    requiredToolIds: [],
+    requiredSkillIds: [],
+    requiredMcpServerIds: [],
+    requiredKnowledgeBaseIds: [],
+  }
+}
+
 function arrayEquals(a, b) {
   if (a === b) return true
   if (!Array.isArray(a) || !Array.isArray(b)) return false
@@ -54,37 +82,7 @@ function arrayEquals(a, b) {
   return true
 }
 
-const BUILTIN_DOC_EDITOR_AGENT = {
-  id: BUILTIN_DOC_EDITOR_ID,
-  type: 'system',
-  name: 'Doc Editor',
-  avatar: 'a3',
-  description: 'Expert document editing AI for writing, formatting, and content optimization.',
-  prompt: `You are Doc Editor, a world-class document editing AI assistant embedded in a professional document editor.
-
-Core expertise:
-- Writing excellence: grammar, spelling, style, tone, clarity, conciseness
-- Structural editing: reorganize content, improve flow, add transitions
-- Format mastery: Markdown, HTML, code, technical docs, creative writing, business docs
-- Content enhancement: expand ideas, simplify complex topics, summarize
-- Code documentation: comments, docstrings, README, API docs
-- Multilingual: edit and translate while preserving intent
-
-When asked to modify text, output the replacement wrapped in <replacement>...</replacement> tags.
-When asked questions about the text, answer directly without tags.
-
-Rules:
-- Preserve original formatting style unless asked to change it
-- Maintain the author's voice — enhance, don't replace
-- Be precise — only change what's needed
-- For code, preserve functionality while improving readability
-- For partial selections, only modify the selected section`,
-  voiceId: 'en-US-AriaNeural',
-  isDefault: false,
-  isBuiltin: true,
-  createdAt: 0,
-  updatedAt: 0,
-}
+// BUILTIN_DOC_EDITOR_AGENT is now built dynamically via buildBuiltinDocEditorCopy()
 
 // BUILTIN_USER_AGENT removed — user must create their own via onboarding
 
@@ -139,6 +137,55 @@ export const useAgentsStore = defineStore('agents', () => {
       categoryIds: Array.isArray(previous.categoryIds) ? previous.categoryIds : [],
       createdAt: previous.createdAt ?? builtin.createdAt,
       updatedAt: previous.updatedAt ?? builtin.updatedAt,
+    }
+  }
+
+  function createBuiltinDocEditorAgent() {
+    return buildBuiltinDocEditorCopy(
+      configStore.language || 'en',
+      configStore.config.utilityModel || {}
+    )
+  }
+
+  function mergeBuiltinDocEditorAgent(existing) {
+    const builtin = createBuiltinDocEditorAgent()
+    const previous = existing || {}
+    return {
+      ...previous,
+      ...builtin,
+      providerId: previous.providerId ?? builtin.providerId,
+      modelId: previous.modelId ?? builtin.modelId,
+      isBuiltin: true,
+      categoryIds: Array.isArray(previous.categoryIds) ? previous.categoryIds : [],
+      createdAt: previous.createdAt ?? builtin.createdAt,
+      updatedAt: previous.updatedAt ?? builtin.updatedAt,
+    }
+  }
+
+  function builtinDocEditorAgentNeedsSync(current, next) {
+    if (!current) return true
+    return current.name !== next.name ||
+      current.avatar !== next.avatar ||
+      current.description !== next.description ||
+      current.voiceId !== next.voiceId
+  }
+
+  async function syncBuiltinDocEditorAgent(persistChanges = true) {
+    const docIdx = agents.value.findIndex(p => p.id === BUILTIN_DOC_EDITOR_ID)
+    if (docIdx === -1 || builtinSyncInFlight) return
+    const current = agents.value[docIdx]
+    const next = mergeBuiltinDocEditorAgent(current)
+    if (!builtinDocEditorAgentNeedsSync(current, next)) return
+
+    builtinSyncInFlight = true
+    agents.value[docIdx] = {
+      ...next,
+      updatedAt: Date.now(),
+    }
+    try {
+      if (persistChanges) await persist()
+    } finally {
+      builtinSyncInFlight = false
     }
   }
 
@@ -214,9 +261,9 @@ export const useAgentsStore = defineStore('agents', () => {
     // Ensure built-in doc editor agent exists
     const docIdx = list.findIndex(p => p.id === BUILTIN_DOC_EDITOR_ID)
     if (docIdx >= 0) {
-      list[docIdx] = { ...list[docIdx], isBuiltin: true }
+      list[docIdx] = mergeBuiltinDocEditorAgent(list[docIdx])
     } else {
-      list.push({ ...BUILTIN_DOC_EDITOR_AGENT })
+      list.push(createBuiltinDocEditorAgent())
     }
 
     // Remove legacy built-in default user agent from disk data
@@ -408,6 +455,7 @@ export const useAgentsStore = defineStore('agents', () => {
     }),
     () => {
       syncBuiltinSystemAgent(true)
+      syncBuiltinDocEditorAgent(true)
     }
   )
 

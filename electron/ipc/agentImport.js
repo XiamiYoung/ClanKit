@@ -5,7 +5,7 @@
  *
  * Channels:
  *   agent:import-check-env        → { ready: bool }
- *   agent:import-setup-env        → streams agent:import-progress → { success, error? }
+ *   agent:import-setup-env        → (no-op, Python no longer required)
  *   agent:import-pick-file        → { filePath: string | null }
  *   agent:import-extract-messages → { source, contactName?, dbDir?, filePath?, text? }
  *                                   streams agent:import-progress
@@ -17,16 +17,13 @@
 
 const { ipcMain, dialog } = require('electron')
 const path = require('path')
-const { spawn } = require('child_process')
 const windowRef = require('../lib/windowRef')
 const { logger } = require('../logger')
 
-const { isEnvReady, setupChatImportEnv, getChatImportEnvPath, getVenvPythonBin, getSystemPythonPath } = require('../agent/chatImport/setup')
 const { extractWhatsAppMessages, extractPlainTextMessages, classifyMessages, buildMessageBlock } = require('../agent/chatImport/chatParser')
 const { buildCombinedPrompt, generatePersona } = require('../agent/chatImport/personaBuilder')
-
-// Path to the Python scripts bundled with the app
-const SCRIPTS_DIR = path.join(__dirname, '../agent/chatImport')
+const wechatDecryptor = require('../agent/chatImport/wechatDecryptor')
+const wechatParser = require('../agent/chatImport/wechatParser')
 
 /**
  * Send a progress event to the renderer (guarded against destroyed sender).
@@ -40,27 +37,10 @@ function sendProgress(event, payload) {
 }
 
 // ─── agent:import-check-env ────────────────────────────────────────────────
+// Kept for backward compatibility — no external environment needed.
 
-ipcMain.handle('agent:import-check-env', async () => {
-  try {
-    const ready = await isEnvReady()
-    return { ready }
-  } catch (err) {
-    return { ready: false, error: err.message }
-  }
-})
-
-// ─── agent:import-setup-env ────────────────────────────────────────────────
-
-ipcMain.handle('agent:import-setup-env', async (event) => {
-  try {
-    const result = await setupChatImportEnv((payload) => sendProgress(event, payload))
-    return result
-  } catch (err) {
-    logger.error('agent:import-setup-env error', err.message)
-    return { success: false, error: err.message }
-  }
-})
+ipcMain.handle('agent:import-check-env', async () => ({ ready: true }))
+ipcMain.handle('agent:import-setup-env', async () => ({ success: true }))
 
 // ─── agent:import-pick-file ────────────────────────────────────────────────
 
@@ -106,13 +86,6 @@ ipcMain.handle('agent:import-decrypt-wechat', async (event, { dbDir } = {}) => {
     // If the caller already has a decrypted directory, pass it straight through
     if (dbDir) return { success: true, decryptedDir: dbDir }
 
-    const ready = await isEnvReady()
-    if (!ready) {
-      return { success: false, error: 'Chat import environment not set up. Please set up the environment first.' }
-    }
-
-    const venvPython = getVenvPythonBin(getChatImportEnvPath())
-    const decryptorScript = path.join(SCRIPTS_DIR, 'wechat_decryptor.py')
     const ds = require('../lib/dataStore')
     const fs = require('fs')
     const decryptedDir = path.join(ds.paths().DATA_DIR, 'wechat-decrypted')
@@ -121,25 +94,17 @@ ipcMain.handle('agent:import-decrypt-wechat', async (event, { dbDir } = {}) => {
     try { fs.rmSync(decryptedDir, { recursive: true, force: true }) } catch {}
 
     sendProgress(event, { step: 'key', progress: 5, message: 'Starting WeChat decryption...' })
-    const result = await runPythonScript(
-      venvPython,
-      [decryptorScript, '--json-progress', '--output', decryptedDir],
-      (data) => sendProgress(event, data)
-    )
+
+    const result = wechatDecryptor.decrypt({
+      output: decryptedDir,
+      emitFn: (step, progress, message) => sendProgress(event, { step, progress, message }),
+    })
 
     if (!result.success) {
-      const errMsg = result.error || ''
-      const isProcessNotFound = /process not found|WeChat process not found/i.test(errMsg)
-      if (process.platform === 'win32' && isProcessNotFound) {
-        sendProgress(event, { step: 'elevate', progress: 8, message: 'WeChat process not accessible — requesting administrator privileges...' })
-        const elevResult = await _decryptWeChatElevated(event, venvPython, decryptorScript)
-        if (!elevResult.success) return { success: false, error: elevResult.error || 'WeChat decryption failed.' }
-        return { success: true, decryptedDir: elevResult.output_dir || decryptedDir }
-      }
-      return { success: false, error: errMsg || 'WeChat decryption failed.' }
+      return { success: false, error: result.error || 'WeChat decryption failed.' }
     }
 
-    return { success: true, decryptedDir: result.output_dir || decryptedDir }
+    return { success: true, decryptedDir: result.outputDir || decryptedDir }
   } catch (err) {
     logger.error('agent:import-decrypt-wechat error', err.message)
     return { success: false, error: err.message }
@@ -152,21 +117,29 @@ ipcMain.handle('agent:import-decrypt-wechat', async (event, { dbDir } = {}) => {
 
 ipcMain.handle('agent:import-list-contacts', async (_event, { dbDir, source }) => {
   try {
-    const parserPython = await _getParserPython()
-    if (!parserPython) return { success: false, error: 'No compatible Python found.' }
-    const parserScript = path.join(SCRIPTS_DIR, 'wechat_parser.py')
-
-    const args = [parserScript, '--list-contacts', '--json-output']
     if (source === 'imessage') {
-      args.push('--imessage')
-    } else {
-      if (!dbDir) return { success: false, error: 'dbDir is required for WeChat contact list.' }
-      args.push('--db-dir', dbDir)
+      const defaultPath = path.join(require('os').homedir(), 'Library', 'Messages', 'chat.db')
+      const contacts = wechatParser.listImessageContacts(defaultPath)
+      return { success: true, contacts: contacts.map(c => ({ wxid: c.handle, alias: '', remark: '', nickname: c.handle, messageCount: c.count })) }
     }
 
-    const result = await runPythonScript(parserPython, args, null)
-    if (!result.success) return { success: false, error: result.error }
-    return { success: true, contacts: result.jsonData?.contacts || [] }
+    if (!dbDir) return { success: false, error: 'dbDir is required for WeChat contact list.' }
+
+    const contacts = wechatParser.listContacts(dbDir)
+    const counts = wechatParser.countMessagesByContact(dbDir)
+    const avatars = wechatParser.loadAvatars(dbDir)
+
+    for (const c of contacts) {
+      c.messageCount = counts[c.wxid] || 0
+      if (avatars[c.wxid]) c.avatar = avatars[c.wxid]
+    }
+
+    // Filter out group chats, contacts with messages first
+    const filtered = contacts.filter(c => !c.wxid.endsWith('@chatroom'))
+    const withMsgs = filtered.filter(c => c.messageCount > 0).sort((a, b) => b.messageCount - a.messageCount)
+    const noMsgs = filtered.filter(c => c.messageCount === 0).slice(0, 50)
+
+    return { success: true, contacts: [...withMsgs, ...noMsgs] }
   } catch (err) {
     logger.error('agent:import-list-contacts error', err.message)
     return { success: false, error: err.message }
@@ -357,136 +330,60 @@ ipcMain.handle('agent:import-write-memories', async (_event, { agentId, memories
  * @param {string|null} dbDir - if provided, skip decryption
  */
 async function _extractWeChat(event, contactName, dbDir) {
-  const parserScript = path.join(SCRIPTS_DIR, 'wechat_parser.py')
   let resolvedDbDir = dbDir
 
-  // Step 1: decrypt if no dbDir provided (requires venv with pycryptodome)
+  // Step 1: decrypt if no dbDir provided
   if (!resolvedDbDir) {
-    const ready = await isEnvReady()
-    if (!ready) {
-      return { success: false, error: 'Chat import environment not set up. Please set up the environment first.' }
-    }
-    const venvPython = getVenvPythonBin(getChatImportEnvPath())
-    sendProgress(event, { step: 'key', progress: 5, message: 'Starting WeChat decryption...' })
-    const decryptorScript = path.join(SCRIPTS_DIR, 'wechat_decryptor.py')
     const ds = require('../lib/dataStore')
     const fs = require('fs')
     const decryptedDir = path.join(ds.paths().DATA_DIR, 'wechat-decrypted')
     // Clean previous decrypted data to avoid leaking other accounts' contacts
     try { fs.rmSync(decryptedDir, { recursive: true, force: true }) } catch {}
-    const decryptResult = await runPythonScript(
-      venvPython,
-      [decryptorScript, '--json-progress', '--output', decryptedDir],
-      (data) => { sendProgress(event, data) }
-    )
+
+    sendProgress(event, { step: 'key', progress: 5, message: 'Starting WeChat decryption...' })
+    const decryptResult = wechatDecryptor.decrypt({
+      output: decryptedDir,
+      emitFn: (step, progress, message) => sendProgress(event, { step, progress, message }),
+    })
+
     if (!decryptResult.success) {
-      // If process not found, automatically retry with UAC elevation (Windows only)
-      const errMsg = decryptResult.error || ''
-      const isProcessNotFound = /process not found|未找到微信进程/i.test(errMsg)
-      if (process.platform === 'win32' && isProcessNotFound) {
-        sendProgress(event, { step: 'elevate', progress: 8, message: 'WeChat process not accessible — requesting administrator privileges...' })
-        const elevResult = await _decryptWeChatElevated(event, venvPython, decryptorScript)
-        if (!elevResult.success) {
-          return { success: false, error: elevResult.error || 'WeChat decryption failed.' }
-        }
-        resolvedDbDir = elevResult.output_dir
-      } else {
-        return { success: false, error: errMsg || 'WeChat decryption failed.' }
-      }
-    } else {
-      resolvedDbDir = decryptResult.output_dir
+      return { success: false, error: decryptResult.error || 'WeChat decryption failed.' }
     }
+
+    resolvedDbDir = decryptResult.outputDir
     if (!resolvedDbDir) {
       return { success: false, error: 'Decryption succeeded but output directory was not returned.' }
     }
   }
 
-  // Step 2: parse messages — wechat_parser.py only uses stdlib, system Python is fine
-  const parserPython = await _getParserPython()
-  if (!parserPython) {
-    return { success: false, error: 'No compatible Python found. Please set up the environment.' }
-  }
-
+  // Step 2: parse messages directly via Node.js
   sendProgress(event, { step: 'parse', progress: 60, message: 'Extracting messages...' })
-  const parseResult = await runPythonScript(
-    parserPython,
-    [parserScript, '--db-dir', resolvedDbDir, '--target', contactName, '--json-output'],
-    (data) => sendProgress(event, { ...data, progress: 60 + Math.round((data.progress || 0) * 0.3) })
-  )
 
-  if (!parseResult.success) {
-    return { success: false, error: parseResult.error || 'Message extraction failed.' }
+  const targetWxid = wechatParser.findContactWxid(resolvedDbDir, contactName)
+  if (targetWxid) {
+    logger.info(`agent:import: Matched contact wxid: ${targetWxid}`)
+  } else {
+    logger.warn(`agent:import: No exact match for '${contactName}'`)
   }
 
-  const classified = parseResult.jsonData
-  if (!classified) {
-    return { success: false, error: 'Parser returned no data.' }
+  const messages = wechatParser.extractMessagesFromDir(resolvedDbDir, targetWxid)
+
+  if (messages.length === 0) {
+    return { success: false, error: `No messages found for '${contactName}'. Use list-contacts to verify the exact name.` }
   }
+
+  const classified = classifyMessages(messages, contactName)
+  const theirCount = classified.total_their_count
 
   sendProgress(event, { step: 'done', progress: 100, message: 'Extraction complete.' })
   return {
     success: true,
     classified,
     messageCount: classified.total_count || 0,
-    theirCount: classified.total_their_count || 0,
-    warning: classified.total_their_count < 50
-      ? `Only ${classified.total_their_count} messages from ${contactName}. Results may be less accurate.`
+    theirCount,
+    warning: theirCount < 50
+      ? `Only ${theirCount} messages from ${contactName}. Results may be less accurate.`
       : undefined,
-  }
-}
-
-/**
- * Re-run WeChat decryption elevated via UAC (Windows only).
- * Uses PowerShell Start-Process -Verb RunAs so the user sees one UAC prompt.
- * Result is communicated via a temp JSON file (stdout is inaccessible cross-elevation).
- *
- * @param {Electron.IpcMainInvokeEvent} event
- * @param {string} venvPython  - path to venv python binary
- * @param {string} decryptorScript - path to wechat_decryptor.py
- * @returns {Promise<{ success: boolean, output_dir?: string, error?: string }>}
- */
-async function _decryptWeChatElevated(event, venvPython, decryptorScript) {
-  const os = require('os')
-  const fs = require('fs')
-  const ds = require('../lib/dataStore')
-  const tempOutput = path.join(os.tmpdir(), `wechat_result_${Date.now()}.json`)
-  const decryptedDir = path.join(ds.paths().DATA_DIR, 'wechat-decrypted')
-
-  // Build the inner PowerShell command and encode it as base64 UTF-16LE.
-  // This avoids ALL quoting/escaping issues with paths that contain spaces or special chars.
-  const sq = (s) => s.replace(/'/g, "''")   // single-quote escape for PS literal strings
-  const innerCmd = [
-    `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`,
-    `$env:PYTHONUTF8 = '1'`,
-    `$env:PYTHONIOENCODING = 'utf-8'`,
-    `& '${sq(venvPython)}' '${sq(decryptorScript)}' '--json-progress' '--output' '${sq(decryptedDir)}' '--output-file' '${sq(tempOutput)}'`,
-  ].join('\n')
-  const encodedCmd = Buffer.from(innerCmd, 'utf16le').toString('base64')
-
-  sendProgress(event, { step: 'elevate', progress: 12, message: 'A UAC prompt appeared — click Yes to allow WeChat decryption.' })
-
-  // Launch elevated PowerShell and wait for it to finish
-  await new Promise((resolve) => {
-    const child = spawn('powershell', [
-      '-NoProfile', '-NonInteractive', '-Command',
-      `Start-Process powershell -ArgumentList '-NoProfile -EncodedCommand ${encodedCmd}' -Verb RunAs -Wait`,
-    ], { stdio: 'ignore', env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' } })
-    child.on('close', resolve)
-    child.on('error', resolve)
-  })
-
-  sendProgress(event, { step: 'elevate', progress: 75, message: 'Checking decryption result...' })
-
-  if (!fs.existsSync(tempOutput)) {
-    return { success: false, error: 'UAC prompt was cancelled or the decryptor could not start. Try using the "I already have a decrypted directory" option.' }
-  }
-
-  try {
-    const result = JSON.parse(fs.readFileSync(tempOutput, 'utf-8'))
-    try { fs.unlinkSync(tempOutput) } catch (_) { /* ignore */ }
-    return result   // { success, output_dir }
-  } catch (err) {
-    return { success: false, error: `Failed to read decryption result: ${err.message}` }
   }
 }
 
@@ -498,119 +395,24 @@ async function _extractIMessage(event, contactHandle) {
     return { success: false, error: 'iMessage extraction is only available on macOS.' }
   }
 
-  // wechat_parser.py iMessage mode only needs stdlib — use system Python, no venv required
-  const parserPython = await _getParserPython()
-  if (!parserPython) {
-    return { success: false, error: 'No compatible Python found. Please set up the environment.' }
-  }
-  const parserScript = path.join(SCRIPTS_DIR, 'wechat_parser.py')
-
   sendProgress(event, { step: 'parse', progress: 10, message: 'Reading iMessage database...' })
-  const parseResult = await runPythonScript(
-    parserPython,
-    [parserScript, '--imessage', '--target', contactHandle, '--json-output'],
-    (data) => sendProgress(event, data)
-  )
 
-  if (!parseResult.success) {
-    return { success: false, error: parseResult.error || 'iMessage extraction failed.' }
+  const defaultDbPath = path.join(require('os').homedir(), 'Library', 'Messages', 'chat.db')
+  const messages = wechatParser.extractImessageMessages(defaultDbPath, contactHandle)
+
+  if (messages.length === 0) {
+    return { success: false, error: `No iMessage messages found for '${contactHandle}'. Grant Full Disk Access to the app.` }
   }
 
-  const classified = parseResult.jsonData
+  const classified = classifyMessages(messages, contactHandle)
+
   sendProgress(event, { step: 'done', progress: 100, message: 'Extraction complete.' })
   return {
     success: true,
     classified,
-    messageCount: classified?.total_count || 0,
-    theirCount: classified?.total_their_count || 0,
+    messageCount: classified.total_count || 0,
+    theirCount: classified.total_their_count || 0,
   }
-}
-
-/**
- * Returns the best available Python binary for running stdlib-only scripts.
- * Prefers venv python if ready, falls back to system Python.
- */
-async function _getParserPython() {
-  // Try venv python first (already set up)
-  const venvPython = getVenvPythonBin(getChatImportEnvPath())
-  const fs = require('fs')
-  if (fs.existsSync(venvPython)) return venvPython
-  // Fall back to system Python
-  return getSystemPythonPath()
-}
-
-/**
- * Spawn a Python script and collect stdout/stderr.
- * Stdout lines that are valid JSON objects are parsed; the last one is treated
- * as the final result (for --json-output), and intermediate ones are forwarded
- * as progress (for --json-progress).
- *
- * @returns {Promise<{ success: boolean, jsonData?: object, output_dir?: string, error?: string }>}
- */
-function runPythonScript(pythonBin, args, onProgress) {
-  return new Promise((resolve) => {
-    const child = spawn(pythonBin, args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' },
-    })
-    const stderrLines = []
-    let lastJson = null
-    let buffer = ''
-
-    child.stdout.on('data', (chunk) => {
-      buffer += chunk.toString()
-      const lines = buffer.split('\n')
-      buffer = lines.pop() // keep incomplete line
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed) continue
-        try {
-          const parsed = JSON.parse(trimmed)
-          lastJson = parsed
-          // If it has "step" and "progress", treat as progress event
-          if (parsed.step !== undefined) {
-            onProgress && onProgress(parsed)
-          }
-        } catch (_) {
-          // Non-JSON stdout — ignore (human-readable output)
-        }
-      }
-    })
-
-    child.stderr.on('data', (chunk) => {
-      stderrLines.push(chunk.toString())
-    })
-
-    child.on('close', (code) => {
-      // Flush remaining buffer
-      if (buffer.trim()) {
-        try {
-          const parsed = JSON.parse(buffer.trim())
-          if (parsed.step !== undefined) onProgress && onProgress(parsed)
-          lastJson = parsed
-        } catch (_) { /* ignore */ }
-      }
-
-      if (code === 0) {
-        resolve({
-          success: true,
-          jsonData: lastJson,
-          output_dir: lastJson?.output_dir,
-        })
-      } else {
-        // Prefer the JSON error message from stdout over raw stderr
-        const jsonError = (lastJson?.step === 'error') ? lastJson.message : null
-        resolve({
-          success: false,
-          error: jsonError || stderrLines.join('').trim() || `Python exited with code ${code}`,
-        })
-      }
-    })
-
-    child.on('error', (err) => {
-      resolve({ success: false, error: err.message })
-    })
-  })
 }
 
 function register() {

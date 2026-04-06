@@ -64,7 +64,9 @@ export function useChatTree({ mentionInputRef } = {}) {
   function getDefaultSidebarWidth() {
     if (window.innerWidth >= 2560) return 340
     if (window.innerWidth >= 1920) return 280
-    return 240
+    if (window.innerWidth >= 1024) return 240
+    if (window.innerWidth >= 768) return 220
+    return 200
   }
 
   const sidebarWidth = ref(getDefaultSidebarWidth())

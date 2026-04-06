@@ -447,11 +447,6 @@ function register() {
             }
 
             const requestUrl = url.toString()
-            logger.info(`[Skills] Tencent API REQUEST URL: ${requestUrl}`)
-            console.log(`\n========== Tencent API REQUEST ==========`)
-            console.log(`URL: ${requestUrl}`)
-            console.log(`OPTIONS: ${JSON.stringify(options)}`)
-            console.log(`==========================================\n`)
             const response = await fetch(requestUrl, {
               timeout: 10000,
               headers: { 'Accept': 'application/json' }

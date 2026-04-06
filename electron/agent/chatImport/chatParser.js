@@ -2,7 +2,7 @@
 
 /**
  * chatParser.js — Node.js parsers for WhatsApp and plain-text chat exports.
- * WeChat and iMessage are handled via Python (wechat_parser.py).
+ * WeChat and iMessage parsing lives in wechatParser.js.
  */
 
 const fs = require('fs')
@@ -138,7 +138,7 @@ function extractPlainTextMessages(text, onProgress) {
 
 /**
  * Classify raw messages into categories.
- * JS port of wechat_parser.py classify_messages().
+ * Classify messages into categories (long, conflict, sweet, daily).
  *
  * @param {Array<{sender: string, content: string}>} messages
  * @param {string} targetName - the name of "them" (the person being studied)
@@ -217,7 +217,7 @@ function classifyMessages(messages, targetName) {
 
 /**
  * Build the message block string for the AI prompt.
- * JS port of wechat_parser.py format_output() with capped samples.
+ * Build the message block string for the AI prompt.
  *
  * @param {object} classified - result of classifyMessages()
  * @param {string} targetName

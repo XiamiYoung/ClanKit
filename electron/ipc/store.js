@@ -186,7 +186,7 @@ function register({ DEFAULT_CONFIG }) {
     const merged = {
       ...existing, ...config,
       providers: config.providers || existing.providers || [],
-      smtp:       { ...(existing.smtp || {}),       ...(config.smtp || {}) },
+      smtp: { ...(existing.smtp || {}), ...(config.smtp || {}) },
     }
     ds.writeJSON(p().CONFIG_FILE, merged)
     return true
@@ -214,21 +214,24 @@ function register({ DEFAULT_CONFIG }) {
 
   ipcMain.handle('store:save-data-path', (_, newDataPath) => {
     try {
-      const envPath = path.join(p().DATA_DIR, '.env')
-      let lines = []
-      if (fs.existsSync(envPath)) lines = fs.readFileSync(envPath, 'utf8').split('\n')
-      let found = false
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].trim().startsWith('CLANKAI_DATA_PATH=')) { lines[i] = `CLANKAI_DATA_PATH=${newDataPath}`; found = true; break }
-      }
-      if (!found) lines.push('# Data directory for ClankAI', `CLANKAI_DATA_PATH=${newDataPath}`)
-      fs.writeFileSync(envPath, lines.join('\n'), 'utf8')
-      logger.info('Saved CLANKAI_DATA_PATH to .env:', newDataPath)
+      // Write dataPath to the fixed settings.json (pointer file, outside DATA_DIR)
+      const trimmed = (newDataPath || '').trim()
+      const settings = (trimmed && trimmed !== p().DEFAULT_DATA_PATH)
+        ? { dataPath: trimmed }
+        : {}
+      ds.writeJSON(p().SETTINGS_FILE, settings)
+      logger.info('Saved dataPath to settings.json:', trimmed || '(default)')
       return { success: true }
     } catch (err) {
-      logger.error('Failed to save CLANKAI_DATA_PATH to .env:', err.message)
+      logger.error('Failed to save dataPath to settings.json:', err.message)
       return { success: false, error: err.message }
     }
+  })
+
+  ipcMain.handle('app:relaunch', () => {
+    const { app } = require('electron')
+    app.relaunch()
+    app.quit()
   })
 
   ipcMain.handle('store:get-env-paths', () => ds.getEnvPaths())

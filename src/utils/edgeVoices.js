@@ -15,8 +15,8 @@ export const EDGE_VOICES = [
 
 // Return a sensible default voice based on the app language setting
 export function getDefaultVoiceForLocale(language) {
-  if (String(language || '').startsWith('zh')) return 'zh-CN-XiaoxiaoNeural'
-  return 'en-US-AriaNeural'
+  if (String(language || '').startsWith('zh')) return 'zh-CN-YunxiaNeural'
+  return 'en-US-AndrewNeural'
 }
 
 // OpenAI TTS voices (for OpenAI whisper mode)

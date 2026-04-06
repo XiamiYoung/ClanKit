@@ -313,19 +313,21 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
         const isMuted = voiceStore.isMuted
         const inCooldown = Date.now() < micCooldownUntil
 
-        // Barge-in: user speaks while AI is speaking → stop TTS.
-        // Require continuous speech for 1s before cutting — prevents a single noise
-        // spike or clap from interrupting. The timer resets if speech drops below threshold.
-        // Use ttsIsSpeaking (not voiceStore.status) so the timer persists across the brief
-        // standby gap between consecutive sentences.
-        if (isSpeaking && !isMuted && ttsIsSpeaking) {
+        // Barge-in: user speaks while AI is speaking or processing → interrupt immediately.
+        // Require continuous speech for 300ms before cutting — prevents noise spikes.
+        // On trigger: stop TTS, signal backend to abort LLM, switch to listening state.
+        const aiIsActive = ttsIsSpeaking || voiceStore.status === 'processing'
+        if (isSpeaking && !isMuted && aiIsActive) {
           if (!micBargeInStart) micBargeInStart = Date.now()
-          if (Date.now() - micBargeInStart >= 500) {
+          if (Date.now() - micBargeInStart >= 300) {
             stopSpeaking()
             micCooldownUntil = 0
             micBargeInStart = 0
+            // Tell backend to abort the active LLM stream immediately
+            window.electronAPI?.voice?.bargeIn?.()
+            voiceStore.setStatus('listening')
           }
-        } else {
+        } else if (!isSpeaking) {
           micBargeInStart = 0  // reset if speech drops — noise burst didn't sustain
         }
 

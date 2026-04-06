@@ -152,7 +152,7 @@
           <!-- ── User agent ── -->
           <div class="agent-group">
             <div class="agent-card-wrap" ref="usrChipWrap">
-              <div class="agent-card user" @mouseenter="showAgentTooltip($event, resolvedUserAgentId)" @mouseleave="hideAgentTooltip">
+              <div class="agent-card user" @mouseenter="showAgentTooltip($event, resolvedUserAgentId, true)" @mouseleave="hideAgentTooltip">
                 <div class="agent-card-avatar">
                   <img
                     v-if="activeUserAvatarDataUri"
@@ -199,7 +199,7 @@
     <div
       v-if="tooltipState.visible"
       class="ch-agent-tooltip-fixed"
-      :style="{ top: tooltipState.y + 'px', left: tooltipState.x + 'px' }"
+      :style="{ top: tooltipState.y + 'px', left: tooltipState.x + 'px', transform: tooltipState.flipY ? 'translate(-50%, -100%)' : 'translateX(-50%)' }"
     >
       <div class="ch-agent-tooltip-name">{{ tooltipState.name }}
         <span v-if="tooltipState.providerModel" class="ch-agent-tooltip-pm">{{ tooltipState.providerModel }}</span>
@@ -628,7 +628,7 @@ const agentSearchQuery = ref('')
 const expandedSysCatIds = ref(new Set())
 
 // ── Own tooltip state (not shared with parent) ──
-const tooltipState = reactive({ visible: false, name: '', providerModel: '', text: '', x: 0, y: 0 })
+const tooltipState = reactive({ visible: false, name: '', providerModel: '', text: '', x: 0, y: 0, flipY: false })
 
 // ── Agent computed ──
 function getAvatarDataUriForAgent(agent) {
@@ -781,19 +781,25 @@ function _resolveAgentProviderModel(agentId) {
   return providerName || modelShort
 }
 
-function showAgentTooltip(event, pid) {
+function showAgentTooltip(event, pid, hideProviderModel = false) {
   const agent = agentsStore.getAgentById(pid)
-  const providerModel = _resolveAgentProviderModel(pid)
+  const providerModel = hideProviderModel ? '' : _resolveAgentProviderModel(pid)
   if (!agent?.description && !providerModel) { tooltipState.visible = false; return }
   const rect = event.currentTarget.getBoundingClientRect()
   tooltipState.name = agent?.name || '?'
   tooltipState.providerModel = providerModel
   tooltipState.text = agent?.description || ''
   const tooltipMaxW = 448
+  const TOOLTIP_EST_H = 72
+  const MARGIN = 8
+  // Horizontal: clamp center so tooltip stays within viewport
   let left = rect.left + rect.width / 2
-  left = Math.max(tooltipMaxW / 2 + 8, Math.min(left, window.innerWidth - tooltipMaxW / 2 - 8))
+  left = Math.max(tooltipMaxW / 2 + MARGIN, Math.min(left, window.innerWidth - tooltipMaxW / 2 - MARGIN))
   tooltipState.x = left
-  tooltipState.y = rect.bottom + 10
+  // Vertical: prefer below, flip above when not enough room
+  const spaceBelow = window.innerHeight - rect.bottom - MARGIN
+  tooltipState.flipY = spaceBelow < TOOLTIP_EST_H
+  tooltipState.y = tooltipState.flipY ? rect.top - MARGIN : rect.bottom + MARGIN
   tooltipState.visible = true
 }
 
@@ -1069,11 +1075,13 @@ const effectiveAgentRounds = computed(() => {
   display: flex; align-items: center; justify-content: center;
   width: 1.875rem; height: 1.875rem; border: none; border-radius: 0.5rem;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border: 1px solid #1A1A1A;
   color: #FFFFFF; cursor: pointer; transition: all 0.15s ease;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
 .ch-call-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  border-color: #2D2D2D;
   box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
 }
 .ch-call-btn:disabled {
@@ -1120,7 +1128,7 @@ const effectiveAgentRounds = computed(() => {
   height: 1.875rem;
   padding: 0;
   border-radius: 50%;
-  border: none;
+  border: 1px solid #1A1A1A;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
@@ -1131,6 +1139,7 @@ const effectiveAgentRounds = computed(() => {
 }
 .chat-config-btn:hover {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  border-color: #2D2D2D;
   box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
 }
 /* ── Agent section layout ── */
@@ -1597,7 +1606,6 @@ const effectiveAgentRounds = computed(() => {
   position: fixed;
   z-index: 9999;
   pointer-events: none;
-  transform: translateX(-50%);
   width: max-content;
   max-width: 28rem;
   padding: 0.625rem 0.875rem;

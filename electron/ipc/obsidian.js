@@ -23,7 +23,19 @@ function register() {
   // Config persistence — DoCPath stored in config.json
   ipcMain.handle('obsidian:get-config', async () => {
     const cfg = await ds.readJSONAsync(p().CONFIG_FILE, {})
-    return { vaultPath: cfg.DoCPath || '', lastOpenedDoc: cfg.docsLastOpenedDoc || null }
+    let vaultPath = cfg.DoCPath || ''
+    // Auto-initialize to default aidoc path if not set
+    if (!vaultPath) {
+      const dataDir = p().DATA_DIR || ''
+      if (dataDir) {
+        vaultPath = path.join(dataDir, 'clank_aidoc')
+        try { fs.mkdirSync(vaultPath, { recursive: true }) } catch {}
+        // Persist so it's used next time
+        cfg.DoCPath = vaultPath
+        ds.writeJSON(p().CONFIG_FILE, cfg)
+      }
+    }
+    return { vaultPath, lastOpenedDoc: cfg.docsLastOpenedDoc || null }
   })
 
   ipcMain.handle('obsidian:save-config', async (_, config) => {

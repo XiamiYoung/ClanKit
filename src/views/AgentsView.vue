@@ -215,7 +215,18 @@
                 <circle v-if="selectedView.agentType !== 'system'" cx="12" cy="7" r="4"/>
               </svg>
               <p v-if="selectedView.type === 'category'">{{ t('agents.noAgentsAssigned', 'No agents assigned — drag cards here from another view.') }}</p>
-              <p v-else>{{ t('agents.noAgents') }}</p>
+              <p v-else>{{ selectedView.agentType === 'system' ? t('agents.noSystemAgents', 'No system agents yet') : t('agents.noUserAgents', 'No user agents yet') }}</p>
+              <div class="section-empty-actions">
+                <AppButton 
+                  v-if="selectedView.type !== 'category'"
+                  size="compact" 
+                  variant="primary"
+                  @click="createNew(selectedView.agentType)"
+                >
+                  <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  {{ selectedView.agentType === 'system' ? t('agents.createSystem', 'Create System Agent') : t('agents.createUser', 'Create User Agent') }}
+                </AppButton>
+              </div>
             </div>
           </div>
         </div>
@@ -311,59 +322,6 @@
 
   </div>
 
-  <!-- Onboarding: spotlight on header + create button area -->
-  <OnboardingOverlay
-    v-if="onboardingPhase === 'userAgentCreate' && !bodyViewerAgent"
-    :title="t('onboarding.createUserAgentTitle')"
-    :description="t('onboarding.createUserAgentDesc')"
-    target-selector=".shared-header-content"
-    :padding="12"
-    :current-step="2"
-    :total-steps="3"
-    @skip="skipOnboarding"
-  />
-
-  <!-- Onboarding: guide card alongside modal (after modal opens) -->
-  <OnboardingOverlay
-    v-if="onboardingPhase === 'userAgentCreate' && bodyViewerAgent"
-    :title="t('onboarding.fillUserAgentTitle')"
-    :description="t('onboarding.fillUserAgentDesc')"
-    target-selector=".bv-modal"
-    :padding="16"
-    :steps="userAgentFormSteps"
-    :current-step="2"
-    :total-steps="3"
-    @skip="skipOnboarding"
-  />
-
-  <!-- Onboarding: multi-user agent tip (between user agent and system agent) -->
-  <Teleport to="body" v-if="onboardingPhase === 'multiUserTip'">
-    <div class="ob-overlay" style="z-index: 9998;">
-      <div class="ob-panel" style="inset:0;"></div>
-      <div class="ob-tip-center">
-        <div class="ob-tip-icon">💡</div>
-        <h3 class="ob-tip-title">{{ t('onboarding.multiUserAgentTitle') }}</h3>
-        <p class="ob-tip-desc">{{ t('onboarding.multiUserAgentDesc') }}</p>
-        <div class="ob-tip-actions">
-          <button class="ob-tip-btn secondary" @click="skipOnboarding">{{ t('onboarding.configureLater') }}</button>
-          <button class="ob-tip-btn primary" @click="advanceFromMultiUserTip">{{ t('common.next', 'Next') }}</button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
-
-  <!-- Onboarding: guide card alongside system agent group creator -->
-  <OnboardingOverlay
-    v-if="onboardingPhase === 'systemAgentTemplates' && showGroupCreator"
-    :title="t('onboarding.systemAgentTitle')"
-    :description="t('onboarding.systemAgentDesc')"
-    target-selector=".agc-modal"
-    :padding="16"
-    :current-step="3"
-    :total-steps="3"
-    @skip="skipOnboarding"
-  />
-
   <!-- Import Wizard -->
   <AgentImportWizard
     v-if="showImportWizard"
@@ -383,7 +341,7 @@
 
 <script setup>
 defineOptions({ inheritAttrs: false })
-import { ref, computed, reactive, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
+import { ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { useRoute, useRouter } from 'vue-router'
 import { useAgentsStore } from '../stores/agents'
@@ -396,7 +354,6 @@ import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import CategoryModal from '../components/agents/CategoryModal.vue'
 import AgentGroupCreator from '../components/agents/AgentGroupCreator.vue'
-import OnboardingOverlay from '../components/agents/OnboardingOverlay.vue'
 import AgentImportWizard from '../components/agents/AgentImportWizard.vue'
 import UserAgentSetupDialog from '../components/agents/UserAgentSetupDialog.vue'
 import { useI18n } from '../i18n/useI18n'
@@ -446,21 +403,10 @@ onMounted(async () => {
   await agentsStore.loadAgents()
   await tasksStore.loadPlans()
 
-  if (route.query.onboarding === '1') {
-    if (route.query.phase === 'system') {
-      // Skip directly to system agent templates
-      onboardingPhase.value = 'systemAgentTemplates'
-      selectedView.agentType = 'system'
-      selectedView.type = 'all'
-      showGroupCreator.value = true
-      groupCreatorInitialTab.value = 'templates'
-    } else {
-      // Start with user agent creation
-      onboardingPhase.value = 'userAgentCreate'
-      selectedView.agentType = 'user'
-      selectedView.type = 'all'
-    }
-    router.replace({ path: '/agents', query: {} })
+  // Switch to specific agent tab if requested (used by setup wizard tour)
+  if (route.query.agentTab === 'system' || route.query.agentTab === 'user') {
+    selectedView.agentType = route.query.agentTab
+    selectedView.type = 'all'
   } else if (route.query.createUserAgent === '1') {
     selectedView.agentType = 'user'
     selectedView.type = 'all'
@@ -537,6 +483,14 @@ function hideNavTooltip() {
 
 // ── View selection ─────────────────────────────────────────────────────────
 const selectedView = reactive({ type: 'all', agentType: 'system', categoryId: null })
+
+// Handle agentTab query param (tour navigation between system/user tabs)
+watch(() => route.query.agentTab, (tab) => {
+  if (tab === 'system' || tab === 'user') {
+    selectedView.agentType = tab
+    selectedView.type = 'all'
+  }
+})
 
 const filterQuery = ref('')
 
@@ -642,11 +596,6 @@ function onUserAgentSetupConfirm(data) {
 
 async function onBodyViewerUpdate(updates) {
   if (!bodyViewerAgent.value) return
-  // Track user agent creation during onboarding
-  // All mandatory fields are enforced by AgentBodyViewer validation
-  if (onboardingPhase.value === 'userAgentCreate') {
-    onboardingUserAgentCreated.value = true
-  }
   const updated = { ...bodyViewerAgent.value }
   delete updated.isNew
   Object.assign(updated, updates)
@@ -695,83 +644,6 @@ async function onCategoryModalConfirm({ name, emoji, type }) {
 const showGroupCreator = ref(false)
 const groupCreatorInitialTab = ref('')
 const groupCreatorHighlightCategory = ref('')
-
-// ── Onboarding state machine ───────────────────────────────────────────────
-const onboardingPhase = ref('idle') // 'idle' | 'userAgentCreate' | 'multiUserTip' | 'systemAgentTemplates'
-const onboardingUserAgentCreated = ref(false)
-
-// Transition: user agent created → show multi-user tip
-watch(bodyViewerAgent, (val) => {
-  if (val === null && onboardingPhase.value === 'userAgentCreate' && onboardingUserAgentCreated.value) {
-    onboardingPhase.value = 'multiUserTip'
-    onboardingUserAgentCreated.value = false
-  }
-})
-
-function advanceFromMultiUserTip() {
-  onboardingPhase.value = 'systemAgentTemplates'
-  selectedView.agentType = 'system'
-  selectedView.type = 'all'
-  showGroupCreator.value = true
-  groupCreatorInitialTab.value = 'templates'
-}
-
-// Transition: group creator closed → pause to show results, then navigate to chat
-watch(showGroupCreator, (val) => {
-  if (!val && onboardingPhase.value === 'systemAgentTemplates') {
-    onboardingPhase.value = 'idle'
-    // Let user see the newly created agents for 1.5 seconds before navigating
-    setTimeout(() => {
-      router.push({ path: '/chats', query: { onboarding: '1' } })
-    }, 1500)
-  }
-})
-
-function skipOnboarding() {
-  onboardingPhase.value = 'idle'
-  showGroupCreator.value = false
-  bodyViewerAgent.value = null
-  configStore.saveConfig({ onboardingCompleted: true })
-}
-
-// User agent form steps — polled from exposed refs for reliable reactivity
-const userAgentFormSteps = ref([])
-let _formPollId = null
-
-// Read exposed ref value — handles both unwrapped (string) and raw Ref
-function readExposed(bv, key) {
-  const v = bv[key]
-  if (v == null) return ''
-  return typeof v === 'object' && 'value' in v ? (v.value ?? '') : (v ?? '')
-}
-
-watch(bodyViewerAgent, (val) => {
-  if (_formPollId) { clearInterval(_formPollId); _formPollId = null }
-  if (val && onboardingPhase.value === 'userAgentCreate') {
-    const poll = () => {
-      const bv = bodyViewerRef.value
-      if (!bv) return
-      const name = String(readExposed(bv, 'draftName')).trim()
-      const desc = String(readExposed(bv, 'draftDescription')).trim()
-      const prompt = String(readExposed(bv, 'draftPrompt')).trim()
-      const avatar = readExposed(bv, 'draftAvatar')
-      userAgentFormSteps.value = [
-        { label: t('onboarding.userStep1'), done: !!name },
-        { label: t('onboarding.userStep2'), done: !!desc },
-        { label: t('onboarding.userStep3'), done: !!prompt },
-        { label: t('onboarding.userStep4'), done: !!avatar },
-      ]
-    }
-    setTimeout(poll, 200)
-    _formPollId = setInterval(poll, 400)
-  } else {
-    userAgentFormSteps.value = []
-  }
-})
-
-onBeforeUnmount(() => {
-  if (_formPollId) { clearInterval(_formPollId); _formPollId = null }
-})
 
 const confirmDeleteCategory = ref(null)
 const deleteCategoryError   = ref(null)
@@ -998,6 +870,7 @@ function isDeleteButtonDisabled(agent) {
 /* ── Top-level tab bar ──────────────────────────────────────────────────── */
 .agents-tab-bar {
   display: flex;
+  justify-content: center;
   gap: 0.25rem;
   margin-top: 0.875rem;
   border-bottom: 1.5px solid #E5E5EA;
@@ -1006,13 +879,14 @@ function isDeleteButtonDisabled(agent) {
 .agents-tab {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.875rem;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
   border: none;
   background: transparent;
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 500;
+  font-size: 1.25rem;
+  font-weight: 700;
   color: #9CA3AF;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -1034,12 +908,13 @@ function isDeleteButtonDisabled(agent) {
   font-weight: 700;
   padding: 0.0625rem 0.375rem;
   border-radius: 9999px;
-  background: rgba(0,0,0,0.06);
+  background: #E5E5EA;
+  color: #1A1A1A;
   line-height: 1.4;
 }
 .agents-tab.active .agents-tab-count {
-  background: rgba(0,0,0,0.1);
-  color: #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
 }
 
 /* ── Shared header ───────────────────────────────────────────────────────── */
@@ -1634,6 +1509,11 @@ function isDeleteButtonDisabled(agent) {
   margin: 0;
   text-align: center;
 }
+.section-empty-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.75rem;
+}
 </style>
 
 <style>
@@ -1655,66 +1535,4 @@ function isDeleteButtonDisabled(agent) {
   z-index: 9999;
 }
 
-/* Onboarding tip card (centered) */
-.ob-tip-center {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(26rem, 90vw);
-  padding: 1.5rem;
-  background: #0F0F0F;
-  border: 1px solid #2A2A2A;
-  border-radius: 1rem;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
-  z-index: 2;
-  pointer-events: auto;
-  text-align: center;
-  animation: ob-card-enter 0.25s ease-out;
-}
-.ob-tip-icon { font-size: 2rem; margin-bottom: 0.5rem; }
-.ob-tip-title {
-  font-size: var(--fs-section, 1.25rem);
-  font-weight: 600;
-  color: #FFFFFF;
-  margin: 0 0 0.5rem;
-}
-.ob-tip-desc {
-  font-size: var(--fs-body, 0.9375rem);
-  color: #9CA3AF;
-  margin: 0 0 1.25rem;
-  line-height: 1.5;
-}
-.ob-tip-actions {
-  display: flex;
-  justify-content: center;
-  gap: 0.5rem;
-}
-.ob-tip-btn {
-  padding: 0.5rem 1.25rem;
-  border-radius: 0.5rem;
-  font-size: var(--fs-secondary, 0.875rem);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-  font-family: inherit;
-}
-.ob-tip-btn.primary {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  border: none;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-}
-.ob-tip-btn.primary:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-}
-.ob-tip-btn.secondary {
-  background: transparent;
-  border: 1px solid #2A2A2A;
-  color: #6B7280;
-}
-.ob-tip-btn.secondary:hover {
-  border-color: #4B5563;
-  color: #9CA3AF;
-}
 </style>

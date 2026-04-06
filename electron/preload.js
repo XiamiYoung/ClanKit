@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('electronAPI', {
   // ── Platform ────────────────────────────────────────────────────────────────
   platform: process.platform,
+  getLocale: () => ipcRenderer.invoke('app:get-locale'),
 
   // ── Storage ──────────────────────────────────────────────────────────────
   getChats: () => ipcRenderer.invoke('store:get-chats'),
@@ -20,6 +21,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveConfig: (config) => ipcRenderer.invoke('store:save-config', config),
   getDataPath: () => ipcRenderer.invoke('store:get-data-path'),
   saveDataPath: (dataPath) => ipcRenderer.invoke('store:save-data-path', dataPath),
+  relaunchApp: () => ipcRenderer.invoke('app:relaunch'),
   getEnvPaths: () => ipcRenderer.invoke('store:get-env-paths'),
   saveEnvPath: (key, value) => ipcRenderer.invoke('store:save-env-path', key, value),
   getUtilityUsage: () => ipcRenderer.invoke('store:get-utility-usage'),
@@ -211,6 +213,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     stop:       ()         => ipcRenderer.invoke('voice:stop'),
     audioChunk: (buffer, mimeType) => ipcRenderer.invoke('voice:audio-chunk', buffer, mimeType),
     mute:               (params)  => ipcRenderer.invoke('voice:mute', params),
+    bargeIn:            ()        => ipcRenderer.invoke('voice:barge-in'),
     notifyTaskComplete: (summary) => ipcRenderer.invoke('voice:task-complete', summary),
     updateHistory:      (history) => ipcRenderer.invoke('voice:update-history', history),
     onStatus:       (cb) => { ipcRenderer.on('voice:status', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('voice:status') },
@@ -231,6 +234,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     removeLocalEnv:    ()      => ipcRenderer.invoke('voice:remove-local-env'),
     localTts:          (params)=> ipcRenderer.invoke('voice:local-tts', params),
     edgeTtsNode:       (params)=> ipcRenderer.invoke('voice:edge-tts-node', params),
+    edgeTtsChunked:    (params)=> ipcRenderer.invoke('voice:edge-tts-chunked', params),
+    edgeTtsCancel:     (params)=> ipcRenderer.invoke('voice:edge-tts-cancel', params),
+    edgeTtsCleanup:    (params)=> ipcRenderer.invoke('voice:edge-tts-cleanup', params),
+    onTtsChunkReady:   (cb)    => { const handler = (_e, d) => cb(d); ipcRenderer.on('voice:tts-chunk-ready', handler); return handler },
+    offTtsChunkReady:  (handler)=> ipcRenderer.removeListener('voice:tts-chunk-ready', handler),
     localTest:         ()      => ipcRenderer.invoke('voice:local-test'),
     edgeVoices:        ()      => ipcRenderer.invoke('voice:edge-voices'),
     edgePreview:       (params)=> ipcRenderer.invoke('voice:edge-preview', params),

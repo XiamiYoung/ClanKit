@@ -23,6 +23,12 @@ export const useChatsStore = defineStore('chats', () => {
   // Minibar quick-send signal: set by MinibarOverlay, consumed by ChatsView
   const pendingMinibarSend = ref(null) // { text, chatId } | null
 
+  // Wizard first chat — set by SetupWizard, consumed by ChatsView for TTS auto-play
+  const wizardFirstChatId = ref(null)
+
+  // Input prefill signal: set by useChatToCreate, consumed by ChatsView to populate input box
+  const pendingInputPrefill = ref(null) // { text, chatId } | null
+
   // Scroll-to-bottom signal: increment to request ChatWindow to scroll to bottom
   const scrollToBottomSignal = ref(0)
   function requestScrollToBottom() { scrollToBottomSignal.value++ }
@@ -1388,6 +1394,8 @@ export const useChatsStore = defineStore('chats', () => {
     setPlanState, storePlanRunParams, getPlanRunParams,
     pendingMinibarSend, triggerMinibarSend, clearMinibarSend, sendMinibarMessage,
     scrollToBottomSignal, requestScrollToBottom,
+    wizardFirstChatId,
+    pendingInputPrefill,
     reconnectRunningAgents,
   }
 })

@@ -77,8 +77,15 @@
                 <span class="hint" style="margin:0;">{{ knowledgeStore.knowledgeBases.length }}</span>
               </div>
               <div v-if="knowledgeStore.isLoading" class="hint" style="padding:0.75rem 0;">{{ t('knowledge.loading') }}</div>
-              <div v-else-if="knowledgeStore.knowledgeBases.length === 0" class="hint" style="padding:0.75rem 0;">
-                {{ t('knowledge.noKnowledge') }}
+              <div v-else-if="knowledgeStore.knowledgeBases.length === 0">
+                <EmptyStateGuide
+                  compact
+                  :title="t('knowledge.title')"
+                  :description="t('knowledge.emptyGuideDesc')"
+                  :useCases="[t('knowledge.emptyGuideUseCase1'), t('knowledge.emptyGuideUseCase2')]"
+                  :ctaLabel="t('knowledge.createViaChat')"
+                  @create="startChatGuide(t('knowledge.emptyGuideChatMsg'), t('knowledge.title'))"
+                />
               </div>
               <div v-else class="index-list">
                 <button
@@ -447,10 +454,13 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useKnowledgeStore } from '../stores/knowledge'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
+import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
 import { useI18n } from '../i18n/useI18n'
+import { useChatToCreate } from '../composables/useChatToCreate'
 
 const knowledgeStore = useKnowledgeStore()
 const { t } = useI18n()
+const { startChatGuide } = useChatToCreate()
 
 // ── Lifecycle ──
 onMounted(async () => {

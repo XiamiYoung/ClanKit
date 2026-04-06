@@ -3,21 +3,31 @@
     <div class="avpicker-dialog">
       <!-- Header -->
       <div class="avpicker-header">
-        <h2 class="avpicker-title">Choose an Avatar</h2>
+        <h2 class="avpicker-title">{{ t('agents.chooseAvatar') }}</h2>
         <button class="avpicker-close" @click="$emit('close')" aria-label="Close">
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
 
-      <!-- Style tabs (horizontal scroll) -->
-      <div class="avpicker-tabs-wrap">
-        <button
-          v-for="style in STYLES"
-          :key="style.key"
-          class="avpicker-tab"
-          :class="{ active: activeStyleKey === style.key }"
-          @click="switchStyle(style.key)"
-        >{{ style.label }}</button>
+      <!-- Style selector (custom combobox with avatar previews) -->
+      <div class="avpicker-style-select-wrap">
+        <button class="avpicker-combo-trigger" @click="styleDropdownOpen = !styleDropdownOpen">
+          <img :src="getStylePreview(activeStyleKey)" class="avpicker-combo-preview" />
+          <span class="avpicker-combo-label">{{ t(STYLES.find(s => s.key === activeStyleKey)?.i18nKey || STYLES[0].i18nKey) }}</span>
+          <svg style="width:0.75rem;height:0.75rem;flex-shrink:0;color:#6B7280;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div v-if="styleDropdownOpen" class="avpicker-combo-dropdown">
+          <button
+            v-for="style in STYLES"
+            :key="style.key"
+            class="avpicker-combo-option"
+            :class="{ active: activeStyleKey === style.key }"
+            @click="switchStyle(style.key); styleDropdownOpen = false"
+          >
+            <img :src="getStylePreview(style.key)" class="avpicker-combo-preview" />
+            <span>{{ t(style.i18nKey) }}</span>
+          </button>
+        </div>
       </div>
 
       <!-- Scrollable avatar grid -->
@@ -43,8 +53,8 @@
           <input type="file" accept="image/*" style="display:none;" @change="onFileUpload" />
         </label>
         <div style="flex:1;"></div>
-        <button class="avpicker-btn secondary" @click="$emit('close')">Cancel</button>
-        <button class="avpicker-btn primary" :disabled="!selectedId" @click="confirm">Select Avatar</button>
+        <button class="avpicker-btn secondary" @click="$emit('close')">{{ t('common.cancel') }}</button>
+        <button class="avpicker-btn primary" :disabled="!selectedId" @click="confirm">{{ t('agents.selectAvatar') }}</button>
       </div>
     </div>
   </div>
@@ -67,11 +77,21 @@ const emit = defineEmits(['close', 'select'])
 function detectStyleKey(id) {
   if (!id) return STYLES[0].key
   if (id.includes(':')) return id.split(':')[0]
-  return 'avataaars'
+  return STYLES[0].key
 }
 
 const selectedId     = ref(props.currentAvatarId || '')
 const activeStyleKey = ref(detectStyleKey(props.currentAvatarId))
+const styleDropdownOpen = ref(false)
+
+// Generate a preview avatar for each style (first avatar of that style)
+const stylePreviewCache = new Map()
+function getStylePreview(styleKey) {
+  if (!stylePreviewCache.has(styleKey)) {
+    stylePreviewCache.set(styleKey, getAvatarDataUri(`${styleKey}:preview_sample`))
+  }
+  return stylePreviewCache.get(styleKey)
+}
 
 // Per-style avatar cache
 const batchCache = new Map()
@@ -156,37 +176,72 @@ function onFileUpload(event) {
 }
 .avpicker-close:hover { background: #1F1F1F; color: #FFFFFF; }
 
-/* Tabs — horizontal scroll, no wrap */
-.avpicker-tabs-wrap {
-  display: flex; align-items: center; gap: 0.375rem;
-  padding: 0.75rem 1.5rem;
-  overflow-x: auto;
+/* Style combobox */
+.avpicker-style-select-wrap {
+  padding: 0.625rem 1.5rem;
   border-bottom: 1px solid #1F1F1F;
   flex-shrink: 0;
-  
-  
+  position: relative;
 }
-.avpicker-tabs-wrap::-webkit-scrollbar { height: 3px; }
-.avpicker-tabs-wrap::-webkit-scrollbar-track { background: transparent; }
-.avpicker-tabs-wrap::-webkit-scrollbar-thumb { background: #333; border-radius: 9999px; }
-.avpicker-tab {
-  padding: 0.3125rem 0.875rem;
-  border-radius: 9999px;
-  border: 1px solid #2A2A2A;
+.avpicker-combo-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
   background: #1A1A1A;
-  color: #9CA3AF;
-  font-family: 'Inter', sans-serif; font-size: 0.8125rem; font-weight: 500;
-  cursor: pointer; white-space: nowrap; flex-shrink: 0;
-  transition: all 0.15s;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  color: #FFFFFF;
 }
-.avpicker-tab:hover:not(.active) {
-  background: #242424; color: #D1D5DB; border-color: #374151;
+.avpicker-combo-trigger:hover { border-color: #4B5563; }
+.avpicker-combo-label { flex: 1; text-align: left; }
+.avpicker-combo-preview {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #0F0F0F;
 }
-.avpicker-tab.active {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF; border-color: #4B5563;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+.avpicker-combo-dropdown {
+  position: absolute;
+  left: 1.5rem;
+  right: 1.5rem;
+  top: 100%;
+  max-height: 16rem;
+  overflow-y: auto;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.5rem;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+  z-index: 10;
+  margin-top: 0.25rem;
+  padding: 0.25rem;
 }
+.avpicker-combo-dropdown::-webkit-scrollbar { width: 4px; }
+.avpicker-combo-dropdown::-webkit-scrollbar-thumb { background: #444; border-radius: 9999px; }
+.avpicker-combo-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.375rem 0.625rem;
+  background: transparent;
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8125rem;
+  color: #D1D5DB;
+  transition: background 0.12s;
+  text-align: left;
+}
+.avpicker-combo-option:hover { background: #1A1A1A; color: #FFFFFF; }
+.avpicker-combo-option.active { background: #1E1E30; color: #FFFFFF; }
 
 /* Scrollable grid */
 .avpicker-grid-wrap {

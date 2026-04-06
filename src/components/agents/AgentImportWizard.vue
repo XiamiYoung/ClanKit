@@ -95,21 +95,9 @@
                     <div class="import-option-title">{{ t('agents.import.modeAutoTitle') }}</div>
                     <div class="import-option-desc">{{ t('agents.import.modeAutoDesc') }}</div>
                   </div>
-                  <span class="env-badge" :class="envReady ? 'ready' : 'not-ready'" style="flex-shrink:0;">
-                    {{ envReady ? t('agents.import.toolReady') : t('agents.import.toolNotReady') }}
-                  </span>
                 </div>
-                <!-- Option A details -->
                 <template v-if="wechatMode === 'auto'">
-                  <div v-if="!envReady" class="env-status-row" style="margin-left:1.75rem;">
-                    <AppButton size="compact" :loading="settingUp" @click.stop="doSetupEnv">
-                      {{ settingUp ? t('agents.import.settingUp') : t('agents.import.setupEnv') }}
-                    </AppButton>
-                  </div>
-                  <div v-if="setupLog.length > 0" ref="setupLogEl" class="progress-log" style="margin-left:1.75rem;">
-                    <div v-for="(l, i) in setupLog" :key="i" class="log-line">{{ l }}</div>
-                  </div>
-                  <p v-if="setupError" class="error-text" style="margin-left:1.75rem;">{{ setupError }}</p>
+                  <!-- No setup required — decryption runs natively in Electron -->
                 </template>
 
                 <!-- Option B: Already have data directory -->
@@ -488,47 +476,6 @@ function onSelectContact(c) {
   if (c.avatar) {
     selectedAvatarUrl.value = c.avatar
     selectedAvatarId.value = ''
-  }
-}
-
-// ── Env state ───────────────────────────────────────────────────────────────
-const envReady = ref(false)
-const settingUp = ref(false)
-const setupLog = ref([])
-const setupError = ref('')
-const setupLogEl = ref(null)
-
-watch(setupLog, async () => {
-  await nextTick()
-  if (setupLogEl.value) setupLogEl.value.scrollTop = setupLogEl.value.scrollHeight
-}, { deep: true })
-
-async function checkEnv() {
-  const res = await window.electronAPI.agentImport.checkEnv()
-  envReady.value = !!res.ready
-}
-checkEnv()
-
-async function doSetupEnv() {
-  settingUp.value = true
-  setupLog.value = []
-  setupError.value = ''
-  const unsub = window.electronAPI.agentImport.onProgress((data) => {
-    if (data.message) setupLog.value.push(data.message)
-  })
-  try {
-    const res = await window.electronAPI.agentImport.setupEnv()
-    if (res && res.success) {
-      envReady.value = true
-      setupLog.value = []
-    } else {
-      setupError.value = res?.error || t('agents.import.setupFailed')
-    }
-  } catch (err) {
-    setupError.value = err.message || t('agents.import.setupFailedGeneric')
-  } finally {
-    unsub()
-    settingUp.value = false
   }
 }
 
