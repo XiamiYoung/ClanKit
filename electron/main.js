@@ -335,7 +335,7 @@ function createWindow() {
 
   mainWindow = new BrowserWindow({
     icon: app.isPackaged
-      ? path.join(process.resourcesPath, 'icon.png')
+      ? path.join(process.resourcesPath, 'icon.ico')
       : path.join(__dirname, '../public/icon.png'),
     width: Math.round(screenW * 0.7),
     height: Math.round(screenH * 0.7),

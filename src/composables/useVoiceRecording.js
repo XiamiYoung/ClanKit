@@ -105,13 +105,13 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
           id: agentId,
           name: agent?.name,
           description: agent?.description,
-          systemPrompt: agent?.systemPrompt,
+          systemPrompt: agent?.prompt,
         },
         userAgent: {
           id: userAgentId || '__default_user__',
           name: userAgent?.name,
           description: userAgent?.description,
-          systemPrompt: userAgent?.systemPrompt,
+          systemPrompt: userAgent?.prompt,
         },
       }
 

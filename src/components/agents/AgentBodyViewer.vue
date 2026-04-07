@@ -820,7 +820,7 @@ const draftPrompt      = ref(props.agentPrompt || '')
 const draftAvatar      = ref(props.agentAvatar || null)
 const draftVoiceId     = ref(props.agentVoiceId || getDefaultVoiceForLocale(configStore.config.language))
 
-// Pre-fill prompt template for new user agents (markdown format matching system agent templates)
+// Pre-fill prompt template for new user agents
 if (props.isNew && props.agentType !== 'system' && !draftPrompt.value) {
   const isZh = configStore.config.language === 'zh'
   draftPrompt.value = isZh
@@ -959,7 +959,7 @@ function onAvatarFileUpload(event) {
 const draftMemory   = ref('')
 const memoryLoading = ref(!props.isNew)
 const memoryLoaded  = ref(false)
-const memoryLineCount = computed(() => draftMemory.value.split('\n').filter(l => l.trim()).length)
+const memoryLineCount = computed(() => draftMemory.value.split('\n').filter(l => l.trimStart().startsWith('- ')).length)
 
 // Ensure blank lines between list entries and line breaks between numbered items
 function normalizeMemoryBody(body) {

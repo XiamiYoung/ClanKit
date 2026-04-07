@@ -83,11 +83,13 @@
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:0.875rem;height:0.875rem;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                       {{ t('setupWizard.getApiKey') }}
                     </a>
-                    <span v-if="providerPriceLabel" class="sw-apikey-price-badge" :class="providerPriceBadge">{{ providerPriceLabel }}</span>
                     <button class="sw-apikey-help-toggle" @click="showApiKeyHelp = !showApiKeyHelp">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:0.875rem;height:0.875rem;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                       {{ t('setupWizard.apiKeyHelpToggle') }}
                     </button>
+                  </div>
+                  <div v-if="providerPriceLabel" class="sw-apikey-price-row">
+                    <span class="sw-apikey-price-badge" :class="providerPriceBadge">{{ providerPriceLabel }}</span>
                   </div>
                   <div v-if="showApiKeyHelp" class="sw-apikey-help-body">
                     <p class="sw-apikey-help-text">{{ t('setupWizard.apiKeyWhatIs') }}</p>
@@ -462,7 +464,7 @@ const providerOptions = computed(() => {
       value: type,
       label: type === 'qwen' ? 'Qwen（通义千问）'
            : type === 'glm' ? 'GLM（智谱清言）'
-           : type === 'moonshot' ? 'Moonshot（月之暗面）'
+           : type === 'moonshot' ? 'Moonshot / Kimi（月之暗面）'
            : type === 'doubao' ? 'Doubao（豆包）'
            : type === 'deepseek' ? 'DeepSeek（深度求索）'
            : preset.name,
@@ -836,7 +838,7 @@ async function goNext() {
     await agentsStore.saveAgent({
       name,
       description: desc,
-      systemPrompt: generatedPrompt.value,
+      prompt: generatedPrompt.value,
       type: 'user',
       providerId: wizardProviderId.value || '',
       modelId: selectedModelId.value || (selectedProviderType.value === 'anthropic' ? anthropicSonnet.value : ''),
@@ -1036,7 +1038,7 @@ async function finishTour() {
     const chat = await chatsStore.createChat(chatTitle, [BUILTIN_SYSTEM_AGENT_ID], null, { userAgentId })
     const chatId = chat?.id
     if (chatId) await chatsStore.setChatSettings(chatId, { permissionMode: 'all_permissions' })
-    // Mark this chat for TTS auto-play when agent replies
+    // Mark this chat for AI Docs nav highlight when agent replies
     chatsStore.wizardFirstChatId = chatId
     await configStore.saveConfig({ setupDismissed: true, onboardingCompleted: true })
     emit('complete')
@@ -1128,7 +1130,7 @@ watch(() => props.visible, (val) => {
   if (step.value >= 5) {
     const userAgent = agentsStore.userAgents.find(a => !a.isBuiltin)
     if (userAgent) {
-      generatedPrompt.value = userAgent.systemPrompt || ''
+      generatedPrompt.value = userAgent.prompt || ''
       selectedAvatar.value = userAgent.avatar || `agents:${buildAvatarSeed()}`
       selectedVoiceId.value = userAgent.voiceId || pickVoiceForProfile(null)
     } else {
@@ -1402,37 +1404,40 @@ watch(step, (val) => {
 .sw-apikey-help-top {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 0.625rem;
 }
 
 .sw-apikey-get-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.3125rem 0.75rem;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border: 1px solid #374151;
+  gap: 0.3rem;
+  padding: 0.25rem 0.625rem;
+  background: rgba(110, 231, 183, 0.1);
+  border: 1px solid rgba(110, 231, 183, 0.3);
   border-radius: 0.375rem;
-  color: #FFFFFF;
+  color: #6EE7B7;
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
   transition: all 0.15s;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
 
 .sw-apikey-get-btn:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  background: rgba(110, 231, 183, 0.18);
+  border-color: rgba(110, 231, 183, 0.55);
+  color: #A7F3D0;
+}
+
+.sw-apikey-price-row {
+  margin-top: 0.375rem;
 }
 
 .sw-apikey-price-badge {
   font-size: 0.6875rem;
-  font-weight: 600;
+  font-weight: 500;
   padding: 0.125rem 0.4rem;
   border-radius: 0.25rem;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
 .sw-apikey-price-badge.free { background: #064E3B; color: #6EE7B7; }
@@ -1445,14 +1450,13 @@ watch(step, (val) => {
   gap: 0.25rem;
   background: none;
   border: none;
-  color: #818CF8;
+  color: #6B7280;
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
   padding: 0.125rem 0;
   font-family: inherit;
   transition: color 0.12s;
-  margin-left: auto;
 }
 
 .sw-apikey-help-toggle:hover { color: #A5B4FC; }

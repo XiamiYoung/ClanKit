@@ -34,6 +34,7 @@ release/
 dist-release/
 electron/build-config.json
 electron/.backup/
+electron-compiled/
 
 # Backup files
 *.bak
@@ -46,6 +47,7 @@ docs/
 scripts/*
 !scripts/run-electron.js
 !scripts/compile-bytecode.js
+!scripts/after-pack.js
 
 # Docs
 docs/
@@ -58,3 +60,6 @@ __pycache__/
 
 # playwright
 .playwright-mcp/
+
+# jsc
+*.jsc

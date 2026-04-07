@@ -891,9 +891,9 @@ import { useMcpStore } from '../stores/mcp'
 import { useToolsStore } from '../stores/tools'
 import { useModelsStore } from '../stores/models'
 import { useKnowledgeStore } from '../stores/knowledge'
-import { useObsidianStore } from '../stores/obsidian'
 import { useVoiceStore } from '../stores/voice'
 import { useFocusModeStore } from '../stores/focusMode'
+import { useObsidianStore } from '../stores/obsidian'
 import { useI18n } from '../i18n/useI18n'
 import { getAvatarDataUri } from '../components/agents/agentAvatars'
 import AgentBodyViewer from '../components/agents/AgentBodyViewer.vue'
@@ -1132,7 +1132,8 @@ function stopSpeakMessage() {
   if (dir) window.electronAPI?.voice?.edgeTtsCleanup?.({ sessionDir: dir })
 }
 
-// Wizard first chat: auto-play TTS when agent stops running
+
+// Wizard first chat: highlight AI Docs nav when agent stops running
 watch(() => {
   const wid = chatsStore.wizardFirstChatId
   if (!wid) return null
@@ -1143,18 +1144,11 @@ watch(() => {
     const wizardChatId = chatsStore.wizardFirstChatId
     if (!wizardChatId) return
     chatsStore.wizardFirstChatId = null
-    const chat = chatsStore.chats.find(c => c.id === wizardChatId)
-    if (!chat?.messages?.length) return
-    const lastAssistant = [...chat.messages].reverse().find(m => m.role === 'assistant' && !m.streaming)
-    if (lastAssistant) {
-      setTimeout(() => handleSpeakMessage(lastAssistant), 500)
-      // Highlight AI Docs nav after agent likely created a file
-      setTimeout(() => {
-        const obsStore = useObsidianStore()
-        obsStore.highlightNav = true
-        obsStore.loadTree()
-      }, 1000)
-    }
+    setTimeout(() => {
+      const obsStore = useObsidianStore()
+      obsStore.highlightNav = true
+      obsStore.loadTree()
+    }, 1000)
   }
 })
 

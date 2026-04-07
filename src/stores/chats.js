@@ -23,10 +23,10 @@ export const useChatsStore = defineStore('chats', () => {
   // Minibar quick-send signal: set by MinibarOverlay, consumed by ChatsView
   const pendingMinibarSend = ref(null) // { text, chatId } | null
 
-  // Wizard first chat — set by SetupWizard, consumed by ChatsView for TTS auto-play
+  // Wizard first chat — set by SetupWizard, consumed by ChatsView to highlight AI Docs nav
   const wizardFirstChatId = ref(null)
 
-  // Input prefill signal: set by useChatToCreate, consumed by ChatsView to populate input box
+// Input prefill signal: set by useChatToCreate, consumed by ChatsView to populate input box
   const pendingInputPrefill = ref(null) // { text, chatId } | null
 
   // Scroll-to-bottom signal: increment to request ChatWindow to scroll to bottom

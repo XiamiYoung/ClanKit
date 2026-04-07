@@ -234,13 +234,6 @@
       </div>
     </div>
 
-    <!-- User Agent Setup Dialog -->
-    <UserAgentSetupDialog
-      v-if="showUserAgentSetup"
-      @close="showUserAgentSetup = false"
-      @confirm="onUserAgentSetupConfirm"
-    />
-
     <!-- Agent Body Viewer Modal (create + edit) -->
     <AgentBodyViewer
       v-if="bodyViewerAgent"
@@ -355,7 +348,6 @@ import AppButton from '../components/common/AppButton.vue'
 import CategoryModal from '../components/agents/CategoryModal.vue'
 import AgentGroupCreator from '../components/agents/AgentGroupCreator.vue'
 import AgentImportWizard from '../components/agents/AgentImportWizard.vue'
-import UserAgentSetupDialog from '../components/agents/UserAgentSetupDialog.vue'
 import { useI18n } from '../i18n/useI18n'
 import { getDefaultVoiceForLocale } from '../utils/edgeVoices'
 
@@ -542,7 +534,7 @@ const visibleAgents = computed(() => {
     list = list.filter(p =>
       (p.name        || '').toLowerCase().includes(q) ||
       (p.description || '').toLowerCase().includes(q) ||
-      (p.systemPrompt|| '').toLowerCase().includes(q) ||
+      (p.prompt      || '').toLowerCase().includes(q) ||
       (p.modelId     || '').toLowerCase().includes(q) ||
       (p.providerId  || '').toLowerCase().includes(q)
     )
@@ -554,7 +546,6 @@ const visibleAgents = computed(() => {
 // ── AgentBodyViewer (create + edit) ───────────────────────────────────────
 const bodyViewerAgent = ref(null)
 const bodyViewerRef = ref(null)
-const showUserAgentSetup = ref(false)
 
 function openBodyViewer(agent) {
   bodyViewerAgent.value = { ...agent }
@@ -562,21 +553,13 @@ function openBodyViewer(agent) {
 
 function createNew(type) {
   const resolvedType = type || selectedView.agentType
-  if (resolvedType === 'user') {
-    showUserAgentSetup.value = true
-    return
-  }
-  _openNewBodyViewer(resolvedType, {})
-}
-
-function _openNewBodyViewer(type, prefill) {
   const { providerId, modelId } = resolveDefaultProviderModel()
   bodyViewerAgent.value = {
     id: uuidv4(),
-    name: prefill.name || '',
-    type,
-    description: prefill.description || '',
-    prompt: prefill.prompt || '',
+    name: '',
+    type: resolvedType,
+    description: '',
+    prompt: '',
     avatar: null,
     providerId,
     modelId,
@@ -587,11 +570,6 @@ function _openNewBodyViewer(type, prefill) {
     requiredKnowledgeBaseIds: [],
     isNew: true,
   }
-}
-
-function onUserAgentSetupConfirm(data) {
-  showUserAgentSetup.value = false
-  _openNewBodyViewer('user', data)
 }
 
 async function onBodyViewerUpdate(updates) {

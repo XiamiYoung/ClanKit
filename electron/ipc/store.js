@@ -159,11 +159,6 @@ function register({ DEFAULT_CONFIG }) {
     }
     let providers = saved.providers || []
     if (providers.length > 0) providers = providers.map(sanitizeProvider)
-    if (providers.length === 0 && process.env.ANTHROPIC_API_KEY) {
-      // Seed from environment variables on fresh install
-      const { v4: uuidv4 } = require('uuid')
-      providers.push({ id: uuidv4(), name: 'Anthropic', type: 'anthropic', apiKey: process.env.ANTHROPIC_API_KEY, baseURL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com', model: 'claude-sonnet-4-5', settings: { maxOutputTokens: 32768, opusModel: 'claude-opus-4-6', haikuModel: 'claude-haiku-4-5' }, isActive: true, testedAt: null })
-    }
     const nonEmpty = Object.fromEntries(Object.entries(saved).filter(([, v]) => v !== '' && v !== null && v !== undefined))
     const savedSandbox = saved.sandboxConfig || {}
     const result = {

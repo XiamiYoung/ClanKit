@@ -346,7 +346,13 @@ function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetCh
 
     const effectiveProvider = resolvedProvider || baseCfg.defaultProvider || 'anthropic'
     _applyProviderCredsToConfig(agentCfg, effectiveProvider)
-    if (resolvedModel) agentCfg.customModel = resolvedModel
+    if (resolvedModel) {
+      agentCfg.customModel = resolvedModel
+    } else {
+      // No explicit model on agent — use provider's configured default model
+      const providerEntry = (baseCfg.providers || []).find(p => p.type === effectiveProvider || p.id === effectiveProvider)
+      if (providerEntry?.model) agentCfg.customModel = providerEntry.model
+    }
     // Pass model context window from Vue metadata (if known)
     const ctxWindows = targetChatMeta.modelContextWindows
     if (resolvedModel && ctxWindows?.[resolvedModel]) {

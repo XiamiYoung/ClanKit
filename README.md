@@ -76,11 +76,7 @@ On Windows without a code signing certificate, skip code signing to avoid symlin
 Under the hood each dist command runs:
 
 1. `vite build` — build Vue renderer to dist/
-2. `node scripts/compile-bytecode.js` — compile 69 electron/ JS files to .jsc bytecode (backup originals)
-3. `electron-builder` — package app (asar contains only .jsc bytecode, not readable JS)
-4. `node scripts/compile-bytecode.js --restore` — restore original JS source for development
-
-Files kept as plaintext: main.js (entry point), preload.js, drawio-preload.js (Electron internal loading).
+2. `electron-builder` — package app (asar with JS source)
 
 To set the telemetry endpoint before packaging, create electron/build-config.json (gitignored):
 

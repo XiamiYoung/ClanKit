@@ -346,7 +346,7 @@
         <div class="flex items-end gap-0.5 h-5">
           <span v-for="n in 5" :key="n" class="wave-bar" :style="`--bar-color:${wavebarColor.bar}; --bar-glow:${wavebarColor.glow}; animation-delay:${(n-1)*0.13}s;`" />
         </div>
-        <div v-if="cachedTokens" class="flex items-center gap-1.5 wavebar-tokens" :style="`font-family:'JetBrains Mono',monospace; font-size:0.7rem; --wb-color:${wavebarColor.bar}; --wb-bright:${wavebarColor.glow};`">
+        <div v-if="cachedTokens" class="flex items-center gap-1.5 wavebar-tokens" :style="`font-family:'JetBrains Mono',monospace; font-size:0.7rem; line-height:1.25rem; --wb-color:${wavebarColor.bar}; --wb-bright:${wavebarColor.glow};`">
           <span>in {{ formatTokenCount(cachedTokens.input) }}</span>
           <span style="opacity:0.5;">·</span>
           <span>out {{ formatTokenCount(cachedTokens.output) }}</span>
@@ -488,13 +488,12 @@ const elapsedMs = computed(() => {
 
 // ── Wavebar color cycling ─────────────────────────────────────────────────
 const WAVEBAR_COLORS = [
-  // User bubble (brown gradient) + assistant bubble (warm neutral) palette
-  { bar: '#8B6F5E', glow: '#8B6F5E80' },  // user bubble light
-  { bar: '#A8947D', glow: '#A8947D80' },  // assistant warm mid
-  { bar: '#BCA892', glow: '#BCA89280' },  // warm neutral
-  { bar: '#C9B8A3', glow: '#C9B8A380' },  // assistant warm light
-  { bar: '#D8CBB9', glow: '#D8CBB980' },  // assistant soft light
-  { bar: '#E5DCCD', glow: '#E5DCCD80' },  // softest beige
+  { bar: '#D46A3A', glow: '#D46A3AA0' },  // burnt orange
+  { bar: '#D4A832', glow: '#D4A832A0' },  // golden amber
+  { bar: '#4DAA6D', glow: '#4DAA6DA0' },  // emerald green
+  { bar: '#3D8EB9', glow: '#3D8EB9A0' },  // ocean blue
+  { bar: '#8B5CC2', glow: '#8B5CC2A0' },  // violet
+  { bar: '#CC5078', glow: '#CC5078A0' },  // hot pink
 ]
 const wavebarColorIdx = ref(0)
 let colorTimer = null
@@ -1344,7 +1343,7 @@ function diffMarker(type) {
   transform: scaleY(0.3);
   background: var(--bar-color);
   box-shadow: 0 0 0px var(--bar-glow);
-  animation: wave-oscillate 1.3s ease-in-out infinite;
+  animation: wave-oscillate 1.3s ease-in-out infinite, wave-hue 6s ease-in-out infinite;
   transition: background 1s ease, box-shadow 1s ease;
 }
 @keyframes wave-oscillate {
