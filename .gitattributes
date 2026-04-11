@@ -1,0 +1,27 @@
+# Force LF line endings for all text files
+* text=auto eol=lf
+
+# Explicitly declare binary files to prevent corruption
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.eot binary
+*.otf binary
+*.mp3 binary
+*.mp4 binary
+*.wav binary
+*.ogg binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.7z binary
+*.dmg binary
+*.exe binary
+*.dll binary
+*.node binary

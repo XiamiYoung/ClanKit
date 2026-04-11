@@ -1107,11 +1107,16 @@ async function _reloadActiveTextFileFromDisk() {
 async function sendAiDoc(userText) {
   const beforeMsgCount = aiDocMessages.value.length
   const agent = agentsStore.getAgentById(selectedAgentId.value)
+  const reqSkills = agent?.requiredSkillIds ?? []
+  const reqMcp    = agent?.requiredMcpServerIds ?? []
+  const reqTools  = agent?.requiredToolIds ?? []
+  const filterById = (items, required) =>
+    items.filter(x => required.includes(x.id))
   const agentConfig = {
     agentPrompt: agent?.prompt || '',
-    enabledSkills: JSON.parse(JSON.stringify(skillsStore.skills || [])),
-    mcpServers: JSON.parse(JSON.stringify(mcpStore.servers || [])),
-    httpTools: JSON.parse(JSON.stringify(toolsStore.tools || [])),
+    enabledSkills: JSON.parse(JSON.stringify(filterById(skillsStore.skills || [], reqSkills))),
+    mcpServers: JSON.parse(JSON.stringify(filterById(mcpStore.servers || [], reqMcp))),
+    httpTools: JSON.parse(JSON.stringify(filterById(toolsStore.tools || [], reqTools))),
     knowledgeConfig: {
       ragEnabled: knowledgeStore.ragEnabled,
       knowledgeBases: JSON.parse(JSON.stringify(knowledgeStore.kbConfigs || {})),

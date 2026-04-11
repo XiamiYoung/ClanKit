@@ -2,7 +2,7 @@
   <div class="perm-prompt" :class="{ 'perm-resolved': resolved || seg.status !== 'pending' }">
     <div class="perm-header">
       <div class="perm-icon">
-        <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg style="width:13px;height:13px;color:#FFFFFF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
           <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
         </svg>
@@ -20,11 +20,11 @@
       </div>
     </div>
     <div v-if="!resolved && seg.status === 'pending'" class="perm-actions">
-      <button class="perm-btn perm-btn-primary" @click="decide('allow-chat')">
-        {{ t('chats.permissionAllowChat') }}
-      </button>
-      <button class="perm-btn perm-btn-secondary" @click="decide('allow-global')">
+      <button class="perm-btn perm-btn-primary" @click="decide('allow-global')">
         {{ t('chats.permissionAllowAll') }}
+      </button>
+      <button class="perm-btn perm-btn-secondary" @click="decide('allow-chat')">
+        {{ t('chats.permissionAllowChat') }}
       </button>
       <button class="perm-btn perm-btn-danger" @click="decide('reject')">
         {{ t('chats.permissionReject') }}
@@ -61,68 +61,66 @@ function decide(decision) {
 <style scoped>
 .perm-prompt {
   margin: 0.5rem 0;
-  border-radius: 0.75rem;
+  border-radius: 0.875rem;
   overflow: hidden;
-  border: 1px solid #2A2A2A;
-  background: #0F0F0F;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #2C2C2E;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   font-family: 'Inter', sans-serif;
 }
 .perm-resolved {
-  opacity: 0.75;
+  opacity: 0.55;
 }
 .perm-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 0.875rem 0.5rem;
-  border-bottom: 1px solid #1F1F1F;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem 0.625rem;
 }
 .perm-icon {
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 0.375rem;
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: #FF9F0A;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 .perm-title {
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: #FFFFFF;
   flex: 1;
+  letter-spacing: -0.01em;
 }
 .perm-result-badge {
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 0.6875rem;
+  font-weight: 500;
   padding: 0.125rem 0.5rem;
   border-radius: 99px;
 }
 .badge-allowed {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
+  background: rgba(48, 209, 88, 0.18);
+  color: #30D158;
 }
 .badge-rejected {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+  background: rgba(255, 69, 58, 0.15);
+  color: #FF453A;
 }
 .perm-body {
-  padding: 0.625rem 0.875rem;
+  padding: 0 1rem 0.75rem;
 }
 .perm-description {
   font-size: 0.75rem;
-  color: #9CA3AF;
+  color: #98989D;
   margin: 0 0 0.5rem 0;
 }
 .perm-command {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.625rem;
-  background: #1A1A1A;
-  border: 1px solid #2A2A2A;
+  padding: 0.4375rem 0.625rem;
+  background: rgba(0, 0, 0, 0.25);
   border-radius: 0.5rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.75rem;
@@ -130,53 +128,55 @@ function decide(decision) {
   gap: 0.25rem;
 }
 .perm-tool-name {
-  color: #60a5fa;
+  color: #FF9F0A;
   font-weight: 600;
 }
 .perm-cmd-text {
-  color: #E5E5EA;
+  color: #EBEBF5;
   word-break: break-all;
+  opacity: 0.75;
 }
 .perm-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.375rem;
   padding: 0.5rem 0.875rem 0.75rem;
-  flex-wrap: wrap;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 .perm-btn {
-  padding: 0.3125rem 0.75rem;
-  border-radius: 0.5rem;
-  border: none;
   font-family: 'Inter', sans-serif;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
+  border-radius: 0.4375rem;
+  border: 1px solid transparent;
   cursor: pointer;
+  padding: 0.3rem 0.625rem;
   transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 .perm-btn-primary {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  background: linear-gradient(135deg, #92400E, #B45309);
+  color: #FEF3C7;
+  box-shadow: 0 1px 4px rgba(180, 83, 9, 0.3);
 }
 .perm-btn-primary:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
+  background: linear-gradient(135deg, #A45208, #D97706);
 }
 .perm-btn-secondary {
-  background: #1A1A1A;
-  color: #9CA3AF;
-  border: 1px solid #2A2A2A;
+  background: linear-gradient(135deg, #065F46, #047857);
+  color: #D1FAE5;
+  box-shadow: 0 1px 4px rgba(4, 120, 87, 0.3);
 }
 .perm-btn-secondary:hover {
-  background: #2A2A2A;
-  color: #FFFFFF;
+  background: linear-gradient(135deg, #047857, #059669);
 }
 .perm-btn-danger {
-  background: rgba(255, 59, 48, 0.08);
-  color: #FF3B30;
-  border: 1px solid rgba(255, 59, 48, 0.2);
+  background: linear-gradient(135deg, #7F1D1D, #B91C1C);
+  color: #FEE2E2;
+  box-shadow: 0 1px 4px rgba(185, 28, 28, 0.3);
 }
 .perm-btn-danger:hover {
-  background: rgba(255, 59, 48, 0.15);
+  background: linear-gradient(135deg, #991B1B, #DC2626);
 }
 </style>

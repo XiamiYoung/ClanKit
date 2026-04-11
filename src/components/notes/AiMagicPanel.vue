@@ -65,7 +65,7 @@
                 <!-- Permission gate block -->
                 <div v-if="tc._permBlock" class="ai-magic-perm-block" :class="{ 'ai-magic-perm-resolved': tc.status !== 'pending' }">
                   <div class="ai-magic-perm-header">
-                    <svg style="width:12px;height:12px;flex-shrink:0;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <div class="ai-magic-perm-icon"><svg style="width:11px;height:11px;color:#FFFFFF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
                     <span class="ai-magic-perm-title">{{ t('notes.permissionRequired') }}</span>
                     <span v-if="tc.status !== 'pending'" class="ai-magic-perm-badge" :class="tc.status === 'rejected' ? 'badge-rejected' : 'badge-allowed'">
                       {{ tc.status === 'rejected' ? t('notes.rejected') : t('notes.allowed') }}
@@ -76,8 +76,8 @@
                     <span v-if="tc.command" class="ai-magic-perm-cmd">{{ tc.command }}</span>
                   </div>
                   <div v-if="tc.status === 'pending'" class="ai-magic-perm-actions">
-                    <button class="ai-magic-perm-btn ai-magic-perm-btn-primary" @click="onPermAllow(tc, 'allow_chat')">{{ t('notes.allow') }}</button>
-                    <button class="ai-magic-perm-btn ai-magic-perm-btn-secondary" @click="onPermAllow(tc, 'allow_global')">{{ t('notes.allowAll') }}</button>
+                    <button class="ai-magic-perm-btn ai-magic-perm-btn-primary" @click="onPermAllow(tc, 'allow_global')">{{ t('notes.allowAll') }}</button>
+                    <button class="ai-magic-perm-btn ai-magic-perm-btn-secondary" @click="onPermAllow(tc, 'allow_chat')">{{ t('notes.allow') }}</button>
                     <button class="ai-magic-perm-btn ai-magic-perm-btn-danger" @click="onPermDeny(tc)">{{ t('notes.reject') }}</button>
                   </div>
                 </div>
@@ -613,97 +613,115 @@ defineExpose({ focusInput })
 
 /* ── Permission prompt blocks ── */
 .ai-magic-perm-block {
-  border: 1px solid #2A2A2A;
-  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
   overflow: hidden;
-  background: #0F0F0F;
+  background: #2C2C2E;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
-.ai-magic-perm-resolved { opacity: 0.7; }
+.ai-magic-perm-resolved { opacity: 0.55; }
 .ai-magic-perm-header {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.625rem;
-  border-bottom: 1px solid #1F1F1F;
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #374151 100%);
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem 0.5rem;
+}
+.ai-magic-perm-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.4375rem;
+  background: #FF9F0A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 .ai-magic-perm-title {
   font-size: var(--fs-small);
-  font-weight: 700;
+  font-weight: 600;
   color: #FFFFFF;
   flex: 1;
+  letter-spacing: -0.01em;
 }
 .ai-magic-perm-badge {
   font-size: 0.625rem;
-  font-weight: 600;
+  font-weight: 500;
   padding: 0.0625rem 0.375rem;
   border-radius: 9999px;
 }
 .ai-magic-perm-badge.badge-allowed {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
+  background: rgba(48, 209, 88, 0.18);
+  color: #30D158;
 }
 .ai-magic-perm-badge.badge-rejected {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+  background: rgba(255, 69, 58, 0.15);
+  color: #FF453A;
 }
 .ai-magic-perm-body {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.375rem 0.625rem;
+  padding: 0 0.75rem 0.625rem;
   font-family: 'JetBrains Mono', monospace;
   font-size: var(--fs-small);
   flex-wrap: wrap;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0 0 0 0;
+  margin: 0 0.5rem 0.5rem;
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.5rem;
 }
 .ai-magic-perm-tool {
-  color: #60a5fa;
+  color: #FF9F0A;
   font-weight: 600;
 }
 .ai-magic-perm-cmd {
-  color: #E5E5EA;
+  color: #EBEBF5;
+  opacity: 0.75;
   word-break: break-all;
 }
 .ai-magic-perm-actions {
   display: flex;
   gap: 0.375rem;
   padding: 0.375rem 0.625rem 0.5rem;
-  flex-wrap: wrap;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 .ai-magic-perm-btn {
-  padding: 0.25rem 0.625rem;
-  border-radius: 0.375rem;
-  border: none;
   font-family: 'Inter', sans-serif;
   font-size: 0.6875rem;
   font-weight: 600;
+  border-radius: 0.4375rem;
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s;
+  padding: 0.275rem 0.5625rem;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.275rem;
 }
 .ai-magic-perm-btn-primary {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  background: linear-gradient(135deg, #92400E, #B45309);
+  color: #FEF3C7;
+  box-shadow: 0 1px 4px rgba(180, 83, 9, 0.3);
 }
 .ai-magic-perm-btn-primary:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  background: linear-gradient(135deg, #A45208, #D97706);
 }
 .ai-magic-perm-btn-secondary {
-  background: #1A1A1A;
-  color: #9CA3AF;
-  border: 1px solid #2A2A2A;
+  background: linear-gradient(135deg, #065F46, #047857);
+  color: #D1FAE5;
+  box-shadow: 0 1px 4px rgba(4, 120, 87, 0.3);
 }
 .ai-magic-perm-btn-secondary:hover {
-  background: #2A2A2A;
-  color: #FFFFFF;
+  background: linear-gradient(135deg, #047857, #059669);
 }
 .ai-magic-perm-btn-danger {
-  background: rgba(255, 59, 48, 0.08);
-  color: #FF3B30;
-  border: 1px solid rgba(255, 59, 48, 0.2);
+  background: linear-gradient(135deg, #7F1D1D, #B91C1C);
+  color: #FEE2E2;
+  box-shadow: 0 1px 4px rgba(185, 28, 28, 0.3);
 }
 .ai-magic-perm-btn-danger:hover {
-  background: rgba(255, 59, 48, 0.15);
+  background: linear-gradient(135deg, #991B1B, #DC2626);
 }
 
 /* Tool calls */

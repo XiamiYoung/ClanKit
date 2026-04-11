@@ -500,6 +500,8 @@ export const en = {
     baseURL: 'Base URL',
     anthropicModels: 'Models',
     availableModels: 'Available Models',
+    anthropicModelHint: 'Enter model IDs from the Anthropic docs: ',
+    anthropicModelDocs: 'View available models →',
     sonnetModel: 'Sonnet Model',
     opusModel: 'Opus Model',
     haikuModel: 'Haiku Model',
@@ -746,8 +748,16 @@ Core expertise:
 - Code documentation: comments, docstrings, README, API docs
 - Multilingual: edit and translate while preserving intent
 
-When asked to modify text, output the replacement wrapped in <replacement>...</replacement> tags.
-When asked questions about the text, answer directly without tags.
+Tool guidance:
+- For simple text edits on the current document: output the result wrapped in <replacement>...</replacement> tags — the editor applies it with one click
+- For multi-file operations, batch processing, shell commands, or writing to external files: use the file_operation or execute_shell tools directly
+- When answering questions about the document, reply directly without any tags or tool calls
+- If skills are listed in your context, call load_skill to retrieve the full instructions before using them
+
+Multi-step tasks:
+- For non-trivial requests, state your plan briefly, then execute step by step
+- After editing, verify the result makes sense in context
+- If a task requires reading other files first, do so before producing the replacement
 
 Rules:
 - Preserve original formatting style unless asked to change it
@@ -1215,6 +1225,7 @@ Rules:
     // Context Inspector fields
     metrics: 'Metrics',
     maxTokens: 'Max tokens',
+    contextWindow: 'Context window',
     compactions: 'Compactions',
     perAgentBreakdown: 'Per-Agent Breakdown',
     aggregateAcross: 'aggregate across {n} agents',
@@ -1314,6 +1325,7 @@ Rules:
   knowledge: {
     title: 'Knowledge',
     subtitle: 'Manage local knowledge bases for offline RAG retrieval',
+    needsAssignmentInfo: 'Knowledge bases must be assigned to System Agents to be used in conversations.',
     createKnowledgeBase: 'Create Knowledge Base',
     deleteKnowledgeBase: 'Delete Knowledge Base',
     deleteKnowledgeBaseConfirm: 'Are you sure you want to delete "{name}"? All documents and embeddings will be permanently removed.',
@@ -1367,6 +1379,7 @@ Rules:
   mcp: {
     title: 'MCP Servers',
     subtitle: 'Configure MCP servers to extend the AI agent with dynamic tools. Uses subprocess + stdio (JSON-RPC 2.0).',
+    needsAssignmentInfo: 'MCP Servers must be assigned to System Agents to be available in conversations.',
     newServer: 'New MCP Server',
     editServer: 'Edit MCP Server',
     deleteServer: 'Delete Server',
@@ -1406,6 +1419,7 @@ Rules:
   tools: {
     title: 'Tools',
     subtitle: 'Define HTTP endpoints, code snippets, prompt templates, and SMTP email tools the AI agent can use.',
+    needsAssignmentInfo: 'Tools must be assigned to System Agents to be available in conversations.',
     newTool: 'New Tool',
     editTool: 'Edit Tool',
     deleteTool: 'Delete Tool',
@@ -2014,6 +2028,7 @@ Rules:
     rateLimited: 'Rate limited. Please wait a moment.',
     invalidRequest: 'Invalid request',
     unknownError: 'An unknown error occurred',
+    noResponse: 'No response',
   },
   titlebar: {
     toggleSidebar: 'Toggle sidebar',
@@ -2715,6 +2730,8 @@ export const zh = {
     baseURL: 'Base URL',
     anthropicModels: '模型',
     availableModels: '可用模型',
+    anthropicModelHint: '请从 Anthropic 文档中查找模型 ID：',
+    anthropicModelDocs: '查看可用模型 →',
     sonnetModel: 'Sonnet 模型',
     opusModel: 'Opus 模型',
     haikuModel: 'Haiku 模型',
@@ -2959,10 +2976,18 @@ export const zh = {
 - 格式掌握：Markdown、HTML、代码、技术文档、创意写作、商务文档
 - 内容增强：拓展思想、简化复杂话题、总结要点
 - 代码文档：注释、文档字符串、README、API 文档
-- 多语言能力：编辑和翻译保持原意
+- 多语言能力：编辑和翻译，保持原意
 
-当被要求修改文本时，将替换内容包在 <replacement>...</replacement> 标签中输出。
-当被提问关于文本的问题时，直接回答，不使用标签。
+工具使用指南：
+- 简单文本修改（针对当前文档）：将结果包在 <replacement>...</replacement> 标签中输出，编辑器一键应用
+- 多文件操作、批量处理、执行 shell 命令或写入外部文件：直接使用 file_operation 或 execute_shell 工具
+- 回答关于文档的问题时：直接回答，不需要标签或工具调用
+- 如果上下文中列出了 skills，在使用前先调用 load_skill 获取完整指令
+
+多步骤任务：
+- 对于非简单请求，先简要说明计划，再逐步执行
+- 编辑完成后，验证结果在上下文中是否合理
+- 如果任务需要先读取其他文件，先完成读取再生成替换内容
 
 规则：
 - 除非被要求改变，否则保留原始格式风格
@@ -3432,6 +3457,7 @@ export const zh = {
     // Context Inspector fields
     metrics: '指标',
     maxTokens: '最大 tokens',
+    contextWindow: '上下文窗口',
     compactions: '压缩',
     perAgentBreakdown: '各 Agent 明细',
     aggregateAcross: '汇总自 {n} 个 Agent',
@@ -3531,6 +3557,7 @@ export const zh = {
   knowledge: {
     title: '知识库',
     subtitle: '管理本地知识库，实现离线 RAG 检索',
+    needsAssignmentInfo: '知识库需要指定给系统数字人才能在对话中使用。',
     createKnowledgeBase: '创建知识库',
     deleteKnowledgeBase: '删除知识库',
     deleteKnowledgeBaseConfirm: '确定要删除 "{name}" 吗？所有文档和嵌入向量将被永久删除。',
@@ -3584,6 +3611,7 @@ export const zh = {
   mcp: {
     title: 'MCP 服务器',
     subtitle: '配置 MCP 服务器以使用动态工具扩展 AI 智能体。使用子进程 + stdio (JSON-RPC 2.0)。',
+    needsAssignmentInfo: 'MCP 服务器需要指定给系统数字人才能在对话中使用。',
     newServer: '新建 MCP 服务器',
     editServer: '编辑 MCP 服务器',
     deleteServer: '删除服务器',
@@ -3636,6 +3664,7 @@ export const zh = {
   tools: {
     title: '工具',
     subtitle: '定义 HTTP 端点、代码片段、提示词模板和 SMTP 邮件工具供 AI 智能体使用。',
+    needsAssignmentInfo: '工具需要指定给系统数字人才能在对话中使用。',
     newTool: '新建工具',
     editTool: '编辑工具',
     deleteTool: '删除工具',
@@ -4243,6 +4272,7 @@ export const zh = {
     rateLimited: '请求过于频繁，请稍等。',
     invalidRequest: '无效请求',
     unknownError: '发生未知错误',
+    noResponse: '无响应',
   },
   titlebar: {
     toggleSidebar: '切换侧边栏',

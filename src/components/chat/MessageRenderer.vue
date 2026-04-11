@@ -23,8 +23,8 @@
 
     <!-- ── Assistant message ────────────────────────────────────────────────── -->
     <template v-else>
-    <!-- ── Todo List Panel (single, live) ───────────────────────────────────────── -->
-    <div v-if="latestTodos.length > 0" class="mb-3 rounded-xl overflow-hidden" style="border:1px solid #3a5478; background:#f4f7fb;">
+    <!-- ── Todo List Panel (single, live) — shown at top only when no plan exists ── -->
+    <div v-if="latestTodos.length > 0 && !hasSubmitPlan" class="mb-3 rounded-xl overflow-hidden" style="border:1px solid #3a5478; background:#f4f7fb;">
       <!-- Header -->
       <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none" style="background:linear-gradient(135deg,#47648e,#24435e); border-bottom:1px solid #3a5478;" @click="todoCollapsed = !todoCollapsed">
         <span style="color:#a8c8f0; font-size:0.85rem;">☑</span>
@@ -117,7 +117,48 @@
             <pre class="rounded-xl p-2 overflow-x-auto mt-1" style="background:#1C1C1E; color:#E5E5EA; font-size:0.72rem; margin:0; white-space:pre-wrap; border-radius:12px; max-height:200px; overflow-y:auto;">{{ String(seg.output).slice(0, 500) }}</pre>
           </div>
         </div>
-      </div><template v-else-if="(seg.type === 'tool' || seg.type === 'permission' || seg.type === 'warning') && !isSoulTool(seg) && processExpanded">
+      </div><!-- ── submit_plan: render PlanCard + Todo panel inline ── -->
+      <template v-else-if="seg.type === 'tool' && seg.name === 'submit_plan'">
+        <PlanCard
+          v-if="planData"
+          :plan="planData"
+          :state="planState"
+          @approve="onApprovePlan?.()"
+          @refine="onRefinePlan?.()"
+          @reject="onRejectPlan?.()"
+        />
+        <!-- Todo List Panel — rendered after PlanCard when plan exists -->
+        <div v-if="latestTodos.length > 0" class="mt-3 mb-3 rounded-xl overflow-hidden" style="border:1px solid #3a5478; background:#f4f7fb;">
+          <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none" style="background:linear-gradient(135deg,#47648e,#24435e); border-bottom:1px solid #3a5478;" @click="todoCollapsed = !todoCollapsed">
+            <span style="color:#a8c8f0; font-size:0.85rem;">☑</span>
+            <span style="font-size:0.8rem; font-weight:600; color:#fff;">{{ t('chats.taskList') }}</span>
+            <div class="flex gap-1.5 ml-2">
+              <span v-if="todoSummary.done > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:rgba(255,255,255,0.2); color:#fff;">{{ todoSummary.done }} {{ t('chats.done') }}</span>
+              <span v-if="todoSummary.running > 0" class="px-1.5 py-0.5 rounded-full animate-pulse" style="font-size:0.7rem; background:#fef9c3; color:#a16207;">{{ todoSummary.running }} {{ t('chats.running') }}</span>
+              <span v-if="todoSummary.blocked > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:#fee2e2; color:#dc2626;">{{ todoSummary.blocked }} {{ t('chats.blocked') }}</span>
+              <span v-if="todoSummary.pending > 0" class="px-1.5 py-0.5 rounded-full" style="font-size:0.7rem; background:rgba(255,255,255,0.15); color:rgba(255,255,255,0.75);">{{ todoSummary.pending }} {{ t('chats.pending') }}</span>
+            </div>
+            <span class="ml-auto" style="font-size:0.75rem; color:rgba(255,255,255,0.8);">{{ todoSummary.done }}/{{ latestTodos.length }}</span>
+            <span style="font-size:0.7rem; color:rgba(255,255,255,0.6); margin-left:4px;">{{ todoCollapsed ? '▶' : '▼' }}</span>
+          </div>
+          <div v-if="!todoCollapsed">
+            <div v-for="todo in latestTodos" :key="todo.id" class="flex items-start gap-2 px-3 py-1.5" style="border-bottom:1px solid #f0f4f0;">
+              <span class="shrink-0 mt-0.5" style="font-size:0.85rem; width:1.2rem; text-align:center;" :class="todo.status === 'in_progress' ? 'animate-pulse' : ''">
+                <span v-if="todo.status === 'completed'" style="color:#22c55e;">✓</span>
+                <span v-else-if="todo.status === 'in_progress'" style="color:#eab308;">⚡</span>
+                <span v-else-if="todo.status === 'blocked'" style="color:#ef4444;">✕</span>
+                <span v-else style="color:#9CA3AF;">○</span>
+              </span>
+              <span class="flex-1" style="font-size:0.8rem; color:#374151;" :style="todo.status === 'completed' ? 'text-decoration:line-through; color:#9ca3af;' : ''">{{ todo.title }}</span>
+              <span class="shrink-0 px-1.5 py-0.5 rounded-full" style="font-size:0.68rem;"
+                :style="todo.status === 'completed' ? 'background:#dcfce7; color:#15803d;' : todo.status === 'in_progress' ? 'background:#fef9c3; color:#a16207;' : todo.status === 'blocked' ? 'background:#fee2e2; color:#dc2626;' : 'background:#F5F5F5; color:#9CA3AF;'">
+                {{ todo.status === 'completed' ? t('chats.done') : todo.status === 'in_progress' ? t('chats.running') : todo.status === 'blocked' ? t('chats.blocked') : t('chats.pending') }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template v-else-if="(seg.type === 'tool' || seg.type === 'permission' || seg.type === 'warning') && !isSoulTool(seg) && processExpanded">
       <!-- File diff (file_operation write/append) -->
       <div v-if="seg.type === 'tool' && isFileWrite(seg)" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #d1d5db; font-size:0.78rem;">
         <!-- Diff header -->
@@ -405,6 +446,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import BabylonViewer from './BabylonViewer.vue'
 import PermissionPrompt from './PermissionPrompt.vue'
+import PlanCard from './PlanCard.vue'
 import { useChatsStore } from '../../stores/chats'
 import { useConfigStore } from '../../stores/config'
 import { useAgentsStore } from '../../stores/agents'
@@ -416,7 +458,12 @@ const agentsStore = useAgentsStore()
 const { t } = useI18n()
 
 const props = defineProps({
-  message: { type: Object, required: true }
+  message:      { type: Object,   required: true },
+  planData:     { type: Object,   default: null },
+  planState:    { type: String,   default: 'pending' },
+  onApprovePlan:{ type: Function, default: null },
+  onRefinePlan: { type: Function, default: null },
+  onRejectPlan: { type: Function, default: null }
 })
 
 const emit = defineEmits(['quote-image'])
@@ -813,28 +860,52 @@ function formatTokenCount(count) {
   return (count / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M'
 }
 
+const hasSubmitPlan = computed(() =>
+  (props.message.segments || []).some(s => s.type === 'tool' && s.name === 'submit_plan')
+)
+
 const latestTodos = computed(() => {
   const segs = props.message.segments || []
-  const map = new Map()
+  // After plan approval, only show todos from the execution phase (after submit_plan)
+  let startIdx = 0
+  for (let j = segs.length - 1; j >= 0; j--) {
+    if (segs[j].type === 'tool' && segs[j].name === 'submit_plan') { startIdx = j + 1; break }
+  }
+  const map = new Map()    // keyed by todo.id
   const order = []
-  for (const seg of segs) {
+  const titleMap = new Map() // keyed by normalized title → todo.id (dedup across agent runs)
+  // Normalize title: strip "Step N: ", "Step N/N — ", "Step N — ", "#N " prefixes
+  const normalizeTitle = (t) => t.replace(/^(?:Step\s+\d+(?:\/\d+)?[\s:—-]+|#\d+\s+)/i, '').trim()
+  for (let idx = startIdx; idx < segs.length; idx++) {
+    const seg = segs[idx]
     if (seg.type !== 'tool' || seg.name !== 'todo_manager') continue
     const out = parseOutput(seg)
     const action = seg.input?.action
     if (action === 'add' && out?.todo) {
-      if (!map.has(out.todo.id)) order.push(out.todo.id)
-      map.set(out.todo.id, { ...out.todo })
+      const normTitle = normalizeTitle(out.todo.title)
+      // Dedup by normalized title: if a todo with the same core title already
+      // exists (from a different agent run with different IDs/prefix), merge
+      const existingId = titleMap.get(normTitle)
+      if (existingId !== undefined && map.has(existingId)) {
+        Object.assign(map.get(existingId), out.todo, { id: existingId })
+      } else {
+        if (!map.has(out.todo.id)) order.push(out.todo.id)
+        map.set(out.todo.id, { ...out.todo })
+        titleMap.set(normTitle, out.todo.id)
+      }
     } else if ((action === 'update' || action === 'complete') && out?.todo) {
       if (map.has(out.todo.id)) {
         Object.assign(map.get(out.todo.id), out.todo)
       }
     } else if (action === 'clear') {
-      map.clear(); order.length = 0
+      map.clear(); order.length = 0; titleMap.clear()
     } else if (action === 'remove' && out?.todo) {
+      const removed = map.get(out.todo.id)
+      if (removed) titleMap.delete(normalizeTitle(removed.title))
       map.delete(out.todo.id)
     }
   }
-  return order.map(id => map.get(id)).filter(Boolean)
+  return order.map(id => map.get(id)).filter(Boolean).sort((a, b) => a.id - b.id)
 })
 
 const todoSummary = computed(() => {

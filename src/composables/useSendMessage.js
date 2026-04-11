@@ -714,66 +714,90 @@ export function useSendMessage({
   // ── Plan Approval Functions ────────────────────────────────────────────────────
   async function approvePlan(msg) {
     const chatId = chatsStore.activeChatId
+    if (!chatId) return
     chatsStore.setPlanState(chatId, msg.id, 'approved')
 
-    const savedParams = chatsStore.getPlanRunParams(chatId)
-    if (!savedParams) return
+    const targetChat = chatsStore.chats.find(c => c.id === chatId)
+    if (!targetChat?.messages) return
 
-    // Format plan as injected text
-    const injectedPlan = `Title: ${msg.planData.title}\n` +
-      msg.planData.steps.map((s, i) => `${i + 1}. ${s.label}`).join('\n')
+    // Resume streaming on the SAME assistant message (no new user bubble)
+    msg.streaming = true
+    msg.streamingStartedAt = Date.now()
+    targetChat.isRunning = true
+    collaborationCancelled.value = false
 
-    // Create a new streaming assistant message
-    const newMsgId = uuidv4()
-    const chat = chatsStore.chats.find(c => c.id === chatId)
-    if (!chat?.messages) return
+    // Route incoming chunks to the existing message
+    perChatStreamingMsgId.set(chatId, msg.id)
+    perChatStreamingSegments.set(chatId, [...(msg.segments || [])])
+    startStreamingTimer()
 
-    chat.messages.push({
-      id: newMsgId,
-      role: 'assistant',
-      content: '',
-      streaming: true,
-      streamingStartedAt: Date.now(),
-      segments: []
-    })
-    chat.isRunning = true
-    perChatStreamingSegments.set(chatId, [])
-    perChatStreamingMsgId.set(chatId, newMsgId)
-    scrollToBottom()
+    // Pre-mark agents as running
+    for (const id of activeSystemAgentIds.value) runningAgentKeys.add(`${chatId}:${id}`)
 
-    try {
-      const res = await window.electronAPI.runAgent({ ...savedParams, injectedPlan })
+    // Build messages array (same logic as sendMessage)
+    const apiMessagesRaw = targetChat.messages
+      .filter(m => {
+        if (m.role === 'user') return !!m.content
+        if (m.role === 'assistant' && !m.streaming) return !!(m.content || m.segments?.length)
+        return false
+      })
+      .map(m => {
+        let content = m.content || ''
+        const toolSegs = (m.segments || []).filter(s => s.type === 'tool' && !s._fromLog)
+        if (toolSegs.length > 0) content += buildToolLog(toolSegs)
+        return { role: m.role, content, _agentId: m.agentId || null, _userAgentId: m.userAgentId || null }
+      })
+      .filter(m => !!m.content)
 
-      const finalSegments = perChatStreamingSegments.get(chatId) || []
-      const execMsg = chat.messages.find(m => m.id === newMsgId)
-      if (execMsg) {
-        execMsg.streaming = false
-        execMsg.segments = finalSegments.map(s => ({ ...s }))
-        execMsg.content = finalSegments.filter(s => s.type === 'text').map(s => s.content).join('')
-        if (!execMsg.content && res.result) {
-          execMsg.segments = [{ type: 'text', content: res.result }]
-          execMsg.content = res.result
-        }
-        if (!res.success) {
-          execMsg.segments = [{ type: 'text', content: `Error: ${res.error}` }]
-          execMsg.content = `Error: ${res.error}`
-        }
-        if (execMsg.streamingStartedAt) execMsg.durationMs = Date.now() - execMsg.streamingStartedAt
-      }
-    } catch (err) {
-      const execMsg = chat.messages.find(m => m.id === newMsgId)
-      if (execMsg) {
-        execMsg.streaming = false
-        execMsg.segments = [{ type: 'text', content: `Error: ${err.message}` }]
-        execMsg.content = `Error: ${err.message}`
-      }
-    } finally {
-      chat.isRunning = false
-      perChatStreamingMsgId.delete(chatId)
-      perChatStreamingSegments.delete(chatId)
-      await chatsStore.persist?.()
-      scrollToBottom()
+    // Append plan approval instruction as a user message so the agent sees it
+    const planInstruction = `[Plan Approved — Execute Now]\n\nTitle: ${msg.planData.title}\n` +
+      msg.planData.steps.map((s, i) => `${i + 1}. ${s.label}`).join('\n') +
+      '\n\nThe user has approved this plan. Execute it step by step now.'
+    apiMessagesRaw.push({ role: 'user', content: planInstruction })
+
+    const isGroup = activeSystemAgentIds.value.length > 1
+    if (isGroup) isInCollaborationLoop.value = true
+
+    // Coding Mode context
+    let claudeContext = null
+    if (targetChat.codingMode && targetChat.workingPath) {
+      try {
+        const cached = targetChat.id === chatsStore.activeChatId ? _codingModeContext.value : null
+        claudeContext = cached ?? (
+          window.electronAPI?.claude?.loadContext
+            ? await window.electronAPI.claude.loadContext(targetChat.workingPath)
+            : null
+        )
+      } catch {}
     }
+
+    // Fire the same unified IPC — chunks route to existing msg via perChatStreamingMsgId
+    window.electronAPI.sendMessage({
+      chatId,
+      messages: JSON.parse(JSON.stringify(apiMessagesRaw)),
+      groupIds: JSON.parse(JSON.stringify(activeSystemAgentIds.value)),
+      isGroup,
+      text: planInstruction,
+      pendingAttachments: [],
+      enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
+      stickyTargetIds: JSON.parse(JSON.stringify(stickyTarget.value || [])),
+      targetChatMeta: {
+        permissionMode: targetChat.permissionMode || 'inherit',
+        chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
+        chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
+        maxAgentRounds: targetChat.maxAgentRounds ?? 10,
+        workingPath: targetChat.workingPath || null,
+        codingMode: !!targetChat.codingMode,
+        claudeContext: claudeContext ? JSON.parse(JSON.stringify(claudeContext)) : null,
+        userAgentId: targetChat.userAgentId || null,
+        systemAgentId: isGroup ? null : (activeSystemAgentIds.value[0] || targetChat.systemAgentId || null),
+        groupAudienceMode: targetChat.groupAudienceMode || 'auto',
+        groupAudienceAgentIds: JSON.parse(JSON.stringify(targetChat.groupAudienceAgentIds || [])),
+        modelContextWindows: modelsStore.getAllContextWindows(),
+      },
+    }).catch(err => dbg(`approvePlan IPC error: ${err.message}`, 'error'))
+
+    scrollToBottom()
   }
 
   function rejectPlan(msg) {

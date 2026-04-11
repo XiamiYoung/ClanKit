@@ -397,17 +397,21 @@
 
                   <!-- Anthropic: 3 model inputs with Test -->
                   <template v-if="selectedProvider.type === 'anthropic'">
+                    <p class="hint" style="margin-bottom: 0.75rem;">
+                      {{ t('config.anthropicModelHint') }}
+                      <a href="#" @click.prevent="openUrl('https://platform.claude.com/docs/en/docs/about-claude/models/overview')" style="color: var(--color-accent); text-decoration: underline;">{{ t('config.anthropicModelDocs') }}</a>
+                    </p>
                     <div class="form-group compact">
                       <label class="form-label">{{ t('config.sonnetModel') }}</label>
-                      <input v-model="selectedProvider.model" type="text" class="field font-mono" placeholder="claude-sonnet-latest" />
+                      <input v-model="selectedProvider.model" type="text" class="field font-mono" placeholder="e.g. claude-sonnet-4-6" />
                     </div>
                     <div class="form-group compact">
                       <label class="form-label">{{ t('config.opusModel') }}</label>
-                      <input v-model="selectedProvider.settings.opusModel" type="text" class="field font-mono" placeholder="claude-opus-latest" />
+                      <input v-model="selectedProvider.settings.opusModel" type="text" class="field font-mono" placeholder="e.g. claude-opus-4-6" />
                     </div>
                     <div class="form-group compact">
                       <label class="form-label">{{ t('config.haikuModel') }}</label>
-                      <input v-model="selectedProvider.settings.haikuModel" type="text" class="field font-mono" placeholder="claude-3-5-haiku-20241022" />
+                      <input v-model="selectedProvider.settings.haikuModel" type="text" class="field font-mono" placeholder="e.g. claude-haiku-4-5" />
                     </div>
                     <div class="test-connection-row" style="margin-top: 0.5rem;">
                       <select v-model="selectedTestModel" class="field font-mono" style="flex:1;">
@@ -2288,6 +2292,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useConfigStore } from '../stores/config'
 import { useModelsStore } from '../stores/models'
 import { useKnowledgeStore } from '../stores/knowledge'
+import { useObsidianStore } from '../stores/obsidian'
 import AppButton from '../components/common/AppButton.vue'
 import ProviderModelPicker from '../components/common/ProviderModelPicker.vue'
 import ComboBox from '../components/common/ComboBox.vue'
@@ -2298,6 +2303,7 @@ import { buildDemoTooltipHtml } from '../utils/demoMode.js'
 const configStore = useConfigStore()
 const modelsStore = useModelsStore()
 const knowledgeStore = useKnowledgeStore()
+const obsidianStore = useObsidianStore()
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
@@ -2676,8 +2682,8 @@ const subTabsAI = computed(() => {
     )
   }
   items.push(
-    { value: 'skills',    label: t('config.skillsPath'), icon: IconSkills   },
     { value: 'aidoc',     label: t('config.aidocPath'),  icon: IconAiDoc    },
+    { value: 'skills',    label: t('config.skillsPath'), icon: IconSkills   },
     { value: 'knowledge', label: t('config.knowledge'), icon: IconKnowledge },
   )
   return items
@@ -3497,7 +3503,9 @@ async function saveSkillsPath() {
 async function saveAidocPath() {
   savingAidocPath.value = true
   try {
-    await configStore.saveEnvPath('DoCPath', String(form.DoCPath))
+    const newPath = String(form.DoCPath)
+    await configStore.saveEnvPath('DoCPath', newPath)
+    await obsidianStore.setVaultManually(newPath)
     savedAidocPathMsg.value = { ok: true, text: t('config.saved') }
   } catch (err) {
     savedAidocPathMsg.value = { ok: false, text: err.message || t('common.saveFailed') }

@@ -8,6 +8,12 @@
           <div style="display:flex; align-items:center; gap:0.5rem;">
             <h1 class="catalog-title">{{ t('mcp.title') }}</h1>
             <span class="catalog-count-badge">{{ mcpStore.servers.length }}</span>
+            <span class="catalog-assignment-hint">
+              <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+              {{ t('mcp.needsAssignmentInfo') }}
+            </span>
           </div>
           <p class="catalog-subtitle">
             {{ t('mcp.subtitle') }}
@@ -601,6 +607,15 @@ function cardGradient() {
   font-size: var(--fs-body);
   color: #6B7280;
   margin: 0.25rem 0 0 0;
+}
+.catalog-assignment-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  color: #9CA3AF;
+  line-height: 1;
 }
 .catalog-count-badge {
   font-family: 'Inter', sans-serif;

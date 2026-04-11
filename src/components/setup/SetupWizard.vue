@@ -485,9 +485,9 @@ const fetchingModels = ref(false)
 const fetchError = ref('')
 const testingConnection = ref(false)
 const testResult = ref(null)
-const anthropicSonnet = ref('claude-sonnet-latest')
-const anthropicOpus = ref('claude-opus-latest')
-const anthropicHaiku = ref('claude-haiku-latest')
+const anthropicSonnet = ref('')
+const anthropicOpus = ref('')
+const anthropicHaiku = ref('')
 
 const currentPreset = computed(() => PROVIDER_PRESETS[selectedProviderType.value])
 const showApiKeyHelp = ref(false)
@@ -544,9 +544,9 @@ function ensureWizardProvider() {
     providerBaseUrl.value = existingByType.baseURL || currentPreset.value?.defaultBaseURL || ''
     selectedModelId.value = existingByType.model || ''
     if (type === 'anthropic') {
-      anthropicSonnet.value = existingByType.model || 'claude-sonnet-latest'
-      anthropicOpus.value = existingByType.settings?.opusModel || 'claude-opus-latest'
-      anthropicHaiku.value = existingByType.settings?.haikuModel || 'claude-haiku-latest'
+      anthropicSonnet.value = existingByType.model || ''
+      anthropicOpus.value = existingByType.settings?.opusModel || ''
+      anthropicHaiku.value = existingByType.settings?.haikuModel || ''
     }
     return existingByType
   }
@@ -1114,9 +1114,9 @@ watch(() => props.visible, (val) => {
       providerBaseUrl.value = existing.baseURL || currentPreset.value?.defaultBaseURL || ''
       selectedModelId.value = existing.model || ''
       if (type === 'anthropic') {
-        anthropicSonnet.value = existing.model || 'claude-sonnet-latest'
-        anthropicOpus.value = existing.settings?.opusModel || 'claude-opus-latest'
-        anthropicHaiku.value = existing.settings?.haikuModel || 'claude-haiku-latest'
+        anthropicSonnet.value = existing.model || ''
+        anthropicOpus.value = existing.settings?.opusModel || ''
+        anthropicHaiku.value = existing.settings?.haikuModel || ''
       }
       if (existing.isActive) testResult.value = { ok: true }
     }

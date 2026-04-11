@@ -8,13 +8,15 @@
  */
 const { logger } = require('../../logger')
 
-const MAX_CONTEXT_TOKENS = 200_000    // Claude context window
-const COMPACT_TRIGGER    = 150_000    // Trigger compaction at 75% of context
-const LOCAL_TRIM_TARGET  = 100_000    // After local trim, aim for this many tokens
+const DEFAULT_MAX_CONTEXT_TOKENS = 1_000_000  // Claude Sonnet/Opus context window (1M)
 
 class ContextManager {
-  constructor(anthropicClient) {
-    this.anthropicClient = anthropicClient
+  constructor(anthropicClient, maxContextTokens) {
+    this.anthropicClient  = anthropicClient
+    this.maxContextTokens = maxContextTokens || DEFAULT_MAX_CONTEXT_TOKENS
+    // Thresholds are proportional to the model's actual context window
+    this.compactTrigger  = Math.round(this.maxContextTokens * 0.70)
+    this.localTrimTarget = Math.round(this.maxContextTokens * 0.40)
     this.inputTokens  = 0
     this.outputTokens = 0
     this.cacheCreationInputTokens = 0
@@ -39,8 +41,8 @@ class ContextManager {
       inputTokens:  this.inputTokens,
       outputTokens: this.outputTokens,
       totalTokens,
-      maxTokens:    MAX_CONTEXT_TOKENS,
-      percentage:   Math.round((this.inputTokens / MAX_CONTEXT_TOKENS) * 100),
+      maxTokens:    this.maxContextTokens,
+      percentage:   Math.round((this.inputTokens / this.maxContextTokens) * 100),
       cacheCreationInputTokens: this.cacheCreationInputTokens,
       cacheReadInputTokens:     this.cacheReadInputTokens,
       compactionCount:          this.compactionCount,
@@ -49,12 +51,12 @@ class ContextManager {
 
   /** Check whether we should compact before the next API call */
   shouldCompact() {
-    return this.inputTokens >= COMPACT_TRIGGER
+    return this.inputTokens >= this.compactTrigger
   }
 
   /** Check whether the context window is nearly exhausted (>90%) */
   isExhausted() {
-    return this.inputTokens >= MAX_CONTEXT_TOKENS * 0.9
+    return this.inputTokens >= this.maxContextTokens * 0.9
   }
 
   /**
@@ -147,7 +149,7 @@ class ContextManager {
 
     // Stage 2: hard clear if total chars still over threshold
     const totalChars = msgs.reduce((sum, m) => sum + JSON.stringify(m).length, 0)
-    const maxChars = MAX_CONTEXT_TOKENS * CHARS_PER_TOKEN
+    const maxChars = this.maxContextTokens * CHARS_PER_TOKEN
     if (totalChars / maxChars < HARD_CLEAR_RATIO) return msgs
 
     for (let i = 0; i < cutoffIdx; i++) {
@@ -173,7 +175,7 @@ class ContextManager {
    * the system context and the last N messages.
    */
   localTrim(messages, estimatedTokens) {
-    if (estimatedTokens < COMPACT_TRIGGER) return messages
+    if (estimatedTokens < this.compactTrigger) return messages
     if (messages.length <= 4) return messages
 
     logger.agent('ContextManager: local trim triggered', {
@@ -199,4 +201,4 @@ class ContextManager {
   }
 }
 
-module.exports = { ContextManager, MAX_CONTEXT_TOKENS, COMPACT_TRIGGER }
+module.exports = { ContextManager }

@@ -228,23 +228,23 @@
                   <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
                 <span>{{ formatErrorLabel(msg) }}</span>
-                <span v-if="msg.errorDetail" class="cw-error-info" :data-tooltip="msg.errorDetail">
+                <span v-if="msg.isError" class="cw-error-info" :data-tooltip="msg.errorDetail || t('errors.unknownError')">
                   <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
                   </svg>
                 </span>
               </div>
               <div :class="msg.role === 'user' ? 'user-content' : 'prose-clankai'">
-                <MessageRenderer :message="msg" @quote-image="emit('quote-image', $event)" />
+                <MessageRenderer
+                  :message="msg"
+                  :plan-data="msg.planData || null"
+                  :plan-state="msg.planState || 'pending'"
+                  :on-approve-plan="() => props.onApprovePlan?.(msg)"
+                  :on-refine-plan="() => props.onRefinePlan?.(msg)"
+                  :on-reject-plan="() => props.onRejectPlan?.(msg)"
+                  @quote-image="emit('quote-image', $event)"
+                />
               </div>
-              <PlanCard
-                v-if="msg.planData"
-                :plan="msg.planData"
-                :state="msg.planState || 'pending'"
-                @approve="props.onApprovePlan?.(msg)"
-                @refine="props.onRefinePlan?.(msg)"
-                @reject="props.onRejectPlan?.(msg)"
-              />
             </div>
             <div
               class="cw-msg-timestamp"
@@ -438,7 +438,6 @@ import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
 import { getAvatarDataUri } from '../agents/agentAvatars'
 import MessageRenderer from './MessageRenderer.vue'
-import PlanCard from './PlanCard.vue'
 
 const props = defineProps({
   chatId: { type: String, required: true },

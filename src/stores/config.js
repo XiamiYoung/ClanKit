@@ -9,7 +9,7 @@ export const PROVIDER_PRESETS = {
     type: 'anthropic',
     auth: 'x-api-key',
     defaultBaseURL: 'https://api.anthropic.com',
-    defaultModels: ['claude-sonnet-latest', 'claude-opus-latest', 'claude-haiku-latest'],
+    defaultModels: [],
     hardLimits: {},
     apiKeyUrl: 'https://console.anthropic.com/settings/keys',
     freeInfo: { badge: 'paid', labelKey: 'onboarding.freeInfo.paid' },
@@ -252,8 +252,8 @@ export const useConfigStore = defineStore('config', () => {
       maxOutputTokens: preset.hardLimits?.maxOutputTokens || 32768,
     }
     if (presetType === 'anthropic') {
-      settings.opusModel = 'claude-opus-latest'
-      settings.haikuModel = 'claude-haiku-latest'
+      settings.opusModel = ''
+      settings.haikuModel = ''
     }
     if (presetType === 'custom') {
       settings.protocol = 'openai'

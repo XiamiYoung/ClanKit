@@ -1384,7 +1384,7 @@ _fireGroupAgentsDirectRef = _fireGroupAgentsDirect
 
 // Per-chat state — reads from the active chat object in the store (must be before useSendMessage)
 const activeRunning = computed(() => chatsStore.activeChat?.isRunning ?? false)
-const activeContextMetrics = computed(() => chatsStore.activeChat?.contextMetrics ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 200000, percentage: 0, compactionCount: 0 })
+const activeContextMetrics = computed(() => chatsStore.activeChat?.contextMetrics ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 1000000, percentage: 0, compactionCount: 0 })
 const activePerAgentMetrics = computed(() => chatsStore.activeChat?.perAgentContextMetrics ?? {})
 const hasContextData = computed(() => activeContextMetrics.value.inputTokens > 0)
 const hasMessages = computed(() => (chatsStore.activeChat?.messages?.length ?? 0) > 0)
@@ -1590,7 +1590,7 @@ function updateChatPermissionMode(newMode) {
   if (runningChat && window.electronAPI?.updatePermissionMode) {
     window.electronAPI.updatePermissionMode(chatId, {
       chatMode: newMode,
-      chatAllowList: chatsStore.activeChat?.chatAllowList || []
+      chatAllowList: JSON.parse(JSON.stringify(chatsStore.activeChat?.chatAllowList || []))
     })
   }
 }

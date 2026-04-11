@@ -1049,13 +1049,22 @@ ipcMain.handle('agent:permission-response', (event, chatId, { blockId, decision,
 ipcMain.handle('agent:update-permission-mode', (event, chatId, { chatMode, chatAllowList }) => {
   // Update all active loops for this chat (exact + group agent loops)
   let updated = false
+  const allAutoResolved = []
   for (const [key, loop] of activeLoops) {
     if (key === chatId || key.startsWith(chatId + ':')) {
       if (typeof loop.updatePermissionMode === 'function') {
-        loop.updatePermissionMode(chatMode, chatAllowList)
+        const resolved = loop.updatePermissionMode(chatMode, chatAllowList)
+        if (resolved?.length) allAutoResolved.push(...resolved)
         updated = true
       }
     }
+  }
+  // Notify renderer so it can mark auto-resolved permission segments as allowed
+  if (allAutoResolved.length > 0) {
+    event.sender.send('agent:chunk', {
+      chatId,
+      chunk: { type: 'permission_auto_resolved', blockIds: allAutoResolved },
+    })
   }
   return { success: updated }
 })

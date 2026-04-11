@@ -8,6 +8,12 @@
           <div style="display:flex; align-items:center; gap:0.5rem;">
             <h1 class="knowledge-title">{{ t('knowledge.title') }}</h1>
             <span class="catalog-count-badge">{{ knowledgeStore.knowledgeBases.length }}</span>
+            <span class="catalog-assignment-hint">
+              <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+              {{ t('knowledge.needsAssignmentInfo') }}
+            </span>
           </div>
           <p class="knowledge-subtitle">
             {{ t('knowledge.subtitle') }}
@@ -737,6 +743,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .knowledge-header-top { display: flex; align-items: flex-start; justify-content: space-between; }
 .knowledge-title { font-family: 'Inter', sans-serif; font-size: var(--fs-page-title); font-weight: 700; color: var(--text-primary); margin: 0; }
 .knowledge-subtitle { font-family: 'Inter', sans-serif; font-size: var(--fs-body); color: var(--text-secondary); margin: 0.25rem 0 0 0; }
+.catalog-assignment-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption);
+  color: #9CA3AF;
+  line-height: 1;
+}
 .header-actions { display: flex; align-items: center; gap: 0.5rem; }
 .catalog-count-badge {
   font-family: 'Inter', sans-serif;

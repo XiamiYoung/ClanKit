@@ -13,6 +13,12 @@
             <div style="display:flex; align-items:center; gap:0.5rem;">
               <h1 style="font-family:'Inter',sans-serif; font-size:var(--fs-page-title); font-weight:700; color:#1A1A1A; margin:0;">{{ t('skills.title') }}</h1>
               <span class="catalog-count-badge">{{ activeTab === 'local' ? filteredSkills.length : activeTab === 'tencent' ? tencentDisplaySkills.length : filteredClawhubSkills.length }}</span>
+              <span class="catalog-assignment-hint">
+                <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                {{ t('skills.needsAssignmentInfo') }}
+              </span>
             </div>
             <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#6B7280; margin:0.25rem 0 0 0;">
               {{ t('skills.subtitle') }}
@@ -26,14 +32,6 @@
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </AppButton>
           </div>
-        </div>
-
-        <!-- 💡 Info banner: Skills need to be assigned to System Agents -->
-        <div class="skills-info-banner">
-          <svg style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-          </svg>
-          <span>{{ t('skills.needsAssignmentInfo') }}</span>
         </div>
 
         <!-- Tabs -->
@@ -1466,18 +1464,15 @@ const SkillTreeNode = defineComponent({
   line-height: 1.4;
 }
 
-/* ── Info banner ──────────────────────────────────────────────────────── */
-.skills-info-banner {
-  display: flex;
+/* ── Assignment hint (inline, under subtitle) ─────────────────────────── */
+.catalog-assignment-hint {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: #EFF6FF;
-  border-bottom: 1px solid #BFDBFE;
-  color: #1E40AF;
+  gap: 0.3rem;
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body);
-  flex-shrink: 0;
+  font-size: var(--fs-caption);
+  color: #9CA3AF;
+  line-height: 1;
 }
 
 /* ── Search bar ────────────────────────────────────────────────────────── */

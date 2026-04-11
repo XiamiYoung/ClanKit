@@ -241,8 +241,8 @@ export const useModelsStore = defineStore('models', () => {
     }
     if (!provider) return []
     const models = []
-    if (provider.model) models.push({ id: provider.model, name: 'Sonnet', context_length: 200000 })
-    if (provider.settings?.opusModel) models.push({ id: provider.settings.opusModel, name: 'Opus', context_length: 200000 })
+    if (provider.model) models.push({ id: provider.model, name: 'Sonnet', context_length: 1000000 })
+    if (provider.settings?.opusModel) models.push({ id: provider.settings.opusModel, name: 'Opus', context_length: 1000000 })
     if (provider.settings?.haikuModel) models.push({ id: provider.settings.haikuModel, name: 'Haiku', context_length: 200000 })
     return models
   }

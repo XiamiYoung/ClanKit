@@ -17,6 +17,9 @@ vi.mock('../../stores/chats', () => ({
 vi.mock('../../stores/agents', () => ({
   useAgentsStore: () => mockAgentsStore,
 }))
+vi.mock('../../i18n/useI18n', () => ({
+  useI18n: () => ({ t: (key) => key, locale: ref('en') }),
+}))
 
 // Import after mocks are declared
 import { useChunkHandler } from '../useChunkHandler'
@@ -184,15 +187,14 @@ describe('useChunkHandler', () => {
       expect(runningAgentKeys.has('chat1:a1')).toBe(false)
     })
 
-    it('sets "_No response_" when agent produces no content', () => {
+    it('marks isError when agent produces no content', () => {
       const { handleChunk } = createHandler()
 
       handleChunk('chat1', { type: 'agent_start', agentId: 'a1', agentName: 'Alice' })
       handleChunk('chat1', { type: 'agent_end', agentId: 'a1', agentName: 'Alice' })
 
       const msg = mockChatsStore.chats[0].messages[0]
-      expect(msg.content).toBe('_No response_')
-      expect(msg.segments).toEqual([{ type: 'text', content: '_No response_' }])
+      expect(msg.isError).toBe(true)
       expect(msg.streaming).toBe(false)
     })
   })

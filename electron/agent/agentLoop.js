@@ -122,7 +122,7 @@ class AgentLoop {
       this.anthropicClient = new AnthropicClient(config)
       this.isOpenAI = false
     }
-    this.contextManager  = new ContextManager(this.anthropicClient)
+    this.contextManager  = new ContextManager(this.anthropicClient, config.modelContextWindow || null)
     this.toolRegistry    = new ToolRegistry(config.soulsDir)
     this.subAgentManager = new SubAgentManager(this.anthropicClient, this.toolRegistry, this.isOpenAI)
     this.taskManager     = new TaskManager()
@@ -194,13 +194,16 @@ class AgentLoop {
     logger.agent('PermissionGate: mode updated live', { chatMode, chatAllowListLen: chatAllowList?.length })
 
     // Auto-resolve any pending permission requests when switching to all_permissions
+    const autoResolvedBlockIds = []
     if (chatMode === 'all_permissions' && this._pendingPermissions.size > 0) {
       for (const [blockId, resolve] of this._pendingPermissions) {
         logger.agent('PermissionGate: auto-resolving pending block due to mode change', { blockId })
+        autoResolvedBlockIds.push(blockId)
         resolve('allow_chat')
       }
       this._pendingPermissions.clear()
     }
+    return autoResolvedBlockIds
   }
 
   requestCompaction() {
@@ -1555,6 +1558,7 @@ class AgentLoop {
                     onChunk({ type: 'plan_submitted', plan: toolInput })
                     result = { success: true, status: 'awaiting_approval' }
                     this._planPending = true
+                    onChunk({ type: 'tool_result', name: toolName, result: JSON.stringify(result), toolCallId: block.id })
                     return { tool_call_id: block.id, content: JSON.stringify(result) }
                   } else {
                     const permCheck = await this._checkPermission(toolName, toolInput, onChunk)
@@ -1865,6 +1869,7 @@ class AgentLoop {
                     onChunk({ type: 'plan_submitted', plan: toolInput })
                     result = { success: true, status: 'awaiting_approval' }
                     this._planPending = true
+                    onChunk({ type: 'tool_result', name: toolName, result: JSON.stringify(result), toolCallId: block.id })
                     return { type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) }
                   } else {
                     const permCheck = await this._checkPermission(toolName, toolInput, onChunk)

@@ -3,6 +3,7 @@ import { useChatsStore } from '../stores/chats'
 import { useAgentsStore } from '../stores/agents'
 import { v4 as uuidv4 } from 'uuid'
 import { parseToolLogBlock, deduplicateToolSegments } from '../utils/parseToolLog'
+import { useI18n } from '../i18n/useI18n'
 
 /**
  * Streaming chunk handler: manages per-chat streaming state, segment flushing,
@@ -22,6 +23,7 @@ export function useChunkHandler({
 } = {}) {
   const chatsStore = useChatsStore()
   const agentsStore = useAgentsStore()
+  const { t } = useI18n()
 
   const perChatStreamingMsgId = new Map()    // chatId → string
   const perChatStreamingSegments = new Map() // chatId → segment[]
@@ -221,7 +223,16 @@ export function useChunkHandler({
           // to guarantee consistency when agent_end fires.
           const finalSegs = perChatStreamingSegments.get(agentKey) || []
           if (finalSegs.length > 0) {
-            msg.segments = finalSegs.map(s => ({ ...s }))
+            // Preserve resolved permission statuses — user may have clicked allow/reject
+            // on msg.segments while perChatStreamingSegments still has status:'pending'
+            const prevSegs = msg.segments || []
+            msg.segments = finalSegs.map(s => {
+              if (s.type === 'permission') {
+                const live = prevSegs.find(p => p.type === 'permission' && p.blockId === s.blockId)
+                if (live && live.status !== 'pending') return { ...s, status: live.status }
+              }
+              return { ...s }
+            })
             msg.content = finalSegs.filter(s => s.type === 'text').map(s => s.content).join('')
           }
           // ── Post-processing: parse tool execution log text into tool segments ──
@@ -275,7 +286,7 @@ export function useChunkHandler({
           // If no text content: distinguish user-initiated stop from real error.
           // When user pressed stop/escape, silently remove the empty placeholder.
           // Otherwise mark as error (the agent produced nothing — likely a backend error).
-          const hasTextContent = msg.content || (msg.segments || []).some(s => s.type === 'text' && s.content)
+          const hasTextContent = msg.content || msg.planData || (msg.segments || []).some(s => s.type === 'text' && s.content)
           if (!hasTextContent) {
             if (collaborationCancelled.value) {
               // User-initiated stop — silently remove empty placeholder
@@ -283,8 +294,6 @@ export function useChunkHandler({
               if (rmIdx !== -1) targetChat.messages.splice(rmIdx, 1)
             } else {
               msg.isError = true
-              msg.content = '_No response_'
-              msg.segments = [{ type: 'text', content: '_No response_' }]
             }
           }
 
@@ -486,6 +495,22 @@ export function useChunkHandler({
       flushSegments(routeKey)
       scrollToBottom(false, cId)
       chatsStore.markPermissionPending(cId)
+    } else if (chunk.type === 'permission_auto_resolved') {
+      // Triggered when user switches to all_permissions mode mid-run — mark pending
+      // permission segments as allowed so the UI hides the action buttons.
+      const blockIds = new Set(chunk.blockIds || [])
+      const chat = chatsStore.chats.find(c => c.id === cId)
+      if (chat?.messages) {
+        for (const msg of chat.messages) {
+          if (!msg.segments) continue
+          for (const seg of msg.segments) {
+            if (seg.type === 'permission' && seg.status === 'pending' && blockIds.has(seg.blockId)) {
+              seg.status = 'allowed'
+            }
+          }
+        }
+      }
+      chatsStore.clearPermissionPending(cId)
     } else if (chunk.type === 'context_update') {
       if (chunk.metrics) {
         targetChat.contextMetrics = { ...chunk.metrics }
@@ -625,6 +650,13 @@ export function useChunkHandler({
       // the "Done" label for background chats. This ensures background chats always get
       // the completed status and spinner disappears properly.
       chatsStore.markCompleted(cId)
+
+      // Transition plan state: approved → completed
+      if (targetChat?.messages) {
+        for (const m of targetChat.messages) {
+          if (m.planState === 'approved') { m.planState = 'completed'; break }
+        }
+      }
 
       // Persist chat
       chatsStore.persist?.()

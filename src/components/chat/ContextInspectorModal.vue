@@ -64,11 +64,15 @@
               <tbody>
                 <tr style="border-bottom:1px solid #1E1E1E;">
                   <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.inputTokens') }}</td>
-                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ (aggregateMetrics.inputTokens ?? 0).toLocaleString() }}</td>
+                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ fmtTokens(aggregateMetrics.inputTokens ?? 0) }}</td>
                 </tr>
                 <tr style="border-bottom:1px solid #1E1E1E;">
-                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.maxTokens') }}</td>
-                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ (aggregateMetrics.maxTokens ?? 0).toLocaleString() }}</td>
+                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.outputTokens') }}</td>
+                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ fmtTokens(aggregateMetrics.outputTokens ?? 0) }}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #1E1E1E;">
+                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.contextWindow') }}</td>
+                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ fmtTokens(aggregateMetrics.maxTokens ?? 0) }}</td>
                 </tr>
                 <tr style="border-bottom:1px solid #1E1E1E;">
                   <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.context') }}</td>
@@ -84,11 +88,11 @@
                 <template v-if="contextMetrics.voiceInputTokens || contextMetrics.voiceOutputTokens">
                   <tr style="border-bottom:1px solid #1E1E1E;">
                     <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.voiceIn') }}</td>
-                    <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ (contextMetrics.voiceInputTokens ?? 0).toLocaleString() }} {{ t('chats.tok') }}</td>
+                    <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ fmtTokens(contextMetrics.voiceInputTokens ?? 0) }}</td>
                   </tr>
                   <tr :style="contextMetrics.whisperCalls ? 'border-bottom:1px solid #1E1E1E;' : ''">
                     <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.voiceOut') }}</td>
-                    <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ (contextMetrics.voiceOutputTokens ?? 0).toLocaleString() }} {{ t('chats.tok') }}</td>
+                    <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ fmtTokens(contextMetrics.voiceOutputTokens ?? 0) }}</td>
                   </tr>
                 </template>
                 <tr v-if="contextMetrics.whisperCalls">
@@ -411,6 +415,8 @@ import { useToolsStore }  from '../../stores/tools'
 import { useMcpStore }    from '../../stores/mcp'
 import { useI18n }        from '../../i18n/useI18n'
 
+const DEFAULT_MAX_CONTEXT_TOKENS = 1_000_000
+
 const props = defineProps({
   visible:                Boolean,
   chatId:                 String,
@@ -449,6 +455,15 @@ function isSectionOpen(group, idx) { return !!sectionState[sectionKey(group, idx
 function toggleSection(group, idx) {
   const k = sectionKey(group, idx)
   sectionState[k] = !sectionState[k]
+}
+
+// ── Token formatter ───────────────────────────────────────────────────────────
+
+function fmtTokens(n) {
+  if (!n) return '0'
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1) + 'M'
+  if (n >= 1_000)     return (n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1) + 'k'
+  return n.toString()
 }
 
 // ── Sub-section parser (### headers within a section body) ───────────────────
@@ -490,14 +505,24 @@ function parsePromptSections(prompt) {
 // ── Aggregate metrics ─────────────────────────────────────────────────────────
 
 const aggregateMetrics = computed(() => {
-  const entries = Object.values(props.perAgentContextMetrics || {})
-  if (entries.length === 0) return props.contextMetrics || {}
-  const maxTokens       = props.contextMetrics?.maxTokens || entries[0]?.maxTokens || 0
-  const inputTokens     = entries.reduce((s, e) => s + (e.inputTokens    || 0), 0)
-  const outputTokens    = entries.reduce((s, e) => s + (e.outputTokens   || 0), 0)
-  const compactionCount = entries.reduce((s, e) => s + (e.compactionCount || 0), 0)
-  const percentage      = maxTokens > 0 ? (inputTokens / maxTokens) * 100 : 0
-  return { inputTokens, outputTokens, maxTokens, compactionCount, percentage }
+  const messages = chatsStore.activeChat?.messages || []
+  // Sum tokenUsage across all messages for conversation-wide totals
+  let totalInputTokens  = 0
+  let totalOutputTokens = 0
+  for (const msg of messages) {
+    if (msg.tokenUsage) {
+      totalInputTokens  += msg.tokenUsage.input  || 0
+      totalOutputTokens += msg.tokenUsage.output || 0
+    }
+  }
+  // maxTokens comes from ContextManager.getMetrics() via context_update chunks,
+  // which is now model-aware (passed from config.modelContextWindow in _buildAgentRuns).
+  const maxTokens       = props.contextMetrics?.maxTokens || DEFAULT_MAX_CONTEXT_TOKENS
+  const compactionCount = props.contextMetrics?.compactionCount || 0
+  // Recompute percentage from the live current-window inputTokens (not the sum of all turns)
+  const currentInput    = props.contextMetrics?.inputTokens || 0
+  const percentage      = Math.round((currentInput / maxTokens) * 100)
+  return { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, maxTokens, compactionCount, percentage }
 })
 
 // ── Chat agent IDs ────────────────────────────────────────────────────────────
