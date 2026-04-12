@@ -14,9 +14,12 @@ function start(opts, onMessage) {
   if (_running) stop()
   const lark = require('@larksuiteoapi/node-sdk')
 
-  _client = new lark.Client({ appId: opts.appId, appSecret: opts.appSecret })
+  const silentLogger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
+  const loggerOpts = { loggerLevel: lark.LogLevel?.OFF ?? 4, logger: silentLogger }
 
-  const dispatcher = new lark.EventDispatcher({}).register({
+  _client = new lark.Client({ appId: opts.appId, appSecret: opts.appSecret, ...loggerOpts })
+
+  const dispatcher = new lark.EventDispatcher(loggerOpts).register({
     'im.message.receive_v1': async (data) => {
       try {
         const msg = data.message
@@ -42,7 +45,7 @@ function start(opts, onMessage) {
     },
   })
 
-  _wsClient = new lark.WSClient({ appId: opts.appId, appSecret: opts.appSecret })
+  _wsClient = new lark.WSClient({ appId: opts.appId, appSecret: opts.appSecret, ...loggerOpts })
   _wsClient.start({ eventDispatcher: dispatcher })
   _running = true
 }

@@ -61,6 +61,13 @@ Important: the full app behavior only works in the Electron window. Browser-only
 - npm run dist:all: package win + mac
 - npm run bundle:mcporter: rebuild bundled MCP transporter module
 
+## Release
+
+Pushing a version tag triggers GitHub Actions to build installers for Windows and macOS automatically.
+
+    git tag v1.0.0
+    git push origin v1.0.0
+
 ## Packaging
 
 The dist scripts automatically compile Electron main-process JS to V8 bytecode before packaging, and restore the source files afterward:

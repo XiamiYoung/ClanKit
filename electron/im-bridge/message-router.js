@@ -6,6 +6,7 @@ const { v4: uuidv4 } = require('uuid')
 const { AgentLoop } = require('../agent/agentLoop')
 
 const ds = require('../lib/dataStore')
+const { normalizeLoopConfig } = require('../ipc/agentRuntimeUtils')
 
 function readJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return fallback }
@@ -71,61 +72,13 @@ function readAgents() {
   return Array.isArray(data) ? data : (data.agents || [])
 }
 
-/**
- * Resolve a provider ID (either a legacy type string or a UUID from config.providers)
- * to { type, apiKey, baseURL }.
- */
-function resolveProviderConfig(providerId, baseConfig) {
-  // New provider objects are stored in config.providers[] with UUID ids
-  if (Array.isArray(baseConfig.providers)) {
-    const found = baseConfig.providers.find(p => p.id === providerId)
-    if (found) {
-      return { type: found.type, apiKey: found.apiKey || '', baseURL: found.baseURL || '' }
-    }
-  }
-  // Legacy: providerId is the type string (e.g. 'anthropic', 'deepseek')
-  const type = providerId
-  return {
-    type,
-    apiKey:  baseConfig[type]?.apiKey  || '',
-    baseURL: baseConfig[type]?.baseURL || '',
-  }
-}
 
 function buildLoopConfig(baseConfig, agent) {
-  const cfg = { ...baseConfig }
-  const rawProviderId = agent.providerId || baseConfig.defaultProvider || 'anthropic'
-
-  delete cfg.apiKey
-  delete cfg.baseURL
-  delete cfg.openaiApiKey
-  delete cfg.openaiBaseURL
-  delete cfg._directAuth
-  delete cfg._resolvedProvider
-
-  const { type: providerType, apiKey, baseURL } = resolveProviderConfig(rawProviderId, baseConfig)
-
-  if (providerType === 'anthropic') {
-    cfg.apiKey  = apiKey
-    cfg.baseURL = baseURL
-  } else if (providerType === 'openrouter') {
-    cfg.apiKey  = apiKey
-    cfg.baseURL = baseURL
-  } else if (providerType === 'openai') {
-    cfg.openaiApiKey  = apiKey
-    cfg.openaiBaseURL = baseURL
-    cfg._resolvedProvider = 'openai'
-    cfg.defaultProvider   = 'openai'
-  } else if (providerType === 'deepseek') {
-    cfg.openaiApiKey  = apiKey
-    cfg.openaiBaseURL = baseURL.replace(/\/+$/, '')
-    cfg._resolvedProvider = 'openai'
-    cfg._directAuth       = true
-    cfg.defaultProvider   = 'openai'
-  }
-
+  // Use normalizeLoopConfig so provider type resolution (anthropic vs openai-compat)
+  // is identical to the chat window path. This fixes OpenRouter models that only
+  // support tool use via the OpenAI-compat API, not the Anthropic-format API.
+  const cfg = normalizeLoopConfig({ ...baseConfig }, agent.id)
   if (agent.modelId) cfg.customModel = agent.modelId
-
   return cfg
 }
 
