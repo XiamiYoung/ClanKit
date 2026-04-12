@@ -27,7 +27,7 @@ function register({ imBridge }) {
 
   ipcMain.handle('im:start-platform', (_, platform) => {
     const cfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
-    _imBridge.start(cfg)
+    _imBridge.updateConfig(cfg)
     return _imBridge.startPlatform(platform)
   })
 

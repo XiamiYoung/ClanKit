@@ -2001,6 +2001,37 @@ onMounted(async () => {
     })
   }
 
+  // IM bridge: streaming agent response into chat window
+  if (window.electronAPI?.im?.onAgentStreamStart) {
+    window.electronAPI.im.onAgentStreamStart(({ chatId, message }) => {
+      const chat = chatsStore.chats.find(c => c.id === chatId)
+      if (!chat?.messages) return
+      if (!chat.messages.find(m => m.id === message.id)) {
+        chat.messages.push(message)
+      }
+    })
+  }
+  if (window.electronAPI?.im?.onAgentChunk) {
+    window.electronAPI.im.onAgentChunk(({ chatId, messageId, chunk }) => {
+      if (chunk.type !== 'text') return
+      const chat = chatsStore.chats.find(c => c.id === chatId)
+      if (!chat?.messages) return
+      const msg = chat.messages.find(m => m.id === messageId)
+      if (!msg) return
+      msg.content = (msg.content || '') + (chunk.text || '')
+      if (msg.segments?.[0]) msg.segments[0].content = msg.content
+      else msg.segments = [{ type: 'text', content: msg.content }]
+    })
+  }
+  if (window.electronAPI?.im?.onAgentStreamEnd) {
+    window.electronAPI.im.onAgentStreamEnd(({ chatId, messageId }) => {
+      const chat = chatsStore.chats.find(c => c.id === chatId)
+      if (!chat?.messages) return
+      const msg = chat.messages.find(m => m.id === messageId)
+      if (msg) msg.streaming = false
+    })
+  }
+
   // Prevent Electron from navigating when files are dropped anywhere on the page
   document.addEventListener('dragover', preventNav)
   document.addEventListener('drop', preventNav)

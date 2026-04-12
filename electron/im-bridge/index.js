@@ -202,83 +202,88 @@ function handleCallbackQuery(platform, channelId, cbQueryId, data) {
   if (platform === 'telegram') telegram.answerCallbackQuery(cbQueryId)
 }
 
+function _startTelegram() {
+  const cfg = _config.im?.telegram
+  if (!cfg?.enabled || !cfg?.botToken) return
+  telegram.start(
+    cfg.botToken,
+    (chatId, username, text) => {
+      const allowed = cfg.allowedUsers
+      if (allowed && allowed.length > 0 && !allowed.includes(username) && !allowed.includes(chatId)) {
+        telegram.sendMessage(chatId, 'Access denied.')
+        return
+      }
+      handleIncoming('telegram', chatId, '@' + username, text).catch(err => {
+        console.error('[im-bridge] handleIncoming error:', err.message)
+        telegram.sendMessage(chatId, 'Internal error: ' + err.message)
+      })
+    },
+    async (chatId, username, fileId) => {
+      const allowed = cfg.allowedUsers
+      if (allowed && allowed.length > 0 && !allowed.includes(username) && !allowed.includes(chatId)) {
+        telegram.sendMessage(chatId, 'Access denied.')
+        return
+      }
+
+      let audioBuffer
+      try {
+        audioBuffer = await telegram.downloadFile(fileId)
+      } catch (err) {
+        console.error('[im-bridge] telegram voice download error:', err.message)
+        await sendToIM('telegram', chatId, '⚠️ Could not download voice message.')
+        return
+      }
+
+      let result
+      try {
+        result = await transcribeAudio(audioBuffer)
+      } catch (err) {
+        console.error('[im-bridge] telegram voice transcription error:', err.message)
+        await sendToIM('telegram', chatId, '⚠️ Could not transcribe voice message: ' + err.message)
+        return
+      }
+
+      if (result.error === 'no-key') {
+        await sendToIM('telegram', chatId, '⚠️ Voice transcription requires an OpenAI or Groq API key in settings.')
+        return
+      }
+      if (!result.text) {
+        await sendToIM('telegram', chatId, '⚠️ Could not detect speech in voice message.')
+        return
+      }
+
+      handleIncoming('telegram', chatId, '@' + username, result.text, true).catch(err => {
+        console.error('[im-bridge] handleIncoming error (voice):', err.message)
+        telegram.sendMessage(chatId, 'Internal error: ' + err.message)
+      })
+    },
+    (chatId, username, cbQueryId, data) => {
+      const allowed = cfg.allowedUsers
+      if (allowed && allowed.length > 0 && !allowed.includes(username) && !allowed.includes(chatId)) {
+        return  // silently ignore unauthorized callback taps
+      }
+      handleCallbackQuery('telegram', chatId, cbQueryId, data)
+    },
+    async (chatId, username, buffer, caption) => {
+      const allowed = cfg.allowedUsers
+      if (allowed && allowed.length > 0 && !allowed.includes(username) && !allowed.includes(chatId)) {
+        telegram.sendMessage(chatId, 'Access denied.')
+        return
+      }
+      handleIncomingImage('telegram', chatId, '@' + username, buffer, caption).catch(err => {
+        console.error('[im-bridge] handleIncomingImage error:', err.message)
+        telegram.sendMessage(chatId, 'Internal error: ' + err.message)
+      })
+    }
+  )
+  console.log('[im-bridge] Telegram bot started')
+}
+
 function start(fullConfig) {
   _config = fullConfig || {}
 
-
   if (_config.im?.telegram?.enabled && _config.im?.telegram?.botToken) {
-    telegram.start(
-      _config.im?.telegram.botToken,
-      (chatId, username, text) => {
-        const allowed = _config.im?.telegram?.allowedUsers
-        if (allowed && allowed.length > 0 && !allowed.includes(username) && !allowed.includes(chatId)) {
-          telegram.sendMessage(chatId, 'Access denied.')
-          return
-        }
-        handleIncoming('telegram', chatId, '@' + username, text).catch(err => {
-          console.error('[im-bridge] handleIncoming error:', err.message)
-          telegram.sendMessage(chatId, 'Internal error: ' + err.message)
-        })
-      },
-      async (chatId, username, fileId) => {
-        const allowed = _config.im?.telegram?.allowedUsers
-        if (allowed && allowed.length > 0 && !allowed.includes(username) && !allowed.includes(chatId)) {
-          telegram.sendMessage(chatId, 'Access denied.')
-          return
-        }
-
-        let audioBuffer
-        try {
-          audioBuffer = await telegram.downloadFile(fileId)
-        } catch (err) {
-          console.error('[im-bridge] telegram voice download error:', err.message)
-          await sendToIM('telegram', chatId, '⚠️ Could not download voice message.')
-          return
-        }
-
-        let result
-        try {
-          result = await transcribeAudio(audioBuffer)
-        } catch (err) {
-          console.error('[im-bridge] telegram voice transcription error:', err.message)
-          await sendToIM('telegram', chatId, '⚠️ Could not transcribe voice message: ' + err.message)
-          return
-        }
-
-        if (result.error === 'no-key') {
-          await sendToIM('telegram', chatId, '⚠️ Voice transcription requires an OpenAI or Groq API key in settings.')
-          return
-        }
-        if (!result.text) {
-          await sendToIM('telegram', chatId, '⚠️ Could not detect speech in voice message.')
-          return
-        }
-
-        handleIncoming('telegram', chatId, '@' + username, result.text, true).catch(err => {
-          console.error('[im-bridge] handleIncoming error (voice):', err.message)
-          telegram.sendMessage(chatId, 'Internal error: ' + err.message)
-        })
-      },
-      (chatId, username, cbQueryId, data) => {
-        const allowed = _config.im?.telegram?.allowedUsers
-        if (allowed && allowed.length > 0 && !allowed.includes(username) && !allowed.includes(chatId)) {
-          return  // silently ignore unauthorized callback taps
-        }
-        handleCallbackQuery('telegram', chatId, cbQueryId, data)
-      },
-      async (chatId, username, buffer, caption) => {
-        const allowed = _config.im?.telegram?.allowedUsers
-        if (allowed && allowed.length > 0 && !allowed.includes(username) && !allowed.includes(chatId)) {
-          telegram.sendMessage(chatId, 'Access denied.')
-          return
-        }
-        handleIncomingImage('telegram', chatId, '@' + username, buffer, caption).catch(err => {
-          console.error('[im-bridge] handleIncomingImage error:', err.message)
-          telegram.sendMessage(chatId, 'Internal error: ' + err.message)
-        })
-      }
-    )
-    console.log('[im-bridge] Telegram bot started')
+    _startTelegram()
   }
 
   if (_config.im?.whatsapp?.enabled) {
@@ -382,12 +387,17 @@ function _startWhatsApp() {
   console.log('[im-bridge] WhatsApp adapter started (will reconnect from saved session or show QR if not linked)')
 }
 
+function updateConfig(fullConfig) {
+  _config = fullConfig || {}
+}
+
 function startPlatform(platform) {
   if (platform === 'telegram') {
-    // Re-read config and start telegram
     const cfg = _config.im?.telegram || {}
     if (cfg.enabled && cfg.botToken) {
-      start(_config)  // telegram needs full start flow; simplest to restart all
+      telegram.stop()
+      // Re-start only telegram, not all platforms
+      _startTelegram()
     }
   } else if (platform === 'whatsapp') {
     _startWhatsApp()
@@ -526,4 +536,4 @@ function getTeamsAuthStatus() {
   return teams.getAuthStatus()
 }
 
-module.exports = { start, stop, getStatus, setMainWindow, requestWhatsAppQR, startPlatform, stopPlatform, requestTeamsAuth, teamsSignOut, getTeamsAuthStatus }
+module.exports = { start, stop, updateConfig, getStatus, setMainWindow, requestWhatsAppQR, startPlatform, stopPlatform, requestTeamsAuth, teamsSignOut, getTeamsAuthStatus }

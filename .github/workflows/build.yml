@@ -23,6 +23,7 @@ jobs:
         with:
           name: ClankAI-windows
           path: dist-release/*.exe
+          retention-days: 3
 
   build-macos:
     runs-on: macos-latest
@@ -37,3 +38,4 @@ jobs:
         with:
           name: ClankAI-macos
           path: dist-release/*.dmg
+          retention-days: 3

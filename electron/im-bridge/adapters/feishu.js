@@ -11,6 +11,7 @@ let _running  = false
  * @param {(chatId: string, username: string, text: string) => void} onMessage
  */
 function start(opts, onMessage) {
+  if (_running) stop()
   const lark = require('@larksuiteoapi/node-sdk')
 
   _client = new lark.Client({ appId: opts.appId, appSecret: opts.appSecret })

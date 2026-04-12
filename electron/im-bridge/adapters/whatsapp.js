@@ -73,7 +73,11 @@ async function _createSocket() {
       _running = false
       const code = lastDisconnect?.error?.output?.statusCode
       if (code !== DisconnectReason.loggedOut) {
-        // Auto-reconnect on network drops
+        // Auto-reconnect on network drops — clean up old socket first
+        const oldSock = _sock
+        _sock = null
+        try { oldSock?.ev?.removeAllListeners() } catch {}
+        try { oldSock?.ws?.close() } catch {}
         _createSocket().catch(err => console.error('[whatsapp] reconnect error:', err.message))
       } else {
         console.log('[whatsapp] Logged out — clearing session files')
@@ -184,6 +188,7 @@ async function start(opts, onMessage, onVoice, onImage, onQrCode, onReady, onSto
 
   // Close any lingering disconnected socket before creating a fresh one
   if (_sock) {
+    try { _sock.ev?.removeAllListeners() } catch {}
     try { _sock.ws?.close() } catch {}
     _sock = null
   }
@@ -201,6 +206,7 @@ async function requestQR(authDir, onQrCode, onReady) {
 
   // Close existing socket and wipe session to force fresh QR
   if (_sock) {
+    try { _sock.ev?.removeAllListeners() } catch {}
     try { _sock.ws?.close() } catch {}
     _sock    = null
     _running = false
@@ -226,6 +232,7 @@ async function sendMessage(chatId, text) {
 }
 
 function stop() {
+  try { _sock?.ev?.removeAllListeners() } catch {}
   try { _sock?.ws?.close() } catch {}
   _sock      = null
   _running   = false
