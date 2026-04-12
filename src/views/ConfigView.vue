@@ -4006,7 +4006,9 @@ async function savePricing() {
 /* ── Content area ───────────────────────────────────────────────────────── */
 .config-content { flex: 1; min-width: 0; overflow-y: auto; padding: 1.5rem 2rem 5rem; scrollbar-width: thin; }
 .config-content-inner { max-width: 860px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
-.config-content-inner:has(.models-page-layout) { max-width: 80%; }
+/* Models page needs the full viewport height — disable scroll on parent, let inner fill */
+.config-content:has(.models-page-layout) { overflow-y: hidden; padding-bottom: 1.5rem; display: flex; flex-direction: column; }
+.config-content-inner:has(.models-page-layout) { max-width: 80%; flex: 1; min-height: 0; }
 @media (min-width: 2560px) {
   .config-content-inner { max-width: 1000px; }
   .config-content-inner:has(.models-page-layout) { max-width: 80%; }

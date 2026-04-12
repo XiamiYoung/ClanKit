@@ -236,17 +236,22 @@
               <span v-if="selectedStep.runDuration" class="phm-output-meta-chip phm-output-meta-chip--dur">
                 {{ selectedStep.runDuration }}
               </span>
-              <span v-if="selectedStep.runResults && selectedStep.runResults.length > 1" class="phm-output-meta-chip">
-                {{ selectedStep.runResults.length }} {{ t('tasks.step.agents') }}
+              <span v-if="displayResults && displayResults.length > 1" class="phm-output-meta-chip">
+                {{ displayResults.length }} {{ t('tasks.step.agents') }}
               </span>
             </div>
 
             <!-- Output scrollable area -->
-            <div class="phm-output-scroll">
-              <template v-if="selectedStep.runResults && selectedStep.runResults.length > 0">
-                <template v-for="(res, ri) in selectedStep.runResults" :key="ri">
+            <div class="phm-output-scroll" ref="outputScrollRef">
+              <!-- Live running indicator -->
+              <div v-if="isLiveRun && displayResults && displayResults.some(r => r.status === 'running')" class="phm-live-indicator">
+                <svg class="phm-live-spin" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                {{ t('tasks.status.running') }}…
+              </div>
+              <template v-if="displayResults && displayResults.length > 0">
+                <template v-for="(res, ri) in displayResults" :key="ri">
                   <!-- Agent header (only if more than one result) -->
-                  <div v-if="selectedStep.runResults.length > 1" class="phm-output-agent-row">
+                  <div v-if="displayResults.length > 1" class="phm-output-agent-row">
                     <span class="phm-output-agent-chip">
                       <svg style="width:9px;height:9px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                       {{ res.agentName || '(unknown)' }}
@@ -255,23 +260,23 @@
                     <span v-if="fmtDuration(res.startedAt, res.completedAt)" class="phm-output-res-dur">{{ fmtDuration(res.startedAt, res.completedAt) }}</span>
                   </div>
                   <template v-if="res.output">
-                    <div class="phm-output-section-label">{{ selectedStep.runResults.length > 1 ? 'Output' : 'Output' }}</div>
+                    <div class="phm-output-section-label">{{ t('tasks.history.output') }}</div>
                     <pre class="phm-output-pre">{{ res.output }}</pre>
                   </template>
                   <template v-if="res.error">
-                    <div class="phm-output-section-label phm-output-section-label--err">Error</div>
+                    <div class="phm-output-section-label phm-output-section-label--err">{{ t('tasks.history.status') }}</div>
                     <pre class="phm-output-pre phm-output-pre--err">{{ res.error }}</pre>
                   </template>
                   <template v-if="!res.output && !res.error">
                     <div class="phm-output-empty phm-output-empty--inline">
-                      <span>No output.</span>
+                      <span>{{ isLiveRun ? t('tasks.actions.running') + '…' : t('tasks.actions.noExecutionData') }}</span>
                     </div>
                   </template>
                 </template>
               </template>
               <div v-else class="phm-output-empty">
                 <svg style="width:24px;height:24px;opacity:0.25;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                <span>No output yet.</span>
+                <span>{{ isLiveRun ? t('tasks.actions.running') + '…' : t('tasks.actions.noExecutionData') }}</span>
               </div>
             </div>
           </div>
@@ -323,6 +328,7 @@ const visibleRuns = computed(() => mergedRuns.value.slice(0, visibleCount.value)
 
 // ── Resizable output panel ─────────────────────────────────────────────────────
 const bodyRef   = ref(null)
+const outputScrollRef = ref(null)
 const outputPct = ref(30)   // default 30%
 const MIN_OUTPUT_PCT = 15
 const MAX_OUTPUT_PCT = 60
@@ -364,11 +370,33 @@ const selectedStep = computed(() => {
   return null
 })
 
+// ── Live run results: direct reactive read from store for real-time updates ───
+// When a run is active, read stepResults directly from tasksStore so Vue
+// tracks deep mutations (e.g. result.output += chunk) without depending on the
+// flowWaves → buildNode intermediate computed chain.
+const isLiveRun = computed(() => {
+  const ar = tasksStore.activeRun
+  return !!(ar && ar.planId === props.plan?.id && ar.status === 'running')
+})
+
+const liveStepResults = computed(() => {
+  if (!isLiveRun.value || !selectedStep.value) return null
+  const stepIndex = selectedStep.value.stepIndex
+  // Read directly from store's reactive stepResults — Vue tracks .output on each item
+  return (tasksStore.activeRun?.stepResults || []).filter(r => r.stepIndex === stepIndex)
+})
+
+// Resolved results: prefer live data during a running run, fall back to snapshot
+const displayResults = computed(() => {
+  if (isLiveRun.value && liveStepResults.value !== null) return liveStepResults.value
+  return selectedStep.value?.runResults || null
+})
+
 const liveRunEntry = computed(() => {
   const ar = tasksStore.activeRun
   if (!ar || ar.planId !== props.plan?.id) return null
   return {
-    id: ar.id || 'live',
+    id: ar.runId || 'live',
     planId: ar.planId,
     status: ar.status || 'running',
     triggeredBy: ar.triggeredBy || 'manual',
@@ -389,6 +417,14 @@ watch(() => props.visible, async v => {
   else   { reset() }
 })
 
+// Auto-scroll output panel to bottom when live output updates
+watch(liveStepResults, () => {
+  nextTick(() => {
+    const el = outputScrollRef.value
+    if (el) el.scrollTop = el.scrollHeight
+  })
+}, { deep: true })
+
 watch(() => props.plan, () => { if (props.visible) loadRuns() })
 
 watch(() => tasksStore.activeRun, async (ar, prevAr) => {
@@ -405,11 +441,11 @@ watch(() => tasksStore.activeRun, async (ar, prevAr) => {
     }
     return
   }
-  if (selectedRunId.value === (ar.id || 'live') || selectedRunId.value === 'live') {
+  if (selectedRunId.value === (ar.runId || 'live') || selectedRunId.value === 'live') {
     activeRun.value = ar
   }
   if (ar.planId === props.plan?.id && props.visible && !selectedRunId.value) {
-    selectRun(ar.id || 'live')
+    selectRun(ar.runId || 'live')
   }
 }, { deep: true })
 
@@ -432,7 +468,7 @@ async function loadRuns() {
       if (props.initialRunId && runs.value.some(r => r.id === props.initialRunId)) {
         await selectRun(props.initialRunId)
       } else if (tasksStore.activeRun?.planId === props.plan.id) {
-        selectedRunId.value = tasksStore.activeRun.id || 'live'
+        selectedRunId.value = tasksStore.activeRun.runId || 'live'
         activeRun.value = tasksStore.activeRun
       } else if (runs.value.length > 0) {
         await selectRun(runs.value[0].id)
@@ -459,8 +495,9 @@ async function selectRun(runId) {
   selectedRunId.value = runId
   selectedStepId.value = null
   activeRun.value = null
-  const liveId = tasksStore.activeRun?.id || (tasksStore.isRunning ? 'live' : null)
+  const liveId = tasksStore.activeRun?.runId || (tasksStore.isRunning ? 'live' : null)
   if (runId === liveId || runId === 'live') {
+    // Directly reference the store's reactive object so live chunks update the UI
     activeRun.value = tasksStore.activeRun
   } else {
     try {
@@ -1167,6 +1204,25 @@ onBeforeUnmount(() => {
   padding: 0.5rem 0;
   color: #3A3A3A;
 }
+
+/* ── Live run indicator ───────────────────────────────────────────────────── */
+.phm-live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: #D97706;
+  flex-shrink: 0;
+  padding: 0.25rem 0;
+}
+.phm-live-spin {
+  color: #D97706;
+  animation: phmLiveSpin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes phmLiveSpin { to { transform: rotate(360deg); } }
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
 .phm-footer {

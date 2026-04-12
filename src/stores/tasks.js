@@ -139,6 +139,8 @@ export const useTasksStore = defineStore('tasks', () => {
 
   // Maps chatId → step result _key so parallel agent runs don't clobber each other
   const _chatIdToKey = new Map()
+  // Maps chatId → resolve function for the send_message_complete waiter
+  const _chatIdCompleteResolvers = new Map()
 
   function handleTaskChunk(chatId, chunk) {
     if (!activeRun.value || activeRun.value.status !== 'running') return
@@ -149,6 +151,14 @@ export const useTasksStore = defineStore('tasks', () => {
       if (key) {
         const result = run.stepResults.find(r => r._key === key)
         if (result) result.output = (result.output || '') + chunk.text
+      }
+    }
+
+    if (chunk.type === 'send_message_complete' || chunk.type === 'send_message_error') {
+      const resolve = _chatIdCompleteResolvers.get(chatId)
+      if (resolve) {
+        _chatIdCompleteResolvers.delete(chatId)
+        resolve()
       }
     }
   }
@@ -281,7 +291,10 @@ export const useTasksStore = defineStore('tasks', () => {
       httpTools: [],
     }]
 
-    return await window.electronAPI.runAgent({
+    // Register a waiter for send_message_complete before invoking, so no chunk is missed
+    const completePromise = new Promise(resolve => _chatIdCompleteResolvers.set(chatId, resolve))
+
+    const result = await window.electronAPI.runAgent({
       chatId,
       messages: [{ role: 'user', content: promptText }],
       config: JSON.parse(JSON.stringify(agentCfg)),
@@ -296,6 +309,15 @@ export const useTasksStore = defineStore('tasks', () => {
       chatDangerOverrides: [],
       knowledgeConfig: { ragEnabled: false },
     })
+
+    // Wait for send_message_complete chunk to arrive (IPC channels have no ordering guarantee)
+    await Promise.race([
+      completePromise,
+      new Promise(resolve => setTimeout(resolve, 3000)), // 3s safety timeout
+    ])
+    _chatIdCompleteResolvers.delete(chatId)
+
+    return result
   }
 
   // ── Finalize a run ────────────────────────────────────────────────────────

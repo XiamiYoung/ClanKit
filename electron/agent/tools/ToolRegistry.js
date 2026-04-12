@@ -9,6 +9,7 @@ const { logger } = require('../../logger')
 const { TodoTool }    = require('./TodoTool')
 const { SoulUpdateTool, SoulReadTool } = require('./SoulTool')
 const { SearchHistoryTool } = require('./SearchHistoryTool')
+const { NewsfeedTool } = require('./NewsfeedTool')
 
 // Map agent IDs → tool class (lazy — not instantiated until enabled)
 const TOOL_CLASS_MAP = {
@@ -21,6 +22,9 @@ const TOOL_CLASS_MAP = {
 
 // Core tools that are always available (file + shell operations are essential)
 const ALWAYS_ON_AGENTS = ['code-executor', 'file-manager']
+
+// NewsfeedTool is always available (singleton; config injected at runtime)
+const newsfeedTool = new NewsfeedTool()
 
 // TodoTool is always available (for task planning)
 const todoTool = new TodoTool()
@@ -60,6 +64,8 @@ class ToolRegistry {
       this.registerTool('update_soul_memory', soulUpdateTool)
       this.registerTool('read_soul_memory', soulReadTool)
     }
+    // Always register newsfeed tool
+    this.registerTool('fetch_newsfeed', newsfeedTool)
     // Always register core tools (shell + file operations)
     this._loadAlwaysOnTools()
   }
@@ -90,11 +96,13 @@ class ToolRegistry {
     this.tools.clear()
     // Always have todo
     this.registerTool('todo_manager', todoTool)
-      // Always have soul tools
+    // Always have soul tools
     if (soulUpdateTool) {
       this.registerTool('update_soul_memory', soulUpdateTool)
       this.registerTool('read_soul_memory', soulReadTool)
     }
+    // Always have newsfeed tool
+    this.registerTool('fetch_newsfeed', newsfeedTool)
     // Always have core tools (shell + file)
     this._loadAlwaysOnTools()
 
@@ -133,6 +141,16 @@ class ToolRegistry {
   setSoulCompactionConfig(config) {
     if (soulUpdateTool && config) {
       soulUpdateTool.setCompactionConfig(config)
+    }
+  }
+
+  /**
+   * Inject full runtime config into tools that need it (e.g. NewsfeedTool reads config.newsFeeds).
+   * Called by AgentLoop.run() once config is available.
+   */
+  setRuntimeConfig(config) {
+    if (config) {
+      newsfeedTool.setConfig(config)
     }
   }
 

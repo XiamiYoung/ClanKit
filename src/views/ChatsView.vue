@@ -314,25 +314,25 @@
           <!-- Inspect button — always clickable -->
           <button
             @click="inspectContext"
-            class="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
-            style="background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
+            class="flex items-center justify-center rounded-md transition-colors cursor-pointer shrink-0"
+            style="width:1.75rem; height:1.75rem; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
+            :title="t('chats.inspect')"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
             </svg>
-            <span style="font-size:var(--fs-small);">{{ t('chats.inspect') }}</span>
           </button>
 
           <!-- Compact button -->
           <button
             @click="compactContext"
             :disabled="isCompacting || (!activeRunning && !hasMessages)"
-            class="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
+            class="flex items-center justify-center rounded-md transition-colors cursor-pointer shrink-0"
             :style="isCompacting
-              ? 'background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'
+              ? 'width:1.75rem; height:1.75rem; background:#F5F5F5; color:#6B7280; border:1px solid #E5E5EA;'
               : (activeRunning || hasMessages)
-                ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
-                : 'background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
+                ? 'width:1.75rem; height:1.75rem; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
+                : 'width:1.75rem; height:1.75rem; background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
             @mouseenter="e => { if (!isCompacting && (activeRunning || hasMessages)) e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }"
             @mouseleave="e => { if (!isCompacting && (activeRunning || hasMessages)) e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }"
             :title="isCompacting ? t('chats.compacting') : activeRunning ? t('chats.compactOnNext') : t('chats.compactContextWindow')"
@@ -343,7 +343,6 @@
             <svg v-else class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/>
             </svg>
-            <span style="font-size:var(--fs-small);">{{ isCompacting ? t('chats.compacting') : t('chats.compact') }}</span>
           </button>
         </div>
         </div>

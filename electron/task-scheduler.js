@@ -107,7 +107,6 @@ async function _checkOncePlans() {
     } catch {}
 
     if (alreadyRan) {
-      logger.info(`[TaskScheduler] Once plan "${plan.name}" already executed, skipping`)
       continue
     }
 
@@ -204,6 +203,9 @@ function buildAgentConfig(agent, globalCfg) {
       ...customProvider,
       model: agent.modelId || customProvider.model,
     }
+    // Propagate per-provider maxOutputTokens so AgentLoop uses it as the output token limit
+    const providerMax = customProvider.settings?.maxOutputTokens
+    if (providerMax && providerMax > 0) cfg.providerMaxOutputTokens = providerMax
     return cfg
   }
 
@@ -637,7 +639,6 @@ function schedulePlan(plan) {
     _startOncePoll()
     // Check immediately — handles startup after sleep and past-due plans
     _checkOncePlans()
-    logger.info(`[TaskScheduler] Once plan "${plan.name}" (${plan.id}) queued for poll, runAt=${new Date(runAt).toISOString()}`)
   }
 }
 

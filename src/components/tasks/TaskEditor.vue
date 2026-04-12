@@ -57,43 +57,16 @@
                   <span class="te-label-hint">{{ t('tasks.taskEditor.promptHint') }}</span>
                 </label>
                 <button
-                  class="te-describe-btn"
-                  @click="showDescribePanel = !showDescribePanel; describeInput = ''; describeError = ''"
-                  :disabled="!draft.name.trim()"
-                  :title="t('tasks.taskEditor.generate')"
+                  class="te-ai-enhance-btn"
+                  @click="enhancePrompt"
+                  :disabled="enhanceLoading || !draft.prompt.trim()"
                 >
-                  <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                  {{ t('tasks.taskEditor.describeIt') }}
+                  <svg v-if="enhanceLoading" class="te-spin" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                  <svg v-else style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  {{ enhanceLoading ? t('tasks.taskEditor.enhancing') : t('tasks.taskEditor.aiEnhance') }}
                 </button>
               </div>
-
-              <!-- Inline describe panel -->
-              <div v-if="showDescribePanel" class="te-describe-panel">
-                <textarea
-                  v-model="describeInput"
-                  class="te-describe-textarea"
-                  :placeholder="t('tasks.taskEditor.promptHint')"
-                  rows="3"
-                  autofocus
-                ></textarea>
-                <div v-if="describeError" class="te-describe-error">{{ describeError }}</div>
-                <div class="te-describe-actions">
-                  <button
-                    class="te-gen-btn"
-                    @click="generatePrompt"
-                    :disabled="describeLoading"
-                  >
-                    <svg v-if="describeLoading" class="te-spin" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                    <svg v-else style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                    {{ describeLoading ? t('tasks.taskEditor.generating') : t('tasks.taskEditor.generate') }}
-                  </button>
-                  <button
-                    class="te-cancel-inline-btn"
-                    @click="showDescribePanel = false; describeInput = ''"
-                    :disabled="describeLoading"
-                  >{{ t('tasks.taskEditor.cancel') }}</button>
-                </div>
-              </div>
+              <div v-if="enhanceError" class="te-enhance-error">{{ enhanceError }}</div>
 
               <textarea
                 v-model="draft.prompt"
@@ -148,6 +121,7 @@ import EmojiPicker from '../agents/EmojiPicker.vue'
 import ComboBox from '../common/ComboBox.vue'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
+import { detectAgentLanguage } from '../../utils/agentDefinitionPrompts'
 
 const { t } = useI18n()
 
@@ -169,10 +143,8 @@ const usedInPlans = computed(() => {
 const configStore = useConfigStore()
 const DEFAULT_ICON = '✍️'
 const showEmojiPicker = ref(false)
-const showDescribePanel = ref(false)
-const describeInput = ref('')
-const describeLoading = ref(false)
-const describeError = ref('')
+const enhanceLoading = ref(false)
+const enhanceError = ref('')
 
 const isNew = computed(() => !props.task?.id)
 
@@ -191,44 +163,42 @@ watch(() => props.visible, (v) => {
   if (v) {
     draft.value = makeDraft(props.task)
     showEmojiPicker.value = false
-    showDescribePanel.value = false
-    describeInput.value = ''
-    describeError.value = ''
+    enhanceLoading.value = false
+    enhanceError.value = ''
   }
 })
 
-async function generatePrompt() {
-  describeLoading.value = true
-  describeError.value = ''
+async function enhancePrompt() {
+  enhanceLoading.value = true
+  enhanceError.value = ''
   try {
-    const userDesc = describeInput.value.trim()
+    const lang = detectAgentLanguage(draft.value.description, draft.value.prompt, configStore.config?.language || 'en')
+    const langInstruction = lang ? `IMPORTANT: Write ALL output entirely in ${lang}.\n\n` : ''
     const result = await window.electronAPI.enhancePrompt({
-      prompt: `You are helping write a task prompt for an AI agent workflow.
-Task name: "${draft.value.name}"${draft.value.description ? `\nTask description: "${draft.value.description}"` : ''}${userDesc ? `\nUser description: "${userDesc}"` : ''}
+      prompt: `${langInstruction}You are helping improve a task prompt for an AI agent workflow.
+Task name: "${draft.value.name}"${draft.value.description ? `\nTask description: "${draft.value.description}"` : ''}
+Current prompt: "${draft.value.prompt}"
 
-Write a clear, actionable prompt that an AI agent should follow to complete this task.
-The prompt should be concise (2-4 sentences), specific, and use @AgentName if multiple agents may be involved.
-Respond with ONLY the prompt text, nothing else.`,
+Rewrite and enhance the prompt to be clearer, more actionable, and more specific for an AI agent.
+Keep it concise (2-4 sentences). Preserve any @AgentName mentions.
+Respond with ONLY the improved prompt text, nothing else.`,
       config: JSON.parse(JSON.stringify(configStore.config)),
     })
     if (result.success) {
       draft.value.prompt = result.text.trim().replace(/^["']|["']$/g, '')
-      showDescribePanel.value = false
-      describeInput.value = ''
     } else {
-      describeError.value = result.error || 'Failed to generate prompt'
+      enhanceError.value = result.error || 'Failed to enhance prompt'
     }
   } catch (e) {
-    describeError.value = e.message
+    enhanceError.value = e.message
   } finally {
-    describeLoading.value = false
+    enhanceLoading.value = false
   }
 }
 
 function onKeydown(e) {
   if (e.key === 'Escape') {
     if (showEmojiPicker.value) { showEmojiPicker.value = false; return }
-    if (showDescribePanel.value) { showDescribePanel.value = false; describeInput.value = ''; return }
     cancel()
   }
 }
@@ -503,94 +473,34 @@ function cancel() {
   gap: 0.5rem;
   flex-wrap: wrap;
 }
-.te-describe-btn {
+.te-ai-enhance-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.25rem 0.625rem;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
+  padding: 0.1875rem 0.5rem;
+  background: linear-gradient(135deg, #92400E 0%, #B45309 40%, #D97706 100%);
+  border: none;
   border-radius: 0.375rem;
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-small);
+  font-size: 0.6875rem;
   font-weight: 600;
-  color: rgba(255,255,255,0.6);
+  color: #FFFFFF;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(180,83,9,0.35), 0 1px 3px rgba(180,83,9,0.2);
 }
-.te-describe-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); color: #FFFFFF; }
-.te-describe-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-/* Inline describe panel */
-.te-describe-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  background: #111111;
-  border: 1px solid #2A2A2A;
-  border-radius: 0.625rem;
+.te-ai-enhance-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #78350F 0%, #92400E 40%, #B45309 100%);
+  box-shadow: 0 2px 10px rgba(180,83,9,0.45);
 }
-.te-describe-textarea {
-  width: 100%;
-  padding: 0.5rem 0.625rem;
-  border: 1px solid #2A2A2A;
-  border-radius: 0.5rem;
-  background: #1A1A1A;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  color: #FFFFFF;
-  outline: none;
-  resize: none;
-  line-height: 1.5;
-  box-sizing: border-box;
-  transition: border-color 0.15s;
-}
-.te-describe-textarea:focus { border-color: #4B5563; }
-.te-describe-textarea::placeholder { color: #4B5563; }
-.te-describe-error {
+.te-ai-enhance-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+.te-enhance-error {
   font-size: var(--fs-small);
   color: #EF4444;
   font-style: italic;
 }
-.te-describe-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-.te-gen-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.875rem;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border: none;
-  border-radius: 0.5rem;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 600;
-  color: #FFFFFF;
-  cursor: pointer;
-  transition: all 0.15s;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-}
-.te-gen-btn:hover:not(:disabled) { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
-.te-gen-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.te-cancel-inline-btn {
-  padding: 0.375rem 0.875rem;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 0.5rem;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 600;
-  color: rgba(255,255,255,0.65);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.te-cancel-inline-btn:hover:not(:disabled) { background: rgba(255,255,255,0.12); color: #FFFFFF; }
-.te-cancel-inline-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 @keyframes teSpin { to { transform: rotate(360deg); } }
 .te-spin { animation: teSpin 0.8s linear infinite; }
 </style>

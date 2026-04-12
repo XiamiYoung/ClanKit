@@ -658,38 +658,44 @@ function testKey(dbPath, keyHex) {
 function extractAllKeysV4(dbFiles, saltToDbs, emitFn) {
   if (!IS_WINDOWS) return {};
 
-  // Lazy-load koffi only when actually scanning
-  let koffi;
-  try {
-    koffi = require('koffi');
-  } catch (err) {
-    emitFn('key', 0, `Failed to load koffi: ${err.message}`);
-    return {};
+  // Lazy-load koffi only when actually scanning (cached to avoid duplicate type registration)
+  if (!extractAllKeysV4._koffiCache) {
+    let koffi;
+    try {
+      koffi = require('koffi');
+    } catch (err) {
+      emitFn('key', 0, `Failed to load koffi: ${err.message}`);
+      return {};
+    }
+
+    const kernel32 = koffi.load('kernel32.dll');
+    const MEMORY_BASIC_INFORMATION = koffi.struct('MEMORY_BASIC_INFORMATION', {
+      BaseAddress: 'uint64',
+      AllocationBase: 'uint64',
+      AllocationProtect: 'uint32',
+      __alignment1: 'uint32',
+      RegionSize: 'uint64',
+      State: 'uint32',
+      Protect: 'uint32',
+      Type: 'uint32',
+      __alignment2: 'uint32',
+    });
+
+    extractAllKeysV4._koffiCache = {
+      koffi,
+      MEMORY_BASIC_INFORMATION,
+      OpenProcess: kernel32.func('void* __stdcall OpenProcess(uint32_t, bool, uint32_t)'),
+      CloseHandle: kernel32.func('bool __stdcall CloseHandle(void*)'),
+      VirtualQueryEx: kernel32.func(
+        'size_t __stdcall VirtualQueryEx(void*, uint64_t, _Out_ MEMORY_BASIC_INFORMATION*, size_t)'
+      ),
+      ReadProcessMemory: kernel32.func(
+        'bool __stdcall ReadProcessMemory(void*, uint64_t, _Out_ uint8_t*, size_t, _Out_ size_t*)'
+      ),
+    };
   }
 
-  const kernel32 = koffi.load('kernel32.dll');
-
-  // Define MEMORY_BASIC_INFORMATION struct (64-bit)
-  const MEMORY_BASIC_INFORMATION = koffi.struct('MEMORY_BASIC_INFORMATION', {
-    BaseAddress: 'uint64',
-    AllocationBase: 'uint64',
-    AllocationProtect: 'uint32',
-    __alignment1: 'uint32',
-    RegionSize: 'uint64',
-    State: 'uint32',
-    Protect: 'uint32',
-    Type: 'uint32',
-    __alignment2: 'uint32',
-  });
-
-  const OpenProcess = kernel32.func('void* __stdcall OpenProcess(uint32_t, bool, uint32_t)');
-  const CloseHandle = kernel32.func('bool __stdcall CloseHandle(void*)');
-  const VirtualQueryEx = kernel32.func(
-    'size_t __stdcall VirtualQueryEx(void*, uint64_t, _Out_ MEMORY_BASIC_INFORMATION*, size_t)'
-  );
-  const ReadProcessMemory = kernel32.func(
-    'bool __stdcall ReadProcessMemory(void*, uint64_t, _Out_ uint8_t*, size_t, _Out_ size_t*)'
-  );
+  const { koffi, MEMORY_BASIC_INFORMATION, OpenProcess, CloseHandle, VirtualQueryEx, ReadProcessMemory } = extractAllKeysV4._koffiCache;
 
   const MEM_COMMIT = 0x1000;
   const READABLE = new Set([0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80]);
@@ -848,35 +854,43 @@ function extractAllKeysV4(dbFiles, saltToDbs, emitFn) {
 function extractKeyWindows(pid) {
   if (!IS_WINDOWS) return null;
 
-  let koffi;
-  try {
-    koffi = require('koffi');
-  } catch {
-    return null;
+  // Cached to avoid duplicate koffi type registration on repeated calls
+  if (!extractKeyWindows._koffiCache) {
+    let koffi;
+    try {
+      koffi = require('koffi');
+    } catch {
+      return null;
+    }
+
+    const kernel32 = koffi.load('kernel32.dll');
+    const MBI_3X = koffi.struct('MBI_3x', {
+      BaseAddress: 'uint64',
+      AllocationBase: 'uint64',
+      AllocationProtect: 'uint32',
+      __alignment1: 'uint32',
+      RegionSize: 'uint64',
+      State: 'uint32',
+      Protect: 'uint32',
+      Type: 'uint32',
+      __alignment2: 'uint32',
+    });
+
+    extractKeyWindows._koffiCache = {
+      koffi,
+      MBI_3X,
+      OpenProcess: kernel32.func('void* __stdcall OpenProcess(uint32_t, bool, uint32_t)'),
+      CloseHandle: kernel32.func('bool __stdcall CloseHandle(void*)'),
+      VirtualQueryEx: kernel32.func(
+        'size_t __stdcall VirtualQueryEx(void*, uint64_t, _Out_ MBI_3x*, size_t)'
+      ),
+      ReadProcessMemory: kernel32.func(
+        'bool __stdcall ReadProcessMemory(void*, uint64_t, _Out_ uint8_t*, size_t, _Out_ size_t*)'
+      ),
+    };
   }
 
-  const kernel32 = koffi.load('kernel32.dll');
-
-  const MBI_3X = koffi.struct('MBI_3x', {
-    BaseAddress: 'uint64',
-    AllocationBase: 'uint64',
-    AllocationProtect: 'uint32',
-    __alignment1: 'uint32',
-    RegionSize: 'uint64',
-    State: 'uint32',
-    Protect: 'uint32',
-    Type: 'uint32',
-    __alignment2: 'uint32',
-  });
-
-  const OpenProcess = kernel32.func('void* __stdcall OpenProcess(uint32_t, bool, uint32_t)');
-  const CloseHandle = kernel32.func('bool __stdcall CloseHandle(void*)');
-  const VirtualQueryEx = kernel32.func(
-    'size_t __stdcall VirtualQueryEx(void*, uint64_t, _Out_ MBI_3x*, size_t)'
-  );
-  const ReadProcessMemory = kernel32.func(
-    'bool __stdcall ReadProcessMemory(void*, uint64_t, _Out_ uint8_t*, size_t, _Out_ size_t*)'
-  );
+  const { koffi, MBI_3X, OpenProcess, CloseHandle, VirtualQueryEx, ReadProcessMemory } = extractKeyWindows._koffiCache;
 
   const MEM_COMMIT = 0x1000;
   const READABLE = new Set([0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80]);

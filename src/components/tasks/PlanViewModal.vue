@@ -10,12 +10,12 @@
               <span v-if="plan?.icon" style="font-size:1.125rem;">{{ plan.icon }}</span>
               <svg v-else style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </div>
-            <span class="pv-header-title">{{ plan?.name || 'View Plan' }}</span>
+            <span class="pv-header-title">{{ plan?.name || t('tasks.viewModal.viewPlan') }}</span>
           </div>
           <div class="pv-header-center">
             <button v-if="plan?.id" class="pv-history-btn" @click="showHistory = true">
               <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              Execution History
+              {{ t('tasks.executionHistory') }}
             </button>
           </div>
           <button class="pv-close-btn" @click="$emit('close')">
@@ -54,7 +54,7 @@
                   <!-- Agents -->
                   <template v-if="step.taskId && step.defaultAgentIds?.length">
                     <div class="pv-step-field">
-                      <label class="pv-step-label">Agent(s)</label>
+                      <label class="pv-step-label">{{ t('tasks.viewModal.agents') }}</label>
                       <div class="pv-agent-chips">
                         <span v-for="pid in step.defaultAgentIds" :key="pid" class="pv-agent-chip">
                           {{ agentName(pid) }}
@@ -65,17 +65,17 @@
 
                   <!-- Prompt override -->
                   <div v-if="step.promptOverride" class="pv-step-field">
-                    <label class="pv-step-label">Prompt override</label>
+                    <label class="pv-step-label">{{ t('tasks.step.promptOverride') }}</label>
                     <div class="pv-prompt-pre">{{ step.promptOverride }}</div>
                   </div>
 
                   <!-- Dependencies -->
                   <div v-if="(step.dependsOn || []).length > 0" class="pv-step-field">
-                    <label class="pv-step-label">Run after</label>
+                    <label class="pv-step-label">{{ t('tasks.viewModal.runAfter') }}</label>
                     <div class="pv-dep-info">
                       {{ dependsOnLabels(step).join(', ') }}
                       <span v-if="(step.runCondition || 'always') !== 'always'" :class="['pv-cond-badge', `pv-cond-badge--${step.runCondition}`]">
-                        {{ step.runCondition === 'on_success' ? 'on success' : 'on failure' }}
+                        {{ step.runCondition === 'on_success' ? t('tasks.planEditor.onSuccess') : t('tasks.planEditor.onFailure') }}
                       </span>
                     </div>
                   </div>
@@ -90,18 +90,18 @@
                 <div class="pv-section-icon">
                   <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 </div>
-                <span class="pv-section-title">Schedule</span>
+                <span class="pv-section-title">{{ t('tasks.schedule.schedule') }}</span>
                 <span class="pv-section-hint">{{ schedTypeLabel(plan?.schedule?.type) }}</span>
               </div>
               <template v-if="plan?.schedule?.type === 'once' && plan?.schedule?.runAt">
                 <div class="pv-sched-row">
-                  <span class="pv-sched-key">Run at</span>
+                  <span class="pv-sched-key">{{ t('tasks.schedule.runAt') }}</span>
                   <span class="pv-sched-val">{{ new Date(plan.schedule.runAt).toLocaleString() }}</span>
                 </div>
               </template>
               <template v-if="plan?.schedule?.type === 'cron'">
                 <div class="pv-sched-row">
-                  <span class="pv-sched-key">Cron</span>
+                  <span class="pv-sched-key">{{ t('tasks.schedule.cronExpression') }}</span>
                   <span class="pv-sched-val pv-sched-val--mono">{{ plan.schedule.cron || '—' }}</span>
                 </div>
                 <div v-if="plan?.schedule?.cron" class="pv-cron-desc">
@@ -109,7 +109,7 @@
                   {{ describeCronSimple(plan.schedule.cron) }}
                 </div>
                 <div class="pv-sched-row">
-                  <span class="pv-sched-key">Timezone</span>
+                  <span class="pv-sched-key">{{ t('tasks.schedule.timezone') }}</span>
                   <span class="pv-sched-val">{{ plan.schedule.timezone || 'UTC' }}</span>
                 </div>
               </template>
@@ -345,7 +345,7 @@ function buildNode(step, allSteps) {
     taskName: task?.name || (step.taskId ? '(unknown)' : 'No task'),
     taskIcon: task?.icon || '✍️',
     agents, runCondition: cond,
-    conditionBadge: hasDeps && cond !== 'always' ? (cond === 'on_success' ? 'on success' : 'on failure') : null,
+    conditionBadge: hasDeps && cond !== 'always' ? (cond === 'on_success' ? t('tasks.planEditor.onSuccess') : t('tasks.planEditor.onFailure')) : null,
     condClass: hasDeps ? (cond === 'on_success' ? 'pf-step-block--success' : cond === 'on_failure' ? 'pf-step-block--failure' : '') : '',
     dependsOnLabels: (step.dependsOn || []).map(id => {
       const di = allSteps.findIndex(s => s.id === id)

@@ -1459,19 +1459,39 @@ ipcMain.handle('agent:doc-permission-response', (_event, requestId, { blockId, d
 })
 
 // -- Lightweight one-shot LLM call (for AI Enhance features) -----------------
-// Uses global config.utilityModel — supports all providers.
+// Uses global config.utilityModel — falls back to first active configured provider.
 ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
   try {
-    const um = config.utilityModel
-    if (!um?.provider || !um?.model) {
-      return { success: false, error: 'Utility model not configured. Set it in Config → AI → Models → Global Model Settings.' }
+    let um = (config.utilityModel?.provider && config.utilityModel?.model) ? config.utilityModel : null
+
+    // Fallback: pick the first active provider that has credentials
+    if (!um) {
+      const activeProviders = (config.providers || []).filter(p => p.isActive && p.apiKey)
+      const fallback = activeProviders.find(p => p.type === 'google' || p.baseURL) || activeProviders[0]
+      if (!fallback) {
+        return { success: false, error: 'No configured provider found. Add and activate a provider in Config → AI → Providers.' }
+      }
+      // Use the provider's selected model if available, otherwise a sensible default per provider
+      const fallbackModelMap = {
+        anthropic: 'claude-haiku-4-5-20251001',
+        openrouter: 'openai/gpt-4o-mini',
+        openai_official: 'gpt-4o-mini',
+        deepseek: 'deepseek-chat',
+        google: 'gemini-2.0-flash',
+      }
+      um = {
+        provider: fallback.type,
+        model: fallback.selectedModel || fallbackModelMap[fallback.type] || fallback.type,
+        _fallbackProviderCfg: fallback,
+      }
     }
-    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
+
+    const providerCfg = um._fallbackProviderCfg || (config.providers || []).find(p => p.type === um.provider && p.isActive)
     if (!providerCfg?.apiKey) {
-      return { success: false, error: `Utility model provider "${um.provider}" is missing apiKey. Check provider configuration.` }
+      return { success: false, error: `Provider "${um.provider}" is missing apiKey. Check provider configuration.` }
     }
     if (um.provider !== 'google' && !providerCfg?.baseURL) {
-      return { success: false, error: `Utility model provider "${um.provider}" is missing baseURL. Check provider configuration.` }
+      return { success: false, error: `Provider "${um.provider}" is missing baseURL. Check provider configuration.` }
     }
     // Use the global maxOutputTokens from config, capped at 4096 for utility calls.
     // The global setting reflects what models the user's providers actually support.

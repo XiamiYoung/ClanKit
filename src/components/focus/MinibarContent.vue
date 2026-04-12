@@ -45,7 +45,7 @@
 
     <!-- ── Plan section ───────────────────────────────── -->
     <div class="mbc-section mbc-section--clickable" ref="planSectionRef" @mouseenter="showPlanKit" @mouseleave="hidePlanKit" @click.stop="onPlanSectionClick">
-      <svg v-if="planActivity?.status === 'running'" class="mbc-spin mbc-spin--plan" viewBox="0 0 24 24" fill="none">
+      <svg v-if="isPlanRunning" class="mbc-spin mbc-spin--plan" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="9" stroke="rgba(251,191,36,0.2)" stroke-width="2.5"/>
         <path d="M12 3a9 9 0 0 1 9 9" stroke="#FBBF24" stroke-width="2.5" stroke-linecap="round"/>
       </svg>
@@ -59,9 +59,9 @@
         <path d="M8 12l3 3 5-5" :stroke="planActivity ? '#FBBF24' : 'rgba(255,255,255,0.15)'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <span class="mbc-count mbc-count--plan">
-        {{ planActivity ? `${planActivity.doneCount}/${planActivity.stepCount}` : '—' }}
+        {{ planActivity ? `${planActivity.doneCount}/${planActivity.stepCount}` : (isPlanRunning ? '…' : '—') }}
       </span>
-      <span v-if="planNameShort" class="mbc-name">{{ planNameShort }}</span>
+      <span v-if="planNameShort || activeRunPlanName" class="mbc-name">{{ planNameShort || activeRunPlanName }}</span>
     </div>
 
     <div class="mbc-sep" />
@@ -177,6 +177,12 @@
             <div v-else class="mbc-kit-empty" style="font-style:italic;">{{ t('minibar.summarizing') }}</div>
           </template>
         </template>
+        <template v-else-if="isPlanRunning">
+          <div class="mbc-kit-plan-row">
+            <span class="mbc-kit-plan-name">{{ activeRunPlanName || t('minibar.planRunning') }}</span>
+            <span class="mbc-kit-plan-badge mbc-plan-badge--running">{{ t('minibar.planRunning') }}</span>
+          </div>
+        </template>
         <div v-else class="mbc-kit-empty">{{ t('minibar.noRecentPlanActivity') }}</div>
       </div>
     </Teleport>
@@ -236,9 +242,30 @@ const runningChats = computed(() =>
 // ── Plan section ──────────────────────────────────────────────────────────
 const planActivity = computed(() => tasksStore.planActivity)
 
+// Any run index entry with status 'running' (covers stale-on-disk + in-progress scheduled runs)
+const anyRunIndexRunning = computed(() =>
+  tasksStore.runs.some(r => r.status === 'running')
+)
+
+// True when a plan is actively running — covers in-memory state, planActivity, and run index
+const isPlanRunning = computed(() =>
+  planActivity.value?.status === 'running' ||
+  tasksStore.isRunning ||
+  anyRunIndexRunning.value
+)
+
 const planNameShort = computed(() => {
   const name = planActivity.value?.planName
   if (!name) return null
+  return name.length > 9 ? name.slice(0, 9) + '…' : name
+})
+
+// Fallback plan name from run index when planActivity isn't populated
+const activeRunPlanName = computed(() => {
+  if (planActivity.value?.planName) return null
+  const runningRun = tasksStore.runs.find(r => r.status === 'running')
+  if (!runningRun?.planName) return null
+  const name = runningRun.planName
   return name.length > 9 ? name.slice(0, 9) + '…' : name
 })
 

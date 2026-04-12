@@ -434,6 +434,9 @@ class AgentLoop {
       }
     }
 
+    // Inject runtime config into tools that need it (e.g. NewsfeedTool reads newsFeeds)
+    this.toolRegistry.setRuntimeConfig(this.config)
+
     // Store full skill prompts for lazy loading via load_skill tool
     this.skillPrompts = new Map()
     this.loadedSkills = new Map()  // tracks skills actually loaded by LLM via load_skill tool
@@ -714,8 +717,11 @@ class AgentLoop {
       }
     })
 
-    // Resolve configured output token limit: per-chat → global config → hardcoded default
-    const DEFAULT_MAX_TOKENS = 32768
+    // Resolve configured output token limit: per-chat → provider settings → hardcoded default
+    const providerSettingsMax = this.config.provider?.settings?.maxOutputTokens
+    const DEFAULT_MAX_TOKENS = (providerSettingsMax && providerSettingsMax > 0)
+      ? providerSettingsMax
+      : 32768
     let configuredMaxTokens = this.config.maxOutputTokens
       ? Math.min(98304, Math.max(1024, Number(this.config.maxOutputTokens)))
       : DEFAULT_MAX_TOKENS

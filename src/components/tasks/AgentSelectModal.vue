@@ -155,7 +155,7 @@ const expandedCats = ref(new Set())
 
 const allAgents = computed(() => {
   return agentsStore.agents
-    .filter(a => !props.excludeAgentIds.includes(a.id))
+    .filter(a => a.type === 'system' && !props.excludeAgentIds.includes(a.id))
     .sort((a, b) => a.name.localeCompare(b.name))
 })
 
@@ -172,7 +172,7 @@ const filteredAgents = computed(() => {
 
 function agentsInCategory(catId) {
   return agentsStore.agentsInCategory(catId)
-    .filter(a => !props.excludeAgentIds.includes(a.id))
+    .filter(a => a.type === 'system' && !props.excludeAgentIds.includes(a.id))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
