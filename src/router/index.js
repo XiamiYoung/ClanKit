@@ -10,8 +10,6 @@ import ToolsView from '../views/ToolsView.vue'
 import KnowledgeView from '../views/KnowledgeView.vue'
 import TaskEngineView from '../views/TaskEngineView.vue'
 import AiTaskView from '../views/AiTaskView.vue'
-import PlazaView from '../views/PlazaView.vue'
-import PlazaSessionView from '../views/PlazaSessionView.vue'
 export default createRouter({
   history: createWebHashHistory(),
   routes: [

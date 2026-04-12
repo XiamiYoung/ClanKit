@@ -52,6 +52,7 @@ ${modelIds.join('\n')}`
           customModel: um.model,
           _resolvedProvider: 'openai',
           defaultProvider: 'openai',
+          _scenario: 'fetch-models',
           ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
           provider: { type: um.provider },
         })
@@ -68,6 +69,7 @@ ${modelIds.join('\n')}`
           apiKey: provider.apiKey,
           baseURL: provider.baseURL.replace(/\/+$/, ''),
           customModel: um.model,
+          _scenario: 'fetch-models',
         }).getClient()
         const response = await client.messages.create({
           model: um.model,

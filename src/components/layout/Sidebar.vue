@@ -929,12 +929,6 @@ const IconAiTasks = defineComponent({
   ])
 })
 
-const IconPlaza = defineComponent({
-  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
-    h('path', { d: 'M3 21h18M3 10h18M3 7l9-4 9 4M4 10v11M20 10v11M8 10v11M12 10v11M16 10v11' }),
-  ])
-})
-
 const IconConfig = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
     h('circle', { cx: '12', cy: '12', r: '3' }),

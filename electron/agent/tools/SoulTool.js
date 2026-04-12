@@ -168,6 +168,7 @@ ${content}`
           customModel: cfg.model,
           _resolvedProvider: 'openai',
           defaultProvider: 'openai',
+          _scenario: 'soul-tool',
           ...(cfg.directAuth ? { _directAuth: true } : {}),
           provider: { type: cfg.providerType || 'openai' },
         })
@@ -183,6 +184,7 @@ ${content}`
           apiKey: cfg.apiKey,
           baseURL: cfg.baseURL,
           customModel: cfg.model,
+          _scenario: 'soul-tool',
         }).getClient()
         const response = await client.messages.create({
           model: cfg.model,

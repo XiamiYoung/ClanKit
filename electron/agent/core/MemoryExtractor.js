@@ -323,6 +323,7 @@ Respond with ONLY valid JSON (no markdown fences, no explanation):
       customModel: this.model,
       _resolvedProvider: 'openai',
       defaultProvider: 'openai',
+      _scenario: 'memory-extract',
       _directAuth: this.directAuth,
     }
     const client = new OpenAIClient(cfg).getClient()

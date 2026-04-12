@@ -1176,6 +1176,7 @@ Examples:
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
+        _scenario: 'edit-text',
         ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
@@ -1208,6 +1209,7 @@ Examples:
         apiKey: providerCfg.apiKey,
         baseURL: providerCfg.baseURL.replace(/\/+$/, ''),
         customModel: um.model,
+        _scenario: 'edit-text',
       }
       const client = new AnthropicClient(cfg).getClient()
       const stream = client.messages.stream({
@@ -1518,6 +1520,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
+        _scenario: 'enhance-prompt',
         ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
@@ -1537,6 +1540,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
         apiKey:      providerCfg.apiKey,
         baseURL:     providerCfg.baseURL.replace(/\/+$/, ''),
         customModel: um.model,
+        _scenario:   'enhance-prompt',
       }
       const client = new AnthropicClient(cfg).getClient()
       const response = await client.messages.create({
@@ -1609,6 +1613,7 @@ If none should respond, reply with [].`
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
+        _scenario: 'resolve-addressees',
         ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
@@ -1630,6 +1635,7 @@ If none should respond, reply with [].`
         apiKey:      providerCfg.apiKey,
         baseURL:     providerCfg.baseURL.replace(/\/+$/, ''),
         customModel: um.model,
+        _scenario:   'resolve-addressees',
       }
       const resp = await new AnthropicClient(cfg).getClient().messages.create({
         model: um.model,
@@ -1746,6 +1752,7 @@ Examples:
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
+        _scenario: 'route-group-audience',
         ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
@@ -1766,6 +1773,7 @@ Examples:
         apiKey: providerCfg.apiKey,
         baseURL: providerCfg.baseURL.replace(/\/+$/, ''),
         customModel: um.model,
+        _scenario: 'route-group-audience',
       }
       const resp = await new AnthropicClient(cfg).getClient().messages.create({
         model: um.model,
@@ -1865,6 +1873,7 @@ Reply with ONLY a JSON object:
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
+        _scenario: 'dispatch-group-tasks',
         ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
@@ -1877,7 +1886,7 @@ Reply with ONLY a JSON object:
       accumulateUtilityUsage(um.model, um.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
     } else {
       const { AnthropicClient } = require('../agent/core/AnthropicClient')
-      const cfg = { apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model }
+      const cfg = { apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model, _scenario: 'dispatch-group-tasks' }
       const resp = await new AnthropicClient(cfg).getClient().messages.create({
         model: um.model, max_tokens: 512, system: systemPrompt,
         messages: [{ role: 'user', content: userContent }],
@@ -1991,6 +2000,7 @@ Rules:
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
+        _scenario: 'suggest-title',
         ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
@@ -2011,6 +2021,7 @@ Rules:
         apiKey: providerCfg.apiKey,
         baseURL: providerCfg.baseURL.replace(/\/+$/, ''),
         customModel: um.model,
+        _scenario: 'suggest-title',
       }
       const resp = await new AnthropicClient(clientCfg).getClient().messages.create({
         model: um.model,
@@ -2084,6 +2095,7 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
         customModel: utilityModel,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
+        _scenario: 'test-provider',
         _directAuth: provider !== 'openai' && provider !== 'ollama',
       }
       cfg.provider = { type: provider }
@@ -2103,6 +2115,7 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
         apiKey,
         baseURL: baseURL.replace(/\/+$/, ''),
         customModel: utilityModel,
+        _scenario: 'test-provider',
       }
       const ac = new AnthropicClient(cfg)
       const client = ac.getClient()

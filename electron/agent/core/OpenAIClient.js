@@ -28,6 +28,7 @@ class OpenAIClient {
       })
     }
     logger.agent('OpenAIClient init', {
+      scenario: config._scenario || 'unknown',
       model: this.resolveModel(),
       baseURL,
       hasKey: !!apiKey

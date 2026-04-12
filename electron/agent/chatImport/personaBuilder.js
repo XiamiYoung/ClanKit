@@ -278,6 +278,7 @@ async function _callLLM(prompt, config, maxTokens = 8192) {
         customModel: um.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
+        _scenario: 'persona-build',
         ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
@@ -294,6 +295,7 @@ async function _callLLM(prompt, config, maxTokens = 8192) {
         apiKey:      providerCfg.apiKey,
         baseURL:     providerCfg.baseURL.replace(/\/+$/, ''),
         customModel: um.model,
+        _scenario:   'persona-build',
       }
       const client = new AnthropicClient(cfg).getClient()
       const response = await client.messages.create({

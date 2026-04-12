@@ -377,27 +377,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getTree:  ()        => ipcRenderer.invoke('ai-task:get-tree'),
   },
 
-  // ── Plaza ─────────────────────────────────────────────────────────────────
-  plaza: {
-    getTopics:        ()     => ipcRenderer.invoke('plaza:get-topics'),
-    saveTopics:       (data) => ipcRenderer.invoke('plaza:save-topics', data),
-    getSessions:      (topicId) => ipcRenderer.invoke('plaza:get-sessions', topicId),
-    saveSession:      (session) => ipcRenderer.invoke('plaza:save-session', session),
-    getSessionById:   (id)   => ipcRenderer.invoke('plaza:get-session-by-id', id),
-    generateTopics:   (p)    => ipcRenderer.invoke('plaza:generate-topics', p),
-    generateFromDesc: (p)    => ipcRenderer.invoke('plaza:generate-from-desc', p),
-    surpriseMe:       (p)    => ipcRenderer.invoke('plaza:surprise-me', p),
-    runRound:         (p)    => ipcRenderer.invoke('plaza:run-discussion-round', p),
-    extractMemories:    (p)  => ipcRenderer.invoke('plaza:extract-memories', p),
-    generateConclusion: (p)  => ipcRenderer.invoke('plaza:generate-conclusion', p),
-    commitMemories:     (p)  => ipcRenderer.invoke('plaza:commit-memories', p),
-    onChunk: (cb) => {
-      ipcRenderer.removeAllListeners('plaza:chunk')
-      ipcRenderer.on('plaza:chunk', (_, d) => cb(d))
-      return () => ipcRenderer.removeAllListeners('plaza:chunk')
-    },
-  },
-
   // ── IM Bridge ─────────────────────────────────────────────────────────────
   im: {
     getStatus:   ()       => ipcRenderer.invoke('im:get-status'),

@@ -108,6 +108,7 @@ function register() {
           customModel: model || creds.model,
           _resolvedProvider: isOpenAI ? 'openai' : resolvedType,
           _directAuth: resolvedType !== 'anthropic',
+          _scenario: 'voice',
         }
 
         if (isGoogle) {

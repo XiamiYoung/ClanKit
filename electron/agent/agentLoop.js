@@ -115,11 +115,11 @@ class AgentLoop {
       }
     } else if (isOpenAIProvider) {
       this.isGoogle = false
-      this.anthropicClient = new OpenAIClient(config)
+      this.anthropicClient = new OpenAIClient({ ...config, _scenario: config._scenario || 'agent-run' })
       this.isOpenAI = true
     } else {
       this.isGoogle = false
-      this.anthropicClient = new AnthropicClient(config)
+      this.anthropicClient = new AnthropicClient({ ...config, _scenario: config._scenario || 'agent-run' })
       this.isOpenAI = false
     }
     this.contextManager  = new ContextManager(this.anthropicClient, config.modelContextWindow || null)
@@ -1243,9 +1243,17 @@ class AgentLoop {
             }
 
             // 3. max_tokens out of valid range → parse upper bound and retry
-            if (!retried && streamErr.status === 400 && /max_tokens|max_completion_tokens/.test(streamErr.message || '')) {
+            // Also handles OpenRouter "maximum context length is N tokens" errors
+            if (!retried && streamErr.status === 400 && /max_tokens|max_completion_tokens|context length/i.test(streamErr.message || '')) {
               const rangeMatch = (streamErr.message || '').match(/valid range.*?\[(\d+),\s*(\d+)\]/)
-              const upperBound = rangeMatch ? Number(rangeMatch[2]) : null
+              // OpenRouter: "maximum context length is N tokens. However, you requested about M tokens (X input, Y output)"
+              const contextMatch = (streamErr.message || '').match(/maximum context length is (\d+) tokens.*?(\d+) of text input/i)
+              let upperBound = rangeMatch ? Number(rangeMatch[2]) : null
+              if (!upperBound && contextMatch) {
+                const totalCtx  = Number(contextMatch[1])
+                const inputToks = Number(contextMatch[2])
+                upperBound = Math.max(1024, totalCtx - inputToks - 256)
+              }
               if (upperBound && upperBound > 0) {
                 logger.warn(`max_tokens ${effectiveMaxTokens} exceeds model limit ${upperBound} — retrying`, { model })
                 const retryParams = { ...openaiParams, ...this.anthropicClient.tokenLimit(upperBound) }
@@ -1641,6 +1649,11 @@ class AgentLoop {
               // Retry once without tools so image generation can proceed.
               const noToolSupport = streamErr.status === 404 &&
                 (streamErr.message?.includes('tool use') || streamErr.message?.includes('tool_use'))
+
+              // max_tokens exceeds model limit → parse the limit and retry with lower value
+              const maxTokensErr = streamErr.status === 400 &&
+                /max_tokens|max_completion_tokens|context length/i.test(streamErr.message || '')
+
               if (noToolSupport && createParams.tools?.length > 0) {
                 logger.warn('Model does not support tool use — retrying without tools', streamErr.message)
                 const paramsNoTools = { ...createParams }
@@ -1652,6 +1665,26 @@ class AgentLoop {
                 } catch (retryErr) {
                   logger.error('Retry without tools also FAILED', retryErr.message)
                   throw retryErr
+                }
+              } else if (maxTokensErr) {
+                const rangeMatch = (streamErr.message || '').match(/valid range.*?\[(\d+),\s*(\d+)\]/)
+                const contextMatch = (streamErr.message || '').match(/maximum context length is (\d+) tokens.*?(\d+) of text input/i)
+                let upperBound = rangeMatch ? Number(rangeMatch[2]) : null
+                if (!upperBound && contextMatch) {
+                  upperBound = Math.max(1024, Number(contextMatch[1]) - Number(contextMatch[2]) - 256)
+                }
+                if (upperBound && upperBound > 0) {
+                  logger.warn(`max_tokens exceeds model limit ${upperBound} — retrying (Anthropic path)`, { model })
+                  const retryParams = { ...createParams, max_tokens: upperBound }
+                  try {
+                    stream = await client.messages.stream(retryParams, { signal: this._abortController.signal })
+                  } catch (retryErr) {
+                    logger.error('max_tokens retry also FAILED (Anthropic path)', retryErr.message)
+                    throw retryErr
+                  }
+                } else {
+                  logger.error('stream open FAILED', streamErr.message, streamErr.status)
+                  throw streamErr
                 }
               } else {
                 logger.error('stream open FAILED', streamErr.message, streamErr.status)

@@ -24,6 +24,7 @@ class AnthropicClient {
     }
     this.client = new Anthropic(clientOpts)
     logger.agent('AnthropicClient init', {
+      scenario: config._scenario || 'unknown',
       model: this.resolveModel(),
       baseURL: config.baseURL,
       hasKey: !!key,

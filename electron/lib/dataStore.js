@@ -92,8 +92,6 @@ function init() {
     PLAN_CATEGORIES_FILE: path.join(DATA_DIR, 'plan-categories.json'),
     AI_TASK_TREE_FILE:    path.join(DATA_DIR, 'ai-task-tree.json'),
     PROVIDER_MODELS_FILE: path.join(DATA_DIR, 'provider-models.json'),
-    PLAZA_TOPICS_FILE:    path.join(DATA_DIR, 'plaza-topics.json'),
-    PLAZA_SESSIONS_DIR:   path.join(DATA_DIR, 'plaza-sessions'),
     MEMORY_DIR,
     AGENT_MEMORY_DIR,
     USER_MEMORY_DIR,
