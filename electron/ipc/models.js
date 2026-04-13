@@ -171,13 +171,24 @@ ${modelIds.join('\n')}`
         return { success: false, error: `HTTP ${resp.status}: ${errText}`, models: [] }
       }
       const data = await resp.json()
-      const models = (data.models || []).map(m => ({ id: m.name.replace('models/', ''), name: m.displayName || m.name.replace('models/', ''), context_length: m.inputTokenLimit || null }))
+      const models = (data.models || []).map(m => ({ id: m.name.replace('models/', ''), name: m.displayName || m.name.replace('models/', ''), context_length: m.inputTokenLimit || null, max_output_tokens: m.outputTokenLimit || null }))
 
       return { success: true, models }
     } catch (err) {
       logger.error('google:fetch-models error', err.message)
       return { success: false, error: err.message, models: [] }
     }
+  })
+
+  // ── Model defaults lookup (powered by LiteLLM catalog) ──────────────
+  ipcMain.handle('models:get-default-max-output-tokens', async (_, modelId) => {
+    const { lookupModelMaxOutputTokensDetailed } = require('../agent/modelDefaults')
+    return lookupModelMaxOutputTokensDetailed(modelId, ds.paths().DATA_DIR)
+  })
+
+  ipcMain.handle('models:get-all-default-max-output-tokens', async () => {
+    const { getAllDefaults, FALLBACK_MAX_OUTPUT_TOKENS } = require('../agent/modelDefaults')
+    return { table: getAllDefaults(ds.paths().DATA_DIR), fallback: FALLBACK_MAX_OUTPUT_TOKENS }
   })
 }
 

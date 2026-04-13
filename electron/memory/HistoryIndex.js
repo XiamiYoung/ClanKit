@@ -171,6 +171,106 @@ class HistoryIndex {
   }
 
   /**
+   * Check whether an agent has imported chat history indexed.
+   * @param {string} agentId
+   * @returns {boolean}
+   */
+  hasImportedHistory(agentId) {
+    try {
+      const db = this._getDb(agentId)
+      if (!db) return false
+      const row = db.prepare("SELECT COUNT(*) AS cnt FROM messages WHERE chat_id = 'imported-history'").get()
+      return (row?.cnt || 0) > 0
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Get aggregate statistics for the imported history of an agent.
+   * Used by AnalyzeAgentTool for comprehensive analysis.
+   * @param {string} agentId
+   * @returns {object|null}
+   */
+  getStats(agentId) {
+    try {
+      const db = this._getDb(agentId)
+      if (!db) return null
+
+      const totalRow = db.prepare("SELECT COUNT(*) AS cnt FROM messages WHERE chat_id = 'imported-history'").get()
+      const total = totalRow?.cnt || 0
+      if (total === 0) return null
+
+      const dateRow = db.prepare("SELECT MIN(timestamp) AS first, MAX(timestamp) AS last FROM messages WHERE chat_id = 'imported-history'").get()
+      const senders = db.prepare("SELECT sender, COUNT(*) AS cnt FROM messages WHERE chat_id = 'imported-history' GROUP BY sender ORDER BY cnt DESC").all()
+      const monthly = db.prepare(`
+        SELECT substr(timestamp, 1, 7) AS month, sender, COUNT(*) AS cnt
+        FROM messages
+        WHERE chat_id = 'imported-history' AND timestamp IS NOT NULL
+        GROUP BY month, sender
+        ORDER BY month ASC
+      `).all()
+      const lengthRow = db.prepare("SELECT AVG(length(content)) AS avg_len, MAX(length(content)) AS max_len FROM messages WHERE chat_id = 'imported-history'").get()
+
+      return {
+        total_messages: total,
+        date_range: { first: dateRow?.first || null, last: dateRow?.last || null },
+        senders: senders.map(r => ({ sender: r.sender || 'Unknown', count: r.cnt })),
+        monthly_activity: monthly.map(r => ({ month: r.month, sender: r.sender || 'Unknown', count: r.cnt })),
+        avg_message_length: Math.round(lengthRow?.avg_len || 0),
+        max_message_length: lengthRow?.max_len || 0,
+        page_size: 150,
+        total_pages: Math.ceil(total / 150),
+      }
+    } catch (err) {
+      logger.error('[HistoryIndex] getStats error', { agentId, error: err.message })
+      return null
+    }
+  }
+
+  /**
+   * Get paginated messages from imported history (chronological order).
+   * Used by AnalyzeAgentTool to load all messages without token limit concern.
+   * @param {string} agentId
+   * @param {number} page     1-based page number
+   * @param {number} pageSize messages per page (default 150)
+   * @returns {object|null}
+   */
+  getPagedMessages(agentId, page = 1, pageSize = 150) {
+    try {
+      const db = this._getDb(agentId)
+      if (!db) return null
+
+      const totalRow = db.prepare("SELECT COUNT(*) AS cnt FROM messages WHERE chat_id = 'imported-history'").get()
+      const total = totalRow?.cnt || 0
+      if (total === 0) return null
+
+      const offset = (Math.max(1, page) - 1) * pageSize
+      const rows = db.prepare(`
+        SELECT content, timestamp, sender, created_at
+        FROM messages
+        WHERE chat_id = 'imported-history'
+        ORDER BY timestamp ASC, created_at ASC
+        LIMIT ? OFFSET ?
+      `).all(pageSize, offset)
+
+      return {
+        page,
+        total_pages: Math.ceil(total / pageSize),
+        total_messages: total,
+        messages: rows.map(r => ({
+          time: r.timestamp || '',
+          sender: r.sender || 'Unknown',
+          content: r.content,
+        })),
+      }
+    } catch (err) {
+      logger.error('[HistoryIndex] getPagedMessages error', { agentId, error: err.message })
+      return null
+    }
+  }
+
+  /**
    * Search indexed history for relevant context.
    *
    * @param {string} query        Search keywords (can be empty if using date range)

@@ -441,10 +441,43 @@
                     <div v-if="selectedProviderModels.length > 0" style="margin-top: 0.5rem;">
                       <input v-model="providerModelFilter" type="text" placeholder="Filter models…" class="field font-mono field-sm" style="width: 100%; margin-bottom: 0.5rem;" />
                       <div class="cv-model-list">
-                        <button v-for="m in filteredProviderModels" :key="m.id" class="cv-model-item" :class="{ active: selectedProvider.model === m.id }" @click="selectedProvider.model = m.id">
-                          <span class="cv-model-name">{{ m.name || m.id }}</span>
+                        <div v-for="m in filteredProviderModels" :key="m.id" class="cv-model-item" :class="{ active: selectedProvider.model === m.id }">
+                          <button class="cv-model-select" @click="selectedProvider.model = m.id">
+                            <span class="cv-model-name">{{ m.name || m.id }}</span>
+                          </button>
                           <span v-if="m.context_length" class="cv-model-ctx">{{ Math.round(m.context_length / 1000) }}k</span>
-                        </button>
+                          <!-- Max output: label mode -->
+                          <template v-if="editingMaxOutputModelId !== m.id">
+                            <span class="cv-model-out-tag" :class="{ 'is-fallback': !getModelMaxOutput(selectedProvider, m.id) && getModelMaxOutputDefault(m).isFallback }">
+                              <span class="cv-model-out-label">out</span>
+                              <span class="cv-model-out-text" :class="{ 'is-custom': !!getModelMaxOutput(selectedProvider, m.id) }">{{ getModelMaxOutput(selectedProvider, m.id) || getModelMaxOutputDefault(m).value }}</span>
+                              <span v-if="!getModelMaxOutput(selectedProvider, m.id) && getModelMaxOutputDefault(m).isFallback" class="cv-model-out-fallback" :title="t('config.modelMaxOutputFallbackHint')">?</span>
+                            </span>
+                            <button class="cv-model-out-edit" :title="t('config.modelMaxOutputTokensHint')" @click.stop="startEditMaxOutput(m.id)">
+                              <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                          </template>
+                          <!-- Max output: edit mode -->
+                          <template v-else>
+                            <span class="cv-model-out-tag editing" @click.stop>
+                              <span class="cv-model-out-label">out</span>
+                              <input
+                                ref="maxOutputEditInput"
+                                type="text"
+                                v-model="editingMaxOutputValue"
+                                class="cv-model-out-input"
+                                @keydown.enter="confirmEditMaxOutput"
+                                @keydown.escape="cancelEditMaxOutput"
+                              />
+                            </span>
+                            <button class="cv-model-out-confirm" @click.stop="confirmEditMaxOutput" :title="t('common.save')">
+                              <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            </button>
+                            <button class="cv-model-out-cancel" @click.stop="cancelEditMaxOutput" :title="t('common.cancel')">
+                              <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          </template>
+                        </div>
                       </div>
                       <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
                         <AppButton size="icon" @click="testProviderNew" :disabled="testingProviderNew || !canTestNew" :loading="testingProviderNew" :title="testingProviderNew ? t('config.testing') : t('config.test')"><svg v-if="!testingProviderNew" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
@@ -473,6 +506,7 @@
                     <div class="form-group">
                       <label class="form-label">
                         {{ t('config.maxOutputTokens') }}
+                        <span class="form-label-hint" style="color:#9CA3AF;">{{ t('config.maxOutputTokensProviderFallback') }}</span>
                         <span v-if="getHardLimit(selectedProvider, 'maxOutputTokens')" class="form-label-hint" style="color:#EF4444;">
                           {{ t('config.hardLimit', '', { count: getHardLimit(selectedProvider, 'maxOutputTokens') }) }}
                         </span>
@@ -2283,6 +2317,13 @@
     @close="showPreviewVoiceError = false"
   />
 
+  <!-- Preview limit modal -->
+  <PreviewLimitModal
+    :visible="showPreviewLimitModal"
+    :message="previewLimitMessage"
+    @close="showPreviewLimitModal = false"
+  />
+
 </template>
 
 <script setup>
@@ -2297,8 +2338,10 @@ import AppButton from '../components/common/AppButton.vue'
 import ProviderModelPicker from '../components/common/ProviderModelPicker.vue'
 import ComboBox from '../components/common/ComboBox.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import { useI18n } from '../i18n/useI18n'
 import { buildDemoTooltipHtml } from '../utils/demoMode.js'
+import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
 const configStore = useConfigStore()
 const modelsStore = useModelsStore()
@@ -2307,6 +2350,18 @@ const obsidianStore = useObsidianStore()
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+
+const showPreviewLimitModal = ref(false)
+const previewLimitMessage = ref('')
+
+// Built-in model max output token defaults (loaded from main process)
+// { table: { modelId: maxTokens }, fallback: 32768 }
+const modelDefaultMaxOutput = ref({ table: {}, fallback: 32768 })
+
+// Per-model max output tokens inline editing state
+const editingMaxOutputModelId = ref(null)
+const editingMaxOutputValue = ref('')
+const maxOutputEditInput = ref(null)
 
 const isElectron = !!(typeof window !== 'undefined' && window.electronAPI)
 
@@ -3158,6 +3213,13 @@ function openAddProvider(preset) {
 
 function confirmAddProvider() {
   const preset = addProviderPreset.value
+  // Check preview limit before adding a new provider
+  if (isLimitEnforced() && configStore.config.providers.length >= PREVIEW_LIMITS.maxProviders) {
+    showAddProviderModal.value = false
+    previewLimitMessage.value = t('limits.maxProviders')
+    showPreviewLimitModal.value = true
+    return
+  }
   // Non-custom presets: if a provider of the same type already exists, select it instead of creating a duplicate
   if (preset !== 'custom') {
     const existing = configStore.config.providers.find(p => p.type === preset)
@@ -3264,13 +3326,88 @@ function getHardLimit(provider, key) {
   return preset?.hardLimits?.[key]
 }
 
+// Per-model max output tokens helpers
+function getModelMaxOutput(provider, modelId) {
+  return provider.modelSettings?.[modelId]?.maxOutputTokens || ''
+}
+
+/** Returns { value: string, isFallback: boolean } */
+function getModelMaxOutputDefault(model) {
+  // API-cached value (e.g. Google outputTokenLimit)
+  if (model.max_output_tokens) return { value: String(model.max_output_tokens), isFallback: false }
+  // Built-in lookup table (prefix match)
+  const id = (model.id || '').toLowerCase()
+  const table = modelDefaultMaxOutput.value.table || {}
+  let bestLen = 0
+  let bestVal = null
+  for (const [key, val] of Object.entries(table)) {
+    const lk = key.toLowerCase()
+    if ((id === lk || id.startsWith(lk)) && lk.length > bestLen) {
+      bestLen = lk.length
+      bestVal = val
+    }
+  }
+  if (bestVal !== null) return { value: String(bestVal), isFallback: false }
+  // Generic fallback
+  const fb = modelDefaultMaxOutput.value.fallback || 32768
+  return { value: String(fb), isFallback: true }
+}
+
+function startEditMaxOutput(modelId) {
+  const provider = selectedProvider.value
+  if (!provider) return
+  const current = getModelMaxOutput(provider, modelId)
+  const model = filteredProviderModels.value.find(m => m.id === modelId)
+  editingMaxOutputValue.value = current || (model ? getModelMaxOutputDefault(model).value : '32768')
+  editingMaxOutputModelId.value = modelId
+  nextTick(() => {
+    const input = maxOutputEditInput.value
+    const el = Array.isArray(input) ? input[0] : input
+    if (el) { el.focus(); el.select() }
+  })
+}
+
+function confirmEditMaxOutput() {
+  const provider = selectedProvider.value
+  const modelId = editingMaxOutputModelId.value
+  if (!provider || !modelId) return
+
+  if (!provider.modelSettings) provider.modelSettings = {}
+  const num = parseInt(editingMaxOutputValue.value, 10)
+  if (!num || num <= 0) {
+    if (provider.modelSettings[modelId]) {
+      delete provider.modelSettings[modelId].maxOutputTokens
+      if (Object.keys(provider.modelSettings[modelId]).length === 0) {
+        delete provider.modelSettings[modelId]
+      }
+    }
+  } else {
+    if (!provider.modelSettings[modelId]) provider.modelSettings[modelId] = {}
+    provider.modelSettings[modelId].maxOutputTokens = Math.min(98304, Math.max(256, num))
+  }
+
+  // Save directly to config.json without requiring the provider Save button
+  configStore.saveConfig(configStore.config)
+
+  editingMaxOutputModelId.value = null
+  editingMaxOutputValue.value = ''
+}
+
+function cancelEditMaxOutput() {
+  editingMaxOutputModelId.value = null
+  editingMaxOutputValue.value = ''
+}
+
 onMounted(async () => {
   const c = JSON.parse(JSON.stringify(configStore.config))
   delete c.defaultProvider
-  
+
   if (c.voiceCall)    Object.assign(form.voiceCall, c.voiceCall)
   if (c.smtp)         Object.assign(form.smtp, c.smtp)
   if (c.utilityModel) Object.assign(form.utilityModel, c.utilityModel)
+
+  // Load built-in model max output token defaults
+  try { modelDefaultMaxOutput.value = await window.electronAPI.getAllDefaultMaxOutputTokens() } catch (_) {}
 
   // Check local voice server status immediately after config loaded
   if (form.voiceCall.mode === 'local') {
@@ -4908,8 +5045,7 @@ async function savePricing() {
 .cv-model-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.375rem;
   padding: 0.375rem 0.625rem;
   background: transparent;
   border: none;
@@ -4930,6 +5066,20 @@ async function savePricing() {
   color: #FFFFFF;
 }
 
+.cv-model-select {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+
 .cv-model-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4947,6 +5097,140 @@ async function savePricing() {
   border-radius: 0.25rem;
 }
 .cv-model-item.active .cv-model-ctx { color: #E5E7EB; background: rgba(255,255,255,0.12); }
+
+/* Max output tag (label mode) */
+.cv-model-out-tag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+  padding: 0.0625rem 0.25rem;
+  background: rgba(255,255,255,0.06);
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+.cv-model-out-tag.editing {
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.12);
+}
+.cv-model-out-tag.is-fallback {
+  border: 1px dashed rgba(0,0,0,0.15);
+  background: rgba(0,0,0,0.02);
+}
+.cv-model-item.active .cv-model-out-tag { background: rgba(255,255,255,0.12); }
+.cv-model-item.active .cv-model-out-tag.is-fallback { border: 1px dashed rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); }
+.cv-model-item.active .cv-model-out-tag.editing { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.3); }
+
+.cv-model-out-fallback {
+  color: #EAB308;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+}
+.cv-model-item.active .cv-model-out-fallback { color: #FACC15; }
+
+.cv-model-out-label {
+  color: #9CA3AF;
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+  user-select: none;
+}
+.cv-model-item.active .cv-model-out-label { color: #9CA3AF; }
+
+.cv-model-out-text {
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+}
+.cv-model-out-text.is-custom { color: var(--text-primary); }
+.cv-model-item.active .cv-model-out-text { color: #E5E7EB; }
+.cv-model-item.active .cv-model-out-text.is-custom { color: #FFFFFF; }
+
+/* Edit pencil button — always visible */
+.cv-model-out-edit {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  background: rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 0.25rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.cv-model-out-edit:hover {
+  background: rgba(0,0,0,0.1);
+  border-color: rgba(0,0,0,0.2);
+  color: var(--text-primary);
+}
+.cv-model-item.active .cv-model-out-edit {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.2);
+  color: #D1D5DB;
+}
+.cv-model-item.active .cv-model-out-edit:hover {
+  background: rgba(255,255,255,0.18);
+  border-color: rgba(255,255,255,0.3);
+  color: #FFFFFF;
+}
+
+/* Edit mode input */
+.cv-model-out-input {
+  width: 3.5rem;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-align: right;
+  padding: 0;
+}
+.cv-model-item.active .cv-model-out-input { color: #FFFFFF; }
+
+/* Confirm / Cancel buttons */
+.cv-model-out-confirm,
+.cv-model-out-cancel {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+/* Normal row: dark tones for light background */
+.cv-model-out-confirm {
+  background: rgba(0,0,0,0.06);
+  color: var(--text-secondary);
+}
+.cv-model-out-confirm:hover { background: rgba(0,0,0,0.12); color: var(--text-primary); }
+.cv-model-out-cancel {
+  background: rgba(0,0,0,0.04);
+  color: var(--text-secondary);
+}
+.cv-model-out-cancel:hover { background: rgba(0,0,0,0.1); color: var(--text-primary); }
+/* Active row: brighter confirm/cancel */
+.cv-model-item.active .cv-model-out-confirm {
+  background: rgba(255,255,255,0.1);
+  color: #D1D5DB;
+}
+.cv-model-item.active .cv-model-out-confirm:hover { background: rgba(255,255,255,0.2); color: #FFFFFF; }
+.cv-model-item.active .cv-model-out-cancel {
+  background: rgba(255,255,255,0.06);
+  color: #D1D5DB;
+}
+.cv-model-item.active .cv-model-out-cancel:hover { background: rgba(255,255,255,0.15); color: #FFFFFF; }
 
 .info-tooltip-wrapper:hover .edge-tts-tooltip,
 .edge-tts-tooltip:hover { display: block !important; }

@@ -761,6 +761,13 @@
     </div>
 
   </div>
+
+  <!-- Preview limit modal -->
+  <PreviewLimitModal
+    :visible="showPreviewLimitModal"
+    :message="previewLimitMessage"
+    @close="showPreviewLimitModal = false"
+  />
 </template>
 
 <script setup>
@@ -772,12 +779,16 @@ import { useConfigStore } from '../stores/config'
 import { useI18n } from '../i18n/useI18n'
 import AppButton from '../components/common/AppButton.vue'
 import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
+import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import { useChatToCreate } from '../composables/useChatToCreate'
+import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
 const { t } = useI18n()
 const { startChatGuide } = useChatToCreate()
 const skillsStore = useSkillsStore()
 const configStore = useConfigStore()
+const showPreviewLimitModal = ref(false)
+const previewLimitMessage = ref('')
 
 // ── Uninstall dialog state (must be after skillsStore) ──
 const showUninstallDialog = ref(false)
@@ -1055,7 +1066,10 @@ watch(() => skillsStore.installingSkills, (map) => {
 }, { deep: true })
 
 function installSkill(sourceId, skill) {
-  if (!skill.downloadUrl) {
+  if (!skill.downloadUrl) return
+  if (isLimitEnforced() && skillsStore.skills.length >= PREVIEW_LIMITS.maxSkills) {
+    previewLimitMessage.value = t('limits.maxSkills')
+    showPreviewLimitModal.value = true
     return
   }
   skillsStore.installRemoteSkill(sourceId, skill.id, skill.downloadUrl, configStore.config.skillsPath)
@@ -1071,6 +1085,11 @@ function openRemoteDetail(skill) {
 function installFromModal() {
   const skill = remoteDetailSkill.value
   if (!skill || !skill.downloadUrl) return
+  if (isLimitEnforced() && skillsStore.skills.length >= PREVIEW_LIMITS.maxSkills) {
+    previewLimitMessage.value = t('limits.maxSkills')
+    showPreviewLimitModal.value = true
+    return
+  }
   const sourceId = (skill.sourceId === 'tencent-top' || skill.sourceId === 'tencent') ? 'tencent' : 'clawhub'
   skillsStore.installRemoteSkill(sourceId, skill.id, skill.downloadUrl, configStore.config.skillsPath)
 }

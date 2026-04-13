@@ -262,7 +262,7 @@ ConfigView uses a **two-level navigation** pattern — do not flatten it back to
 - Filesystem paths (Data, Artifact, Skills) → General → Paths — each path in its own `config-card`
 - Global model settings (Max Output Tokens) → AI → Models → **Global Model Settings** card (provider-agnostic settings go here)
 - DeepSeek-specific limits (Max Output Tokens 8192 cap) → DeepSeek provider card → **Limits** section
-- Pinecone/RAG → AI → Knowledge (label: "Knowledge", not "RAG" or "AI Knowledge")
+- RAG → AI → Knowledge (label: "Knowledge", not "RAG" or "AI Knowledge")
 
 ### Section Card Pattern
 

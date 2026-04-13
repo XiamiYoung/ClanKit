@@ -39,6 +39,20 @@ const {
 } = require('./agentRuntimeUtils')
 
 
+// Inject API-cached max_output_tokens from provider-models.json into loopConfig
+function _injectCachedModelMaxOutputTokens(loopConfig) {
+  try {
+    const modelCache = ds.readJSON(ds.paths().PROVIDER_MODELS_FILE, {})
+    const map = {}
+    for (const entry of Object.values(modelCache)) {
+      for (const m of (entry.models || [])) {
+        if (m.id && m.max_output_tokens) map[m.id] = m.max_output_tokens
+      }
+    }
+    if (Object.keys(map).length > 0) loopConfig._cachedModelMaxOutputTokens = map
+  } catch (_) { /* non-critical — fallback chain handles missing data */ }
+}
+
 // --- IPC: Agent Loop ---------------------------------------------------------
 // is resolved. im-bridge modules use lazy getDataDir() so they pick it up.
 const activeLoops = new Map()          // chatId -> AgentLoop
@@ -383,6 +397,10 @@ function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetCh
       if (notes.length > 0) handoverNote = notes.join(' ')
     }
 
+    // Analysis chat: resolve target agent for search_chat_history override
+    const analysisTargetId = targetChatMeta.chatType === 'analysis' ? (targetChatMeta.analysisTargetAgentId || null) : null
+    const analysisTargetAgent = analysisTargetId ? agentsById[analysisTargetId] : null
+
     const agentPrompts = {
       systemAgentPrompt: agent.prompt || '',
       userAgentPrompt:   userAgentPrompt || '',
@@ -392,6 +410,12 @@ function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetCh
       userAgentDescription: usrAgent?.description || null,
       groupChatContext: { agentName: agent.name, agentDescription: agent.description || '', otherParticipants },
       ...(handoverNote ? { chatHandoverNote: handoverNote } : {}),
+      // Analysis chat context
+      ...(analysisTargetId ? {
+        analysisTargetAgentId:     analysisTargetId,
+        analysisTargetAgentName:   analysisTargetAgent?.name || 'Unknown',
+        analysisTargetAgentPrompt: analysisTargetAgent?.prompt || '',
+      } : {}),
     }
 
     const agentSkills    = _filterByRequired(enabledSkills,  agent.requiredSkillIds      ?? [])
@@ -592,6 +616,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       loopConfig.DoCPath      = groupCfg.DoCPath      || ''
       loopConfig.memoryDir    = ds.paths().MEMORY_DIR
       loopConfig.chatId       = chatId
+      _injectCachedModelMaxOutputTokens(loopConfig)
       const loopConfigError = _validateLoopConfig(loopConfig)
       if (loopConfigError) {
         logger.error('agent:run invalid group loop config', { chatId, agentId: run.agentId, error: loopConfigError })
@@ -732,6 +757,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.DoCPath      = fullCfg.DoCPath      || ''
   loopConfig.memoryDir    = ds.paths().MEMORY_DIR
   loopConfig.chatId       = chatId
+  _injectCachedModelMaxOutputTokens(loopConfig)
   const loopConfigError = _validateLoopConfig(loopConfig)
   if (loopConfigError) {
     logger.error('agent:run invalid loop config', { chatId, error: loopConfigError })
@@ -873,6 +899,7 @@ ipcMain.handle('agent:run-additional', async (event, {
     loopConfig.DoCPath             = groupCfg.DoCPath || ''
     loopConfig.memoryDir           = ds.paths().MEMORY_DIR
     loopConfig.chatId              = chatId
+    _injectCachedModelMaxOutputTokens(loopConfig)
 
     if (pendingStops.has(chatId)) {
       pendingStops.delete(chatId)
@@ -1312,6 +1339,7 @@ ipcMain.handle('agent:doc-run', async (event, {
     loopConfig.skillsPath   = fullCfg.skillsPath   || ''
     loopConfig.DoCPath      = fullCfg.DoCPath      || ''
     loopConfig.memoryDir    = ds.paths().MEMORY_DIR
+    _injectCachedModelMaxOutputTokens(loopConfig)
 
     const loop = new AgentLoop(loopConfig)
     _activeDocLoops.set(requestId, loop)
@@ -2217,6 +2245,7 @@ ipcMain.handle('agent:send-message', async (event, {
       loopConfig.DoCPath      = fullCfg.DoCPath      || ''
       loopConfig.memoryDir    = ds.paths().MEMORY_DIR
       loopConfig.chatId       = chatId
+      _injectCachedModelMaxOutputTokens(loopConfig)
       const loopConfigError = _validateLoopConfig(loopConfig)
       if (loopConfigError) {
         logger.error('agent:send-message invalid loop config', { chatId, agentId: run.agentId, error: loopConfigError })

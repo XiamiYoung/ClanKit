@@ -854,6 +854,20 @@
     @close="voiceServerError = ''"
   />
 
+  <!-- Preview limit modal (chat/folder) -->
+  <PreviewLimitModal
+    :visible="showPreviewLimitModal"
+    :message="previewLimitMessage"
+    @close="showPreviewLimitModal = false"
+  />
+
+  <!-- Preview limit modal (voice call daily limit) -->
+  <PreviewLimitModal
+    :visible="showVoiceLimitModal"
+    :message="voiceLimitMessage"
+    @close="showVoiceLimitModal = false"
+  />
+
   <!-- Tree item name tooltip (teleported — escapes sidebar overflow clip) -->
   <Teleport to="body">
     <div
@@ -897,6 +911,7 @@ import { useI18n } from '../i18n/useI18n'
 import { getAvatarDataUri } from '../components/agents/agentAvatars'
 import AgentBodyViewer from '../components/agents/AgentBodyViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import MessageRenderer from '../components/chat/MessageRenderer.vue'
 import ChatWindow from '../components/chat/ChatWindow.vue'
 import ChatHeader from '../components/chat/ChatHeader.vue'
@@ -961,6 +976,8 @@ const {
   handleVoiceTask,
   startMicCapture,
   stopMicCapture,
+  showVoiceLimitModal,
+  voiceLimitMessage,
 } = useVoiceRecording({ inputText, sendMessage: (...args) => sendMessage(...args) })
 
 const speakingMsgId = ref('')
@@ -1263,6 +1280,7 @@ const {
   toggleNcpCat, toggleNupCat, toggleNewChatFolderExpand,
   newChat, newChatBlockedNoUserAgent, confirmNewChat, cancelNewChat,
   confirmDeleteTarget, requestDeleteChat, requestRemoveGroupAgent, executeConfirmedDelete,
+  showPreviewLimitModal, previewLimitMessage,
 } = useChatTree({ mentionInputRef })
 
 const messagesEl = ref(null)

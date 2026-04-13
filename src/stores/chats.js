@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { storage } from '../services/storage'
 import { en, zh } from '../i18n'
 import { parseToolLogBlock, deduplicateToolSegments } from '../utils/parseToolLog'
+import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
 const NEW_CHAT_TITLES = new Set([
   en.chats.newChat,
@@ -349,13 +350,18 @@ export const useChatsStore = defineStore('chats', () => {
   }
 
   async function createChat(title = en.chats.newChat, agentConfig = null, folderId = null, options = null) {
+    if (isLimitEnforced() && chats.value.length >= PREVIEW_LIMITS.maxChats) {
+      throw new Error('preview_limit:maxChats')
+    }
     const normalizedIcon = typeof options?.icon === 'string' ? options.icon.trim() : ''
     const normalizedUserAgentId = options?.userAgentId ? String(options.userAgentId) : null
     const autoTitleEligible = options?.autoTitleEligible !== undefined
       ? !!options.autoTitleEligible
       : NEW_CHAT_TITLES.has(title)
+    const chatType = options?.chatType || 'chat'
+    const analysisTargetAgentId = options?.analysisTargetAgentId || null
     const chat = {
-      type: 'chat',
+      type: chatType,
       id: uuidv4(),
       title,
       icon: normalizedIcon,
@@ -370,7 +376,7 @@ export const useChatsStore = defineStore('chats', () => {
       systemAgentId: null,
       userAgentId: normalizedUserAgentId,
       autoTitleEligible,
-      autoTitleLocked: false,
+      autoTitleLocked: chatType === 'analysis',
       autoTitleAttemptCount: 0,
       provider: null,
       model: null,
@@ -382,6 +388,7 @@ export const useChatsStore = defineStore('chats', () => {
       workingPath: null,
       codingMode: false,
       codingProvider: 'claude-code',
+      ...(analysisTargetAgentId ? { analysisTargetAgentId } : {}),
     }
     if (agentConfig && agentConfig.length === 1) {
       chat.systemAgentId = agentConfig[0]
@@ -536,7 +543,21 @@ export const useChatsStore = defineStore('chats', () => {
 
   // ── Folder CRUD ───────────────────────────────────────────────────────────
 
+  function _countFolders(nodes) {
+    let count = 0
+    for (const node of nodes) {
+      if (node.type === 'folder') {
+        count++
+        if (node.children?.length) count += _countFolders(node.children)
+      }
+    }
+    return count
+  }
+
   async function createFolder(name, parentFolderId = null, emoji = '📁') {
+    if (isLimitEnforced() && _countFolders(chatTree.value) >= PREVIEW_LIMITS.maxFolders) {
+      throw new Error('preview_limit:maxFolders')
+    }
     const folder = {
       type: 'folder',
       id: uuidv4(),
@@ -1348,6 +1369,8 @@ export const useChatsStore = defineStore('chats', () => {
         systemAgentId: isGroup ? null : (groupIds[0] || null),
         groupAudienceMode: targetChat.groupAudienceMode || 'auto',
         groupAudienceAgentIds: JSON.parse(JSON.stringify(targetChat.groupAudienceAgentIds || [])),
+        chatType: targetChat.type || 'chat',
+        analysisTargetAgentId: targetChat.analysisTargetAgentId || null,
       },
     }).catch(err => console.error('[minibar send] IPC error:', err.message))
   }

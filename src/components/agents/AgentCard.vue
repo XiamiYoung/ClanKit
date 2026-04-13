@@ -3,6 +3,28 @@
     <!-- Gradient accent bar -->
     <div class="agent-card-accent" :style="{ background: gradient }"></div>
 
+    <!-- AI Analysis floating button — top-right corner (only when imported history exists) -->
+    <button
+      v-if="hasImportedHistory"
+      class="agent-analysis-btn"
+      :title="t('agents.analysis.buttonTitle')"
+      :aria-label="t('agents.analysis.buttonTitle')"
+      @click.stop="openOrCreateAnalysisChat(agent)"
+    >
+      <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="5" r="2"/>
+        <circle cx="5" cy="12" r="2"/>
+        <circle cx="19" cy="12" r="2"/>
+        <circle cx="8" cy="19" r="2"/>
+        <circle cx="16" cy="19" r="2"/>
+        <line x1="12" y1="7" x2="7" y2="10"/>
+        <line x1="12" y1="7" x2="17" y2="10"/>
+        <line x1="7" y1="12" x2="9" y2="17"/>
+        <line x1="17" y1="12" x2="15" y2="17"/>
+      </svg>
+      AI
+    </button>
+
     <div class="agent-card-body">
       <!-- Avatar + title row -->
       <div class="agent-card-title-row">
@@ -102,10 +124,11 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { getAvatarDataUri } from './agentAvatars'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
+import { useAgentAnalysisChat } from '../../composables/useAgentAnalysisChat'
 import { EDGE_VOICES, OPENAI_VOICES } from '../../utils/edgeVoices'
 
 const _allVoices = [...EDGE_VOICES, ...OPENAI_VOICES]
@@ -115,6 +138,7 @@ function voiceLabel(id) {
 }
 
 const { t } = useI18n()
+const { openOrCreateAnalysisChat } = useAgentAnalysisChat()
 
 const PROVIDER_LABELS = {
   anthropic:  'Anthropic',
@@ -132,9 +156,24 @@ const props = defineProps({
   showUnassign:   { type: Boolean, default: false },
   deleteDisabled: { type: Boolean, default: false },
   deleteTitle:    { type: String,  default: 'Delete Agent' },
+  refreshToken:   { type: Number,  default: 0 },
 })
 
 defineEmits(['click', 'delete', 'unassign', 'set-default'])
+
+// Only show AI analysis button for agents that have imported chat history
+const hasImportedHistory = ref(false)
+async function checkImportedHistory() {
+  if (props.agent.isBuiltin) return
+  try {
+    const res = await window.electronAPI?.agentAnalysis?.hasHistory({ agentId: props.agent.id })
+    hasImportedHistory.value = !!res?.hasHistory
+  } catch {
+    hasImportedHistory.value = false
+  }
+}
+onMounted(checkImportedHistory)
+watch(() => props.refreshToken, checkImportedHistory)
 
 const avatarDataUri = computed(() => getAvatarDataUri(props.agent.avatar))
 
@@ -357,6 +396,36 @@ const isNoProviderConfigured = computed(() => {
 .star-btn-always:hover { background: #F5F5F5; color: #F59E0B; }
 .delete-btn-always { color: #D1D5DB; }
 .delete-btn-always:hover { background: #FEE2E2; color: #DC2626; }
+.agent-analysis-btn {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3125rem 0.5625rem;
+  border-radius: 9999px;
+  border: none;
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  color: #FFFFFF;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
+  transition: all 0.15s ease;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.agent-analysis-btn:hover {
+  background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.5);
+  transform: translateY(-1px);
+}
+.agent-analysis-btn:active {
+  transform: translateY(0);
+}
 .unassign-chip {
   display: flex;
   align-items: center;

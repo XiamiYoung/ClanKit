@@ -829,9 +829,17 @@
       @close="closeDeleteDialog"
     />
   </div>
+
+  <!-- Preview limit modal -->
+  <PreviewLimitModal
+    :visible="showPreviewLimitModal"
+    :message="previewLimitMessage"
+    @close="showPreviewLimitModal = false"
+  />
 </template>
 
 <script setup>
+defineOptions({ inheritAttrs: false })
 import { ref, reactive, computed, watch, nextTick, onMounted, onActivated, onBeforeUnmount, defineComponent, h } from 'vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import AppButton from '../components/common/AppButton.vue'
@@ -859,8 +867,12 @@ import { getAvatarDataUri } from '../components/agents/agentAvatars'
 import { useFocusModeStore } from '../stores/focusMode'
 import { useVoiceStore } from '../stores/voice'
 import { useI18n } from '../i18n/useI18n'
+import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
+import { isLimitEnforced } from '../utils/guestLimits'
 
 const { t } = useI18n()
+const showPreviewLimitModal = ref(false)
+const previewLimitMessage = ref('')
 
 // When true, this instance is embedded inside FocusModeView and owns the AI panel.
 // The router-level instance suppresses its panel to avoid duplicates.
@@ -1645,6 +1657,11 @@ function onAiMagicButtonClick() {
 
 /** Toggle the AI Doc switch on/off. When turning on, auto-open panel. */
 function toggleAiDoc() {
+  if (isLimitEnforced() && !aiDocEnabled.value) {
+    previewLimitMessage.value = t('limits.aiDocsAssistant')
+    showPreviewLimitModal.value = true
+    return
+  }
   aiDocEnabled.value = !aiDocEnabled.value
   if (aiDocEnabled.value && store.activeFile) {
     _ensureAiDocPanel()

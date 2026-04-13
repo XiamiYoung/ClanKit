@@ -198,8 +198,11 @@ function classifyMessages(messages, targetName) {
     .filter(m => m.sender === 'them' && m.content.length < 50)
     .slice(-50)
 
-  // All messages (recent 200, full conversation)
-  const all_messages = normalized.slice(-200)
+  // All messages — full history for storage and analysis tool
+  const all_messages = normalized
+
+  // Recent sample for AI prompt building (last 200 to keep context window sane)
+  const all_messages_preview = normalized.slice(-200)
 
   const total_their_count = normalized.filter(m => m.sender === 'them').length
 
@@ -209,6 +212,7 @@ function classifyMessages(messages, targetName) {
     sweet_messages,
     daily_messages,
     all_messages,
+    all_messages_preview,
     total_their_count,
     total_count: messages.length,
     target_name: targetName,
@@ -242,10 +246,11 @@ function buildMessageBlock(classified, targetName) {
   fmt(classified.sweet_messages, 'Sweet / Affectionate Messages')
   fmt(classified.daily_messages, 'Daily Chat Samples')
 
-  const all = classified.all_messages || []
-  if (all.length > 0) {
-    lines.push(`\n## Recent Conversation (last ${all.length} messages, chronological)\n`)
-    for (const m of all) {
+  const all = classified.all_messages_preview || classified.all_messages || []
+  const allSlice = all.slice(-200)
+  if (allSlice.length > 0) {
+    lines.push(`\n## Recent Conversation (last ${allSlice.length} messages, chronological)\n`)
+    for (const m of allSlice) {
       const sender = m.sender === 'them' ? name : 'Me'
       const ts = m.timestamp ? `[${m.timestamp}] ` : ''
       lines.push(`${ts}${sender}: ${m.content}`)

@@ -573,6 +573,9 @@ app.whenReady().then(async () => {
   // Anonymous install telemetry (async, non-blocking, silent on failure)
   require('./lib/telemetry').sendInstallPing().catch(() => {})
 
+  // Refresh LiteLLM model catalog in background (best-effort)
+  require('./agent/modelDefaults').refreshFromRemote(p().DATA_DIR).catch(() => {})
+
   // ── Clean up stale 'running' run entries from a previous session ────────────
   try {
     if (fs.existsSync(p().TASK_RUNS_INDEX)) {

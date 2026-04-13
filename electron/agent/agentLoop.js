@@ -237,11 +237,13 @@ class AgentLoop {
    */
   async _checkPermission(toolName, toolInput, onChunk) {
     const RESTRICTED_FILE_OPS = ['write', 'append', 'delete', 'mkdir']
+    const RESTRICTED_KNOWLEDGE_OPS = ['create_knowledge_base', 'upload_file', 'add_text', 'delete_document']
     const isMcp = toolName.startsWith('mcp_')
 
-    // Only check: execute_shell, file_operation (write/append/delete/mkdir), mcp_*
+    // Only check: execute_shell, file_operation (write/append/delete/mkdir), knowledge_manage (write ops), mcp_*
     const needsCheck = toolName === 'execute_shell'
       || (toolName === 'file_operation' && RESTRICTED_FILE_OPS.includes(toolInput.operation))
+      || (toolName === 'knowledge_manage' && RESTRICTED_KNOWLEDGE_OPS.includes(toolInput.operation))
       || isMcp
 
     if (!needsCheck) return { decision: 'allow' }
@@ -415,7 +417,23 @@ class AgentLoop {
 
     // Register agent-specific tools
     if (this.config.memoryDir && agentPrompts?.systemAgentId) {
-      this.toolRegistry.registerSearchHistoryTool(this.config.memoryDir, agentPrompts.systemAgentId)
+      // For analysis chats, search the target agent's history instead of the analyzer's
+      const searchTargetId = agentPrompts.analysisTargetAgentId || agentPrompts.systemAgentId
+      this.toolRegistry.registerSearchHistoryTool(this.config.memoryDir, searchTargetId)
+    }
+
+    // Register dedicated analysis tool for analysis chats
+    if (this.config.memoryDir && agentPrompts?.analysisTargetAgentId) {
+      const { AnalyzeAgentTool } = require('./tools/AnalyzeAgentTool')
+      const analysisTool = new AnalyzeAgentTool(
+        this.config.memoryDir,
+        agentPrompts.analysisTargetAgentId,
+        agentPrompts.analysisTargetAgentName || 'Unknown',
+        agentPrompts.analysisTargetAgentPrompt || '',
+        this.config.dataPath || '',
+        this.config.DoCPath || ''
+      )
+      this.toolRegistry.registerTool('analyze_agent_history', analysisTool)
     }
 
     // Set compaction config for soul file auto-compression
@@ -717,11 +735,18 @@ class AgentLoop {
       }
     })
 
-    // Resolve configured output token limit: per-chat → provider settings → hardcoded default
-    const providerSettingsMax = this.config.provider?.settings?.maxOutputTokens
-    const DEFAULT_MAX_TOKENS = (providerSettingsMax && providerSettingsMax > 0)
-      ? providerSettingsMax
-      : 32768
+    // Resolve configured output token limit (5-layer fallback):
+    //   1. Per-chat override (ChatSettingsModal → loopConfig.maxOutputTokens)
+    //   2. Per-model user override (config.json → provider.modelSettings[modelId])
+    //   3. API-returned default (provider-models.json cache, e.g. Google outputTokenLimit)
+    //   4. Built-in lookup table (LiteLLM catalog)
+    //   5. Fallback: 32768
+    const { lookupModelMaxOutputTokens } = require('./modelDefaults')
+    const modelSettings = this.config._modelSettings || {}
+    const perModelOverride = modelSettings[model]?.maxOutputTokens
+    const cachedDefault = this.config._cachedModelMaxOutputTokens?.[model] || null
+    const builtInDefault = lookupModelMaxOutputTokens(model, this.config.dataPath)
+    const DEFAULT_MAX_TOKENS = perModelOverride || cachedDefault || builtInDefault
     let configuredMaxTokens = this.config.maxOutputTokens
       ? Math.min(98304, Math.max(1024, Number(this.config.maxOutputTokens)))
       : DEFAULT_MAX_TOKENS

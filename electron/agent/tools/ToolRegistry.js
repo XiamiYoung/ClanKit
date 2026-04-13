@@ -10,6 +10,7 @@ const { TodoTool }    = require('./TodoTool')
 const { SoulUpdateTool, SoulReadTool } = require('./SoulTool')
 const { SearchHistoryTool } = require('./SearchHistoryTool')
 const { NewsfeedTool } = require('./NewsfeedTool')
+const { KnowledgeTool } = require('./KnowledgeTool')
 
 // Map agent IDs → tool class (lazy — not instantiated until enabled)
 const TOOL_CLASS_MAP = {
@@ -28,6 +29,9 @@ const newsfeedTool = new NewsfeedTool()
 
 // TodoTool is always available (for task planning)
 const todoTool = new TodoTool()
+
+// KnowledgeTool is always available (for RAG management)
+const knowledgeTool = new KnowledgeTool()
 
 // Soul tools are always available (for agent memory)
 let soulUpdateTool = null
@@ -66,6 +70,8 @@ class ToolRegistry {
     }
     // Always register newsfeed tool
     this.registerTool('fetch_newsfeed', newsfeedTool)
+    // Always register knowledge tool (RAG management)
+    this.registerTool('knowledge_manage', knowledgeTool)
     // Always register core tools (shell + file operations)
     this._loadAlwaysOnTools()
   }
@@ -103,6 +109,8 @@ class ToolRegistry {
     }
     // Always have newsfeed tool
     this.registerTool('fetch_newsfeed', newsfeedTool)
+    // Always have knowledge tool
+    this.registerTool('knowledge_manage', knowledgeTool)
     // Always have core tools (shell + file)
     this._loadAlwaysOnTools()
 

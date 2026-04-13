@@ -81,7 +81,7 @@
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
           </AppButton>
-          <AppButton v-if="selectedView.type !== 'category' && selectedView.agentType === 'system'" size="icon" @click="showImportWizard = true" :title="t('agents.import.title')">
+          <AppButton v-if="selectedView.type !== 'category'" size="icon" @click="openImportWizard" :title="t('agents.import.title')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
@@ -199,6 +199,7 @@
                   :show-unassign="selectedView.type === 'category'"
                   :delete-disabled="isDeleteButtonDisabled(agent)"
                   :delete-title="getDeleteButtonTitle(agent)"
+                  :refresh-token="agentCardRefreshToken"
                   @click="selectMode ? toggleSelect(agent.id) : openBodyViewer(agent)"
                   @delete="confirmDelete(agent)"
                   @unassign="agentsStore.unassignFromCategory(agent.id, selectedView.categoryId)"
@@ -318,8 +319,16 @@
   <!-- Import Wizard -->
   <AgentImportWizard
     v-if="showImportWizard"
+    :agent-type="importWizardAgentType"
     @close="showImportWizard = false"
     @created="onAgentImported"
+  />
+
+  <!-- Preview limit modal -->
+  <PreviewLimitModal
+    :visible="showPreviewLimitModal"
+    :message="previewLimitMessage"
+    @close="showPreviewLimitModal = false"
   />
 
   <!-- Nav item name tooltip -->
@@ -344,12 +353,14 @@ import { AGENT_AVATARS } from '../components/agents/agentAvatars'
 import AgentCard from '../components/agents/AgentCard.vue'
 import AgentBodyViewer from '../components/agents/AgentBodyViewer.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import CategoryModal from '../components/agents/CategoryModal.vue'
 import AgentGroupCreator from '../components/agents/AgentGroupCreator.vue'
 import AgentImportWizard from '../components/agents/AgentImportWizard.vue'
 import { useI18n } from '../i18n/useI18n'
 import { getDefaultVoiceForLocale } from '../utils/edgeVoices'
+import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -361,10 +372,20 @@ const configStore = useConfigStore()
 const refreshing = ref(false)
 const newlyAddedIds = ref(new Set())
 const showImportWizard = ref(false)
+const importWizardAgentType = ref('system')
+const agentCardRefreshToken = ref(0)
+
+function openImportWizard() {
+  importWizardAgentType.value = selectedView.agentType
+  showImportWizard.value = true
+}
+const showPreviewLimitModal = ref(false)
+const previewLimitMessage = ref('')
 
 function onAgentImported() {
   showImportWizard.value = false
   agentsStore.loadAgents()
+  agentCardRefreshToken.value++
 }
 
 function resolveDefaultProviderModel() {
@@ -552,6 +573,11 @@ function openBodyViewer(agent) {
 }
 
 function createNew(type) {
+  if (isLimitEnforced() && agentsStore.agents.length >= PREVIEW_LIMITS.maxAgents) {
+    previewLimitMessage.value = t('limits.maxAgents')
+    showPreviewLimitModal.value = true
+    return
+  }
   const resolvedType = type || selectedView.agentType
   const { providerId, modelId } = resolveDefaultProviderModel()
   bodyViewerAgent.value = {

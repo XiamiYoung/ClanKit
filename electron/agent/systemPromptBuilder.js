@@ -99,7 +99,7 @@ function readFileIfExists(filePath) {
  * @param {object|null} ragContext           RAG retrieval results
  * @returns {string} The assembled system prompt
  */
-function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
+function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
   // When a named agent is active, use it as the opening identity (highest priority).
   // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
   let openingIdentity
@@ -156,6 +156,73 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
   // appear in the conversation history with [Name]: prefixes.
   if (chatHandoverNote) {
     system += `\n\n---\n## CONVERSATION HISTORY NOTE\n${chatHandoverNote}\nMessages from these previous participants are prefixed with their name in brackets (e.g. [Name]:). Those messages are NOT yours — do not confuse them with your own prior responses.`
+  }
+
+  // ── Analysis Chat Context ──
+  if (analysisTargetAgentId && analysisTargetAgentName) {
+    system += `\n\n---\n## ANALYSIS MODE — "${analysisTargetAgentName}"
+
+You are a professional character analyst. Your task is to deeply analyze the digital persona **"${analysisTargetAgentName}"** using their complete imported chat history.
+
+### Tool: analyze_agent_history
+This is your primary tool. It has two actions:
+- **action="stats"** — Call this FIRST. Returns: total message count, date range, monthly activity heat map, sender breakdown, and suggested file paths.
+- **action="messages", page=N** — Call for pages 1 through total_pages to read all messages chronologically (150 per page).
+
+### Standard Workflow (follow this exactly when the user asks to start or analyze):
+1. Call \`analyze_agent_history(action="stats")\` → understand scope
+2. Read ALL pages: \`analyze_agent_history(action="messages", page=1)\`, page=2, page=3… until all pages done
+3. Write the analysis report via \`file_operation\` to the suggested_output_path from stats
+
+### Default Output: Markdown Report
+Unless the user requests HTML, write a **Markdown (.md)** file with these sections:
+\`\`\`
+# ${analysisTargetAgentName} — Character Analysis
+
+## Overview
+[Brief summary: who this person is, relationship to the user, period covered]
+
+## Personality Traits
+[Core traits with evidence from chat messages]
+
+## MBTI Profile
+[Inferred type (e.g. INTJ) with reasoning and specific message evidence]
+
+## Communication Style
+[Tone, vocabulary patterns, emoji usage, response length, formality level]
+
+## Topics & Interests
+[Most discussed topics, recurring themes, expertise areas]
+
+## Emotional Patterns
+[How they express emotion, stress responses, humor style]
+
+## Relationship with User
+[Dynamics, closeness level, patterns in how they interact]
+
+## Chat Activity Heat Map
+[Visualize monthly activity from the stats data — text-based table or description]
+
+## Key Quotes
+[5-10 notable messages that best capture their character]
+
+## Summary
+[Overall impression, strengths, blind spots]
+\`\`\`
+
+### Optional: HTML Dashboard
+If the user requests HTML, generate a **self-contained HTML file** with:
+- Inline CSS (dark theme, modern design)
+- Monthly activity bar chart (using SVG or CSS bars from the heat map data)
+- Sender ratio donut chart (CSS-only)
+- All analysis sections styled as cards
+- No external dependencies — fully self-contained
+
+### Guidelines
+- Base ALL claims on specific evidence from the messages — cite actual quotes
+- Read enough pages to cover the full time range before drawing conclusions
+- Write in the same language as the user's most recent message
+- After writing the file, tell the user the file path and offer to open it or generate the HTML version`
   }
 
   // ── Inject agent IDs for SoulTool ──

@@ -8,14 +8,16 @@ import { useVoiceStore } from '../stores/voice'
 import { useConfigStore } from '../stores/config'
 import { useAgentsStore } from '../stores/agents'
 import { useChatsStore } from '../stores/chats'
+import { useI18n } from '../i18n/useI18n'
 
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 export function useVoiceRecording({ inputText, sendMessage } = {}) {
   const voiceStore = useVoiceStore()
   const configStore = useConfigStore()
   const agentsStore = useAgentsStore()
   const chatsStore = useChatsStore()
+  const { t } = useI18n()
 
   // Exposed error state for voice config dialogs
   const voiceServerError = ref('')  // 'SERVER_NOT_RUNNING' | 'VOICE_DISABLED' | 'WHISPER_NOT_CONFIGURED'
@@ -23,8 +25,29 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
     voiceServerError.value = code
   }
 
+  // Preview limit modal state (voice call daily limit)
+  const showVoiceLimitModal = ref(false)
+  const voiceLimitMessage = ref('')
+
+  // Auto-stop when daily limit is hit during an active call
+  watch(() => voiceStore.isDailyVoiceLimitReached, (reached) => {
+    if (reached && voiceStore.isCallActive) {
+      window.electronAPI?.stopVoiceCall?.()
+      voiceStore.endCall()
+      voiceLimitMessage.value = t('limits.maxVoiceSecsPerDayAutoStop')
+      showVoiceLimitModal.value = true
+    }
+  })
+
   // ── Voice call ──
   async function handleStartCall(chatId) {
+    // Block if daily voice limit already reached
+    if (voiceStore.isDailyVoiceLimitReached) {
+      voiceLimitMessage.value = t('limits.maxVoiceSecsPerDay')
+      showVoiceLimitModal.value = true
+      return
+    }
+
     const chat = chatsStore.chats.find(c => c.id === chatId)
     if (!chat) return
     // Use active agent count, not isGroupChat flag (which stays true after removing agents)
@@ -666,6 +689,8 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
   return {
     handleStartCall,
     voiceServerError,
+    showVoiceLimitModal,
+    voiceLimitMessage,
     setupVoiceListeners,
     cleanupVoiceListeners,
     addVoiceMessageToChat,

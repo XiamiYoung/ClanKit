@@ -45,7 +45,7 @@
               <span class="switch-label-text">{{ knowledgeStore.ragEnabled ? t('knowledge.on') : t('knowledge.off') }}</span>
               <span v-if="saveMsg" class="save-msg" :class="saveMsg.ok ? 'save-ok' : 'save-err'">{{ saveMsg.text }}</span>
             </div>
-            <AppButton size="compact" @click="showCreateModal = true" :disabled="!knowledgeStore.modelReady">
+            <AppButton size="compact" @click="openCreateKb" :disabled="!knowledgeStore.modelReady">
               <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
@@ -453,16 +453,25 @@
     />
 
   </div>
+
+  <!-- Preview limit modal -->
+  <PreviewLimitModal
+    :visible="showPreviewLimitModal"
+    :message="previewLimitMessage"
+    @close="showPreviewLimitModal = false"
+  />
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useKnowledgeStore } from '../stores/knowledge'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
 import { useI18n } from '../i18n/useI18n'
 import { useChatToCreate } from '../composables/useChatToCreate'
+import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
 const knowledgeStore = useKnowledgeStore()
 const { t } = useI18n()
@@ -479,6 +488,19 @@ const saveMsg = ref(null)
 const uploadResult = ref(null)
 const refreshToast = ref('')
 let refreshToastTimer = null
+
+// Preview limit modal
+const showPreviewLimitModal = ref(false)
+const previewLimitMessage = ref('')
+
+function openCreateKb() {
+  if (isLimitEnforced() && knowledgeStore.knowledgeBases.length >= PREVIEW_LIMITS.maxKnowledgeBases) {
+    previewLimitMessage.value = t('limits.maxKnowledgeBases')
+    showPreviewLimitModal.value = true
+    return
+  }
+  showCreateModal.value = true
+}
 
 // Create KB modal
 const showCreateModal = ref(false)

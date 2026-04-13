@@ -268,19 +268,21 @@
               </div>
             </div>
 
-            <!-- Relationship & Impression (auto-inferred, editable) -->
-            <div class="field-group">
-              <label class="field-label">{{ t('agents.import.profileRelationship') }}</label>
-              <input v-model="profile.relationship" class="field-input" :placeholder="t('agents.import.profileRelationshipPlaceholder')" />
-            </div>
-            <div class="field-group">
-              <label class="field-label">{{ t('agents.import.profileImpression') }}</label>
-              <input v-model="profile.impression" class="field-input" :placeholder="t('agents.import.profileImpressionPlaceholder')" />
-            </div>
-            <div class="field-group">
-              <label class="field-label">{{ t('agents.import.theirImpression') }}</label>
-              <input v-model="profile.theirImpression" class="field-input" :placeholder="t('agents.import.theirImpressionPlaceholder')" />
-            </div>
+            <!-- Relationship & Impression — skip for user agent imports -->
+            <template v-if="props.agentType !== 'user'">
+              <div class="field-group">
+                <label class="field-label">{{ t('agents.import.profileRelationship') }}</label>
+                <input v-model="profile.relationship" class="field-input" :placeholder="t('agents.import.profileRelationshipPlaceholder')" />
+              </div>
+              <div class="field-group">
+                <label class="field-label">{{ t('agents.import.profileImpression') }}</label>
+                <input v-model="profile.impression" class="field-input" :placeholder="t('agents.import.profileImpressionPlaceholder')" />
+              </div>
+              <div class="field-group">
+                <label class="field-label">{{ t('agents.import.theirImpression') }}</label>
+                <input v-model="profile.theirImpression" class="field-input" :placeholder="t('agents.import.theirImpressionPlaceholder')" />
+              </div>
+            </template>
 
             <!-- Agent Provider / Model -->
             <div class="field-group">
@@ -329,6 +331,9 @@
             </div>
             <p v-if="saveHistory" class="hint-info" style="font-size:0.7rem;">
               {{ t('agents.import.saveHistoryHint') }}
+            </p>
+            <p v-else class="hint-warn" style="font-size:0.7rem; color: var(--warning-text, #F59E0B);">
+              {{ t('agents.import.saveHistoryDisabledWarning') }}
             </p>
 
             <!-- Import memories toggle -->
@@ -410,6 +415,10 @@ const { t } = useI18n()
 const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 const modelsStore = useModelsStore()
+
+const props = defineProps({
+  agentType: { type: String, default: 'system' }, // 'system' | 'user'
+})
 
 const emit = defineEmits(['close', 'created'])
 
@@ -875,14 +884,17 @@ function onAvatarSelect(idOrDataUri) {
 // ── Build final prompt with relationship context ────────────────────────────
 function buildFinalPrompt() {
   let prompt = generatedPrompt.value
-  const extras = []
-  if (profile.relationship) extras.push(`Relationship: ${profile.relationship}`)
-  if (profile.impression) extras.push(`User's impression: ${profile.impression}`)
-  if (profile.theirImpression) extras.push(`Their impression of user: ${profile.theirImpression}`)
-  if (extras.length > 0) {
-    const zh = configStore.language === 'zh'
-    const header = zh ? '## 关系与印象' : '## Relationship & Impressions'
-    prompt = prompt.trim() + '\n\n' + header + '\n' + extras.join('\n')
+  // Relationship & impression not applicable for user agent imports
+  if (props.agentType !== 'user') {
+    const extras = []
+    if (profile.relationship) extras.push(`Relationship: ${profile.relationship}`)
+    if (profile.impression) extras.push(`User's impression: ${profile.impression}`)
+    if (profile.theirImpression) extras.push(`Their impression of user: ${profile.theirImpression}`)
+    if (extras.length > 0) {
+      const zh = configStore.language === 'zh'
+      const header = zh ? '## 关系与印象' : '## Relationship & Impressions'
+      prompt = prompt.trim() + '\n\n' + header + '\n' + extras.join('\n')
+    }
   }
   return prompt
 }
@@ -901,7 +913,7 @@ async function doCreateAgent() {
 
   await agentsStore.saveAgent({
     id: agentId,
-    type: 'system',
+    type: props.agentType || 'system',
     name: agentName.value.trim().replace(/\s+/g, '_'),
     prompt: buildFinalPrompt(),
     avatar: selectedAvatarUrl.value || '',

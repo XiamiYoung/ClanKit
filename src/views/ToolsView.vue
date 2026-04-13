@@ -416,23 +416,34 @@
     />
 
   </div>
+
+  <!-- Preview limit modal -->
+  <PreviewLimitModal
+    :visible="showPreviewLimitModal"
+    :message="previewLimitMessage"
+    @close="showPreviewLimitModal = false"
+  />
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useToolsStore } from '../stores/tools'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import { useConfigStore } from '../stores/config'
 import { useI18n } from '../i18n/useI18n'
 import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
 import { useChatToCreate } from '../composables/useChatToCreate'
+import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
 const toolsStore = useToolsStore()
 const configStore = useConfigStore()
 const { t } = useI18n()
 const { startChatGuide } = useChatToCreate()
 const refreshing = ref(false)
+const showPreviewLimitModal = ref(false)
+const previewLimitMessage = ref('')
 
 // Resolve display name/description for built-in tools via i18n
 function toolDisplayName(tool) {
@@ -543,6 +554,11 @@ const canSave = computed(() => {
 })
 
 function openAdd() {
+  if (isLimitEnforced() && toolsStore.tools.length >= PREVIEW_LIMITS.maxTools) {
+    previewLimitMessage.value = t('limits.maxTools')
+    showPreviewLimitModal.value = true
+    return
+  }
   editingTool.value = null
   form.value = emptyForm()
   saveError.value = ''

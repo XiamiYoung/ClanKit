@@ -106,6 +106,7 @@ export const en = {
     copiedToClipboard: '已复制到剪贴板',
     clickToOpen: '点击打开',
     openFile: 'Open File',
+    openInAiDoc: 'Open in AI Docs',
     openFolder: 'Open Folder',
     copied: '已复制',
     copiedExclaim: '已复制！',
@@ -517,6 +518,9 @@ export const en = {
     genericSettings: 'Generic Settings',
     advancedSettings: 'Advanced',
     maxOutputTokens: 'Max Output Tokens',
+    modelMaxOutputTokensHint: 'Override max output tokens for this model. Leave empty for default.',
+    modelMaxOutputFallbackHint: 'Default value — exact limit unknown for this model. Will auto-adjust via retry if too high.',
+    maxOutputTokensProviderFallback: '(fallback for models without override)',
     temperature: 'Temperature',
     hardLimit: 'Max: {count}',
     selectModelToTest: 'Select a model to test...',
@@ -765,6 +769,69 @@ Rules:
 - Be precise — only change what's needed
 - For code, preserve functionality while improving readability
 - For partial selections, only modify the selected section`,
+    builtinAnalystName: 'Analyst',
+    builtinAnalystDescription: 'Professional psychological analyst specializing in deep character analysis, personality profiling, and relationship dynamics from imported chat history.',
+    builtinAnalystPrompt: `You are Analyst, a senior character analyst with over 20 years of experience integrating clinical psychology, behavioral science, and social dynamics research.
+
+Your analytical framework:
+- Evidence-based: every conclusion is anchored to specific behavioral evidence from the conversation data
+- Multi-layered: surface behavior → underlying patterns → core personality structure → deep needs and fears
+- Nuanced: you acknowledge complexity, contradiction, and contextual factors
+- Clinical objectivity combined with genuine empathic insight
+- You illuminate without judging — your role is to understand, not to evaluate morally
+
+Your personality assessment toolkit:
+- Big Five (OCEAN) — scored with behavioral evidence per trait
+- MBTI — assessed through communication style, decision patterns, and social orientation
+- Attachment theory — secure, anxious, avoidant, or disorganized indicators
+- Core motivational needs (belonging, autonomy, recognition, safety, mastery)
+- Communication style fingerprinting (direct vs indirect, assertive vs tentative, formal vs casual)
+- Emotional regulation patterns and stress response signatures
+
+When conducting an analysis, follow this workflow precisely:
+1. Call analyze_agent_history with action="stats" to understand the dataset scope and structure
+2. Call analyze_agent_history with action="messages" repeatedly across all pages to read the complete conversation history
+3. After reading all data, synthesize findings into a comprehensive professional report
+
+Your report structure (write as a Markdown file to the suggested_output_path):
+# [Agent Name] — Character Analysis Report
+
+## Executive Summary
+A 3-4 sentence portrait of the core personality.
+
+## Data Overview
+Dataset statistics, time range, conversation density.
+
+## Personality Profile
+### Big Five Assessment
+Score each dimension with specific evidence.
+### MBTI Type
+Argue for a specific type (e.g., INTJ) with concrete behavioral evidence.
+### Attachment Style
+Primary and secondary attachment patterns observed.
+
+## Communication Patterns
+Linguistic fingerprint, topic preferences, response styles, humor, conflict behavior.
+
+## Emotional Architecture
+Emotional range, regulation capacity, recurring emotional themes, triggers.
+
+## Core Needs & Motivations
+What drives this person. What they seek in relationships and interactions.
+
+## Relationship Dynamics
+How they relate to others — peer dynamics, authority, intimacy.
+
+## Growth Edges
+Areas of apparent psychological challenge or stuck patterns (framed constructively).
+
+## Notable Quotes
+5-7 verbatim quotes that best illuminate the personality.
+
+## Analyst Notes
+Any caveats, uncertainties, or contextual factors affecting interpretation.
+
+Always reply in the same language as the user's most recent message.`,
     builtinClankPrompt: `You are Clank, the built-in default system agent in ClankAI and the primary partner users meet by default.
 
   Your role and background:
@@ -898,6 +965,13 @@ Rules:
       extractionFailed: 'Extraction failed.',
       analysisFailed: 'Analysis failed.',
       chatImportEnvNotSetUp: 'Chat import environment not set up. Please set up the environment first.',
+      saveHistoryDisabledWarning: 'Agents created without saved chat history cannot use AI analysis later.',
+    },
+    analysis: {
+      chatTitle: 'Analysis: {name}',
+      readyMessage: "I'm ready to analyze {name}'s imported chat history. Would you like me to start a comprehensive analysis now?",
+      noHistory: 'This agent has no imported chat history, so analysis is unavailable. Re-import with chat history saved.',
+      buttonTitle: 'AI Analysis',
     },
     groupCreator: {
       title: 'Add Multiple Agents',
@@ -2209,6 +2283,20 @@ Rules:
     skipConfirmOk: 'Skip Anyway',
     step: 'Step {current} of {total}',
   },
+  limits: {
+    title: 'Preview Version Limit',
+    maxChats: 'You\'ve reached the chat limit (10) for the preview version.',
+    maxFolders: 'You\'ve reached the folder limit (5) for the preview version.',
+    maxAgents: 'You\'ve reached the agent limit (10) for the preview version.',
+    maxSkills: 'You\'ve reached the skill limit (20) for the preview version.',
+    maxMcpServers: 'You\'ve reached the MCP server limit (5) for the preview version.',
+    maxKnowledgeBases: 'You\'ve reached the knowledge base limit (3) for the preview version.',
+    maxTools: 'You\'ve reached the tool limit (10) for the preview version.',
+    maxProviders: 'You\'ve reached the provider limit (3) for the preview version.',
+    maxVoiceSecsPerDay: 'You\'ve used your 10-minute daily voice call allowance for the preview version.',
+    maxVoiceSecsPerDayAutoStop: 'Your 10-minute daily voice call allowance has been used up. The call has been ended.',
+    aiDocsAssistant: 'AI Docs Assistant is not available in the preview version.',
+  },
 }
 
 // This line stays the same
@@ -2321,6 +2409,7 @@ export const zh = {
     copiedToClipboard: 'Copied to clipboard',
     clickToOpen: 'Click to open',
     openFile: '打开文件',
+    openInAiDoc: '在AI文档中打开',
     openFolder: '打开文件夹',
     copied: 'Copied',
     copiedExclaim: 'Copied!',
@@ -2732,6 +2821,9 @@ export const zh = {
     genericSettings: '通用设置',
     advancedSettings: '高级',
     maxOutputTokens: '最大输出 tokens',
+    modelMaxOutputTokensHint: '覆盖此模型的最大输出 tokens，留空使用默认值。',
+    modelMaxOutputFallbackHint: '默认值 — 此模型的实际限制未知，过高时会自动重试调整。',
+    maxOutputTokensProviderFallback: '（未单独设置的模型使用此值）',
     temperature: '温度',
     hardLimit: '最大: {count}',
     selectModelToTest: '选择模型进行测试...',
@@ -2980,6 +3072,69 @@ export const zh = {
 - 精确执行——仅改变所需的内容
 - 对于代码，保留功能同时提高可读性
 - 对于部分选择，仅修改选中的部分`,
+    builtinAnalystName: '分析大师',
+    builtinAnalystDescription: '专业心理分析师，擅长从聊天记录中进行深度人格分析、心理侧写与关系动态解读。',
+    builtinAnalystPrompt: `你是「分析大师」，一位融合临床心理学、行为科学与社会动力学的资深人格分析专家，从业逾20年。
+
+你的分析框架：
+- 循证原则：每一个结论都有具体的行为证据支撑
+- 多层次深入：表面行为 → 深层模式 → 核心人格结构 → 深层需求与恐惧
+- 细腻入微：承认复杂性、矛盾性与情境因素
+- 临床客观性与真实共情并重
+- 照亮而不评判——你的使命是理解，而非道德裁判
+
+你的人格评估工具箱：
+- 大五人格（OCEAN）——为每个维度提供行为证据评分
+- MBTI——通过沟通风格、决策模式和社会取向进行评估
+- 依恋理论——识别安全型、焦虑型、回避型或混乱型依恋迹象
+- 核心动机需求（归属、自主、认可、安全感、掌控感）
+- 沟通风格指纹（直接vs间接、自信vs试探性、正式vs随意）
+- 情绪调节模式与压力反应特征
+
+分析工作流程（严格遵循）：
+1. 调用 analyze_agent_history，action="stats"，了解数据集规模
+2. 多次调用 analyze_agent_history，action="messages"，读取全部历史记录
+3. 整合所有数据，生成专业分析报告
+
+报告结构（以 Markdown 文件写入 suggested_output_path）：
+# [Agent 名称] — 人格分析报告
+
+## 核心摘要
+3-4句话勾勒出核心人格画像。
+
+## 数据概览
+数据集统计、时间跨度、对话密度。
+
+## 人格画像
+### 大五人格评估
+对每个维度评分并提供具体证据。
+### MBTI 类型
+论证具体类型（如 INTJ），附行为证据。
+### 依恋风格
+主要及次要依恋模式。
+
+## 沟通模式
+语言指纹、话题偏好、回应风格、幽默感、冲突行为。
+
+## 情绪结构
+情绪范围、调节能力、反复出现的情绪主题与触发因素。
+
+## 核心需求与动机
+驱动这个人的力量，以及他/她在关系与互动中的追求。
+
+## 关系动态
+与他人互动的方式——同伴关系、权威关系、亲密度。
+
+## 成长空间
+明显的心理困境或固着模式（以建设性方式呈现）。
+
+## 典型语录
+5-7句最能体现其人格的原始引用。
+
+## 分析备注
+影响解读的注意事项、不确定因素或情境因素。
+
+始终用用户最近一条消息的语言回复。`,
     builtinClankPrompt: `你是 Clank，ClankAI 内置的默认系统 Agent，也是用户进入应用后默认会遇到的主力搭档。
 
   你的背景与定位：
@@ -3113,6 +3268,13 @@ export const zh = {
       extractionFailed: '提取失败。',
       analysisFailed: '分析失败。',
       chatImportEnvNotSetUp: '聊天导入环境未配置，请先完成环境配置。',
+      saveHistoryDisabledWarning: '未保存聊天记录的数字人后续无法使用 AI 分析功能。',
+    },
+    analysis: {
+      chatTitle: '数字人分析：{name}',
+      readyMessage: '我已准备好分析{name}导入的聊天记录。要现在开始全面分析吗？',
+      noHistory: '这个数字人没有导入的聊天记录，无法进行分析。请重新导入并勾选保存聊天记录。',
+      buttonTitle: 'AI 分析',
     },
     groupCreator: {
       title: '批量添加数字人',
@@ -4437,5 +4599,19 @@ export const zh = {
     skipConfirmMessage: '我们强烈建议完成初始设置以获得最佳体验。你随时可以在设置中重新配置。',
     skipConfirmOk: '仍然跳过',
     step: '第 {current} 步，共 {total} 步',
+  },
+  limits: {
+    title: '预览版限制',
+    maxChats: '当前为预览版，对话最多创建 10 个。',
+    maxFolders: '当前为预览版，文件夹最多创建 5 个。',
+    maxAgents: '当前为预览版，Agent 最多创建 10 个。',
+    maxSkills: '当前为预览版，技能最多创建 20 个。',
+    maxMcpServers: '当前为预览版，MCP 服务器最多添加 5 个。',
+    maxKnowledgeBases: '当前为预览版，知识库最多创建 3 个。',
+    maxTools: '当前为预览版，工具最多创建 10 个。',
+    maxProviders: '当前为预览版，服务商最多添加 3 个。',
+    maxVoiceSecsPerDay: '当前为预览版，每日语音通话时长最多 10 分钟，今日时长已用完。',
+    maxVoiceSecsPerDayAutoStop: '今日 10 分钟语音通话时长已用完，通话已自动结束。',
+    aiDocsAssistant: '当前为预览版，AI 文档助手功能暂不可用。',
   },
 }

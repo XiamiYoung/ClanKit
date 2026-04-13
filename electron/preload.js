@@ -50,6 +50,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadModelCache: () => ipcRenderer.invoke('models:load-cache'),
   saveModelCache: (data) => ipcRenderer.invoke('models:save-cache', data),
   enrichModelContext: (params) => ipcRenderer.invoke('models:enrich-context', params),
+  getDefaultMaxOutputTokens: (modelId) => ipcRenderer.invoke('models:get-default-max-output-tokens', modelId),
+  getAllDefaultMaxOutputTokens: () => ipcRenderer.invoke('models:get-all-default-max-output-tokens'),
 
   // ── Skills (filesystem-based) ───────────────────────────────────────────
   skills: {
@@ -262,6 +264,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('agent:import-progress', (_e, data) => cb(data))
       return () => ipcRenderer.removeAllListeners('agent:import-progress')
     },
+  },
+
+  // ── Agent Analysis ─────────────────────────────────────────────────────────
+  agentAnalysis: {
+    hasHistory: (p) => ipcRenderer.invoke('agent:analysis-has-history', p),
   },
 
   // ── Window ─────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-ClankAI is a multi-LLM desktop chat application built with **Electron + Vue 3 + Vite**. It supports Anthropic (Claude), OpenRouter, and OpenAI-compatible backends. Features include agent management, MCP server integration, HTTP tools, knowledge base (RAG via Pinecone), skills, and an agentic tool-use loop.
+ClankAI is a multi-LLM desktop chat application built with **Electron + Vue 3 + Vite**. It supports Anthropic (Claude), OpenRouter, and OpenAI-compatible backends. Features include agent management, MCP server integration, HTTP tools, knowledge base (RAG via local embeddings and vectra vector store), skills, and an agentic tool-use loop.
 
 ## Tech Stack
 
@@ -236,7 +236,7 @@ Every `agentRun` from `_buildAgentRuns()` must be fully isolated. NEVER share be
 | Skills | Filtered by `agent.requiredSkillIds` |
 | MCP servers | Filtered by `agent.requiredMcpServerIds` |
 | HTTP tools | Filtered by `agent.requiredToolIds` |
-| Knowledge (RAG) | Independent Pinecone query per agent |
+| Knowledge (RAG) | Independent local vector store query per agent |
 | Conversation view | Other agents' messages prefixed with `[AgentName]: ` |
 | AgentLoop instance | `new AgentLoop(loopConfig)` per agent, keyed `chatId:agentId` |
 

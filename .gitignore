@@ -51,6 +51,11 @@ scripts/*
 !scripts/run-electron.js
 !scripts/compile-bytecode.js
 !scripts/after-pack.js
+!scripts/check-models-staleness.js
+!scripts/update-models.js
+
+# Model staleness check flag (dev-only)
+.models-stale
 
 # Docs
 docs/

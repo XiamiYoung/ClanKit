@@ -7,14 +7,15 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "dev": "concurrently \"vite\" \"wait-on tcp:5173 && node scripts/run-electron.js\"",
+    "dev": "concurrently \"vite\" \"wait-on tcp:5173 && node scripts/run-electron.js\" \"node scripts/check-models-staleness.js\"",
     "build": "vite build",
     "preview": "vite preview",
     "electron": "node scripts/run-electron.js",
     "dist:win": "npm run build && npx electron-builder --win --publish=never",
     "dist:mac": "npm run build && npx electron-builder --mac --publish=never",
     "dist:all": "npm run build && npx electron-builder --win --mac --publish=never",
-    "bundle:mcporter": "cd ../mcporter && node_modules/.bin/tsc -p tsconfig.build.json && cd ../ClankAI && node_modules/.bin/esbuild ../mcporter/src/index.ts --bundle --format=esm --platform=node --main-fields=module,main \"--banner:js=import { createRequire as __cjsRequire } from 'module'; const require = __cjsRequire(import.meta.url);\" --outfile=electron/agent/mcp/mcporter-bundle.mjs"
+    "bundle:mcporter": "cd ../mcporter && node_modules/.bin/tsc -p tsconfig.build.json && cd ../ClankAI && node_modules/.bin/esbuild ../mcporter/src/index.ts --bundle --format=esm --platform=node --main-fields=module,main \"--banner:js=import { createRequire as __cjsRequire } from 'module'; const require = __cjsRequire(import.meta.url);\" --outfile=electron/agent/mcp/mcporter-bundle.mjs",
+    "update-models": "node scripts/update-models.js"
   },
   "build": {
     "appId": "com.clankai.app",

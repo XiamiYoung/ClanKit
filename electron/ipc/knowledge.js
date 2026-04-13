@@ -1,10 +1,11 @@
 /**
  * IPC handlers for local Knowledge Base / RAG.
  * Channels: knowledge:*
- * Exports queryRAG() for use by ipc/agent.js.
  *
- * Replaces the former Pinecone-based implementation with fully local
- * vector storage (vectra), local embeddings (transformers.js), and
+ * Exports queryRAG(), uploadFileToKB(), addTextToKB() for use by
+ * ipc/agent.js and agent tools (KnowledgeTool).
+ *
+ * Fully local: vectra vector storage, transformers.js embeddings,
  * hybrid search (vector + BM25 via minisearch with CJK bigram tokenizer).
  */
 const path = require('path')
@@ -73,7 +74,126 @@ async function queryRAG({ query, knowledgeBaseId, topK = 5 }) {
   }
 }
 
-// ── Document parsing & chunking (preserved from original) ────────────────────
+// ── Reusable pipeline functions (used by IPC handlers + KnowledgeTool) ───────
+
+/**
+ * Upload a file to a knowledge base: parse → chunk → embed → store.
+ * @param {string} kbId
+ * @param {string} filePath
+ * @param {Function} [onProgress] - optional progress callback ({ stage, current, total, documentName })
+ * @returns {{ success: boolean, name: string, chunkCount?: number, error?: string }}
+ */
+async function uploadFileToKB(kbId, filePath, onProgress) {
+  const name = path.basename(filePath)
+  const notify = onProgress || (() => {})
+
+  notify({ stage: 'parsing', current: 0, total: 0, documentName: name })
+  const parsed = _parseFileContent(filePath)
+  const content = await parsed.contentPromise
+
+  if (!content.trim()) {
+    return { success: false, name, error: 'No text content could be extracted from this file' }
+  }
+
+  const chunks = _chunkText(content)
+  const docId = `doc_${Date.now()}_${name.replace(/[^a-z0-9]/gi, '_')}`
+
+  const vectors = []
+  const ftChunks = []
+  for (let i = 0; i < chunks.length; i++) {
+    notify({ stage: 'embedding', current: i + 1, total: chunks.length, documentName: name })
+    const vector = await localEmbedding.embed(chunks[i])
+    const chunkId = `${docId}_chunk_${i}`
+    vectors.push({
+      id: chunkId,
+      vector,
+      metadata: { text: chunks[i], documentId: docId, documentName: name, chunkIndex: i },
+    })
+    ftChunks.push({
+      id: chunkId,
+      text: chunks[i],
+      documentName: name,
+      documentId: docId,
+      chunkIndex: i,
+    })
+  }
+
+  notify({ stage: 'indexing', current: chunks.length, total: chunks.length, documentName: name })
+  await localVectorStore.addVectors(kbId, vectors)
+
+  const ftIndex = _getFulltextIndex(kbId)
+  hybridSearch.addToIndex(ftIndex, ftChunks)
+  _saveFulltextIndex(kbId, ftIndex)
+
+  localVectorStore.addDocument(kbId, {
+    id: docId,
+    name,
+    type: (parsed.ext || 'txt').toUpperCase(),
+    size: parsed.size,
+    chunkCount: chunks.length,
+    uploadedAt: Date.now(),
+    filePath,
+  })
+
+  logger.info('uploadFileToKB processed', { name, chunks: chunks.length })
+  return { success: true, name, chunkCount: chunks.length }
+}
+
+/**
+ * Add raw text content to a knowledge base: chunk → embed → store.
+ * @param {string} kbId
+ * @param {string} text
+ * @param {string} [title] - document title (defaults to timestamp)
+ * @returns {{ success: boolean, name: string, chunkCount?: number, error?: string }}
+ */
+async function addTextToKB(kbId, text, title) {
+  if (!text || !text.trim()) {
+    return { success: false, name: title || '', error: 'Text content is empty' }
+  }
+
+  const name = title || `text_${Date.now()}`
+  const chunks = _chunkText(text)
+  const docId = `doc_${Date.now()}_${name.replace(/[^a-z0-9]/gi, '_')}`
+
+  const vectors = []
+  const ftChunks = []
+  for (let i = 0; i < chunks.length; i++) {
+    const vector = await localEmbedding.embed(chunks[i])
+    const chunkId = `${docId}_chunk_${i}`
+    vectors.push({
+      id: chunkId,
+      vector,
+      metadata: { text: chunks[i], documentId: docId, documentName: name, chunkIndex: i },
+    })
+    ftChunks.push({
+      id: chunkId,
+      text: chunks[i],
+      documentName: name,
+      documentId: docId,
+      chunkIndex: i,
+    })
+  }
+
+  await localVectorStore.addVectors(kbId, vectors)
+
+  const ftIndex = _getFulltextIndex(kbId)
+  hybridSearch.addToIndex(ftIndex, ftChunks)
+  _saveFulltextIndex(kbId, ftIndex)
+
+  localVectorStore.addDocument(kbId, {
+    id: docId,
+    name,
+    type: 'TEXT',
+    size: Buffer.byteLength(text, 'utf8'),
+    chunkCount: chunks.length,
+    uploadedAt: Date.now(),
+  })
+
+  logger.info('addTextToKB processed', { name, chunks: chunks.length })
+  return { success: true, name, chunkCount: chunks.length }
+}
+
+// ── Document parsing & chunking ─────────────────────────────────────────────
 
 function _parseFileContent(filePath) {
   const name = path.basename(filePath)
@@ -249,75 +369,18 @@ function register() {
     const modelCheck = localEmbedding.isModelReady()
     if (!modelCheck.ready) return { success: false, error: 'Embedding model not downloaded' }
 
-    const results = []
-
     const sendProgress = (data) => {
       try { event.sender.send('knowledge:upload-progress', data) } catch {}
     }
 
+    const results = []
     for (const filePath of filePaths) {
-      const name = path.basename(filePath)
       try {
-        // Parse file
-        sendProgress({ stage: 'parsing', current: 0, total: 0, documentName: name })
-        const parsed = _parseFileContent(filePath)
-        const content = await parsed.contentPromise
-
-        if (!content.trim()) {
-          results.push({ name, error: 'No text content could be extracted from this file' })
-          continue
-        }
-
-        // Chunk text
-        const chunks = _chunkText(content)
-        const docId = `doc_${Date.now()}_${name.replace(/[^a-z0-9]/gi, '_')}`
-
-        // Embed all chunks locally
-        const vectors = []
-        const ftChunks = []
-        for (let i = 0; i < chunks.length; i++) {
-          sendProgress({ stage: 'embedding', current: i + 1, total: chunks.length, documentName: name })
-          const vector = await localEmbedding.embed(chunks[i])
-          const chunkId = `${docId}_chunk_${i}`
-          vectors.push({
-            id: chunkId,
-            vector,
-            metadata: { text: chunks[i], documentId: docId, documentName: name, chunkIndex: i },
-          })
-          ftChunks.push({
-            id: chunkId,
-            text: chunks[i],
-            documentName: name,
-            documentId: docId,
-            chunkIndex: i,
-          })
-        }
-
-        // Store vectors
-        sendProgress({ stage: 'indexing', current: chunks.length, total: chunks.length, documentName: name })
-        await localVectorStore.addVectors(kbId, vectors)
-
-        // Update fulltext index
-        const ftIndex = _getFulltextIndex(kbId)
-        hybridSearch.addToIndex(ftIndex, ftChunks)
-        _saveFulltextIndex(kbId, ftIndex)
-
-        // Save document metadata
-        localVectorStore.addDocument(kbId, {
-          id: docId,
-          name,
-          type: (parsed.ext || 'txt').toUpperCase(),
-          size: parsed.size,
-          chunkCount: chunks.length,
-          uploadedAt: Date.now(),
-          filePath,
-        })
-
-        results.push({ name, success: true, chunkCount: chunks.length })
-        logger.info('knowledge:upload-files processed', { name, chunks: chunks.length })
+        const result = await uploadFileToKB(kbId, filePath, sendProgress)
+        results.push(result)
       } catch (err) {
-        logger.error('knowledge:upload-files error for file', { name, error: err.message })
-        results.push({ name, error: err.message })
+        logger.error('knowledge:upload-files error for file', { name: path.basename(filePath), error: err.message })
+        results.push({ name: path.basename(filePath), error: err.message })
       }
     }
 
@@ -423,4 +486,4 @@ function register() {
   })
 }
 
-module.exports = { register, queryRAG }
+module.exports = { register, queryRAG, uploadFileToKB, addTextToKB }

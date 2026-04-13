@@ -267,6 +267,7 @@ export const useConfigStore = defineStore('config', () => {
       baseURL: preset.defaultBaseURL || '',
       model: preset.defaultModels[0] || '',
       settings,
+      modelSettings: {},
       isActive: false,
       testedAt: null,
     }
@@ -288,6 +289,7 @@ export const useConfigStore = defineStore('config', () => {
     return {
       ...provider,
       settings: sanitizedSettings,
+      modelSettings: provider.modelSettings || {},
     }
   }
 

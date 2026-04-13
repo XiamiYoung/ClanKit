@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div>
     <!-- ── User message ─────────────────────────────────────────────────────── -->
     <template v-if="message.role === 'user'">
@@ -447,14 +447,18 @@ import DOMPurify from 'dompurify'
 import BabylonViewer from './BabylonViewer.vue'
 import PermissionPrompt from './PermissionPrompt.vue'
 import PlanCard from './PlanCard.vue'
+import { useRouter } from 'vue-router'
 import { useChatsStore } from '../../stores/chats'
 import { useConfigStore } from '../../stores/config'
 import { useAgentsStore } from '../../stores/agents'
+import { useObsidianStore } from '../../stores/obsidian'
 import { useI18n } from '../../i18n/useI18n'
 
+const router = useRouter()
 const chatsStore = useChatsStore()
 const configStore = useConfigStore()
 const agentsStore = useAgentsStore()
+const obsidianStore = useObsidianStore()
 const { t } = useI18n()
 
 const props = defineProps({
@@ -627,7 +631,15 @@ function stripBase64(text) {
 // File-path regex: matches files with known extensions OR directory paths (trailing / or \)
 // Files:  ~/path/file.ext, /abs/path/file.ext, C:\path\file.ext, \\server\share\file.ext
 // Dirs:   ~/dir/sub/, /abs/path/dir/, C:\path\dir\, \\server\share\  (2+ segments)
-const FILE_PATH_RE = /(?:(?:~\/[\w.\/\-]+|\/(?:[\w.\-]+\/)+[\w.\-]+|[A-Z]:\\(?:[\w.\- ]+\\)*[\w.\-]+|\\\\[\w.\-]+(?:\\[\w.\-]+)+)\.(?:md|txt|json|jsx|tsx|toml|yaml|yml|html|scss|sass|bash|conf|java|svelte|vue|ts|js|py|rb|go|rs|cpp|hpp|css|xml|ini|cfg|log|csv|sql|zsh|env|sh|c|h)|(?:~\/(?:[\w.\-]+\/)+|\/(?:[\w.\-]+\/){2,}|[A-Z]:\\(?:[\w.\- ]+\\){2,}|\\\\[\w.\-]+(?:\\[\w.\-]+)+\\)(?=[\s.,;:!?)'"}\]]|$))/g
+const FILE_PATH_RE = /(?:(?:~\/[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\/\-]+|\/(?:[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+\/)+[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+|[A-Z]:\\(?:[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\- ]+\\)*[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+|\\\\[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+(?:\\[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+)+)\.(?:md|txt|json|jsx|tsx|toml|yaml|yml|html|scss|sass|bash|conf|java|svelte|vue|ts|js|py|rb|go|rs|cpp|hpp|css|xml|ini|cfg|log|csv|sql|zsh|env|sh|c|h)|(?:~\/(?:[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+\/)+|\/(?:[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+\/){2,}|[A-Z]:\\(?:[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\- ]+\\){2,}|\\\\[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+(?:\\[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+)+\\)(?=[\s.,;:!?)'"\]}]|$))/gu
+
+function _normSlash(p) { return p.replace(/\\/g, '/').toLowerCase() }
+
+function _isUnderAidocDir(filePath) {
+  const docPath = configStore.config.DoCPath
+  if (!docPath) return false
+  return _normSlash(filePath).startsWith(_normSlash(docPath))
+}
 
 function injectFilePathChips(html) {
   // Split HTML into tags vs text runs so we never match inside tags or <pre>/<a>
@@ -649,7 +661,10 @@ function injectFilePathChips(html) {
     // Replace file paths with chips containing open buttons (use data-* for event delegation)
     parts[i] = p.replace(FILE_PATH_RE, (path) => {
       const escaped = path.replace(/"/g, '&quot;')
-      return `${path}<button class="file-path-btn file-path-open" data-action="open-file" data-path="${escaped}" title="${t('common.openFile')}">📄</button><button class="file-path-btn file-path-folder" data-action="open-folder" data-path="${escaped}" title="${t('common.openFolder')}">📁</button>`
+      const aidocBtn = _isUnderAidocDir(path)
+        ? `<button class="file-path-btn file-path-aidoc" data-action="open-in-aidoc" data-path="${escaped}" title="${t('common.openInAiDoc')}">📝</button>`
+        : ''
+      return `${path}${aidocBtn}<button class="file-path-btn file-path-open" data-action="open-file" data-path="${escaped}" title="${t('common.openFile')}">📄</button><button class="file-path-btn file-path-folder" data-action="open-folder" data-path="${escaped}" title="${t('common.openFolder')}">📁</button>`
     })
   }
   return parts.join('')
@@ -700,7 +715,11 @@ function handleContentClick(e) {
     const action = fpBtn.dataset.action
     const filePath = fpBtn.dataset.path
     if (!filePath) return
-    if (action === 'open-file' && window.electronAPI?.openFile) {
+    if (action === 'open-in-aidoc') {
+      const fileName = filePath.split(/[/\\]/).pop()
+      obsidianStore.openFile(filePath, fileName)
+      router.push('/notes')
+    } else if (action === 'open-file' && window.electronAPI?.openFile) {
       window.electronAPI.openFile(filePath)
     } else if (action === 'open-folder' && window.electronAPI?.showInFolder) {
       window.electronAPI.showInFolder(filePath)

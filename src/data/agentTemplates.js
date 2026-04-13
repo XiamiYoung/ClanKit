@@ -194,7 +194,7 @@ const EN_TEMPLATES = [
 ## Technical Arsenal
 - **ML Frameworks**: TensorFlow, PyTorch, Scikit-learn, Hugging Face
 - **LLM Integration**: OpenAI, Anthropic, Cohere, local models (Ollama)
-- **Vector DBs**: Pinecone, Weaviate, Chroma, FAISS
+- **Vector DBs**: Weaviate, Chroma, FAISS, Vectra
 - **MLOps**: MLflow, Kubeflow, automated retraining pipelines
 - **RAG Systems**: document chunking, embedding strategies, retrieval optimisation
 
@@ -1441,7 +1441,7 @@ const ZH_TEMPLATES = [
 ## 技术栈
 - TensorFlow、PyTorch、Hugging Face、Scikit-learn
 - LLM集成：OpenAI、Anthropic、本地模型（Ollama）
-- 向量数据库：Pinecone、Weaviate、Chroma
+- 向量数据库：Weaviate、Chroma、FAISS、Vectra
 - MLOps：MLflow、自动化再训练流水线
 
 ## 沟通风格

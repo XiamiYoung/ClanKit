@@ -14,6 +14,7 @@ import { getDefaultVoiceForLocale } from '../utils/edgeVoices'
 export const BUILTIN_SYSTEM_AGENT_ID = '__default_system__'
 export const BUILTIN_USER_AGENT_ID   = '__default_user__'
 export const BUILTIN_DOC_EDITOR_ID   = '__doc_editor__'
+export const BUILTIN_ANALYST_ID      = '__analyst__'
 export const BUILTIN_SYSTEM_ICON_ID  = '__system_icon__'
 
 function buildBuiltinSystemCopy(locale, utilityModel, capabilities) {
@@ -56,6 +57,34 @@ function buildBuiltinDocEditorCopy(locale, utilityModel) {
     type: 'system',
     name: builtinName,
     avatar: 'a3',
+    description,
+    prompt,
+    providerId: utilityModel?.provider || null,
+    modelId: utilityModel?.model || null,
+    voiceId: getDefaultVoiceForLocale(locale),
+    isDefault: false,
+    isBuiltin: true,
+    createdAt: 0,
+    updatedAt: 0,
+    requiredToolIds: [],
+    requiredSkillIds: [],
+    requiredMcpServerIds: [],
+    requiredKnowledgeBaseIds: [],
+  }
+}
+
+function buildBuiltinAnalystCopy(locale, utilityModel) {
+  const isChinese = String(locale || 'en').startsWith('zh')
+  const messages = isChinese ? zh : en
+  const builtinName = messages.agents.builtinAnalystName || 'Analyst'
+  const description = messages.agents.builtinAnalystDescription || ''
+  const prompt = messages.agents.builtinAnalystPrompt || ''
+
+  return {
+    id: BUILTIN_ANALYST_ID,
+    type: 'system',
+    name: builtinName,
+    avatar: 'a5',
     description,
     prompt,
     providerId: utilityModel?.provider || null,
@@ -189,6 +218,55 @@ export const useAgentsStore = defineStore('agents', () => {
     }
   }
 
+  function createBuiltinAnalystAgent() {
+    return buildBuiltinAnalystCopy(
+      configStore.language || 'en',
+      configStore.config.utilityModel || {}
+    )
+  }
+
+  function mergeBuiltinAnalystAgent(existing) {
+    const builtin = createBuiltinAnalystAgent()
+    const previous = existing || {}
+    return {
+      ...previous,
+      ...builtin,
+      providerId: previous.providerId ?? builtin.providerId,
+      modelId: previous.modelId ?? builtin.modelId,
+      isBuiltin: true,
+      categoryIds: Array.isArray(previous.categoryIds) ? previous.categoryIds : [],
+      createdAt: previous.createdAt ?? builtin.createdAt,
+      updatedAt: previous.updatedAt ?? builtin.updatedAt,
+    }
+  }
+
+  function builtinAnalystAgentNeedsSync(current, next) {
+    if (!current) return true
+    return current.name !== next.name ||
+      current.avatar !== next.avatar ||
+      current.description !== next.description ||
+      current.voiceId !== next.voiceId
+  }
+
+  async function syncBuiltinAnalystAgent(persistChanges = true) {
+    const analystIdx = agents.value.findIndex(p => p.id === BUILTIN_ANALYST_ID)
+    if (analystIdx === -1 || builtinSyncInFlight) return
+    const current = agents.value[analystIdx]
+    const next = mergeBuiltinAnalystAgent(current)
+    if (!builtinAnalystAgentNeedsSync(current, next)) return
+
+    builtinSyncInFlight = true
+    agents.value[analystIdx] = {
+      ...next,
+      updatedAt: Date.now(),
+    }
+    try {
+      if (persistChanges) await persist()
+    } finally {
+      builtinSyncInFlight = false
+    }
+  }
+
   function builtinSystemAgentNeedsSync(current, next) {
     if (!current) return true
     return current.name !== next.name ||
@@ -264,6 +342,14 @@ export const useAgentsStore = defineStore('agents', () => {
       list[docIdx] = mergeBuiltinDocEditorAgent(list[docIdx])
     } else {
       list.push(createBuiltinDocEditorAgent())
+    }
+
+    // Ensure built-in analyst agent exists
+    const analystIdx = list.findIndex(p => p.id === BUILTIN_ANALYST_ID)
+    if (analystIdx >= 0) {
+      list[analystIdx] = mergeBuiltinAnalystAgent(list[analystIdx])
+    } else {
+      list.push(createBuiltinAnalystAgent())
     }
 
     // Remove legacy built-in default user agent from disk data
@@ -456,6 +542,7 @@ export const useAgentsStore = defineStore('agents', () => {
     () => {
       syncBuiltinSystemAgent(true)
       syncBuiltinDocEditorAgent(true)
+      syncBuiltinAnalystAgent(true)
     }
   )
 

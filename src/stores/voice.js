@@ -1,5 +1,8 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
+
+const VOICE_DAILY_KEY = 'clankai_voice_daily'
 
 export const useVoiceStore = defineStore('voice', () => {
   const isCallActive = ref(false)
@@ -22,6 +25,35 @@ export const useVoiceStore = defineStore('voice', () => {
   const callWhisperCalls = ref(0)
   const callVoiceInputTokens = ref(0)
   const callVoiceOutputTokens = ref(0)
+
+  // Daily voice usage tracking (preview limit)
+  const voiceDailySecsUsed = ref(0)
+
+  function _loadVoiceDaily() {
+    try {
+      const raw = localStorage.getItem(VOICE_DAILY_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw)
+      const today = new Date().toISOString().slice(0, 10)
+      if (saved.date === today) voiceDailySecsUsed.value = saved.secsUsed || 0
+      // else: new day, keep 0
+    } catch {}
+  }
+
+  function _saveVoiceDaily() {
+    const today = new Date().toISOString().slice(0, 10)
+    localStorage.setItem(VOICE_DAILY_KEY, JSON.stringify({ date: today, secsUsed: voiceDailySecsUsed.value }))
+  }
+
+  const isDailyVoiceLimitReached = computed(() =>
+    isLimitEnforced() && voiceDailySecsUsed.value >= PREVIEW_LIMITS.maxVoiceSecsPerDay
+  )
+
+  const voiceDailySecsRemaining = computed(() =>
+    Math.max(0, PREVIEW_LIMITS.maxVoiceSecsPerDay - voiceDailySecsUsed.value)
+  )
+
+  _loadVoiceDaily()
 
   function startCall(chatId, agentId, agentName, modelId) {
     isCallActive.value = true
@@ -63,6 +95,11 @@ export const useVoiceStore = defineStore('voice', () => {
     if (usage.whisperCalls)        callWhisperCalls.value        += usage.whisperCalls
     if (usage.voiceInputTokens)    callVoiceInputTokens.value    += usage.voiceInputTokens
     if (usage.voiceOutputTokens)   callVoiceOutputTokens.value   += usage.voiceOutputTokens
+    // Accumulate daily usage for preview limit tracking
+    if (usage.whisperSecs && isLimitEnforced()) {
+      voiceDailySecsUsed.value += usage.whisperSecs
+      _saveVoiceDaily()
+    }
   }
 
   function setStatus(s) { status.value = s }
@@ -79,6 +116,7 @@ export const useVoiceStore = defineStore('voice', () => {
     selectedMicId, selectedSpeakerId,
     callModelId, callWhisperSecs, callWhisperCalls,
     callVoiceInputTokens, callVoiceOutputTokens,
+    voiceDailySecsUsed, voiceDailySecsRemaining, isDailyVoiceLimitReached,
     startCall, endCall, setStatus, setMuted, setPip, setTranscript, setAiText,
     setMicId, setSpeakerId, addCallUsage,
   }

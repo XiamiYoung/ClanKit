@@ -321,17 +321,26 @@
     />
 
   </div>
+
+  <!-- Preview limit modal -->
+  <PreviewLimitModal
+    :visible="showPreviewLimitModal"
+    :message="previewLimitMessage"
+    @close="showPreviewLimitModal = false"
+  />
 </template>
 
 <script setup>
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import { useMcpStore } from '../stores/mcp'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import { useConfigStore } from '../stores/config'
 import { useI18n } from '../i18n/useI18n'
 import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
 import { useChatToCreate } from '../composables/useChatToCreate'
+import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
 const { t } = useI18n()
 const { startChatGuide } = useChatToCreate()
@@ -339,6 +348,8 @@ const { startChatGuide } = useChatToCreate()
 const mcpStore = useMcpStore()
 const configStore = useConfigStore()
 const refreshing = ref(false)
+const showPreviewLimitModal = ref(false)
+const previewLimitMessage = ref('')
 
 async function refreshServers() {
   refreshing.value = true
@@ -406,10 +417,14 @@ const filteredServers = computed(() => {
 
 
 function openAdd() {
+  if (isLimitEnforced() && mcpStore.servers.length >= PREVIEW_LIMITS.maxMcpServers) {
+    previewLimitMessage.value = t('limits.maxMcpServers')
+    showPreviewLimitModal.value = true
+    return
+  }
   editingServer.value = null
   form.value = emptyForm()
   saveError.value = ''
-
   showModal.value = true
 }
 

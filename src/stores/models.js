@@ -289,6 +289,17 @@ export const useModelsStore = defineStore('models', () => {
     return map
   }
 
+  /** Returns { modelId: max_output_tokens } for cached models that have the field (e.g. Google) */
+  function getAllMaxOutputTokens() {
+    const map = {}
+    for (const entry of Object.values(providerModels.value)) {
+      for (const m of (entry.models || [])) {
+        if (m.id && m.max_output_tokens) map[m.id] = m.max_output_tokens
+      }
+    }
+    return map
+  }
+
   return {
     providerModels,
     loadingProviders,
@@ -305,5 +316,6 @@ export const useModelsStore = defineStore('models', () => {
     isCached,
     hasMissingContext,
     getAllContextWindows,
+    getAllMaxOutputTokens,
   }
 })

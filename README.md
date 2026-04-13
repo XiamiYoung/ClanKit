@@ -12,7 +12,7 @@ ClankAI is a multi-LLM desktop chat application built with Electron and Vue 3. I
 - Agentic tool-use loop (filesystem, shell, git, web, data processing, planning)
 - Mention routing between agents during collaborative conversations
 - MCP server integration and HTTP tools management
-- Knowledge (RAG) workflows with Pinecone-backed indexing/querying
+- Knowledge (RAG) workflows with local vector storage and hybrid search
 - Skills system (filesystem and remote skill hub sources)
 - AI docs workspace with markdown plus office/drawing helpers
 - AI news view with configurable feed aggregation and reading workflows

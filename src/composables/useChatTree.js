@@ -11,12 +11,27 @@ import { useChatsStore } from '../stores/chats'
 import { useAgentsStore } from '../stores/agents'
 import { useVoiceStore } from '../stores/voice'
 import { useI18n } from '../i18n/useI18n'
+import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
 export function useChatTree({ mentionInputRef } = {}) {
   const chatsStore = useChatsStore()
   const agentsStore = useAgentsStore()
   const voiceStore = useVoiceStore()
   const { t } = useI18n()
+
+  // ── Preview limit modal ────────────────────────────────────────────────────
+  const showPreviewLimitModal = ref(false)
+  const previewLimitMessage = ref('')
+
+  function _handlePreviewLimitError(e) {
+    if (e.message?.startsWith('preview_limit:')) {
+      const key = e.message.split(':')[1]
+      previewLimitMessage.value = t(`limits.${key}`)
+      showPreviewLimitModal.value = true
+      return true
+    }
+    return false
+  }
 
   // ── Sorted agents (used by new chat agent picker) ──────────────────────────
   const sortedSystemAgents = computed(() =>
@@ -338,7 +353,12 @@ export function useChatTree({ mentionInputRef } = {}) {
     const { mode, parentFolderId, editFolderId } = folderModal.value
     folderModal.value.visible = false
     if (mode === 'create') {
-      await chatsStore.createFolder(name, parentFolderId, emoji)
+      try {
+        await chatsStore.createFolder(name, parentFolderId, emoji)
+      } catch (e) {
+        if (_handlePreviewLimitError(e)) return
+        throw e
+      }
     } else {
       await chatsStore.renameFolder(editFolderId, name, emoji)
     }
@@ -581,11 +601,16 @@ export function useChatTree({ mentionInputRef } = {}) {
     const userAgentId = newChatUserAgentId.value || null
     const agentCfg = selectedIds.length > 0 ? [...selectedIds] : null
     const folderId = newChatFolderId.value
-    await chatsStore.createChat(title, agentCfg, folderId, {
-      icon: chatIcon,
-      userAgentId,
-      autoTitleEligible: !typedName,
-    })
+    try {
+      await chatsStore.createChat(title, agentCfg, folderId, {
+        icon: chatIcon,
+        userAgentId,
+        autoTitleEligible: !typedName,
+      })
+    } catch (e) {
+      if (_handlePreviewLimitError(e)) return
+      throw e
+    }
     // Expand the target folder and all its ancestors so the new chat is visible
     if (folderId) {
       const ancestors = getAncestorFolderIds(folderId, chatsStore.chatTree) || []
@@ -747,5 +772,8 @@ export function useChatTree({ mentionInputRef } = {}) {
     requestDeleteChat,
     requestRemoveGroupAgent,
     executeConfirmedDelete,
+    // Preview limit modal
+    showPreviewLimitModal,
+    previewLimitMessage,
   }
 }

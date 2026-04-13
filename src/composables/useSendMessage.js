@@ -546,6 +546,8 @@ export function useSendMessage({
           groupAudienceMode: targetChat.groupAudienceMode || 'auto',
           groupAudienceAgentIds: JSON.parse(JSON.stringify(targetChat.groupAudienceAgentIds || [])),
           modelContextWindows: modelsStore.getAllContextWindows(),
+          chatType: targetChat.type || 'chat',
+          analysisTargetAgentId: targetChat.analysisTargetAgentId || null,
         },
       }).catch(err => dbg(`sendMessage IPC error: ${err.message}`, 'error'))
 
@@ -794,6 +796,8 @@ export function useSendMessage({
         groupAudienceMode: targetChat.groupAudienceMode || 'auto',
         groupAudienceAgentIds: JSON.parse(JSON.stringify(targetChat.groupAudienceAgentIds || [])),
         modelContextWindows: modelsStore.getAllContextWindows(),
+        chatType: targetChat.type || 'chat',
+        analysisTargetAgentId: targetChat.analysisTargetAgentId || null,
       },
     }).catch(err => dbg(`approvePlan IPC error: ${err.message}`, 'error'))
 
