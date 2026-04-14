@@ -20,7 +20,7 @@ const path = require('path')
 const windowRef = require('../lib/windowRef')
 const { logger } = require('../logger')
 
-const { extractWhatsAppMessages, extractPlainTextMessages, classifyMessages, buildMessageBlock } = require('../agent/chatImport/chatParser')
+const { extractWhatsAppMessages, extractPlainTextMessages, classifyMessages, buildMessageBlock, listWhatsAppSenders } = require('../agent/chatImport/chatParser')
 const { buildCombinedPrompt, generatePersona } = require('../agent/chatImport/personaBuilder')
 const wechatDecryptor = require('../agent/chatImport/wechatDecryptor')
 const wechatParser = require('../agent/chatImport/wechatParser')
@@ -134,14 +134,58 @@ ipcMain.handle('agent:import-list-contacts', async (_event, { dbDir, source }) =
       if (avatars[c.wxid]) c.avatar = avatars[c.wxid]
     }
 
-    // Filter out group chats, contacts with messages first
-    const filtered = contacts.filter(c => !c.wxid.endsWith('@chatroom'))
+    // Detect logged-in user's info for self-analysis auto-fill
+    // detectMyWxid requires an account-level dir (e.g. <wxid>_<hash>), not the decrypted root,
+    // so iterate account dirs via findAccountDirs and take the first non-empty result
+    let myWxid = ''
+    try {
+      const acctDirs = wechatParser.findAccountDirs
+        ? wechatParser.findAccountDirs(dbDir)
+        : [dbDir]
+      for (const ad of acctDirs) {
+        const w = wechatParser.detectMyWxid(ad)
+        if (w) { myWxid = w; break }
+      }
+    } catch (_) { /* ignore */ }
+
+    let myNickname = ''
+    let myAvatar = ''
+    if (myWxid) {
+      const selfContact = contacts.find(c => c.wxid === myWxid)
+      if (selfContact) {
+        myNickname = selfContact.remark || selfContact.nickname || ''
+        myAvatar = selfContact.avatar || ''
+      }
+      // Self usually isn't in the Contact table — fall back to the avatar cache directly
+      if (!myAvatar && avatars[myWxid]) myAvatar = avatars[myWxid]
+    }
+
+    // Filter out group chats and self, contacts with messages first
+    const filtered = contacts.filter(c => !c.wxid.endsWith('@chatroom') && c.wxid !== myWxid)
     const withMsgs = filtered.filter(c => c.messageCount > 0).sort((a, b) => b.messageCount - a.messageCount)
     const noMsgs = filtered.filter(c => c.messageCount === 0).slice(0, 50)
 
-    return { success: true, contacts: [...withMsgs, ...noMsgs] }
+    return {
+      success: true,
+      contacts: [...withMsgs, ...noMsgs],
+      me: { wxid: myWxid, nickname: myNickname, avatar: myAvatar },
+    }
   } catch (err) {
     logger.error('agent:import-list-contacts error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// ─── agent:import-list-whatsapp-senders ───────────────────────────────────
+// Parse a WhatsApp export and return unique senders with message counts.
+
+ipcMain.handle('agent:import-list-whatsapp-senders', async (_event, { filePath }) => {
+  try {
+    if (!filePath) return { success: false, error: 'filePath is required.' }
+    const { senders, warning } = listWhatsAppSenders(filePath)
+    return { success: true, senders, warning }
+  } catch (err) {
+    logger.error('agent:import-list-whatsapp-senders error', err.message)
     return { success: false, error: err.message }
   }
 })
@@ -149,10 +193,14 @@ ipcMain.handle('agent:import-list-contacts', async (_event, { dbDir, source }) =
 // ─── agent:import-extract-messages ────────────────────────────────────────
 
 ipcMain.handle('agent:import-extract-messages', async (event, params) => {
-  const { source, contactName, dbDir, filePath, text } = params
+  const { source, contactName, contacts, dbDir, filePath, text } = params
 
   try {
     if (source === 'wechat') {
+      // Multi-contact extraction (for user self-analysis)
+      if (contacts && contacts.length > 0) {
+        return await _extractWeChatMulti(event, contacts, dbDir)
+      }
       return await _extractWeChat(event, contactName, dbDir)
     }
 
@@ -384,6 +432,56 @@ async function _extractWeChat(event, contactName, dbDir) {
     warning: theirCount < 50
       ? `Only ${theirCount} messages from ${contactName}. Results may be less accurate.`
       : undefined,
+  }
+}
+
+/**
+ * Extract and merge messages from multiple WeChat contacts (for self-analysis).
+ * @param {Electron.IpcMainInvokeEvent} event
+ * @param {Array<{wxid: string}>} contacts
+ * @param {string} dbDir
+ */
+async function _extractWeChatMulti(event, contacts, dbDir) {
+  if (!dbDir) {
+    return { success: false, error: 'dbDir is required for multi-contact extraction.' }
+  }
+
+  const allMessages = []
+  for (let i = 0; i < contacts.length; i++) {
+    const wxid = contacts[i].wxid
+    sendProgress(event, {
+      step: 'parse',
+      progress: Math.round(10 + 80 * (i / contacts.length)),
+      message: `Extracting conversation ${i + 1}/${contacts.length}...`,
+    })
+    const msgs = wechatParser.extractMessagesFromDir(dbDir, wxid)
+    allMessages.push(...msgs)
+  }
+
+  if (allMessages.length === 0) {
+    return { success: false, error: 'No messages found for the selected contacts.' }
+  }
+
+  // Sort chronologically by timestamp
+  allMessages.sort((a, b) => {
+    if (!a.timestamp && !b.timestamp) return 0
+    if (!a.timestamp) return -1
+    if (!b.timestamp) return 1
+    return a.timestamp < b.timestamp ? -1 : 1
+  })
+
+  // classifyMessages already handles sender:'me'|'them' from wechatParser
+  const classified = classifyMessages(allMessages, '')
+  classified.target_name = 'me'
+
+  const myCount = classified.all_messages.filter(m => m.sender === 'me').length
+
+  sendProgress(event, { step: 'done', progress: 100, message: 'Extraction complete.' })
+  return {
+    success: true,
+    classified,
+    messageCount: classified.total_count || 0,
+    myCount,
   }
 }
 

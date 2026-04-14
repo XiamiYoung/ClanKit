@@ -618,7 +618,8 @@ ${docTemplate}`
  * Extract key memories/events from chat history via LLM.
  * Returns structured memory entries for the agent's soul file.
  */
-async function _extractKeyMemories(messageBlock, profile, config, language, contextWindows) {
+async function _extractKeyMemories(messageBlock, profile, config, language, contextWindows, analyzeTarget) {
+  const isSelf = analyzeTarget === 'self'
   const name = profile.name || 'Unknown'
   const lang = language === 'zh' ? 'Chinese (Simplified)' : 'English'
   const um = config.utilityModel
@@ -638,7 +639,32 @@ async function _extractKeyMemories(messageBlock, profile, config, language, cont
     logger.info(`personaBuilder: memory sample truncated from ${sampleTokens} to ~${inputBudget} tokens`)
   }
 
-  const prompt = `Extract key memories and events from this chat history between me and "${name}".
+  const prompt = isSelf
+    ? `Extract key memories and events about "${name}" (the user labeled "Me" in the chat) from their chat history across multiple conversations.
+
+Output in ${lang}. Return a JSON array of memory entries, max 100 items. Each entry:
+{"section": "<category>", "entry": "<one-line description with date if available>"}
+
+Categories (use these exact section names):
+- "Life Events" — things that happened to the user: trips, jobs, milestones, decisions, health, moves
+- "Communication Style" — how the user writes: tone, emoji habits, reply length, typical openings
+- "Topics & Interests" — subjects the user frequently talks about, hobbies, things they care about
+- "Important People" — people the user mentions often, relationships, family, colleagues, friends
+- "Preferences & Habits" — the user's likes/dislikes, routines, opinions, food preferences, daily patterns
+- "Values & Beliefs" — opinions, principles, attitudes the user expresses
+
+Rules:
+- Focus on what the messages reveal about the user (the "Me" speaker), not the other people
+- Each entry should be a specific fact, not vague (e.g. "2024-07 planning Singapore trip" not "likes travel")
+- Include dates when inferable from timestamps
+- Prioritize distinctive/memorable events over mundane daily chat
+- Max 100 entries total, aim for 30-80
+
+Output ONLY the JSON array, no other text.
+
+---
+${sample}`
+    : `Extract key memories and events from this chat history between me and "${name}".
 
 Output in ${lang}. Return a JSON array of memory entries, max 100 items. Each entry:
 {"section": "<category>", "entry": "<one-line description with date if available>"}
@@ -672,12 +698,60 @@ ${sample}`
   if (arrStart >= 0 && arrEnd > arrStart) {
     jsonStr = jsonStr.slice(arrStart, arrEnd + 1)
   }
-  const parsed = JSON.parse(jsonStr)
+
+  let parsed
+  try {
+    parsed = JSON.parse(jsonStr)
+  } catch (parseErr) {
+    // Output was likely truncated at max_tokens — salvage complete entries
+    // by scanning for well-formed {"section": "...", "entry": "..."} objects.
+    logger.warn(`personaBuilder: memory JSON parse failed (${parseErr.message}), salvaging partial entries...`)
+    parsed = _salvageMemoryEntries(jsonStr)
+    logger.info(`personaBuilder: salvaged ${parsed.length} entries from truncated output`)
+  }
+
   if (!Array.isArray(parsed)) return []
   return parsed
     .filter(m => m && typeof m.section === 'string' && typeof m.entry === 'string')
     .slice(0, 100)
     .map(m => ({ section: m.section.trim(), entry: m.entry.trim() }))
+}
+
+/**
+ * Salvage complete {section, entry} objects from a truncated JSON array string.
+ * Walks object boundaries by tracking braces while respecting quoted strings,
+ * stops at the last complete object so unterminated tails are dropped.
+ */
+function _salvageMemoryEntries(jsonStr) {
+  const results = []
+  let depth = 0
+  let inString = false
+  let escape = false
+  let start = -1
+
+  for (let i = 0; i < jsonStr.length; i++) {
+    const ch = jsonStr[i]
+    if (escape) { escape = false; continue }
+    if (ch === '\\') { escape = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+
+    if (ch === '{') {
+      if (depth === 0) start = i
+      depth++
+    } else if (ch === '}') {
+      depth--
+      if (depth === 0 && start >= 0) {
+        const objStr = jsonStr.slice(start, i + 1)
+        try {
+          const obj = JSON.parse(objStr)
+          if (obj && typeof obj === 'object') results.push(obj)
+        } catch { /* skip malformed object */ }
+        start = -1
+      }
+    }
+  }
+  return results
 }
 
 /**
@@ -895,7 +969,7 @@ async function generatePersona(fullPrompt, config, onProgress, profile, contextW
     emit('analyze', 88, msg.extractMem)
     let memories = []
     try {
-      memories = await _extractKeyMemories(messageBlock, resolvedProfile, config, language, contextWindows)
+      memories = await _extractKeyMemories(messageBlock, resolvedProfile, config, language, contextWindows, analyzeTarget)
       logger.info(`personaBuilder: extracted ${memories.length} key memories`)
     } catch (memErr) {
       logger.error('personaBuilder: memory extraction failed:', memErr.message)

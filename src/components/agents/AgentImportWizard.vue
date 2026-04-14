@@ -38,24 +38,36 @@
         </div>
 
         <!-- Source tabs — always visible at top -->
-        <div v-if="step === 1 && !showContactList" class="source-tabs">
+        <div v-if="step === 1 && !showContactList && !showWASenderList" class="source-tabs">
           <button
             v-for="src in SOURCES" :key="src.key"
             class="source-tab" :class="{ active: source === src.key }"
             @click="source = src.key"
           >{{ t('agents.import.' + src.labelKey) }}</button>
         </div>
+        <div v-if="step === 1 && showWASenderList" class="contact-header">
+          <p class="contact-list-title">{{ t('agents.import.waSenderListTitle') }}</p>
+        </div>
         <div v-if="step === 1 && showContactList" class="contact-header">
-          <p class="contact-list-title">{{ t('agents.import.contactListTitle') }}</p>
+          <p class="contact-list-title">
+            {{ isUserAgent ? t('agents.import.contactListTitleMulti') : t('agents.import.contactListTitle') }}
+          </p>
           <p class="hint-info" style="font-size:0.75rem;">
-            {{ t('agents.import.contactListSubtitle').replace('{count}', contactListWithMessages.length) }}
+            <template v-if="isUserAgent">
+              {{ t('agents.import.contactListSubtitleMulti')
+                  .replace('{selected}', selectedContactWxids.size)
+                  .replace('{count}', contactListWithMessages.length) }}
+            </template>
+            <template v-else>
+              {{ t('agents.import.contactListSubtitle').replace('{count}', contactListWithMessages.length) }}
+            </template>
           </p>
           <input v-model="contactFilter" class="field-input" style="margin-top:0.35rem;"
                  :placeholder="t('agents.import.contactSearchPlaceholder')" />
         </div>
 
         <!-- Step content -->
-        <div class="wizard-body" :class="{ 'body-center': step === 2 || step === 3, 'body-fill': step === 1 && showContactList }">
+        <div class="wizard-body" :class="{ 'body-center': step === 2 || step === 3, 'body-fill': step === 1 && (showContactList || showWASenderList) }">
 
           <!-- ── Step 1: Source ── -->
           <template v-if="step === 1">
@@ -69,8 +81,13 @@
                     {{ contactFilter ? t('agents.import.noContactsMatch') : t('agents.import.noContactsFound') }}
                   </div>
                   <div v-for="c in filteredContacts" :key="c.wxid"
-                       class="contact-item" :class="{ selected: selectedContact?.wxid === c.wxid }"
-                       @click="onSelectContact(c)">
+                       class="contact-item"
+                       :class="{ selected: isUserAgent ? selectedContactWxids.has(c.wxid) : selectedContact?.wxid === c.wxid }"
+                       @click="isUserAgent ? onToggleContact(c) : onSelectContact(c)">
+                    <!-- Checkbox indicator for multi-select mode -->
+                    <div v-if="isUserAgent" class="contact-checkbox" :class="{ checked: selectedContactWxids.has(c.wxid) }">
+                      <svg v-if="selectedContactWxids.has(c.wxid)" style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
                     <img v-if="c.avatar" :src="c.avatar" class="contact-avatar" />
                     <div v-else class="contact-avatar-placeholder">{{ (c.remark || c.nickname || '?')[0] }}</div>
                     <div class="contact-info">
@@ -134,14 +151,41 @@
 
             <!-- WhatsApp -->
             <template v-if="source === 'whatsapp'">
-              <div class="field-group">
-                <label class="field-label">{{ t('agents.import.contactNameLabel') }}</label>
-                <input v-model="contactName" class="field-input" :placeholder="t('agents.import.contactNamePlaceholder')" />
-              </div>
-              <div class="file-row">
-                <AppButton size="compact" @click="pickWhatsAppFile">{{ t('agents.import.uploadFile') }}</AppButton>
-                <span v-if="filePath" class="file-name-label">{{ shortFileName(filePath) }}</span>
-              </div>
+              <!-- Sender selection list (shown after file is parsed) -->
+              <template v-if="showWASenderList">
+                <p class="hint-info" style="font-size:0.75rem;">
+                  {{ t('agents.import.waSenderListSubtitle').replace('{count}', waSenders.length) }}
+                </p>
+                <div class="contact-list">
+                  <div v-if="waSenders.length === 0" class="contact-empty">
+                    {{ t('agents.import.noContactsFound') }}
+                  </div>
+                  <div
+                    v-for="s in waSenders" :key="s.name"
+                    class="contact-item" :class="{ selected: selectedWASender === s.name }"
+                    @click="selectedWASender = s.name; contactName = s.name"
+                  >
+                    <div class="contact-avatar-placeholder">{{ s.name[0] }}</div>
+                    <div class="contact-info">
+                      <div class="contact-name">{{ s.name }}</div>
+                      <div class="contact-meta">
+                        <span class="contact-count">{{ t('agents.import.waSenderMessages').replace('{count}', s.count) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- File picker (initial state) -->
+              <template v-else>
+                <div class="file-row">
+                  <AppButton size="compact" @click="pickWhatsAppFile">{{ t('agents.import.uploadFile') }}</AppButton>
+                  <span v-if="filePath" class="file-name-label">{{ shortFileName(filePath) }}</span>
+                </div>
+                <p v-if="filePath" class="hint-info" style="margin-top:0.5rem;">
+                  {{ t('agents.import.waSenderFileHint') }}
+                </p>
+              </template>
             </template>
 
             <!-- Plain text -->
@@ -194,9 +238,10 @@
             <div class="summary-card">
               <div class="summary-row">
                 <span class="summary-label">{{ t('agents.import.messageCount').replace('{count}', classified?.total_count || 0) }}</span>
-                <span class="summary-label">{{ t('agents.import.theirCount').replace('{count}', classified?.total_their_count || 0) }}</span>
+                <span v-if="isUserAgent" class="summary-label">{{ t('agents.import.myCount').replace('{count}', myMessageCount) }}</span>
+                <span v-else class="summary-label">{{ t('agents.import.theirCount').replace('{count}', classified?.total_their_count || 0) }}</span>
               </div>
-              <p v-if="classified?.total_their_count < 50" class="hint-warn mt-1">
+              <p v-if="!isUserAgent && classified?.total_their_count < 50" class="hint-warn mt-1">
                 {{ t('agents.import.warningFewMessages').replace('{count}', classified?.total_their_count || 0) }}
               </p>
             </div>
@@ -375,7 +420,7 @@
             :disabled="!canProceed"
             @click="nextStep"
             style="background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151); color: #fff;"
-          >{{ step === 1 && source === 'wechat' && !showContactList ? t('agents.import.readAndList') : t('common.next') }}</AppButton>
+          >{{ step === 1 && source === 'wechat' && !showContactList ? t('agents.import.readAndList') : step === 1 && source === 'whatsapp' && !showWASenderList ? t('agents.import.readAndList') : t('common.next') }}</AppButton>
           <AppButton
             v-if="step === 4"
             size="compact"
@@ -428,11 +473,13 @@ const maxReachedStep = ref(1)
 
 const canGoBack = computed(() => {
   if (step.value === 1 && showContactList.value) return true
+  if (step.value === 1 && showWASenderList.value) return true
   return step.value > 1
 })
 
 const canGoForward = computed(() => {
   if (step.value === 1 && showContactList.value && !selectedContact.value) return false
+  if (step.value === 1 && showWASenderList.value && !selectedWASender.value) return false
   return step.value < maxReachedStep.value
 })
 
@@ -459,8 +506,17 @@ const wechatMode = ref('auto') // 'auto' | 'manual'
 const showContactList = ref(false)
 const contactList = ref([])
 const selectedContact = ref(null)
+const selectedContactWxids = ref(new Set()) // multi-select for user agent
 const contactFilter = ref('')
 const decryptedDir = ref('')
+const myInfo = ref(null) // { wxid, nickname, avatar } — logged-in WeChat user, for self-analysis auto-fill
+
+const isUserAgent = computed(() => props.agentType === 'user')
+const myMessageCount = computed(() => {
+  const all = classified.value?.all_messages
+  if (!all) return 0
+  return all.filter(m => m.sender === 'me').length
+})
 
 const contactListWithMessages = computed(() =>
   contactList.value.filter(c => (c.messageCount || 0) > 0)
@@ -488,15 +544,67 @@ function onSelectContact(c) {
   }
 }
 
+function onToggleContact(c) {
+  const s = new Set(selectedContactWxids.value)
+  if (s.has(c.wxid)) {
+    s.delete(c.wxid)
+  } else {
+    s.add(c.wxid)
+    // Note: avatar is NOT set from the selected contact — for user agent multi-select,
+    // the agent represents the logged-in user (self), not the other party.
+  }
+  selectedContactWxids.value = s
+}
+
 async function browseDbDir() {
   const res = await window.electronAPI.agentImport.pickDir()
   if (res.dirPath) dbDir.value = res.dirPath
 }
 
-// ── WhatsApp file pick ──────────────────────────────────────────────────────
+// ── WhatsApp file pick & sender selection ──────────────────────────────────
+const showWASenderList = ref(false)
+const waSenders = ref([])       // [{ name, count }]
+const selectedWASender = ref('')
+
 async function pickWhatsAppFile() {
   const res = await window.electronAPI.agentImport.pickFile()
-  if (res.filePath) filePath.value = res.filePath
+  if (res.filePath) {
+    filePath.value = res.filePath
+    // Reset sender selection when a new file is picked
+    showWASenderList.value = false
+    selectedWASender.value = ''
+    waSenders.value = []
+    contactName.value = ''
+  }
+}
+
+async function doListWASenders() {
+  if (!filePath.value) {
+    extractError.value = t('agents.import.waSenderNoFile')
+    return false
+  }
+  extracting.value = true
+  extractProgress.value = 20
+  extractMsg.value = 'Parsing file...'
+  extractError.value = ''
+  try {
+    const res = await window.electronAPI.agentImport.listWhatsAppSenders({ filePath: filePath.value })
+    if (!res.success) {
+      extractError.value = res.error || t('agents.import.extractionFailed')
+      return false
+    }
+    waSenders.value = res.senders || []
+    if (waSenders.value.length === 0) {
+      extractError.value = res.warning || t('agents.import.extractionFailed')
+      return false
+    }
+    showWASenderList.value = true
+    return false  // stay on step 1 to pick sender
+  } finally {
+    extracting.value = false
+    extractProgress.value = 0
+    extractMsg.value = ''
+  }
 }
 
 function shortFileName(fp) {
@@ -507,12 +615,17 @@ function shortFileName(fp) {
 const canProceed = computed(() => {
   if (step.value === 1) {
     if (source.value === 'wechat') {
-      if (showContactList.value) return selectedContact.value !== null
+      if (showContactList.value) {
+        return isUserAgent.value ? selectedContactWxids.value.size > 0 : selectedContact.value !== null
+      }
       if (wechatMode.value === 'manual') return dbDir.value.trim().length > 0
       return true  // auto mode — always allow attempt
     }
     if (source.value === 'imessage')  return window.electronAPI?.platform === 'darwin' && contactName.value.trim().length > 0
-    if (source.value === 'whatsapp')  return filePath.value.length > 0
+    if (source.value === 'whatsapp') {
+      if (showWASenderList.value) return selectedWASender.value.length > 0
+      return filePath.value.length > 0
+    }
     if (source.value === 'text')      return rawText.value.trim().length > 0
     return false
   }
@@ -571,7 +684,9 @@ async function doDecryptAndList() {
     }
 
     contactList.value = listRes.contacts || []
+    myInfo.value = listRes.me || null
     selectedContact.value = null
+    selectedContactWxids.value = new Set()
     contactFilter.value = ''
     showContactList.value = true
     extractProgress.value = 0
@@ -593,14 +708,41 @@ async function doExtract() {
     extractMsg.value = data.message || ''
   })
 
-  // For WeChat with contact list: use wxid directly (avoids fragile display-name lookup)
-  const resolvedContactName = (source.value === 'wechat' && selectedContact.value)
-    ? selectedContact.value.wxid
-    : contactName.value.trim()
-
   const resolvedDbDir = (source.value === 'wechat' && decryptedDir.value)
     ? decryptedDir.value
     : (dbDir.value.trim() || null)
+
+  // User agent + WeChat: multi-contact extraction
+  if (isUserAgent.value && source.value === 'wechat' && selectedContactWxids.value.size > 0) {
+    // Only send wxid — strips reactive proxies and avatar data URIs (avoids IPC clone errors)
+    const contacts = contactList.value
+      .filter(c => selectedContactWxids.value.has(c.wxid))
+      .map(c => ({ wxid: c.wxid }))
+    const params = { source: 'wechat', contacts, dbDir: resolvedDbDir }
+    const res = await window.electronAPI.agentImport.extractMessages(params)
+    unsub()
+    extracting.value = false
+    if (!res.success) {
+      extractError.value = res.error || t('agents.import.extractionFailed')
+      return false
+    }
+    classified.value = res.classified
+    // Auto-fill profile name and avatar from detected self info
+    if (myInfo.value) {
+      const myDisplayName = myInfo.value.nickname || myInfo.value.wxid || ''
+      if (!profile.name && myDisplayName) profile.name = myDisplayName
+      if (!selectedAvatarUrl.value && myInfo.value.avatar) {
+        selectedAvatarUrl.value = myInfo.value.avatar
+        selectedAvatarId.value = ''
+      }
+    }
+    return true
+  }
+
+  // Single-contact extraction (system agent or non-WeChat sources)
+  const resolvedContactName = (source.value === 'wechat' && selectedContact.value)
+    ? selectedContact.value.wxid
+    : contactName.value.trim()
 
   const params = {
     source: source.value,
@@ -623,8 +765,8 @@ async function doExtract() {
   }
 
   classified.value = res.classified
-  // Pre-fill profile name with selected contact's display name
-  if (!profile.name) {
+  // Pre-fill profile name with selected contact's display name (not for user agent self-analysis)
+  if (!isUserAgent.value && !profile.name) {
     const fallback = (source.value === 'wechat' && selectedContact.value)
       ? (selectedContact.value.remark || selectedContact.value.nickname || selectedContact.value.wxid)
       : (res.classified?.target_name || '')
@@ -657,8 +799,17 @@ async function nextStep() {
         await doDecryptAndList()
         return  // stay on step 1 with contact list shown
       }
-      // Contact selected — extract messages for that contact
-      if (!selectedContact.value) return
+      // Contact(s) selected — extract messages
+      if (isUserAgent.value) {
+        if (selectedContactWxids.value.size === 0) return
+      } else {
+        if (!selectedContact.value) return
+      }
+    }
+    if (source.value === 'whatsapp' && !showWASenderList.value) {
+      // First: parse file and show sender list
+      await doListWASenders()
+      return  // stay on step 1 to pick sender
     }
     const ok = await doExtract()
     if (!ok) return
@@ -671,7 +822,13 @@ function goBack() {
   if (step.value === 1 && showContactList.value) {
     showContactList.value = false
     selectedContact.value = null
+    selectedContactWxids.value = new Set()
     contactFilter.value = ''
+    extractError.value = ''
+  } else if (step.value === 1 && showWASenderList.value) {
+    showWASenderList.value = false
+    selectedWASender.value = ''
+    contactName.value = ''
     extractError.value = ''
   } else {
     step.value--
@@ -862,7 +1019,10 @@ async function doAnalyze() {
   const contactDisplayName = selectedContact.value
     ? (selectedContact.value.remark || selectedContact.value.nickname || selectedContact.value.wxid)
     : contactName.value
-  agentName.value = res.suggestedName || profile.name || contactDisplayName || 'Imported'
+  // For user agent (self-analysis), prefer the user's real WeChat nickname over LLM-suggested
+  agentName.value = isUserAgent.value
+    ? (profile.name || res.suggestedName || 'Me')
+    : (res.suggestedName || profile.name || contactDisplayName || 'Imported')
   // Analysis done — unlock step 4
   if (maxReachedStep.value < 4) maxReachedStep.value = 4
 }
@@ -937,9 +1097,11 @@ async function doCreateAgent() {
   // Save full chat history if enabled
   if (saveHistory.value && classified.value?.all_messages?.length > 0) {
     try {
-      const contactDisplayName = selectedContact.value
-        ? (selectedContact.value.remark || selectedContact.value.nickname || selectedContact.value.wxid)
-        : (contactName.value || profile.name)
+      const contactDisplayName = (isUserAgent.value && selectedContactWxids.value.size > 0)
+        ? 'me'
+        : selectedContact.value
+          ? (selectedContact.value.remark || selectedContact.value.nickname || selectedContact.value.wxid)
+          : (contactName.value || profile.name)
       await window.electronAPI.agentImport.saveHistory({
         agentId,
         messages: JSON.parse(JSON.stringify(classified.value.all_messages)),
@@ -1589,6 +1751,24 @@ onUnmounted(() => {
 }
 .contact-item:hover { background: #1E1E1E; }
 .contact-item.selected { background: #2A2A40; border: 1px solid #4B4BD4; }
+
+.contact-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1.5px solid #555;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+.contact-checkbox.checked {
+  background: #4B4BD4;
+  border-color: #4B4BD4;
+  color: #fff;
+}
 
 .contact-avatar {
   width: 32px;

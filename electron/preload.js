@@ -256,6 +256,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     pickDir:         ()       => ipcRenderer.invoke('agent:import-pick-dir'),
     decryptWeChat:   (p)      => ipcRenderer.invoke('agent:import-decrypt-wechat', p),
     listContacts:    (p)      => ipcRenderer.invoke('agent:import-list-contacts', p),
+    listWhatsAppSenders: (p)  => ipcRenderer.invoke('agent:import-list-whatsapp-senders', p),
     extractMessages: (params) => ipcRenderer.invoke('agent:import-extract-messages', params),
     analyze:         (params) => ipcRenderer.invoke('agent:import-analyze', params),
     writeMemories:   (params) => ipcRenderer.invoke('agent:import-write-memories', params),

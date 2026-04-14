@@ -8,14 +8,20 @@
 const fs = require('fs')
 const path = require('path')
 
-// WhatsApp export regex patterns (3 format variants)
-// iOS:     [DD/MM/YYYY, HH:MM:SS] Name: message
-// Android: DD/MM/YYYY, HH:MM - Name: message
-// US:      M/D/YY, H:MM AM/PM - Name: message
+// WhatsApp export regex patterns (multiple format variants)
+// iOS:         [DD/MM/YYYY, HH:MM:SS] Name: message
+// iOS (intl):  [YYYY/M/D, HH:MM:SS] Name: message   ← year-first locales
+// Android:     DD/MM/YYYY, HH:MM - Name: message
+// US:          M/D/YY, H:MM AM/PM - Name: message
+// Date segment: any combo of 1-4 digits separated by / or - or .
+const WA_DATE = '[\\d]{1,4}[\\/\\-\\.][\\d]{1,2}[\\/\\-\\.][\\d]{1,4}'
 const WA_PATTERNS = [
-  /^\[(\d{1,2}\/\d{1,2}\/\d{2,4}),\s*\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?\]\s+(.+?):\s+(.*)$/,
-  /^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s*\d{1,2}:\d{2}(?:\s*[AP]M)?\s+-\s+(.+?):\s+(.*)$/,
-  /^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s*\d{1,2}:\d{2}\s*[AP]M\s+-\s+(.+?):\s+(.*)$/,
+  // Bracketed format: [date, time] Name: msg
+  new RegExp(`^\\[(${WA_DATE}),\\s*\\d{1,2}:\\d{2}(?::\\d{2})?(?:\\s*[AP]M)?\\]\\s+(.+?):\\s+(.*)$`),
+  // Unbracketed with dash separator: date, time - Name: msg
+  new RegExp(`^(${WA_DATE}),\\s*\\d{1,2}:\\d{2}(?:\\s*[AP]M)?\\s+-\\s+(.+?):\\s+(.*)$`),
+  // Unbracketed AM/PM: date, time AM/PM - Name: msg
+  new RegExp(`^(${WA_DATE}),\\s*\\d{1,2}:\\d{2}\\s*[AP]M\\s+-\\s+(.+?):\\s+(.*)$`),
 ]
 
 // System messages to skip
@@ -243,10 +249,22 @@ function buildMessageBlock(classified, targetName, analyzeTarget) {
     }
   }
 
-  fmt(classified.long_messages, isSelf ? 'Long Messages (My Detailed Expressions)' : 'Long Messages (Their Detailed Expressions)')
-  fmt(classified.conflict_messages, 'Conflict Messages')
-  fmt(classified.sweet_messages, 'Sweet / Affectionate Messages')
-  fmt(classified.daily_messages, 'Daily Chat Samples')
+  // When analyzing self, use "me" messages for the highlight sections
+  // (classified.long_messages / daily_messages always contain "them" messages)
+  if (isSelf) {
+    const all = classified.all_messages || []
+    const myLong = all.filter(m => m.sender === 'me' && m.content.length >= 50).slice(0, 30)
+    const myDaily = all.filter(m => m.sender === 'me' && m.content.length < 50).slice(-50)
+    fmt(myLong, 'Long Messages (My Detailed Expressions)')
+    fmt(classified.conflict_messages, 'Conflict Messages')
+    fmt(classified.sweet_messages, 'Sweet / Affectionate Messages')
+    fmt(myDaily, 'Daily Chat Samples (Mine)')
+  } else {
+    fmt(classified.long_messages, 'Long Messages (Their Detailed Expressions)')
+    fmt(classified.conflict_messages, 'Conflict Messages')
+    fmt(classified.sweet_messages, 'Sweet / Affectionate Messages')
+    fmt(classified.daily_messages, 'Daily Chat Samples')
+  }
 
   const all = classified.all_messages_preview || classified.all_messages || []
   const allSlice = all.slice(-200)
@@ -262,9 +280,31 @@ function buildMessageBlock(classified, targetName, analyzeTarget) {
   return lines.join('\n')
 }
 
+/**
+ * List unique senders in a WhatsApp export file, with message counts.
+ * Used by the wizard to let the user pick which sender is "them".
+ * @param {string} filePath - path to .txt or .zip file
+ * @returns {{ senders: Array<{name: string, count: number}>, warning?: string }}
+ */
+function listWhatsAppSenders(filePath) {
+  const { messages, warning } = extractWhatsAppMessages(filePath)
+  if (messages.length === 0) {
+    return { senders: [], warning: warning || 'No messages could be parsed.' }
+  }
+  const counts = {}
+  for (const m of messages) {
+    counts[m.sender] = (counts[m.sender] || 0) + 1
+  }
+  const senders = Object.entries(counts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+  return { senders, warning }
+}
+
 module.exports = {
   extractWhatsAppMessages,
   extractPlainTextMessages,
   classifyMessages,
   buildMessageBlock,
+  listWhatsAppSenders,
 }
