@@ -747,9 +747,18 @@ const agentModelList = computed(() => {
   return modelsStore.getModelsForProvider(agentProviderType.value) || []
 })
 
-function onAgentProviderChange() {
+async function onAgentProviderChange() {
   const models = agentModelList.value
-  agentModelId.value = models.length > 0 ? models[0].id : ''
+  if (models.length === 0) { agentModelId.value = ''; return }
+  try {
+    const rec = await window.electronAPI.recommendModel({
+      providerType: agentProviderType.value,
+      modelIds: models.map(m => m.id),
+    })
+    agentModelId.value = (rec?.modelId && models.some(m => m.id === rec.modelId)) ? rec.modelId : models[0].id
+  } catch {
+    agentModelId.value = models[0].id
+  }
 }
 
 // Initialize from utility model or first active provider
@@ -832,6 +841,7 @@ async function doAnalyze() {
     config,
     providerType: analyzeProviderType.value || undefined,
     modelId: analyzeModelId.value || undefined,
+    analyzeTarget: props.agentType === 'user' ? 'self' : 'other',
   })
   unsub()
   stopTipRotation()

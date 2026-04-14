@@ -201,13 +201,13 @@ ipcMain.handle('agent:import-extract-messages', async (event, params) => {
 
 // ─── agent:import-analyze ─────────────────────────────────────────────────
 
-ipcMain.handle('agent:import-analyze', async (event, { classified, profile, config, providerType, modelId }) => {
+ipcMain.handle('agent:import-analyze', async (event, { classified, profile, config, providerType, modelId, analyzeTarget }) => {
   try {
     sendProgress(event, { step: 'build', progress: 5, message: 'Building prompt...' })
     const targetName = classified.target_name || profile.name || 'Unknown'
-    const messageBlock = buildMessageBlock(classified, targetName)
+    const messageBlock = buildMessageBlock(classified, targetName, analyzeTarget)
     const language = config.language || 'en'
-    const fullPrompt = buildCombinedPrompt(profile, messageBlock, language)
+    const fullPrompt = buildCombinedPrompt(profile, messageBlock, language, analyzeTarget)
 
     // Allow caller to override the utility model provider/model
     const effectiveConfig = { ...config }
@@ -229,7 +229,7 @@ ipcMain.handle('agent:import-analyze', async (event, { classified, profile, conf
       }
     } catch { /* no cache yet, will use fallback */ }
 
-    const result = await generatePersona(fullPrompt, effectiveConfig, (payload) => sendProgress(event, payload), profile, contextWindows, language)
+    const result = await generatePersona(fullPrompt, effectiveConfig, (payload) => sendProgress(event, payload), profile, contextWindows, language, analyzeTarget)
     return result
   } catch (err) {
     logger.error('agent:import-analyze error', err.message)

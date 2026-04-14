@@ -133,13 +133,13 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
 
     logger.debug('[Memory] start', { chatId, provider: um.provider, model: um.model, msgCount: messages?.length })
 
-    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
+    const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
     const extractor = new MemoryExtractor({
       model:        um.model,
       apiKey:       providerCfg.apiKey,
       baseURL:      providerCfg.baseURL,
       isOpenAI,
-      directAuth:   um.provider === 'openai_official' || um.provider === 'deepseek',
+      directAuth:   isOpenAI && um.provider !== 'openai',
       providerType: um.provider,
     })
 
@@ -415,6 +415,7 @@ function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetCh
         analysisTargetAgentId:     analysisTargetId,
         analysisTargetAgentName:   analysisTargetAgent?.name || 'Unknown',
         analysisTargetAgentPrompt: analysisTargetAgent?.prompt || '',
+        analysisTargetAgentType:   analysisTargetAgent?.type || 'system',
       } : {}),
     }
 
@@ -1192,7 +1193,7 @@ Examples:
     abort = new AbortController()
     _activeEditRequests.set(requestId, abort)
 
-    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
+    const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
     let inputTokens = 0, outputTokens = 0
 
     if (isOpenAI) {
@@ -1204,7 +1205,7 @@ Examples:
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
         _scenario: 'edit-text',
-        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider !== 'openai' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
       const oaiClient = new OpenAIClient(cfg)
@@ -1319,14 +1320,15 @@ ipcMain.handle('agent:doc-run', async (event, {
     } else if (provider === 'openrouter') {
       loopConfig.apiKey  = providerCfg.apiKey
       loopConfig.baseURL = providerCfg.baseURL
-    } else if (provider === 'openai' || provider === 'openai_official' || provider === 'deepseek') {
+    } else {
+      // All OpenAI-compatible providers (openai, openai_official, deepseek, qwen, glm, mistral, groq, etc.)
       loopConfig.defaultProvider   = 'openai'
       loopConfig._resolvedProvider = 'openai'
       loopConfig.openaiApiKey      = providerCfg.apiKey
       loopConfig.openaiBaseURL     = providerCfg.baseURL
       loopConfig.apiKey            = providerCfg.apiKey
       loopConfig.baseURL           = providerCfg.baseURL
-      if (provider === 'openai_official' || provider === 'deepseek') loopConfig._directAuth = true
+      if (provider !== 'openai') loopConfig._directAuth = true
     }
 
     loopConfig.sandboxConfig = fullCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
@@ -1539,7 +1541,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
       return { success: true, text }
     }
 
-    const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter'
+    const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
@@ -1549,7 +1551,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
         _scenario: 'enhance-prompt',
-        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider !== 'openai' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
       const oaiClient = new OpenAIClient(cfg)
@@ -1632,7 +1634,7 @@ If none should respond, reply with [].`
     }
 
     let raw
-    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
+    const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
@@ -1642,7 +1644,7 @@ If none should respond, reply with [].`
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
         _scenario: 'resolve-addressees',
-        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider !== 'openai' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
       const oaiClient = new OpenAIClient(cfg)
@@ -1771,7 +1773,7 @@ Examples:
     }
 
     let raw
-    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
+    const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
@@ -1781,7 +1783,7 @@ Examples:
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
         _scenario: 'route-group-audience',
-        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider !== 'openai' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
       const oaiClient = new OpenAIClient(cfg)
@@ -1892,7 +1894,7 @@ Reply with ONLY a JSON object:
     }
 
     let raw
-    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
+    const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const cfg = {
@@ -1902,7 +1904,7 @@ Reply with ONLY a JSON object:
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
         _scenario: 'dispatch-group-tasks',
-        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider !== 'openai' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
       const oaiClient = new OpenAIClient(cfg)
@@ -2019,7 +2021,7 @@ Rules:
     const userContent = `Conversation:\n${convo}`
 
     let raw = ''
-    const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
+    const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const clientCfg = {
@@ -2029,7 +2031,7 @@ Rules:
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
         _scenario: 'suggest-title',
-        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider !== 'openai' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
       const oaiClient = new OpenAIClient(clientCfg)
@@ -2110,10 +2112,7 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
       return { success: false, error: 'Missing required field: baseURL' }
     }
 
-    const isOpenAI = provider === 'openai' || provider === 'openai_official' || provider === 'deepseek' ||
-      provider === 'minimax' || provider === 'custom' || provider === 'qwen' || provider === 'glm' ||
-      provider === 'mistral' || provider === 'groq' || provider === 'xai' || provider === 'moonshot' ||
-      provider === 'doubao' || provider === 'ollama'
+    const isOpenAI = provider !== 'anthropic' && provider !== 'openrouter' && provider !== 'google'
 
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
@@ -2124,7 +2123,7 @@ ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, uti
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
         _scenario: 'test-provider',
-        _directAuth: provider !== 'openai' && provider !== 'ollama',
+        _directAuth: provider !== 'openai',
       }
       cfg.provider = { type: provider }
       const client = new OpenAIClient(cfg)

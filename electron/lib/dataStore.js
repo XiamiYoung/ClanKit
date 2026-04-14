@@ -165,7 +165,7 @@ function getProviderById(config, id) {
 
 function buildProviderClientConfig(provider, model = null) {
   if (!provider) return null
-  const isOpenAI = provider.type === 'openai' || provider.type === 'openai_official' || provider.type === 'deepseek' || provider.type === 'minimax'
+  const isOpenAI = provider.type !== 'anthropic' && provider.type !== 'openrouter' && provider.type !== 'google'
   const cfg = {
     provider: {
       id: provider.id, type: provider.type, name: provider.name,
@@ -176,7 +176,7 @@ function buildProviderClientConfig(provider, model = null) {
   if (isOpenAI) {
     cfg.defaultProvider = 'openai'
     cfg._resolvedProvider = 'openai'
-    if (provider.type === 'openai_official' || provider.type === 'deepseek' || provider.type === 'minimax') cfg._directAuth = true
+    if (provider.type !== 'openai') cfg._directAuth = true
   } else {
     cfg.defaultProvider = provider.type
     cfg._resolvedProvider = provider.type

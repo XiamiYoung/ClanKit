@@ -225,9 +225,11 @@ function classifyMessages(messages, targetName) {
  *
  * @param {object} classified - result of classifyMessages()
  * @param {string} targetName
+ * @param {string} [analyzeTarget='other'] - 'self' to analyze "Me", 'other' to analyze "Them"
  * @returns {string}
  */
-function buildMessageBlock(classified, targetName) {
+function buildMessageBlock(classified, targetName, analyzeTarget) {
+  const isSelf = analyzeTarget === 'self'
   const name = targetName || 'Them'
   const lines = []
 
@@ -241,7 +243,7 @@ function buildMessageBlock(classified, targetName) {
     }
   }
 
-  fmt(classified.long_messages, 'Long Messages (Their Detailed Expressions)')
+  fmt(classified.long_messages, isSelf ? 'Long Messages (My Detailed Expressions)' : 'Long Messages (Their Detailed Expressions)')
   fmt(classified.conflict_messages, 'Conflict Messages')
   fmt(classified.sweet_messages, 'Sweet / Affectionate Messages')
   fmt(classified.daily_messages, 'Daily Chat Samples')

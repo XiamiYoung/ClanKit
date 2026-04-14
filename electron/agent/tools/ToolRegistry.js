@@ -163,6 +163,17 @@ class ToolRegistry {
   }
 
   /**
+   * Inject LLM config into AnalyzeAgentTool for parallel analysis.
+   * Called by AgentLoop.run() after registerTool('analyze_agent_history', ...).
+   */
+  setAnalysisConfig(config) {
+    const tool = this.tools.get('analyze_agent_history')
+    if (tool && typeof tool.setLLMConfig === 'function' && config) {
+      tool.setLLMConfig(config)
+    }
+  }
+
+  /**
    * Register SearchHistoryTool for a specific agent.
    * Called by AgentLoop.run() once systemAgentId is known.
    */

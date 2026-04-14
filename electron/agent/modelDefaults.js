@@ -184,10 +184,127 @@ function getAllDefaults(dataDir) {
   return result
 }
 
+// Map ClankAI provider type → litellm_provider name
+const PROVIDER_TO_LITELLM = {
+  openai_official: 'openai',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  qwen: 'dashscope',
+  google: 'gemini',
+  mistral: 'mistral',
+  groq: 'groq',
+  xai: 'xai',
+}
+
+/**
+ * Load full litellm catalog (not just max_output_tokens).
+ * Returns raw { modelId: { ...fields } } object.
+ */
+function _loadRawCatalog(dataDir) {
+  if (dataDir) {
+    const cachedPath = path.join(dataDir, 'litellm-models.json')
+    try {
+      if (fs.existsSync(cachedPath)) return JSON.parse(fs.readFileSync(cachedPath, 'utf8'))
+    } catch {}
+  }
+  try {
+    if (fs.existsSync(BUNDLED_PATH)) return JSON.parse(fs.readFileSync(BUNDLED_PATH, 'utf8'))
+  } catch {}
+  return {}
+}
+
+/**
+ * Recommend a balanced chat model for a given provider from the user's available models.
+ *
+ * Strategy:
+ * - Filter litellm catalog for matching provider + mode=chat models
+ * - Intersect with the user's actual available model IDs (from API fetch)
+ * - Sort by total cost (input + output per token)
+ * - Pick the median model (balanced cost/performance)
+ * - If 1-2 models: pick the more expensive one (better quality)
+ *
+ * @param {string} providerType - ClankAI provider type (e.g. 'qwen', 'deepseek')
+ * @param {string[]} availableModelIds - Model IDs from the user's API fetch
+ * @param {string} [dataDir] - User data directory for cached litellm data
+ * @returns {{ modelId: string|null, reason: string }}
+ */
+function recommendModel(providerType, availableModelIds, dataDir) {
+  if (!availableModelIds || availableModelIds.length === 0) {
+    return { modelId: null, reason: 'no models available' }
+  }
+  if (availableModelIds.length === 1) {
+    return { modelId: availableModelIds[0], reason: 'only model' }
+  }
+
+  const litellmProvider = PROVIDER_TO_LITELLM[providerType]
+  if (!litellmProvider) {
+    // Unknown provider — pick middle of list
+    const mid = Math.floor(availableModelIds.length / 2)
+    return { modelId: availableModelIds[mid], reason: 'unknown provider, picked middle' }
+  }
+
+  const catalog = _loadRawCatalog(dataDir)
+  if (!catalog || Object.keys(catalog).length === 0) {
+    const mid = Math.floor(availableModelIds.length / 2)
+    return { modelId: availableModelIds[mid], reason: 'no catalog data' }
+  }
+
+  // Build a set of available IDs (lowercase) for matching
+  const availSet = new Set(availableModelIds.map(id => id.toLowerCase()))
+
+  // Find chat models from catalog that match provider AND are in the user's available list
+  const scored = []
+  for (const [catalogId, meta] of Object.entries(catalog)) {
+    if (catalogId === 'sample_spec') continue
+    if (meta.litellm_provider !== litellmProvider) continue
+    if (meta.mode !== 'chat') continue
+    if (meta.deprecation_date) continue
+
+    const cost = (meta.input_cost_per_token || 0) + (meta.output_cost_per_token || 0)
+    // litellm IDs may have provider prefix (e.g. "deepseek/deepseek-chat")
+    const bare = catalogId.includes('/') ? catalogId.split('/').pop() : catalogId
+
+    // Match against available model IDs
+    let matchedId = null
+    if (availSet.has(catalogId.toLowerCase())) matchedId = availableModelIds.find(id => id.toLowerCase() === catalogId.toLowerCase())
+    else if (availSet.has(bare.toLowerCase())) matchedId = availableModelIds.find(id => id.toLowerCase() === bare.toLowerCase())
+
+    if (matchedId) {
+      scored.push({ id: matchedId, cost, ctx: meta.max_input_tokens || 0 })
+    }
+  }
+
+  if (scored.length === 0) {
+    // No catalog matches — pick middle of available list
+    const mid = Math.floor(availableModelIds.length / 2)
+    return { modelId: availableModelIds[mid], reason: 'no catalog matches' }
+  }
+
+  // Deduplicate by model ID (keep lowest cost entry per ID)
+  const byId = new Map()
+  for (const s of scored) {
+    const key = s.id.toLowerCase()
+    if (!byId.has(key) || s.cost < byId.get(key).cost) byId.set(key, s)
+  }
+  const unique = [...byId.values()].sort((a, b) => a.cost - b.cost)
+
+  if (unique.length <= 2) {
+    // 1-2 models: pick the more expensive (better quality)
+    const pick = unique[unique.length - 1]
+    return { modelId: pick.id, reason: `best of ${unique.length}` }
+  }
+
+  // 3+ models: pick the median (balanced)
+  const medianIdx = Math.floor(unique.length / 2)
+  const pick = unique[medianIdx]
+  return { modelId: pick.id, reason: `median of ${unique.length} (cost rank ${medianIdx + 1})` }
+}
+
 module.exports = {
   FALLBACK_MAX_OUTPUT_TOKENS,
   lookupModelMaxOutputTokens,
   lookupModelMaxOutputTokensDetailed,
   getAllDefaults,
   refreshFromRemote,
+  recommendModel,
 }

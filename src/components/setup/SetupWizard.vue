@@ -589,14 +589,19 @@ async function handleFetchModels() {
         models = [...reasonerModels, ...otherModels]
       }
       if (models.length) {
-        const preset = PROVIDER_PRESETS[selectedProviderType.value]
-        // For DeepSeek, always select the first model from sorted list (reasoner)
-        if (selectedProviderType.value === 'deepseek') {
+        // Auto-select a balanced model using litellm pricing data
+        try {
+          const rec = await window.electronAPI.recommendModel({
+            providerType: selectedProviderType.value,
+            modelIds: models.map(m => m.id),
+          })
+          if (rec?.modelId && models.some(m => m.id === rec.modelId)) {
+            selectedModelId.value = rec.modelId
+          } else {
+            selectedModelId.value = models[0].id
+          }
+        } catch {
           selectedModelId.value = models[0].id
-        } else {
-          const defaultId = preset?.defaultModels?.[0]
-          const match = defaultId && models.find(m => m.id === defaultId)
-          selectedModelId.value = match ? match.id : models[0].id
         }
       }
     }
@@ -1048,8 +1053,8 @@ async function finishTour() {
     setTimeout(() => {
       if (chatId) {
         const greeting = lang === 'zh'
-          ? '你好，很高兴和你一起开启 AI 旅程，告诉我关于我你知道什么，你能做什么，你可以把对我的了解创建到一个文档吗？'
-          : 'Hi, excited to start this AI journey with you! Tell me what you know about me, what you can do, and can you create a document about what you know about me?'
+          ? '你好，很高兴和你一起开启 AI 旅程，告诉我关于我你知道什么，你能做什么，你可以把对我的了解通过使用工具创建到一个文档吗？'
+          : 'Hi, excited to start this AI journey with you! Tell me what you know about me, what you can do, and can you use your tools to create a document about what you know about me?'
         chatsStore.sendMinibarMessage(greeting, chatId)
       }
       // Trigger logo dance animation to welcome the user

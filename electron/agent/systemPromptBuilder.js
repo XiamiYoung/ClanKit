@@ -99,7 +99,7 @@ function readFileIfExists(filePath) {
  * @param {object|null} ragContext           RAG retrieval results
  * @returns {string} The assembled system prompt
  */
-function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
+function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName, analysisTargetAgentType } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
   // When a named agent is active, use it as the opening identity (highest priority).
   // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
   let openingIdentity
@@ -160,27 +160,55 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
 
   // ── Analysis Chat Context ──
   if (analysisTargetAgentId && analysisTargetAgentName) {
-    system += `\n\n---\n## ANALYSIS MODE — "${analysisTargetAgentName}"
+    const isSelfAnalysis = analysisTargetAgentType === 'user'
 
-You are a professional character analyst. Your task is to deeply analyze the digital persona **"${analysisTargetAgentName}"** using their complete imported chat history.
+    const analysisTitle = isSelfAnalysis
+      ? `ANALYSIS MODE — Self-Analysis ("Me")`
+      : `ANALYSIS MODE — "${analysisTargetAgentName}"`
+
+    const analysisIntro = isSelfAnalysis
+      ? `You are a professional character analyst. Your task is to deeply analyze **the user's own personality and communication patterns** ("Me" in the chat history) using their complete imported chat records.`
+      : `You are a professional character analyst. Your task is to deeply analyze the digital persona **"${analysisTargetAgentName}"** using their complete imported chat history.`
+
+    const reportTitle = isSelfAnalysis
+      ? `# Me — Self-Analysis`
+      : `# ${analysisTargetAgentName} — Character Analysis`
+
+    const overviewDesc = isSelfAnalysis
+      ? `[Brief summary: your communication style, period covered, who you chatted with]`
+      : `[Brief summary: who this person is, relationship to the user, period covered]`
+
+    const relationshipSection = isSelfAnalysis
+      ? `## How I Interact with Others\n[Patterns in how you initiate, respond, and maintain conversations]`
+      : `## Relationship with User\n[Dynamics, closeness level, patterns in how they interact]`
+
+    const keyQuotesDesc = isSelfAnalysis
+      ? `[5-10 notable messages that best capture your character]`
+      : `[5-10 notable messages that best capture their character]`
+
+    system += `\n\n---\n## ${analysisTitle}
+
+${analysisIntro}
 
 ### Tool: analyze_agent_history
-This is your primary tool. It has two actions:
+This is your primary tool. It has three actions:
 - **action="stats"** — Call this FIRST. Returns: total message count, date range, monthly activity heat map, sender breakdown, and suggested file paths.
-- **action="messages", page=N** — Call for pages 1 through total_pages to read all messages chronologically (150 per page).
+- **action="analyze_all"** — Call this SECOND. Performs parallel chunked analysis of all messages and returns partial analyses. Much faster than reading pages one by one.
+- **action="messages", page=N** — (Fallback) Read messages page by page (150 per page). Only use if analyze_all fails.
 
 ### Standard Workflow (follow this exactly when the user asks to start or analyze):
 1. Call \`analyze_agent_history(action="stats")\` → understand scope
-2. Read ALL pages: \`analyze_agent_history(action="messages", page=1)\`, page=2, page=3… until all pages done
-3. Write the analysis report via \`file_operation\` to the suggested_output_path from stats
+2. Call \`analyze_agent_history(action="analyze_all")\` → get parallel analysis results
+3. Synthesize the partial analyses into the final report
+4. Write the analysis report via \`file_operation\` to the suggested_output_path from stats
 
 ### Default Output: Markdown Report
 Unless the user requests HTML, write a **Markdown (.md)** file with these sections:
 \`\`\`
-# ${analysisTargetAgentName} — Character Analysis
+${reportTitle}
 
 ## Overview
-[Brief summary: who this person is, relationship to the user, period covered]
+${overviewDesc}
 
 ## Personality Traits
 [Core traits with evidence from chat messages]
@@ -197,14 +225,13 @@ Unless the user requests HTML, write a **Markdown (.md)** file with these sectio
 ## Emotional Patterns
 [How they express emotion, stress responses, humor style]
 
-## Relationship with User
-[Dynamics, closeness level, patterns in how they interact]
+${relationshipSection}
 
 ## Chat Activity Heat Map
 [Visualize monthly activity from the stats data — text-based table or description]
 
 ## Key Quotes
-[5-10 notable messages that best capture their character]
+${keyQuotesDesc}
 
 ## Summary
 [Overall impression, strengths, blind spots]
@@ -219,8 +246,7 @@ If the user requests HTML, generate a **self-contained HTML file** with:
 - No external dependencies — fully self-contained
 
 ### Guidelines
-- Base ALL claims on specific evidence from the messages — cite actual quotes
-- Read enough pages to cover the full time range before drawing conclusions
+- Base ALL claims on specific evidence from the messages — cite actual quotes${isSelfAnalysis ? '\n- Focus on "Me" messages to extract personality traits. The other person\'s messages are context only.' : '\n- Read enough pages to cover the full time range before drawing conclusions'}
 - Write in the same language as the user's most recent message
 - After writing the file, tell the user the file path and offer to open it or generate the HTML version`
   }

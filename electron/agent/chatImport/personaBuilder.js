@@ -54,13 +54,179 @@ function getContextWindow(modelId, contextWindows) {
 }
 
 /**
+ * Build a self-analysis prompt: generate a persona for "Me" (the user) from chat history.
+ */
+function _buildSelfPrompt(profile, messageBlock, language) {
+  const name = profile.name || 'Me'
+  const gender = profile.gender || 'Unknown'
+  const zh = language === 'zh'
+
+  const template = zh ? `你是一个人格生成系统。分析下方的聊天记录，为标记为 **"Me"** 的一方生成完整的 Layer 0-5 人格文档。
+
+重要：
+- 整个输出必须使用简体中文。
+- 只分析 "Me" 的消息来提取性格、表达风格和行为模式。对方的消息仅作为上下文参考。
+- 仅输出最终的人格文档（Markdown 格式），不要包含中间分析步骤。
+在文档末尾另起一行输出：
+SHORT_DESCRIPTION: <用一句话描述此人，不超过50个字>
+
+---
+## 个人资料
+姓名：${name}
+性别：${gender}
+
+---
+## 任务
+从聊天记录中提取 **"Me"** 的：
+1. 语言习惯：高频词、口头禅、常用 emoji 及使用场景、句子长度、回复速度、"不想聊"信号
+2. 情感表达：如何表达关心、不满、道歉、喜欢
+3. 冲突模式：触发点 → 第一反应 → 升级 → 冷战 → 和解
+4. 角色行为：主动发起模式、消失信号、底线
+
+然后生成以下文档：
+
+# ${name} — 人格档案
+
+## Layer 0：核心模式（最高优先级 — 不可打破）
+{从聊天记录中提炼 "Me" 的核心行为规则。
+格式："当[情况]时，你会[行为]，而不是[别人以为的那样]"}
+
+## Layer 1：身份
+{姓名、性别}
+{从聊天模式中推断的关键性格特征}
+
+## Layer 2：表达风格
+### 口头禅和高频词
+### 说话风格
+{句式结构、不同场景下的 emoji 习惯、回复速度、沉默信号}
+### 实际回复方式
+> 日常问候：...
+> 遇到不舒服的事：...
+> "最近怎么样"：...
+> 长时间沉默后被联系：...
+
+## Layer 3：情感行为模式
+### 如何表达关心
+### 如何表达不满
+### 如何道歉（或不道歉）
+
+## Layer 4：冲突与关系边界
+### 冲突链
+### 冷战模式
+### 和解信号
+### 底线
+
+## Layer 5：预警与极限
+### 讨厌的事（附聊天证据）
+### 什么时候会消失
+### 如何重新出现
+
+## 行为准则
+1. Layer 0 优先级最高
+2. 使用 Layer 2 的说话风格
+3. 通过 Layer 3 的模式表达情感 — 用行为而非直白的陈述
+4. 按 Layer 4 处理冲突 — 按链条走，不跳步
+5. 你是${name}，不是 AI，永远不要打破角色
+6. 始终使用用户的语言回复
+7. 如果存在纠正记录，纠正记录优先
+
+## 纠正记录
+（暂无）
+
+---
+## 聊天记录
+${messageBlock}`
+
+  : `You are a persona generation system. Analyze the chat history below and generate a complete Layer 0-5 persona document for the person marked as **"Me"**.
+
+IMPORTANT:
+- The entire output MUST be written in English.
+- Only analyze messages from "Me" to extract personality, expression style, and behavior patterns. The other person's messages are context only.
+- Output ONLY the final persona document in Markdown. Do not include intermediate analysis steps.
+After the document, on a NEW line, output exactly:
+SHORT_DESCRIPTION: <a one-sentence description of this person, max 50 characters>
+
+---
+## PROFILE
+Name: ${name}
+Gender: ${gender}
+
+---
+## TASK
+From the chat messages, extract **"Me"**'s:
+1. Speech patterns: high-frequency words, catchphrases, top 5 emoji + usage context, sentence length, reply speed, "not in the mood" signals
+2. Emotional expression: how they show care, displeasure, apologize (or don't), express affection
+3. Conflict chain: trigger → first reaction → escalation → cold war → resolution
+4. Role behavior: initiation patterns, disappearance signals, hard limits
+
+Then generate this exact document:
+
+# ${name} — Persona
+
+## Layer 0: Core Patterns (Highest Priority — Never Break)
+{Derive core behavioral rules from "Me"'s messages in the chat history.
+Format: "When [situation], you [behavior], not [what people assume]"}
+
+## Layer 1: Identity
+{name, gender}
+{Key personality traits inferred from chat patterns}
+
+## Layer 2: Expression Style
+### Catchphrases and High-Frequency Words
+### Speaking Style
+{sentence structure, emoji habits by context, reply speed, silence signals}
+### How You Actually Respond
+> Normal greeting: ...
+> Something uncomfortable: ...
+> "How have you been": ...
+> Long silence then someone reaches out: ...
+
+## Layer 3: Emotional Behavior Patterns
+### How You Show You Care
+### How You Express Displeasure
+### How You Apologize (or Don't)
+
+## Layer 4: Conflict and Relationship Boundaries
+### Your Conflict Chain
+### Your Cold War Mode
+### Your Reconciliation Signal
+### Your Hard Limits
+
+## Layer 5: Warning Signs and Limits
+### You Dislike (with chat evidence)
+### When You Disappear
+### How You Reappear
+
+## Behavioral Master Principles
+1. Layer 0 has highest priority
+2. Speak using Layer 2 style
+3. Express emotions through Layer 3 patterns — use behavior, not direct statements
+4. Handle conflict per Layer 4 — follow the chain, don't skip steps
+5. You are ${name}, not an AI. Never break character
+6. Always reply in the user's language
+7. If Correction layer exists, it takes priority
+
+## Correction Log
+(No entries yet)
+
+---
+## CHAT MESSAGES
+${messageBlock}`
+
+  return template
+}
+
+/**
  * Build the merged prompt (chat_analyzer + persona_analyzer + persona_builder).
  *
  * @param {object} profile - { name, gender, relationship, impression }
  * @param {string} messageBlock - formatted chat messages (from buildMessageBlock())
+ * @param {string} language - 'en' or 'zh'
+ * @param {string} [analyzeTarget='other'] - 'self' to analyze "Me", 'other' to analyze "Them"
  * @returns {string} full prompt string
  */
-function buildCombinedPrompt(profile, messageBlock, language) {
+function buildCombinedPrompt(profile, messageBlock, language, analyzeTarget) {
+  if (analyzeTarget === 'self') return _buildSelfPrompt(profile, messageBlock, language)
   const name = profile.name || 'Unknown'
   const gender = profile.gender || 'Unknown'
   const zh = language === 'zh'
@@ -254,8 +420,8 @@ function _parseTokenError(err) {
 async function _callLLM(prompt, config, maxTokens = 8192) {
   const um = config.utilityModel
   const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
-  const isOpenAI = ['openai', 'openai_official', 'deepseek'].includes(um.provider)
   const isGoogle  = um.provider === 'google'
+  const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && !isGoogle
 
   try {
     if (isGoogle) {
@@ -279,7 +445,7 @@ async function _callLLM(prompt, config, maxTokens = 8192) {
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
         _scenario: 'persona-build',
-        ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+        ...(um.provider !== 'openai' ? { _directAuth: true } : {}),
         provider: { type: um.provider },
       }
       const oaiClient = new OpenAIClient(cfg)
@@ -319,19 +485,25 @@ async function _callLLM(prompt, config, maxTokens = 8192) {
 /**
  * Build the chunk analysis prompt (partial messages → partial observations).
  */
-function _buildChunkAnalysisPrompt(profile, messageBlock, chunkIdx, totalChunks) {
+function _buildChunkAnalysisPrompt(profile, messageBlock, chunkIdx, totalChunks, analyzeTarget) {
   const name = profile.name || 'Unknown'
+  const isSelf = analyzeTarget === 'self'
+  const targetDesc = isSelf
+    ? `Analyze messages from "Me" only. The other person's messages are context only.`
+    : `Person: ${name} (${profile.gender || 'Unknown'}, relationship: ${profile.relationship || 'Not specified'})`
+  const subjectLabel = isSelf ? '"Me"' : 'them'
+
   return `You are analyzing chat messages (chunk ${chunkIdx + 1} of ${totalChunks}) for persona generation.
 
-Person: ${name} (${profile.gender || 'Unknown'}, relationship: ${profile.relationship || 'Not specified'})
+${targetDesc}
 
-Analyze these messages and extract observations for EACH of the following categories. Be specific, quote actual messages when possible:
+Analyze these messages and extract observations about ${subjectLabel} for EACH of the following categories. Be specific, quote actual messages when possible:
 
 1. **Speech patterns**: catchphrases, high-frequency words, emoji usage, sentence length, reply speed signals
 2. **Emotional expression**: how they show care, displeasure, apologize, express affection
 3. **Conflict patterns**: triggers, reactions, escalation, cold war behavior, resolution style
 4. **Communication habits**: initiation patterns, response timing, disappearance signals, hard limits
-5. **Notable quotes**: 3-5 most characteristic messages that capture their personality
+5. **Notable quotes**: 3-5 most characteristic messages that capture ${isSelf ? 'my' : 'their'} personality
 
 Output your observations as structured notes. Do NOT generate a full persona document — just observations.
 
@@ -343,14 +515,28 @@ ${messageBlock}`
 /**
  * Build the synthesis prompt (merge partial analyses → final persona).
  */
-function _buildSynthesisPrompt(profile, partialAnalyses, language) {
+function _buildSynthesisPrompt(profile, partialAnalyses, language, analyzeTarget) {
   const name = profile.name || 'Unknown'
   const gender = profile.gender || 'Unknown'
   const zh = language === 'zh'
+  const isSelf = analyzeTarget === 'self'
   const merged = partialAnalyses.map((a, i) => `### ${zh ? '分析部分' : 'Analysis Part'} ${i + 1}\n${a}`).join('\n\n')
 
   // Reuse the same template structure as buildCombinedPrompt but replace chat messages with partial analyses
-  const instructions = zh
+  const instructions = isSelf
+    ? (zh
+      ? `你是一个人格生成系统。下方是对聊天记录中 **"Me"** 的多次分析结果。将它们合成为完整的 Layer 0-5 人格文档。
+
+重要：整个输出必须使用简体中文。
+仅输出最终的人格文档（Markdown 格式）。
+在文档末尾另起一行输出：
+SHORT_DESCRIPTION: <用一句话描述此人，不超过50个字>`
+      : `You are a persona generation system. Below are partial analyses of **"Me"** from chat history. Synthesize them into a complete Layer 0-5 persona document.
+
+IMPORTANT: The entire output MUST be written in English.
+Output ONLY the final persona document in Markdown.
+After the document, on a NEW line: SHORT_DESCRIPTION: <one-sentence, max 50 chars>`)
+    : (zh
     ? `你是一个人格生成系统。下方是多个聊天记录分析的结果。将它们合成为完整的 Layer 0-5 人格文档。
 
 重要：整个输出必须使用简体中文。
@@ -370,7 +556,7 @@ Output ONLY the final persona document in Markdown.
 After the document, on a NEW line: SHORT_DESCRIPTION: <one-sentence, max 50 chars>
 Then: INFERRED_RELATIONSHIP: <relationship inferred from analyses>
 Then: INFERRED_IMPRESSION: <your impression of this person, max 100 chars>
-Then: INFERRED_THEIR_IMPRESSION: <their impression/attitude toward you, max 100 chars>`
+Then: INFERRED_THEIR_IMPRESSION: <their impression/attitude toward you, max 100 chars>`)
 
   // Use the same document template as buildCombinedPrompt (language-matched)
   const docTemplate = zh
@@ -531,7 +717,7 @@ function _splitMessageBlock(messageBlock, tokenBudget) {
  * @param {string} [language] - 'en' or 'zh'
  * @returns {Promise<{ success: boolean, systemPrompt?: string, suggestedName?: string, description?: string, error?: string }>}
  */
-async function generatePersona(fullPrompt, config, onProgress, profile, contextWindows, language) {
+async function generatePersona(fullPrompt, config, onProgress, profile, contextWindows, language, analyzeTarget) {
   const emit = (step, progress, message) => {
     onProgress && onProgress({ step, progress, message })
   }
@@ -614,38 +800,48 @@ async function generatePersona(fullPrompt, config, onProgress, profile, contextW
 
       const partialAnalyses = []
       let completed = 0
+      const CONCURRENCY = 3
 
-      for (let ti = 0; ti < tasks.length; ti++) {
-        const task = tasks[ti]
+      for (let ti = 0; ti < tasks.length; ti += CONCURRENCY) {
+        const batch = tasks.slice(ti, Math.min(ti + CONCURRENCY, tasks.length))
         const pct = 5 + Math.round(((completed + 1) / (tasks.length + 1)) * 60)
-        emit('analyze', pct, msg.analyzing(completed + 1, tasks.length, task.label))
+        emit('analyze', pct, msg.analyzing(completed + 1, tasks.length, batch.map(t => t.label).join(',')))
 
-        const chunkPrompt = _buildChunkAnalysisPrompt(resolvedProfile, task.chunk, ti, tasks.length)
+        const batchResults = await Promise.all(
+          batch.map((task, j) => {
+            const chunkPrompt = _buildChunkAnalysisPrompt(resolvedProfile, task.chunk, ti + j, tasks.length, analyzeTarget)
+            return _callLLM(chunkPrompt, config, 4096)
+              .then(analysis => ({ success: true, analysis, task }))
+              .catch(err => ({ success: false, error: err, task }))
+          })
+        )
 
-        try {
-          const analysis = await _callLLM(chunkPrompt, config, 4096)
-          if (analysis) partialAnalyses.push(analysis)
-          completed++
-        } catch (chunkErr) {
-          if (chunkErr.tokenInfo) {
+        const retryTasks = []
+        for (const br of batchResults) {
+          if (br.success && br.analysis) {
+            partialAnalyses.push(br.analysis)
+            completed++
+          } else if (br.error?.tokenInfo) {
             // This chunk overflowed — split it further using real token info
-            const ratio = chunkErr.tokenInfo.messageTokens / Math.max(estimateTokens(chunkPrompt), 1)
+            const ratio = br.error.tokenInfo.messageTokens / Math.max(estimateTokens(br.task.chunk), 1)
             const subBudget = Math.floor(chunkBudget / Math.max(ratio, 1.5))
-            const subChunks = _splitMessageBlock(task.chunk, Math.max(subBudget, 1000))
+            const subChunks = _splitMessageBlock(br.task.chunk, Math.max(subBudget, 1000))
 
-            logger.info(`personaBuilder: part ${task.label} overflow (ratio ${ratio.toFixed(1)}x), re-splitting into ${subChunks.length} sub-parts`)
+            logger.info(`personaBuilder: part ${br.task.label} overflow (ratio ${ratio.toFixed(1)}x), re-splitting into ${subChunks.length} sub-parts`)
 
-            // Replace this task with sub-tasks in the queue
-            const newTasks = subChunks.map((sc, j) => ({
+            retryTasks.push(...subChunks.map((sc, k) => ({
               chunk: sc,
-              label: `${task.label}.${j + 1}`,
-            }))
-            tasks.splice(ti + 1, 0, ...newTasks)
-
-            emit('analyze', pct, msg.reSplit(completed + 1, tasks.length, task.label, subChunks.length))
-          } else {
-            throw chunkErr
+              label: `${br.task.label}.${k + 1}`,
+            })))
+          } else if (br.error) {
+            throw br.error
           }
+        }
+
+        // Append overflow sub-tasks after current batch position
+        if (retryTasks.length > 0) {
+          tasks.splice(ti + batch.length, 0, ...retryTasks)
+          emit('analyze', pct, msg.reSplit(completed + 1, tasks.length, 'overflow', retryTasks.length))
         }
       }
 
@@ -654,7 +850,7 @@ async function generatePersona(fullPrompt, config, onProgress, profile, contextW
       }
 
       emit('analyze', 70, msg.synthesize(partialAnalyses.length))
-      const synthesisPrompt = _buildSynthesisPrompt(resolvedProfile, partialAnalyses, language)
+      const synthesisPrompt = _buildSynthesisPrompt(resolvedProfile, partialAnalyses, language, analyzeTarget)
       text = await _callLLM(synthesisPrompt, config, maxOutputTokens)
     }
 
@@ -729,4 +925,12 @@ function _extractProfileFromPrompt(promptPart) {
   }
 }
 
-module.exports = { buildCombinedPrompt, generatePersona }
+module.exports = {
+  buildCombinedPrompt,
+  generatePersona,
+  // Exported for reuse by AnalyzeAgentTool parallel analysis
+  estimateTokens,
+  getContextWindow,
+  _splitMessageBlock,
+  _callLLM,
+}

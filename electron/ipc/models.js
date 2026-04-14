@@ -41,7 +41,7 @@ Model IDs:
 ${modelIds.join('\n')}`
 
     try {
-      const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek' || um.provider === 'minimax'
+      const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
       let resultText = ''
 
       if (isOpenAI) {
@@ -53,7 +53,7 @@ ${modelIds.join('\n')}`
           _resolvedProvider: 'openai',
           defaultProvider: 'openai',
           _scenario: 'fetch-models',
-          ...(um.provider === 'openai_official' || um.provider === 'deepseek' ? { _directAuth: true } : {}),
+          ...(um.provider !== 'openai' ? { _directAuth: true } : {}),
           provider: { type: um.provider },
         })
         const response = await oaiClient.getClient().chat.completions.create({
@@ -189,6 +189,11 @@ ${modelIds.join('\n')}`
   ipcMain.handle('models:get-all-default-max-output-tokens', async () => {
     const { getAllDefaults, FALLBACK_MAX_OUTPUT_TOKENS } = require('../agent/modelDefaults')
     return { table: getAllDefaults(ds.paths().DATA_DIR), fallback: FALLBACK_MAX_OUTPUT_TOKENS }
+  })
+
+  ipcMain.handle('models:recommend', async (_, { providerType, modelIds }) => {
+    const { recommendModel } = require('../agent/modelDefaults')
+    return recommendModel(providerType, modelIds, ds.paths().DATA_DIR)
   })
 }
 

@@ -18,6 +18,10 @@ export const useObsidianStore = defineStore('obsidian', () => {
     const config = await window.electronAPI.obsidian.getConfig()
     if (config.vaultPath) {
       vaultPath.value = normalizePath(config.vaultPath)
+      // Sync DoCPath to configStore so MessageRenderer can detect aidoc files
+      const { useConfigStore } = await import('./config')
+      const configStore = useConfigStore()
+      configStore.config.DoCPath = vaultPath.value
       await loadTree()
       if (config.lastOpenedDoc) {
         const { path: filePath, name: fileName } = config.lastOpenedDoc

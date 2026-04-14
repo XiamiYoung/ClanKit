@@ -73,26 +73,15 @@ class AgentLoop {
     // If using new provider config structure
     if (config.provider && config.provider.type) {
       const pType = config.provider.type
-      const customIsOpenAI = pType === 'custom' && config.provider.settings?.protocol !== 'anthropic'
-      isOpenAIProvider = (
-        pType === 'openai' || pType === 'openai_official' || pType === 'deepseek' ||
-        pType === 'minimax' || pType === 'openrouter' || pType === 'qwen' || pType === 'glm' ||
-        pType === 'mistral' || pType === 'groq' || pType === 'xai' || pType === 'ollama' ||
-        pType === 'moonshot' || pType === 'doubao' || customIsOpenAI
-      )
+      isOpenAIProvider = pType !== 'anthropic' && pType !== 'google'
 
       // Normalize config for clients
       if (isOpenAIProvider) {
         config.openaiApiKey = config.provider.apiKey || ''
         config.openaiBaseURL = config.provider.baseURL
         if (!config.customModel) config.customModel = config.provider.model
-        // ollama needs no auth header; custom-openai inherits bearer
-        config._directAuth = (
-          pType === 'openai_official' || pType === 'deepseek' || pType === 'minimax' ||
-          pType === 'openrouter' || pType === 'qwen' || pType === 'glm' ||
-          pType === 'mistral' || pType === 'groq' || pType === 'xai' ||
-          pType === 'moonshot' || pType === 'doubao' || customIsOpenAI
-        )
+        // _directAuth: standard Bearer auth for all direct providers (not proxy-based openai)
+        config._directAuth = pType !== 'openai'
       } else {
         config.apiKey = config.provider.apiKey
         config.baseURL = config.provider.baseURL
@@ -431,9 +420,12 @@ class AgentLoop {
         agentPrompts.analysisTargetAgentName || 'Unknown',
         agentPrompts.analysisTargetAgentPrompt || '',
         this.config.dataPath || '',
-        this.config.DoCPath || ''
+        this.config.DoCPath || '',
+        agentPrompts.analysisTargetAgentType || 'system'
       )
       this.toolRegistry.registerTool('analyze_agent_history', analysisTool)
+      // Inject LLM config for parallel analysis (analyze_all action)
+      this.toolRegistry.setAnalysisConfig(this.config)
     }
 
     // Set compaction config for soul file auto-compression
@@ -445,8 +437,8 @@ class AgentLoop {
           model:        um.model,
           apiKey:       providerCfg.apiKey,
           baseURL:      providerCfg.baseURL,
-          isOpenAI:     um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek',
-          directAuth:   um.provider === 'openai_official' || um.provider === 'deepseek',
+          isOpenAI:     um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google',
+          directAuth:   um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google' && um.provider !== 'openai',
           providerType: um.provider,
         })
       }

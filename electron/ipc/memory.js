@@ -80,13 +80,13 @@ function register({ lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtracti
       if (!providerCfg?.apiKey) return { success: true, count: 0 }
       if (!providerCfg?.baseURL && um.provider !== 'google') return { success: true, count: 0 }
 
-      const isOpenAI = um.provider === 'openai' || um.provider === 'openai_official' || um.provider === 'deepseek'
+      const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
       const extractor = new MemoryExtractor({
         model:        um.model,
         apiKey:       providerCfg.apiKey,
         baseURL:      providerCfg.baseURL,
         isOpenAI,
-        directAuth:   um.provider === 'openai_official' || um.provider === 'deepseek',
+        directAuth:   isOpenAI && um.provider !== 'openai',
         providerType: um.provider,
       })
 
