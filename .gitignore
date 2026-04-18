@@ -43,9 +43,8 @@ electron-compiled/
 *.bak
 *.bak*
 
-# docs (whitelist go-migration)
-docs/*
-!docs/go-migration/
+# docs (local notes — not tracked)
+docs/
 
 # Scripts (ignore all except whitelisted)
 scripts/*
