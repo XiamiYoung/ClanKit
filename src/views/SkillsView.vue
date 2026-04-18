@@ -160,6 +160,7 @@
                     </svg>
                   </div>
                   <h3 class="skill-card-name">{{ skillDisplayName(skill) }}</h3>
+                  <span v-if="skill.isBuiltin" class="skill-builtin-badge">{{ t('skills.builtinBadge') }}</span>
                 </div>
 
                 <!-- Description -->
@@ -173,8 +174,8 @@
                     {{ new Date(skill.installedAt).toISOString().split('T')[0] }}
                   </div>
 
-                  <!-- Uninstall button row -->
-                  <div style="display:flex;justify-content:flex-end;width:100%;margin-top:0.5rem;">
+                  <!-- Uninstall button row (hidden for built-in skills) -->
+                  <div v-if="!skill.isBuiltin" style="display:flex;justify-content:flex-end;width:100%;margin-top:0.5rem;">
                     <button
                       class="remote-uninstall-btn"
                       @click.stop="confirmUninstall(skill)"
@@ -760,14 +761,13 @@
       </div>
     </div>
 
+    <!-- Preview limit modal (inside root so component has a single root for class/attrs) -->
+    <PreviewLimitModal
+      :visible="showPreviewLimitModal"
+      :message="previewLimitMessage"
+      @close="showPreviewLimitModal = false"
+    />
   </div>
-
-  <!-- Preview limit modal -->
-  <PreviewLimitModal
-    :visible="showPreviewLimitModal"
-    :message="previewLimitMessage"
-    @close="showPreviewLimitModal = false"
-  />
 </template>
 
 <script setup>
@@ -1791,6 +1791,18 @@ const SkillTreeNode = defineComponent({
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+}
+.skill-builtin-badge {
+  flex-shrink: 0;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm, 0.25rem);
+  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151);
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-caption, 0.6875rem);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
 }
 
 /* Description — the main content */

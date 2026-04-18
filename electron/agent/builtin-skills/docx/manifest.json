@@ -1,0 +1,6 @@
+{
+  "id": "docx",
+  "version": 1,
+  "builtin": true,
+  "description": "Word document processing — create, read, edit, format DOCX files with tables, headers, images"
+}

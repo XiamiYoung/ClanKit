@@ -34,6 +34,13 @@ const mockChatsStore = {
     if (chat) chat.messages.push({ id: msg.id || `msg-${Date.now()}`, ...msg })
   }),
   persist: vi.fn(async () => {}),
+  deleteMessage: vi.fn(async (chatId, msgId) => {
+    const chat = mockChatsStore.chats.find(c => c.id === chatId)
+    if (chat?.messages) {
+      const idx = chat.messages.findIndex(m => m.id === msgId)
+      if (idx >= 0) chat.messages.splice(idx, 1)
+    }
+  }),
   setPlanState: vi.fn(),
   getPlanRunParams: vi.fn(() => null),
   markCompleted: vi.fn(),
@@ -182,25 +189,26 @@ describe('useSendMessage', () => {
     expect(inputText.value).toBe('')
   })
 
-  // ─── 4. stopAgent clears everything ───────────────────────────────────────
+  // ─── 4. interrupt clears collaboration state and calls IPC ───────────────
 
   it('sets collaborationCancelled, clears runningAgentKeys, calls IPC stopAgent', async () => {
     const collaborationCancelled = ref(false)
     const isInCollaborationLoop = ref(true)
     const runningAgentKeys = reactive(new Set(['chat-1:agent1', 'chat-1:agent2', 'chat-2:agent1']))
 
-    // Add an assistant message to apply interrupt to
+    // Add a streaming assistant message so interrupt finds something to act on
     mockChat.messages = [
+      { id: 'u1', role: 'user', content: 'Hello' },
       { id: 'msg1', role: 'assistant', content: 'Streaming...', streaming: true },
     ]
 
-    const { stopAgent } = createSendMessage({
+    const { interrupt } = createSendMessage({
       collaborationCancelled,
       isInCollaborationLoop,
       runningAgentKeys,
     })
 
-    await stopAgent('chat-1')
+    await interrupt('chat-1')
 
     // collaborationCancelled should be set to true
     expect(collaborationCancelled.value).toBe(true)
@@ -303,17 +311,17 @@ describe('useSendMessage', () => {
     expect(pendingInterrupt.visible).toBe(false)
   })
 
-  // ─── 8. escapeRetrieve does nothing when not running ─────────────────────
+  // ─── 8. interrupt does nothing when no streaming/waiting msg ─────────────
 
-  it('escapeRetrieve does nothing when agents are not running', () => {
+  it('interrupt does nothing when no streaming/waiting assistant msg exists', async () => {
     mockChat.isRunning = false
     mockChat.messages = [{ id: 'u1', role: 'user', content: 'Hello' }]
     const inputText = ref('')
-    const { escapeRetrieve } = createSendMessage({ inputText })
+    const { interrupt } = createSendMessage({ inputText })
 
-    escapeRetrieve('chat-1')
+    await interrupt('chat-1')
 
-    // Input should remain empty since agents were not running
+    // Input should remain empty since there's no streaming/waiting msg
     expect(inputText.value).toBe('')
   })
 
@@ -359,29 +367,41 @@ describe('useSendMessage', () => {
     expect(attachments.value).toHaveLength(0)
   })
 
-  // ─── 12. _applyInterrupt behaviour ────────────────────────────────────────
+  // ─── 12. interrupt recall behaviour ───────────────────────────────────────
 
-  it('appends inline marker to a message with content on stop', () => {
-    const { _applyInterrupt } = createSendMessage()
-    const chat = { messages: [] }
-    const msg = { content: 'Partial response', streaming: true }
-    chat.messages.push(msg)
+  it('interrupt with activity keeps bubbles and appends marker', async () => {
+    mockChat.messages = [
+      { id: 'u1', role: 'user', content: 'Hello' },
+      { id: 'a1', role: 'assistant', content: 'Partial response', streaming: true },
+    ]
+    const inputText = ref('')
+    const { interrupt } = createSendMessage({ inputText })
 
-    _applyInterrupt(chat, msg, 'stop')
+    await interrupt('chat-1')
 
-    expect(msg.content).toContain('[Request interrupted by user.]')
-    expect(msg.streaming).toBe(false)
+    // User msg should remain, assistant msg should have marker
+    expect(mockChat.messages.find(m => m.id === 'u1')).toBeTruthy()
+    const assistantMsg = mockChat.messages.find(m => m.id === 'a1')
+    expect(assistantMsg.content).toContain('[Request interrupted by user.]')
+    expect(assistantMsg.streaming).toBe(false)
+    expect(inputText.value).toBe('')
   })
 
-  it('silently removes empty message without adding system bubble', () => {
-    const { _applyInterrupt } = createSendMessage()
-    const emptyMsg = { content: '', streaming: true }
-    const chat = { messages: [emptyMsg] }
+  it('interrupt without activity recalls user msg and deletes both bubbles', async () => {
+    mockChat.messages = [
+      { id: 'u1', role: 'user', content: 'Hello' },
+      { id: 'a1', role: 'assistant', content: '', streaming: true },
+    ]
+    const inputText = ref('')
+    const { interrupt } = createSendMessage({ inputText })
 
-    _applyInterrupt(chat, emptyMsg, 'stop')
+    await interrupt('chat-1')
 
-    // Empty msg should be removed silently — no system bubble
-    expect(chat.messages).toHaveLength(0)
+    // User msg should be recalled to textarea
+    expect(inputText.value).toBe('Hello')
+    // Both messages should be gone
+    expect(mockChat.messages.find(m => m.id === 'u1')).toBeFalsy()
+    expect(mockChat.messages.find(m => m.id === 'a1')).toBeFalsy()
   })
 })
 

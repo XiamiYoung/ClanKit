@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{D.agent_name}} · {{L.report_title}}</title>
+<style>
+  /* ─── Design tokens (v4 palette) ─── */
+  :root {
+    --ink:      #0f1117;
+    --ink-2:    #374151;
+    --ink-3:    #6b7280;
+    --ink-4:    #9ca3af;
+    --line:     #e5e7eb;
+    --line-2:   #f3f4f6;
+    --bg:       #ffffff;
+    --bg-off:   #f9fafb;
+    --bg-blue:  #eff6ff;
+
+    --blue:    #2563eb;
+    --blue-2:  #3b82f6;
+    --blue-3:  #bfdbfe;
+    --teal:    #0d9488;
+    --teal-2:  #99f6e4;
+    --amber:   #d97706;
+    --amber-2: #fde68a;
+    --rose:    #e11d48;
+    --rose-2:  #fecdd3;
+    --purple:  #7c3aed;
+    --purple-2:#ddd6fe;
+    --green:   #059669;
+    --green-2: #a7f3d0;
+    --indigo:  #4f46e5;
+    --cyan:    #06b6d4;
+    --pink:    #ec4899;
+
+    --font-sans: 'PingFang SC','Noto Sans SC','Microsoft YaHei',-apple-system,BlinkMacSystemFont,'Inter',sans-serif;
+    --font-mono: 'SF Mono','Fira Code',monospace;
+
+    --r: 8px;
+    --r-lg: 16px;
+    --r-xl: 20px;
+    --shadow:    0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+    --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.06);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 1120px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* ─── Nav ─── */
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(255,255,255,.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+    padding: 0 24px;
+  }
+  .nav-inner {
+    max-width: 1120px; margin: 0 auto;
+    display: flex; align-items: center; gap: 28px;
+    height: 52px; overflow-x: auto; scrollbar-width: none;
+  }
+  .nav-inner::-webkit-scrollbar { display: none; }
+  .nav-brand { font-size: 14px; font-weight: 700; color: var(--blue); white-space: nowrap; }
+  .nav a {
+    font-size: 13px; color: var(--ink-3); text-decoration: none;
+    white-space: nowrap; padding: 4px 2px;
+    border-bottom: 2px solid transparent; transition: all .2s;
+  }
+  .nav a:hover { color: var(--blue); border-bottom-color: var(--blue); }
+
+  /* ─── Hero (v4 clean) ─── */
+  .hero { padding: 60px 0 48px; border-bottom: 1px solid var(--line); margin-bottom: 56px; }
+  .hero-kicker {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg-blue); color: var(--blue);
+    font-size: 12px; font-weight: 600; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 100px;
+    margin-bottom: 20px; text-transform: uppercase;
+  }
+  .hero h1 {
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 800; line-height: 1.2;
+    letter-spacing: -.02em; margin-bottom: 12px;
+  }
+  .hero-sub {
+    font-size: 16px; color: var(--ink-3); max-width: 640px;
+    margin-bottom: 26px; line-height: 1.7;
+  }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; font-weight: 600; padding: 4px 10px;
+    border-radius: 6px;
+  }
+  .badge-blue   { background: var(--bg-blue); color: var(--blue); }
+  .badge-teal   { background: #f0fdfa;       color: var(--teal); }
+  .badge-amber  { background: #fffbeb;       color: var(--amber); }
+  .badge-purple { background: #f5f3ff;       color: var(--purple); }
+  .badge-rose   { background: #fff1f2;       color: var(--rose); }
+  .badge-green  { background: #ecfdf5;       color: var(--green); }
+
+  .hero-stats { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; }
+  .hstat { display: flex; flex-direction: column; gap: 2px; }
+  .hstat-val { font-size: 26px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
+  .hstat-lbl { font-size: 12px; color: var(--ink-4); font-weight: 500; }
+  .hstat-divider { width: 1px; background: var(--line); height: 40px; align-self: center; }
+
+  /* ─── Section header (v4) ─── */
+  .section { margin-bottom: 64px; scroll-margin-top: 64px; }
+  .section-header { margin-bottom: 28px; }
+  .section-number {
+    font-size: 11px; font-weight: 700; color: var(--blue-2);
+    letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px;
+  }
+  .section-title {
+    font-size: 22px; font-weight: 800; letter-spacing: -.01em;
+    display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 10px;
+  }
+  .section-desc { font-size: 14px; color: var(--ink-3); margin-top: 4px; }
+  .confidence-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 600; color: var(--ink-3);
+    background: var(--line-2); padding: 3px 10px; border-radius: 100px;
+    vertical-align: middle;
+  }
+  .conf-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+  /* ─── Grids ─── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 20px; }
+
+  /* ─── Card ─── */
+  .card {
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: var(--r-lg); padding: 24px;
+    box-shadow: var(--shadow);
+  }
+  .card-title {
+    font-size: 13px; font-weight: 700; color: var(--ink-2);
+    text-transform: uppercase; letter-spacing: .06em;
+    margin-bottom: 16px;
+  }
+  .chart-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+  .chart-desc  { font-size: 13px; color: var(--ink-3); margin-bottom: 18px; }
+
+  /* Overview cards */
+  .ov-label { font-size: 12px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+  .ov-val   { font-size: 34px; font-weight: 800; color: var(--ink); line-height: 1.1; }
+  .ov-val.colored { color: var(--blue); }
+  .ov-sub   { font-size: 12px; color: var(--ink-4); margin-top: 4px; }
+  .ov-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: var(--bg-blue); color: var(--blue); margin-top: 8px; }
+
+  /* ─── Deep analysis (28 dims, v4-styled) ─── */
+  .deep-card {
+    background: linear-gradient(135deg, #fafbff 0%, #f6f3fb 100%);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: 32px 36px;
+  }
+  .dim-row {
+    display: grid; grid-template-columns: 180px 1fr; gap: 28px;
+    padding-bottom: 20px; margin-bottom: 20px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .dim-row:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: none; }
+  .dim-label {
+    font-size: 11px; font-weight: 700; letter-spacing: .15em;
+    text-transform: uppercase; line-height: 1.5; align-self: start;
+  }
+  .dim-body { font-size: 14.5px; color: var(--ink-2); line-height: 1.9; }
+  .dim-body strong { color: var(--ink); font-weight: 700; }
+  .dim-body em { font-style: italic; color: var(--ink-3); font-size: 13px; }
+
+  /* ─── Annual area chart ─── */
+  .area-chart-card { padding: 24px; }
+  #yearChart { width: 100%; min-height: 240px; display: block; }
+
+  /* ─── Donut + length bars ─── */
+  .donut-wrap { display: flex; align-items: center; gap: 28px; }
+  .donut-legend { flex: 1; }
+  .legend-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .legend-item:last-child { border-bottom: none; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+  .legend-name  { font-size: 14px; color: var(--ink); flex: 1; }
+  .legend-count { font-size: 14px; font-weight: 700; color: var(--ink); }
+  .legend-pct   { font-size: 13px; color: var(--ink-3); min-width: 48px; text-align: right; }
+
+  .length-bars { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+  .length-row { display: flex; align-items: center; gap: 12px; }
+  .length-label { font-size: 13px; color: var(--ink); min-width: 76px; }
+  .length-track { flex: 1; height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; }
+  .length-fill  { height: 100%; border-radius: 5px; }
+  .length-pct   { font-size: 13px; font-weight: 700; color: var(--ink); min-width: 38px; text-align: right; }
+
+  /* ─── Heatmap + weekday ─── */
+  .heatmap-grid { display: grid; grid-template-columns: repeat(24,1fr); gap: 3px; margin-top: 8px; align-items: flex-end; height: 64px; }
+  .heatmap-cell { border-radius: 4px; transition: transform .2s; position: relative; cursor: default; }
+  .heatmap-cell:hover { transform: scaleY(1.08); }
+  .heatmap-cell:hover::after {
+    content: attr(data-tip); position: absolute; bottom: 100%; left: 50%;
+    transform: translateX(-50%); background: var(--ink); color: #fff;
+    font-size: 11px; padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+    z-index: 10; margin-bottom: 6px;
+  }
+  .weekday-chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; margin-top: 8px; }
+  .weekday-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; gap: 4px; }
+  .weekday-bar { width: 100%; border-radius: 6px 6px 0 0; transition: filter .2s; }
+  .weekday-bar:hover { filter: brightness(1.1); }
+  .weekday-label { font-size: 12px; color: var(--ink-3); }
+
+  /* ─── Intimacy ─── */
+  .intimacy-wrap { display: grid; grid-template-columns: auto 1fr; gap: 36px; align-items: center; }
+  .intimacy-total { text-align: center; flex-shrink: 0; }
+  .intimacy-big {
+    font-size: 80px; font-weight: 900; line-height: 1;
+    background: linear-gradient(135deg, var(--pink), var(--amber));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .intimacy-cap { font-size: 13px; color: var(--ink-3); margin-top: 8px; }
+  .intimacy-tag { margin-top: 8px; font-size: 14px; color: var(--ink-2); }
+  .intimacy-dims { display: flex; flex-direction: column; gap: 10px; }
+  .intimacy-row { display: flex; align-items: center; gap: 12px; }
+  .intimacy-label { font-size: 13px; color: var(--ink); min-width: 92px; }
+  .intimacy-track { flex: 1; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .intimacy-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--pink), var(--amber)); }
+  .intimacy-val { font-size: 13px; font-weight: 700; color: var(--ink); min-width: 32px; text-align: right; }
+
+  /* ─── OCEAN bars (v4 evidence style) ─── */
+  .ocean-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
+  .ocean-bars { display: flex; flex-direction: column; gap: 14px; }
+  .ocean-bar-row { display: flex; flex-direction: column; gap: 4px; }
+  .ocean-bar-header { display: flex; justify-content: space-between; align-items: baseline; }
+  .ocean-bar-name { font-size: 13px; font-weight: 700; }
+  .ocean-bar-score { font-size: 20px; font-weight: 800; }
+  .ocean-bar-track { height: 8px; background: var(--line-2); border-radius: 100px; overflow: hidden; }
+  .ocean-bar-fill  { height: 100%; border-radius: 100px; transition: width 1.2s cubic-bezier(.16,1,.3,1); }
+  .ocean-bar-evidence { font-size: 11px; color: var(--ink-4); margin-top: 2px; }
+
+  .ocean-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .ocean-detail-card { background: var(--bg-off); border-radius: var(--r); padding: 14px 16px; }
+  .ocean-detail-dim { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+  .ocean-detail-quote {
+    font-size: 12px; color: var(--ink-3); line-height: 1.5;
+    border-left: 2px solid var(--line); padding-left: 8px;
+    font-style: italic;
+  }
+
+  /* ─── MBTI ─── */
+  .mbti-card {
+    background: linear-gradient(135deg, var(--blue) 0%, var(--indigo) 100%);
+    color: #fff; border-radius: var(--r-lg); padding: 26px 28px;
+  }
+  .mbti-type {
+    font-size: 54px; font-weight: 900; letter-spacing: .08em; line-height: 1; margin-bottom: 6px;
+  }
+  .mbti-name { font-size: 14px; opacity: .85; margin-bottom: 22px; }
+  .mbti-bar { margin-bottom: 14px; }
+  .mbti-bar-header { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; color: rgba(255,255,255,.95); font-weight: 600; }
+  .mbti-bar-track { height: 8px; background: rgba(255,255,255,.18); border-radius: 4px; overflow: hidden; }
+  .mbti-bar-fill  { height: 100%; border-radius: 4px; background: rgba(255,255,255,.92); }
+  .mbti-pct { font-size: 11px; color: rgba(255,255,255,.75); text-align: right; margin-top: 3px; }
+
+  /* ─── Attachment card ─── */
+  .attachment-wrap { display: grid; grid-template-columns: 200px 1fr; gap: 20px; align-items: stretch; }
+  .attachment-dial {
+    background: var(--bg-off); border-radius: var(--r-lg); padding: 22px;
+    text-align: center; display: flex; flex-direction: column; justify-content: center;
+  }
+  .attachment-type { font-size: 28px; font-weight: 800; color: var(--blue); line-height: 1.2; margin-bottom: 8px; }
+  .attachment-conf { font-size: 11px; color: var(--ink-3); }
+  .attachment-desc { font-size: 14px; color: var(--ink-2); line-height: 1.8; background: var(--bg-blue); border-radius: var(--r-lg); padding: 20px; }
+
+  /* ─── Zodiac cards ─── */
+  .zodiac-card { display: flex; align-items: center; gap: 22px; }
+  .zodiac-emoji { font-size: 64px; flex-shrink: 0; }
+  .zodiac-info > .z-title { font-size: 24px; font-weight: 800; color: var(--indigo); }
+  .zodiac-info > .z-sub   { font-size: 13px; color: var(--ink-3); margin-top: 4px; }
+  .zodiac-info > .z-desc  { font-size: 13px; color: var(--ink-2); margin-top: 10px; line-height: 1.7; }
+
+  /* ─── Theatre ─── */
+  .theatre-card { padding: 0; overflow: hidden; }
+  .theatre-act {
+    display: grid; grid-template-columns: 100px 1fr; gap: 20px;
+    padding: 22px 26px; border-bottom: 1px solid var(--line);
+  }
+  .theatre-act:last-child { border-bottom: none; }
+  .theatre-meta { text-align: right; border-right: 2px solid var(--line-2); padding-right: 16px; }
+  .theatre-num { font-size: 11px; font-weight: 700; color: var(--ink-3); letter-spacing: .1em; }
+  .theatre-date { font-size: 13px; font-weight: 700; color: var(--indigo); margin-top: 6px; }
+  .theatre-cat {
+    display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .08em;
+    padding: 2px 8px; border-radius: 8px; margin-top: 6px;
+    background: var(--bg-blue); color: var(--blue);
+  }
+  .theatre-scene { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 10px; }
+  .theatre-line { font-size: 13px; color: var(--ink-2); margin-bottom: 4px; line-height: 1.6; word-break: break-word; overflow-wrap: anywhere; }
+  .theatre-line .who { font-weight: 600; }
+  .theatre-line.me .who   { color: var(--purple); }
+  .theatre-line.them .who { color: var(--blue); }
+  .theatre-analysis {
+    margin-top: 10px; font-size: 13px; color: var(--ink-2); line-height: 1.7;
+    padding: 10px 14px; background: var(--bg-off); border-radius: 8px;
+    border-left: 3px solid var(--blue);
+  }
+  .theatre-analysis strong { color: var(--blue); }
+
+  /* ─── Subtext table ─── */
+  .subtext-card { padding: 0; overflow: hidden; }
+  .subtext-head {
+    display: grid; grid-template-columns: 260px 1fr 1fr; gap: 20px;
+    padding: 14px 26px; background: var(--bg-off);
+    font-size: 11px; font-weight: 700; color: var(--ink-3);
+    text-transform: uppercase; letter-spacing: .08em;
+    border-bottom: 2px solid var(--line);
+  }
+  .subtext-row {
+    display: grid; grid-template-columns: 260px 1fr 1fr; gap: 20px;
+    padding: 18px 26px; border-bottom: 1px solid var(--line); align-items: center;
+  }
+  .subtext-row:last-child { border-bottom: none; }
+  .subtext-surface { font-size: 16px; font-weight: 700; font-style: italic; color: var(--indigo); word-break: break-word; overflow-wrap: anywhere; }
+  .subtext-decoded { font-size: 14px; color: var(--ink); line-height: 1.6; }
+  .subtext-decoded .arrow { color: var(--purple); margin-right: 6px; }
+  .subtext-evidence { font-size: 12px; color: var(--ink-3); line-height: 1.6; }
+
+  /* ─── Communication modes ─── */
+  .mode-list { display: flex; flex-direction: column; gap: 14px; }
+  .mode-row { display: flex; align-items: center; gap: 12px; }
+  .mode-ico { font-size: 18px; }
+  .mode-info { flex: 1; }
+  .mode-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .mode-desc { font-size: 12px; color: var(--ink-3); }
+  .mode-track { width: 110px; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .mode-fill  { height: 100%; border-radius: 4px; }
+  .mode-pct { font-size: 13px; font-weight: 700; color: var(--ink); min-width: 36px; text-align: right; }
+
+  .topic-cloud { display: flex; flex-wrap: wrap; gap: 10px; padding: 6px 0; }
+  .topic-tag { display: inline-flex; align-items: center; border-radius: 20px; font-weight: 600; }
+
+  /* ─── Emotion tri-cards ─── */
+  .emotion-card { padding: 22px; border-top: 4px solid var(--green); }
+  .emotion-ico  { font-size: 26px; margin-bottom: 12px; }
+  .emotion-name { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+  .emotion-desc { font-size: 13px; color: var(--ink-2); line-height: 1.8; }
+  .emotion-desc strong { color: var(--ink); }
+
+  /* ─── Relation rows / timeline ─── */
+  .relation-list { display: flex; flex-direction: column; }
+  .relation-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .relation-row:last-child { border-bottom: none; }
+  .relation-ico { font-size: 22px; flex-shrink: 0; width: 32px; text-align: center; }
+  .relation-content { flex: 1; min-width: 0; }
+  .relation-label { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .relation-desc  { font-size: 13px; color: var(--ink-3); margin-top: 2px; line-height: 1.6; }
+  .relation-score { font-size: 13px; font-weight: 700; color: var(--blue); white-space: nowrap; flex-shrink: 0; }
+
+  .timeline { position: relative; margin-top: 14px; padding-left: 0; }
+  .timeline::before { content: ''; position: absolute; left: 19px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+  .tl-row { display: flex; gap: 18px; align-items: flex-start; padding: 0 0 16px 0; position: relative; }
+  .tl-dot {
+    width: 40px; height: 40px; border-radius: 50%; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; flex-shrink: 0; z-index: 1;
+  }
+  .tl-label { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .tl-year  { color: var(--ink-3); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .tl-desc  { font-size: 13px; color: var(--ink-3); margin-top: 2px; line-height: 1.6; }
+
+  /* ─── Apple cards (DO/DONT, topics, signals, 10 ways) ─── */
+  .apple {
+    background: #fff; border-radius: 20px;
+    border: 0.5px solid rgba(0,0,0,0.08);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.03);
+  }
+  .apple-pad { padding: 32px; }
+  .apple-head { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+  .apple-sym {
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 700;
+  }
+  .apple-h-title { font-size: 20px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.3px; }
+  .apple-h-sub   { font-size: 13px; color: #86868b; margin-top: 2px; }
+  .apple-item { padding: 16px 0; border-bottom: 0.5px solid rgba(0,0,0,0.06); font-size: 15px; color: #1d1d1f; line-height: 1.55; letter-spacing: -0.1px; }
+  .apple-item:last-child { border-bottom: none; }
+
+  .topic-row {
+    display: grid; grid-template-columns: 200px 1fr; gap: 32px;
+    padding: 28px 0; border-bottom: 0.5px solid rgba(0,0,0,0.06);
+    align-items: flex-start;
+  }
+  .topic-row:last-child { border-bottom: none; }
+  .topic-row .label-wrap { display: flex; align-items: center; gap: 10px; }
+  .topic-row .label-wrap .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .topic-row .label-wrap .name { font-size: 17px; font-weight: 600; color: #1d1d1f; letter-spacing: -0.2px; }
+  .topic-row .desc { font-size: 13px; color: #86868b; margin-top: 4px; margin-left: 20px; }
+  .topic-row .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .topic-pill {
+    padding: 7px 14px; border-radius: 9999px;
+    font-size: 14px; font-weight: 500; letter-spacing: -0.1px;
+  }
+
+  .signal-card { padding: 28px 26px; }
+  .signal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .signal-lamp { display: flex; align-items: center; gap: 10px; }
+  .pulse { position: relative; display: inline-flex; width: 16px; height: 16px; }
+  .pulse .halo { position: absolute; inset: 0; border-radius: 50%; opacity: 0.18; }
+  .pulse .core { position: absolute; top: 3px; left: 3px; width: 10px; height: 10px; border-radius: 50%; }
+  .signal-name { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; }
+  .signal-count { font-size: 13px; color: #86868b; font-variant-numeric: tabular-nums; }
+  .signal-title { font-size: 22px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.5px; margin-bottom: 20px; }
+  .signal-item { padding: 14px 0; border-bottom: 0.5px solid rgba(0,0,0,0.06); font-size: 14px; color: #1d1d1f; line-height: 1.5; letter-spacing: -0.1px; }
+  .signal-item:last-child { border-bottom: none; }
+
+  /* ─── 10 Ways ─── */
+  .way-row { display: grid; grid-template-columns: 88px 1fr; gap: 24px; padding: 28px 36px; border-bottom: 0.5px solid rgba(0,0,0,0.06); }
+  .way-row:last-child { border-bottom: none; }
+  .way-num-col { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+  .way-num { font-size: 42px; font-weight: 200; letter-spacing: -2px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .way-icon { font-size: 24px; }
+  .way-title { font-size: 17px; font-weight: 600; color: #1d1d1f; letter-spacing: -0.2px; line-height: 1.5; margin-bottom: 16px; }
+  .way-example {
+    background: #f5f5f7; border-radius: 12px; padding: 16px 18px;
+    font-size: 14px; color: #1d1d1f; line-height: 1.7; margin-bottom: 14px;
+  }
+  .way-kicker { font-size: 10px; font-weight: 700; letter-spacing: 1.8px; margin-bottom: 6px; color: #86868b; }
+  .way-reason { padding: 0 4px; }
+  .way-reason-body { font-size: 14px; color: #48484a; line-height: 1.8; }
+
+  /* ─── Trajectory / portrait / contradiction ─── */
+  .traj-card { padding: 22px; border-top: 4px solid var(--blue); }
+  .traj-ico { font-size: 26px; margin-bottom: 10px; }
+  .traj-title { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+  .traj-scene { font-size: 14px; color: var(--ink); line-height: 1.7; margin-bottom: 12px; }
+  .traj-trigger { font-size: 12px; color: var(--ink-3); padding-top: 10px; border-top: 1px solid var(--line); line-height: 1.6; }
+  .traj-trigger strong { color: var(--ink-2); }
+
+  .portrait-card, .contradiction-card {
+    border-radius: var(--r-lg); padding: 32px;
+    font-size: 15px; line-height: 1.95; color: var(--ink-2);
+    border: 1px solid var(--line);
+  }
+  .portrait-card { background: linear-gradient(135deg, #f0f4ff, #fdf4ff); }
+  .contradiction-card { background: linear-gradient(135deg, #fef3c7, #fee2e2); }
+
+  /* ─── Compatibility ─── */
+  .compat-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .compat-row:last-child { border-bottom: none; }
+  .compat-code { width: 60px; font-size: 17px; font-weight: 900; letter-spacing: 1px; flex-shrink: 0; }
+  .compat-desc { flex: 1; font-size: 13px; color: var(--ink-2); line-height: 1.6; min-width: 0; }
+  .compat-score-wrap { width: 90px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .compat-score-track { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .compat-score-fill { height: 100%; border-radius: 3px; }
+  .compat-score-val { font-size: 14px; font-weight: 800; min-width: 26px; text-align: right; }
+
+  /* ─── Quotes ─── */
+  .quotes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .quote-card {
+    background: var(--bg-off); border-radius: 12px; padding: 18px 20px;
+    border-left: 4px solid var(--indigo); min-width: 0;
+  }
+  .quote-text { font-size: 14px; color: var(--ink); line-height: 1.7; margin-bottom: 10px; font-style: italic; word-break: break-word; overflow-wrap: anywhere; }
+  .quote-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .quote-year { font-size: 12px; color: var(--ink-3); }
+  .quote-tag { font-size: 11px; padding: 2px 8px; border-radius: 8px; font-weight: 600; }
+
+  /* ─── Health + growth ─── */
+  .health-wrap { display: flex; align-items: center; gap: 32px; }
+  .health-num { font-size: 76px; font-weight: 900; color: var(--green); line-height: 1; text-align: center; flex-shrink: 0; }
+  .health-lbl { font-size: 13px; color: var(--ink-3); text-align: center; margin-top: 4px; }
+  .health-trend { flex: 1; }
+  .health-alert {
+    margin-top: 18px; padding: 14px 16px;
+    background: #fef3c7; border-radius: 10px;
+    font-size: 13px; color: #92400e; line-height: 1.6;
+  }
+
+  .advice-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
+  .advice-card { position: relative; overflow: hidden; }
+  .advice-top { position: absolute; top: 0; left: 0; right: 0; height: 4px; }
+  .advice-ico { font-size: 26px; margin-bottom: 12px; margin-top: 8px; }
+  .advice-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+  .advice-text  { font-size: 13px; color: var(--ink-2); line-height: 1.7; margin-bottom: 12px; }
+  .advice-diff { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 8px; font-weight: 600; background: var(--bg-blue); color: var(--blue); }
+
+  /* ─── Footer ─── */
+  .footer {
+    margin-top: 72px; border-top: 1px solid var(--line);
+    padding: 28px 0; text-align: center; color: var(--ink-3); font-size: 13px;
+    background: var(--bg-off);
+  }
+  .footer strong { color: var(--ink); }
+  .footer .dot { margin: 0 10px; color: var(--ink-4); }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 860px) {
+    .grid-4 { grid-template-columns: 1fr 1fr; }
+    .grid-3 { grid-template-columns: 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .ocean-wrap { grid-template-columns: 1fr; }
+    .attachment-wrap { grid-template-columns: 1fr; }
+    .intimacy-wrap { grid-template-columns: 1fr; }
+    .subtext-head, .subtext-row { grid-template-columns: 1fr; gap: 6px; }
+    .topic-row { grid-template-columns: 1fr; gap: 12px; }
+    .theatre-act { grid-template-columns: 1fr; }
+    .theatre-meta { text-align: left; border-right: none; border-bottom: 1px solid var(--line-2); padding: 0 0 10px 0; }
+    .quotes-grid { grid-template-columns: 1fr; }
+    .advice-grid { grid-template-columns: 1fr; }
+    .compat-row { flex-wrap: wrap; }
+    .hstat-divider { display: none; }
+  }
+
+  /* THEME · Warm Cream Editorial */
+  :root {
+    --ink:#1F1815; --ink-2:#3D312B; --ink-3:#6F5F55; --ink-4:#9B8B7D;
+    --line:#E4D9C6; --line-2:#F0E8D7;
+    --bg:#F0E9DD; --bg-off:#E8E0CF; --bg-blue:#EEE6D3;
+    --coral:#CC785C; --coral-2:#DE9279;
+    --blue:#3B6E6A; --blue-2:#5B8E8A; --blue-3:#AEC7C4;
+    --teal:#4F7471; --teal-2:#A5C3C0;
+    --amber:#B57E3A; --amber-2:#D5A668;
+    --rose:#B04B3E; --rose-2:#DA9989;
+    --purple:#7A5C7C; --purple-2:#C0A9C2;
+    --green:#7E9A6D; --green-2:#BDD0AE;
+    --indigo:#45557D; --cyan:#64858A; --pink:#C58A7A;
+    --font-sans:'Styrene B','Söhne','Inter','Source Sans 3','PingFang SC','Noto Sans SC',sans-serif;
+    --font-heading:'Tiempos Headline','Copernicus','Source Serif 4','Noto Serif SC',Georgia,serif;
+    --r:4px; --r-lg:8px; --r-xl:14px;
+    --shadow: 0 1px 2px rgba(31,24,21,0.04), 0 4px 10px rgba(31,24,21,0.04);
+    --shadow-md: 0 8px 24px rgba(31,24,21,0.07);
+  }
+  body {
+    background:
+      radial-gradient(1200px 500px at 10% -10%, #F5EFE2 0%, transparent 60%),
+      var(--bg);
+    color: var(--ink);
+  }
+  .nav { background: rgba(240,233,221,0.9); backdrop-filter: blur(14px); border-bottom:1px solid var(--line); }
+  .nav-brand { color: var(--coral); font-family: var(--font-heading); font-weight:600; letter-spacing:-0.01em; }
+  .nav a { color: var(--ink-2); font-family: var(--font-sans); }
+  .nav a:hover { color: var(--coral); border-bottom-color: var(--coral); }
+  .hero { border-bottom:1px solid var(--line); padding: 72px 0 56px; }
+  .hero-kicker { background: transparent; color: var(--coral); border:1px solid var(--coral); font-family: var(--font-sans); font-weight:500; letter-spacing:0.08em; text-transform:uppercase; }
+  .hero h1 { font-family: var(--font-heading); font-weight:500; letter-spacing:-0.02em; color: var(--ink); font-size: clamp(34px, 4.5vw, 56px); line-height:1.1; }
+  .hero-sub { color: var(--ink-2); font-family: var(--font-sans); max-width:680px; }
+  .hstat-val { font-family: var(--font-heading); color: var(--ink); font-weight:500; }
+  .hstat-lbl { color: var(--ink-3); font-family: var(--font-sans); }
+  .hstat-divider { background: var(--line); }
+  .section-number { color: var(--coral); font-family: var(--font-sans); letter-spacing:0.15em; font-weight:500; }
+  .section-title { font-family: var(--font-heading); font-weight:500; color: var(--ink); letter-spacing:-0.015em; font-size:26px; }
+  .section-desc { color: var(--ink-3); font-family: var(--font-sans); font-style:normal; }
+  .card, .deep-card { border-radius: var(--r-lg); border-color: var(--line); background: #FAF4E6; box-shadow: var(--shadow); }
+  .deep-card { background: linear-gradient(135deg, #FAF4E6 0%, #F0E6D0 100%); }
+  .dim-label { font-family: var(--font-sans); font-weight:600; letter-spacing:0.08em; }
+  .dim-body { font-family: var(--font-sans); color: var(--ink-2); }
+  .dim-body strong { color: var(--ink); }
+  .dim-body em { color: var(--ink-3); font-family: var(--font-heading); font-style: italic; }
+  .apple { border-radius: var(--r-lg); border:1px solid var(--line); background:#FAF4E6; box-shadow: var(--shadow); }
+  .apple-h-title { color: var(--ink); font-family: var(--font-heading); font-weight:500; }
+  .apple-h-sub { color: var(--ink-3); font-family: var(--font-sans); }
+  .apple-item { color: var(--ink-2); border-bottom-color: var(--line-2); font-family: var(--font-sans); }
+  .way-num { font-family: var(--font-heading); font-weight:300; }
+  .way-title { color: var(--ink); font-family: var(--font-heading); font-weight:500; letter-spacing:-0.01em; }
+  .way-example { background: var(--bg-off); color: var(--ink-2); font-family: var(--font-sans); }
+  .way-reason-body { color: var(--ink-2); font-family: var(--font-sans); }
+  .badge, .topic-pill, .confidence-chip { font-family: var(--font-sans); }
+  .badge-blue   { background: #E6D7C1; color: var(--coral); }
+  .badge-teal   { background: #DEE7E3; color: var(--teal); }
+  .badge-amber  { background: #EADDC3; color: var(--amber); }
+  .badge-rose   { background: #E6D0CB; color: var(--rose); }
+  .badge-purple { background: #E0D8E1; color: var(--purple); }
+  .badge-green  { background: #DEE6D3; color: var(--green); }
+  .confidence-chip { background: rgba(204,120,92,0.1); color: var(--coral); }
+  .conf-dot { background: var(--coral); }
+  .mbti-card { background: linear-gradient(135deg, #CC785C 0%, #A85C40 100%); color:#FFF7EB; border-radius: var(--r-lg); }
+  .mbti-type { font-family: var(--font-heading); font-weight:500; letter-spacing:0.04em; }
+  .portrait-card { background: linear-gradient(135deg, #FAF4E6, #EADDC3); border:1px solid var(--line); color: var(--ink-2); font-family: var(--font-heading); font-style:normal; }
+  .contradiction-card { background: linear-gradient(135deg, #EADDC3, #E6D0CB); border:1px solid var(--line); color: var(--ink-2); font-family: var(--font-heading); font-style:normal; }
+  .intimacy-big { background: linear-gradient(135deg, #CC785C, #B57E3A); -webkit-background-clip:text; background-clip:text; font-family: var(--font-heading); }
+  .health-num { color: var(--coral); font-family: var(--font-heading); font-weight:500; }
+  .health-alert { background: #EADDC3; color: #8A5923; border:1px solid #D4BE8E; }
+  .footer { background: var(--bg-off); color: var(--ink-2); border-top-color: var(--line); font-family: var(--font-sans); }
+  .footer strong { color: var(--ink); font-family: var(--font-heading); }
+  .subtext-head { background: var(--bg-off); color: var(--ink-3); border-bottom-color: var(--line); }
+  .subtext-surface { color: var(--coral); font-family: var(--font-heading); font-style:italic; }
+  .subtext-decoded { color: var(--ink); font-family: var(--font-sans); }
+  .subtext-evidence { color: var(--ink-3); font-family: var(--font-sans); }
+  .subtext-row { border-bottom-color: var(--line-2); }
+  .theatre-act { border-bottom-color: var(--line-2); }
+  .theatre-meta { border-right-color: var(--line); }
+  .theatre-date { color: var(--coral); font-family: var(--font-heading); font-weight:600; }
+  .theatre-cat { background: var(--bg-off); color: var(--coral); }
+  .theatre-scene { color: var(--ink); font-family: var(--font-heading); font-weight:500; font-style:normal; }
+  .theatre-line { color: var(--ink-2); font-family: var(--font-sans); }
+  .theatre-analysis { background: var(--bg-off); color: var(--ink-2); border-left-color: var(--coral); font-family: var(--font-sans); }
+  .theatre-analysis strong { color: var(--coral); font-family: var(--font-heading); }
+  .ocean-bar-evidence, .section-desc { font-style: normal; }
+
+
+  /* ─── TOC (目录) ─── */
+  .toc { padding: 32px 0 44px; border-bottom: 1px solid var(--line); margin-bottom: 48px; }
+  .toc-label { font-size: 11px; font-weight: 600; color: var(--coral); letter-spacing: .22em; text-transform: uppercase; margin-bottom: 22px; font-family: var(--font-sans); }
+  .toc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 40px; }
+  .toc-item { display: flex; align-items: baseline; gap: 14px; padding: 11px 0; text-decoration: none; color: var(--ink-2); transition: color .2s; border-bottom: 1px dotted var(--line); }
+  .toc-item:hover { color: var(--coral); }
+  .toc-item:hover .toc-title { color: var(--coral); }
+  .toc-num { font-family: var(--font-heading); font-size: 13px; color: var(--coral); font-weight: 500; width: 36px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .toc-num.star { font-size: 15px; }
+  .toc-title { flex: 1; font-size: 14px; font-family: var(--font-heading); color: var(--ink); }
+  @media (max-width: 860px) { .toc-grid { grid-template-columns: 1fr; } }
+
+</style>
+</head>
+<body>
+
+<!-- ═══ Nav ═══ -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="nav-brand">✦ {{D.agent_name}}</div>
+    <a href="#portrait">{{L.nav_portrait}}</a>
+    <a href="#overview">{{L.nav_overview}}</a>
+    <a href="#persona">{{L.nav_persona}}</a>
+    <a href="#deep">{{L.nav_deep}}</a>
+    <a href="#theatre">{{L.nav_theatre}}</a>
+    <a href="#subtext">{{L.nav_subtext}}</a>
+    <a href="#quotes">{{L.nav_quotes}}</a>
+    <a href="#health">{{L.nav_health}}</a>
+    <a href="#advice">{{L.nav_advice}}</a>
+    <a href="#ways">{{L.nav_ways}}</a>
+    <a href="#growth">{{L.nav_growth}}</a>
+  </div>
+</nav>
+
+<div class="page">
+
+<!-- ═══ Hero (v4 clean) ═══ -->
+<header class="hero">
+  <div class="hero-kicker">{{L.hero_kicker}}</div>
+  <h1>{{D.agent_name}} · {{L.report_title}}</h1>
+  <p class="hero-sub">{{L.hero_sub}}</p>
+  <div class="badge-row">
+    {{HTML.hero_badges}}
+  </div>
+  <div class="hero-stats">
+    <div class="hstat"><span class="hstat-val">{{D.total_him_fmt}}</span><span class="hstat-lbl">{{L.stat_his_msgs}}</span></div>
+    <div class="hstat-divider"></div>
+    <div class="hstat"><span class="hstat-val">{{D.total_messages_fmt}}</span><span class="hstat-lbl">{{L.stat_total_msgs}}</span></div>
+    <div class="hstat-divider"></div>
+    <div class="hstat"><span class="hstat-val">{{D.pct_him}}%</span><span class="hstat-lbl">{{L.stat_pct}}</span></div>
+    <div class="hstat-divider"></div>
+    <div class="hstat"><span class="hstat-val">{{D.avg_length}} {{L.unit_chars}}</span><span class="hstat-lbl">{{L.stat_avg_len}}</span></div>
+    <div class="hstat-divider"></div>
+    <div class="hstat"><span class="hstat-val">{{D.intimacy_total}} {{L.unit_intimacy}}</span><span class="hstat-lbl">{{L.stat_intimacy}}</span></div>
+    <div class="hstat-divider"></div>
+    <div class="hstat"><span class="hstat-val">{{D.years_count}} {{L.unit_years}}</span><span class="hstat-lbl">{{L.stat_years}}</span></div>
+  </div>
+</header>
+
+<!-- ═══ TOC · 目录 ═══ -->
+<section class="toc" id="toc">
+  <div class="toc-label">{{L.toc_label}}</div>
+  <div class="toc-grid">
+    <a class="toc-item" href="#portrait"><span class="toc-num">01</span><span class="toc-title">{{L.sec_19_title}}</span></a>
+    <a class="toc-item" href="#zodiac"><span class="toc-num">02</span><span class="toc-title">{{L.sec_06_title}}</span></a>
+    <a class="toc-item" href="#intimacy"><span class="toc-num">03</span><span class="toc-title">{{L.sec_05_title}}</span></a>
+    <a class="toc-item" href="#overview"><span class="toc-num">04</span><span class="toc-title">{{L.sec_01_title}}</span></a>
+    <a class="toc-item" href="#trend"><span class="toc-num">05</span><span class="toc-title">{{L.sec_02_title}}</span></a>
+    <a class="toc-item" href="#ratio"><span class="toc-num">06</span><span class="toc-title">{{L.sec_03_title}}</span></a>
+    <a class="toc-item" href="#active"><span class="toc-num">07</span><span class="toc-title">{{L.sec_04_title}}</span></a>
+    <a class="toc-item" href="#persona"><span class="toc-num">08</span><span class="toc-title">{{L.sec_07_title}}</span></a>
+    <a class="toc-item" href="#contradict"><span class="toc-num">09</span><span class="toc-title">{{L.sec_20_title}}</span></a>
+    <a class="toc-item" href="#emotion"><span class="toc-num">10</span><span class="toc-title">{{L.sec_11_title}}</span></a>
+    <a class="toc-item" href="#deep"><span class="toc-num star">★</span><span class="toc-title">{{L.sec_deep_title}}</span></a>
+    <a class="toc-item" href="#comm-style"><span class="toc-num">11</span><span class="toc-title">{{L.sec_10_title}}</span></a>
+    <a class="toc-item" href="#subtext"><span class="toc-num">12</span><span class="toc-title">{{L.sec_09_title}}</span></a>
+    <a class="toc-item" href="#theatre"><span class="toc-num">13</span><span class="toc-title">{{L.sec_08_title}}</span></a>
+    <a class="toc-item" href="#quotes"><span class="toc-num">14</span><span class="toc-title">{{L.sec_22_title}}</span></a>
+    <a class="toc-item" href="#relation"><span class="toc-num">15</span><span class="toc-title">{{L.sec_12_title}}</span></a>
+    <a class="toc-item" href="#signals"><span class="toc-num">16</span><span class="toc-title">{{L.sec_15_title}}</span></a>
+    <a class="toc-item" href="#health"><span class="toc-num">17</span><span class="toc-title">{{L.sec_24_title}}</span></a>
+    <a class="toc-item" href="#paths"><span class="toc-num">18</span><span class="toc-title">{{L.sec_18_title}}</span></a>
+    <a class="toc-item" href="#topics"><span class="toc-num">19</span><span class="toc-title">{{L.sec_14_title}}</span></a>
+    <a class="toc-item" href="#times"><span class="toc-num">20</span><span class="toc-title">{{L.sec_16_title}}</span></a>
+    <a class="toc-item" href="#advice"><span class="toc-num">21</span><span class="toc-title">{{L.sec_13_title}}</span></a>
+    <a class="toc-item" href="#ways"><span class="toc-num star">★</span><span class="toc-title">{{L.sec_ways_title}}</span></a>
+    <a class="toc-item" href="#compat"><span class="toc-num">22</span><span class="toc-title">{{L.sec_21_title}}</span></a>
+    <a class="toc-item" href="#next"><span class="toc-num">23</span><span class="toc-title">{{L.sec_17_title}}</span></a>
+    <a class="toc-item" href="#growth"><span class="toc-num">24</span><span class="toc-title">{{L.sec_25_title}}</span></a>
+    <a class="toc-item" href="#gifts"><span class="toc-num">25</span><span class="toc-title">{{L.sec_23_title}}</span></a>
+  </div>
+</section>
+<!-- ═══ 19 人物画像 ═══ -->
+<section class="section" id="portrait">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_19_num}}</div>
+    <h2 class="section-title">{{L.sec_19_title}}</h2>
+    <p class="section-desc">{{L.sec_19_desc}}</p>
+  </div>
+  <div class="portrait-card">{{D.character_portrait}}</div>
+</section>
+
+<!-- ═══ 06 星座 & 化学反应 ═══ -->
+<section class="section" id="zodiac">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_06_num}}</div>
+    <h2 class="section-title">{{L.sec_06_title}}</h2>
+    <p class="section-desc">{{L.sec_06_desc}}</p>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="chart-title">{{L.sec_06_a_title}}</div>
+      <div class="zodiac-card" style="margin-top:8px;">
+        <div class="zodiac-emoji">{{D.zodiac_emoji}}</div>
+        <div class="zodiac-info">
+          <div class="z-title">{{D.zodiac_name}}</div>
+          <div class="z-sub">{{L.zodiac_match}}</div>
+          <div class="z-desc">{{D.zodiac_desc}}</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="chart-title">{{L.sec_06_b_title}}</div>
+      <div class="zodiac-card" style="margin-top:8px;">
+        <div class="zodiac-emoji">{{D.chemistry_emoji}}</div>
+        <div class="zodiac-info">
+          <div class="z-title" style="color:var(--purple);">{{D.chemistry_type}}</div>
+          <div class="z-sub">{{L.chemistry_conf}}</div>
+          <div class="z-desc">{{D.chemistry_desc}}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 05 亲密度 ═══ -->
+<section class="section" id="intimacy">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_05_num}}</div>
+    <h2 class="section-title">{{L.sec_05_title}} <span class="confidence-chip"><span class="conf-dot"></span>{{L.sec_05_conf}}</span></h2>
+    <p class="section-desc">{{L.sec_05_desc}}</p>
+  </div>
+  <div class="card">
+    <div class="intimacy-wrap">
+      <div class="intimacy-total">
+        <div class="intimacy-big">{{D.intimacy_total}}</div>
+        <div class="intimacy-cap">{{L.intimacy_total_label}}</div>
+        <div class="intimacy-tag">{{D.chemistry_emoji}} {{D.chemistry_type}}</div>
+      </div>
+      <div class="intimacy-dims">
+        <div class="intimacy-row"><span class="intimacy-label">{{L.intimacy_trust}}</span>   <div class="intimacy-track"><div class="intimacy-fill" style="width:{{D.intimacy_trust}}%;"></div></div><span class="intimacy-val">{{D.intimacy_trust}}</span></div>
+        <div class="intimacy-row"><span class="intimacy-label">{{L.intimacy_dependence}}</span>   <div class="intimacy-track"><div class="intimacy-fill" style="width:{{D.intimacy_dependence}}%;"></div></div><span class="intimacy-val">{{D.intimacy_dependence}}</span></div>
+        <div class="intimacy-row"><span class="intimacy-label">{{L.intimacy_density}}</span> <div class="intimacy-track"><div class="intimacy-fill" style="width:{{D.intimacy_density}}%;"></div></div><span class="intimacy-val">{{D.intimacy_density}}</span></div>
+        <div class="intimacy-row"><span class="intimacy-label">{{L.intimacy_depth}}</span> <div class="intimacy-track"><div class="intimacy-fill" style="width:{{D.intimacy_depth}}%;"></div></div><span class="intimacy-val">{{D.intimacy_depth}}</span></div>
+        <div class="intimacy-row"><span class="intimacy-label">{{L.intimacy_stability}}</span>   <div class="intimacy-track"><div class="intimacy-fill" style="width:{{D.intimacy_stability}}%;"></div></div><span class="intimacy-val">{{D.intimacy_stability}}</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 01 数据概览 ═══ -->
+<section class="section" id="overview">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_01_num}}</div>
+    <h2 class="section-title">{{L.sec_01_title}} <span class="confidence-chip"><span class="conf-dot"></span>{{L.sec_01_conf}}</span></h2>
+    <p class="section-desc">{{L.sec_01_desc}}</p>
+  </div>
+  <div class="grid-4">
+    <div class="card">
+      <div class="ov-label">{{L.ov_his_msgs}}</div>
+      <div class="ov-val colored">{{D.total_him_fmt}}</div>
+      <div class="ov-sub">{{L.ov_of_total}}</div>
+    </div>
+    <div class="card">
+      <div class="ov-label">{{L.ov_duration}}</div>
+      <div class="ov-val">{{D.years_count}} <span style="font-size:20px;font-weight:600;color:var(--ink-3);">{{L.unit_years}}</span></div>
+      <div class="ov-sub">{{L.ov_year_range}}</div>
+    </div>
+    <div class="card">
+      <div class="ov-label">{{L.ov_intimacy}}</div>
+      <div class="ov-val">{{D.intimacy_total}} <span style="font-size:20px;font-weight:600;color:var(--ink-3);">{{L.unit_intimacy}}</span></div>
+      <div class="ov-sub">{{L.ov_trust_stability}}</div>
+      <span class="ov-badge">{{D.chemistry_emoji}} {{D.chemistry_type}}</span>
+    </div>
+    <div class="card">
+      <div class="ov-label">{{L.ov_peak}}</div>
+      <div class="ov-val colored">{{D.peak_year}}</div>
+      <div class="ov-sub">{{L.ov_peak_sub}}</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 02 年度趋势 ═══ -->
+<section class="section" id="trend">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_02_num}}</div>
+    <h2 class="section-title">{{L.sec_02_title}} <span class="confidence-chip"><span class="conf-dot"></span>{{L.sec_02_conf}}</span></h2>
+    <p class="section-desc">{{L.sec_02_desc}}</p>
+  </div>
+  <div class="card area-chart-card">
+    <div class="chart-title">{{L.sec_02_card_title}}</div>
+    <div class="chart-desc">{{L.sec_02_card_desc}}</div>
+    <svg id="yearChart" viewBox="0 0 1020 260" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+</section>
+
+<!-- ═══ 03 发送比例 & 长度 ═══ -->
+<section class="section" id="ratio">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_03_num}}</div>
+    <h2 class="section-title">{{L.sec_03_title}}</h2>
+    <p class="section-desc">{{L.sec_03_desc}}</p>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="chart-title">{{L.sec_03_a_title}}</div>
+      <div class="chart-desc">{{L.sec_03_a_desc}}</div>
+      <div class="donut-wrap">
+        <svg width="160" height="160" viewBox="0 0 160 160">
+          <circle cx="80" cy="80" r="60" fill="none" stroke="#e5e7eb" stroke-width="22"/>
+          <circle cx="80" cy="80" r="60" fill="none" stroke="#CC785C" stroke-width="22"
+            stroke-dasharray="{{D.donut_dash_him}}" stroke-dashoffset="{{D.donut_offset_him}}" stroke-linecap="butt"/>
+          <text x="80" y="72" text-anchor="middle" font-size="22" font-weight="800" fill="#CC785C">{{D.pct_him}}%</text>
+          <text x="80" y="92" text-anchor="middle" font-size="11" fill="#6b7280">{{D.agent_name}}</text>
+        </svg>
+        <div class="donut-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#CC785C;"></div><span class="legend-name">{{D.agent_name}}</span><span class="legend-count">{{D.total_him_fmt}}</span><span class="legend-pct">{{D.pct_him}}%</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#e5e7eb;border:1px solid #d1d5db;"></div><span class="legend-name">{{L.sec_03_partner}}</span><span class="legend-count">{{D.total_me_fmt}}</span><span class="legend-pct">{{D.pct_me}}%</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="chart-title">{{L.sec_03_b_title}}</div>
+      <div class="chart-desc">{{L.sec_03_b_desc}}</div>
+      <div class="length-bars">
+        <div class="length-row"><span class="length-label">{{L.length_label_1}}</span><div class="length-track"><div class="length-fill" style="width:{{D.len_under1}}%;background:#CC785C;"></div></div><span class="length-pct">{{D.len_under1}}%</span></div>
+        <div class="length-row"><span class="length-label">{{L.length_label_2_5}}</span><div class="length-track"><div class="length-fill" style="width:{{D.len_2_5}}%;background:#B57E3A;"></div></div><span class="length-pct">{{D.len_2_5}}%</span></div>
+        <div class="length-row"><span class="length-label">{{L.length_label_6_20}}</span><div class="length-track"><div class="length-fill" style="width:{{D.len_6_20}}%;background:#3B6E6A;"></div></div><span class="length-pct">{{D.len_6_20}}%</span></div>
+        <div class="length-row"><span class="length-label">{{L.length_label_21}}</span><div class="length-track"><div class="length-fill" style="width:{{D.len_21}}%;background:#7E9A6D;"></div></div><span class="length-pct">{{D.len_21}}%</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 04 活跃时段 ═══ -->
+<section class="section" id="active">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_04_num}}</div>
+    <h2 class="section-title">{{L.sec_04_title}}</h2>
+    <p class="section-desc">{{L.sec_04_desc}}</p>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="chart-title">{{L.sec_04_a_title}}</div>
+      <div class="chart-desc">{{L.sec_04_a_desc}}</div>
+      <div class="heatmap-grid" id="hourHeatmap"></div>
+    </div>
+    <div class="card">
+      <div class="chart-title">{{L.sec_04_b_title}}</div>
+      <div class="chart-desc">{{L.sec_04_b_desc}}</div>
+      <div class="weekday-chart" id="weekdayChart"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 07 人格画像 ═══ -->
+<section class="section" id="persona">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_07_num}}</div>
+    <h2 class="section-title">{{L.sec_07_title}} <span class="confidence-chip"><span class="conf-dot"></span>{{L.sec_07_conf}}</span></h2>
+    <p class="section-desc">{{L.sec_07_desc}}</p>
+  </div>
+  <div class="grid-2" style="margin-bottom:20px;">
+    <div class="card">
+      <div class="chart-title">{{L.sec_07_ocean_title}}</div>
+      <div class="chart-desc">{{L.sec_07_ocean_desc}}</div>
+      <div class="ocean-bars">
+        {{HTML.ocean_bars}}
+      </div>
+    </div>
+    <div class="mbti-card">
+      <div class="mbti-type">{{D.mbti_type}}</div>
+      <div class="mbti-name">{{D.mbti_name}} · {{L.chemistry_conf}}</div>
+      <div class="mbti-bar">
+        <div class="mbti-bar-header"><span>{{L.mbti_axis_IE_left}}</span><span>{{L.mbti_axis_IE_right}}</span></div>
+        <div class="mbti-bar-track"><div class="mbti-bar-fill" style="width:{{D.mbti_ie_right_pct}}%;"></div></div>
+        <div class="mbti-pct">{{D.mbti_ie_dominant_label}}</div>
+      </div>
+      <div class="mbti-bar">
+        <div class="mbti-bar-header"><span>{{L.mbti_axis_SN_left}}</span><span>{{L.mbti_axis_SN_right}}</span></div>
+        <div class="mbti-bar-track"><div class="mbti-bar-fill" style="width:{{D.mbti_sn_right_pct}}%;"></div></div>
+        <div class="mbti-pct">{{D.mbti_sn_dominant_label}}</div>
+      </div>
+      <div class="mbti-bar">
+        <div class="mbti-bar-header"><span>{{L.mbti_axis_TF_left}}</span><span>{{L.mbti_axis_TF_right}}</span></div>
+        <div class="mbti-bar-track"><div class="mbti-bar-fill" style="width:{{D.mbti_tf_right_pct}}%;"></div></div>
+        <div class="mbti-pct">{{D.mbti_tf_dominant_label}}</div>
+      </div>
+      <div class="mbti-bar">
+        <div class="mbti-bar-header"><span>{{L.mbti_axis_JP_left}}</span><span>{{L.mbti_axis_JP_right}}</span></div>
+        <div class="mbti-bar-track"><div class="mbti-bar-fill" style="width:{{D.mbti_jp_right_pct}}%;"></div></div>
+        <div class="mbti-pct">{{D.mbti_jp_dominant_label}}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chart-title">{{L.sec_07_details_title}}</div>
+    <div class="chart-desc">{{L.sec_07_details_desc}}</div>
+    <div class="ocean-detail-grid">
+      {{HTML.ocean_details}}
+    </div>
+  </div>
+
+  <div style="margin-top:20px;" class="card">
+    <div class="chart-title">{{L.sec_07_attachment_title}}</div>
+    <div class="chart-desc">{{L.sec_07_attachment_desc}}</div>
+    <div class="attachment-wrap" style="margin-top:12px;">
+      <div class="attachment-dial">
+        <div class="attachment-type">{{D.attachment_type}}</div>
+        <div class="attachment-conf">{{D.attachment_variant}} · 4/5</div>
+      </div>
+      <div class="attachment-desc">{{D.attachment_desc}}</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 20 令人意外的矛盾 ═══ -->
+<section class="section" id="contradict">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_20_num}}</div>
+    <h2 class="section-title">{{L.sec_20_title}}</h2>
+    <p class="section-desc">{{L.sec_20_desc}}</p>
+  </div>
+  <div class="contradiction-card">{{D.surprising_contradiction}}</div>
+</section>
+
+<!-- ═══ 11 情绪结构 ═══ -->
+<section class="section" id="emotion">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_11_num}}</div>
+    <h2 class="section-title">{{L.sec_11_title}}</h2>
+    <p class="section-desc">{{L.sec_11_desc}}</p>
+  </div>
+  <div class="grid-3">
+    {{HTML.emotion_cards}}
+  </div>
+</section>
+
+<!-- ═══ ★ 深度分析 · 28 维 ═══ -->
+<section class="section" id="deep">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_deep_num}}</div>
+    <h2 class="section-title">{{L.sec_deep_title}} <span class="confidence-chip"><span class="conf-dot"></span>{{L.sec_deep_conf}}</span></h2>
+    <p class="section-desc">{{L.sec_deep_desc}}</p>
+  </div>
+  <div class="deep-card">
+    {{HTML.deep_analysis_body}}
+  </div>
+</section>
+
+<!-- ═══ 10 沟通风格 ═══ -->
+<section class="section" id="comm-style">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_10_num}}</div>
+    <h2 class="section-title">{{L.sec_10_title}}</h2>
+    <p class="section-desc">{{L.sec_10_desc}}</p>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="chart-title">{{L.sec_10_a_title}}</div>
+      <div class="chart-desc">{{L.sec_10_a_desc}}</div>
+      <div class="mode-list" style="margin-top:12px;">
+        {{HTML.mode_rows}}
+      </div>
+    </div>
+    <div class="card">
+      <div class="chart-title">{{L.sec_10_b_title}}</div>
+      <div class="chart-desc">{{L.sec_10_b_desc}}</div>
+      <div class="topic-cloud" style="margin-top:12px;">
+        {{HTML.topic_cloud}}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 09 潜台词 ═══ -->
+<section class="section" id="subtext">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_09_num}}</div>
+    <h2 class="section-title">{{L.sec_09_title}}</h2>
+    <p class="section-desc">{{L.sec_09_desc}}</p>
+  </div>
+  <div class="card subtext-card">
+    <div class="subtext-head">
+      <div>{{L.subtext_col_surface}}</div><div>{{L.subtext_col_decoded}}</div><div>{{L.subtext_col_evidence}}</div>
+    </div>
+    {{HTML.subtext_rows}}
+  </div>
+</section>
+
+<!-- ═══ 08 对话剧场 ═══ -->
+<section class="section" id="theatre">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_08_num}}</div>
+    <h2 class="section-title">{{L.sec_08_title}}</h2>
+    <p class="section-desc">{{L.sec_08_desc}}</p>
+  </div>
+  <div class="card theatre-card">
+    {{HTML.theatre_acts}}
+  </div>
+</section>
+
+<!-- ═══ 22 典型语录 ═══ -->
+<section class="section" id="quotes">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_22_num}}</div>
+    <h2 class="section-title">{{L.sec_22_title}} <span class="confidence-chip"><span class="conf-dot"></span>{{L.sec_22_conf}}</span></h2>
+    <p class="section-desc">{{L.sec_22_desc}}</p>
+  </div>
+  <div class="quotes-grid">
+    {{HTML.quotes_grid}}
+  </div>
+</section>
+
+<!-- ═══ 12 关系动态 ═══ -->
+<section class="section" id="relation">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_12_num}}</div>
+    <h2 class="section-title">{{L.sec_12_title}}</h2>
+    <p class="section-desc">{{L.sec_12_desc}}</p>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="chart-title">{{L.sec_12_a_title}}</div>
+      <div class="chart-desc">{{L.sec_12_a_desc}}</div>
+      <div class="relation-list" style="margin-top:12px;">
+        {{HTML.relation_modes}}
+      </div>
+    </div>
+    <div class="card">
+      <div class="chart-title">{{L.sec_12_b_title}}</div>
+      <div class="chart-desc">{{L.sec_12_b_desc}}</div>
+      <div class="timeline">
+        {{HTML.timeline_rows}}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 15 关系信号灯 ═══ -->
+<section class="section" id="signals">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_15_num}}</div>
+    <h2 class="section-title">{{L.sec_15_title}}</h2>
+    <p class="section-desc">{{L.sec_15_desc}}</p>
+  </div>
+  <div class="grid-3">
+    <div class="apple signal-card">
+      <div class="signal-head">
+        <div class="signal-lamp">
+          <span class="pulse"><span class="halo" style="background:#34C759;"></span><span class="core" style="background:#34C759;"></span></span>
+          <span class="signal-name" style="color:#34C759;">GREEN</span>
+        </div>
+        <span class="signal-count">{{D.signal_green_count}}</span>
+      </div>
+      <div class="signal-title">{{L.signal_green_title}}</div>
+      {{HTML.signal_green_items}}
+    </div>
+    <div class="apple signal-card">
+      <div class="signal-head">
+        <div class="signal-lamp">
+          <span class="pulse"><span class="halo" style="background:#FF9500;"></span><span class="core" style="background:#FF9500;"></span></span>
+          <span class="signal-name" style="color:#FF9500;">YELLOW</span>
+        </div>
+        <span class="signal-count">{{D.signal_yellow_count}}</span>
+      </div>
+      <div class="signal-title">{{L.signal_yellow_title}}</div>
+      {{HTML.signal_yellow_items}}
+    </div>
+    <div class="apple signal-card">
+      <div class="signal-head">
+        <div class="signal-lamp">
+          <span class="pulse"><span class="halo" style="background:#FF3B30;"></span><span class="core" style="background:#FF3B30;"></span></span>
+          <span class="signal-name" style="color:#FF3B30;">RED</span>
+        </div>
+        <span class="signal-count">{{D.signal_red_count}}</span>
+      </div>
+      <div class="signal-title">{{L.signal_red_title}}</div>
+      {{HTML.signal_red_items}}
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 24 关系健康指数 ═══ -->
+<section class="section" id="health">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_24_num}}</div>
+    <h2 class="section-title">{{L.sec_24_title}}</h2>
+    <p class="section-desc">{{L.sec_24_desc}}</p>
+  </div>
+  <div class="card">
+    <div class="health-wrap">
+      <div>
+        <div class="health-num">{{D.health_score}}</div>
+        <div class="health-lbl">{{L.health_score_label}}</div>
+      </div>
+      <div class="health-trend">
+        <svg id="healthTrend" width="100%" height="120" viewBox="0 0 600 120"></svg>
+      </div>
+    </div>
+    <div class="health-alert">{{D.health_alert_text}}</div>
+  </div>
+</section>
+
+<!-- ═══ 18 三条路径 ═══ -->
+<section class="section" id="paths">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_18_num}}</div>
+    <h2 class="section-title">{{L.sec_18_title}}</h2>
+    <p class="section-desc">{{L.sec_18_desc}}</p>
+  </div>
+  <div class="grid-3">
+    {{HTML.trajectory_cards}}
+  </div>
+</section>
+
+<!-- ═══ 14 话题偏好 (Apple) ═══ -->
+<section class="section" id="topics">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_14_num}}</div>
+    <h2 class="section-title">{{L.sec_14_title}}</h2>
+    <p class="section-desc">{{L.sec_14_desc}}</p>
+  </div>
+  <div class="apple" style="padding:8px 32px;">
+    <div class="topic-row">
+      <div>
+        <div class="label-wrap"><span class="dot" style="background:#34C759;"></span><span class="name">{{L.topic_loves}}</span></div>
+        <div class="desc">{{L.topic_loves_sub}}</div>
+      </div>
+      <div class="pills">
+        {{HTML.topic_loves}}
+      </div>
+    </div>
+    <div class="topic-row">
+      <div>
+        <div class="label-wrap"><span class="dot" style="background:#8E8E93;"></span><span class="name">{{L.topic_neutral}}</span></div>
+        <div class="desc">{{L.topic_neutral_sub}}</div>
+      </div>
+      <div class="pills">
+        {{HTML.topic_neutral}}
+      </div>
+    </div>
+    <div class="topic-row">
+      <div>
+        <div class="label-wrap"><span class="dot" style="background:#FF3B30;"></span><span class="name">{{L.topic_avoid}}</span></div>
+        <div class="desc">{{L.topic_avoid_sub}}</div>
+      </div>
+      <div class="pills">
+        {{HTML.topic_avoid}}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 16 最佳沟通时机 ═══ -->
+<section class="section" id="times">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_16_num}}</div>
+    <h2 class="section-title">{{L.sec_16_title}}</h2>
+    <p class="section-desc">{{L.sec_16_desc}}</p>
+  </div>
+  <div class="card">
+    <div class="relation-list">
+      {{HTML.best_times}}
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 13 互动建议 (Apple DO/DON'T) ═══ -->
+<section class="section" id="advice">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_13_num}}</div>
+    <h2 class="section-title">{{L.sec_13_title}}</h2>
+    <p class="section-desc">{{L.sec_13_desc}}</p>
+  </div>
+  <div class="grid-2">
+    <div class="apple apple-pad">
+      <div class="apple-head">
+        <div class="apple-sym" style="background:#E8F8EC;color:#34C759;">✓</div>
+        <div>
+          <div class="apple-h-title">{{L.do_title}}</div>
+          <div class="apple-h-sub">{{L.do_sub}}</div>
+        </div>
+      </div>
+      {{HTML.do_items}}
+    </div>
+    <div class="apple apple-pad">
+      <div class="apple-head">
+        <div class="apple-sym" style="background:#FFEBE9;color:#FF3B30;">×</div>
+        <div>
+          <div class="apple-h-title">{{L.dont_title}}</div>
+          <div class="apple-h-sub">{{L.dont_sub}}</div>
+        </div>
+      </div>
+      {{HTML.dont_items}}
+    </div>
+  </div>
+</section>
+
+<!-- ═══ ★ 增进关系的 10 个方式 ═══ -->
+<section class="section" id="ways">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_ways_num}}</div>
+    <h2 class="section-title">{{L.sec_ways_title}}</h2>
+    <p class="section-desc">{{L.sec_ways_desc}}</p>
+  </div>
+  <div class="apple">
+    {{HTML.ways_body}}
+  </div>
+</section>
+
+<!-- ═══ 21 MBTI 兼容性 ═══ -->
+<section class="section" id="compat">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_21_num}}</div>
+    <h2 class="section-title">{{L.sec_21_title}}</h2>
+    <p class="section-desc">{{L.sec_21_desc}}</p>
+  </div>
+  <div class="card">
+    {{HTML.compat_rows}}
+  </div>
+</section>
+
+<!-- ═══ 17 下一步可能 ═══ -->
+<section class="section" id="next">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_17_num}}</div>
+    <h2 class="section-title">{{L.sec_17_title}}</h2>
+    <p class="section-desc">{{L.sec_17_desc}}</p>
+  </div>
+  <div class="card">
+    <div class="relation-list">
+      {{HTML.next_predictions}}
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 25 成长建议 ═══ -->
+<section class="section" id="growth">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_25_num}}</div>
+    <h2 class="section-title">{{L.sec_25_title}}</h2>
+    <p class="section-desc">{{L.sec_25_desc}}</p>
+  </div>
+  <div class="advice-grid">
+    {{HTML.growth_cards}}
+  </div>
+</section>
+
+<!-- ═══ 23 礼物建议 ═══ -->
+<section class="section" id="gifts">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_23_num}}</div>
+    <h2 class="section-title">{{L.sec_23_title}}</h2>
+    <p class="section-desc">{{L.sec_23_desc}}</p>
+  </div>
+  <div class="card">
+    <div class="relation-list">
+      {{HTML.gift_rows}}
+    </div>
+  </div>
+</section>
+</div>
+
+<div class="footer">
+  <div class="page" style="padding:0 24px;">
+    <strong>{{D.agent_name}} · {{L.footer_tagline}}</strong>
+    <span class="dot">·</span>{{L.footer_msg_count}}
+    <span class="dot">·</span>{{L.footer_framework}}
+    <span class="dot">·</span>{{L.footer_generated}}
+    <span class="dot">·</span><span style="color:var(--coral);">{{L.footer_confidence}}</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  const data = {{D.year_chart_json}};
+  const HIM_NAME = "{{D.agent_name}}";
+  const svg = document.getElementById('yearChart');
+  const W=1020,H=260, ml=60,mr=20,mt=20,mb=50;
+  const cw=W-ml-mr, ch=H-mt-mb;
+  const maxVal = Math.max(1, ...data.map(d=>Math.max(d.him,d.me))) * 1.15;
+  const xStep = data.length > 1 ? cw/(data.length-1) : cw;
+  const xp = i => ml + i*xStep, yp = v => mt + ch - (v/maxVal)*ch;
+  let grid = '';
+  const step = Math.ceil(maxVal/5/1000)*1000 || 1000;
+  for(let v=0; v<=maxVal; v+=step){
+    const y=yp(v);
+    grid += '<line x1="'+ml+'" y1="'+y+'" x2="'+(W-mr)+'" y2="'+y+'" stroke="#f0f0f0" stroke-width="1"/>';
+    grid += '<text x="'+(ml-8)+'" y="'+(y+4)+'" text-anchor="end" font-size="11" fill="#9ca3af">'+(v>=1000?(v/1000)+'k':v)+'</text>';
+  }
+  let hp='M '+xp(0)+' '+yp(data[0].him), mp='M '+xp(0)+' '+yp(data[0].me);
+  for(let i=1;i<data.length;i++){
+    const x0=xp(i-1),x1=xp(i),cx=(x0+x1)/2;
+    hp += ' C '+cx+' '+yp(data[i-1].him)+', '+cx+' '+yp(data[i].him)+', '+x1+' '+yp(data[i].him);
+    mp += ' C '+cx+' '+yp(data[i-1].me)+', '+cx+' '+yp(data[i].me)+', '+x1+' '+yp(data[i].me);
+  }
+  const hArea = hp+' L '+xp(data.length-1)+' '+(mt+ch)+' L '+xp(0)+' '+(mt+ch)+' Z';
+  const mArea = mp+' L '+xp(data.length-1)+' '+(mt+ch)+' L '+xp(0)+' '+(mt+ch)+' Z';
+  let xLabels='', dots='';
+  data.forEach((d,i)=>{
+    xLabels += '<text x="'+xp(i)+'" y="'+(H-10)+'" text-anchor="middle" font-size="12" fill="#6b7280">'+d.year+'</text>';
+    dots += '<circle cx="'+xp(i)+'" cy="'+yp(d.him)+'" r="4" fill="#CC785C" stroke="#fff" stroke-width="2"/>';
+    dots += '<circle cx="'+xp(i)+'" cy="'+yp(d.me)+'" r="3" fill="#E8E0CF" stroke="#fff" stroke-width="1.5"/>';
+  });
+  let pIdx=0; for(let i=1;i<data.length;i++){ if(data[i].him>data[pIdx].him) pIdx=i; }
+  const pvx=xp(pIdx), pvy=yp(data[pIdx].him);
+  const peakVal = data[pIdx].him.toLocaleString();
+  const labelCx = Math.max(ml+42, Math.min(W-mr-42, pvx));
+  const peakAnn =
+    '<line x1="'+pvx+'" y1="'+(pvy-8)+'" x2="'+pvx+'" y2="'+(pvy-32)+'" stroke="#CC785C" stroke-width="1.5" stroke-dasharray="3,2"/>'
+    + '<rect x="'+(labelCx-42)+'" y="'+(pvy-52)+'" width="84" height="22" rx="4" fill="#CC785C"/>'
+    + '<text x="'+labelCx+'" y="'+(pvy-37)+'" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">峰值 '+peakVal+'</text>';
+  const legend =
+    '<rect x="'+(W-200)+'" y="'+mt+'" width="14" height="14" rx="3" fill="#CC785C"/>'
+    + '<text x="'+(W-182)+'" y="'+(mt+11)+'" font-size="12" fill="#374151">'+HIM_NAME+'</text>'
+    + '<rect x="'+(W-200)+'" y="'+(mt+22)+'" width="14" height="14" rx="3" fill="#E8E0CF"/>'
+    + '<text x="'+(W-182)+'" y="'+(mt+33)+'" font-size="12" fill="#374151">对方（Me）</text>';
+  svg.innerHTML =
+    '<defs>'
+    + '<linearGradient id="hG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#CC785C" stop-opacity="0.22"/><stop offset="100%" stop-color="#CC785C" stop-opacity="0.02"/></linearGradient>'
+    + '<linearGradient id="mG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#9ca3af" stop-opacity="0.16"/><stop offset="100%" stop-color="#9ca3af" stop-opacity="0.01"/></linearGradient>'
+    + '</defs>'
+    + grid
+    + '<path d="'+mArea+'" fill="url(#mG)"/>'
+    + '<path d="'+mp+'" fill="none" stroke="#E8E0CF" stroke-width="2.5" stroke-linecap="round"/>'
+    + '<path d="'+hArea+'" fill="url(#hG)"/>'
+    + '<path d="'+hp+'" fill="none" stroke="#CC785C" stroke-width="3" stroke-linecap="round"/>'
+    + peakAnn + dots + xLabels + legend;
+})();
+
+(function(){
+  const hours = {{D.hour_heatmap_json}};
+  const maxH = Math.max(...hours);
+  const el = document.getElementById('hourHeatmap');
+  const colors = ['#ede9fe','#ddd6fe','#c4b5fd','#a78bfa','#8b5cf6','#7c3aed','#6d28d9','#5b21b6','#4c1d95'];
+  hours.forEach((v,i)=>{
+    const pct = v/maxH;
+    const ci  = Math.floor(pct*(colors.length-1));
+    const h   = Math.max(8, Math.round(54*pct));
+    const d = document.createElement('div');
+    d.className = 'heatmap-cell';
+    d.style.cssText = 'background:'+colors[ci]+';height:'+h+'px;';
+    d.setAttribute('data-tip', String(i).padStart(2,'0')+':00 热度 '+Math.round(pct*100)+'%');
+    el.appendChild(d);
+  });
+})();
+
+(function(){
+  const days = ['周一','周二','周三','周四','周五','周六','周日'];
+  const vals = {{D.weekday_json}};
+  const max  = Math.max(...vals);
+  const el = document.getElementById('weekdayChart');
+  days.forEach((d,i)=>{
+    const pct = vals[i]/max;
+    const h   = Math.round(98*pct);
+    const we  = i >= 5;
+    const w = document.createElement('div');
+    w.className = 'weekday-bar-wrap';
+    const grad = we
+      ? 'linear-gradient(180deg, #a78bfa, #7c3aed)'
+      : 'linear-gradient(180deg, #3b82f6, #CC785C)';
+    w.innerHTML = '<div class="weekday-bar" style="height:'+h+'px;background:'+grad+';"></div><span class="weekday-label">'+d+'</span>';
+    el.appendChild(w);
+  });
+})();
+
+(function(){
+  const trend = {{D.health_trend_json}};
+  const svg = document.getElementById('healthTrend');
+  if (!svg) return;
+  const W = 600, H = 120, pad = 10;
+  const mn = Math.min(...trend)-5, mx = Math.max(...trend)+5;
+  const xp = i => pad + i*((W-2*pad)/(trend.length-1));
+  const yp = v => pad + (H-2*pad)*(1-(v-mn)/(mx-mn));
+  let p = 'M '+xp(0)+' '+yp(trend[0]);
+  for (let i = 1; i < trend.length; i++) {
+    const cx = (xp(i-1)+xp(i))/2;
+    p += ' C '+cx+' '+yp(trend[i-1])+', '+cx+' '+yp(trend[i])+', '+xp(i)+' '+yp(trend[i]);
+  }
+  let area = p+' L '+xp(trend.length-1)+' '+(H-pad)+' L '+xp(0)+' '+(H-pad)+' Z';
+  let dots = ''; trend.forEach((v,i)=>{ dots += '<circle cx="'+xp(i)+'" cy="'+yp(v)+'" r="4" fill="#7E9A6D"/>'; });
+  svg.innerHTML =
+    '<defs><linearGradient id="hT" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7E9A6D" stop-opacity="0.22"/><stop offset="100%" stop-color="#7E9A6D" stop-opacity="0.02"/></linearGradient></defs>'
+    + '<path d="'+area+'" fill="url(#hT)"/>'
+    + '<path d="'+p+'" fill="none" stroke="#7E9A6D" stroke-width="3"/>'
+    + dots;
+})();
+</script>
+
+</body>
+</html>

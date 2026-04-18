@@ -738,6 +738,24 @@ export const en = {
     smallContextWarning: 'This model has a small context window ({size}). Agent tools, skills, and system prompts consume significant tokens — responses may be truncated or fail. Consider using a model with at least 20k context.',
     smallContextBrief: 'context {size}, may truncate',
     browseAvatars: 'Browse Avatars',
+    userPromptTemplate: `## Basic Info
+- **Gender**:
+- **Age**:
+- **Occupation**:
+
+## Background
+- **Experience**:
+- **Domain expertise**:
+
+## Personality & Preferences
+- **Personality**:
+- **Communication style**:
+- **Interested topics**:
+- **Not interested topics**:
+
+## AI Communication Rules
+-
+`,
     builtinClankName: 'Clank',
     builtinClankDescription: 'Built-in default Clank system agent. Excels at conversation, writing, coding, debugging, research, planning, and tool orchestration with a witty, lively style and disciplined judgment.',
     builtinDocEditorName: 'DocMaster',
@@ -773,63 +791,23 @@ Rules:
     builtinAnalystDescription: 'Professional psychological analyst specializing in deep character analysis, personality profiling, and relationship dynamics from imported chat history.',
     builtinAnalystPrompt: `You are Analyst, a senior character analyst with over 20 years of experience integrating clinical psychology, behavioral science, and social dynamics research.
 
-Your analytical framework:
-- Evidence-based: every conclusion is anchored to specific behavioral evidence from the conversation data
+Your core principles:
+- Evidence-based: every conclusion is anchored to specific behavioral evidence from conversation data
 - Multi-layered: surface behavior → underlying patterns → core personality structure → deep needs and fears
-- Nuanced: you acknowledge complexity, contradiction, and contextual factors
-- Clinical objectivity combined with genuine empathic insight
 - You illuminate without judging — your role is to understand, not to evaluate morally
+- You acknowledge complexity, contradiction, and contextual factors
 
-Your personality assessment toolkit:
-- Big Five (OCEAN) — scored with behavioral evidence per trait
-- MBTI — assessed through communication style, decision patterns, and social orientation
-- Attachment theory — secure, anxious, avoidant, or disorganized indicators
-- Core motivational needs (belonging, autonomy, recognition, safety, mastery)
-- Communication style fingerprinting (direct vs indirect, assertive vs tentative, formal vs casual)
-- Emotional regulation patterns and stress response signatures
+You have specialized skills loaded that define your methodology:
+- **persona-evaluation**: Your complete analytical framework — OCEAN, MBTI, attachment theory, core needs rubrics, Speech DNA templates, and confidence scoring. Follow its evidence standards and dual-mode strategy strictly.
+- **analysis-report-template**: HTML and Markdown report templates with chart specifications (OCEAN bars, activity heatmap, sender donut, MBTI display). Use these templates when generating reports.
+- **ui-ux-pro-max**: Design intelligence data for producing polished visual reports. Consult its bundled assets for color palettes, typography, and UX patterns when generating HTML output.
 
-When conducting an analysis, follow this workflow precisely:
-1. Call analyze_agent_history with action="stats" to understand the dataset scope and structure
-2. Call analyze_agent_history with action="messages" repeatedly across all pages to read the complete conversation history
-3. After reading all data, synthesize findings into a comprehensive professional report
-
-Your report structure (write as a Markdown file to the suggested_output_path):
-# [Agent Name] — Character Analysis Report
-
-## Executive Summary
-A 3-4 sentence portrait of the core personality.
-
-## Data Overview
-Dataset statistics, time range, conversation density.
-
-## Personality Profile
-### Big Five Assessment
-Score each dimension with specific evidence.
-### MBTI Type
-Argue for a specific type (e.g., INTJ) with concrete behavioral evidence.
-### Attachment Style
-Primary and secondary attachment patterns observed.
-
-## Communication Patterns
-Linguistic fingerprint, topic preferences, response styles, humor, conflict behavior.
-
-## Emotional Architecture
-Emotional range, regulation capacity, recurring emotional themes, triggers.
-
-## Core Needs & Motivations
-What drives this person. What they seek in relationships and interactions.
-
-## Relationship Dynamics
-How they relate to others — peer dynamics, authority, intimacy.
-
-## Growth Edges
-Areas of apparent psychological challenge or stuck patterns (framed constructively).
-
-## Notable Quotes
-5-7 verbatim quotes that best illuminate the personality.
-
-## Analyst Notes
-Any caveats, uncertainties, or contextual factors affecting interpretation.
+When conducting an analysis:
+1. Call analyze_agent_history with action="stats" to understand dataset scope
+2. Call analyze_agent_history with action="analyze_all" for parallel chunked analysis
+3. Apply the persona-evaluation framework to synthesize findings
+4. Generate both Markdown and HTML reports using the analysis-report-template
+5. Every major section must include a Confidence indicator (see persona-evaluation skill)
 
 Always reply in the same language as the user's most recent message.`,
     builtinClankPrompt: `You are Clank, the built-in default system agent in ClankAI and the primary partner users meet by default.
@@ -929,6 +907,8 @@ Always reply in the same language as the user's most recent message.`,
       reAnalyze: 'Re-analyze',
       analyzing: 'Analyzing...',
       analyzeModel: 'Analysis Model',
+      analyzeModelHint: 'Prefer a non-reasoning (chat / instruct) model — extraction here is structured JSON work, not deep reasoning. Reasoning models (reasoner / thinking / o-series) are typically 5–10× slower, more expensive, and less reliable at strict JSON output. Look for "chat", "instruct", "haiku", "mini", or "flash" in the model name above.',
+      analyzePrivacyWarning: 'Privacy notice: imported conversations are sent to the selected AI provider. Do NOT import chats containing financial info, medical records, ID numbers, or business secrets. Before importing, disable "data used for training / telemetry" in the provider\'s account dashboard (e.g. OpenAI Data Controls, DeepSeek Privacy Settings, Anthropic Workspace settings). Prefer locally-hosted or region-compliant providers when available.',
       agentModel: 'Agent Model',
       analysisComplete: 'Analysis complete',
       analysisCompleteHint: 'Click Next to review the generated persona and create the agent.',
@@ -974,10 +954,25 @@ Always reply in the same language as the user's most recent message.`,
       analysisFailed: 'Analysis failed.',
       chatImportEnvNotSetUp: 'Chat import environment not set up. Please set up the environment first.',
       saveHistoryDisabledWarning: 'Agents created without saved chat history cannot use AI analysis later.',
+      harnessTitle: 'Reality Check',
+      harnessSubtitle: 'Compare {count} real replies vs generated replies',
+      harnessRetry: 'Retry {count}',
+      harnessRunCheck: 'Run check',
+      harnessLike: 'like ({pct}%)',
+      harnessRound: 'Round {n}',
+      harnessLowScore: 'Score is low — rate then retry, disliked items will be regenerated',
+      harnessYou: 'You: ',
+      harnessRealReply: 'Real reply',
+      harnessAiGenerated: 'AI generated',
+      harnessLikeBtn: 'Like',
+      harnessNotLikeBtn: 'Not like',
+      harnessWhatsOff: "What's off? (optional, feeds next retry)",
+      harnessPrevAttempts: '{count} previous attempt(s)',
+      harnessRoundShort: 'R{n}',
     },
     analysis: {
       chatTitle: 'Analysis: {name}',
-      readyMessage: "I'm ready to analyze {name}'s imported chat history. Would you like me to start a comprehensive analysis now?",
+      readyMessage: "I'm ready to analyze {name}'s imported chat history. Want me to start the full analysis now and generate an HTML persona report?\n\n> **Privacy & safety notice:**\n> - Make sure the chats you import do not contain sensitive or private information (ID numbers, bank details, passwords, medical records, etc.) — the content will be sent to your configured AI model for processing.\n> - Before proceeding, make sure the model you're using has **personal data extraction / training on user data** turned off in its provider settings.\n> - The generated report is stored locally in your AI Doc folder and never uploaded.",
       noHistory: 'This agent has no imported chat history, so analysis is unavailable. Re-import with chat history saved.',
       buttonTitle: 'AI Analysis',
     },
@@ -1001,6 +996,8 @@ Always reply in the same language as the user's most recent message.`,
       create: 'Create {count} Agents',
       creating: 'Creating...',
       dupTitle: 'Already exists — skipped',
+      agentsExistRemoved: 'The following agents already exist and were removed from this preview: {names}',
+      agentsExistSkipped: 'The following agents already exist and were skipped: {names}',
     },
   },
   chats: {
@@ -1189,6 +1186,9 @@ Always reply in the same language as the user's most recent message.`,
     quotedImage: 'Quoted image',
     cookingFor: 'cooking for',
     cookedFor: 'cooked for',
+    durationSecs: '{s}s',
+    durationMinsSecs: '{m} min{mPlural} {s}s',
+    durationHoursMinsSecs: '{h} hour{hPlural} {m} min{mPlural} {s}s',
     toolReadMemory: 'Read Memory',
     toolUpdateMemory: 'Update Memory',
     toolFileOperation: 'File Operation',
@@ -1396,6 +1396,7 @@ Always reply in the same language as the user's most recent message.`,
     tencentCategorySecurityCompliance: 'Security & Compliance',
     tencentCategoryCommunication: 'Communication',
     skillFolderHint: 'Create skill folders in your skills directory. Each folder should contain a SKILL.md file with the skill\'s system prompt.',
+    builtinBadge: 'Built-in',
     emptyGuideDesc: 'Add specialized capabilities to enhance what your agents can do',
     emptyGuideUseCase1: 'Web search for real-time information',
     emptyGuideUseCase2: 'Code review with custom instructions',
@@ -1580,13 +1581,7 @@ Always reply in the same language as the user's most recent message.`,
     createViaChat: 'Create via Chat',
     emptyGuideChatMsg: 'I want to create a tool for my AI agent that can...\n(e.g. query a weather API, send email notifications, run SQL queries)',
     builtin: {
-      myLocation: { name: 'Get My Location', description: 'Detect your current city, country, timezone and coordinates via IP address. No parameters needed.' },
-      weatherAuto: { name: 'Current Location Weather', description: 'Auto-detect your location and get real-time weather: temperature, humidity, wind speed and conditions. No parameters needed.' },
       weatherCity: { name: 'City Weather Lookup', description: 'Get real-time weather for any city. Provide city name in English (e.g. Beijing, Shanghai, Tokyo).' },
-      exchangeRates: { name: 'Exchange Rate Lookup', description: 'Get live exchange rates for any currency. Provide the base currency code: CNY, USD, EUR, JPY, GBP, etc.' },
-      countryInfo: { name: 'Country Information', description: 'Look up any country\'s capital, official languages, currency, population and area. Provide country name in English.' },
-      publicHolidays: { name: 'Public Holidays', description: 'Get public holidays for any country and year. Provide year (e.g. 2026) and two-letter country code (CN, JP, US, GB, etc.).' },
-      funFact: { name: 'Random Fun Fact', description: 'Get a random interesting science or trivia fact. No parameters needed.' },
     },
   },
   notes: {
@@ -2218,17 +2213,19 @@ Always reply in the same language as the user's most recent message.`,
     tourMcp: 'MCP Servers',
     tourMcpDesc: 'Connect external tools and services via the Model Context Protocol.',
     tourTools: 'HTTP Tools',
-    tourToolsDesc: 'Built-in tools include location, weather, exchange rates, holidays and more. You can also create custom tools by chatting with your agent.',
+    tourToolsDesc: 'Connect agents to external APIs. A weather tool is included as an example — you can add more or create custom tools by chatting with your agent.',
     tourSkills: 'Skills',
-    tourSkillsDesc: 'Extend agent capabilities with prompt templates. Explore popular skills from the hub.',
+    tourSkillsDesc: 'Skills extend what your agents can do. You can install popular skills from the hub now, or browse and install them later.',
     tourSkillsLoading: 'Loading popular skills...',
     tourSkillsUnavailable: 'Skills hub is currently unavailable. You can explore it later.',
     tourSkillsInstallTitle: 'Popular Skills',
     tourSkillsInstallDesc: 'Would you like to install these popular skills?',
     tourSkillsInstall: 'Install',
-    tourSkillsSkip: 'Skip',
+    tourSkillsSkip: 'Skip for now',
     tourSkillsInstalling: 'Installing...',
     tourSkillsInstalled: 'Installed',
+    tourAssignReminder: 'Important: Assign to Agents',
+    tourAssignReminderDesc: 'Skills, Tools, MCP servers, and Knowledge Bases must be assigned to an agent before they take effect. Open any agent, scroll to the bottom, and check the items you want to enable for that agent.',
     tourMcpDesc: 'Connect external tools and services via MCP. You can ask your agent to help set up MCP servers through chat.',
     tourKnowledge: 'Knowledge Base',
     tourKnowledgeDesc: 'Add documents as a knowledge base (RAG). You can ask your agent to help organize your knowledge through chat.',
@@ -3049,6 +3046,24 @@ export const zh = {
     smallContextWarning: '该模型上下文窗口较小（{size}）。智能体工具、技能和系统提示会占用大量 token，回复可能被截断或失败。建议使用至少 20k 上下文的模型。',
     smallContextBrief: '上下文 {size}，可能截断',
     browseAvatars: '浏览头像',
+    userPromptTemplate: `## 基本信息
+- **性别**:
+- **年龄**:
+- **职业**:
+
+## 背景
+- **经验**:
+- **专业领域**:
+
+## 性格与偏好
+- **性格**:
+- **沟通方式**:
+- **感兴趣的话题**:
+- **不感兴趣的话题**:
+
+## AI 沟通规则
+-
+`,
     builtinClankName: 'Clank',
     builtinClankDescription: '内置默认 Clank 系统 Agent。擅长对话、写作、编程、调试、调研、规划与多工具协同，风格幽默灵动，但判断保持清晰可靠。',
     builtinDocEditorName: '文档大师',
@@ -3084,63 +3099,23 @@ export const zh = {
     builtinAnalystDescription: '专业心理分析师，擅长从聊天记录中进行深度人格分析、心理侧写与关系动态解读。',
     builtinAnalystPrompt: `你是「分析大师」，一位融合临床心理学、行为科学与社会动力学的资深人格分析专家，从业逾20年。
 
-你的分析框架：
+核心原则：
 - 循证原则：每一个结论都有具体的行为证据支撑
 - 多层次深入：表面行为 → 深层模式 → 核心人格结构 → 深层需求与恐惧
-- 细腻入微：承认复杂性、矛盾性与情境因素
-- 临床客观性与真实共情并重
 - 照亮而不评判——你的使命是理解，而非道德裁判
+- 承认复杂性、矛盾性与情境因素
 
-你的人格评估工具箱：
-- 大五人格（OCEAN）——为每个维度提供行为证据评分
-- MBTI——通过沟通风格、决策模式和社会取向进行评估
-- 依恋理论——识别安全型、焦虑型、回避型或混乱型依恋迹象
-- 核心动机需求（归属、自主、认可、安全感、掌控感）
-- 沟通风格指纹（直接vs间接、自信vs试探性、正式vs随意）
-- 情绪调节模式与压力反应特征
+你已加载以下专业 Skill，它们定义了你的方法论：
+- **persona-evaluation**：完整分析框架——大五人格、MBTI、依恋理论、核心需求量表、Speech DNA 模板、置信度评分。严格遵循其证据标准和双模策略。
+- **analysis-report-template**：HTML 和 Markdown 报告模板，包含图表规范（OCEAN 柱状图、活跃热力图、发送方环图、MBTI 展示）。生成报告时使用这些模板。
+- **ui-ux-pro-max**：设计智能数据，用于生成精美的可视化报告。生成 HTML 输出时参考其内置资产获取调色板、字体和 UX 模式。
 
-分析工作流程（严格遵循）：
+分析工作流程：
 1. 调用 analyze_agent_history，action="stats"，了解数据集规模
-2. 多次调用 analyze_agent_history，action="messages"，读取全部历史记录
-3. 整合所有数据，生成专业分析报告
-
-报告结构（以 Markdown 文件写入 suggested_output_path）：
-# [Agent 名称] — 人格分析报告
-
-## 核心摘要
-3-4句话勾勒出核心人格画像。
-
-## 数据概览
-数据集统计、时间跨度、对话密度。
-
-## 人格画像
-### 大五人格评估
-对每个维度评分并提供具体证据。
-### MBTI 类型
-论证具体类型（如 INTJ），附行为证据。
-### 依恋风格
-主要及次要依恋模式。
-
-## 沟通模式
-语言指纹、话题偏好、回应风格、幽默感、冲突行为。
-
-## 情绪结构
-情绪范围、调节能力、反复出现的情绪主题与触发因素。
-
-## 核心需求与动机
-驱动这个人的力量，以及他/她在关系与互动中的追求。
-
-## 关系动态
-与他人互动的方式——同伴关系、权威关系、亲密度。
-
-## 成长空间
-明显的心理困境或固着模式（以建设性方式呈现）。
-
-## 典型语录
-5-7句最能体现其人格的原始引用。
-
-## 分析备注
-影响解读的注意事项、不确定因素或情境因素。
+2. 调用 analyze_agent_history，action="analyze_all"，执行并行分块分析
+3. 运用 persona-evaluation 框架合成分析结论
+4. 使用 analysis-report-template 同时生成 Markdown 和 HTML 报告
+5. 每个主要章节必须包含置信度指标（见 persona-evaluation skill）
 
 始终用用户最近一条消息的语言回复。`,
     builtinClankPrompt: `你是 Clank，ClankAI 内置的默认系统 Agent，也是用户进入应用后默认会遇到的主力搭档。
@@ -3240,6 +3215,8 @@ export const zh = {
       reAnalyze: '重新分析',
       analyzing: '分析中...',
       analyzeModel: '分析模型',
+      analyzeModelHint: '建议选非推理（chat / instruct）类模型——导入阶段是结构化 JSON 提取，不是深度推理。推理类模型（reasoner / thinking / o 系列）通常慢 5-10 倍、成本更高，而且在严格 JSON 输出上更容易出错。在上方列表中优先选名称含 chat、instruct、haiku、mini、flash 之类的模型。',
+      analyzePrivacyWarning: '隐私提醒：导入时聊天内容会完整发送给所选 AI 服务商。请勿导入涉及财务信息、医疗记录、证件号、公司商业机密等敏感内容的聊天记录。建议在导入前先登入所选服务商的后台，关闭"数据用于模型训练 / 数据采集"等选项（如 OpenAI Data Controls、DeepSeek 隐私设置、Anthropic Workspace 设置）。如果数据敏感，优先选择本地部署或合规区域（国内云、欧盟 EU Residency 等）的服务商。',
       agentModel: '对话模型',
       analysisComplete: '分析完成',
       analysisCompleteHint: '点击下一步查看生成的人格并创建数字人。',
@@ -3285,10 +3262,25 @@ export const zh = {
       analysisFailed: '分析失败。',
       chatImportEnvNotSetUp: '聊天导入环境未配置，请先完成环境配置。',
       saveHistoryDisabledWarning: '未保存聊天记录的数字人后续无法使用 AI 分析功能。',
+      harnessTitle: '真实度检验',
+      harnessSubtitle: '对比 {count} 条真实回复 vs 生成回复',
+      harnessRetry: '重试 {count} 条',
+      harnessRunCheck: '开始检验',
+      harnessLike: '像 ({pct}%)',
+      harnessRound: '第 {n} 轮',
+      harnessLowScore: '评分偏低 — 打分后点重试，不像的会重新生成',
+      harnessYou: '你：',
+      harnessRealReply: '真人回复',
+      harnessAiGenerated: 'AI 生成',
+      harnessLikeBtn: '像',
+      harnessNotLikeBtn: '不像',
+      harnessWhatsOff: '哪里不像？（选填，会用于下一轮改进）',
+      harnessPrevAttempts: '{count} 条历史尝试',
+      harnessRoundShort: '第 {n} 轮',
     },
     analysis: {
       chatTitle: '数字人分析：{name}',
-      readyMessage: '我已准备好分析{name}导入的聊天记录。要现在开始全面分析吗？',
+      readyMessage: '我已准备好分析 {name} 导入的聊天记录，要现在开始全面分析并生成 HTML 人格报告吗？\n\n> **隐私与安全提示：**\n> - 请确保你导入的记录中不要包含敏感或隐私信息（身份证号、银行卡、密码、病历等）——这些内容会被发送到你配置的 AI 模型处理。\n> - 开始前请确认所用模型已在服务方后台**关闭"个人数据提取 / 用户数据训练"**选项。\n> - 生成的报告只会保存在本地 AI Doc 目录，不会上传。',
       noHistory: '这个数字人没有导入的聊天记录，无法进行分析。请重新导入并勾选保存聊天记录。',
       buttonTitle: 'AI 分析',
     },
@@ -3312,6 +3304,8 @@ export const zh = {
       create: '创建 {count} 个数字人',
       creating: '创建中...',
       dupTitle: '已存在，已跳过',
+      agentsExistRemoved: '以下 agent 已存在，已从本次预览中移除：{names}',
+      agentsExistSkipped: '以下 agent 已存在，已跳过创建：{names}',
     },
   },
   chats: {
@@ -3501,6 +3495,9 @@ export const zh = {
     quotedImage: '引用的图片',
     cookingFor: '正在处理',
     cookedFor: '已运行',
+    durationSecs: '{s} 秒',
+    durationMinsSecs: '{m} 分 {s} 秒',
+    durationHoursMinsSecs: '{h} 小时 {m} 分 {s} 秒',
     toolReadMemory: '读取记忆',
     toolUpdateMemory: '更新记忆',
     toolFileOperation: '文件操作',
@@ -3709,6 +3706,7 @@ export const zh = {
     tencentCategorySecurityCompliance: '安全合规',
     tencentCategoryCommunication: '通讯协作',
     skillFolderHint: '在你的技能目录中创建技能文件夹。每个文件夹应包含一个包含技能系统提示的 SKILL.md 文件。',
+    builtinBadge: '内置',
     emptyGuideDesc: '为数字人添加专业能力，增强它的功能',
     emptyGuideUseCase1: '联网搜索，获取实时信息',
     emptyGuideUseCase2: '代码审查，自定义审查规则',
@@ -3906,13 +3904,7 @@ export const zh = {
     createViaChat: '通过对话创建',
     emptyGuideChatMsg: '我想创建一个工具，让我的AI可以...\n（例如：查询天气API、发送邮件通知、执行SQL查询）',
     builtin: {
-      myLocation: { name: '获取当前位置', description: '通过 IP 地址自动获取当前所在城市、国家、时区、经纬度等信息。无需任何参数。' },
-      weatherAuto: { name: '当前位置天气', description: '自动检测当前位置并获取实时天气，包括温度、湿度、风速、天气状况。无需任何参数。' },
-      weatherCity: { name: '城市天气查询', description: '查询指定城市的实时天气。参数 city 为城市名（英文，如 Beijing、Shanghai、Tokyo）。' },
-      exchangeRates: { name: '货币汇率查询', description: '查询指定货币对主流货币的实时汇率。参数 base 为货币代码，如 CNY、USD、EUR、JPY、GBP。' },
-      countryInfo: { name: '国家信息查询', description: '查询任意国家的首都、官方语言、使用货币、人口、面积等信息。参数 name 为国家名（英文）。' },
-      publicHolidays: { name: '法定节假日查询', description: '查询指定国家指定年份的法定节假日列表。参数 year 为年份，countryCode 为两位国家代码（CN、JP、US、GB 等）。' },
-      funFact: { name: '随机趣味知识', description: '获取一条随机科普趣味小知识，适合在聊天中增加趣味性。无需任何参数。' },
+      weatherCity: { name: '城市天气查询', description: '查询任意城市的实时天气。参数 city 为城市名（英文，如 Beijing、Shanghai、Tokyo）。' },
     },
   },
   notes: {
@@ -4543,9 +4535,9 @@ export const zh = {
     tourMcp: 'MCP 服务',
     tourMcpDesc: '通过 MCP 协议连接外部工具和服务。',
     tourTools: 'HTTP 工具',
-    tourToolsDesc: '内置定位、天气、汇率、节假日等工具。你也可以通过和 Agent 对话来创建自定义工具，无需手动配置。',
+    tourToolsDesc: '连接外部 API 服务。已内置天气查询作为示例，你也可以通过对话让数字人帮你创建更多工具。',
     tourSkills: '技能',
-    tourSkillsDesc: '用提示词模板扩展 Agent 能力。从技能中心探索热门技能。',
+    tourSkillsDesc: '技能可以扩展数字人的能力。你可以现在从技能中心安装热门技能，也可以之后再安装。',
     tourSkillsLoading: '正在加载热门技能...',
     tourSkillsUnavailable: '技能中心暂时不可用，稍后可以在此页面探索。',
     tourSkillsInstallTitle: '热门技能',
@@ -4554,6 +4546,8 @@ export const zh = {
     tourSkillsSkip: '暂不安装',
     tourSkillsInstalling: '安装中...',
     tourSkillsInstalled: '已安装',
+    tourAssignReminder: '重要提示：分配给数字人',
+    tourAssignReminderDesc: '技能、工具、MCP 服务和知识库需要分配给数字人后才能在对话中生效。打开任意数字人，在底部勾选要启用的项目。',
     tourMcpDesc: '通过 MCP 协议连接外部工具和服务。你可以让 Agent 通过聊天帮你配置 MCP 服务。',
     tourKnowledge: '知识库',
     tourKnowledgeDesc: '添加文档作为知识库（RAG）。你可以让 Agent 通过聊天帮你整理和管理知识库。',

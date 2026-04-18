@@ -313,9 +313,14 @@
                   </AppButton>
                 </template>
                 <template v-else-if="showSkillsDialog">
-                  <button class="sw-btn-text" @click="skipSkillsInstall" :disabled="installingSkills">{{ t('setupWizard.tourSkillsSkip') }}</button>
-                  <AppButton variant="primary" size="modal" :loading="installingSkills" :disabled="installingSkills" @click="installSelectedSkills">
-                    {{ installingSkills ? t('setupWizard.tourSkillsInstalling') : t('setupWizard.tourSkillsInstall') }}
+                  <AppButton v-if="!installingSkills" variant="secondary" size="modal" @click="installSelectedSkills">
+                    {{ t('setupWizard.tourSkillsInstall') }}
+                  </AppButton>
+                  <AppButton v-else variant="secondary" size="modal" :loading="true" :disabled="true">
+                    {{ t('setupWizard.tourSkillsInstalling') }}
+                  </AppButton>
+                  <AppButton variant="primary" size="modal" :disabled="installingSkills" @click="skipSkillsInstall">
+                    {{ t('setupWizard.tourSkillsSkip') }}
                   </AppButton>
                 </template>
                 <template v-else>
@@ -871,6 +876,7 @@ const tourSteps = computed(() => [
   { route: '/agents', query: { agentTab: 'user' }, title: t('setupWizard.tourAgentsUser'), desc: t('setupWizard.tourAgentsUserDesc') },
   { route: '/skills', title: t('setupWizard.tourSkills'), desc: t('setupWizard.tourSkillsDesc') },
   { route: '/tools', title: t('setupWizard.tourTools'), desc: t('setupWizard.tourToolsDesc') },
+  { route: '/agents', query: { agentTab: 'system' }, title: t('setupWizard.tourAssignReminder'), desc: t('setupWizard.tourAssignReminderDesc') },
   { route: '/mcp', title: t('setupWizard.tourMcp'), desc: t('setupWizard.tourMcpDesc') },
   { route: '/knowledge', title: t('setupWizard.tourKnowledge'), desc: t('setupWizard.tourKnowledgeDesc') },
   { route: '/news', title: t('setupWizard.tourNews'), desc: t('setupWizard.tourNewsDesc') },
@@ -925,7 +931,7 @@ async function fetchTopSkills() {
       skillsHubError.value = true
       return
     }
-    topSkills.value = all.filter(s => !s.installed && s.downloadUrl).slice(0, 10)
+    topSkills.value = all.filter(s => !s.installed && s.downloadUrl).slice(0, 3)
     if (topSkills.value.length > 0) {
       showSkillsDialog.value = true
     } else {

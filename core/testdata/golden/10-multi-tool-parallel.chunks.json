@@ -1,0 +1,175 @@
+[
+  {
+    "type": "context_update",
+    "metrics": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "totalTokens": 0,
+      "maxTokens": 1000000,
+      "percentage": 0,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "compactionCount": 0
+    }
+  },
+  {
+    "type": "agent_step",
+    "id": "step-init",
+    "title": "🤖 Initializing Agent...",
+    "status": "in_progress",
+    "details": {
+      "iteration": 0,
+      "model": "claude-haiku-4-5",
+      "provider": "anthropic",
+      "tools": 0,
+      "thinking": false,
+      "msgs": 0,
+      "inputTokens": 0,
+      "outputTokens": 0
+    }
+  },
+  {
+    "type": "agent_step",
+    "id": "step-llm-1",
+    "title": "📡 Calling claude-haiku-4-5...",
+    "status": "in_progress",
+    "details": {
+      "iteration": 1,
+      "model": "claude-haiku-4-5",
+      "provider": "anthropic",
+      "tools": 12,
+      "thinking": false,
+      "msgs": 1,
+      "inputTokens": 0,
+      "outputTokens": 0
+    }
+  },
+  {
+    "type": "context_update",
+    "metrics": {
+      "inputTokens": 55,
+      "outputTokens": 30,
+      "totalTokens": 85,
+      "maxTokens": 1000000,
+      "percentage": 0,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "compactionCount": 0
+    }
+  },
+  {
+    "type": "agent_step",
+    "id": "step-tools-1",
+    "title": "🔧 Executing tools (2)...",
+    "status": "in_progress",
+    "details": {
+      "iteration": 1,
+      "model": "claude-haiku-4-5",
+      "provider": "anthropic",
+      "tools": 2,
+      "currentTools": "execute_shell, file_operation",
+      "thinking": false,
+      "msgs": 2,
+      "inputTokens": 55,
+      "outputTokens": 30
+    }
+  },
+  {
+    "type": "tool_call",
+    "name": "execute_shell",
+    "input": {
+      "command": "cat a.conf"
+    },
+    "toolCallId": "tool_0"
+  },
+  {
+    "type": "tool_call",
+    "name": "file_operation",
+    "input": {
+      "operation": "read",
+      "path": "b.conf"
+    },
+    "toolCallId": "tool_1"
+  },
+  {
+    "type": "tool_result",
+    "name": "execute_shell",
+    "result": {
+      "text": "config_data_a",
+      "exit_code": 0,
+      "truncated": false,
+      "totalLines": 1,
+      "totalBytes": 13
+    },
+    "toolCallId": "tool_0"
+  },
+  {
+    "type": "tool_result",
+    "name": "file_operation",
+    "result": {
+      "text": "config_data_b"
+    },
+    "toolCallId": "tool_1"
+  },
+  {
+    "type": "agent_step",
+    "id": "step-llm-2",
+    "title": "📡 Calling claude-haiku-4-5...",
+    "status": "in_progress",
+    "details": {
+      "iteration": 2,
+      "model": "claude-haiku-4-5",
+      "provider": "anthropic",
+      "tools": 12,
+      "thinking": false,
+      "msgs": 3,
+      "inputTokens": 55,
+      "outputTokens": 30
+    }
+  },
+  {
+    "type": "text",
+    "text": "Both configs read successfully."
+  },
+  {
+    "type": "context_update",
+    "metrics": {
+      "inputTokens": 100,
+      "outputTokens": 10,
+      "totalTokens": 110,
+      "maxTokens": 1000000,
+      "percentage": 0,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "compactionCount": 0
+    }
+  },
+  {
+    "type": "context_update",
+    "metrics": {
+      "inputTokens": 100,
+      "outputTokens": 10,
+      "totalTokens": 110,
+      "maxTokens": 1000000,
+      "percentage": 0,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "compactionCount": 0
+    }
+  },
+  {
+    "type": "agent_step",
+    "id": "step-complete",
+    "title": "✅ Agent Complete",
+    "status": "completed",
+    "details": {
+      "iteration": 2,
+      "model": "claude-haiku-4-5",
+      "provider": "anthropic",
+      "msgs": 4,
+      "totalTokens": 110,
+      "inputTokens": 100,
+      "outputTokens": 10
+    }
+  }
+]

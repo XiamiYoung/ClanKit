@@ -4,6 +4,7 @@
  * These functions strip Vue reactive proxies before data crosses
  * the Electron IPC structured-clone boundary.
  */
+import { describe, it, expect } from 'vitest'
 import { safeClone, safeCloneAll } from '../ipcSerialize'
 
 describe('safeClone', () => {

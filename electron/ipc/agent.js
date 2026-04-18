@@ -1300,16 +1300,19 @@ ipcMain.handle('agent:doc-run', async (event, {
   permissionMode
 }) => {
   try {
-    // Resolve provider/model: use global default (not utility model)
-    const provider = config.defaultProvider || 'anthropic'
-    const providerCfg = config[provider]
+    // Resolve provider from the new config.providers[] array.
+    // Try config.defaultProvider (type string), then fall back to first active provider.
+    const providerType = config.defaultProvider || null
+    const providerCfg = providerType
+      ? (config.providers || []).find(p => (p.type === providerType || p.id === providerType) && p.isActive)
+      : (config.providers || []).find(p => p.isActive && p.apiKey)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
-      event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: `Provider "${provider}" is missing apiKey or baseURL. Configure it in Config → AI → Models.` })
+      event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: `No active provider with credentials found. Configure it in Config → AI → Models.` })
       return { success: false }
     }
+    const provider = providerCfg.type || 'anthropic'
 
-    // Build loop config from global config (same pattern as agent:run in ChatsView)
-    // CRITICAL: promote provider-specific apiKey/baseURL to top-level,
+    // Build loop config — promote provider-specific apiKey/baseURL to top-level,
     // because AnthropicClient/OpenAIClient read config.apiKey / config.baseURL.
     const fullCfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
     const loopConfig = { ...config, soulsDir: ds.paths().SOULS_DIR }
@@ -1321,7 +1324,6 @@ ipcMain.handle('agent:doc-run', async (event, {
       loopConfig.apiKey  = providerCfg.apiKey
       loopConfig.baseURL = providerCfg.baseURL
     } else {
-      // All OpenAI-compatible providers (openai, openai_official, deepseek, qwen, glm, mistral, groq, etc.)
       loopConfig.defaultProvider   = 'openai'
       loopConfig._resolvedProvider = 'openai'
       loopConfig.openaiApiKey      = providerCfg.apiKey
@@ -1985,7 +1987,7 @@ ipcMain.handle('agent:suggest-chat-title', async (_event, { chatId, messages, at
       return { success: false, clear: false, error: 'utility model not configured' }
     }
 
-    const providerCfg = cfg[um.provider]
+    const providerCfg = (cfg.providers || []).find(p => (p.type === um.provider || p.id === um.provider) && p.isActive)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       logger.warn('agent:suggest-chat-title: utility provider missing credentials', { chatId, provider: um.provider })
       return { success: false, clear: false, error: 'utility model credentials missing' }

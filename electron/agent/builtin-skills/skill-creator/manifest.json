@@ -1,0 +1,6 @@
+{
+  "id": "skill-creator",
+  "version": 1,
+  "builtin": true,
+  "description": "Meta-skill for creating, editing, evaluating, and optimizing other skills"
+}

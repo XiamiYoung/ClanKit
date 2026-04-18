@@ -1,0 +1,6 @@
+{
+  "id": "xlsx",
+  "version": 1,
+  "builtin": true,
+  "description": "Excel spreadsheet processing — create, read, edit XLSX files with formulas, charts, pivot tables"
+}

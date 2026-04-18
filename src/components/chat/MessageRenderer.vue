@@ -607,12 +607,21 @@ onUpdated(() => {
 
 function formatDuration(ms) {
   const totalSec = Math.round(ms / 1000)
-  if (totalSec < 60) return `${totalSec}s`
+  if (totalSec < 60) return t('chats.durationSecs', { s: totalSec })
   const hours = Math.floor(totalSec / 3600)
   const mins = Math.floor((totalSec % 3600) / 60)
   const secs = totalSec % 60
-  if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ${mins} min${mins !== 1 ? 's' : ''} ${secs}s`
-  return `${mins} min${mins !== 1 ? 's' : ''} ${secs}s`
+  if (hours > 0) {
+    return t('chats.durationHoursMinsSecs', {
+      h: hours, hPlural: hours > 1 ? 's' : '',
+      m: mins,  mPlural: mins !== 1 ? 's' : '',
+      s: secs,
+    })
+  }
+  return t('chats.durationMinsSecs', {
+    m: mins, mPlural: mins !== 1 ? 's' : '',
+    s: secs,
+  })
 }
 
 // ── Strip base64 blobs from text before rendering ────────────────────────────

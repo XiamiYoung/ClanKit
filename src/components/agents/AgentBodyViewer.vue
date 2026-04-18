@@ -822,44 +822,7 @@ const draftVoiceId     = ref(props.agentVoiceId || getDefaultVoiceForLocale(conf
 
 // Pre-fill prompt template for new user agents
 if (props.isNew && props.agentType !== 'system' && !draftPrompt.value) {
-  const isZh = configStore.config.language === 'zh'
-  draftPrompt.value = isZh
-    ? `## 基本信息
-- **性别**:
-- **年龄**:
-- **职业**:
-
-## 背景
-- **经验**:
-- **专业领域**:
-
-## 性格与偏好
-- **性格**:
-- **沟通方式**:
-- **感兴趣的话题**:
-- **不感兴趣的话题**:
-
-## AI 沟通规则
--
-`
-    : `## Basic Info
-- **Gender**:
-- **Age**:
-- **Occupation**:
-
-## Background
-- **Experience**:
-- **Domain expertise**:
-
-## Personality & Preferences
-- **Personality**:
-- **Communication style**:
-- **Interested topics**:
-- **Not interested topics**:
-
-## AI Communication Rules
--
-`
+  draftPrompt.value = t('agents.userPromptTemplate')
 }
 
 // Expose draft field state for onboarding tracking

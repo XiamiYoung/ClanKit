@@ -1,0 +1,160 @@
+{
+  "name": "10-multi-tool-parallel",
+  "description": "Model emits two tool_use blocks in one response. AgentLoop runs both via Promise.all. Proves: two tool_call chunks emitted in-order, then two tool_result chunks after parallel execution.",
+  "model": "claude-haiku-4-5",
+  "messages": [
+    { "role": "user", "content": "Read both config files." }
+  ],
+  "toolMocks": {
+    "execute_shell": {
+      "result": {
+        "content": [
+          { "type": "text", "text": "config_data_a" }
+        ],
+        "details": { "exit_code": 0, "truncated": false, "totalLines": 1, "totalBytes": 13 }
+      }
+    },
+    "file_operation": {
+      "result": {
+        "content": [
+          { "type": "text", "text": "config_data_b" }
+        ]
+      }
+    }
+  },
+  "enabledAgents": [],
+  "enabledSkills": [],
+  "agentPrompts": {},
+  "llmResponses": [
+    [
+      {
+        "event": "message_start",
+        "data": {
+          "type": "message_start",
+          "message": {
+            "id": "msg_mock_0010a",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-haiku-4-5",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": { "input_tokens": 55, "output_tokens": 0 }
+          }
+        }
+      },
+      {
+        "event": "content_block_start",
+        "data": {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "tool_use",
+            "id": "toolu_mock_par_01",
+            "name": "execute_shell",
+            "input": {}
+          }
+        }
+      },
+      {
+        "event": "content_block_delta",
+        "data": {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": { "type": "input_json_delta", "partial_json": "{\"command\":\"cat a.conf\"}" }
+        }
+      },
+      {
+        "event": "content_block_stop",
+        "data": { "type": "content_block_stop", "index": 0 }
+      },
+      {
+        "event": "content_block_start",
+        "data": {
+          "type": "content_block_start",
+          "index": 1,
+          "content_block": {
+            "type": "tool_use",
+            "id": "toolu_mock_par_02",
+            "name": "file_operation",
+            "input": {}
+          }
+        }
+      },
+      {
+        "event": "content_block_delta",
+        "data": {
+          "type": "content_block_delta",
+          "index": 1,
+          "delta": { "type": "input_json_delta", "partial_json": "{\"operation\":\"read\",\"path\":\"b.conf\"}" }
+        }
+      },
+      {
+        "event": "content_block_stop",
+        "data": { "type": "content_block_stop", "index": 1 }
+      },
+      {
+        "event": "message_delta",
+        "data": {
+          "type": "message_delta",
+          "delta": { "stop_reason": "tool_use", "stop_sequence": null },
+          "usage": { "output_tokens": 30 }
+        }
+      },
+      {
+        "event": "message_stop",
+        "data": { "type": "message_stop" }
+      }
+    ],
+    [
+      {
+        "event": "message_start",
+        "data": {
+          "type": "message_start",
+          "message": {
+            "id": "msg_mock_0010b",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-haiku-4-5",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": { "input_tokens": 100, "output_tokens": 0 }
+          }
+        }
+      },
+      {
+        "event": "content_block_start",
+        "data": {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": { "type": "text", "text": "" }
+        }
+      },
+      {
+        "event": "content_block_delta",
+        "data": {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": { "type": "text_delta", "text": "Both configs read successfully." }
+        }
+      },
+      {
+        "event": "content_block_stop",
+        "data": { "type": "content_block_stop", "index": 0 }
+      },
+      {
+        "event": "message_delta",
+        "data": {
+          "type": "message_delta",
+          "delta": { "stop_reason": "end_turn", "stop_sequence": null },
+          "usage": { "output_tokens": 10 }
+        }
+      },
+      {
+        "event": "message_stop",
+        "data": { "type": "message_stop" }
+      }
+    ]
+  ]
+}

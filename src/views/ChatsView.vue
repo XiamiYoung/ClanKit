@@ -414,7 +414,7 @@
           @send="handleChatWindowSend"
           @resend-message="handleResendMessage"
           @retry-waiting-indicator="handleRetryWaitingIndicator"
-          @escape-retrieve="escapeRetrieve(chatsStore.activeChatId)"
+          @escape-retrieve="interrupt(chatsStore.activeChatId)"
           @quote="quoteMessage"
           @quote-image="handleQuoteImage"
           @delete-message="requestDeleteMessage"
@@ -596,7 +596,7 @@
                   :isGroupChat="isGroupChat"
                   :isRunning="activeRunning"
                   @send="sendMessage"
-                  @escape="escapeRetrieve(chatsStore.activeChatId)"
+                  @escape="interrupt(chatsStore.activeChatId)"
                   @focus="inputFocused = true"
                   @blur="onInputBlur"
                   @attach="atts => attachments.push(...atts)"
@@ -604,7 +604,7 @@
                 <!-- Escape retrieve button (visible while running) -->
                 <template v-if="activeRunning">
                   <button
-                    @click="escapeRetrieve(chatsStore.activeChatId)"
+                    @click="interrupt(chatsStore.activeChatId)"
                     class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer mb-0.5"
                     style="background:rgba(255,59,48,0.08); color:#FF3B30; box-shadow:0 1px 3px rgba(0,0,0,0.04);"
                     @mouseenter="e => e.currentTarget.style.background='rgba(255,59,48,0.12)'"
@@ -893,7 +893,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted, onActivated, onDeactivated, onErrorCaptured, watch, toRaw } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, onActivated, onDeactivated, onErrorCaptured, watch, toRaw, provide } from 'vue'
 defineOptions({ name: 'ChatsView', inheritAttrs: false })
 import { useRoute, useRouter } from 'vue-router'
 import { useChatsStore } from '../stores/chats'
@@ -1399,6 +1399,14 @@ const {
 // Now bind the wrapper to the actual implementation
 _fireGroupAgentsDirectRef = _fireGroupAgentsDirect
 
+// Provide shared interrupt refs to grid panels (each panel calls useInterrupt with these +
+// its own local inputText/attachments/mentionInputRef).
+provide('interruptShared', {
+  collaborationCancelled,
+  isInCollaborationLoop,
+  runningAgentKeys,
+})
+
 // Per-chat state — reads from the active chat object in the store (must be before useSendMessage)
 const activeRunning = computed(() => chatsStore.activeChat?.isRunning ?? false)
 const activeContextMetrics = computed(() => chatsStore.activeChat?.contextMetrics ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 1000000, percentage: 0, compactionCount: 0 })
@@ -1415,12 +1423,11 @@ const activeSystemAgentIds = computed(() => {
 
 // ── Send message orchestration ──
 const {
-  sendMessage, stopAgent, approvePlan, rejectPlan, refinePlan, compactContext,
-  pendingInterrupt, confirmInterrupt, cancelInterrupt, escapeRetrieve,
+  sendMessage, interrupt, approvePlan, rejectPlan, refinePlan, compactContext,
+  pendingInterrupt, confirmInterrupt, cancelInterrupt,
   _saveDraftForChat, _restoreDraftForChat,
   _codingModeContext, isCompacting,
   startStreamingTimer, stopStreamingTimer,
-  getLastActiveMessage, _applyInterrupt,
 } = useSendMessage({
   inputText, attachments, quotedMessage, mentionInputRef, userScrolled,
   scrollToBottom, dbg, getQuotedSenderName,
@@ -1862,9 +1869,12 @@ function handleGlobalKeydown(e) {
     pickFiles()
     return
   }
-  if (e.key === 'Escape' && activeRunning.value) {
+  if (e.key === 'Escape') {
+    // Don't gate on activeRunning — isRunning may be cleared by agent_end before
+    // the user's ESC reaches us. interrupt() checks whether there's a
+    // streaming/waiting msg to interrupt.
     e.preventDefault()
-    escapeRetrieve(chatsStore.activeChatId)
+    interrupt(chatsStore.activeChatId)
   }
 }
 
@@ -1960,7 +1970,7 @@ onMounted(async () => {
     handleChunk(cId, chunk)
   })
 
-  // Reconnect to any agent loops that survived a page refresh.
+  // Reconnect to any agent loops that survived a page refresh or minibar transition.
   // setUiChunkCallback is registered BEFORE this await so chunks arriving
   // during ensureMessages calls go through handleChunk (the full UI path).
   const reconnected = await chatsStore.reconnectRunningAgents()
@@ -1970,19 +1980,32 @@ onMounted(async () => {
     for (const entry of entries) {
       const routeKey = entry.isGroup ? `${chatId}:${entry.agentId}` : chatId
       if (perChatStreamingMsgId.has(routeKey)) continue  // already registered
-      const msgId = uuidv4()
-      perChatStreamingMsgId.set(routeKey, msgId)
-      perChatStreamingSegments.set(routeKey, [])
-      chat.messages.push({
-        id: msgId,
-        role: 'assistant',
-        content: '',
-        streaming: true,
-        streamingStartedAt: Date.now(),
-        agentId: entry.isGroup ? entry.agentId : undefined,
-        agentName: entry.isGroup ? entry.agentName : undefined,
-        segments: [],
-      })
+
+      // Reuse an existing streaming message if one was created by _applyChunk
+      // while ChatsView was unmounted (e.g. during minibar mode). Without this,
+      // each minibar round-trip creates a duplicate empty bubble with a wavebar.
+      const existingMsg = [...chat.messages].reverse().find(m =>
+        m.role === 'assistant' && m.streaming &&
+        (entry.isGroup ? m.agentId === entry.agentId : !m.isWaitingIndicator)
+      )
+      if (existingMsg) {
+        perChatStreamingMsgId.set(routeKey, existingMsg.id)
+        perChatStreamingSegments.set(routeKey, existingMsg.segments || [])
+      } else {
+        const msgId = uuidv4()
+        perChatStreamingMsgId.set(routeKey, msgId)
+        perChatStreamingSegments.set(routeKey, [])
+        chat.messages.push({
+          id: msgId,
+          role: 'assistant',
+          content: '',
+          streaming: true,
+          streamingStartedAt: Date.now(),
+          agentId: entry.isGroup ? entry.agentId : undefined,
+          agentName: entry.isGroup ? entry.agentName : undefined,
+          segments: [],
+        })
+      }
     }
     scrollToBottom(false, chatId)
   }

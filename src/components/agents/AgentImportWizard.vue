@@ -259,6 +259,11 @@
                   </option>
                 </select>
               </div>
+              <p class="hint-info mt-1" style="line-height:1.5;">{{ t('agents.import.analyzeModelHint') }}</p>
+              <div class="privacy-warning mt-1">
+                <span class="privacy-icon" aria-hidden="true">⚠</span>
+                <p class="privacy-text">{{ t('agents.import.analyzePrivacyWarning') }}</p>
+              </div>
             </div>
 
             <!-- Start Analyzing / Re-analyze button -->
@@ -293,6 +298,23 @@
 
           <!-- ── Step 4: Review & Create ── -->
           <template v-if="step === 4">
+            <!-- Accuracy warning -->
+            <div v-if="accuracyTier && (accuracyTier.tier === 'low' || accuracyTier.tier === 'skip')"
+                 class="accuracy-warning">
+              <svg style="width:14px;height:14px;flex-shrink:0;color:#F59E0B;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>{{ locale === 'zh' ? accuracyTier.message.zh : accuracyTier.message.en }}</span>
+            </div>
+            <div v-else-if="accuracyTier && accuracyTier.tier === 'medium'"
+                 class="accuracy-info">
+              <svg style="width:14px;height:14px;flex-shrink:0;color:#22c55e;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+              <span>{{ locale === 'zh' ? accuracyTier.message.zh : accuracyTier.message.en }}</span>
+            </div>
+            <div v-else-if="accuracyTier && accuracyTier.tier === 'high'"
+                 class="accuracy-good">
+              <svg style="width:14px;height:14px;flex-shrink:0;color:#22c55e;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>{{ locale === 'zh' ? accuracyTier.message.zh : accuracyTier.message.en }}</span>
+            </div>
+
             <!-- Avatar + Name row -->
             <div class="review-top-row">
               <div class="avatar-col" @click="showAvatarPicker = true" :title="t('agents.browseAvatars')">
@@ -404,6 +426,113 @@
               <label class="field-label">{{ t('agents.import.generatedPromptLabel') }}</label>
               <textarea v-model="generatedPrompt" class="field-textarea generated-prompt-area" rows="12" />
             </div>
+
+            <!-- ── Phase 4: Hold-out Validation Harness ── -->
+            <div v-if="(classified?.holdOutPairs?.length || 0) > 0" class="harness-section">
+              <div class="harness-header">
+                <div>
+                  <div class="harness-title">{{ t('agents.import.harnessTitle') }}</div>
+                  <div class="harness-subtitle">{{ t('agents.import.harnessSubtitle', { count: classified.holdOutPairs.length }) }}</div>
+                </div>
+                <div style="display:flex;gap:0.4rem;align-items:center;">
+                  <AppButton
+                    v-if="harnessResults.length > 0 && harnessRetryCount > 0"
+                    size="compact"
+                    :loading="harnessRunning"
+                    :disabled="harnessRunning"
+                    @click="runHarness"
+                  >{{ t('agents.import.harnessRetry', { count: harnessRetryCount }) }}</AppButton>
+                  <AppButton
+                    v-if="harnessResults.length === 0"
+                    size="compact"
+                    :loading="harnessRunning"
+                    :disabled="harnessRunning || !generatedPrompt"
+                    @click="runHarness"
+                  >{{ t('agents.import.harnessRunCheck') }}</AppButton>
+                </div>
+              </div>
+
+              <div v-if="harnessRunning" class="harness-progress-wrap">
+                <div class="progress-bar-wrap"><div class="progress-bar" :style="{ width: harnessProgress + '%' }" /></div>
+                <p class="hint-info" style="font-size:0.7rem;">{{ harnessMsg }}</p>
+              </div>
+
+              <p v-if="harnessError" class="error-text">{{ harnessError }}</p>
+
+              <div v-if="harnessScore" class="harness-score-row">
+                <strong>{{ harnessScore.likes }}/{{ harnessScore.total }}</strong>
+                <span>{{ t('agents.import.harnessLike', { pct: harnessScore.pct }) }}</span>
+                <span v-if="harnessScore.rounds > 1" class="harness-round-badge">
+                  {{ t('agents.import.harnessRound', { n: harnessScore.rounds }) }}
+                </span>
+                <span v-if="harnessScore.total >= 3 && harnessScore.pct < 60" class="harness-low-hint">
+                  {{ t('agents.import.harnessLowScore') }}
+                </span>
+              </div>
+
+              <div v-if="harnessResults.length > 0" class="harness-results">
+                <div v-for="(r, i) in harnessResults" :key="i"
+                     class="harness-pair"
+                     :class="{ 'harness-pair-liked': r.currentRating === 'like' }">
+
+                  <!-- Round badge -->
+                  <span v-if="r.rounds.length > 1" class="harness-round-badge" style="float:right;">
+                    {{ t('agents.import.harnessRoundShort', { n: r.rounds.length }) }}
+                  </span>
+
+                  <div class="harness-user">{{ t('agents.import.harnessYou') }}{{ r.userMessage }}</div>
+                  <div class="harness-side-by-side">
+                    <div class="harness-reply harness-real">
+                      <div class="harness-reply-label">{{ t('agents.import.harnessRealReply') }}</div>
+                      <div class="harness-reply-text">{{ r.realReply }}</div>
+                    </div>
+                    <div class="harness-reply harness-gen">
+                      <div class="harness-reply-label">{{ t('agents.import.harnessAiGenerated') }}</div>
+                      <div class="harness-reply-text">{{ r.currentGenerated || '(empty)' }}</div>
+                    </div>
+                  </div>
+
+                  <div class="harness-rating-row">
+                    <button
+                      class="harness-rate-btn"
+                      :class="{ active: r.currentRating === 'like' }"
+                      @click="rateHarness(i, 'like')"
+                    >👍 {{ t('agents.import.harnessLikeBtn') }}</button>
+                    <button
+                      class="harness-rate-btn"
+                      :class="{ active: r.currentRating === 'dislike' }"
+                      @click="rateHarness(i, 'dislike')"
+                    >👎 {{ t('agents.import.harnessNotLikeBtn') }}</button>
+                  </div>
+
+                  <!-- Reason input (shows when 👎 active) -->
+                  <div v-if="r.currentRating === 'dislike'" class="harness-reason-wrap">
+                    <input
+                      type="text"
+                      class="field-input harness-reason-input"
+                      :placeholder="t('agents.import.harnessWhatsOff')"
+                      :value="r.currentReason"
+                      @input="setHarnessReason(i, $event.target.value)"
+                    />
+                  </div>
+
+                  <!-- Previous rounds (collapsed by default if > 1 round) -->
+                  <details v-if="r.rounds.length > 1" class="harness-history">
+                    <summary class="harness-history-summary">
+                      {{ t('agents.import.harnessPrevAttempts', { count: r.rounds.length - 1 }) }}
+                    </summary>
+                    <div v-for="(rd, ri) in r.rounds.slice(0, -1)" :key="ri" class="harness-history-item">
+                      <span class="harness-history-badge">{{ t('agents.import.harnessRoundShort', { n: ri + 1 }) }}</span>
+                      <span :class="rd.rating === 'like' ? 'harness-history-like' : 'harness-history-dislike'">
+                        {{ rd.rating === 'like' ? '👍' : '👎' }}
+                      </span>
+                      <span class="harness-history-text">{{ rd.generatedReply }}</span>
+                      <span v-if="rd.reason" class="harness-history-reason">— {{ rd.reason }}</span>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            </div>
           </template>
 
         </div>
@@ -456,7 +585,7 @@ import AvatarPicker from './AvatarPicker.vue'
 import { generateRandomBatch, getAvatarDataUri } from './agentAvatars'
 import { EDGE_VOICES, getDefaultVoiceForLocale } from '../../utils/edgeVoices'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 const modelsStore = useModelsStore()
@@ -941,8 +1070,169 @@ const generatedPrompt = ref('')
 const agentName = ref('')
 const agentDescription = ref('')
 const extractedMemories = ref([])
+const extractedSpeechDna = ref(null)
+const extractedNuwaSections = ref(null)
+const extractedEvidenceIndex = ref(null)
+const accuracyTier = ref(null)  // { tier, mode, message: { en, zh } }
 const saveHistory = ref(true)
 const importMemories = ref(true)
+
+// ── Hold-out Validation Harness (Phase D) ──────────────────────────────────
+// Data model per item:
+//   { userMessage, realReply, timestamp,
+//     rounds: [{ generatedReply, rating, reason, ts }],
+//     currentGenerated, currentRating, currentReason }
+// Rounds accumulate across retries. Only items NOT rated 👍 get regenerated.
+// Previous disliked rounds + their reasons are passed to the LLM so it can
+// learn from the user's feedback and try a different approach.
+const harnessRunning = ref(false)
+const harnessProgress = ref(0)
+const harnessMsg = ref('')
+const harnessError = ref('')
+const harnessResults = ref([])
+const harnessScore = ref(null)
+
+function recomputeHarnessScore() {
+  const rated = harnessResults.value.filter(r => r.currentRating !== null)
+  if (rated.length === 0) { harnessScore.value = null; return }
+  const likes = rated.filter(r => r.currentRating === 'like').length
+  const maxRounds = Math.max(...harnessResults.value.map(r => (r.rounds || []).length), 0)
+  harnessScore.value = {
+    likes,
+    dislikes: rated.length - likes,
+    total: rated.length,
+    pct: Math.round((likes / rated.length) * 100),
+    rounds: maxRounds,
+  }
+}
+
+async function runHarness() {
+  if (harnessRunning.value) return
+  const holdOut = classified.value?.holdOutPairs || []
+  if (holdOut.length === 0) {
+    harnessError.value = 'No hold-out pairs available (chat too small).'
+    return
+  }
+
+  // First run — initialize results from holdOutPairs
+  if (harnessResults.value.length === 0) {
+    harnessResults.value = holdOut.map(p => ({
+      userMessage: p.userMessage,
+      realReply: p.realReply,
+      timestamp: p.timestamp,
+      rounds: [],
+      currentGenerated: '',
+      currentRating: null,
+      currentReason: '',
+    }))
+  }
+
+  // Determine which items need (re)generation: anything not yet rated 👍
+  const indices = []
+  for (let i = 0; i < harnessResults.value.length; i++) {
+    if (harnessResults.value[i].currentRating !== 'like') indices.push(i)
+  }
+  if (indices.length === 0) return  // everything already liked
+
+  harnessRunning.value = true
+  harnessProgress.value = 0
+  harnessMsg.value = ''
+  harnessError.value = ''
+
+  const unsub = window.electronAPI.agentImport.onProgress((data) => {
+    if (data.step === 'harness') {
+      harnessProgress.value = data.progress || 0
+      harnessMsg.value = data.message || ''
+    }
+  })
+
+  try {
+    // Build payload — include previous disliked rounds as feedback for the LLM
+    const payloadPairs = indices.map(i => {
+      const r = harnessResults.value[i]
+      return {
+        userMessage: r.userMessage,
+        realReply: r.realReply,
+        timestamp: r.timestamp,
+        previousAttempts: (r.rounds || []).map(rd => ({
+          generatedReply: rd.generatedReply,
+          rating: rd.rating,
+          reason: rd.reason || '',
+        })),
+      }
+    })
+
+    const configPlain = JSON.parse(JSON.stringify(configStore.config || {}))
+    const res = await window.electronAPI.agentImport.validateHarness({
+      agentName: agentName.value.trim() || profile.name || 'Them',
+      generatedPrompt: buildFinalPrompt(),
+      speechDna: extractedSpeechDna.value
+        ? JSON.parse(JSON.stringify(extractedSpeechDna.value))
+        : null,
+      providerType: analyzeProviderType.value || undefined,
+      modelId: analyzeModelId.value || undefined,
+      pairs: JSON.parse(JSON.stringify(payloadPairs)),
+      language: configStore.language || 'en',
+      config: configPlain,
+    })
+
+    if (res?.success && Array.isArray(res.results)) {
+      // Merge results back into the original positions
+      for (let k = 0; k < res.results.length; k++) {
+        const origIdx = indices[k]
+        const item = harnessResults.value[origIdx]
+        const gen = res.results[k]
+        const newRound = {
+          generatedReply: gen.generatedReply || '',
+          rating: null,
+          reason: '',
+          ts: new Date().toISOString(),
+        }
+        item.rounds.push(newRound)
+        item.currentGenerated = newRound.generatedReply
+        item.currentRating = null
+        item.currentReason = ''
+      }
+      recomputeHarnessScore()
+    } else {
+      harnessError.value = res?.error || 'Validation failed.'
+    }
+  } catch (e) {
+    harnessError.value = e?.message || String(e)
+  } finally {
+    unsub()
+    harnessRunning.value = false
+  }
+}
+
+function rateHarness(idx, rating) {
+  const r = harnessResults.value[idx]
+  if (!r) return
+  r.currentRating = rating
+  // Sync into the latest round entry
+  if (r.rounds.length > 0) {
+    r.rounds[r.rounds.length - 1].rating = rating
+  }
+  // If switching away from dislike, clear reason
+  if (rating !== 'dislike') {
+    r.currentReason = ''
+    if (r.rounds.length > 0) r.rounds[r.rounds.length - 1].reason = ''
+  }
+  recomputeHarnessScore()
+}
+
+function setHarnessReason(idx, reason) {
+  const r = harnessResults.value[idx]
+  if (!r) return
+  r.currentReason = reason
+  if (r.rounds.length > 0) {
+    r.rounds[r.rounds.length - 1].reason = reason
+  }
+}
+
+const harnessRetryCount = computed(() => {
+  return harnessResults.value.filter(r => r.currentRating !== 'like').length
+})
 let tipTimer = null
 
 const TIPS_EN = [
@@ -1012,6 +1302,10 @@ async function doAnalyze() {
   generatedPrompt.value = res.systemPrompt || ''
   agentDescription.value = res.description || ''
   extractedMemories.value = Array.isArray(res.memories) ? res.memories : []
+  extractedSpeechDna.value = res.speechDna || null
+  extractedNuwaSections.value = res.nuwaSections || null
+  extractedEvidenceIndex.value = res.evidenceIndex || null
+  accuracyTier.value = res.accuracyTier || null
   // Auto-fill relationship and impression from LLM inference (only if user hasn't set them)
   if (!profile.relationship && res.inferredRelationship) profile.relationship = res.inferredRelationship
   if (!profile.impression && res.inferredImpression) profile.impression = res.inferredImpression
@@ -1121,6 +1415,54 @@ async function doCreateAgent() {
       })
     } catch (e) {
       console.warn('Failed to write memories:', e)
+    }
+  }
+
+  // Write Speech DNA fingerprint (Phase A — Nuwa Expression DNA layer)
+  if (extractedSpeechDna.value) {
+    try {
+      await window.electronAPI.agentImport.writeSpeechDna({
+        agentId,
+        agentType: props.agentType || 'system',
+        speechDna: JSON.parse(JSON.stringify(extractedSpeechDna.value)),
+      })
+    } catch (e) {
+      console.warn('Failed to write speech DNA:', e)
+    }
+  }
+
+  // Write harness validation results (Phase D) — persist even without ratings
+  if (harnessResults.value.length > 0) {
+    try {
+      await window.electronAPI.agentImport.writeHarness({
+        agentId,
+        agentType: props.agentType || 'system',
+        harness: {
+          version: 1,
+          generatedAt: new Date().toISOString(),
+          score: harnessScore.value,
+          pairs: JSON.parse(JSON.stringify(harnessResults.value)),
+        },
+      })
+    } catch (e) {
+      console.warn('Failed to write harness:', e)
+    }
+  }
+
+  // Write Nuwa-pipeline sections + evidence index (Phase B)
+  if (extractedNuwaSections.value) {
+    try {
+      await window.electronAPI.agentImport.writeNuwaSections({
+        agentId,
+        agentName: agentName.value.trim().replace(/\s+/g, '_'),
+        agentType: props.agentType || 'system',
+        sections: JSON.parse(JSON.stringify(extractedNuwaSections.value)),
+        evidenceIndex: extractedEvidenceIndex.value
+          ? JSON.parse(JSON.stringify(extractedEvidenceIndex.value))
+          : null,
+      })
+    } catch (e) {
+      console.warn('Failed to write nuwa sections:', e)
     }
   }
 
@@ -1448,6 +1790,27 @@ onUnmounted(() => {
 .hint-info {
   font-size: 0.75rem;
   color: rgba(255,255,255,0.35);
+  margin: 0;
+}
+.privacy-warning {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+}
+.privacy-icon {
+  flex-shrink: 0;
+  color: #fbbf24;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.privacy-text {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #fde68a;
   margin: 0;
 }
 
@@ -1858,4 +2221,213 @@ onUnmounted(() => {
 .mt-3 { margin-top: 0.75rem; }
 .mb-2 { margin-bottom: 0.5rem; }
 .flex-wrap { flex-wrap: wrap; }
+
+/* ── Hold-out Validation Harness (Phase D) ────────────────────────────── */
+.harness-section {
+  margin-top: 1rem;
+  padding: 0.85rem;
+  background: #151515;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.75rem;
+}
+.harness-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+.harness-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #FFFFFF;
+}
+.harness-subtitle {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.45);
+  margin-top: 0.15rem;
+}
+.harness-progress-wrap {
+  margin-top: 0.65rem;
+}
+.harness-score-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: #1F1F1F;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.75);
+}
+.harness-score-row strong { color: #FFFFFF; font-size: 1rem; }
+.harness-low-hint {
+  margin-left: auto;
+  color: #F59E0B;
+  font-size: 0.75rem;
+}
+.harness-results {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+.harness-pair {
+  padding: 0.65rem;
+  background: #1A1A1A;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.5rem;
+}
+.harness-user {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #222;
+}
+.harness-side-by-side {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.harness-reply {
+  padding: 0.5rem;
+  background: #0F0F0F;
+  border-radius: 0.35rem;
+  border: 1px solid #222;
+}
+.harness-reply-label {
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.25rem;
+}
+.harness-reply-text {
+  font-size: 0.8rem;
+  color: #F0F0F0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.harness-real { border-color: #22c55e44; }
+.harness-gen  { border-color: #6366f144; }
+.harness-rating-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.harness-rate-btn {
+  flex: 1;
+  padding: 0.35rem 0.5rem;
+  background: #1F1F1F;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.35rem;
+  color: rgba(255,255,255,0.6);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.harness-rate-btn:hover { border-color: #6366f1; color: #FFFFFF; }
+.harness-rate-btn.active {
+  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151);
+  border-color: #6366f1;
+  color: #FFFFFF;
+}
+.harness-pair-liked {
+  opacity: 0.55;
+  border-color: #22c55e33;
+}
+.harness-round-badge {
+  font-size: 0.6rem;
+  color: rgba(255,255,255,0.35);
+  background: #222;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+}
+.harness-reason-wrap {
+  margin-top: 0.4rem;
+}
+.harness-reason-input {
+  font-size: 0.75rem !important;
+  padding: 0.3rem 0.5rem !important;
+  background: #0F0F0F !important;
+  border-color: #F59E0B44 !important;
+}
+.harness-reason-input::placeholder {
+  color: rgba(255,255,255,0.3);
+  font-style: italic;
+}
+.harness-history {
+  margin-top: 0.5rem;
+  border-top: 1px solid #222;
+  padding-top: 0.35rem;
+}
+.harness-history-summary {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.35);
+  cursor: pointer;
+  user-select: none;
+}
+.harness-history-summary:hover { color: rgba(255,255,255,0.6); }
+.harness-history-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.5);
+  padding: 0.2rem 0;
+  flex-wrap: wrap;
+}
+.harness-history-badge {
+  font-size: 0.6rem;
+  color: rgba(255,255,255,0.3);
+  background: #1A1A1A;
+  padding: 0.05rem 0.25rem;
+  border-radius: 0.15rem;
+  flex-shrink: 0;
+}
+.harness-history-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.harness-history-like { color: #22c55e; }
+.harness-history-dislike { color: #ef4444; }
+.harness-history-reason {
+  color: #F59E0B99;
+  font-style: italic;
+}
+
+/* ── Accuracy tier banners ─────────────────────────────────────────────── */
+.accuracy-warning,
+.accuracy-info,
+.accuracy-good {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.78rem;
+  margin-bottom: 0.75rem;
+}
+.accuracy-warning {
+  background: #F59E0B15;
+  border: 1px solid #F59E0B33;
+  color: #F59E0B;
+}
+.accuracy-info {
+  background: #22c55e10;
+  border: 1px solid #22c55e22;
+  color: rgba(255,255,255,0.6);
+}
+.accuracy-good {
+  background: #22c55e10;
+  border: 1px solid #22c55e22;
+  color: #22c55e;
+}
 </style>

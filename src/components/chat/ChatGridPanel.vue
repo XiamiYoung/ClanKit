@@ -126,6 +126,7 @@
               :isRunning="isRunning"
               :compact="true"
               @send="onMentionSend"
+              @escape="interrupt(props.chatId)"
               @focus="gpInputFocused = true"
               @blur="gpInputFocused = false"
               @attach="atts => gpAttachments.push(...atts)"
@@ -222,7 +223,7 @@
 
 <script setup>
 defineOptions({ inheritAttrs: false })
-import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted, inject } from 'vue'
 import { useChatsStore } from '../../stores/chats'
 import { useConfigStore } from '../../stores/config'
 import { useAgentsStore } from '../../stores/agents'
@@ -236,6 +237,7 @@ import ChatWindow from './ChatWindow.vue'
 import ChatMentionInput from './ChatMentionInput.vue'
 import { parseMentions } from '../../utils/mentions'
 import { useI18n } from '../../i18n/useI18n'
+import { useInterrupt } from '../../composables/useInterrupt'
 
 function filterByRequired(items, requiredIds) {
   if (!requiredIds || requiredIds.length === 0) return []
@@ -303,6 +305,26 @@ const gpInputText = ref('')
 const mentionInputRef = ref(null)
 const gpAttachments = ref([])
 const gpInputFocused = ref(false)
+
+// ── Interrupt/stop/escape — shared logic with main chat view via useInterrupt.
+// Falls back to local refs if ChatsView's provide isn't available (e.g. unit tests).
+const _interruptShared = inject('interruptShared', null)
+const _interruptFallback = {
+  collaborationCancelled: ref(false),
+  isInCollaborationLoop: ref(false),
+  runningAgentKeys: reactive(new Set()),
+}
+const _interruptRefs = _interruptShared || _interruptFallback
+const { interrupt } = useInterrupt({
+  chatId: () => props.chatId,
+  inputText: gpInputText,
+  attachments: gpAttachments,
+  mentionInputRef,
+  collaborationCancelled: _interruptRefs.collaborationCancelled,
+  isInCollaborationLoop: _interruptRefs.isInCollaborationLoop,
+  runningAgentKeys: _interruptRefs.runningAgentKeys,
+  dbg: (msg, level) => console.log(`[grid:${props.chatId.slice(0,8)}][interrupt] ${msg}`),
+})
 
 // ── Explicit group audience selection ──
 const groupAudienceMode = computed({
@@ -719,50 +741,8 @@ async function onSend(text, pendingAttachments = []) {
   }
 }
 
-function _getLastActiveMessage() {
-  const c = chatsStore.chats.find(c => c.id === props.chatId)
-  if (!c?.messages?.length) return { chat: null, msg: null }
-  const streaming = [...c.messages].reverse().find(m => m.streaming)
-  return { chat: c, msg: streaming ?? ([...c.messages].reverse().find(m => m.role === 'assistant') ?? null) }
-}
-
-function _applyInterrupt(chat, msg, type) {
-  const inlineMarker = type === 'stop'
-    ? t('chats.gridInterruptStop')
-    : t('chats.gridInterruptSteer')
-  const bubbleText = type === 'stop'
-    ? t('chats.gridRequestStopped')
-    : t('chats.gridRequestInterrupted')
-
-  if (!msg) {
-    chat?.messages?.push({
-      id: uuidv4(), role: 'system', interruptType: type, content: bubbleText,
-      segments: [{ type: 'text', content: bubbleText }],
-      streaming: false, timestamp: Date.now(),
-    })
-    return
-  }
-
-  const hasContent = msg.content?.trim().length > 0
-  if (hasContent) {
-    msg.content += `\n\n${inlineMarker}`
-    msg.streaming = false
-  } else {
-    const idx = chat?.messages?.indexOf(msg) ?? -1
-    if (idx !== -1) chat.messages.splice(idx, 1)
-    chat?.messages?.push({
-      id: uuidv4(), role: 'system', interruptType: type, content: bubbleText,
-      segments: [{ type: 'text', content: bubbleText }],
-      streaming: false, timestamp: Date.now(),
-    })
-  }
-}
-
-// Stop: interrupt the agent and clear the queue
-async function stopChat() {
-  if (window.electronAPI?.stopAgent) await window.electronAPI.stopAgent(props.chatId)
-  const { chat, msg } = _getLastActiveMessage()
-  _applyInterrupt(chat, msg, 'stop')
+function stopChat() {
+  interrupt(props.chatId)
 }
 
 function deleteMessage(msg) {

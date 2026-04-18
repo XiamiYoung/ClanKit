@@ -9,7 +9,46 @@ const path = require('path')
 const { logger } = require('../logger')
 
 // ── Soul Memory Helpers ──────────────────────────────────────────────────────
-const SOUL_KEY_SECTIONS = ['Preferences', 'Communication', 'Technical', 'Projects', 'Personal']
+// Sections preserved when truncating large soul files. Includes both the old
+// free-form sections AND the new Nuwa-methodology sections from chat import.
+const SOUL_KEY_SECTIONS = [
+  // Nuwa-methodology sections (from chat import)
+  'Mental Models',
+  'Decision Heuristics',
+  'Values & Anti-Patterns',
+  'Relational Genealogy',
+  'Honest Boundaries',
+  'Core Tensions',
+  'Relationship Timeline',
+  // Free-form sections (runtime memory)
+  'Preferences',
+  'Communication',
+  'Technical',
+  'Projects',
+  'Personal',
+]
+
+/**
+ * Read the speech DNA JSON file for an agent. Returns parsed object or null.
+ * Speech DNA is a hard-constraint surface-style fingerprint from chat import.
+ *
+ * Looks under both souls/system/ and souls/users/ since agentId is unique.
+ */
+function readSpeechDna(soulsDir, agentId) {
+  if (!soulsDir || !agentId) return null
+  for (const type of ['system', 'users']) {
+    try {
+      const filePath = path.join(soulsDir, type, `${agentId}.speech.json`)
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf8')
+        return JSON.parse(raw)
+      }
+    } catch (err) {
+      logger.warn('[systemPromptBuilder] readSpeechDna parse error:', err.message)
+    }
+  }
+  return null
+}
 
 /**
  * Read a soul file from disk. Returns null if not found.
@@ -134,6 +173,26 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
 
   let system = `${openingIdentity}`
 
+  // ── Speech DNA injection (highest priority — hard surface-style constraints) ──
+  // Only inject for the active speaking agent (systemAgentId). Speech DNA captures
+  // catchphrases, emoji, sentence length, reply timing — extracted from real chat
+  // history during agent import. This block must come right after identity so the
+  // model treats it as part of "who you are", not as an afterthought.
+  if (systemAgentId) {
+    try {
+      const dataPathForSpeech = config.dataPath || require('../lib/dataStore').paths().DATA_DIR
+      const soulsDirForSpeech = path.join(dataPathForSpeech, 'souls')
+      const speechDna = readSpeechDna(soulsDirForSpeech, systemAgentId)
+      if (speechDna) {
+        const { formatSpeechDnaBlock } = require('./chatImport/speechDnaExtractor')
+        const block = formatSpeechDnaBlock(speechDna)
+        if (block) system += '\n\n---\n' + block
+      }
+    } catch (err) {
+      logger.warn('[systemPromptBuilder] speech DNA injection failed:', err.message)
+    }
+  }
+
   // ── User Agent Identity Context ──
   // Inject who the user is whenever we know their name or have a custom prompt.
   // This fires even when the agent has no custom prompt text — the name alone is
@@ -191,16 +250,33 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
 ${analysisIntro}
 
 ### Tool: analyze_agent_history
-This is your primary tool. It has three actions:
+This is your primary tool. It has four actions:
 - **action="stats"** — Call this FIRST. Returns: total message count, date range, monthly activity heat map, sender breakdown, and suggested file paths.
-- **action="analyze_all"** — Call this SECOND. Performs parallel chunked analysis of all messages and returns partial analyses. Much faster than reading pages one by one.
+- **action="read_import_artifacts"** — Call this SECOND (optional but recommended). Returns pre-computed Speech DNA, Nuwa persona sections, evidence index, Reply Bank stats, and validation harness scores from the import pipeline. If the agent was created manually (not imported from chat), this gracefully returns {imported: false} with no error. Use these artifacts as reference/comparison when writing your independent analysis.
+- **action="analyze_all"** — Call this THIRD. Performs parallel chunked analysis of all messages and returns partial analyses. Much faster than reading pages one by one.
 - **action="messages", page=N** — (Fallback) Read messages page by page (150 per page). Only use if analyze_all fails.
 
 ### Standard Workflow (follow this exactly when the user asks to start or analyze):
+
 1. Call \`analyze_agent_history(action="stats")\` → understand scope
-2. Call \`analyze_agent_history(action="analyze_all")\` → get parallel analysis results
-3. Synthesize the partial analyses into the final report
-4. Write the analysis report via \`file_operation\` to the suggested_output_path from stats
+2. Call \`analyze_agent_history(action="read_import_artifacts")\` → load pre-computed data (if any). Skip if not found.
+3. Call \`analyze_agent_history(action="analyze_all")\` → produces narrative analysis:
+   - **Cache hit** (same agent, unchanged data): returns in < 1 second, \`cached: true\`
+   - **Full context** (< ~5000 msgs): all messages in one call
+   - **Chunking** (> ~5000 msgs): context-window-sized chunks
+4. **🚨 MANDATORY STEP BEFORE GENERATING REPORT: Call \`analyze_agent_history(action="extract_sections")\`.** This converts the narrative analysis into structured JSON with 19 sections of data (intimacy score, constellation, dialogue theatre, subtext decoder, compatibility, etc.). Without this step, the HTML report will be missing all content. Takes 1-2 minutes, cacheable. Non-negotiable.
+5. **🚨 Call \`render_persona_report({sections, stats})\`** passing the sections and stats objects from extract_sections. The tool auto-generates all 55 D scalars and 27 HTML fragments internally, reads the HTML template, and writes the final report. Do NOT use \`file_operation\`. Do NOT generate D/HTML yourself. Do NOT write Python scripts.
+6. If user explicitly says "重新分析"/"fresh analysis", pass \`force_refresh=true\` to both analyze_all AND extract_sections.
+
+### Workflow Enforcement
+
+❌ **NEVER dispatch analyze_agent_history to a subagent.** SubAgents run in isolated contexts with limited turns and cannot return 25KB of structured JSON back to you. If you dispatch extract_sections to a subagent, you will receive an empty summary and produce a BLANK report. **Always call analyze_agent_history tools directly from your own context.**
+
+❌ **DO NOT skip extract_sections.** The render_persona_report tool needs the sections and stats objects. Without extract_sections, you have no data to pass to the tool.
+
+❌ **NEVER use file_operation to write the HTML report.** NEVER generate HTML/CSS yourself. NEVER write Python/JS scripts. NEVER generate D scalars or HTML fragments manually. The render_persona_report tool auto-generates everything from sections+stats.
+
+✅ **DO call render_persona_report({sections, stats})** with both objects from extract_sections. The tool auto-computes all 55 D scalars, generates all 27 HTML fragments, reads the 71KB template, and writes the output file. You only pass sections and stats — nothing else.
 
 ### Default Output: Markdown Report
 Unless the user requests HTML, write a **Markdown (.md)** file with these sections:
@@ -237,13 +313,8 @@ ${keyQuotesDesc}
 [Overall impression, strengths, blind spots]
 \`\`\`
 
-### Optional: HTML Dashboard
-If the user requests HTML, generate a **self-contained HTML file** with:
-- Inline CSS (dark theme, modern design)
-- Monthly activity bar chart (using SVG or CSS bars from the heat map data)
-- Sender ratio donut chart (CSS-only)
-- All analysis sections styled as cards
-- No external dependencies — fully self-contained
+### HTML Report (via render_persona_report tool)
+When the user requests a full analysis report (HTML), call render_persona_report({sections, stats}) with the objects from extract_sections. The tool auto-generates all D scalars and 27 HTML fragments internally, then renders a professional 71KB template with warm editorial styling and bilingual support. Do NOT generate D/HTML yourself — just pass sections and stats.
 
 ### Guidelines
 - Base ALL claims on specific evidence from the messages — cite actual quotes${isSelfAnalysis ? '\n- Focus on "Me" messages to extract personality traits. The other person\'s messages are context only.' : '\n- Read enough pages to cover the full time range before drawing conclusions'}
@@ -263,22 +334,40 @@ If the user requests HTML, generate a **self-contained HTML file** with:
 
   system += `
 
-CORE TOOLS (always available):
+CORE TOOLS (always available — you MUST use them when relevant):
 - execute_shell: Run shell commands (command + args separated, e.g. command:"ls" args:["/home"])
 - file_operation: Read, write, list, append, search, mkdir, delete files on the filesystem
+- web_fetch: Fetch a URL and return its content as clean Markdown. Use this to read web pages, articles, docs, or any HTTP content. Always prefer this over curl/wget in shell — it returns structured Markdown, not raw HTML.
 - todo_manager: Plan complex tasks with structured todo lists
 - dispatch_subagent: Delegate a single focused subtask to a specialized sub-agent
 - dispatch_subagents: Dispatch MULTIPLE sub-agents in parallel at once (preferred for 2+ independent tasks)
-- background_task: Run long operations in the background`
+- background_task: Run long operations in the background
 
-  // List active skills — minimal format for cache efficiency
-  const skillIds = (enabledSkills || [])
+TOOL USE POLICY — MANDATORY:
+When a user's request involves files, shell commands, web pages, real-time data, external systems, or any operation that a tool above can handle, you MUST call the appropriate tool. Do NOT answer from memory or guess the result. If you have a tool for it, use it — every time, no exceptions. Answering from memory when a tool is available is an error. When the user shares a URL or asks about web content, use web_fetch — never try to recall the page from training data.
+
+RUNTIME ENVIRONMENT:
+- Shell is always available via execute_shell (PowerShell on Windows, bash/zsh on macOS/Linux). This is your DEFAULT for file ops, git, curl, pipes, and one-liners.
+- Bundled Node.js v${process.versions.node} is available at "${process.execPath.replace(/\\/g, '/')}" — the user has NOT installed Node separately. To run JS via execute_shell, use that path as the command and set env ELECTRON_RUN_AS_NODE=1. Prefer this over Python for script tasks.
+- Python is NOT guaranteed to be installed. If you need it, probe first with \`python --version\` or (on Windows) \`py --version\`. If missing, tell the user: "This task needs Python, which isn't installed on your system. You can install it from python.org and ask me again." Do not waste turns retrying python commands that failed with "not found".`
+
+  // Progressive disclosure: list each active skill with id + display name + description
+  // so the model can decide when to call load_skill. Full SKILL.md bodies are NOT
+  // injected here — they are fetched on demand via the load_skill tool registered
+  // in agentLoop.js. This keeps the base prompt small while still giving the model
+  // enough metadata to make informed decisions.
+  const skillList = (enabledSkills || [])
     .filter(s => typeof s !== 'string' && s.id)
-    .map(s => s.id)
-    .join(', ')
 
-  if (skillIds) {
-    system += `\nSKILLS: ${skillIds}`
+  if (skillList.length > 0) {
+    system += `\n\n## ACTIVE SKILLS
+You have access to the following skills. Each entry shows the skill id, display name, and description. When a user's request matches a skill's description, you MUST call \`load_skill(skill_id)\` FIRST to retrieve the complete step-by-step instructions, then follow those instructions exactly. Do NOT attempt skill-covered tasks from memory — the skill definition contains authoritative procedures, schemas, and file paths that you cannot recall reliably on your own. Loading a skill is cheap; skipping it when relevant causes mistakes.
+`
+    for (const s of skillList) {
+      const label = s.displayName && s.displayName !== s.id ? ` — ${s.displayName}` : ''
+      const desc  = (s.description || s.summary || '').trim() || '(no description)'
+      system += `\n- **${s.id}**${label}: ${desc}`
+    }
   }
 
   // ── ClankAI Data Directory ──
@@ -290,10 +379,14 @@ CORE TOOLS (always available):
   const artifactPath = config.artifactPath || path.join(dataPath, 'artifact')
   const codingPath = config.chatWorkingPath || ''
   const isCodingMode = !!(config.codingMode && codingPath)
-  const skillsPath = config.skillsPath || ''
-  const utilityModel = config.utilityModel || {}
-  const utilityProvider = utilityModel.provider || ''
-  const utilityModelId  = utilityModel.model    || ''
+  const skillsPath = config.skillsPath || path.join(dataPath, 'skills')
+  // utilityModel fields were historically inlined into the DATA FILE ROUTING
+  // prompt block. That block now lives in the clankai-config-admin built-in
+  // skill (loaded on demand via load_skill). These vars are kept only as
+  // commented documentation — remove if unused for 2+ releases.
+  // const utilityModel = config.utilityModel || {}
+  // const utilityProvider = utilityModel.provider || ''
+  // const utilityModelId  = utilityModel.model    || ''
   system += `\n\nCLANKAI DATA DIRECTORY: ${dataPath}
 This is the local data folder for the ClankAI desktop application. Its structure:
   ${dataPath}/
@@ -314,29 +407,25 @@ ARTIFACT PATH (for non-document output only): ${artifactPath}
 This is for generated files that are NOT readable documents: exports, temp files, raw data dumps, generated code snippets, binary output. Do NOT put .md, .docx, .pdf, .pptx, .txt, .html or other readable documents here. Create subdirectories as needed (e.g. ${artifactPath}/exports/). The directory is auto-created on first write.${isCodingMode ? `
 
 CODING PROJECT PATH: ${codingPath}
-This chat is in CODING MODE. All code files (source code, configs, scripts, tests, etc.) MUST be created/edited within this project directory. Use this path as the root for any code-related file operations. Non-code output (documents, reports) still goes to the document path or artifact path above.` : ''}${skillsPath ? `
+This chat is in CODING MODE. All code files (source code, configs, scripts, tests, etc.) MUST be created/edited within this project directory. Use this path as the root for any code-related file operations. Non-code output (documents, reports) still goes to the document path or artifact path above.` : ''}
 
 SKILLS PATH: ${skillsPath}
-This is the directory where skill folders are stored on disk. Each skill is a folder containing a skill definition file. Use this path if the user asks to inspect, create, or modify skills on disk.` : ''}
+This is the directory where installed skills live on disk. A skill is NOT a single markdown file — it is an ENTIRE FOLDER TREE with this shape:
+  ${skillsPath}/<skill-name>/
+  ├── SKILL.md              — required: frontmatter metadata + instructions
+  ├── scripts/              — optional: helper scripts
+  ├── references/           — optional: reference docs
+  ├── assets/               — optional: images, templates, data files
+  └── ...                   — any other subfolders the skill author ships
 
-DATA FILE ROUTING — when the user asks you to create or modify app configuration, act directly:
-- "create/add/edit a tool" or "add an HTTP tool"  → read then write ${dataPath}/tools.json
-  Format: {"categories":{"CategoryName":{"tools":[{"id":"<uuid>","name":"...","method":"GET|POST|...","endpoint":"...","headers":{},"bodyTemplate":"","description":"..."}]}}}
-- "create/add/edit an MCP server"                  → read then write ${dataPath}/mcp-servers.json
-  Format: [{"id":"<uuid>","name":"...","command":"...","args":[],"env":{},"description":"..."}]
-- "create/add/edit an agent"                       → read then write ${dataPath}/agents.json
-  Format: {"categories":[...],"agents":[...,{"id":"<uuid>","type":"system","name":"...","avatar":"a1","description":"...","prompt":"...","providerId":${utilityProvider ? `"${utilityProvider}"` : 'null'},"modelId":${utilityModelId ? `"${utilityModelId}"` : 'null'},"enabledSkillIds":null,"mcpServerIds":null,"voiceId":null,"categoryIds":[],"createdAt":<timestamp>,"updatedAt":<timestamp>}]}
-  IMPORTANT: always set "providerId" to ${utilityProvider ? `"${utilityProvider}"` : 'null'} and "modelId" to ${utilityModelId ? `"${utilityModelId}"` : 'null'} (the system utility model) unless the user explicitly asks for a different model.
-- "add/edit knowledge / RAG index"                 → read then write ${dataPath}/knowledge.json
-- "create/add/edit a task"                          → read then write ${dataPath}/tasks.json
-  Format: [{"id":"<uuid>","name":"...","description":"...","icon":"📋","prompt":"...","agentInputs":[{"name":"slotName","description":"Role description"}]}]
-  TASK PROMPT RULES: Use @slotName tokens in the prompt to reference agent input slots (e.g. "@analyst review this data"). Slot names must be alphanumeric/underscore only (no spaces). Add agentInputs entries for each @slotName used. If no agent slot is needed, set agentInputs to [].
-- "create/add/edit a plan"                          → read then write ${dataPath}/plans.json
-  Format: [{"id":"<uuid>","name":"...","description":"...","steps":[{"id":"<uuid>","taskId":"<task id>","label":"...","agentAssignments":{"slotName":"<agent id>"},"defaultAgentIds":[],"dependsOn":[],"runCondition":"always"}],"schedule":null,"createdAt":"<iso>","updatedAt":"<iso>"}]
-  PLAN RULES: Each step references a task by its id. If the task has agentInputs, fill agentAssignments with {slotName: agentId}. If no inputs, list agent ids in defaultAgentIds. Set dependsOn:[] for parallel steps; set dependsOn:["<stepId>"] to sequence steps. schedule is null (manual) or a cron string (e.g. "0 8 * * *" = daily 8am). To add a step to the calendar/schedule, set schedule to the appropriate cron expression.
-  AGENT ID LOOKUP: To assign agents to steps, first read ${dataPath}/agents.json and find the id of the agent the user names.
-- Always read the file first to understand existing content before writing. Preserve all existing entries.
-- After writing, tell the user to click Refresh on the relevant page (MCP / Tools / Agents / Knowledge / Tasks) to reload.`
+SKILL INSTALLATION RULES:
+- When the user asks you to install a skill from a git repo (e.g. "install https://github.com/foo/bar-skill"), use shell to clone the WHOLE repo into ${skillsPath}/<skill-name>:
+    git clone <repo-url> "${skillsPath}/<skill-name>"
+  Then verify SKILL.md exists at the root. If the repo contains multiple skills in subfolders, clone to a temp dir and copy each skill subfolder into ${skillsPath}/ individually.
+- When the user asks you to install from a ZIP/tar.gz URL, download and extract the full archive into ${skillsPath}/<skill-name>, preserving all subdirectories.
+- When the user asks you to create a new skill from scratch, create the folder ${skillsPath}/<skill-name>/ and write SKILL.md (plus any supporting files) INSIDE it.
+- NEVER write SKILL.md or any skill files into the AI DOC PATH — skill definition files are NOT readable documents, they belong under SKILLS PATH. This is an explicit exception to the AI DOC PATH rule above.
+- After installing or creating a skill, tell the user to click Refresh on the Skills page to reload.`
 
   // ── Document Path subfolders (for file placement guidance) ──
   // Priority: explicit obsidian vault override → aidocPath (already resolved above)
@@ -405,7 +494,7 @@ ${subfolderList}
   const smtpToolsList   = allUserTools.filter(t => t.type === 'smtp')
 
   if (allUserTools.length > 0) {
-    system += `\n\n## Your Assigned Tools\nThe following tools have been assigned to you. Use them proactively when relevant — especially for real-time or external data, **never answer from memory when a tool is available**.`
+    system += `\n\n## Your Assigned Tools\nThe following tools have been assigned to you. You MUST call them whenever the user's request matches what they do — especially for real-time or external data. NEVER answer from memory or training knowledge when a tool is available. If unsure whether a tool is relevant, call it anyway — a redundant tool call is always better than an incorrect answer from memory.`
 
     if (httpToolsList.length > 0) {
       system += `\n\n**HTTP Tools** (call these for real-time/live data — never guess or use training knowledge):`
@@ -478,10 +567,10 @@ function stripInfraFromPrompt(fullPrompt) {
   if (!fullPrompt) return fullPrompt
   let out = fullPrompt
   // Single-line entries produced by the builder
-  out = out.replace(/\nSKILLS: [^\n]*/g, '')
   out = out.replace(/\nMCP SERVERS: [^\n]*/g, '')
   // Multi-line ## blocks — strip infra + memory sections (memory stored separately in snapshot)
   const STRIP_SECTIONS = [
+    'ACTIVE SKILLS',
     'Your Assigned Tools',
     'Knowledge Context',
     'User Profile',
@@ -496,4 +585,4 @@ function stripInfraFromPrompt(fullPrompt) {
   return out.trim()
 }
 
-module.exports = { buildSystemPrompt, stripInfraFromPrompt, readSoulFile, prepareSoulContent, extractKeySections, readFileIfExists, SOUL_KEY_SECTIONS }
+module.exports = { buildSystemPrompt, stripInfraFromPrompt, readSoulFile, readSpeechDna, prepareSoulContent, extractKeySections, readFileIfExists, SOUL_KEY_SECTIONS }

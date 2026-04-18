@@ -7,6 +7,7 @@ import { useVoiceStore } from '../stores/voice'
 import { useModelsStore } from '../stores/models'
 import { parseMentions } from '../utils/mentions'
 import { useI18n } from '../i18n/useI18n'
+import { useInterrupt } from './useInterrupt'
 
 /**
  * Build a tool execution log string from tool segments.
@@ -69,6 +70,14 @@ export function useSendMessage({
   const isCompacting = ref(false)
   const _codingModeContext = ref(null)
 
+  // Interrupt logic — shared with grid panels via the useInterrupt composable.
+  const { interrupt, _stopAgent } = useInterrupt({
+    chatId: () => chatsStore.activeChatId,
+    inputText, attachments, mentionInputRef,
+    collaborationCancelled, isInCollaborationLoop, runningAgentKeys,
+    dbg,
+  })
+
   // ── Streaming timer ─────────────────────────────────────────────────────────
   function startStreamingTimer() {
     stopStreamingTimer()
@@ -126,8 +135,8 @@ export function useSendMessage({
     const chatId = chatsStore.activeChatId
     if (!chatId) return
 
-    // Stop all running agents first
-    await stopAgent(chatId)
+    // Stop all running agents first (internal _stopAgent, not the public interrupt)
+    await _stopAgent(chatId)
     // Wait briefly for stop to propagate
     await new Promise(r => setTimeout(r, 100))
 
@@ -150,110 +159,7 @@ export function useSendMessage({
     nextTick(() => mentionInputRef.value?.focus())
   }
 
-  let _escapeRetrieving = false
-  function escapeRetrieve(chatId) {
-    if (_escapeRetrieving) return // Block re-entrant calls (rapid ESC presses)
-    if (!chatId) chatId = chatsStore.activeChatId
-    const chat = chatsStore.chats.find(c => c.id === chatId)
-    if (!chat?.isRunning) return // Only works when agents are running
-
-    _escapeRetrieving = true
-
-    // Check if agent already started producing text BEFORE stopAgent mutates messages.
-    // agent_step alone (thinking indicator) does NOT count — only actual text content does.
-    const streamingMsg = chat.messages?.length
-      ? [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming && !m.isWaitingIndicator)
-      : null
-    const agentHasText = streamingMsg && streamingMsg.content?.trim().length > 0
-
-    // Stop all running agents
-    stopAgent(chatId)
-
-    if (agentHasText) {
-      // Agent already produced text — keep both user and assistant bubbles, just stop
-      _escapeRetrieving = false
-      return
-    }
-
-    // Agent hasn't produced text — recall user message to input and delete both bubbles
-    if (!chat.messages?.length) { _escapeRetrieving = false; return }
-    const lastUserMsg = [...chat.messages].reverse().find(m => m.role === 'user')
-    if (!lastUserMsg) { _escapeRetrieving = false; return }
-
-    // Extract text from message
-    const retrievedText = lastUserMsg.content || ''
-    const retrievedAttachments = lastUserMsg.attachments || []
-
-    // Prepend to input box (if already has content, add newline between)
-    if (inputText.value.trim()) {
-      inputText.value = retrievedText + '\n' + inputText.value
-    } else {
-      inputText.value = retrievedText
-    }
-    // Restore attachments
-    if (retrievedAttachments.length > 0) {
-      attachments.value = [...retrievedAttachments, ...attachments.value]
-    }
-
-    // Remove the user message bubble since it's back in the input
-    chatsStore.deleteMessage(chatId, lastUserMsg.id)
-
-    nextTick(() => mentionInputRef.value?.focus())
-    _escapeRetrieving = false
-  }
-
-  // ── Last active message + interrupt helpers ─────────────────────────────────
-  function getLastActiveMessage(chatId) {
-    const chat = chatsStore.chats.find(c => c.id === chatId)
-    if (!chat?.messages?.length) return { chat: null, msg: null }
-    const streaming = [...chat.messages].reverse().find(m => m.streaming)
-    return { chat, msg: streaming ?? ([...chat.messages].reverse().find(m => m.role === 'assistant') ?? null) }
-  }
-
-  // If the message has content: append inline marker (LLM sees it on resume).
-  // If the message is empty or a waiting indicator: silently remove it, no system bubble.
-  function _applyInterrupt(chat, msg, _type) {
-    if (!msg || !chat) return
-
-    const hasContent = msg.content?.trim().length > 0
-    if (hasContent && !msg.isWaitingIndicator) {
-      msg.content += '\n\n[Request interrupted by user.]'
-      msg.streaming = false
-    } else {
-      // Empty placeholder or waiting indicator — just remove silently
-      const idx = chat.messages?.indexOf(msg) ?? -1
-      if (idx !== -1) chat.messages.splice(idx, 1)
-    }
-  }
-
-  // ── Stop agent ──────────────────────────────────────────────────────────────
-  async function stopAgent(chatId) {
-    if (!chatId) chatId = chatsStore.activeChatId
-    // Cancel collaboration loop and clear running agent tracking
-    collaborationCancelled.value = true
-    isInCollaborationLoop.value = false
-    for (const key of [...runningAgentKeys]) {
-      if (key.startsWith(chatId + ':')) runningAgentKeys.delete(key)
-    }
-    if (window.electronAPI?.stopAgent) await window.electronAPI.stopAgent(chatId)
-
-    const chat = chatsStore.chats.find(c => c.id === chatId)
-    if (chat) {
-      // Remove waiting indicators silently
-      if (chat.messages) {
-        const waitIdx = chat.messages.findIndex(m => m.isWaitingIndicator)
-        if (waitIdx >= 0) chat.messages.splice(waitIdx, 1)
-      }
-      // Apply interrupt to any streaming assistant message (partial response)
-      const streamingMsg = chat.messages?.slice().reverse().find(m => m.streaming && m.role === 'assistant' && !m.isWaitingIndicator)
-      if (streamingMsg) _applyInterrupt(chat, streamingMsg, 'stop')
-      // Clear all running state immediately so UI updates
-      chat.isRunning = false
-      chat.isThinking = false
-      chat.isCallingTool = false
-      chat.currentToolCall = null
-    }
-  }
+  // interrupt / _stopAgent live in useInterrupt (initialized at top of this composable).
 
   // ── sendMessage ─────────────────────────────────────────────────────────────
   async function sendMessage() {
@@ -919,7 +825,7 @@ export function useSendMessage({
   // ── Return public API ───────────────────────────────────────────────────────
   return {
     sendMessage,
-    stopAgent,
+    interrupt,
     approvePlan,
     rejectPlan,
     refinePlan,
@@ -927,7 +833,6 @@ export function useSendMessage({
     pendingInterrupt,
     confirmInterrupt,
     cancelInterrupt,
-    escapeRetrieve,
     pendingQueue,
     removeFromQueue,
     processQueuedMessage,
@@ -938,7 +843,5 @@ export function useSendMessage({
     streamingTimer,
     startStreamingTimer,
     stopStreamingTimer,
-    getLastActiveMessage,
-    _applyInterrupt,
   }
 }

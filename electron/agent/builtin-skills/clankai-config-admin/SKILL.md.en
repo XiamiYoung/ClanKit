@@ -1,0 +1,211 @@
+---
+name: ClankAI Config Admin
+description: Create or edit ClankAI app configuration files — HTTP tools, MCP servers, agents, knowledge bases, tasks, and plans. Load this skill whenever the user asks you to add, modify, or remove any of these.
+---
+
+# ClankAI Config Admin
+
+You are managing the ClankAI desktop application's configuration files on disk. This skill gives you the authoritative paths, schemas, and rules for editing them. Follow it exactly — do not improvise field names or file layouts.
+
+## Data directory
+
+All configuration files live in the ClankAI data directory. The absolute path appears in your system prompt under `CLANKAI DATA DIRECTORY: <path>`. Use that path (referred to as `<DATA_DIR>` below) for every file operation in this skill. Never guess the path.
+
+## Standard workflow
+
+For every change, follow this sequence:
+
+1. **Read the target JSON file first** via `file_operation` so you understand the existing content.
+2. **Modify in place**, preserving all existing entries — never overwrite blindly.
+3. **Write back** the complete updated JSON (pretty-printed, 2-space indentation).
+4. **Notify the user** to click Refresh on the relevant page in the app so the changes are picked up.
+
+If the file does not exist yet, create it with an empty root (`[]` for arrays, `{}` for objects) and then proceed.
+
+Generate new UUIDs for every new entry. Preserve existing `id` fields — never rewrite them.
+
+## 1. HTTP Tools — `<DATA_DIR>/tools.json`
+
+Triggered by: "add a tool", "create an HTTP tool", "edit this API tool", etc.
+
+**Schema:**
+```json
+{
+  "categories": {
+    "CategoryName": {
+      "tools": [
+        {
+          "id": "<uuid>",
+          "name": "Weather API",
+          "method": "GET",
+          "endpoint": "https://api.example.com/weather",
+          "headers": { "Authorization": "Bearer $API_KEY" },
+          "bodyTemplate": "",
+          "description": "Fetch current weather for a city"
+        }
+      ]
+    }
+  }
+}
+```
+
+Rules:
+- `method`: one of `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.
+- `bodyTemplate`: empty string for GET; JSON string with `{placeholders}` for POST/PUT.
+- Place the new tool in an existing category when there is a natural fit; otherwise create a new category.
+
+After writing: tell the user to click Refresh on the **Tools** page.
+
+## 2. MCP Servers — `<DATA_DIR>/mcp-servers.json`
+
+Triggered by: "add an MCP server", "install an MCP", "configure MCP X", etc.
+
+**Schema (array at root):**
+```json
+[
+  {
+    "id": "<uuid>",
+    "name": "Filesystem",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/some/path"],
+    "env": {},
+    "description": "Read and write files on the local filesystem"
+  }
+]
+```
+
+Rules:
+- Put API keys and secrets in `env` as key→value pairs, **not** in `args`.
+- `command` is the executable; `args` is the argument list passed to it.
+
+After writing: tell the user to click Refresh on the **MCP** page.
+
+## 3. Agents — `<DATA_DIR>/agents.json`
+
+Triggered by: "create an agent", "add a new assistant", "make an agent that does X", etc.
+
+**Schema:**
+```json
+{
+  "categories": [
+    { "id": "<uuid>", "name": "Assistants", "type": "system" }
+  ],
+  "agents": [
+    {
+      "id": "<uuid>",
+      "type": "system",
+      "name": "Code Reviewer",
+      "avatar": "a1",
+      "description": "Reviews code for bugs and style issues",
+      "prompt": "You are a senior engineer who reviews code for bugs, security, and style.",
+      "providerId": null,
+      "modelId": null,
+      "requiredToolIds": null,
+      "requiredSkillIds": null,
+      "requiredMcpServerIds": null,
+      "requiredKnowledgeBaseIds": null,
+      "voiceId": null,
+      "categoryIds": [],
+      "createdAt": 1234567890,
+      "updatedAt": 1234567890
+    }
+  ]
+}
+```
+
+Rules:
+- `type`: `"system"` for AI assistants the user chats with; `"user"` for user-persona agents that represent the user.
+- **Provider & model for new agents:** before creating the entry, read `<DATA_DIR>/config.json` and find `utilityModel.provider` and `utilityModel.model`. Copy those values into the new agent's `providerId` and `modelId`. Do this unless the user explicitly asks for a different provider or model.
+- The four `required*Ids` fields are each either `null` (inherit defaults) or an array of ids. Use `null` when the user has not specified.
+- `createdAt` and `updatedAt` are Unix millisecond timestamps — use `Date.now()` equivalent values.
+- `avatar`: accepts ids like `a1`, `a2`, ... — pick any if the user does not specify.
+
+After writing: tell the user to click Refresh on the **Agents** page.
+
+## 4. Knowledge Bases — `<DATA_DIR>/knowledge.json`
+
+Triggered by: "add a knowledge base", "create a RAG index", "import these docs for search", etc.
+
+This file's schema varies by version — **always read the existing file first** and add your new entry in the shape already present. Do not invent a layout.
+
+After writing: tell the user to click Refresh on the **Knowledge** page.
+
+## 5. Tasks — `<DATA_DIR>/tasks.json`
+
+Triggered by: "create a task", "add a task template", "save this as a task I can rerun", etc.
+
+**Schema (array at root):**
+```json
+[
+  {
+    "id": "<uuid>",
+    "name": "Summarize article",
+    "description": "Summarize an article in 3 bullet points",
+    "icon": "📋",
+    "prompt": "@writer summarize this article: {input}",
+    "agentInputs": [
+      { "name": "writer", "description": "The agent that writes the summary" }
+    ]
+  }
+]
+```
+
+Rules:
+- Use `@slotName` tokens inside `prompt` to reference agent input slots.
+- Slot names must be alphanumeric/underscore only — no spaces, no CJK.
+- Every `@slotName` used in `prompt` must have a matching entry in `agentInputs`.
+- If the task needs no agent slot, set `agentInputs: []`.
+- `icon` is a single emoji.
+
+After writing: tell the user to click Refresh on the **Tasks** page.
+
+## 6. Plans — `<DATA_DIR>/plans.json`
+
+Triggered by: "create a plan", "schedule this to run daily", "chain these tasks together", etc.
+
+**Schema (array at root):**
+```json
+[
+  {
+    "id": "<uuid>",
+    "name": "Daily news digest",
+    "description": "Fetch and summarize news every morning",
+    "steps": [
+      {
+        "id": "<uuid>",
+        "taskId": "<task-id>",
+        "label": "Fetch news",
+        "agentAssignments": { "writer": "<agent-id>" },
+        "defaultAgentIds": [],
+        "dependsOn": [],
+        "runCondition": "always"
+      }
+    ],
+    "schedule": "0 8 * * *",
+    "createdAt": "2026-04-15T00:00:00Z",
+    "updatedAt": "2026-04-15T00:00:00Z"
+  }
+]
+```
+
+Rules:
+- Each step references a task by its `taskId` — first read `<DATA_DIR>/tasks.json` to find the task id by name.
+- If the task has `agentInputs`, fill `agentAssignments` as `{ slotName: agentId }`. If the task has no inputs, leave `agentAssignments: {}` and list agent ids in `defaultAgentIds`.
+- To find agent ids: read `<DATA_DIR>/agents.json` and match by name.
+- `dependsOn: []` for parallel steps; `dependsOn: ["<stepId>"]` to sequence them.
+- `schedule`: `null` for manual runs, or a cron string (e.g. `"0 8 * * *"` for daily 8 AM local time).
+- `createdAt` and `updatedAt` are ISO 8601 strings for plans (unlike agents/tasks which use numeric timestamps — check the existing file format if unsure).
+
+After writing: tell the user to click Refresh on the **Plans** page.
+
+## Finalizing every operation
+
+After a successful write, confirm what you did in one sentence and tell the user which page to refresh. Example:
+> "Added the Weather API tool under the 'APIs' category. Click Refresh on the Tools page to load it."
+
+## What to never do
+
+- Never touch `<DATA_DIR>/config.json` unless the user explicitly asks to change app settings — it contains API keys.
+- Never delete entries without explicit user confirmation.
+- Never overwrite the whole file with only your new entry — always preserve existing content.
+- Never guess `id` values for references (taskId, agentId) — look them up from the source file.

@@ -68,7 +68,8 @@ if (process.platform === 'linux') {
 const { app, BrowserWindow, ipcMain, dialog, shell, screen, protocol, net, session, Menu } = require('electron')
 const http = require('http')
 const os = require('os')
-const { execFile } = require('child_process')
+const { execFile, spawn } = require('child_process')
+const crypto = require('crypto')
 const { logger } = require('./logger')
 const imBridge = require('./im-bridge')
 const { mcpManager } = require('./agent/mcp/McpManager')
@@ -526,6 +527,64 @@ app.whenReady().then(async () => {
 
   ensureDataDir()
 
+  // ── Go core subprocess (behind CLANK_USE_GO flag) ──
+  if (process.env.CLANK_USE_GO === '1') {
+    try {
+      const goSessionKey = crypto.randomBytes(32).toString('hex')
+      const goPort = 7731
+      const isDev = !!process.env.ELECTRON_DEV
+
+      // Locate binary: dev → air output, prod → bundled resource
+      let goBin
+      if (isDev) {
+        goBin = path.join(__dirname, '..', 'core', 'tmp', process.platform === 'win32' ? 'clank-core.exe' : 'clank-core')
+      } else {
+        const ext = process.platform === 'win32' ? '.exe' : ''
+        goBin = path.join(process.resourcesPath, 'core', 'clank-core' + ext)
+      }
+
+      if (fs.existsSync(goBin)) {
+        logger.info(`[GoCore] spawning ${goBin} on port ${goPort}`)
+        const goDataDir = ds.paths().DATA_DIR
+        const goProc = spawn(goBin, ['--mode', 'embedded', '--port', String(goPort), '--data-dir', goDataDir], {
+          env: {
+            ...process.env,
+            CLANK_SESSION_KEY: goSessionKey,
+            CLANK_ENV: isDev ? 'development' : '',
+          },
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+
+        goProc.stderr.on('data', (d) => logger.info(`[GoCore] ${d.toString().trim()}`))
+
+        // Wait for READY signal on stdout (max 10s)
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('GoCore: READY timeout (10s)')), 10000)
+          let buf = ''
+          goProc.stdout.on('data', (chunk) => {
+            buf += chunk.toString()
+            if (buf.includes('READY')) {
+              clearTimeout(timeout)
+              resolve()
+            }
+          })
+          goProc.on('error', (err) => { clearTimeout(timeout); reject(err) })
+          goProc.on('exit', (code) => {
+            if (code !== null) { clearTimeout(timeout); reject(new Error(`GoCore exited with code ${code}`)) }
+          })
+        })
+
+        global.goCore = { port: goPort, sessionKey: goSessionKey, process: goProc }
+        logger.info(`[GoCore] ready on port ${goPort}`)
+      } else {
+        logger.warn(`[GoCore] binary not found at ${goBin}, falling back to JS engine`)
+      }
+    } catch (err) {
+      logger.error(`[GoCore] failed to start: ${err.message}`)
+      logger.warn('[GoCore] falling back to JS engine')
+    }
+  }
+
   // Initialize local RAG modules (path-only, no model loading)
   const localEmbedding = require('./lib/localEmbedding')
   const localVectorStore = require('./lib/localVectorStore')
@@ -570,6 +629,33 @@ app.whenReady().then(async () => {
 
   // Anonymous install telemetry (async, non-blocking, silent on failure)
   require('./lib/telemetry').sendInstallPing().catch(() => {})
+
+  // ── Built-in skills: seed missing skills from source tree into user skillsDir ──
+  // Runs after IPC registration so the first scan-dir call picks them up.
+  try {
+    const builtinSkills = require('./lib/builtinSkills')
+    const startupCfg = readJSON(p().CONFIG_FILE, {})
+    const startupLang = startupCfg.language || 'en'
+    let startupSkillsDir = (startupCfg.skillsPath || '').trim()
+    if (startupSkillsDir.startsWith('~/') || startupSkillsDir === '~') {
+      startupSkillsDir = path.join(require('os').homedir(), startupSkillsDir.slice(1))
+    }
+    if (!startupSkillsDir) startupSkillsDir = path.join(p().DATA_DIR, 'skills')
+
+    const { seeded, builtinIds } = builtinSkills.ensureBuiltinSkills(startupSkillsDir, startupLang)
+
+    // First-time agent assignment: if any built-in skill was just seeded AND we
+    // have never assigned them to agents before, push their ids into every
+    // existing agent's requiredSkillIds. Guarded by a config flag so users who
+    // intentionally remove the skill from an agent don't see it come back.
+    if (seeded.length > 0 && !startupCfg.builtinSkillsAssignedOnce) {
+      builtinSkills.seedBuiltinSkillsIntoAgents(p().AGENTS_FILE, builtinIds)
+      startupCfg.builtinSkillsAssignedOnce = true
+      writeJSON(p().CONFIG_FILE, startupCfg)
+    }
+  } catch (err) {
+    logger.error('[Startup] ensureBuiltinSkills failed:', err.message)
+  }
 
   // Refresh LiteLLM model catalog in background (best-effort)
   require('./agent/modelDefaults').refreshFromRemote(p().DATA_DIR).catch(() => {})
@@ -678,6 +764,15 @@ app.on('before-quit', async (e) => {
       ipcAgent.activeLoops.delete(key)
       ipcAgent.activeLoopMeta.delete(key)
     }
+  }
+
+  // Stop Go core subprocess
+  if (global.goCore?.process) {
+    try {
+      logger.info('[GoCore] stopping subprocess')
+      global.goCore.process.kill('SIGTERM')
+    } catch (err) { logger.error('[GoCore] cleanup error:', err.message) }
+    global.goCore = null
   }
 
   // Stop local voice server if running

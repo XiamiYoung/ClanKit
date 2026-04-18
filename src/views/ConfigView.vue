@@ -70,13 +70,13 @@
               <h3 class="form-section-title">Language / 语言</h3>
             </div>
             <div class="form-group">
-              <label class="form-label">{{ form.language === 'zh' ? '应用语言' : 'Application Language' }}</label>
+              <label class="form-label">{{ t('config.applicationLanguage') }}</label>
               <select v-model="form.language" class="field" @change="handleLanguageChange">
                 <option value="en">English</option>
                 <option value="zh">中文</option>
               </select>
               <p class="hint">
-                {{ form.language === 'zh' ? '选择应用的默认语言。这将用于界面文字和新创建智能体的默认语言。' : 'Select the default language for the application. This will be used for UI text and as the default language for new agents.' }}
+                {{ t('config.languageHint') }}
               </p>
             </div>
           </div>

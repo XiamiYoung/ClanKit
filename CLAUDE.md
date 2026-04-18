@@ -274,14 +274,28 @@ ShellTool.execute(toolCallId, params, signal, onUpdate)
 
 ## Testing
 
-- **Framework**: Vitest + happy-dom. Run: `npm test` or `npm run test:watch`
-- **83 tests** across 4 files in `__tests__/` directories
-- `useChunkHandler.test.js` — chunk routing, agent lifecycle, segment preservation
-- `useSendMessage.test.js` — queue management, IPC dispatch, stop, plan approval
-- `agentDataNormalization.test.js` — JSON format normalization + chunk accumulation (imports real `dataNormalizers.js` + `chunkAccumulator.js`)
-- `agentRuntimeUtils.test.js` — provider/model normalization, loop-config validation, sequential chat dispatch heuristics
-- `ipcSerialize.test.js` — Vue proxy → plain object serialization
-- **Mandatory chat regression rule:** Any change that touches chat logic, chat orchestration, agent routing/collaboration, message streaming/chunk handling, or chat model/provider resolution MUST run the relevant regression tests before the task is considered done. At minimum run: `npm test -- electron/ipc/__tests__/agentRuntimeUtils.test.js src/composables/__tests__/useChunkHandler.test.js src/composables/__tests__/useSendMessage.test.js electron/ipc/__tests__/agentDataNormalization.test.js`
+- **Framework**: Vitest + happy-dom + @vue/test-utils. Run: `npm test` or `npm run test:watch`
+- **304 tests** across 28 files — Pinia stores (11), composables (8), Vue components (8), views (7), page-level integration (1), utilities (2), backend (1)
+- **Dev-mode chunk recorder**: `chats.js` captures all `agent:chunk` events in memory when `import.meta.env.DEV` is true. Access via `useChatsStore().getChunkLog()` from devtools to export scenarios for replay tests.
+
+### Test Suites by Domain
+
+| Domain | Test Command | When to Run |
+|--------|-------------|-------------|
+| **Chat logic** | `npm test -- src/stores/__tests__/chats.test.js src/composables/__tests__/ src/components/chat/__tests__/ electron/ipc/__tests__/agentDataNormalization.test.js` | Any change to chat orchestration, chunk handling, message streaming, agent routing, collaboration, or provider/model resolution |
+| **Agent management** | `npm test -- src/views/__tests__/AgentsView.test.js src/components/agents/__tests__/` | Changes to agent CRUD, import wizard, agent body editor, agent categories |
+| **Configuration** | `npm test -- src/stores/__tests__/config.test.js src/views/__tests__/ConfigView.test.js` | Changes to provider config, model setup, language, paths |
+| **Skills / Knowledge / MCP / Tools** | `npm test -- src/views/__tests__/SkillsView.test.js src/views/__tests__/RemainingViews.test.js` | Changes to skill/knowledge/MCP/tool management pages |
+| **Docs (AI Doc)** | `npm test -- src/views/__tests__/DocsView.test.js` | Changes to the document editor or AI edit features |
+| **Utilities** | `npm test -- src/utils/__tests__/` | Changes to IPC serialization, token estimation, mentions parsing |
+| **Full suite** | `npm test -- src/ electron/ipc/__tests__/agentDataNormalization.test.js` | Before any PR merge or when unsure of blast radius |
+
+### Mandatory Regression Rules
+
+1. **Chat changes**: Any change touching `src/composables/use*.js`, `src/components/chat/`, `src/stores/chats.js`, `electron/ipc/agent.js`, or `electron/agent/` MUST run the **Chat logic** suite before completion.
+2. **Agent changes**: Any change touching `src/views/AgentsView.vue`, `src/components/agents/`, `src/stores/agents.js`, or `electron/ipc/agentImport.js` MUST run the **Agent management** suite.
+3. **Cross-cutting changes**: Changes to stores used by multiple domains (e.g. `config.js`, `agents.js`) must run ALL affected domain suites.
+4. **New features**: Any new feature MUST include at least one test case in the relevant domain suite.
 
 ---
 

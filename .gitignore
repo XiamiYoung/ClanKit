@@ -43,8 +43,9 @@ electron-compiled/
 *.bak
 *.bak*
 
-# docs
-docs/
+# docs (whitelist go-migration)
+docs/*
+!docs/go-migration/
 
 # Scripts (ignore all except whitelisted)
 scripts/*
@@ -53,12 +54,17 @@ scripts/*
 !scripts/after-pack.js
 !scripts/check-models-staleness.js
 !scripts/update-models.js
+!scripts/build-core.js
+!scripts/recorder/
 
 # Model staleness check flag (dev-only)
 .models-stale
 
-# Docs
-docs/
+# Go build artifacts (air hot reload)
+core/tmp/
+
+# Compiled Go binaries for distribution
+resources/
 
 # Python
 __pycache__/

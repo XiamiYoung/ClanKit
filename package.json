@@ -15,7 +15,10 @@
     "dist:mac": "npm run build && npx electron-builder --mac --publish=never",
     "dist:all": "npm run build && npx electron-builder --win --mac --publish=never",
     "bundle:mcporter": "cd ../mcporter && node_modules/.bin/tsc -p tsconfig.build.json && cd ../ClankAI && node_modules/.bin/esbuild ../mcporter/src/index.ts --bundle --format=esm --platform=node --main-fields=module,main \"--banner:js=import { createRequire as __cjsRequire } from 'module'; const require = __cjsRequire(import.meta.url);\" --outfile=electron/agent/mcp/mcporter-bundle.mjs",
-    "update-models": "node scripts/update-models.js"
+    "update-models": "node scripts/update-models.js",
+    "dev:go": "cd core && air",
+    "build:go": "node scripts/build-core.js",
+    "build:go:all": "node scripts/build-core.js --all"
   },
   "build": {
     "appId": "com.clankai.app",
@@ -42,6 +45,11 @@
       {
         "from": "build/icons/icon.ico",
         "to": "icon.ico"
+      },
+      {
+        "from": "resources/win-x64/clank-core.exe",
+        "to": "core/clank-core.exe",
+        "filter": ["**/*"]
       }
     ],
     "win": {

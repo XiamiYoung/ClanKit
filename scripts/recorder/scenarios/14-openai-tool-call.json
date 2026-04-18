@@ -1,0 +1,121 @@
+{
+  "name": "14-openai-tool-call",
+  "description": "OpenAI-compat provider: tool call via chat.completions stream. Model calls execute_shell, then responds with text. Proves OpenAI tool_calls accumulation + translation to Anthropic chunks.",
+  "model": "gpt-4o",
+  "loopConfigOverrides": {
+    "provider": {
+      "type": "openai",
+      "apiKey": "mock-key",
+      "baseURL": "http://127.0.0.1:9823",
+      "model": "gpt-4o"
+    },
+    "defaultProvider": "openai",
+    "_resolvedProvider": "openai"
+  },
+  "toolMocks": {
+    "execute_shell": {
+      "result": {
+        "content": [{ "type": "text", "text": "hello world\n" }],
+        "details": { "exit_code": 0, "truncated": false, "totalLines": 1, "totalBytes": 12 }
+      }
+    }
+  },
+  "messages": [
+    { "role": "user", "content": "Run echo hello world" }
+  ],
+  "enabledAgents": [],
+  "enabledSkills": [],
+  "agentPrompts": {},
+  "llmResponses": [
+    [
+      {
+        "event": "message",
+        "data": {
+          "id": "chatcmpl-mock-02a",
+          "object": "chat.completion.chunk",
+          "model": "gpt-4o",
+          "choices": [{
+            "index": 0,
+            "delta": {
+              "role": "assistant",
+              "tool_calls": [{
+                "index": 0,
+                "id": "call_mock_01",
+                "type": "function",
+                "function": { "name": "execute_shell", "arguments": "" }
+              }]
+            },
+            "finish_reason": null
+          }]
+        }
+      },
+      {
+        "event": "message",
+        "data": {
+          "id": "chatcmpl-mock-02a",
+          "object": "chat.completion.chunk",
+          "model": "gpt-4o",
+          "choices": [{
+            "index": 0,
+            "delta": {
+              "tool_calls": [{
+                "index": 0,
+                "function": { "arguments": "{\"command\":\"echo hello world\"}" }
+              }]
+            },
+            "finish_reason": null
+          }]
+        }
+      },
+      {
+        "event": "message",
+        "data": {
+          "id": "chatcmpl-mock-02a",
+          "object": "chat.completion.chunk",
+          "model": "gpt-4o",
+          "choices": [{
+            "index": 0,
+            "delta": {},
+            "finish_reason": "tool_calls"
+          }]
+        }
+      },
+      {
+        "event": "message",
+        "data": "[DONE]"
+      }
+    ],
+    [
+      {
+        "event": "message",
+        "data": {
+          "id": "chatcmpl-mock-02b",
+          "object": "chat.completion.chunk",
+          "model": "gpt-4o",
+          "choices": [{
+            "index": 0,
+            "delta": { "content": "Done! Output: hello world" },
+            "finish_reason": null
+          }]
+        }
+      },
+      {
+        "event": "message",
+        "data": {
+          "id": "chatcmpl-mock-02b",
+          "object": "chat.completion.chunk",
+          "model": "gpt-4o",
+          "choices": [{
+            "index": 0,
+            "delta": {},
+            "finish_reason": "stop"
+          }]
+        }
+      },
+      {
+        "event": "message",
+        "data": "[DONE]"
+      }
+    ]
+  ]
+}

@@ -1,0 +1,96 @@
+[
+  {
+    "type": "context_update",
+    "metrics": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "totalTokens": 0,
+      "maxTokens": 1000000,
+      "percentage": 0,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "compactionCount": 0
+    }
+  },
+  {
+    "type": "agent_step",
+    "id": "step-init",
+    "title": "🤖 Initializing Agent...",
+    "status": "in_progress",
+    "details": {
+      "iteration": 0,
+      "model": "gpt-4o",
+      "provider": "openai",
+      "tools": 0,
+      "thinking": false,
+      "msgs": 0,
+      "inputTokens": 0,
+      "outputTokens": 0
+    }
+  },
+  {
+    "type": "agent_step",
+    "id": "step-llm-1",
+    "title": "📡 Calling gpt-4o...",
+    "status": "in_progress",
+    "details": {
+      "iteration": 1,
+      "model": "gpt-4o",
+      "provider": "openai",
+      "tools": 12,
+      "thinking": false,
+      "msgs": 1,
+      "inputTokens": 0,
+      "outputTokens": 0
+    }
+  },
+  {
+    "type": "text",
+    "text": "Hello"
+  },
+  {
+    "type": "text",
+    "text": "!"
+  },
+  {
+    "type": "context_update",
+    "metrics": {
+      "inputTokens": 1941,
+      "outputTokens": 2,
+      "totalTokens": 1943,
+      "maxTokens": 1000000,
+      "percentage": 0,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "compactionCount": 0
+    }
+  },
+  {
+    "type": "context_update",
+    "metrics": {
+      "inputTokens": 1941,
+      "outputTokens": 2,
+      "totalTokens": 1943,
+      "maxTokens": 1000000,
+      "percentage": 0,
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "compactionCount": 0
+    }
+  },
+  {
+    "type": "agent_step",
+    "id": "step-complete",
+    "title": "✅ Agent Complete",
+    "status": "completed",
+    "details": {
+      "iteration": 1,
+      "model": "gpt-4o",
+      "provider": "openai",
+      "msgs": 2,
+      "totalTokens": 1943,
+      "inputTokens": 1941,
+      "outputTokens": 2
+    }
+  }
+]

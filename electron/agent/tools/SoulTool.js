@@ -15,8 +15,20 @@ const { BaseTool } = require('./BaseTool')
 const { logger } = require('../../logger')
 
 // ── Standard section headings ──────────────────────────────────────────────
+// Order matters: Identity first, then Nuwa-methodology sections (populated by
+// the chatImport pipeline), then existing free-form sections (populated by
+// MemoryExtractor at runtime), then logs at the bottom.
 const SECTIONS = [
   'Identity',
+  // Nuwa-methodology sections (populated by chatImport 4-phase pipeline)
+  'Mental Models',
+  'Decision Heuristics',
+  'Values & Anti-Patterns',
+  'Relational Genealogy',
+  'Honest Boundaries',
+  'Core Tensions',
+  'Relationship Timeline',
+  // Existing free-form sections (populated by runtime MemoryExtractor)
   'Preferences',
   'Communication',
   'Technical',
@@ -215,7 +227,7 @@ ${content}`
       properties: {
         agent_id:   { type: 'string', description: 'ID of the agent whose memory to update' },
         agent_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user agent' },
-        section:      { type: 'string', description: 'Section name: Preferences, Communication, Technical, Projects, Personal, Interaction Notes' },
+        section:      { type: 'string', description: 'Section name. Free-form sections (use these for runtime memory updates): Preferences, Communication, Technical, Projects, Personal, Interaction Notes. Nuwa-methodology sections (populated by chat import, do not modify casually): Mental Models, Decision Heuristics, Values & Anti-Patterns, Relational Genealogy, Honest Boundaries, Core Tensions, Relationship Timeline.' },
         action:       { type: 'string', enum: ['add', 'update', 'remove'], description: 'What to do' },
         entry:        { type: 'string', description: 'The memory entry to add/update/remove' },
         old_entry:    { type: 'string', description: 'For update action: the existing entry text to replace' },
@@ -408,4 +420,15 @@ class SoulReadTool extends BaseTool {
   }
 }
 
-module.exports = { SoulUpdateTool, SoulReadTool }
+module.exports = {
+  SoulUpdateTool,
+  SoulReadTool,
+  // Internal helpers exposed for the chat-import nuwa pipeline (Phase B).
+  // Use these to read/write soul files directly when bulk-importing structured
+  // sections instead of going through the per-entry SoulUpdateTool interface.
+  createTemplate,
+  parseSoul,
+  serializeSoul,
+  updateTimestamp,
+  SECTIONS,
+}

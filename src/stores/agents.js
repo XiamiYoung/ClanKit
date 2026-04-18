@@ -67,7 +67,7 @@ function buildBuiltinDocEditorCopy(locale, utilityModel) {
     createdAt: 0,
     updatedAt: 0,
     requiredToolIds: [],
-    requiredSkillIds: [],
+    requiredSkillIds: ['pdf', 'docx', 'pptx', 'xlsx'],
     requiredMcpServerIds: [],
     requiredKnowledgeBaseIds: [],
   }
@@ -84,7 +84,7 @@ function buildBuiltinAnalystCopy(locale, utilityModel) {
     id: BUILTIN_ANALYST_ID,
     type: 'system',
     name: builtinName,
-    avatar: 'a5',
+    avatar: 'agents:s8012',
     description,
     prompt,
     providerId: utilityModel?.provider || null,
@@ -95,7 +95,7 @@ function buildBuiltinAnalystCopy(locale, utilityModel) {
     createdAt: 0,
     updatedAt: 0,
     requiredToolIds: [],
-    requiredSkillIds: [],
+    requiredSkillIds: ['persona-evaluation', 'analysis-report-template', 'ui-ux-pro-max'],
     requiredMcpServerIds: [],
     requiredKnowledgeBaseIds: [],
   }
@@ -196,7 +196,9 @@ export const useAgentsStore = defineStore('agents', () => {
     return current.name !== next.name ||
       current.avatar !== next.avatar ||
       current.description !== next.description ||
-      current.voiceId !== next.voiceId
+      current.voiceId !== next.voiceId ||
+      current.prompt !== next.prompt ||
+      !arrayEquals(current.requiredSkillIds || [], next.requiredSkillIds || [])
   }
 
   async function syncBuiltinDocEditorAgent(persistChanges = true) {
@@ -245,7 +247,9 @@ export const useAgentsStore = defineStore('agents', () => {
     return current.name !== next.name ||
       current.avatar !== next.avatar ||
       current.description !== next.description ||
-      current.voiceId !== next.voiceId
+      current.voiceId !== next.voiceId ||
+      current.prompt !== next.prompt ||
+      !arrayEquals(current.requiredSkillIds || [], next.requiredSkillIds || [])
   }
 
   async function syncBuiltinAnalystAgent(persistChanges = true) {

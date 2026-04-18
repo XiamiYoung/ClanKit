@@ -33,7 +33,7 @@ import { useI18n } from '../../i18n/useI18n'
 
 const { t } = useI18n()
 
-defineProps({
+const props = defineProps({
   visible: {
     type: Boolean,
     default: false,
@@ -44,11 +44,12 @@ defineProps({
   },
 })
 
-defineEmits(['close'])
+const emit = defineEmits(['close'])
 
 function onKeydown(e) {
-  if (e.key === 'Escape') {
+  if (e.key === 'Escape' && props.visible) {
     e.stopPropagation()
+    emit('close')
   }
 }
 

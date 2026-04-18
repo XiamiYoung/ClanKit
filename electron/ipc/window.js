@@ -217,11 +217,6 @@ function register() {
         _preMinibarBounds = mainWindow.getBounds()
         const allDisplays = screen.getAllDisplays()
         const currentDisplay = screen.getDisplayMatching(_preMinibarBounds)
-        logger.info('[minibar] === ENTERING MINIBAR MODE ===')
-        logger.info('[minibar] mainWindow bounds:', JSON.stringify(_preMinibarBounds))
-        logger.info('[minibar] all displays:', JSON.stringify(allDisplays.map((d, i) => ({ i, id: d.id, bounds: d.bounds, workArea: d.workArea }))))
-        logger.info('[minibar] matched display:', JSON.stringify({ id: currentDisplay.id, bounds: currentDisplay.bounds, workArea: currentDisplay.workArea }))
-        logger.info('[minibar] _lastMinibarBounds:', JSON.stringify(_lastMinibarBounds))
         mainWindow.setMinimumSize(200, 80)
         mainWindow.setResizable(false)
         mainWindow.setAlwaysOnTop(true, 'floating')
@@ -230,7 +225,6 @@ function register() {
         const savedOnSameDisplay = _lastMinibarBounds
           && screen.getDisplayMatching(_lastMinibarBounds).id === currentDisplay.id
         if (_lastMinibarBounds && savedOnSameDisplay) {
-          logger.info('[minibar] restoring saved bounds (same display):', JSON.stringify(_lastMinibarBounds))
           _minibarIntendedW = _lastMinibarBounds.width
           _minibarIntendedH = _lastMinibarBounds.height
           mainWindow.setBounds(_lastMinibarBounds)
@@ -241,7 +235,6 @@ function register() {
           _minibarIntendedW = useW
           _minibarIntendedH = useH
           const newBounds = { x: Math.round(wa.x + (wa.width - useW) / 2), y: wa.y, width: useW, height: useH }
-          logger.info('[minibar] centering on current display:', JSON.stringify(newBounds), 'savedOnSameDisplay:', savedOnSameDisplay)
           mainWindow.setBounds(newBounds)
         }
       } else {

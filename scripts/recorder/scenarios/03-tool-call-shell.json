@@ -1,0 +1,137 @@
+{
+  "name": "03-tool-call-shell",
+  "description": "Two-iteration run. Iteration 1: model emits tool_use for execute_shell. Iteration 2: model emits final text using the (mocked) tool result. Proves the tool_call -> tool_output -> tool_result chunk sequence + step-tools-{n} + multi-iteration context_update cadence.",
+  "model": "claude-haiku-4-5",
+  "messages": [
+    { "role": "user", "content": "List files in the current directory." }
+  ],
+  "enabledAgents": [],
+  "enabledSkills": [],
+  "agentPrompts": {},
+  "toolMocks": {
+    "execute_shell": {
+      "output": [
+        { "stream": "stdout", "text": "file_a.txt\n" },
+        { "stream": "stdout", "text": "file_b.txt\n" }
+      ],
+      "result": {
+        "content": [
+          { "type": "text", "text": "file_a.txt\nfile_b.txt\n" }
+        ],
+        "details": {
+          "exit_code": 0,
+          "truncated": false,
+          "totalLines": 2,
+          "totalBytes": 24
+        }
+      }
+    }
+  },
+  "llmResponses": [
+    [
+      {
+        "event": "message_start",
+        "data": {
+          "type": "message_start",
+          "message": {
+            "id": "msg_mock_0003a",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-haiku-4-5",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": { "input_tokens": 60, "output_tokens": 0 }
+          }
+        }
+      },
+      {
+        "event": "content_block_start",
+        "data": {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "tool_use",
+            "id": "toolu_mock_shell_01",
+            "name": "execute_shell",
+            "input": {}
+          }
+        }
+      },
+      {
+        "event": "content_block_delta",
+        "data": {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": { "type": "input_json_delta", "partial_json": "{\"command\":\"ls\"}" }
+        }
+      },
+      {
+        "event": "content_block_stop",
+        "data": { "type": "content_block_stop", "index": 0 }
+      },
+      {
+        "event": "message_delta",
+        "data": {
+          "type": "message_delta",
+          "delta": { "stop_reason": "tool_use", "stop_sequence": null },
+          "usage": { "output_tokens": 15 }
+        }
+      },
+      {
+        "event": "message_stop",
+        "data": { "type": "message_stop" }
+      }
+    ],
+    [
+      {
+        "event": "message_start",
+        "data": {
+          "type": "message_start",
+          "message": {
+            "id": "msg_mock_0003b",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-haiku-4-5",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": { "input_tokens": 90, "output_tokens": 0 }
+          }
+        }
+      },
+      {
+        "event": "content_block_start",
+        "data": {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": { "type": "text", "text": "" }
+        }
+      },
+      {
+        "event": "content_block_delta",
+        "data": {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": { "type": "text_delta", "text": "Two files: file_a.txt and file_b.txt." }
+        }
+      },
+      {
+        "event": "content_block_stop",
+        "data": { "type": "content_block_stop", "index": 0 }
+      },
+      {
+        "event": "message_delta",
+        "data": {
+          "type": "message_delta",
+          "delta": { "stop_reason": "end_turn", "stop_sequence": null },
+          "usage": { "output_tokens": 12 }
+        }
+      },
+      {
+        "event": "message_stop",
+        "data": { "type": "message_stop" }
+      }
+    ]
+  ]
+}

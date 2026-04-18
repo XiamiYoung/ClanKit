@@ -271,6 +271,160 @@ class HistoryIndex {
   }
 
   /**
+   * Load ALL imported messages as a flat array. Used when the dataset is small
+   * enough to fit in a single LLM context window (< ~5000 messages).
+   *
+   * @param {string} agentId
+   * @returns {Array<{content, timestamp, sender}>|null}
+   */
+  getAllMessages(agentId) {
+    try {
+      const db = this._getDb(agentId)
+      if (!db) return null
+      const rows = db.prepare(`
+        SELECT content, timestamp, sender
+        FROM messages
+        WHERE chat_id = 'imported-history'
+        ORDER BY timestamp ASC, created_at ASC
+      `).all()
+      if (rows.length === 0) return null
+      return rows.map(r => ({
+        content: r.content,
+        timestamp: r.timestamp || '',
+        sender: r.sender || 'Unknown',
+      }))
+    } catch (err) {
+      logger.error('[HistoryIndex] getAllMessages error', { agentId, error: err.message })
+      return null
+    }
+  }
+
+  /**
+   * Split imported history into conversation segments by silence gaps.
+   * A gap > gapMinutes between consecutive messages = new segment.
+   * Returns segments as arrays of messages, each segment a complete conversation.
+   *
+   * @param {string} agentId
+   * @param {number} [gapMinutes=30]  Silence threshold for segment boundary
+   * @returns {Array<Array<{content, timestamp, sender}>>|null}
+   */
+  getConversationSegments(agentId, gapMinutes = 30) {
+    try {
+      const db = this._getDb(agentId)
+      if (!db) return null
+
+      const rows = db.prepare(`
+        SELECT content, timestamp, sender
+        FROM messages
+        WHERE chat_id = 'imported-history'
+        ORDER BY timestamp ASC, created_at ASC
+      `).all()
+      if (rows.length === 0) return null
+
+      const gapMs = gapMinutes * 60 * 1000
+      const segments = []
+      let current = []
+
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i]
+        const msg = { content: r.content, timestamp: r.timestamp || '', sender: r.sender || 'Unknown' }
+
+        if (current.length > 0 && r.timestamp) {
+          const prevTs = current[current.length - 1].timestamp
+          if (prevTs) {
+            const prev = new Date(prevTs).getTime()
+            const curr = new Date(r.timestamp).getTime()
+            if (!isNaN(prev) && !isNaN(curr) && (curr - prev) > gapMs) {
+              segments.push(current)
+              current = []
+            }
+          }
+        }
+        current.push(msg)
+      }
+      if (current.length > 0) segments.push(current)
+
+      return segments
+    } catch (err) {
+      logger.error('[HistoryIndex] getConversationSegments error', { agentId, error: err.message })
+      return null
+    }
+  }
+
+  /**
+   * Get a stratified sample of messages for analysis — much faster than loading
+   * all messages. Returns classified-style buckets via SQL, capped at ~350 total.
+   *
+   * @param {string} agentId
+   * @returns {{ long: Array, conflict: Array, sweet: Array, recent: Array, strided: Array, totalMessages: number } | null}
+   */
+  getSampledMessages(agentId) {
+    try {
+      const db = this._getDb(agentId)
+      if (!db) return null
+
+      const totalRow = db.prepare("SELECT COUNT(*) AS cnt FROM messages WHERE chat_id = 'imported-history'").get()
+      const total = totalRow?.cnt || 0
+      if (total === 0) return null
+
+      // Long messages from "them" (>= 50 chars)
+      const long = db.prepare(`
+        SELECT content, timestamp, sender FROM messages
+        WHERE chat_id = 'imported-history' AND sender != 'Me' AND length(content) >= 50
+        ORDER BY length(content) DESC LIMIT 30
+      `).all()
+
+      // Conflict keyword matches (both sides for context)
+      const conflict = db.prepare(`
+        SELECT content, timestamp, sender FROM messages
+        WHERE chat_id = 'imported-history'
+          AND (content LIKE '%生气%' OR content LIKE '%吵%' OR content LIKE '%算了%' OR content LIKE '%随便%'
+               OR content LIKE '%分手%' OR content LIKE '%烦%' OR content LIKE '%hate%' OR content LIKE '%angry%'
+               OR content LIKE '%fight%' OR content LIKE '%upset%' OR content LIKE '%whatever%')
+        ORDER BY timestamp DESC LIMIT 20
+      `).all()
+
+      // Sweet / affectionate matches
+      const sweet = db.prepare(`
+        SELECT content, timestamp, sender FROM messages
+        WHERE chat_id = 'imported-history'
+          AND (content LIKE '%喜欢%' OR content LIKE '%爱你%' OR content LIKE '%想你%' OR content LIKE '%宝%'
+               OR content LIKE '%亲爱%' OR content LIKE '%love%' OR content LIKE '%miss you%'
+               OR content LIKE '%baby%' OR content LIKE '%❤%')
+        ORDER BY timestamp DESC LIMIT 20
+      `).all()
+
+      // Most recent 50 short messages from "them"
+      const recent = db.prepare(`
+        SELECT content, timestamp, sender FROM messages
+        WHERE chat_id = 'imported-history' AND sender != 'Me' AND length(content) < 50
+        ORDER BY timestamp DESC, created_at DESC LIMIT 50
+      `).all()
+
+      // Uniformly strided across the full timeline — skip first and last 5% for diversity
+      const stride = Math.max(1, Math.floor(total / 200))
+      const strided = db.prepare(`
+        SELECT content, timestamp, sender FROM messages
+        WHERE chat_id = 'imported-history' AND rowid % ? = 0
+        ORDER BY timestamp ASC
+        LIMIT 200
+      `).all(stride)
+
+      return {
+        long: long.map(r => ({ content: r.content, timestamp: r.timestamp, sender: r.sender === 'Me' ? 'me' : 'them' })),
+        conflict: conflict.map(r => ({ content: r.content, timestamp: r.timestamp, sender: r.sender === 'Me' ? 'me' : 'them' })),
+        sweet: sweet.map(r => ({ content: r.content, timestamp: r.timestamp, sender: r.sender === 'Me' ? 'me' : 'them' })),
+        recent: recent.map(r => ({ content: r.content, timestamp: r.timestamp, sender: r.sender === 'Me' ? 'me' : 'them' })),
+        strided: strided.map(r => ({ content: r.content, timestamp: r.timestamp, sender: r.sender === 'Me' ? 'me' : 'them' })),
+        totalMessages: total,
+      }
+    } catch (err) {
+      logger.error('[HistoryIndex] getSampledMessages error', { agentId, error: err.message })
+      return null
+    }
+  }
+
+  /**
    * Search indexed history for relevant context.
    *
    * @param {string} query        Search keywords (can be empty if using date range)

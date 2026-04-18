@@ -1,0 +1,211 @@
+---
+name: ClankAI 配置管理
+description: 创建或修改 ClankAI 应用的配置文件 —— HTTP 工具、MCP 服务器、智能体、知识库、任务、计划。当用户要求添加、修改或删除上述任一项时，必须加载此技能。
+---
+
+# ClankAI 配置管理
+
+你正在管理 ClankAI 桌面应用的配置文件。本技能提供所有权威的路径、数据格式和编辑规则。请严格遵循，不要臆造字段名或文件结构。
+
+## 数据目录
+
+所有配置文件都存放在 ClankAI 数据目录下。该目录的绝对路径会出现在你的系统提示词中的 `CLANKAI DATA DIRECTORY: <路径>` 这一行。在本技能里，我们用 `<DATA_DIR>` 代指这个路径。永远不要猜测该路径。
+
+## 标准工作流
+
+每次修改都要按下面的顺序执行：
+
+1. **先读取目标 JSON 文件**（用 `file_operation`），看清楚现有内容。
+2. **原地修改**，保留所有已有条目 —— 不要盲目覆盖。
+3. **写回完整的 JSON**（格式化，缩进 2 空格）。
+4. **提示用户**在应用里对应的页面点击"刷新"按钮以加载变更。
+
+如果目标文件还不存在，用空根节点创建它（数组用 `[]`，对象用 `{}`），然后继续。
+
+每新增一条记录都要生成一个新的 UUID。已有的 `id` 字段要完整保留，绝不要重写。
+
+## 1. HTTP 工具 — `<DATA_DIR>/tools.json`
+
+触发场景："添加一个工具"、"创建一个 HTTP 工具"、"改一下这个 API 工具" 等。
+
+**数据格式：**
+```json
+{
+  "categories": {
+    "分类名": {
+      "tools": [
+        {
+          "id": "<uuid>",
+          "name": "天气接口",
+          "method": "GET",
+          "endpoint": "https://api.example.com/weather",
+          "headers": { "Authorization": "Bearer $API_KEY" },
+          "bodyTemplate": "",
+          "description": "获取某城市的当前天气"
+        }
+      ]
+    }
+  }
+}
+```
+
+规则：
+- `method`：`GET`、`POST`、`PUT`、`PATCH`、`DELETE` 其中之一。
+- `bodyTemplate`：GET 请求留空字符串；POST/PUT 请求可以是包含 `{占位符}` 的 JSON 字符串。
+- 新工具尽量放到已有的分类下；只有在完全不匹配时才新建分类。
+
+写入完成后：告诉用户在 **工具** 页面点击刷新。
+
+## 2. MCP 服务器 — `<DATA_DIR>/mcp-servers.json`
+
+触发场景："添加一个 MCP 服务器"、"装一个 MCP"、"配置 XX MCP" 等。
+
+**数据格式（根为数组）：**
+```json
+[
+  {
+    "id": "<uuid>",
+    "name": "Filesystem",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/some/path"],
+    "env": {},
+    "description": "读写本地文件系统"
+  }
+]
+```
+
+规则：
+- 把 API 密钥等敏感信息放到 `env` 的键值对里，**不要**放到 `args` 里。
+- `command` 是可执行程序，`args` 是传给它的参数列表。
+
+写入完成后：告诉用户在 **MCP** 页面点击刷新。
+
+## 3. 智能体 — `<DATA_DIR>/agents.json`
+
+触发场景："创建一个智能体"、"添加一个助理"、"做一个会 XX 的 agent" 等。
+
+**数据格式：**
+```json
+{
+  "categories": [
+    { "id": "<uuid>", "name": "助理", "type": "system" }
+  ],
+  "agents": [
+    {
+      "id": "<uuid>",
+      "type": "system",
+      "name": "代码审查员",
+      "avatar": "a1",
+      "description": "审查代码中的 bug 和风格问题",
+      "prompt": "你是一位资深工程师，负责审查代码的 bug、安全性和代码风格。",
+      "providerId": null,
+      "modelId": null,
+      "requiredToolIds": null,
+      "requiredSkillIds": null,
+      "requiredMcpServerIds": null,
+      "requiredKnowledgeBaseIds": null,
+      "voiceId": null,
+      "categoryIds": [],
+      "createdAt": 1234567890,
+      "updatedAt": 1234567890
+    }
+  ]
+}
+```
+
+规则：
+- `type`：`"system"` 表示用户对话的 AI 助手；`"user"` 表示代表用户本人的人格 agent。
+- **新 agent 的 provider 和 model 选择：** 在创建条目前，先读 `<DATA_DIR>/config.json`，找到 `utilityModel.provider` 和 `utilityModel.model` 两个字段，把它们的值填到新 agent 的 `providerId` 和 `modelId`。除非用户明确指定了别的 provider 或 model，否则都这么做。
+- 四个 `required*Ids` 字段每一个要么是 `null`（继承默认值）要么是 id 数组。用户没指定时填 `null`。
+- `createdAt` 和 `updatedAt` 是 Unix 毫秒时间戳 —— 用 `Date.now()` 等价的数值。
+- `avatar`：接受 `a1`、`a2`、…… 形式的 id，用户没指定就随便选一个。
+
+写入完成后：告诉用户在 **智能体** 页面点击刷新。
+
+## 4. 知识库 — `<DATA_DIR>/knowledge.json`
+
+触发场景："添加一个知识库"、"创建一个 RAG 索引"、"把这些文档导入供检索" 等。
+
+这个文件的格式在不同版本间有差异 —— **一定要先读已有文件**，按已有格式追加你的新条目，不要凭空设计结构。
+
+写入完成后：告诉用户在 **知识库** 页面点击刷新。
+
+## 5. 任务 — `<DATA_DIR>/tasks.json`
+
+触发场景："创建一个任务"、"添加一个任务模板"、"把这个存成可以重复运行的任务" 等。
+
+**数据格式（根为数组）：**
+```json
+[
+  {
+    "id": "<uuid>",
+    "name": "总结文章",
+    "description": "把一篇文章浓缩成 3 条要点",
+    "icon": "📋",
+    "prompt": "@writer 总结一下这篇文章：{input}",
+    "agentInputs": [
+      { "name": "writer", "description": "负责写总结的 agent" }
+    ]
+  }
+]
+```
+
+规则：
+- 在 `prompt` 里用 `@slotName` 标记来引用 agent 输入槽位。
+- slot 名只能是字母数字和下划线 —— 不允许空格，也不允许中日韩字符。
+- `prompt` 里用到的每个 `@slotName` 都要在 `agentInputs` 里有对应条目。
+- 如果任务不需要 agent 槽位，`agentInputs` 填 `[]`。
+- `icon` 是一个 emoji 字符。
+
+写入完成后：告诉用户在 **任务** 页面点击刷新。
+
+## 6. 计划 — `<DATA_DIR>/plans.json`
+
+触发场景："创建一个计划"、"把这个设置成每天运行"、"把这几个任务串起来" 等。
+
+**数据格式（根为数组）：**
+```json
+[
+  {
+    "id": "<uuid>",
+    "name": "每日新闻摘要",
+    "description": "每天早上抓取并总结新闻",
+    "steps": [
+      {
+        "id": "<uuid>",
+        "taskId": "<task-id>",
+        "label": "抓取新闻",
+        "agentAssignments": { "writer": "<agent-id>" },
+        "defaultAgentIds": [],
+        "dependsOn": [],
+        "runCondition": "always"
+      }
+    ],
+    "schedule": "0 8 * * *",
+    "createdAt": "2026-04-15T00:00:00Z",
+    "updatedAt": "2026-04-15T00:00:00Z"
+  }
+]
+```
+
+规则：
+- 每一步通过 `taskId` 引用一个任务 —— 先读 `<DATA_DIR>/tasks.json` 按名字找到任务 id。
+- 如果被引用的任务有 `agentInputs`，就把 `agentAssignments` 填成 `{ 槽位名: agent id }`。如果任务没有输入槽，`agentAssignments` 留空 `{}`，把 agent id 列到 `defaultAgentIds` 里。
+- 查 agent id：读 `<DATA_DIR>/agents.json`，按名字匹配。
+- `dependsOn: []` 表示并行步骤；`dependsOn: ["<stepId>"]` 表示串行依赖。
+- `schedule`：手动触发填 `null`，自动触发填 cron 表达式（比如 `"0 8 * * *"` 是每天早 8 点本地时间）。
+- `createdAt` 和 `updatedAt` 在 plans 里是 ISO 8601 字符串（注意和 agents/tasks 的数值时间戳不同 —— 不确定就先读已有文件看格式）。
+
+写入完成后：告诉用户在 **计划** 页面点击刷新。
+
+## 每次操作的收尾
+
+写入成功后，用一句话确认你做了什么，并告诉用户去哪个页面点刷新。例如：
+> "已经在 'APIs' 分类下添加了 Weather API 工具。去工具页面点一下刷新就能加载出来。"
+
+## 禁止事项
+
+- 不要碰 `<DATA_DIR>/config.json`，除非用户明确要求修改应用设置 —— 它里面有 API 密钥。
+- 未经用户明确确认，不要删除任何条目。
+- 不要用只包含新条目的 JSON 覆盖整个文件 —— 永远保留已有内容。
+- 引用其他实体时（taskId、agentId 等），不要猜 id —— 去源文件里查出来。

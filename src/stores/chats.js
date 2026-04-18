@@ -39,6 +39,10 @@ export const useChatsStore = defineStore('chats', () => {
   // Task chunk callback — set by TaskEngineView when a plan is running manually
   let _taskChunkCallback = null
 
+  // Dev-mode chunk recording — captures every agent:chunk for replay testing.
+  // Access from devtools: useChatsStore().getChunkLog()
+  const _chunkLog = import.meta.env.DEV ? [] : null
+
   // ── Tree helpers ──────────────────────────────────────────────────────────
 
   // Recursively flatten tree to get only chat nodes (for backward compat)
@@ -1013,6 +1017,11 @@ export const useChatsStore = defineStore('chats', () => {
   function initChunkListener() {
     if (!window.electronAPI?.onAgentChunk) return
     window.electronAPI.onAgentChunk(({ chatId, chunk }) => {
+      // Dev-mode: record every chunk for replay testing
+      if (_chunkLog) {
+        _chunkLog.push({ chatId, chunk: JSON.parse(JSON.stringify(chunk)), ts: Date.now() })
+      }
+
       // Task chunks — route to task callback and skip all chat logic
       if (chatId.startsWith('task:') && _taskChunkCallback) {
         _taskChunkCallback(chatId, chunk)
@@ -1420,5 +1429,7 @@ export const useChatsStore = defineStore('chats', () => {
     wizardFirstChatId,
     pendingInputPrefill,
     reconnectRunningAgents,
+    getChunkLog: () => _chunkLog ? [..._chunkLog] : [],
+    clearChunkLog: () => { if (_chunkLog) _chunkLog.length = 0 },
   }
 })

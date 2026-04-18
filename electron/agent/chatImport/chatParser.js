@@ -212,6 +212,48 @@ function classifyMessages(messages, targetName) {
 
   const total_their_count = normalized.filter(m => m.sender === 'them').length
 
+  // Hold-out pairs for Phase 4 validation harness (Code Phase D).
+  // Walks backward from the tail and extracts turn-aligned (me-group → them-group)
+  // pairs. Merges consecutive same-sender messages into one turn so bursts like
+  // "好累 / 今天加班到9点" become a single trigger. Deduplicates on a normalized
+  // prefix of the user message so the harness doesn't ask the same thing twice.
+  const holdOutPairs = []
+  const seenKeys = new Set()
+  const HO_JUNK_RE = /^\s*(https?:\/\/|<Media|image omitted|sticker omitted)/i
+  let hi = normalized.length - 1
+  while (hi >= 0 && holdOutPairs.length < 15) {
+    // Find end of a "them" run
+    while (hi >= 0 && normalized[hi].sender !== 'them') hi--
+    if (hi < 0) break
+    const themEnd = hi
+    while (hi >= 0 && normalized[hi].sender === 'them') hi--
+    const themStart = hi + 1
+    // Collect connected "me" run immediately before
+    const meEnd = hi
+    while (hi >= 0 && normalized[hi].sender === 'me') hi--
+    const meStart = hi + 1
+    if (meStart > meEnd) continue
+
+    const userMessage = normalized.slice(meStart, meEnd + 1)
+      .map(m => (m.content || '').trim()).filter(Boolean).join(' / ')
+    const realReply = normalized.slice(themStart, themEnd + 1)
+      .map(m => (m.content || '').trim()).filter(Boolean).join(' / ')
+
+    if (userMessage.length < 2 || realReply.length < 4) continue
+    if (HO_JUNK_RE.test(userMessage) || HO_JUNK_RE.test(realReply)) continue
+
+    // Dedup on normalized 30-char prefix
+    const key = userMessage.toLowerCase().replace(/\s+/g, '').slice(0, 30)
+    if (seenKeys.has(key)) continue
+    seenKeys.add(key)
+
+    holdOutPairs.unshift({
+      userMessage,
+      realReply,
+      timestamp: normalized[themStart]?.timestamp || null,
+    })
+  }
+
   return {
     long_messages,
     conflict_messages,
@@ -222,6 +264,7 @@ function classifyMessages(messages, targetName) {
     total_their_count,
     total_count: messages.length,
     target_name: targetName,
+    holdOutPairs,
   }
 }
 

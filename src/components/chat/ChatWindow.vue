@@ -272,34 +272,28 @@
         </div>
       </template>
 
-      <!-- Floating scroll buttons -->
-      <div class="cw-scroll-buttons">
-        <Transition name="cw-scroll-btn-up">
-          <button
-            v-if="showScrollToTop && chat?.messages?.length"
-            class="cw-scroll-btn-float"
-            @click="scrollToTop"
-            :title="t('chats.scrollToTop')"
-            :aria-label="t('chats.scrollToTop')"
-          >
-            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="18 15 12 9 6 15"/>
-            </svg>
-          </button>
-        </Transition>
-        <Transition name="cw-scroll-btn">
-          <button
-            v-if="userScrolled && chat?.messages?.length"
-            class="cw-scroll-btn-float"
-            @click="forceScrollToBottom"
-            :title="t('chats.scrollToBottom')"
-            :aria-label="t('chats.scrollToBottom')"
-          >
-            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-        </Transition>
+      <!-- Floating scroll buttons (always visible when the chat has messages) -->
+      <div v-if="chat?.messages?.length" class="cw-scroll-buttons">
+        <button
+          class="cw-scroll-btn-float"
+          @click="scrollToTop"
+          :title="t('chats.scrollToTop')"
+          :aria-label="t('chats.scrollToTop')"
+        >
+          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="18 15 12 9 6 15"/>
+          </svg>
+        </button>
+        <button
+          class="cw-scroll-btn-float"
+          @click="forceScrollToBottom"
+          :title="t('chats.scrollToBottom')"
+          :aria-label="t('chats.scrollToBottom')"
+        >
+          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
       </div>
     </div>
 

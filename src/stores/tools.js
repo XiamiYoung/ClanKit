@@ -16,78 +16,20 @@ import { ref } from 'vue'
  *
  * Also handles array format for forward-compat.
  */
-// Built-in zero-registration tools seeded on first load.
-// name/description are English for LLM consumption.
-// i18nKey drives UI display via t(i18nKey + '.name') and t(i18nKey + '.description').
+// Built-in HTTP tools seeded on first load.
+// Core tools (execute_shell, file_operation, web_fetch, etc.) are registered
+// directly in ToolRegistry as always-on tools — they do NOT go here.
+// This array is for pre-configured HTTP API tools only.
+// Keep it minimal — one practical example that shows users what tools are.
 const BUILTIN_TOOLS = [
-  {
-    id: 'builtin-my-location',
-    name: 'Get My Location',
-    description: 'Detect current city, country, timezone and coordinates via IP address. No parameters needed.',
-    category: 'Life Tools',
-    i18nKey: 'tools.builtin.myLocation',
-    type: 'http', method: 'GET',
-    endpoint: 'http://ip-api.com/json?lang=zh-CN&fields=status,country,regionName,city,lat,lon,timezone,isp',
-    headers: {}, bodyTemplate: '{}',
-  },
-  {
-    id: 'builtin-weather-auto',
-    name: 'Current Location Weather',
-    description: 'Auto-detect current location and fetch real-time weather including temperature, humidity, wind and conditions. No parameters needed.',
-    category: 'Life Tools',
-    i18nKey: 'tools.builtin.weatherAuto',
-    type: 'http', method: 'GET',
-    endpoint: 'https://wttr.in/auto?format=j1',
-    headers: {}, bodyTemplate: '{}',
-  },
   {
     id: 'builtin-weather-city',
     name: 'City Weather Lookup',
-    description: 'Get real-time weather for any city. Parameter city: city name in English (e.g. Beijing, Shanghai, Tokyo).',
+    description: 'Get real-time weather for any city. Parameter city: city name in English (e.g. Beijing, Shanghai, Tokyo, London, NewYork).',
     category: 'Life Tools',
     i18nKey: 'tools.builtin.weatherCity',
     type: 'http', method: 'GET',
     endpoint: 'https://wttr.in/{city}?format=j1',
-    headers: {}, bodyTemplate: '{}',
-  },
-  {
-    id: 'builtin-exchange-rates',
-    name: 'Exchange Rate Lookup',
-    description: 'Get live exchange rates for any currency. Parameter base: currency code such as CNY, USD, EUR, JPY, GBP.',
-    category: 'Life Tools',
-    i18nKey: 'tools.builtin.exchangeRates',
-    type: 'http', method: 'GET',
-    endpoint: 'https://open.er-api.com/v6/latest/{base}',
-    headers: {}, bodyTemplate: '{}',
-  },
-  {
-    id: 'builtin-country-info',
-    name: 'Country Information',
-    description: 'Look up details about any country: capital, languages, currency, population, area. Parameter name: country name in English.',
-    category: 'Life Tools',
-    i18nKey: 'tools.builtin.countryInfo',
-    type: 'http', method: 'GET',
-    endpoint: 'https://restcountries.com/v3.1/name/{name}?fields=name,currencies,languages,capital,flag,population,continents,area',
-    headers: {}, bodyTemplate: '{}',
-  },
-  {
-    id: 'builtin-public-holidays',
-    name: 'Public Holidays',
-    description: 'Get public holidays for a country and year. Parameters: year (e.g. 2026), countryCode (CN, JP, US, GB, etc.).',
-    category: 'Life Tools',
-    i18nKey: 'tools.builtin.publicHolidays',
-    type: 'http', method: 'GET',
-    endpoint: 'https://date.nager.at/api/v3/publicholidays/{year}/{countryCode}',
-    headers: {}, bodyTemplate: '{}',
-  },
-  {
-    id: 'builtin-fun-fact',
-    name: 'Random Fun Fact',
-    description: 'Get a random interesting science or trivia fact. No parameters needed.',
-    category: 'Life Tools',
-    i18nKey: 'tools.builtin.funFact',
-    type: 'http', method: 'GET',
-    endpoint: 'https://uselessfacts.jsph.pl/api/v2/facts/random?language=en',
     headers: {}, bodyTemplate: '{}',
   },
 ]

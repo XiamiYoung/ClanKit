@@ -410,6 +410,13 @@ function _parseTokenError(err) {
   //   "prompt is too long: 300000 tokens > 200000 maximum"
   const m2 = msg.match(/prompt is too long:\s*(\d+)\s*tokens\s*>\s*(\d+)/i)
   if (m2) return { maxContext: +m2[2], requestedTokens: +m2[1], messageTokens: +m2[1] }
+  // DeepSeek / OpenAI output-cap format:
+  //   "Invalid max_tokens value, the valid range of max_tokens is [1, 8192]"
+  //   "max_tokens is too large: 16384 > 8192"
+  const m3 = msg.match(/valid range of max_tokens is \[\d+,\s*(\d+)\]/i)
+  if (m3) return { outputCap: +m3[1] }
+  const m4 = msg.match(/max_tokens.*?>\s*(\d+)/i)
+  if (m4) return { outputCap: +m4[1] }
   return null
 }
 
@@ -417,11 +424,16 @@ function _parseTokenError(err) {
  * Make a single LLM call. Returns the text response.
  * On context overflow, throws an error with a `tokenInfo` property for retry logic.
  */
-async function _callLLM(prompt, config, maxTokens = 8192) {
+async function _callLLM(prompt, config, maxTokens = 8192, options = {}) {
   const um = config.utilityModel
   const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
   const isGoogle  = um.provider === 'google'
   const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && !isGoogle
+  // jsonMode: force the model to emit a strictly-valid JSON object. Supported
+  // by OpenAI-compatible APIs (DeepSeek, OpenAI, OpenRouter on many models) and
+  // Gemini (via responseMimeType). Anthropic has no pure JSON mode — callers
+  // should use tool-use for guaranteed JSON there; we silently ignore.
+  const jsonMode = options.jsonMode === true
 
   try {
     if (isGoogle) {
@@ -433,7 +445,10 @@ async function _callLLM(prompt, config, maxTokens = 8192) {
       const response = await gc.getClient().models.generateContent({
         model: um.model,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: maxTokens },
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
+        },
       })
       return response.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || ''
     } else if (isOpenAI) {
@@ -453,6 +468,7 @@ async function _callLLM(prompt, config, maxTokens = 8192) {
         model: um.model,
         ...oaiClient.tokenLimit(maxTokens),
         messages: [{ role: 'user', content: prompt }],
+        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
       })
       return response.choices?.[0]?.message?.content || ''
     } else {
@@ -642,7 +658,7 @@ async function _extractKeyMemories(messageBlock, profile, config, language, cont
   const prompt = isSelf
     ? `Extract key memories and events about "${name}" (the user labeled "Me" in the chat) from their chat history across multiple conversations.
 
-Output in ${lang}. Return a JSON array of memory entries, max 100 items. Each entry:
+Output in ${lang}. Return a JSON object with an "entries" array, max 100 items. Each entry:
 {"section": "<category>", "entry": "<one-line description with date if available>"}
 
 Categories (use these exact section names):
@@ -660,13 +676,13 @@ Rules:
 - Prioritize distinctive/memorable events over mundane daily chat
 - Max 100 entries total, aim for 30-80
 
-Output ONLY the JSON array, no other text.
+Output ONLY the JSON object ({"entries":[...]}), no other text.
 
 ---
 ${sample}`
     : `Extract key memories and events from this chat history between me and "${name}".
 
-Output in ${lang}. Return a JSON array of memory entries, max 100 items. Each entry:
+Output in ${lang}. Return a JSON object with an "entries" array, max 100 items. Each entry:
 {"section": "<category>", "entry": "<one-line description with date if available>"}
 
 Categories (use these exact section names):
@@ -682,26 +698,34 @@ Rules:
 - Prioritize distinctive/memorable events over mundane daily chat
 - Max 100 entries total, aim for 30-80
 
-Output ONLY the JSON array, no other text.
+Output ONLY the JSON object ({"entries":[...]}), no other text.
 
 ---
 ${sample}`
 
-  const raw = await _callLLM(prompt, config, 4096)
+  const raw = await _callLLM(prompt, config, 4096, { jsonMode: true })
   // Parse JSON from the response (handle markdown code blocks)
   let jsonStr = raw
   // Strip markdown code fences
   jsonStr = jsonStr.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
-  // Find the JSON array in the response
-  const arrStart = jsonStr.indexOf('[')
-  const arrEnd = jsonStr.lastIndexOf(']')
-  if (arrStart >= 0 && arrEnd > arrStart) {
-    jsonStr = jsonStr.slice(arrStart, arrEnd + 1)
-  }
 
+  // New schema outputs {"entries":[...]}; older schema (or jsonMode-off fallback)
+  // may still emit bare [...]. Detect and extract the list accordingly.
   let parsed
   try {
-    parsed = JSON.parse(jsonStr)
+    const trimmed = jsonStr.trim()
+    if (trimmed.startsWith('{')) {
+      const obj = JSON.parse(trimmed)
+      parsed = Array.isArray(obj?.entries) ? obj.entries : (Array.isArray(obj) ? obj : [])
+    } else {
+      // Legacy bare array
+      const arrStart = jsonStr.indexOf('[')
+      const arrEnd = jsonStr.lastIndexOf(']')
+      if (arrStart >= 0 && arrEnd > arrStart) {
+        jsonStr = jsonStr.slice(arrStart, arrEnd + 1)
+      }
+      parsed = JSON.parse(jsonStr)
+    }
   } catch (parseErr) {
     // Output was likely truncated at max_tokens — salvage complete entries
     // by scanning for well-formed {"section": "...", "entry": "..."} objects.

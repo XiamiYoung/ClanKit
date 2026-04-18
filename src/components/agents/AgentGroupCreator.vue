@@ -212,6 +212,7 @@ import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
 import { getAgentTemplates, PROFESSIONAL_TEMPLATE_IDS, getEntertainmentTemplateIds } from '../../data/agentTemplates'
 import AppButton from '../common/AppButton.vue'
+import { getCharacterPromptSections, getProfessionalPromptSections } from '../../utils/agentDefinitionPrompts'
 
 const props = defineProps({
   agentType: {
@@ -413,7 +414,7 @@ async function _generateAiSurprisePool() {
     const appLang = config.language || 'en'
     const isZh = appLang.startsWith('zh')
     const examples = isZh ? ZH_SURPRISE_PHRASES : EN_SURPRISE_PHRASES
-    const lang = isZh ? 'Chinese (中文)' : 'English'
+    const lang = isZh ? 'Chinese' : 'English'
 
     const res = await window.electronAPI.enhancePrompt({
       prompt: `You are a creative writing assistant. Below are example prompts that describe fun, imaginative group-chat agent scenarios. Study their style — they are vivid, specific, culturally resonant, and often humorous.
@@ -477,121 +478,11 @@ watch(activeTab, (newVal) => {
 
 function detectLanguage() {
   const appLang = configStore.config.language || 'en'
-  return appLang.startsWith('zh') ? 'Chinese (中文)' : 'English'
+  return appLang.startsWith('zh') ? 'Chinese' : 'English'
 }
 
-function getCharacterPromptSections(lang) {
-  if (lang === 'Chinese (中文)') {
-    return `### 身份定位
-以"你是 [姓名/称谓] — [一句话核心特征]"开头，说明这个角色最本质的一点
-
-### 核心限制
-写一条这个角色绝对无法违反的行为规则——这是让角色有辨识度的灵魂
-要求：必须是可观察的行为（不是内心感受），必须是无条件的（不能出现"通常"、"倾向于"等词）
-参考格式（不要照抄，根据角色写专属的）：
-"你只能用[具体方式]表达，绝无例外，哪怕对方要求你[极端情况]"
-"你绝不会[具体行为]，每一次[相关动作]都必须包含[必要元素]"
-"无论发生什么，你都必须[具体行为]，哪怕[极端情况]也不例外"
-
-### 说话方式
-根据这个角色的表达媒介，定义可直接操作的语言机制——不是性格描述，是执行规则：
-- **必用句式**：2-3个每次都会出现的固定开场词或口头禅（用引号写出原话）
-- **情绪编码对照表**：用什么符号/重复/停顿表达不同情绪，写成查表格式
-- **禁用内容**：至少2条这个角色绝对不会说的具体话或词
-
-### 触发规则
-写6条覆盖完全不同场景的 IF→THEN 规则
-每条写"策略描述"而不是固定台词——描述这个角色会采取什么行动/态度：
-当被夸奖时 →
-当被反驳或挑战时 →
-当对方向自己求助时 →
-当话题冷场或对方沉默时 →
-当对方想结束对话时 →
-当触碰到角色的敏感点时 →
-
-### 示例对话
-3组对话，每组展示不同的触发场景，每组至少2个来回
-示例必须体现上面定义的口头禅、情绪编码和触发规则
-
-### 铁律
-一句话锁死这个角色最不可妥协的特征：
-格式："永远[做什么]。哪怕[极端情况]，也绝不例外。"`
-  }
-  return `### Core Identity
-Start with "You are [Name/Title] — [one defining trait]" — the single most essential thing about this character
-
-### The Core Constraint
-Write ONE absolute behavioral rule this character can NEVER violate — this is what makes them recognizable
-Requirements: must be an OBSERVABLE BEHAVIOR (not an internal feeling); must be UNCONDITIONAL (no "tends to", "usually", "often")
-Reference formats (don't copy — write one specific to this character):
-"You can ONLY [specific method of expression]. No exceptions, not even if [extreme situation]"
-"You NEVER [specific behavior] — every [related action] must contain [required element]"
-"No matter what, you always [specific behavior]. Even if [extreme situation], no exceptions"
-
-### How You Speak
-Don't describe personality — define executable language mechanics:
-- **Signature phrases**: 2-3 fixed openers or catchphrases used in EVERY conversation (write them in quotes)
-- **Emotion encoding**: A reference table — how punctuation/repetition/pauses encode different emotions
-- **Forbidden content**: At least 2 specific things this character would NEVER say
-
-### Trigger Rules
-Write 6 IF→THEN rules — each covering a completely different scenario
-Each rule describes a STRATEGY or APPROACH, not a fixed line:
-When complimented →
-When contradicted or challenged →
-When someone asks for help →
-When the conversation goes silent →
-When someone tries to end the conversation →
-When a sensitive topic is hit →
-
-### Example Exchanges
-3 exchanges, each showing a DIFFERENT trigger scenario, at least 2 turns each
-Must demonstrate the signature phrases, emotion encoding, and trigger rules
-
-### The One Rule
-One sentence locking in this character's most non-negotiable trait:
-Format: "Always [do what]. Even if [extreme situation], no exceptions."`
-}
-function getProfessionalPromptSections(lang) {
-  if (lang === 'Chinese (中文)') {
-    return `### 核心定位
-以"你是 [名字]，[一句话定位]"开头，清晰说明这个Agent的专业身份和服务范围
-
-### 专业能力
-列出具体技能、工具、技术栈和细分领域（使用具体名称，不用泛称）；说明各项能力的深度和侧重点
-
-### 工作规则
-针对这个Agent实际会遇到的具体场景，写3-5条 IF→THEN 行为规则
-格式："当[这个Agent真实会遇到的场景]时，[具体做什么]——不允许[错误替代做法]"
-规则必须专属于这个Agent的工作领域，不能写成通用套话
-
-### 输出格式
-定义这个Agent最常见输出类型的具体结构模板
-根据这个Agent的实际工作产出写，不要写通用格式
-
-### 边界约束
-明确列出：不做什么 / 什么时候拒绝 / 什么时候必须追问才能继续
-必须是这个Agent领域专属的限制，不是"遵循高标准"这种废话`
-  }
-  return `### Core Role
-Start with "You are [Name], [one-line positioning]" — clearly state this agent's professional identity and scope
-
-### Expertise & Tools
-List specific skills, tools, tech stack, and sub-disciplines by name (no vague terms); describe the depth and focus of each area
-
-### Working Rules
-3-5 IF→THEN behavioral rules specific to THIS agent's actual work scenarios
-Format: "When [a real scenario this agent faces], [do what] — never [wrong alternative]"
-Rules must be domain-specific — no generic filler
-
-### Output Format
-Define the exact structural template for this agent's most common deliverable(s)
-Write based on what this agent actually produces — not a generic format
-
-### Hard Constraints
-Explicit list of: what you won't do / when you refuse / what must be clarified before you proceed
-Must be domain-specific — not generic quality platitudes`
-}
+// getCharacterPromptSections and getProfessionalPromptSections are imported
+// from ../../utils/agentDefinitionPrompts — single source of truth.
 function normalizeName(value) {
   return (value || '').trim().toLowerCase()
 }
@@ -685,11 +576,11 @@ ${rawText}`,
 
 function buildFallbackPrompt(agent, lang) {
   const name = (agent?.name || '').trim() || 'Agent'
-  const role = (agent?.role || '').trim() || (lang === 'Chinese (中文)' ? '通用助手' : 'General Assistant')
-  const desc = (agent?.description || '').trim() || (lang === 'Chinese (中文)' ? '专注于提供清晰、实用、有趣的帮助。' : 'Focused on clear, practical, engaging help.')
+  const role = (agent?.role || '').trim() || (lang === 'Chinese' ? '通用助手' : 'General Assistant')
+  const desc = (agent?.description || '').trim() || (lang === 'Chinese' ? '专注于提供清晰、实用、有趣的帮助。' : 'Focused on clear, practical, engaging help.')
   const isLikelyCharacter = /朋友|邻居|同事|孩子|侦探|名人|魔法|幻想|角色|persona|character|friend|neighbor|colleague|kid|wizard|detective/i.test(`${role} ${desc}`)
 
-  if (lang === 'Chinese (中文)') {
+  if (lang === 'Chinese') {
     if (isLikelyCharacter) {
       return `### 核心身份\n你是 ${name} — ${role}\n\n### 核心限制\n保持角色一致，不提供危险或误导内容。\n\n### 说话方式\n语气鲜明但友好，表达简洁，优先可执行建议。\n\n### 触发规则\nIF 用户求助 THEN 给出分步骤建议\nIF 用户质疑 THEN 解释依据并给替代方案\nIF 对话冷场 THEN 主动抛出一个相关有趣问题\nIF 对话结束 THEN 总结一句并友好收尾\n\n### 铁律\n始终在有趣与实用之间保持平衡。`
     }
@@ -888,8 +779,9 @@ async function generateFromAI(descriptionOverride = null) {
     const langInstruction = lang ? `\n\nIMPORTANT: Respond entirely in ${lang}.` : ''
 
     const res = await window.electronAPI.enhancePrompt({
-      prompt: `You are an AI assistant that creates vivid, opinionated, personality-rich agent personas.
-The agents you create must feel like real people the user has actually met or knows from culture — full of quirks, conflict potential, and strong opinions.
+      prompt: `You are a character architect that creates vivid, opinionated, personality-rich agent personas.
+The agents you create must feel like real people — full of internal contradictions, distinct speech patterns, and strong opinions.
+For each agent, DECONSTRUCT their inner operating system: beliefs that drive behavior, reflexive reactions, speech fingerprint, and core internal contradictions.
 Based on the user's description, generate one proposal.
 
 User description: "${desc}"
@@ -988,10 +880,7 @@ Rules:
           agents: dedupedAgents
         }
         if (skippedNames.length > 0) {
-          const lang = detectLanguage()
-          aiWarning.value = lang === 'Chinese (中文)'
-            ? `以下 agent 已存在，已从本次预览中移除：${skippedNames.join('、')}`
-            : `The following agents already exist and were removed from this preview: ${skippedNames.join(', ')}`
+          aiWarning.value = t('agents.groupCreator.agentsExistRemoved', { names: skippedNames.join(locale.value === 'zh' ? '、' : ', ') })
         }
       } else {
         generatedProposal.value = null
@@ -1110,10 +999,7 @@ async function createAgents() {
     }
 
     if (skippedAtCreate.length > 0) {
-      const lang = detectLanguage()
-      aiWarning.value = lang === 'Chinese (中文)'
-        ? `以下 agent 已存在，已跳过创建：${skippedAtCreate.join('、')}`
-        : `The following agents already exist and were skipped: ${skippedAtCreate.join(', ')}`
+      aiWarning.value = t('agents.groupCreator.agentsExistSkipped', { names: skippedAtCreate.join(locale.value === 'zh' ? '、' : ', ') })
       if (createdIds.length > 0) {
         emit('created', createdIds)
       }

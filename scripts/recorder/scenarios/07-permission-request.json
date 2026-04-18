@@ -1,0 +1,147 @@
+{
+  "name": "07-permission-request",
+  "description": "Sandbox mode triggers permission_request for execute_shell. Auto-answered with allow_chat. Proves the permission_request chunk shape and that the tool proceeds after approval.",
+  "model": "claude-haiku-4-5",
+  "messages": [
+    { "role": "user", "content": "Run ls please." }
+  ],
+  "loopConfigOverrides": {
+    "sandboxConfig": {
+      "defaultMode": "sandbox",
+      "sandboxAllowList": [],
+      "dangerBlockList": []
+    }
+  },
+  "autoAnswerPermission": {
+    "decision": "allow_chat",
+    "pattern": "ls"
+  },
+  "toolMocks": {
+    "execute_shell": {
+      "output": [
+        { "stream": "stdout", "text": "readme.md\n" }
+      ],
+      "result": {
+        "content": [
+          { "type": "text", "text": "readme.md\n" }
+        ],
+        "details": {
+          "exit_code": 0,
+          "truncated": false,
+          "totalLines": 1,
+          "totalBytes": 10
+        }
+      }
+    }
+  },
+  "enabledAgents": [],
+  "enabledSkills": [],
+  "agentPrompts": {},
+  "llmResponses": [
+    [
+      {
+        "event": "message_start",
+        "data": {
+          "type": "message_start",
+          "message": {
+            "id": "msg_mock_0007a",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-haiku-4-5",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": { "input_tokens": 50, "output_tokens": 0 }
+          }
+        }
+      },
+      {
+        "event": "content_block_start",
+        "data": {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "tool_use",
+            "id": "toolu_mock_perm_01",
+            "name": "execute_shell",
+            "input": {}
+          }
+        }
+      },
+      {
+        "event": "content_block_delta",
+        "data": {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": { "type": "input_json_delta", "partial_json": "{\"command\":\"ls\"}" }
+        }
+      },
+      {
+        "event": "content_block_stop",
+        "data": { "type": "content_block_stop", "index": 0 }
+      },
+      {
+        "event": "message_delta",
+        "data": {
+          "type": "message_delta",
+          "delta": { "stop_reason": "tool_use", "stop_sequence": null },
+          "usage": { "output_tokens": 12 }
+        }
+      },
+      {
+        "event": "message_stop",
+        "data": { "type": "message_stop" }
+      }
+    ],
+    [
+      {
+        "event": "message_start",
+        "data": {
+          "type": "message_start",
+          "message": {
+            "id": "msg_mock_0007b",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-haiku-4-5",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": { "input_tokens": 80, "output_tokens": 0 }
+          }
+        }
+      },
+      {
+        "event": "content_block_start",
+        "data": {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": { "type": "text", "text": "" }
+        }
+      },
+      {
+        "event": "content_block_delta",
+        "data": {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": { "type": "text_delta", "text": "One file: readme.md" }
+        }
+      },
+      {
+        "event": "content_block_stop",
+        "data": { "type": "content_block_stop", "index": 0 }
+      },
+      {
+        "event": "message_delta",
+        "data": {
+          "type": "message_delta",
+          "delta": { "stop_reason": "end_turn", "stop_sequence": null },
+          "usage": { "output_tokens": 8 }
+        }
+      },
+      {
+        "event": "message_stop",
+        "data": { "type": "message_stop" }
+      }
+    ]
+  ]
+}

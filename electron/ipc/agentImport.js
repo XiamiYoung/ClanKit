@@ -22,6 +22,8 @@ const { logger } = require('../logger')
 
 const { extractWhatsAppMessages, extractPlainTextMessages, classifyMessages, buildMessageBlock, listWhatsAppSenders } = require('../agent/chatImport/chatParser')
 const { buildCombinedPrompt, generatePersona } = require('../agent/chatImport/personaBuilder')
+const { extractSpeechDna } = require('../agent/chatImport/speechDnaExtractor')
+const { extractNuwaSections } = require('../agent/chatImport/nuwaPipeline')
 const wechatDecryptor = require('../agent/chatImport/wechatDecryptor')
 const wechatParser = require('../agent/chatImport/wechatParser')
 
@@ -278,9 +280,242 @@ ipcMain.handle('agent:import-analyze', async (event, { classified, profile, conf
     } catch { /* no cache yet, will use fallback */ }
 
     const result = await generatePersona(fullPrompt, effectiveConfig, (payload) => sendProgress(event, payload), profile, contextWindows, language, analyzeTarget)
+
+    // Phase A + B: run Speech DNA extraction and the 4-phase Nuwa pipeline in parallel.
+    // Both are purely additive — failure is logged but never blocks the legacy persona output.
+    if (result?.success) {
+      sendProgress(event, { step: 'nuwa', progress: 90, message: 'Running 4-phase extraction (Nuwa pipeline)...' })
+
+      const [speechDnaResult, nuwaResult] = await Promise.all([
+        extractSpeechDna(classified, profile, effectiveConfig, language, analyzeTarget)
+          .catch(err => { logger.warn('[analyze] speech DNA failed (non-fatal):', err.message); return null }),
+        extractNuwaSections(classified, profile, effectiveConfig, language, analyzeTarget, (payload) => {
+          sendProgress(event, { step: payload.phase, progress: payload.progress, message: payload.message })
+        }).catch(err => { logger.warn('[analyze] nuwa pipeline failed (non-fatal):', err.message); return null }),
+      ])
+
+      if (speechDnaResult) {
+        result.speechDna = speechDnaResult
+        logger.info(`agent:import-analyze: extracted speech DNA (${speechDnaResult.catchphrases?.length || 0} catchphrases)`)
+      }
+      if (nuwaResult) {
+        if (nuwaResult.sections) result.nuwaSections = nuwaResult.sections
+        if (nuwaResult.evidenceIndex) result.evidenceIndex = nuwaResult.evidenceIndex
+        if (nuwaResult.counts) result.nuwaCounts = nuwaResult.counts
+        if (nuwaResult.accuracyTier) result.accuracyTier = nuwaResult.accuracyTier
+        logger.info(`agent:import-analyze: nuwa pipeline tier=${nuwaResult.accuracyTier?.tier}, counts=${JSON.stringify(nuwaResult.counts || {})}`)
+      }
+    }
+
     return result
   } catch (err) {
     logger.error('agent:import-analyze error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// ─── agent:import-validate-harness ────────────────────────────────────────
+// Phase 4: run hold-out validation. For each (userMessage, realReply) pair,
+// call the utility LLM with the generated persona prompt + speech DNA block
+// and return what the agent would say. The wizard shows real vs generated side
+// by side and collects user ratings.
+
+ipcMain.handle('agent:import-validate-harness', async (event, { agentName, generatedPrompt, speechDna, providerType, modelId, pairs, language, config }) => {
+  try {
+    if (!Array.isArray(pairs) || pairs.length === 0) {
+      return { success: true, results: [] }
+    }
+
+    const effectiveConfig = { ...(config || {}) }
+    if (providerType && modelId) {
+      effectiveConfig.utilityModel = { provider: providerType, model: modelId }
+    }
+
+    // Build the character prompt as a single-shot system simulation. We don't
+    // have a real chat session to run through AgentLoop — that path is too
+    // heavy for validation. Instead we mimic the prompt structure directly:
+    // character block + speech DNA hard constraints + user message.
+    const { formatSpeechDnaBlock } = require('../agent/chatImport/speechDnaExtractor')
+    const speechBlock = speechDna ? formatSpeechDnaBlock(speechDna) : ''
+    const zh = language === 'zh'
+
+    const characterHeader = zh
+      ? `你就是 ${agentName}。你不是 AI，是真实的人。不要打破角色，不要用 AI 客服式措辞。用对方的语言回复。下面是你的人格：
+
+${generatedPrompt}`
+      : `You ARE ${agentName}. You are a real person, not an AI. Never break character. Never use AI-assistant phrasings. Reply in the user's language. Your persona:
+
+${generatedPrompt}`
+
+    const fullSystem = speechBlock ? `${characterHeader}\n\n---\n${speechBlock}` : characterHeader
+
+    const { _callLLM } = require('../agent/chatImport/personaBuilder')
+
+    // Run all pairs in parallel, capped at 6 concurrent to avoid rate limits
+    const BATCH = 6
+    const results = []
+    for (let i = 0; i < pairs.length; i += BATCH) {
+      const batch = pairs.slice(i, i + BATCH)
+      sendProgress(event, {
+        step: 'harness',
+        progress: 10 + Math.round((i / pairs.length) * 85),
+        message: zh ? `正在生成第 ${i + 1}-${Math.min(i + BATCH, pairs.length)}/${pairs.length} 条回复...` : `Generating replies ${i + 1}-${Math.min(i + BATCH, pairs.length)}/${pairs.length}...`,
+      })
+      const batchResults = await Promise.all(
+        batch.map(async (pair) => {
+          try {
+            // Build per-pair prompt. If this pair has previous attempts
+            // (from earlier rounds the user rated 👎), inject them as
+            // feedback so the model tries a different approach this time.
+            let feedbackBlock = ''
+            const prev = Array.isArray(pair.previousAttempts)
+              ? pair.previousAttempts.filter(a => a.rating === 'dislike')
+              : []
+            if (prev.length > 0) {
+              const attempts = prev.map((a, k) => {
+                let line = zh ? `尝试 ${k + 1}: "${a.generatedReply}"` : `Attempt ${k + 1}: "${a.generatedReply}"`
+                if (a.reason) line += zh ? ` — 用户反馈: "${a.reason}"` : ` — feedback: "${a.reason}"`
+                return line
+              }).join('\n')
+              feedbackBlock = zh
+                ? `\n\n以下是你之前的回复，用户认为不像本人：\n${attempts}\n\n这次换一种回法，避开之前的问题。`
+                : `\n\nYour previous replies were marked "not like them" by the user:\n${attempts}\n\nTry a different approach this time — avoid the issues above.`
+            }
+            const fullPrompt = `${fullSystem}\n\n---\nThe user just said: "${pair.userMessage}"${feedbackBlock}\n\nReply as ${agentName} would — no explanation, no stage directions, just the actual reply text.`
+            const raw = await _callLLM(fullPrompt, effectiveConfig, 512)
+            return {
+              userMessage: pair.userMessage,
+              realReply: pair.realReply,
+              generatedReply: (raw || '').trim().replace(/^["']|["']$/g, ''),
+              timestamp: pair.timestamp || null,
+            }
+          } catch (err) {
+            return {
+              userMessage: pair.userMessage,
+              realReply: pair.realReply,
+              generatedReply: '',
+              error: err.message,
+              timestamp: pair.timestamp || null,
+            }
+          }
+        })
+      )
+      results.push(...batchResults)
+    }
+
+    sendProgress(event, { step: 'harness', progress: 100, message: zh ? '完成' : 'Done' })
+    return { success: true, results }
+  } catch (err) {
+    logger.error('agent:import-validate-harness error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// ─── agent:import-write-harness ───────────────────────────────────────────
+// Persist validation scores to {soulsDir}/{type}/{agentId}.harness.json
+// after the agent is created. Non-blocking; purely informational for now.
+
+ipcMain.handle('agent:import-write-harness', async (_event, { agentId, agentType, harness }) => {
+  try {
+    if (!agentId || !harness) return { success: true, written: false }
+
+    const ds = require('../lib/dataStore')
+    const fs = require('fs')
+    const type = agentType === 'user' || agentType === 'users' ? 'users' : 'system'
+    const dir = path.join(ds.paths().SOULS_DIR, type)
+    fs.mkdirSync(dir, { recursive: true })
+
+    const filePath = path.join(dir, `${agentId}.harness.json`)
+    fs.writeFileSync(filePath, JSON.stringify(harness, null, 2), 'utf8')
+
+    logger.info(`agent:import-write-harness: wrote ${filePath}`)
+    return { success: true, written: true, filePath }
+  } catch (err) {
+    logger.error('agent:import-write-harness error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// ─── agent:import-write-nuwa-sections ────────────────────────────────────
+// Persist Nuwa-pipeline sections to the agent's soul file (structured bulk
+// write) and the evidence index to a sidecar JSON. Called by the wizard after
+// agent creation. Merges into the existing soul template — preserves any
+// runtime memory already written.
+
+ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, agentName, agentType, sections, evidenceIndex }) => {
+  try {
+    if (!agentId || !sections || typeof sections !== 'object') {
+      return { success: true, written: false }
+    }
+
+    const ds = require('../lib/dataStore')
+    const fs = require('fs')
+    const type = agentType === 'user' || agentType === 'users' ? 'users' : 'system'
+    const soulsDir = ds.paths().SOULS_DIR
+    const dir = path.join(soulsDir, type)
+    fs.mkdirSync(dir, { recursive: true })
+
+    const { createTemplate, parseSoul, serializeSoul, updateTimestamp } = require('../agent/tools/SoulTool')
+
+    const soulPath = path.join(dir, `${agentId}.md`)
+    let content
+    if (fs.existsSync(soulPath)) {
+      content = fs.readFileSync(soulPath, 'utf8')
+    } else {
+      content = createTemplate(agentName || agentId, type === 'users' ? 'user' : 'system')
+    }
+
+    const { headerLines, sections: soulSections } = parseSoul(content)
+
+    // For each nuwa section, REPLACE (not merge) the content. These sections are
+    // owned by the import pipeline and rewritten wholesale on re-import.
+    for (const [sectionName, sectionBody] of Object.entries(sections)) {
+      if (!sectionBody || !sectionBody.trim()) continue
+      const bodyLines = sectionBody.split('\n')
+      // Trailing blank line so the next section reads cleanly
+      if (bodyLines[bodyLines.length - 1] !== '') bodyLines.push('')
+      soulSections.set(sectionName, bodyLines)
+    }
+
+    updateTimestamp(headerLines)
+    const newContent = serializeSoul(headerLines, soulSections)
+    fs.writeFileSync(soulPath, newContent, 'utf8')
+
+    // Write evidence index sidecar
+    if (evidenceIndex) {
+      const evidencePath = path.join(dir, `${agentId}.evidence.json`)
+      fs.writeFileSync(evidencePath, JSON.stringify(evidenceIndex, null, 2), 'utf8')
+    }
+
+    logger.info(`agent:import-write-nuwa-sections: wrote ${soulPath}`)
+    return { success: true, written: true, soulPath }
+  } catch (err) {
+    logger.error('agent:import-write-nuwa-sections error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// ─── agent:import-write-speech-dna ────────────────────────────────────────
+// Persist the extracted speech DNA to {soulsDir}/{type}/{agentId}.speech.json.
+// Called by the wizard after agent creation, in parallel with writeMemories.
+
+ipcMain.handle('agent:import-write-speech-dna', async (_event, { agentId, agentType, speechDna }) => {
+  try {
+    if (!agentId || !speechDna) return { success: true, written: false }
+
+    const ds = require('../lib/dataStore')
+    const fs = require('fs')
+    const type = agentType === 'user' || agentType === 'users' ? 'users' : 'system'
+    const dir = path.join(ds.paths().SOULS_DIR, type)
+    fs.mkdirSync(dir, { recursive: true })
+
+    const filePath = path.join(dir, `${agentId}.speech.json`)
+    fs.writeFileSync(filePath, JSON.stringify(speechDna, null, 2), 'utf8')
+
+    logger.info(`agent:import-write-speech-dna: wrote ${filePath}`)
+    return { success: true, written: true, filePath }
+  } catch (err) {
+    logger.error('agent:import-write-speech-dna error', err.message)
     return { success: false, error: err.message }
   }
 })
@@ -307,7 +542,7 @@ ipcMain.handle('agent:import-cleanup', async () => {
 // ─── agent:import-save-history ────────────────────────────────────────────
 // Save full chat history locally and index it for keyword search at chat time.
 
-ipcMain.handle('agent:import-save-history', async (_event, { agentId, messages, contactName }) => {
+ipcMain.handle('agent:import-save-history', async (event, { agentId, messages, contactName }) => {
   try {
     if (!agentId || !Array.isArray(messages) || messages.length === 0) {
       return { success: true, saved: 0 }
@@ -318,12 +553,26 @@ ipcMain.handle('agent:import-save-history', async (_event, { agentId, messages, 
     const fs = require('fs')
     fs.mkdirSync(agentMemDir, { recursive: true })
 
-    // Index for history search (so agent can find relevant history at chat time)
+    // Index for history search (BM25, legacy path — so agent can find relevant history at chat time)
     const { HistoryIndex } = require('../memory/HistoryIndex')
     const histIdx = new HistoryIndex(ds.paths().AGENT_MEMORY_DIR)
     histIdx.indexImportedHistory(messages, agentId, contactName)
 
-    return { success: true, saved: messages.length }
+    // Phase C: build Reply Bank (semantic vector index of trigger→reply pairs).
+    // Runs AFTER BM25 indexing so the response to the renderer isn't blocked on
+    // the slower embedding step. The wizard already shows a toast; we stream
+    // progress via the same agent:import-progress channel.
+    const replyBankMod = require('../memory/ReplyBank')
+    const replyBank = replyBankMod.getInstance(ds.paths().AGENT_MEMORY_DIR)
+    const buildResult = await replyBank.build(agentId, messages, contactName, (payload) => {
+      sendProgress(event, { step: `replybank-${payload.step}`, progress: payload.progress, message: payload.message })
+    })
+
+    return {
+      success: true,
+      saved: messages.length,
+      replyBank: buildResult,
+    }
   } catch (err) {
     logger.error('agent:import-save-history error', err.message)
     return { success: false, error: err.message }

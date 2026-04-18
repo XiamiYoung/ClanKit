@@ -133,6 +133,12 @@ class AgentLoop {
       chatAllowList: config.chatAllowList || [],
     })
 
+    // tool_choice: read from provider settings. Supported values:
+    //   'auto'     — model decides (default)
+    //   'required' — model MUST call at least one tool (maps to Anthropic 'any')
+    //   'none'     — tools listed but model must not call them
+    this.toolChoice = (config.provider?.settings?.toolChoice || 'auto').toLowerCase()
+
     logger.agent('AgentLoop init', {
       provider: config.provider?.type || (this.isOpenAI ? 'openai' : 'anthropic'),
       model: this.anthropicClient.resolveModel(),
@@ -140,6 +146,7 @@ class AgentLoop {
       isGoogle: this.isGoogle,
       ctxWindow: config.modelContextWindow || null,
       permissionMode: config.chatPermissionMode || 'inherit',
+      toolChoice: this.toolChoice,
     })
   }
 
@@ -424,8 +431,53 @@ class AgentLoop {
         agentPrompts.analysisTargetAgentType || 'system'
       )
       this.toolRegistry.registerTool('analyze_agent_history', analysisTool)
-      // Inject LLM config for parallel analysis (analyze_all action)
-      this.toolRegistry.setAnalysisConfig(this.config)
+      // Inject LLM config for parallel analysis (analyze_all action).
+      // IMPORTANT: prefer the agent's OWN model over the global utility model.
+      // The Analyst agent's chosen provider/model is what the user explicitly
+      // picked — don't silently downgrade to utility model for heavy analysis.
+      const agentProvider = this.config.provider?.type
+      const agentModel    = this.config.customModel
+      const analysisConfig = { ...this.config }
+      // Preserve the ORIGINAL global utilityModel from config.json so that
+      // skill modelHints with strategy:"chat" can resolve to the real helper
+      // model, not the agent-override set below.
+      analysisConfig._configUtilityModel = this.config.utilityModel
+      if (agentProvider && agentModel) {
+        analysisConfig.utilityModel = { provider: agentProvider, model: agentModel }
+      }
+      this.toolRegistry.setAnalysisConfig(analysisConfig)
+      // Stash analysisTool reference for modelHints injection after skill load.
+      this._pendingAnalysisTool = analysisTool
+    }
+
+    // Auto-register tools declared by enabled built-in skills. Each skill can
+    // ship a tool.js in its source directory alongside SKILL.md — the loader
+    // requires it, instantiates the class with runtime context, and registers
+    // it. agentLoop no longer needs to know about specific skill tools.
+    if (Array.isArray(enabledSkills) && enabledSkills.length > 0) {
+      try {
+        const { loadSkillTools } = require('../lib/skillToolLoader')
+        const skillCtx = {
+          dataPath: this.config.dataPath || '',
+          docPath:  this.config.DoCPath  || '',
+          // For analysis chats the "target" (person being analyzed) is the
+          // subject; for non-analysis chats these fall back to the agent itself.
+          agentId:   agentPrompts?.analysisTargetAgentId   || agentPrompts?.systemAgentId || 'unknown',
+          agentName: agentPrompts?.analysisTargetAgentName || agentPrompts?.userAgentName || 'unknown',
+          agentType: agentPrompts?.analysisTargetAgentType || 'system',
+          language:  this.config.language || 'en',
+        }
+        const skillResult = loadSkillTools(enabledSkills, skillCtx, this.toolRegistry)
+        // Forward any modelHints declared in skill manifests to the analysis tool
+        // so it can pick a faster/cheaper model for structured-extraction work.
+        if (this._pendingAnalysisTool && skillResult?.modelHints
+            && Object.keys(skillResult.modelHints).length > 0) {
+          this._pendingAnalysisTool.setModelHints(skillResult.modelHints)
+        }
+        this._pendingAnalysisTool = null
+      } catch (err) {
+        logger.error('[agentLoop] skill tool load failed:', err.message)
+      }
     }
 
     // Set compaction config for soul file auto-compression
@@ -453,6 +505,24 @@ class AgentLoop {
     for (const skill of enabledSkills || []) {
       if (typeof skill !== 'string' && skill.systemPrompt) {
         this.skillPrompts.set(skill.id, skill.systemPrompt)
+      }
+    }
+
+    // ── Auto-preload skills in analysis mode ──────────────────────────────
+    // For analysis chats, skill content is CRITICAL (report templates, visual
+    // style, section requirements). If we wait for the LLM to call load_skill
+    // it may forget — and the generated report will be missing entire sections.
+    // Preload ALL skills upfront into loadedSkills so the system prompt includes
+    // their full content from iteration 1.
+    if (agentPrompts?.analysisTargetAgentId) {
+      for (const [id, prompt] of this.skillPrompts) {
+        this.loadedSkills.set(id, prompt)
+      }
+      if (this.skillPrompts.size > 0) {
+        logger.agent('[agentLoop] analysis mode: auto-preloaded skills', {
+          count: this.skillPrompts.size,
+          ids: [...this.skillPrompts.keys()],
+        })
       }
     }
 
@@ -486,12 +556,45 @@ class AgentLoop {
       userMd = readFileIfExists(path.join(memoryDir, 'users', userId, 'USER.md'))
     }
 
-    const systemPrompt = this.buildSystemPrompt(
+    let systemPrompt = this.buildSystemPrompt(
       enabledAgents, enabledSkills, agentPrompts,
       userSoulContent, systemSoulContent, participantSouls,
       { userMd },
       this.ragContext
     )
+
+    // ── Reply Bank few-shot injection (Phase C) ──────────────────────────
+    // If this system agent has a built Reply Bank (from chat import), retrieve
+    // the top 3 semantically-similar past replies for the current user message
+    // and inject them as a few-shot block at the end of the system prompt.
+    // Purely additive — silent no-op for agents without a reply bank.
+    try {
+      const activeAgentId = agentPrompts?.systemAgentId
+      if (activeAgentId) {
+        const ds = require('../lib/dataStore')
+        const replyBankMod = require('../memory/ReplyBank')
+        const replyBank = replyBankMod.getInstance(ds.paths().AGENT_MEMORY_DIR)
+        if (replyBank.has(activeAgentId)) {
+          // Find the most recent user message content
+          const lastUser = [...messages].reverse().find(m => m.role === 'user')
+          const queryText = typeof lastUser?.content === 'string'
+            ? lastUser.content
+            : Array.isArray(lastUser?.content)
+              ? lastUser.content.filter(b => b.type === 'text').map(b => b.text).join(' ')
+              : ''
+          if (queryText && queryText.trim().length >= 2) {
+            const examples = await replyBank.retrieve(activeAgentId, queryText, 3)
+            if (examples && examples.length > 0) {
+              const block = replyBankMod.formatFewShotBlock(examples)
+              if (block) systemPrompt += '\n\n---\n' + block
+            }
+          }
+        }
+      }
+    } catch (rbErr) {
+      // Reply bank injection must never block LLM call — log and continue
+      try { require('../logger').logger.warn('[agentLoop] reply bank injection failed:', rbErr.message) } catch {}
+    }
 
     // If a per-agent assigned task was dispatched, replace the last user message
     // with just that task so the LLM never sees other agents' task sections.
@@ -522,13 +625,13 @@ class AgentLoop {
     if (this.skillPrompts.size > 0) {
       allToolsAnthropic.push({
         name: 'load_skill',
-        description: 'Load the full instructions for an active skill. Call this when the user\'s request is related to a skill listed in ACTIVE SKILLS. Returns the complete skill guide.',
+        description: 'Load the full step-by-step instructions for one of your ACTIVE SKILLS. You MUST call this BEFORE attempting any task whose description matches a skill in the ACTIVE SKILLS list — the skill body contains authoritative procedures, exact file paths, JSON schemas, and rules that you cannot recall from memory and MUST NOT guess. Pass the skill id exactly as shown in the ACTIVE SKILLS list. Returns the complete skill guide as a string, which you then follow verbatim.',
         input_schema: {
           type: 'object',
           properties: {
             skill_id: {
               type: 'string',
-              description: 'The ID of the skill to load (from the ACTIVE SKILLS list)'
+              description: 'The ID of the skill to load, copied verbatim from the ACTIVE SKILLS list in the system prompt.'
             }
           },
           required: ['skill_id']
@@ -790,6 +893,13 @@ class AgentLoop {
 
         if (allTools.length > 0) {
           createParams.tools = allTools
+          // Apply tool_choice from provider settings (Anthropic format)
+          if (this.toolChoice === 'required' || this.toolChoice === 'any') {
+            createParams.tool_choice = { type: 'any' }
+          } else if (this.toolChoice === 'none') {
+            createParams.tool_choice = { type: 'none' }
+          }
+          // 'auto' is the API default — omit to keep it implicit
         }
 
         // ── Snapshot context for inspector ──
@@ -933,6 +1043,7 @@ class AgentLoop {
         logger.agent('stream start', {
           iteration,
           provider: this.isGoogle ? 'google' : (this.config.provider?.type || (this.isOpenAI ? 'openai-compat' : 'anthropic')),
+          model: model || this.config.customModel || this.config.provider?.model || 'unknown',
           maxTokens: configuredMaxTokens,
           msgs: createParams.messages.length,
           tools: allTools.length,
@@ -960,6 +1071,13 @@ class AgentLoop {
           }
           if (geminiFunctionDeclarations.length > 0) {
             generateConfig.config.tools = [{ functionDeclarations: geminiFunctionDeclarations }]
+            // Apply tool_choice from provider settings (Google/Gemini format)
+            if (this.toolChoice === 'required' || this.toolChoice === 'any') {
+              generateConfig.config.toolConfig = { functionCallingConfig: { mode: 'ANY' } }
+            } else if (this.toolChoice === 'none') {
+              generateConfig.config.toolConfig = { functionCallingConfig: { mode: 'NONE' } }
+            }
+            // 'auto' → mode: 'AUTO' which is the default — omit
           }
 
           // Tool calling loop — Gemini may request multiple rounds of function calls
@@ -1117,7 +1235,16 @@ class AgentLoop {
             messages: openaiMessages,
             stream: true,
           }
-          if (allTools.length > 0) openaiParams.tools = allTools
+          if (allTools.length > 0) {
+            openaiParams.tools = allTools
+            // Apply tool_choice from provider settings (OpenAI format)
+            if (this.toolChoice === 'required' || this.toolChoice === 'any') {
+              openaiParams.tool_choice = 'required'
+            } else if (this.toolChoice === 'none') {
+              openaiParams.tool_choice = 'none'
+            }
+            // 'auto' is the API default — omit to keep it implicit
+          }
 
           // Image-capable models (e.g. OpenRouter Gemini image-preview) need
           // modalities: ["text", "image"] and non-streaming mode for image output.
@@ -1439,6 +1566,30 @@ class AgentLoop {
             })
           }
 
+          // ── Inline JSON tool-call fallback for weak OpenAI-compat models ──
+          // Some cheap / local models output tool calls as inline JSON text
+          // instead of proper delta.tool_calls. Detect and extract them so
+          // tool execution still fires. Only runs when NO native tool calls
+          // were found and the text contains something that looks like a call.
+          if (openaiToolCalls.length === 0 && finalText.length > 0 && allToolsAnthropic.length > 0) {
+            const validToolNames = new Set(allToolsAnthropic.map(t => t.name))
+            const extracted = this._extractInlineToolCalls(finalText, validToolNames)
+            if (extracted.length > 0) {
+              logger.agent('Inline tool-call fallback triggered', { count: extracted.length, names: extracted.map(e => e.name) })
+              for (const ex of extracted) {
+                const syntheticId = `inline-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+                assistantContent.push({ type: 'tool_use', id: syntheticId, name: ex.name, input: ex.arguments })
+                openaiToolCalls.push({
+                  id: syntheticId,
+                  type: 'function',
+                  function: { name: ex.name, arguments: JSON.stringify(ex.arguments) }
+                })
+              }
+              // Override stop reason so the tool dispatch block below fires
+              stopReason = 'tool_calls'
+            }
+          }
+
           // Extract images from the last streaming chunk's message field
           // OpenRouter image models (Gemini) return images in message.images[]
           // which only appears in the final chunk, not in streaming deltas
@@ -1490,7 +1641,7 @@ class AgentLoop {
           if (streamedReasoningContent) nativeAssistant.reasoning_content = streamedReasoningContent
           conversationMessages.push(nativeAssistant)
 
-          logger.agent('OpenAI stream end', { iteration, stopReason, tokens: this.contextManager.getMetrics() })
+          logger.agent('OpenAI stream end', { iteration, model: model || this.config.customModel || 'unknown', stopReason, tokens: this.contextManager.getMetrics() })
           logger.debug('[AgentLoop] LLM text output', { iteration })
 
           // ── Handle tool_calls stop reason ──
@@ -1813,7 +1964,7 @@ class AgentLoop {
                 conversationMessages.push({ role: 'assistant', content: assistantContent })
               }
 
-              logger.agent('stream end', { iteration, stopReason, tokens: this.contextManager.getMetrics() })
+              logger.agent('stream end', { iteration, model: model || this.config.customModel || 'unknown', stopReason, tokens: this.contextManager.getMetrics() })
               streamOk = true // success — exit retry loop
 
             } catch (streamIterErr) {
@@ -2083,6 +2234,88 @@ class AgentLoop {
    */
   _toGeminiContents(systemPrompt, messages) {
     return mc.toGeminiContents(systemPrompt, messages)
+  }
+
+  /**
+   * Inline tool-call fallback for weak OpenAI-compat models.
+   *
+   * Some cheap / local models output tool calls as plain JSON text instead of
+   * using the proper tool_calls response field. This method scans the model's
+   * text output for JSON objects that look like tool calls and extracts them.
+   *
+   * Recognised patterns (all case-insensitive on key names):
+   *   { "name": "<tool>", "arguments": { ... } }
+   *   { "name": "<tool>", "parameters": { ... } }
+   *   { "function": { "name": "<tool>", "arguments": { ... } } }
+   *
+   * Only tool names present in `validToolNames` are accepted — this prevents
+   * false positives on arbitrary JSON in the model's response.
+   *
+   * @param {string}     text           The model's full text output.
+   * @param {Set<string>} validToolNames Set of registered tool names.
+   * @returns {Array<{name: string, arguments: object}>}
+   */
+  _extractInlineToolCalls(text, validToolNames) {
+    if (!text || validToolNames.size === 0) return []
+
+    const results = []
+    // Find all top-level JSON objects in the text (braces matching)
+    const jsonCandidates = []
+    let depth = 0, start = -1
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === '{') {
+        if (depth === 0) start = i
+        depth++
+      } else if (text[i] === '}') {
+        depth--
+        if (depth === 0 && start >= 0) {
+          jsonCandidates.push(text.slice(start, i + 1))
+          start = -1
+        }
+      }
+    }
+
+    for (const candidate of jsonCandidates) {
+      let obj
+      try { obj = JSON.parse(candidate) } catch { continue }
+      if (!obj || typeof obj !== 'object') continue
+
+      // Pattern 1: { "name": "<tool>", "arguments"|"parameters": { ... } }
+      if (obj.name && validToolNames.has(obj.name)) {
+        const args = obj.arguments || obj.parameters || obj.input || {}
+        results.push({ name: obj.name, arguments: typeof args === 'object' ? args : {} })
+        continue
+      }
+
+      // Pattern 2: { "function": { "name": "<tool>", "arguments": { ... } } }
+      const fn = obj.function || obj.tool_call
+      if (fn && fn.name && validToolNames.has(fn.name)) {
+        const args = fn.arguments || fn.parameters || fn.input || {}
+        let parsedArgs = args
+        if (typeof args === 'string') {
+          try { parsedArgs = JSON.parse(args) } catch { parsedArgs = {} }
+        }
+        results.push({ name: fn.name, arguments: typeof parsedArgs === 'object' ? parsedArgs : {} })
+        continue
+      }
+
+      // Pattern 3: { "tool_calls": [{ "function": { "name": "...", ... } }] }
+      if (Array.isArray(obj.tool_calls)) {
+        for (const tc of obj.tool_calls) {
+          const tcFn = tc.function || tc
+          if (tcFn.name && validToolNames.has(tcFn.name)) {
+            const args = tcFn.arguments || tcFn.parameters || tcFn.input || {}
+            let parsedArgs = args
+            if (typeof args === 'string') {
+              try { parsedArgs = JSON.parse(args) } catch { parsedArgs = {} }
+            }
+            results.push({ name: tcFn.name, arguments: typeof parsedArgs === 'object' ? parsedArgs : {} })
+          }
+        }
+      }
+    }
+
+    return results
   }
 }
 

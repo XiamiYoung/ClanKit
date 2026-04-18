@@ -8,6 +8,7 @@ const os = require('os')
 const { ipcMain, app } = require('electron')
 const { logger } = require('../logger')
 const ds = require('../lib/dataStore')
+const { isBuiltinSkillId } = require('../lib/builtinSkills')
 
 /**
  * Normalize path separators on Windows.
@@ -46,13 +47,53 @@ function parseFrontmatter(mdContent) {
   const raw = match[1]
   const body = match[2]
   const meta = {}
-  for (const line of raw.split('\n')) {
+  const lines = raw.split('\n')
+  let currentKey = null
+  let multilineMode = null  // '>' folded, '|' literal, 'indent' plain indented
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    // New key: value pair (unindented line with colon)
     const m = line.match(/^(\w[\w-]*):\s*(.*)$/)
     if (m) {
-      const val = m[2].replace(/^["']|["']$/g, '').trim()
-      meta[m[1]] = val
+      const key = m[1]
+      let val = m[2].replace(/^["']|["']$/g, '').trim()
+      // Check for YAML multiline indicators
+      if (val === '>' || val === '|') {
+        currentKey = key
+        multilineMode = val === '>' ? 'folded' : 'literal'
+        meta[key] = ''
+      } else if (val === '') {
+        // Empty value — might be followed by indented lines
+        currentKey = key
+        multilineMode = 'indent'
+        meta[key] = ''
+      } else {
+        meta[key] = val
+        currentKey = null
+        multilineMode = null
+      }
+    } else if (currentKey && (line.startsWith('  ') || line.startsWith('\t'))) {
+      // Indented continuation line for current multiline value
+      const trimmed = line.trim()
+      if (multilineMode === 'literal') {
+        meta[currentKey] += (meta[currentKey] ? '\n' : '') + trimmed
+      } else {
+        // folded or indent: join with space (like YAML > folding)
+        meta[currentKey] += (meta[currentKey] ? ' ' : '') + trimmed
+      }
+    } else {
+      // Non-indented, non-key line — stop multiline accumulation
+      currentKey = null
+      multilineMode = null
     }
   }
+
+  // Final trim on all values
+  for (const key of Object.keys(meta)) {
+    if (typeof meta[key] === 'string') meta[key] = meta[key].trim()
+  }
+
   return { meta, body }
 }
 
@@ -126,7 +167,22 @@ function register() {
               const stats = await fs.promises.stat(skillDir)
               installedAt = stats.mtimeMs ? new Date(stats.mtimeMs).toISOString() : null
             } catch {}
-            return { id: entry.name, name: entry.name, displayName, description, summary, path: skillDir, installedAt }
+            // Built-in marker: id matches one of the skills shipped in
+            // electron/agent/builtin-skills/. Checked via builtinSkills helper.
+            // Also accept a manifest.json override with { builtin: true } for
+            // future third-party built-ins, though the source-tree check is
+            // the primary mechanism.
+            let isBuiltin = isBuiltinSkillId(entry.name)
+            if (!isBuiltin) {
+              try {
+                const manifestPath = path.join(skillDir, 'manifest.json')
+                if (fs.existsSync(manifestPath)) {
+                  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+                  if (manifest && manifest.builtin === true) isBuiltin = true
+                }
+              } catch {}
+            }
+            return { id: entry.name, name: entry.name, displayName, description, summary, path: skillDir, installedAt, isBuiltin }
           })
       )
       return skills
@@ -196,6 +252,13 @@ function register() {
 
   ipcMain.handle('skills:delete-skill', async (_, skillPath) => {
     try {
+      // Built-in skills are auto-reinstalled on next startup, so deleting
+      // them here is both confusing (they come back) and unsafe (an agent
+      // might be mid-task relying on one). Refuse deletion at the IPC layer.
+      const skillId = path.basename(normalizePath(skillPath || ''))
+      if (skillId && isBuiltinSkillId(skillId)) {
+        return { error: 'Cannot delete a built-in skill.' }
+      }
       await fs.promises.rm(skillPath, { recursive: true, force: true })
       return { success: true }
     } catch (err) {
@@ -225,7 +288,14 @@ function register() {
             const skillMd = path.join(dir, entry.name, 'SKILL.md')
             try {
               const content = await fs.promises.readFile(skillMd, 'utf8')
-              return { id: entry.name, name: entry.name, systemPrompt: content }
+              const { meta } = parseFrontmatter(content)
+              return {
+                id: entry.name,
+                name: entry.name,
+                displayName: meta.name || '',
+                description: meta.description || '',
+                systemPrompt: content
+              }
             } catch { return null }
           })
       )

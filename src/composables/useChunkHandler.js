@@ -283,13 +283,17 @@ export function useChunkHandler({
 
           msg.streaming = false
           if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
-          // If no text content: distinguish user-initiated stop from real error.
-          // When user pressed stop/escape, silently remove the empty placeholder.
-          // Otherwise mark as error (the agent produced nothing — likely a backend error).
-          const hasTextContent = msg.content || msg.planData || (msg.segments || []).some(s => s.type === 'text' && s.content)
-          if (!hasTextContent) {
+          // Must match useInterrupt._hasActivity — pending tool calls (no output) don't count.
+          const hasActivity = !!(msg.content?.trim()) || msg.planData ||
+            (msg.segments || []).some(s => {
+              if (s.type === 'text') return !!s.content?.trim()
+              if (s.type === 'tool') return s.output !== undefined
+              if (s.type === 'agent_step') return false
+              return true
+            })
+          if (!hasActivity) {
             if (collaborationCancelled.value) {
-              // User-initiated stop — silently remove empty placeholder
+              // User-initiated stop on a truly empty placeholder — silently remove
               const rmIdx = targetChat.messages.indexOf(msg)
               if (rmIdx !== -1) targetChat.messages.splice(rmIdx, 1)
             } else {
@@ -611,6 +615,20 @@ export function useChunkHandler({
               errorDetail: chunk.error,
               timestamp: new Date().toISOString(),
             })
+          }
+        }
+      }
+
+      // Finalize ALL still-streaming messages for this chat. This is a safety net
+      // matching _applyChunk's send_message_complete handler — without it, messages
+      // created by _applyChunk while ChatsView was unmounted (e.g. minibar) can
+      // retain streaming=true forever since agent_end only finalizes the message
+      // registered in perChatStreamingMsgId.
+      if (targetChat?.messages) {
+        for (const m of targetChat.messages) {
+          if (m.streaming && !m.isWaitingIndicator) {
+            m.streaming = false
+            if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
           }
         }
       }
