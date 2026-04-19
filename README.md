@@ -63,10 +63,10 @@ Important: the full app behavior only works in the Electron window. Browser-only
 
 ## Release
 
-Pushing a version tag triggers GitHub Actions to build installers for Windows and macOS automatically.
+Pushing a version tag triggers GitHub Actions to build installers for Windows and macOS automatically, and publish them as a GitHub Release.
 
-    git tag v1.0.0
-    git push origin v1.0.0
+    npm version patch
+    git push && git push --tags
 
 ## Packaging
 
