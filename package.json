@@ -1,6 +1,6 @@
 {
   "name": "clankai",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "ClankAI - Multi-LLM Desktop Application",
   "license": "GPL-3.0-only",
   "main": "electron/main.js",
@@ -54,7 +54,9 @@
       {
         "from": "resources/win-x64/clank-core.exe",
         "to": "core/clank-core.exe",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
