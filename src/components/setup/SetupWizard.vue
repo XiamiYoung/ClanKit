@@ -518,14 +518,7 @@ const showBaseUrl = computed(() => {
 
 const availableModels = computed(() => {
   if (!wizardProviderId.value) return []
-  let models = modelsStore.getModelsForProvider(wizardProviderId.value)
-  // For DeepSeek, sort reasoner models first, then chat models
-  if (selectedProviderType.value === 'deepseek' && models.length > 1) {
-    const reasonerModels = models.filter(m => /reasoner/i.test(m.id))
-    const otherModels = models.filter(m => !/reasoner/i.test(m.id))
-    models = [...reasonerModels, ...otherModels]
-  }
-  return models
+  return modelsStore.getModelsForProvider(wizardProviderId.value)
 })
 
 const canTest = computed(() => {
@@ -586,13 +579,7 @@ async function handleFetchModels() {
     if (!ok) {
       fetchError.value = t('setupWizard.testFailed')
     } else {
-      let models = modelsStore.getModelsForProvider(wizardProviderId.value)
-      // For DeepSeek, sort reasoner models first, then chat models
-      if (selectedProviderType.value === 'deepseek' && models.length > 1) {
-        const reasonerModels = models.filter(m => /reasoner/i.test(m.id))
-        const otherModels = models.filter(m => !/reasoner/i.test(m.id))
-        models = [...reasonerModels, ...otherModels]
-      }
+      const models = modelsStore.getModelsForProvider(wizardProviderId.value)
       if (models.length) {
         // Auto-select a balanced model using litellm pricing data
         try {
@@ -876,9 +863,9 @@ const tourSteps = computed(() => [
   { route: '/personas', title: t('setupWizard.tourAgentsUser'),   desc: t('setupWizard.tourAgentsUserDesc') },
   { route: '/skills', title: t('setupWizard.tourSkills'), desc: t('setupWizard.tourSkillsDesc') },
   { route: '/tools', title: t('setupWizard.tourTools'), desc: t('setupWizard.tourToolsDesc') },
-  { route: '/agents', title: t('setupWizard.tourAssignReminder'), desc: t('setupWizard.tourAssignReminderDesc') },
   { route: '/mcp', title: t('setupWizard.tourMcp'), desc: t('setupWizard.tourMcpDesc') },
   { route: '/knowledge', title: t('setupWizard.tourKnowledge'), desc: t('setupWizard.tourKnowledgeDesc') },
+  { route: '/agents', title: t('setupWizard.tourAssignReminder'), desc: t('setupWizard.tourAssignReminderDesc') },
   { route: '/news', title: t('setupWizard.tourNews'), desc: t('setupWizard.tourNewsDesc') },
   { route: '/notes', title: t('setupWizard.tourDocs'), desc: t('setupWizard.tourDocsDesc') },
 ])

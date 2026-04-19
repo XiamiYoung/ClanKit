@@ -545,6 +545,13 @@ export const useChatsStore = defineStore('chats', () => {
     activeChatId.value = null
   }
 
+  // Expand ancestor folders of the currently active chat so it is visible in
+  // the sidebar tree. Called when re-entering the /chats view to re-reveal the
+  // active chat even if the user had manually collapsed its parent folder.
+  function revealActiveChat() {
+    if (activeChatId.value) _expandAncestorFolders(activeChatId.value)
+  }
+
   // ── Folder CRUD ───────────────────────────────────────────────────────────
 
   function _countFolders(nodes) {
@@ -1413,7 +1420,7 @@ export const useChatsStore = defineStore('chats', () => {
     chatTree, chats, activeChatId, activeFolderId, activeChat, isLoading,
     unreadChatIds, completedChatIds, pendingPermissionChatIds,
     loadChats, createChat, createChatFromHistory, removeChat, renameChat,
-    setActiveChat, clearActiveChat, addMessage, updateLastAssistantMessage, setChatAgent,
+    setActiveChat, clearActiveChat, revealActiveChat, addMessage, updateLastAssistantMessage, setChatAgent,
     setChatProvider, setChatModel, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
     loadOlderSegments, hasOlderSegments,
     setGroupAgents, toggleGroupMode, setGroupAgentOverride,

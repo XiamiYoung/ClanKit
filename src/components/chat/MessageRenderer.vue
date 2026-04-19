@@ -388,11 +388,11 @@
           <span v-for="n in 5" :key="n" class="wave-bar" :style="`--bar-color:${wavebarColor.bar}; --bar-glow:${wavebarColor.glow}; animation-delay:${(n-1)*0.13}s;`" />
         </div>
         <div v-if="cachedTokens" class="flex items-center gap-1.5 wavebar-tokens" :style="`font-family:'JetBrains Mono',monospace; font-size:0.7rem; line-height:1.25rem; --wb-color:${wavebarColor.bar}; --wb-bright:${wavebarColor.glow};`">
-          <span>in {{ formatTokenCount(cachedTokens.input) }}</span>
+          <span>{{ t('chats.tokenIn') }} {{ formatTokenCount(cachedTokens.input) }}</span>
           <span style="opacity:0.5;">·</span>
-          <span>out {{ formatTokenCount(cachedTokens.output) }}</span>
+          <span>{{ t('chats.tokenOut') }} {{ formatTokenCount(cachedTokens.output) }}</span>
           <span style="opacity:0.5;">·</span>
-          <span style="font-weight:600;">total {{ formatTokenCount(cachedTokens.total) }}</span>
+          <span style="font-weight:600;">{{ t('chats.tokenTotal') }} {{ formatTokenCount(cachedTokens.total) }}</span>
         </div>
       </div>
 
@@ -433,7 +433,7 @@
       <span>{{ t('chats.cookedFor') }} {{ formatDuration(message.durationMs) }}</span>
       <template v-if="finalTokens">
         <span style="opacity:0.5;">·</span>
-        <span style="font-family:'JetBrains Mono',monospace; color:#A09890;">in {{ formatTokenCount(finalTokens.input) }} · out {{ formatTokenCount(finalTokens.output) }} · <span style="font-weight:600;">total {{ formatTokenCount(finalTokens.total) }}</span></span>
+        <span style="font-family:'JetBrains Mono',monospace; color:#A09890;">{{ t('chats.tokenIn') }} {{ formatTokenCount(finalTokens.input) }} · {{ t('chats.tokenOut') }} {{ formatTokenCount(finalTokens.output) }} · <span style="font-weight:600;">{{ t('chats.tokenTotal') }} {{ formatTokenCount(finalTokens.total) }}</span></span>
       </template>
     </div>
     </template>

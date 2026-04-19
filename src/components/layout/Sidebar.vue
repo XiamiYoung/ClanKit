@@ -1054,13 +1054,13 @@ nav {
 }
 
 .nav-section-label {
-  font-size: var(--fs-caption);
+  font-size: 0.875rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #9CA3AF;
+  color: #374151;
   padding: 0 0.5rem;
   font-family: 'Inter', sans-serif;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .nav-item {

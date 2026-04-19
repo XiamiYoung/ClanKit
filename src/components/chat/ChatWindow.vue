@@ -107,11 +107,12 @@
           </div>
 
           <!-- Assistant avatar + name chip -->
-          <div v-else-if="msg.role === 'assistant'" class="cw-msg-avatar-col"
-            @mouseenter="showAvatarTooltip($event, msg)"
-            @mouseleave="hideAvatarTooltip"
-          >
-            <div class="cw-msg-avatar-wrap">
+          <div v-else-if="msg.role === 'assistant'" class="cw-msg-avatar-col">
+            <div
+              class="cw-msg-avatar-wrap"
+              @mouseenter="showAvatarTooltip($event, msg)"
+              @mouseleave="hideAvatarTooltip"
+            >
               <img v-if="getSystemAvatar(msg)" :src="getSystemAvatar(msg)" alt="" class="cw-msg-avatar-img" />
               <div v-else class="cw-msg-avatar-fallback system">
                 <svg style="width:22px;height:22px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -257,11 +258,12 @@
           </div>
 
           <!-- User avatar + name chip (per-message: preserves original user agent after switch) -->
-          <div v-if="msg.role === 'user'" class="cw-msg-avatar-col"
-            @mouseenter="showAvatarTooltip($event, msg)"
-            @mouseleave="hideAvatarTooltip"
-          >
-            <div class="cw-msg-avatar-wrap">
+          <div v-if="msg.role === 'user'" class="cw-msg-avatar-col">
+            <div
+              class="cw-msg-avatar-wrap"
+              @mouseenter="showAvatarTooltip($event, msg)"
+              @mouseleave="hideAvatarTooltip"
+            >
               <img v-if="getUserAvatar(msg)" :src="getUserAvatar(msg)" alt="" class="cw-msg-avatar-img" />
               <div v-else class="cw-msg-avatar-fallback user">
                 <svg style="width:22px;height:22px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

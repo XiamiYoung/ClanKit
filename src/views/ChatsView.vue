@@ -132,7 +132,7 @@
               <svg class="chat-root-chevron" :style="{ transform: rootExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="9 18 15 12 9 6"/>
               </svg>
-              <span class="chat-root-label">All Chats</span>
+              <span class="chat-root-label">{{ t('chats.allChatsRootLabel', { count: chatsStore.chats.length }) }}</span>
             </div>
             <!-- Fold/Unfold all folders button — only visible when folders exist -->
             <button
@@ -291,7 +291,7 @@
         <!-- ── Context Window Usage Bar (always visible) ────────────────────── -->
         <div class="chat-context-bar-wrap">
         <div class="chat-context-bar">
-          <span style="color:#6B7280; font-size:var(--fs-small); white-space:nowrap;">Context</span>
+          <span style="color:#6B7280; font-size:var(--fs-small); white-space:nowrap;">{{ t('chats.context') }}</span>
           <!-- Progress bar -->
           <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:#E5E5EA;">
             <div
@@ -309,7 +309,7 @@
             {{ Math.round(activeContextMetrics.percentage) }}%
           </span>
           <span style="color:#9CA3AF; font-size:var(--fs-small); white-space:nowrap;">
-            {{ formatTokenCount(activeContextMetrics.inputTokens) }} in / {{ formatTokenCount(activeContextMetrics.outputTokens) }} out
+            {{ formatTokenCount(activeContextMetrics.inputTokens) }} {{ t('chats.tokenIn') }} / {{ formatTokenCount(activeContextMetrics.outputTokens) }} {{ t('chats.tokenOut') }}
           </span>
           <!-- Inspect button — always clickable -->
           <button
@@ -1946,6 +1946,8 @@ watch(
 
 // KeepAlive lifecycle: fires every time the user navigates back to /chats
 onActivated(() => {
+  rootExpanded.value = true
+  chatsStore.revealActiveChat()
   if (voiceStore.isCallActive && voiceStore.isPip) voiceStore.setPip(false)
 })
 
