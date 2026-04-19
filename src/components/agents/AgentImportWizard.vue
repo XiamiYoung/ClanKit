@@ -843,10 +843,15 @@ async function doExtract() {
 
   // User agent + WeChat: multi-contact extraction
   if (isUserAgent.value && source.value === 'wechat' && selectedContactWxids.value.size > 0) {
-    // Only send wxid — strips reactive proxies and avatar data URIs (avoids IPC clone errors)
+    // Strip reactive proxies / avatar data URIs; keep only the fields downstream needs.
+    // displayName carries the partner label so self-analysis can attribute messages
+    // to "Alice"/"Mom" rather than raw wxids in the generated report.
     const contacts = contactList.value
       .filter(c => selectedContactWxids.value.has(c.wxid))
-      .map(c => ({ wxid: c.wxid }))
+      .map(c => ({
+        wxid: c.wxid,
+        displayName: (c.remark || c.nickname || c.wxid || '').toString().trim() || c.wxid,
+      }))
     const params = { source: 'wechat', contacts, dbDir: resolvedDbDir }
     const res = await window.electronAPI.agentImport.extractMessages(params)
     unsub()

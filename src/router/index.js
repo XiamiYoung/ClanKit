@@ -17,6 +17,7 @@ export default createRouter({
     { path: '/news',      component: NewsView },
     { path: '/chats',     component: ChatsView },
     { path: '/agents',    component: AgentsView },
+    { path: '/personas',  component: AgentsView },
     { path: '/skills',    component: SkillsView },
     { path: '/knowledge', component: KnowledgeView },
     { path: '/mcp',       component: McpView },

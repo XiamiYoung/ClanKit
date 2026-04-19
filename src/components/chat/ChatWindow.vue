@@ -1,5 +1,7 @@
 <template>
   <div class="cw-root">
+    <!-- Messages area wrapper (relative positioning context for floating scroll buttons) -->
+    <div class="cw-messages-wrap">
     <!-- Messages area -->
     <div ref="messagesEl" class="cw-messages" @scroll="onScroll">
       <!-- Loading state -->
@@ -272,8 +274,9 @@
         </div>
       </template>
 
-      <!-- Floating scroll buttons (always visible when the chat has messages) -->
-      <div v-if="chat?.messages?.length" class="cw-scroll-buttons">
+    </div>
+      <!-- Floating scroll buttons (always visible in bottom-right corner) -->
+      <div class="cw-scroll-buttons">
         <button
           class="cw-scroll-btn-float"
           @click="scrollToTop"
@@ -1014,6 +1017,15 @@ defineExpose({ scrollToBottom })
   overflow: hidden;
 }
 
+/* ── Messages area wrapper (relative positioning for floating scroll buttons) ── */
+.cw-messages-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
 /* ── Messages area ── */
 .cw-messages {
   flex: 1;
@@ -1552,13 +1564,11 @@ defineExpose({ scrollToBottom })
 .cw-btn.send.active:hover { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); }
 .cw-btn:disabled { cursor: not-allowed; }
 
-/* ── Floating scroll buttons ── */
+/* ── Floating scroll buttons (always bottom-right of messages area) ── */
 .cw-scroll-buttons {
-  position: sticky;
-  bottom: 0.75rem;
-  align-self: flex-end;
-  margin-right: 0.75rem;
-  margin-top: -2.5rem;
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.25rem;
   z-index: 20;
   display: flex;
   flex-direction: column;

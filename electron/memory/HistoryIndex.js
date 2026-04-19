@@ -30,11 +30,16 @@ CREATE TABLE IF NOT EXISTS messages (
   content TEXT NOT NULL,
   timestamp TEXT,
   sender TEXT,
+  partner TEXT,
   created_at INTEGER DEFAULT (strftime('%s','now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id);
 CREATE INDEX IF NOT EXISTS idx_messages_ts ON messages(timestamp);
+-- idx_messages_partner intentionally NOT in SCHEMA: for legacy DBs whose
+-- messages table pre-dates the partner column, running this CREATE INDEX
+-- would throw "no such column: partner" before the ALTER TABLE migration
+-- can run. The index is created inside the migration block below instead.
 
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
   content,
@@ -78,6 +83,28 @@ class HistoryIndex {
       // Enable WAL mode for better concurrent read/write
       db.pragma('journal_mode = WAL')
       db.exec(SCHEMA)
+
+      // Idempotent migration: earlier versions of this schema lacked the
+      // `partner` column (partner identity was inferred via time-proximity
+      // heuristics). Add it if missing so multi-partner self-analysis can
+      // attribute each message correctly. Safe to run on every open.
+      //
+      // Two-step ordering matters: ALTER TABLE must run BEFORE any CREATE
+      // INDEX that references the partner column, otherwise SQLite throws
+      // "no such column: partner" on legacy DBs. The index is then always
+      // ensured (IF NOT EXISTS makes it a no-op for DBs where it already
+      // exists — including brand new DBs and previously-migrated DBs).
+      try {
+        const cols = db.prepare("PRAGMA table_info(messages)").all()
+        const hasPartner = cols.some(c => c.name === 'partner')
+        if (!hasPartner) {
+          db.exec("ALTER TABLE messages ADD COLUMN partner TEXT")
+          logger.info('[HistoryIndex] migrated: added partner column', { agentId })
+        }
+        db.exec("CREATE INDEX IF NOT EXISTS idx_messages_partner ON messages(partner)")
+      } catch (mErr) {
+        logger.warn('[HistoryIndex] partner-column migration failed', { agentId, error: mErr.message })
+      }
 
       this._dbCache.set(agentId, db)
       return db
@@ -152,14 +179,24 @@ class HistoryIndex {
 
       const name = contactName || 'Them'
       const insert = db.prepare(
-        'INSERT INTO messages (chat_id, role, content, timestamp, sender) VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO messages (chat_id, role, content, timestamp, sender, partner) VALUES (?, ?, ?, ?, ?, ?)'
       )
       const insertMany = db.transaction((msgs) => {
         for (const m of msgs) {
           if (!m.content || !m.content.trim()) continue
           const role = m.sender === 'me' ? 'user' : 'assistant'
-          const sender = m.sender === 'me' ? 'Me' : name
-          insert.run(chatId, role, m.content.trim(), m.timestamp || null, sender)
+          // `sender` column: "Me" for user messages, partner display name for
+          // partner messages. Keeps visual/display semantics intact.
+          // `partner` column: the partner this message belongs to, regardless
+          // of sender. For multi-partner (self-analysis) imports this is
+          // m.partner_name (set at extraction time). For single-partner legacy
+          // imports it's the contactName parameter — so both user's and
+          // partner's messages in that conversation are attributed to the
+          // single partner. This lets getMessagesWithPartner/getPartnerStats
+          // slice accurately without time-proximity heuristics.
+          const partner = m.partner_name || name
+          const sender = m.sender === 'me' ? 'Me' : partner
+          insert.run(chatId, role, m.content.trim(), m.timestamp || null, sender, partner)
         }
       })
       insertMany(messages)
@@ -224,6 +261,152 @@ class HistoryIndex {
       }
     } catch (err) {
       logger.error('[HistoryIndex] getStats error', { agentId, error: err.message })
+      return null
+    }
+  }
+
+  /**
+   * Get per-partner statistics for user-agent (self-analysis) imports.
+   * Returns an array of { partner, count, first, last, avg_len } sorted by
+   * count descending. Partner = sender column (with 'Me' filtered out).
+   * For single-partner imports this returns one row; for multi-partner
+   * imports (self-analysis) it returns one row per conversation partner —
+   * enabling relationships_map / identity_modes / perceived_views sections.
+   *
+   * @param {string} agentId
+   * @returns {Array<{partner:string, count:number, first:string, last:string, avg_len:number}>}
+   */
+  getPartnerStats(agentId) {
+    try {
+      const db = this._getDb(agentId)
+      if (!db) return []
+
+      // Total message count per partner (user msgs + partner msgs both count
+      // as "messages in the conversation with this partner"). Uses the
+      // partner column for accurate attribution; falls back to legacy rows
+      // that predate the partner column via sender-based grouping.
+      const rows = db.prepare(`
+        SELECT COALESCE(partner, sender) AS partner,
+               COUNT(*) AS count,
+               MIN(timestamp) AS first,
+               MAX(timestamp) AS last,
+               AVG(length(content)) AS avg_len
+        FROM messages
+        WHERE chat_id = 'imported-history'
+          AND COALESCE(partner, sender) IS NOT NULL
+          AND COALESCE(partner, sender) != 'Me'
+        GROUP BY COALESCE(partner, sender)
+        ORDER BY count DESC
+      `).all()
+
+      return rows.map(r => ({
+        partner: r.partner,
+        count: r.count,
+        first: r.first,
+        last: r.last,
+        avg_len: Math.round(r.avg_len || 0),
+      }))
+    } catch (err) {
+      logger.error('[HistoryIndex] getPartnerStats error', { agentId, error: err.message })
+      return []
+    }
+  }
+
+  /**
+   * Sample messages from the user's conversation with a specific partner.
+   * Used by self-analysis to derive identity_modes (how user behaves with
+   * this partner) and perceived_views (how this partner treats user).
+   *
+   * @param {string} agentId
+   * @param {string} partnerName  Exact match against sender column
+   * @param {number} limit        Max messages to return (default 100)
+   * @param {string} direction    'both' (default) | 'me' | 'them'
+   *                              'me' = user's msgs to this partner only
+   *                              'them' = this partner's msgs to user only
+   * @returns {Array<{sender:string, content:string, timestamp:string}>}
+   */
+  getMessagesWithPartner(agentId, partnerName, limit = 100, direction = 'both') {
+    try {
+      const db = this._getDb(agentId)
+      if (!db || !partnerName) return []
+
+      // Exact partner-column match — accurate for rows imported after the
+      // partner column was added. Legacy rows without partner value fall
+      // back to sender-based matching (single-partner old imports stored
+      // partner identity in the sender column).
+      let whereClause
+      if (direction === 'me') {
+        whereClause = `sender = 'Me' AND COALESCE(partner, sender) = ?`
+      } else if (direction === 'them') {
+        whereClause = `sender != 'Me' AND COALESCE(partner, sender) = ?`
+      } else {
+        whereClause = `COALESCE(partner, sender) = ?`
+      }
+
+      const rows = db.prepare(`
+        SELECT sender, content, timestamp
+        FROM messages
+        WHERE chat_id = 'imported-history' AND ${whereClause}
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(partnerName, limit)
+
+      return rows.reverse()  // chronological
+    } catch (err) {
+      logger.error('[HistoryIndex] getMessagesWithPartner error', { agentId, error: err.message })
+      return []
+    }
+  }
+
+  /**
+   * Get messages grouped by year for growth-arc analysis.
+   * Returns { [year]: count } plus per-year sample messages for LLM chunking.
+   *
+   * @param {string} agentId
+   * @param {number} samplesPerYear  how many representative messages to keep per year (default 80)
+   * @returns {{ counts: Object<string,number>, samples: Object<string,Array> } | null}
+   */
+  getYearlyBuckets(agentId, samplesPerYear = 80) {
+    try {
+      const db = this._getDb(agentId)
+      if (!db) return null
+
+      const yearRows = db.prepare(`
+        SELECT substr(timestamp, 1, 4) AS year, COUNT(*) AS cnt
+        FROM messages
+        WHERE chat_id = 'imported-history' AND timestamp IS NOT NULL
+        GROUP BY year
+        ORDER BY year ASC
+      `).all()
+
+      if (yearRows.length === 0) return null
+
+      const counts = {}
+      const samples = {}
+      for (const { year, cnt } of yearRows) {
+        if (!year) continue
+        counts[year] = cnt
+        // Sample: take chronologically-spaced messages (every Nth) to cover the
+        // year, skew slightly toward user's own messages (growth signal).
+        const step = Math.max(1, Math.floor(cnt / samplesPerYear))
+        const rows = db.prepare(`
+          SELECT sender, content, timestamp
+          FROM messages
+          WHERE chat_id = 'imported-history'
+            AND timestamp IS NOT NULL
+            AND substr(timestamp, 1, 4) = ?
+          ORDER BY timestamp ASC
+        `).all(year)
+        const picked = []
+        for (let i = 0; i < rows.length && picked.length < samplesPerYear; i += step) {
+          picked.push(rows[i])
+        }
+        samples[year] = picked
+      }
+
+      return { counts, samples }
+    } catch (err) {
+      logger.error('[HistoryIndex] getYearlyBuckets error', { agentId, error: err.message })
       return null
     }
   }
@@ -410,12 +593,24 @@ class HistoryIndex {
         LIMIT 200
       `).all(stride)
 
+      // Preserve the raw sender label (either 'Me' or the partner's display
+      // name). Consumers decide how to render — system-agent code treats any
+      // non-'Me' as the single partner; user-agent self-analysis needs the
+      // actual partner names to attribute multi-partner samples correctly.
+      // Keep `senderKind` as a normalized 'me'|'them' flag for any callers
+      // that only need direction without the name.
+      const normalize = (r) => ({
+        content: r.content,
+        timestamp: r.timestamp,
+        sender: r.sender || 'them',                        // raw sender (name)
+        senderKind: r.sender === 'Me' ? 'me' : 'them',     // direction flag
+      })
       return {
-        long: long.map(r => ({ content: r.content, timestamp: r.timestamp, sender: r.sender === 'Me' ? 'me' : 'them' })),
-        conflict: conflict.map(r => ({ content: r.content, timestamp: r.timestamp, sender: r.sender === 'Me' ? 'me' : 'them' })),
-        sweet: sweet.map(r => ({ content: r.content, timestamp: r.timestamp, sender: r.sender === 'Me' ? 'me' : 'them' })),
-        recent: recent.map(r => ({ content: r.content, timestamp: r.timestamp, sender: r.sender === 'Me' ? 'me' : 'them' })),
-        strided: strided.map(r => ({ content: r.content, timestamp: r.timestamp, sender: r.sender === 'Me' ? 'me' : 'them' })),
+        long: long.map(normalize),
+        conflict: conflict.map(normalize),
+        sweet: sweet.map(normalize),
+        recent: recent.map(normalize),
+        strided: strided.map(normalize),
         totalMessages: total,
       }
     } catch (err) {

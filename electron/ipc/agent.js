@@ -29,6 +29,32 @@ const { accumulateUsage, accumulateUtilityUsage } = require('./store')
 const { queryRAG } = require('./knowledge')
 const { createChunkAccumulator } = require('../agent/chunkAccumulator')
 const { normalizeAgents, normalizeTools, normalizeMcpServers } = require('../agent/dataNormalizers')
+const notifier = require('../lib/notifier')
+
+/**
+ * Fire-and-forget completion notification. Finds the last assistant message in
+ * trackMessages, looks up its agent name, and sends a system notification. The
+ * notifier already suppresses when the user is looking at the same chat.
+ */
+function _fireChatCompletionNotification(chatId, trackMessages, agentsById, fullCfg) {
+  try {
+    if (!Array.isArray(trackMessages) || trackMessages.length === 0) return
+    let last = null
+    for (let i = trackMessages.length - 1; i >= 0; i--) {
+      const m = trackMessages[i]
+      if (m?.role === 'assistant' && m?.agentId) { last = m; break }
+    }
+    if (!last) return
+    const agent = agentsById?.[last.agentId]
+    const agentName = agent?.name || 'Agent'
+    const finalText = typeof last.content === 'string' ? last.content : ''
+    // Fire-and-forget — never block the send_message_complete return path.
+    notifier.notifyChatComplete({ chatId, agentName, finalText, config: fullCfg })
+      .catch(err => logger.warn('[notifier] notifyChatComplete rejected:', err.message))
+  } catch (err) {
+    logger.warn('[notifier] _fireChatCompletionNotification error:', err.message)
+  }
+}
 const {
   detectModelProviderType: _detectModelProviderType,
   isProviderActive: _isProviderActive,
@@ -2324,6 +2350,14 @@ ipcMain.handle('agent:send-message', async (event, {
               if (!event.sender.isDestroyed()) {
                 event.sender.send('agent:chunk', { chatId, chunk: { ...chunk, agentId: run.agentId, agentName: run.agentName } })
               }
+              if (chunk?.type === 'permission_request') {
+                notifier.notifyPermissionRequest({
+                  chatId,
+                  agentName: run.agentName,
+                  toolName:  chunk.toolName,
+                  config:    fullCfg,
+                })
+              }
               accumulator.onChunk(chunk)
             },
             attachments,
@@ -2660,6 +2694,7 @@ ipcMain.handle('agent:send-message', async (event, {
         if (!event.sender.isDestroyed()) {
           event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_complete', stickyTargetIds: newStickyTargetIds } })
         }
+        _fireChatCompletionNotification(chatId, trackMessages, agentsById, fullCfg)
         return
       }
 
@@ -2744,6 +2779,7 @@ ipcMain.handle('agent:send-message', async (event, {
       if (!event.sender.isDestroyed()) {
         event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_complete', stickyTargetIds: newStickyTargetIds } })
       }
+      _fireChatCompletionNotification(chatId, trackMessages, agentsById, fullCfg)
     } catch (err) {
       logger.error('agent:send-message orchestration error', { chatId, error: err.message })
       if (!event.sender.isDestroyed()) {

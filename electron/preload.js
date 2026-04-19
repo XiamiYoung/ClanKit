@@ -292,6 +292,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('window:maximized', handler)
       return () => ipcRenderer.removeListener('window:maximized', handler)
     },
+    // Report route + active chat to main process so completion notifications
+    // can suppress when the user is already looking at the relevant chat.
+    setUIState: (payload) => ipcRenderer.invoke('window:set-ui-state', payload),
+  },
+
+  // ── Completion Notifications ───────────────────────────────────────────────
+  // Click-through from notification → renderer opens the target chat.
+  onOpenChat: (cb) => {
+    ipcRenderer.removeAllListeners('notifier:open-chat')
+    ipcRenderer.on('notifier:open-chat', (_e, data) => cb(data))
+    return () => ipcRenderer.removeAllListeners('notifier:open-chat')
   },
 
   // App info (no IPC needed — available in preload context)

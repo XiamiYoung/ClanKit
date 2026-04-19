@@ -38,11 +38,11 @@ const logger = {
 // ─── Block count spec (validation) ───
 
 const BLOCK_COUNT_SPEC = {
-  deep_analysis_body:  { className: 'dim-row',           count: 28 },
+  deep_analysis_body:  { className: 'dim-row',           range: [14, 18] },
   ways_body:           { className: 'way-row',           count: 10 },
   theatre_acts:        { className: 'theatre-act',       count: 10 },
   subtext_rows:        { className: 'subtext-row',       count: 6 },
-  quotes_grid:         { className: 'quote-card',        count: 20 },
+  quotes_grid:         { className: 'quote-card',        range: [10, 20] },
   compat_rows:         { className: 'compat-row',        count: 8 },
   ocean_bars:          { className: 'ocean-bar-row',     count: 5 },
   ocean_details:       { className: 'ocean-detail-card', count: 6 },
@@ -65,6 +65,7 @@ const BLOCK_COUNT_SPEC = {
   gift_rows:           { className: 'relation-row',      range: [5, 8] },
   timeline_rows:       { className: 'tl-row',            range: [4, 6] },
   relation_modes:      { className: 'relation-row',      range: [3, 6] },
+  unique_memories:     { className: 'memory-card',       range: [10, 20] },
 }
 
 // ─── Utilities ───
@@ -139,37 +140,28 @@ const GROWTH_GRADIENTS = [
   'linear-gradient(90deg,#7c3aed,#a78bfa)',
 ]
 
-// ─── 28 dimension spec ───
+// ─── Dimension spec (16 unique dims — compressed from 28 because of heavy
+// source-data overlap. Each row in the rendered table pulls from ONE unique
+// schema field family so the content doesn't repeat the same phrases 4-5
+// times. See buildDeepAnalysis for the 1:1 dim-to-source mapping.) ───
 
 const DIM_SPEC = [
-  { zh: '认知底色', en: 'Cognitive Foundation', color: '#4f46e5', sub: 'mbti' },
-  { zh: '思想的深度', en: 'Depth of Thought', color: '#6366f1' },
-  { zh: '自我叙事', en: 'Self-Narrative', color: '#8b5cf6' },
-  { zh: '情感结构', en: 'Emotional Architecture', color: '#7c3aed', sub: 'attachment' },
-  { zh: '阴影面 · 被压抑的另一半', en: 'Shadow Self', color: '#1e1b4b' },
-  { zh: '内心的渴望点', en: 'Core Desires', color: '#f59e0b' },
-  { zh: '内心的矛盾 · 三层隐蔽错位', en: 'Inner Conflicts', color: '#b91c1c' },
-  { zh: '他最深的恐惧', en: 'Deepest Fear', color: '#991b1b' },
-  { zh: '原型角色', en: 'Archetype', color: '#0369a1' },
-  { zh: '价值观层级', en: 'Value Hierarchy', color: '#10b981' },
-  { zh: '追求的理想 · 北极星', en: 'Guiding Star', color: '#065f46' },
-  { zh: '关系定位', en: 'Relationship Positioning', color: '#06b6d4', sub: 'chemistry' },
-  { zh: '孤独感的形状', en: 'Shape of Loneliness', color: '#475569' },
-  { zh: '被误解的核心', en: 'Misunderstood Core', color: '#334155' },
-  { zh: '最深的善意 · 延迟显影的爱', en: 'Deepest Kindness', color: '#b45309' },
-  { zh: '防御机制 · 三重防线', en: 'Defense Mechanisms', color: '#ea580c' },
-  { zh: '压力响应 · 三级警报', en: 'Stress Response', color: '#ef4444' },
-  { zh: '能量分配 · 刚性电池', en: 'Energy Allocation', color: '#facc15' },
-  { zh: '身体信号 · 替他说话的器官', en: 'Body Signals', color: '#84cc16' },
-  { zh: '决策风格 · 三步结构', en: 'Decision-Making Style', color: '#3b82f6' },
-  { zh: '金钱心理 · 自由的量化载体', en: 'Money Psychology', color: '#16a34a' },
-  { zh: '对时间的感知 · 线性投射', en: 'Time Perception', color: '#0891b2' },
-  { zh: '沟通指纹', en: 'Communication Fingerprint', color: '#ec4899' },
-  { zh: '盲点与禁区', en: 'Blind Spots', color: '#6b7280' },
-  { zh: '核心张力 · 显性矛盾', en: 'Core Tension', color: '#dc2626' },
-  { zh: '成长的可能性 · 转折钥匙', en: 'Growth Potential', color: '#059669' },
-  { zh: '星座运势', en: 'Zodiac Insights', color: '#eab308', sub: 'zodiac' },
-  { zh: '时间维度 · 十年弧光', en: 'Temporal Arc', color: '#10b981' },
+  { zh: '认知底色 · MBTI',           en: 'Cognitive · MBTI',         color: '#4f46e5', sub: 'mbti' },
+  { zh: '开放性 · 好奇的边界',        en: 'Openness',                  color: '#6366f1' },
+  { zh: '尽责性 · 决策与执行',        en: 'Conscientiousness',         color: '#3b82f6' },
+  { zh: '情感结构 · 依恋风格',        en: 'Attachment Architecture',   color: '#7c3aed', sub: 'attachment' },
+  { zh: '自我叙事 · 核心画像',        en: 'Self Narrative',            color: '#8b5cf6' },
+  { zh: '核心矛盾 · 意外的一面',      en: 'Core Contradiction',        color: '#b91c1c' },
+  { zh: '原型关键词',                  en: 'Archetypal Keywords',       color: '#0369a1' },
+  { zh: '追求与北极星',                en: 'Aspirations & Guiding Star', color: '#065f46' },
+  { zh: '恐惧与警示',                  en: 'Fears & Red Flags',         color: '#991b1b' },
+  { zh: '关系定位 · 化学反应',        en: 'Relationship Positioning',  color: '#06b6d4', sub: 'chemistry' },
+  { zh: '潜台词解码',                  en: 'Subtext Decoded',           color: '#ec4899' },
+  { zh: '价值观与偏好',                en: 'Values & Preferences',      color: '#10b981' },
+  { zh: '防御机制 · 不要碰的雷',      en: 'Defense Mechanisms',        color: '#ea580c' },
+  { zh: '身心健康 · 黄灯信号',        en: 'Wellbeing & Caution Signs', color: '#facc15' },
+  { zh: '成长潜力',                    en: 'Growth Potential',          color: '#059669' },
+  { zh: '星座运势',                    en: 'Zodiac',                    color: '#eab308', sub: 'zodiac' },
 ]
 
 // ─── Stats normalization ───
@@ -257,7 +249,7 @@ function identifySenders(sendersRaw, agentName) {
 
 // ─── D scalar builder ───
 
-function buildDScalars(sections, stats, agentName, lang) {
+function buildDScalars(sections, stats, agentName, lang, isSelf) {
   const s = sections || {}
   const st = stats || {}
   const pc = s.persona_card || {}
@@ -400,6 +392,43 @@ function buildDScalars(sections, stats, agentName, lang) {
     hour_heatmap_json: JSON.stringify(hourData),
     weekday_json: JSON.stringify(weekdayData),
     health_trend_json: JSON.stringify(healthTrend),
+    // Month labels for the health trend X-axis. Derived from the latest date
+    // in stats.date_range and walking backward N months so labels always
+    // match the actual 12-month window the trend data represents.
+    health_trend_months_json: (() => {
+      const n = Array.isArray(healthTrend) ? healthTrend.length : 12
+      const ref = dateLast ? new Date(dateLast) : new Date()
+      if (isNaN(ref.getTime())) return JSON.stringify([])
+      const labels = []
+      for (let i = n - 1; i >= 0; i--) {
+        const d = new Date(ref.getFullYear(), ref.getMonth() - i, 1)
+        const y = d.getFullYear()
+        const m = String(d.getMonth() + 1).padStart(2, '0')
+        labels.push(`${y}-${m}`)
+      }
+      return JSON.stringify(labels)
+    })(),
+
+    // Self-analysis scalars (empty strings when sections absent — harmless for other flavor)
+    network_shape: (s.relationships_map?.network_shape) || '',
+    growth_overall_trajectory: (s.growth_arc?.overall_trajectory) || '',
+
+    // Flavor-aware labels for the sender-ratio donut + year-chart legend.
+    // System agent: subject = the single partner, other = the user.
+    // User agent:   subject = the user, other = all partners combined.
+    side_him_label: isSelf
+      ? (lang === 'zh' ? `${agentName}（本人）` : `${agentName} (Me)`)
+      : agentName,
+    side_other_label: isSelf
+      ? (lang === 'zh' ? '所有对话者' : 'All partners')
+      : (lang === 'zh' ? '对方（Me）' : 'Partner (Me)'),
+    // Subject token substituted into strings.json via {subj_pronoun}.
+    // - Self mode: "你" (2nd person, gender-neutral)
+    // - System mode: the partner's actual NAME (not a gendered pronoun like
+    //   "他/她" that would assume gender, and more personal than "TA").
+    subj_pronoun: isSelf
+      ? (lang === 'zh' ? '你' : 'you')
+      : agentName,
   }
 }
 
@@ -449,96 +478,82 @@ function buildDeepAnalysis(sections, lang) {
     ? '此维度的深层特征有待进一步观察和分析。基于现有数据，相关表现尚需更多对话样本来充分解读。'
     : 'Deeper patterns in this dimension await further observation. More conversation data is needed for comprehensive analysis.'
 
+  // 16-dim sources — strict 1:1 mapping to unique schema fields so no two
+  // rows rehash the same narrative. This prevents the earlier problem where
+  // a single phrase (e.g. "系统优化者") appeared in 4+ rows.
   const sources = [
-    // 1. Cognitive foundation
+    // 1. Cognitive · MBTI
     () => {
       const ev = mbti.per_axis_evidence
       if (!ev) return `MBTI: <strong>${esc(mbti.type || '?')}</strong> — ${esc(mbtiFullName(mbti.type, lang))}`
       return Object.entries(ev).map(([ax, txt]) => `<strong>${esc(ax)}:</strong> ${esc(txt)}`).join(' ')
     },
-    // 2. Depth of thought
+    // 2. Openness
     () => esc(ocean.openness?.evidence || ''),
-    // 3. Self-narrative
-    () => esc(s.character_portrait || ''),
-    // 4. Emotional architecture
-    () => esc(att.reason || ''),
-    // 5. Shadow self
-    () => esc(s.surprising_contradiction || ''),
-    // 6. Core desires
-    () => {
-      const parts = [traj.optimistic?.scenario, ...growth.slice(0, 2).map(g => g.text)].filter(Boolean)
-      return esc(parts.join(sep))
-    },
-    // 7. Inner conflicts
-    () => {
-      const sc = (s.surprising_contradiction || '').substring(0, 200)
-      const yellows = (sig.yellow || []).slice(0, 2)
-      return esc([sc, ...yellows].filter(Boolean).join(sep))
-    },
-    // 8. Deepest fear
-    () => esc([traj.pessimistic?.scenario, ...(sig.red || []).slice(0, 2)].filter(Boolean).join(sep)),
-    // 9. Archetype
-    () => esc((s.persona_card?.keywords || []).join(lang === 'zh' ? '、' : ', ')),
-    // 10. Value hierarchy
-    () => esc([(topics.loves || []).join(lang === 'zh' ? '、' : ', '), ...(tips.do || []).slice(0, 2)].filter(Boolean).join(sep)),
-    // 11. Guiding star
-    () => esc(traj.optimistic?.scenario || ''),
-    // 12. Relationship positioning
-    () => esc(chem.desc || ''),
-    // 13. Shape of loneliness
-    () => esc([att.reason, ...(sig.yellow || []).slice(0, 2)].filter(Boolean).join(sep)),
-    // 14. Misunderstood core
-    () => sub.slice(0, 3).map(item => `<em>"${esc(item.surface)}"</em> → ${esc(item.decoded)}`).join(sep),
-    // 15. Deepest kindness
-    () => {
-      const care = theatre.filter(a => a.category === 'showing_care').slice(0, 2)
-      if (care.length) return care.map(a => `${esc(a.scene_title)}: ${esc(a.analysis || '')}`).join(' ')
-      return theatre.slice(0, 1).map(a => esc(a.analysis || '')).join('')
-    },
-    // 16. Defense mechanisms
-    () => esc([...(tips.dont || []).slice(0, 3), ...sub.slice(0, 2).map(i => i.decoded)].filter(Boolean).join(sep)),
-    // 17. Stress response
-    () => esc([health.alert, ...(sig.red || []).slice(0, 3)].filter(Boolean).join(sep)),
-    // 18. Energy allocation
-    () => {
-      const bct = s.best_communication_times || {}
-      const advice = Object.values(bct).map(v => v.advice).filter(Boolean)
-      const topicStr = (topics.loves || []).slice(0, 3).join(lang === 'zh' ? '、' : ', ')
-      return esc([...advice, topicStr].filter(Boolean).join(sep))
-    },
-    // 19. Body signals
-    () => esc(health.alert || ''),
-    // 20. Decision-making style
+    // 3. Conscientiousness (decision + execution)
     () => esc(ocean.conscientiousness?.evidence || ''),
-    // 21. Money psychology
+    // 4. Attachment architecture (contains intentional <strong> HTML —
+    //    use inner esc on values, do NOT outer-esc the assembled string).
     () => {
-      const moneyTopics = (topics.loves || []).filter(t => /金|钱|理财|投资|money|finance|invest/i.test(t))
-      return esc(moneyTopics.length > 0 ? moneyTopics.join(lang === 'zh' ? '、' : ', ')
-        : (lang === 'zh' ? '对金钱的态度反映在日常决策和未来规划中。' : 'Money attitudes are reflected in daily decisions and future planning.'))
+      const parts = []
+      if (att.type) parts.push(`<strong>${esc(att.type)}</strong>`)
+      if (att.reason) parts.push(esc(att.reason))
+      return parts.join(' — ')
     },
-    // 22. Time perception
-    () => esc([traj.optimistic?.scenario, traj.baseline?.scenario, traj.pessimistic?.scenario].filter(Boolean).join(sep)),
-    // 23. Communication fingerprint
-    () => sub.slice(0, 4).map(item => `<em>"${esc(item.surface)}"</em> → ${esc(item.decoded)}`).join(sep),
-    // 24. Blind spots
-    () => esc([...(sig.red || []), ...(tips.dont || [])].filter(Boolean).join(sep)),
-    // 25. Core tension
+    // 5. Self-narrative — show only a focused excerpt (first two sentences)
+    //    to avoid duplicating the full portrait that lives in its own section.
+    () => {
+      const cp = s.character_portrait || ''
+      const firstTwo = cp.split(/[。.!?！？]\s*/).slice(0, 2).filter(Boolean).join('。')
+      return esc(firstTwo ? firstTwo + (cp.length > firstTwo.length ? '…' : '') : '')
+    },
+    // 6. Core contradiction (ONLY place we surface surprising_contradiction)
     () => esc(s.surprising_contradiction || ''),
-    // 26. Growth potential
+    // 7. Archetypal keywords
+    () => esc((s.persona_card?.keywords || []).join(lang === 'zh' ? '、' : ', ')),
+    // 8. Aspirations & guiding star — trajectory.optimistic + top growth seed
+    () => {
+      const seed = growth[0]?.text ? esc(growth[0].text) : ''
+      const star = esc(traj.optimistic?.scenario || '')
+      return [star, seed].filter(Boolean).join(sep)
+    },
+    // 9. Fears & red flags — pessimistic trajectory + signals.red
+    () => {
+      const fear = esc(traj.pessimistic?.scenario || '')
+      const reds = (sig.red || []).slice(0, 2).map(esc).join(sep)
+      return [fear, reds].filter(Boolean).join(sep)
+    },
+    // 10. Relationship positioning / chemistry
+    () => esc(chem.desc || ''),
+    // 11. Subtext decoded (ONLY place we surface subtext_decoder)
+    () => sub.slice(0, 3).map(item => `<em>"${esc(item.surface)}"</em> → ${esc(item.decoded)}`).join(sep),
+    // 12. Values & preferences — loves + tips.do
+    () => {
+      const lovesText = (topics.loves || []).slice(0, 4).join(lang === 'zh' ? '、' : ', ')
+      const doSeed = (tips.do || []).slice(0, 2).map(esc).join(sep)
+      return [lovesText ? esc(lovesText) : '', doSeed].filter(Boolean).join(sep)
+    },
+    // 13. Defense mechanisms — tips.dont (ONLY place for dont)
+    () => esc((tips.dont || []).slice(0, 4).join(sep)),
+    // 14. Wellbeing & caution — health.alert + signals.yellow
+    () => {
+      const alert = esc(health.alert || '')
+      const yellows = (sig.yellow || []).slice(0, 2).map(esc).join(sep)
+      return [alert, yellows].filter(Boolean).join(sep)
+    },
+    // 15. Growth potential
     () => growth.slice(0, 3).map(g => `<strong>${esc(g.title || '')}:</strong> ${esc(g.text || '')}`).join(' '),
-    // 27. Zodiac
+    // 16. Zodiac
     () => esc(zodiac.reason || `${zodiac.name || ''} ${zodiac.emoji || ''}`),
-    // 28. Temporal arc
-    () => esc([traj.optimistic, traj.baseline, traj.pessimistic].filter(Boolean)
-      .map(t => `${t.scenario || ''}${t.trigger ? ` (${t.trigger})` : ''}`).join(sep)),
   ]
 
+  // subLabels indices are aligned to the new 16-dim DIM_SPEC positions.
   const attVars = ATT_VARIANTS[lang] || ATT_VARIANTS.en
   const subLabels = {
-    0: mbti.type || '',
-    3: attVars[(att.type || '').toLowerCase()] || att.type || '',
-    11: chem.type || '',
-    26: `${zodiac.name || ''} ${zodiac.emoji || ''}`.trim(),
+    0:  mbti.type || '',                                             // Cognitive · MBTI
+    3:  attVars[(att.type || '').toLowerCase()] || att.type || '',    // Attachment
+    9:  chem.type || '',                                              // Relationship positioning
+    15: `${zodiac.name || ''} ${zodiac.emoji || ''}`.trim(),         // Zodiac
   }
 
   return DIM_SPEC.map((dim, i) => {
@@ -591,19 +606,41 @@ function buildTheatreActs(sections, lang) {
     scene_title: lang === 'zh' ? '场景待补充' : 'Scene pending', messages: [], analysis: '',
   }))
   const conflictCats = new Set(['conflict', 'vulnerability', 'silence_repair'])
+  const isSelf = sections._isSelf === true
   const meLabel = lang === 'zh' ? '我' : 'Me'
-  const agentLabel = sections._agentName || (lang === 'zh' ? '对方' : 'Them')
+  const fallbackAgent = isSelf
+    ? (lang === 'zh' ? '对方' : 'Them')
+    : (sections._agentName || (lang === 'zh' ? '对方' : 'Them'))
   const analysisPrefix = lang === 'zh' ? '解读 · ' : 'Analysis · '
+
+  // Label a message's sender for display:
+  //   - "me" / "Me"      → user's label ("我" / "Me")
+  //   - empty string     → fallback (partner name for system, generic for self)
+  //   - specific name    → use it as-is (partner name the LLM attached)
+  //   - legacy "对方"/"them" → fallback
+  const senderLabel = (raw, actPartner) => {
+    const s = String(raw || '').trim()
+    if (s === 'me' || s === 'Me') return meLabel
+    if (!s || s === '对方' || s === 'them' || s === 'Them') {
+      // For self mode, prefer the act's partner field if available
+      if (isSelf && actPartner) return esc(actPartner)
+      return fallbackAgent
+    }
+    return esc(s)
+  }
 
   return acts.map((act, i) => {
     const num = String(i + 1).padStart(2, '0')
     const catStyle = conflictCats.has(act.category) ? ' style="background:#fff1f2;color:#e11d48;"' : ''
+    const partnerBadge = isSelf && act.partner
+      ? `<div class="theatre-partner">${lang === 'zh' ? '与 ' : 'With '}<strong>${esc(act.partner)}</strong></div>`
+      : ''
     const lines = (act.messages || []).map(m => {
-      const cls = m.sender === 'me' ? 'me' : 'them'
-      const who = m.sender === 'me' ? meLabel : agentLabel
+      const cls = (m.sender === 'me' || m.sender === 'Me') ? 'me' : 'them'
+      const who = senderLabel(m.sender, act.partner)
       return `    <div class="theatre-line ${cls}"><span class="who">${who}：</span>${esc(String(m.text || '').substring(0, 160))}</div>`
     }).join('\n')
-    return `<div class="theatre-act">\n  <div class="theatre-meta">\n    <div class="theatre-num">ACT ${num}</div>\n    <div class="theatre-date">${esc(act.date || '')}</div>\n    <div class="theatre-cat"${catStyle}>${esc(act.category || '')}</div>\n  </div>\n  <div>\n    <div class="theatre-scene">${esc(act.scene_title || '')}</div>\n${lines}\n    <div class="theatre-analysis"><strong>${analysisPrefix}</strong>${esc(act.analysis || '')}</div>\n  </div>\n</div>`
+    return `<div class="theatre-act">\n  <div class="theatre-meta">\n    <div class="theatre-num">ACT ${num}</div>\n    <div class="theatre-date">${esc(act.date || '')}</div>\n    <div class="theatre-cat"${catStyle}>${esc(act.category || '')}</div>\n  </div>\n  <div>\n    <div class="theatre-scene">${esc(act.scene_title || '')}</div>\n    ${partnerBadge}\n${lines}\n    <div class="theatre-analysis"><strong>${analysisPrefix}</strong>${esc(act.analysis || '')}</div>\n  </div>\n</div>`
   }).join('\n')
 }
 
@@ -851,10 +888,18 @@ function buildCompatRows(sections) {
 
 function buildQuotesGrid(sections) {
   const quotes = sections.key_quotes || []
-  const items = padArr(quotes.slice(0, 20), 20, () => ({ text: '—', date: '', category: '' }))
+  // Render only real items — no padding to 20. An empty "—" placeholder
+  // reads as a bug to users, and users don't need EXACTLY 20 quotes to
+  // understand the section.
+  const items = quotes.slice(0, 20)
+  if (items.length === 0) {
+    return `<div class="rel-empty">暂无代表性语录</div>`
+  }
   return items.map((q, i) => {
     const color = QUOTE_COLORS[i % QUOTE_COLORS.length]
-    return `<div class="quote-card" style="border-left-color:${color};">\n  <div class="quote-text">"${esc(q.text || '')}"</div>\n  <div class="quote-meta">\n    <span class="quote-year">${esc(q.date || '')}</span>\n    <span class="quote-tag" style="background:${color}20;color:${color};">${esc(q.category || '')}</span>\n  </div>\n</div>`
+    const speaker = q.speaker ? `<span class="quote-speaker">${esc(q.speaker)}</span>` : ''
+    const ctx = q.context ? `<div class="quote-context">${esc(q.context)}</div>` : ''
+    return `<div class="quote-card" style="border-left-color:${color};">\n  <div class="quote-text">"${esc(q.text || '')}"</div>\n  ${ctx}\n  <div class="quote-meta">\n    <span class="quote-year">${esc(q.date || '')}</span>\n    ${speaker}\n    <span class="quote-tag" style="background:${color}20;color:${color};">${esc(q.category || '')}</span>\n  </div>\n</div>`
   }).join('\n')
 }
 
@@ -928,7 +973,208 @@ function buildAllHtml(sections, stats, lang) {
     quotes_grid:         buildQuotesGrid(s),
     gift_rows:           buildGiftRows(s, lang),
     growth_cards:        buildGrowthCards(s, lang),
+    // Self-analysis only (empty strings when sections absent — harmless for other flavor)
+    relationships_map:   buildRelationshipsMap(s, lang),
+    identity_modes:      buildIdentityModes(s, lang),
+    perceived_views:     buildPerceivedViews(s, lang),
+    growth_phases:       buildGrowthPhases(s, lang),
+    life_timeline:       buildLifeTimeline(s, lang),
+    unique_memories:     buildUniqueMemories(s, lang),
   }
+}
+
+// ─── Unique memories — 10-20 ───
+
+function buildUniqueMemories(sections, lang) {
+  const memories = Array.isArray(sections.unique_memories) ? sections.unique_memories : []
+  if (memories.length === 0) {
+    return `<div class="rel-empty">${lang === 'zh' ? '暂未挑出独特回忆,可能数据不足或仍在生成' : 'No unique memories found — may need more data or a rerun'}</div>`
+  }
+  const isSelf = sections._isSelf === true
+  const EMOTION_COLORS = {
+    '温暖': '#F59E0B', warm: '#F59E0B',
+    '惊喜': '#8B5CF6', surprised: '#8B5CF6',
+    '心酸': '#64748B', bittersweet: '#64748B',
+    '自豪': '#059669', proud: '#059669',
+    '松动': '#06B6D4', thawed: '#06B6D4',
+    '会心一笑': '#DB2777', knowing_smile: '#DB2777',
+    '难忘': '#B91C1C', unforgettable: '#B91C1C',
+  }
+  const meLabel = lang === 'zh' ? '我' : 'Me'
+  return memories.slice(0, 20).map((m, i) => {
+    const color = EMOTION_COLORS[m.emotion] || '#CC785C'
+    const num = String(i + 1).padStart(2, '0')
+    const fallbackAgent = isSelf
+      ? (lang === 'zh' ? '对方' : 'Them')
+      : (sections._agentName || (lang === 'zh' ? '对方' : 'Them'))
+    const msgLines = (m.messages || []).slice(0, 4).map(msg => {
+      const raw = String(msg.sender || '').trim()
+      const isMe = raw === 'me' || raw === 'Me'
+      const isGeneric = raw === '' || raw === '对方' || raw === 'them' || raw === 'Them'
+      const who = isMe ? meLabel : (isGeneric ? fallbackAgent : esc(raw))
+      const cls = isMe ? 'me' : 'them'
+      const t = msg.time ? `<span class="mem-time">${esc(msg.time)}</span>` : ''
+      return `    <div class="mem-line ${cls}"><span class="who">${who}：</span>${esc(String(msg.text || '').slice(0, 200))}${t}</div>`
+    }).join('\n')
+    return `<div class="memory-card">
+  <div class="mem-head">
+    <div class="mem-num">#${num}</div>
+    <div class="mem-date">${esc(m.date || '')}</div>
+    <div class="mem-icon" style="color:${color};">${esc(m.icon || '✨')}</div>
+    <div class="mem-title-wrap">
+      <div class="mem-title">${esc(m.title || '')}</div>
+      <div class="mem-meta">
+        <span class="mem-cat">${esc(m.category || '')}</span>
+        <span class="mem-emotion" style="background:${color}20;color:${color};">${esc(m.emotion || '')}</span>
+      </div>
+    </div>
+  </div>
+  <p class="mem-scene">${esc(m.scene || '')}</p>
+  <div class="mem-dialogue">
+${msgLines}
+  </div>
+  <p class="mem-analysis"><strong>${lang === 'zh' ? '为什么值得记住 · ' : 'Why it matters · '}</strong>${esc(m.analysis || '')}</p>
+</div>`
+  }).join('\n')
+}
+
+// ─────────────────────────────────────────────────
+//  Self-analysis HTML fragment builders
+// ─────────────────────────────────────────────────
+
+const _warmthColor = (w) => {
+  // Map 1-10 to a coral→teal gradient point for warmth visual
+  const clamped = Math.max(1, Math.min(10, w || 5))
+  const palette = ['#B91C1C','#C2410C','#D97706','#CA8A04','#65A30D','#16A34A','#059669','#0891B2','#0284C7','#1D4ED8']
+  return palette[clamped - 1]
+}
+
+function buildRelationshipsMap(sections, lang) {
+  const rm = sections.relationships_map || {}
+  const partners = Array.isArray(rm.partners) ? rm.partners : []
+  if (partners.length === 0) {
+    return `<div class="relation-row"><div class="rel-empty">${lang === 'zh' ? '暂无关系数据' : 'No relationship data yet'}</div></div>`
+  }
+  return partners.slice(0, 15).map(p => {
+    const warmth = clamp(Math.round(p.warmth || 5), 1, 10)
+    const color = _warmthColor(warmth)
+    return `<div class="relation-row rel-partner-row">
+      <div class="rel-partner-head">
+        <span class="rel-name">${esc(p.name || '—')}</span>
+        <span class="rel-type" style="color:${color};">${esc(p.relation_type || '')}</span>
+        <span class="rel-count">${p.message_count || 0} msgs</span>
+      </div>
+      <div class="rel-partner-body">
+        <div class="rel-warmth">
+          <span class="rel-warmth-label">${lang === 'zh' ? '温度' : 'Warmth'}</span>
+          <div class="rel-warmth-bar"><div class="rel-warmth-fill" style="width:${warmth*10}%;background:${color};"></div></div>
+          <span class="rel-warmth-val">${warmth}/10</span>
+        </div>
+        <div class="rel-role">${esc(p.role_in_life || '')}</div>
+        <div class="rel-meta">${esc(p.date_range || '')} · ${esc(p.intimacy_level || '')}</div>
+      </div>
+    </div>`
+  }).join('\n')
+}
+
+function buildIdentityModes(sections, lang) {
+  const modes = Array.isArray(sections.identity_modes) ? sections.identity_modes : []
+  if (modes.length === 0) {
+    return `<div class="card"><div class="rel-empty">${lang === 'zh' ? '需要多个对话者才能呈现' : 'Needs multiple partners to render'}</div></div>`
+  }
+  return modes.slice(0, 8).map(m => {
+    const traits = (m.voice_traits || []).slice(0, 5).map(t =>
+      `<li>${esc(t)}</li>`).join('')
+    const phrases = (m.common_phrases || []).slice(0, 4).map(p =>
+      `<span class="id-phrase">"${esc(p)}"</span>`).join(' ')
+    return `<div class="card id-mode-card">
+      <div class="id-mode-head">
+        <span class="id-partner">${esc(m.partner || '—')}</span>
+        <span class="id-label">${esc(m.mode_label || '')}</span>
+      </div>
+      <ul class="id-traits">${traits}</ul>
+      <div class="id-phrases">${phrases}</div>
+      <p class="id-analysis">${esc(m.analysis || '')}</p>
+    </div>`
+  }).join('\n')
+}
+
+function buildPerceivedViews(sections, lang) {
+  const views = Array.isArray(sections.perceived_views) ? sections.perceived_views : []
+  if (views.length === 0) {
+    return `<div class="card"><div class="rel-empty">${lang === 'zh' ? '需要对方消息作为证据' : 'Needs partner messages as evidence'}</div></div>`
+  }
+  return views.slice(0, 8).map(v => {
+    const evidence = (v.evidence || []).slice(0, 3).map(e =>
+      `<blockquote class="pv-evidence">"${esc(e)}"</blockquote>`).join('')
+    return `<div class="card pv-card">
+      <div class="pv-head">
+        <span class="pv-partner">${esc(v.partner || '—')}</span>
+        <span class="pv-label">${esc(v.perception_label || '')}</span>
+      </div>
+      <div class="pv-evidence-list">${evidence}</div>
+      <p class="pv-analysis">${esc(v.analysis || '')}</p>
+    </div>`
+  }).join('\n')
+}
+
+function buildGrowthPhases(sections, lang) {
+  const arc = sections.growth_arc || {}
+  const phases = Array.isArray(arc.phases) ? arc.phases : []
+  if (phases.length === 0) {
+    return `<div class="rel-empty">${lang === 'zh' ? '数据不足以识别阶段' : 'Not enough data to identify phases'}</div>`
+  }
+  const phaseLabel = lang === 'zh' ? '阶段' : 'Phase'
+  const themeLabel = lang === 'zh' ? '主导话题' : 'Themes'
+  const voiceLabel = lang === 'zh' ? '声音' : 'Voice'
+  return phases.map((p, i) => {
+    const themes = (p.dominant_themes || []).slice(0, 5).map(t =>
+      `<span class="ga-theme">${esc(t)}</span>`).join(' ')
+    return `<div class="ga-phase">
+      <div class="ga-phase-head">
+        <div class="ga-phase-num">${String(i+1).padStart(2,'0')}</div>
+        <div class="ga-phase-labels">
+          <div class="ga-phase-label">${esc(p.label || phaseLabel)}</div>
+          <div class="ga-phase-years">${esc(p.year_range || '')}</div>
+        </div>
+      </div>
+      <div class="ga-phase-body">
+        <div class="ga-meta"><span class="ga-meta-label">${themeLabel}</span> ${themes}</div>
+        <div class="ga-meta"><span class="ga-meta-label">${voiceLabel}</span> ${esc(p.voice_shift || '')}</div>
+        <p class="ga-summary">${esc(p.summary || '')}</p>
+      </div>
+    </div>`
+  }).join('\n')
+}
+
+function buildLifeTimeline(sections, lang) {
+  const events = Array.isArray(sections.life_timeline) ? sections.life_timeline : []
+  if (events.length === 0) {
+    return `<div class="rel-empty">${lang === 'zh' ? '数据不足以提取生活事件' : 'Not enough data to extract life events'}</div>`
+  }
+  const CAT_COLORS = {
+    career: '#1D4ED8', relationship: '#DB2777', family: '#059669',
+    health: '#DC2626', relocation: '#0891B2', study: '#7C3AED',
+    loss: '#374151', achievement: '#CA8A04',
+    '职业': '#1D4ED8', '关系': '#DB2777', '家庭': '#059669',
+    '健康': '#DC2626', '搬迁': '#0891B2', '学习': '#7C3AED',
+    '丧失': '#374151', '成就': '#CA8A04',
+  }
+  return events.slice(0, 20).map(e => {
+    const color = CAT_COLORS[e.category] || '#6B7280'
+    return `<div class="tl-row life-row">
+      <div class="tl-date" style="color:${color};">${esc(e.date || '')}</div>
+      <div class="tl-body">
+        <div class="tl-head">
+          <span class="tl-icon">${esc(e.icon || '•')}</span>
+          <span class="tl-title">${esc(e.title || '')}</span>
+          <span class="tl-cat" style="background:${color}20;color:${color};">${esc(e.category || '')}</span>
+        </div>
+        <blockquote class="tl-evidence">"${esc(e.evidence || '')}"</blockquote>
+        <p class="tl-sig">${esc(e.significance || '')}</p>
+      </div>
+    </div>`
+  }).join('\n')
 }
 
 // ─────────────────────────────────────────────────
@@ -1019,22 +1265,69 @@ class RenderReportTool extends BaseTool {
         : this.language
 
       const agentName = params.agent_name || this.agentName
-      let sections = params.sections || {}
-      let stats = params.stats || {}
+      // Defensive parse: some LLMs (esp. weaker ones) serialize complex
+      // object arguments to JSON STRINGS instead of passing them as objects.
+      // A string's Object.keys() returns character indices (0,1,2,...) which
+      // look like "many keys" — that would skip the cache-auto-load safety
+      // net below and the HTML would render with all-empty sections. Parse
+      // back into an object here so downstream code always sees a real one.
+      const coerceToObject = (v) => {
+        if (v == null) return {}
+        if (typeof v === 'object' && !Array.isArray(v)) return v
+        if (typeof v === 'string') {
+          try {
+            const parsed = JSON.parse(v)
+            return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {}
+          } catch (_) { return {} }
+        }
+        return {}
+      }
+      let sections = coerceToObject(params.sections)
+      let stats = coerceToObject(params.stats)
       let loadedFromCache = false
 
       // ── Weak-model safety net ─────────────────────────────────────
-      // If the LLM called us without sections (or with a near-empty object),
-      // try to auto-load from the extract_sections cache on disk. This makes
-      // the tool robust to weaker models that skip arguments or pass {}.
+      // Trigger cache auto-load in two cases:
+      //   (a) The LLM sent no sections / a tiny object (< 5 keys). Typical
+      //       of weaker models that skip arguments.
+      //   (b) For user-agent (self) reports, any of the 5 self-only keys is
+      //       missing or empty — the LLM may have condensed its copy of the
+      //       payload and dropped large arrays. Cache has the full data.
       const realKeys = Object.keys(sections).filter(k => !k.startsWith('_'))
-      if (realKeys.length < 5) {
+      const isSelfAgent = this.agentType === 'users'
+      const selfKeysLooseCheck = isSelfAgent && [
+        'relationships_map', 'identity_modes', 'perceived_views',
+        'growth_arc', 'life_timeline', 'unique_memories',
+      ].some(k => {
+        const v = sections[k]
+        if (!v) return true  // missing entirely
+        if (Array.isArray(v) && v.length === 0) return true
+        if (typeof v === 'object' && Array.isArray(v.partners) && v.partners.length === 0) return true
+        if (typeof v === 'object' && Array.isArray(v.phases) && v.phases.length === 0) return true
+        return false
+      })
+      if (realKeys.length < 5 || selfKeysLooseCheck) {
         const cachePath = this._findSectionsCache()
         if (cachePath) {
           try {
             const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'))
             if (cached.sections && typeof cached.sections === 'object') {
-              sections = cached.sections
+              // Merge strategy: cache fills gaps (empty / missing keys) but
+              // any LLM-provided non-empty value wins. This way partial
+              // explicit payloads still augment cache rather than overwrite.
+              if (realKeys.length < 5) {
+                sections = cached.sections
+              } else {
+                const merged = { ...cached.sections }
+                for (const k of Object.keys(sections)) {
+                  const v = sections[k]
+                  const isEmpty = v == null ||
+                    (Array.isArray(v) && v.length === 0) ||
+                    (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0)
+                  if (!isEmpty) merged[k] = v
+                }
+                sections = merged
+              }
               stats = Object.keys(stats).length > 0 ? stats : (cached.stats || {})
               loadedFromCache = true
               logger.agent('[RenderReportTool] auto-loaded sections from cache', {
@@ -1058,7 +1351,16 @@ class RenderReportTool extends BaseTool {
         }
       }
 
+      // Flavor decides which sections render and which labels (pie chart etc.)
+      // to apply. agentType from skill context is the single source of truth.
+      //   - "self"  → strip other-only (relationship-centric) sections
+      //   - "other" → strip self-only sections
+      const isSelfFlavor = this.agentType === 'users'
+
       sections._agentName = agentName
+      // Expose flavor to downstream HTML fragment builders so they can label
+      // speakers correctly in self-mode (see buildTheatreActs / etc.).
+      sections._isSelf = isSelfFlavor
 
       const tplPath = path.join(SKILL_DIR, 'template.html')
       const strPath = path.join(SKILL_DIR, 'strings.json')
@@ -1070,11 +1372,31 @@ class RenderReportTool extends BaseTool {
       const L = strings[lang]
       if (!L) return this._err(`strings.json has no locale "${lang}"`)
 
-      const D = buildDScalars(sections, stats, agentName, lang)
+      const D = buildDScalars(sections, stats, agentName, lang, isSelfFlavor)
       const HTML = buildAllHtml(sections, stats, lang)
+      const stripFlavor = isSelfFlavor ? 'other-only' : 'self-only'
+      logger.agent('[RenderReportTool] flavor', {
+        agentType: this.agentType,
+        flavor: isSelfFlavor ? 'self' : 'other',
+        stripping: stripFlavor,
+      })
 
       const langCode = lang === 'zh' ? 'zh-CN' : 'en'
       let out = template.replace(/\{\{LANG\}\}/g, langCode)
+
+      // Strip sections / TOC items / nav anchors tagged with the non-matching
+      // flavor. Each tagged element is self-contained (section/a) so a simple
+      // non-greedy match up to the closing tag is sufficient.
+      // Sections:
+      out = out.replace(
+        new RegExp(`<section[^>]*data-flavor="${stripFlavor}"[^>]*>[\\s\\S]*?<\\/section>`, 'g'),
+        ''
+      )
+      // TOC items and nav anchors (all <a ... data-flavor="X">...</a>):
+      out = out.replace(
+        new RegExp(`<a[^>]*data-flavor="${stripFlavor}"[^>]*>[\\s\\S]*?<\\/a>`, 'g'),
+        ''
+      )
 
       out = out.replace(/\{\{L\.([a-zA-Z0-9_]+)\}\}/g, (_m, key) => {
         const raw = L[key]
@@ -1088,6 +1410,39 @@ class RenderReportTool extends BaseTool {
 
       out = out.replace(/\{\{HTML\.([a-zA-Z0-9_]+)\}\}/g, (_m, key) =>
         HTML[key] !== undefined ? HTML[key] : `<!-- missing HTML.${key} -->`)
+
+      // Renumber section-number labels to match rendered DOM position.
+      // Runs AFTER {{L.}} substitution so we can see resolved text (including
+      // the ★ symbol for deep/ways) and preserve star-badged sections.
+      // For self-flavor reports, ~8 other-only sections are stripped, so the
+      // hardcoded "Section 09"/"Section 20" labels from strings.json become
+      // non-contiguous. Walking remaining sections in order produces a clean
+      // 1..N sequence that matches the visual position and TOC entries.
+      {
+        let sectionIdx = 0
+        out = out.replace(
+          /(<section class="section"[^>]*>[\s\S]*?<div class="section-number">)([^<]*)(<\/div>)/g,
+          (_m, pre, label, post) => {
+            sectionIdx++
+            // Preserve labels that contain a star (if any stay in the wild —
+            // defensive only; current strings.json no longer uses ★ for deep/ways).
+            if (label.includes('★')) return `${pre}${label}${post}`
+            const pad = String(sectionIdx).padStart(2, '0')
+            return `${pre}Section ${pad}${post}`
+          }
+        )
+        // Keep TOC toc-num in sync with the new section numbering.
+        let tocIdx = 0
+        out = out.replace(
+          /(<a class="toc-item" href="[^"]*"[^>]*><span class="toc-num(?: star)?">)([^<]*)(<\/span>)/g,
+          (_m, pre, label, post) => {
+            tocIdx++
+            if (label.includes('★')) return `${pre}${label}${post}`
+            const pad = String(tocIdx).padStart(2, '0')
+            return `${pre}${pad}${post}`
+          }
+        )
+      }
 
       const residuals = (out.match(/\{\{[A-Za-z.][A-Za-z0-9_.]*\}\}/g) || [])
       if (residuals.length > 0) logger.warn('[RenderReportTool] unresolved placeholders', [...new Set(residuals)])

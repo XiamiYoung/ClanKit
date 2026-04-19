@@ -317,7 +317,11 @@ const DEFAULT_CONFIG = {
       { id: 'danger-8', pattern: 'mkfs.*', description: 'Format filesystem' },
     ]
   },
-  telemetryOptOut: true
+  telemetryOptOut: true,
+  notifications: {
+    enabled: true,
+    silent:  false,
+  },
 }
 
 
@@ -391,8 +395,10 @@ function createWindow() {
   
   // Custom titlebar double-click handler - resize to 70%
   const titleBarHeight = 40
-  mainWindow.on('blur', () => { _isFocused = false })
-  mainWindow.on('focus', () => { _isFocused = true })
+  const notifier = require('./lib/notifier')
+  notifier.setFocus(true)
+  mainWindow.on('blur',  () => notifier.setFocus(false))
+  mainWindow.on('focus', () => notifier.setFocus(true))
   let _lastClickTime = 0
   mainWindow.on('touch-start', (e) => {
     const now = Date.now()
@@ -516,6 +522,17 @@ protocol.registerSchemesAsPrivileged([{
   scheme: 'vault-asset',
   privileges: { bypassCSP: true, supportFetchAPI: true, stream: true }
 }])
+
+// Required for Windows toast notifications: without an AppUserModelID, Electron
+// notifications silently fail on Windows 10/11 (especially in dev runs). In
+// packaged builds the AUMID must match build.appId so the Start Menu shortcut
+// supplies the branded display name + icon for the toast header. In dev there
+// is no shortcut, so Windows shows whatever AUMID we set — use the friendly
+// product name so the toast header reads "ClankAI" rather than the raw AUMID.
+try { app.setName('ClankAI') } catch {}
+if (process.platform === 'win32') {
+  try { app.setAppUserModelId(app.isPackaged ? 'com.clankai.app' : 'ClankAI') } catch {}
+}
 
 app.whenReady().then(async () => {
   // Handle vault-asset:// requests -> serve files from disk

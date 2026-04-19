@@ -55,7 +55,7 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  .page { max-width: 1120px; margin: 0 auto; padding: 0 24px 80px; }
+  .page { max-width: 1760px; margin: 0 auto; padding: 0 24px 80px; }
 
   /* ─── Nav ─── */
   .nav {
@@ -63,11 +63,11 @@
     background: rgba(255,255,255,.92);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
-    padding: 0 24px;
   }
   .nav-inner {
-    max-width: 1120px; margin: 0 auto;
-    display: flex; align-items: center; gap: 28px;
+    max-width: 1760px; margin: 0 auto;
+    padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 28px;
     height: 52px; overflow-x: auto; scrollbar-width: none;
   }
   .nav-inner::-webkit-scrollbar { display: none; }
@@ -80,7 +80,7 @@
   .nav a:hover { color: var(--blue); border-bottom-color: var(--blue); }
 
   /* ─── Hero (v4 clean) ─── */
-  .hero { padding: 60px 0 48px; border-bottom: 1px solid var(--line); margin-bottom: 56px; }
+  .hero { padding: 60px 0 48px; border-bottom: 1px solid var(--line); margin-bottom: 56px; text-align: center; }
   .hero-kicker {
     display: inline-flex; align-items: center; gap: 6px;
     background: var(--bg-blue); color: var(--blue);
@@ -95,9 +95,9 @@
   }
   .hero-sub {
     font-size: 16px; color: var(--ink-3); max-width: 640px;
-    margin-bottom: 26px; line-height: 1.7;
+    margin: 0 auto 26px; line-height: 1.7;
   }
-  .badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; justify-content: center; }
   .badge {
     display: inline-flex; align-items: center; gap: 4px;
     font-size: 12px; font-weight: 600; padding: 4px 10px;
@@ -110,15 +110,15 @@
   .badge-rose   { background: #fff1f2;       color: var(--rose); }
   .badge-green  { background: #ecfdf5;       color: var(--green); }
 
-  .hero-stats { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; }
-  .hstat { display: flex; flex-direction: column; gap: 2px; }
+  .hero-stats { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; justify-content: center; }
+  .hstat { display: flex; flex-direction: column; gap: 2px; align-items: center; text-align: center; }
   .hstat-val { font-size: 26px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
   .hstat-lbl { font-size: 12px; color: var(--ink-4); font-weight: 500; }
   .hstat-divider { width: 1px; background: var(--line); height: 40px; align-self: center; }
 
   /* ─── Section header (v4) ─── */
   .section { margin-bottom: 64px; scroll-margin-top: 64px; }
-  .section-header { margin-bottom: 28px; }
+  .section-header { margin-bottom: 28px; text-align: center; }
   .section-number {
     font-size: 11px; font-weight: 700; color: var(--blue-2);
     letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px;
@@ -126,6 +126,7 @@
   .section-title {
     font-size: 22px; font-weight: 800; letter-spacing: -.01em;
     display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 10px;
+    justify-content: center;
   }
   .section-desc { font-size: 14px; color: var(--ink-3); margin-top: 4px; }
   .confidence-chip {
@@ -478,9 +479,12 @@
 
   /* ─── Health + growth ─── */
   .health-wrap { display: flex; align-items: center; gap: 32px; }
-  .health-num { font-size: 76px; font-weight: 900; color: var(--green); line-height: 1; text-align: center; flex-shrink: 0; }
+  .health-num { font-size: 64px; font-weight: 900; color: var(--green); line-height: 1; text-align: center; flex-shrink: 0; }
   .health-lbl { font-size: 13px; color: var(--ink-3); text-align: center; margin-top: 4px; }
-  .health-trend { flex: 1; }
+  .health-trend { flex: 1; min-width: 0; }
+  .health-trend .chart-hint { font-size: 11px; color: var(--ink-3); margin: 0 0 6px 0; }
+  .health-trend .chart-caption { font-size: 11px; color: var(--ink-3); margin: 6px 0 0 0; text-align: center; font-style: italic; }
+  #healthTrend { width: 100%; display: block; min-height: 160px; }
   .health-alert {
     margin-top: 18px; padding: 14px 16px;
     background: #fef3c7; border-radius: 10px;
@@ -610,16 +614,109 @@
 
 
   /* ─── TOC (目录) ─── */
-  .toc { padding: 32px 0 44px; border-bottom: 1px solid var(--line); margin-bottom: 48px; }
-  .toc-label { font-size: 11px; font-weight: 600; color: var(--coral); letter-spacing: .22em; text-transform: uppercase; margin-bottom: 22px; font-family: var(--font-sans); }
-  .toc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 40px; }
-  .toc-item { display: flex; align-items: baseline; gap: 14px; padding: 11px 0; text-decoration: none; color: var(--ink-2); transition: color .2s; border-bottom: 1px dotted var(--line); }
+  .toc { padding: 32px 0 44px; border-bottom: 1px solid var(--line); margin-bottom: 48px; text-align: center; }
+  .toc-label { font-size: 11px; font-weight: 600; color: var(--coral); letter-spacing: .22em; text-transform: uppercase; margin-bottom: 22px; font-family: var(--font-sans); text-align: center; }
+  .toc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 40px; justify-items: center; max-width: 720px; margin: 0 auto; }
+  .toc-item { display: inline-flex; align-items: baseline; gap: 14px; padding: 11px 0; text-decoration: none; color: var(--ink-2); transition: color .2s; border-bottom: 1px dotted var(--line); min-width: 280px; justify-content: center; }
   .toc-item:hover { color: var(--coral); }
   .toc-item:hover .toc-title { color: var(--coral); }
   .toc-num { font-family: var(--font-heading); font-size: 13px; color: var(--coral); font-weight: 500; width: 36px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
   .toc-num.star { font-size: 15px; }
-  .toc-title { flex: 1; font-size: 14px; font-family: var(--font-heading); color: var(--ink); }
+  .toc-title { font-size: 14px; font-family: var(--font-heading); color: var(--ink); }
   @media (max-width: 860px) { .toc-grid { grid-template-columns: 1fr; } }
+
+  /* ─── Self-analysis sections ─── */
+  .rel-empty { font-size: 13px; color: var(--ink-3); padding: 20px 0; text-align: center; font-style: italic; }
+  .rel-network-shape { font-size: 14px; color: var(--ink-2); font-style: italic; margin: 0 0 18px 0; padding: 14px 18px; background: rgba(204,120,92,0.06); border-left: 3px solid var(--coral); border-radius: 4px; }
+  .rel-partner-row { display: block; padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .rel-partner-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+  .rel-name { font-family: var(--font-heading); font-size: 15px; font-weight: 500; color: var(--ink); flex: 1; }
+  .rel-type { font-size: 12px; font-weight: 500; letter-spacing: .05em; }
+  .rel-count { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .rel-partner-body { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: center; }
+  .rel-warmth { display: flex; align-items: center; gap: 8px; }
+  .rel-warmth-label { font-size: 11px; color: var(--ink-3); width: 28px; }
+  .rel-warmth-bar { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .rel-warmth-fill { height: 100%; transition: width .3s; }
+  .rel-warmth-val { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; width: 36px; text-align: right; }
+  .rel-role { font-size: 13px; color: var(--ink); }
+  .rel-meta { font-size: 11px; color: var(--ink-3); grid-column: 1 / -1; }
+
+  .id-mode-card { background: #fafaf8; border-radius: 10px; padding: 18px; }
+  .id-mode-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+  .id-partner { font-family: var(--font-heading); font-size: 14px; color: var(--ink-2); }
+  .id-label { font-size: 13px; font-weight: 500; color: var(--coral); }
+  .id-traits { list-style: none; padding: 0; margin: 0 0 10px 0; }
+  .id-traits li { font-size: 12px; color: var(--ink-2); padding: 3px 0; padding-left: 14px; position: relative; }
+  .id-traits li::before { content: '·'; position: absolute; left: 4px; color: var(--coral); font-weight: 700; }
+  .id-phrases { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+  .id-phrase { font-size: 11px; color: var(--ink-2); padding: 2px 8px; background: rgba(204,120,92,0.08); border-radius: 10px; font-style: italic; }
+  .id-analysis { font-size: 13px; line-height: 1.65; color: var(--ink); margin: 0; }
+
+  .pv-card { background: #fdfcfa; border-left: 3px solid var(--coral); padding: 18px; border-radius: 8px; }
+  .pv-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+  .pv-partner { font-family: var(--font-heading); font-size: 14px; color: var(--ink-2); }
+  .pv-label { font-size: 13px; font-weight: 500; color: var(--coral); }
+  .pv-evidence-list { margin-bottom: 12px; }
+  .pv-evidence { font-size: 12px; color: var(--ink-2); font-style: italic; margin: 4px 0; padding: 6px 10px; background: rgba(0,0,0,0.02); border-radius: 4px; }
+  .pv-analysis { font-size: 13px; line-height: 1.65; color: var(--ink); margin: 0; }
+
+  .growth-overall { font-size: 14px; color: var(--ink-2); font-style: italic; margin: 0 0 24px 0; padding: 14px 18px; background: rgba(62,136,132,0.06); border-left: 3px solid var(--teal, #3B6E6A); border-radius: 4px; }
+  .growth-phases { display: flex; flex-direction: column; gap: 20px; }
+  .ga-phase { border-left: 2px solid var(--line); padding-left: 20px; position: relative; }
+  .ga-phase::before { content: ''; position: absolute; left: -7px; top: 6px; width: 12px; height: 12px; background: var(--coral); border-radius: 50%; }
+  .ga-phase-head { margin-bottom: 10px; display: flex; align-items: baseline; gap: 14px; }
+  .ga-phase-num { font-family: var(--font-heading); font-size: 18px; color: var(--coral); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .ga-phase-label { font-family: var(--font-heading); font-size: 16px; color: var(--ink); font-weight: 500; }
+  .ga-phase-years { font-size: 12px; color: var(--ink-3); letter-spacing: .05em; }
+  .ga-meta { font-size: 13px; color: var(--ink-2); margin: 4px 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .ga-meta-label { font-size: 11px; color: var(--ink-3); font-weight: 500; text-transform: uppercase; letter-spacing: .1em; margin-right: 4px; }
+  .ga-theme { font-size: 11px; padding: 2px 8px; background: rgba(204,120,92,0.08); color: var(--coral); border-radius: 10px; }
+  .ga-summary { font-size: 13px; line-height: 1.65; color: var(--ink); margin: 8px 0 0 0; }
+
+  /* #life-timeline reuses .timeline layout but does NOT want the central
+     vertical line — each row is already a full-width block with its own
+     left-aligned date column. The line would slice through the date text. */
+  #life-timeline .timeline::before { display: none; }
+  #life-timeline .timeline { padding-left: 0; }
+  .life-row { display: flex; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .life-row:last-child { border-bottom: none; }
+  .life-row .tl-date { font-family: var(--font-heading); font-size: 13px; font-weight: 500; width: 72px; flex-shrink: 0; font-variant-numeric: tabular-nums; padding-top: 2px; }
+  .life-row .tl-body { flex: 1; }
+  .life-row .tl-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .life-row .tl-icon { font-size: 16px; }
+  .life-row .tl-title { font-family: var(--font-heading); font-size: 14px; font-weight: 500; color: var(--ink); flex: 1; }
+  .life-row .tl-cat { font-size: 10px; padding: 2px 8px; border-radius: 10px; letter-spacing: .05em; }
+  .life-row .tl-evidence { font-size: 12px; color: var(--ink-2); font-style: italic; margin: 4px 0; padding: 6px 10px; background: rgba(0,0,0,0.02); border-radius: 4px; }
+  .life-row .tl-sig { font-size: 12px; color: var(--ink-3); margin: 4px 0 0 0; }
+
+  /* ─── Theatre partner badge (shown in self-mode) ─── */
+  .theatre-partner { font-size: 11px; color: var(--ink-3); margin: 4px 0 8px 0; letter-spacing: .05em; }
+  .theatre-partner strong { color: var(--coral); font-weight: 500; }
+
+  /* ─── Quote context (new field on key_quotes) ─── */
+  .quote-context { font-size: 12px; color: var(--ink-2); font-style: italic; margin: 6px 0 0 0; padding-left: 10px; border-left: 2px solid var(--line); }
+  .quote-speaker { font-size: 11px; color: var(--ink-3); letter-spacing: .05em; margin-right: 6px; }
+
+  /* ─── Unique memories ─── */
+  .memory-grid { display: flex; flex-direction: column; gap: 20px; }
+  .memory-card { background: #fdfcfa; border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; }
+  .mem-head { display: grid; grid-template-columns: 42px 76px 28px 1fr; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .mem-num { font-family: var(--font-heading); font-size: 13px; color: var(--coral); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .mem-date { font-family: var(--font-heading); font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .mem-icon { font-size: 20px; text-align: center; }
+  .mem-title { font-family: var(--font-heading); font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 2px; }
+  .mem-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+  .mem-cat { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: #e5e7eb; color: #374151; letter-spacing: .05em; font-weight: 500; }
+  .mem-emotion { font-size: 10px; padding: 2px 8px; border-radius: 10px; letter-spacing: .05em; }
+  .mem-scene { font-size: 13px; color: var(--ink-2); margin: 0 0 14px 0; line-height: 1.6; padding: 10px 14px; background: rgba(0,0,0,0.02); border-radius: 6px; }
+  .mem-dialogue { margin: 0 0 12px 0; padding-left: 4px; border-left: 2px solid var(--coral); }
+  .mem-line { font-size: 12px; line-height: 1.55; padding: 3px 0 3px 10px; }
+  .mem-line .who { color: var(--ink-3); font-weight: 500; margin-right: 4px; }
+  .mem-line.me .who { color: var(--coral); }
+  .mem-time { font-size: 10px; color: var(--ink-3); margin-left: 8px; }
+  .mem-analysis { font-size: 13px; color: var(--ink); margin: 0; line-height: 1.6; }
+  .mem-analysis strong { color: var(--coral); font-weight: 500; }
 
 </style>
 </head>
@@ -629,17 +726,17 @@
 <nav class="nav">
   <div class="nav-inner">
     <div class="nav-brand">✦ {{D.agent_name}}</div>
-    <a href="#portrait">{{L.nav_portrait}}</a>
-    <a href="#overview">{{L.nav_overview}}</a>
-    <a href="#persona">{{L.nav_persona}}</a>
-    <a href="#deep">{{L.nav_deep}}</a>
-    <a href="#theatre">{{L.nav_theatre}}</a>
-    <a href="#subtext">{{L.nav_subtext}}</a>
-    <a href="#quotes">{{L.nav_quotes}}</a>
-    <a href="#health">{{L.nav_health}}</a>
-    <a href="#advice">{{L.nav_advice}}</a>
-    <a href="#ways">{{L.nav_ways}}</a>
-    <a href="#growth">{{L.nav_growth}}</a>
+    <a href="#portrait" data-flavor="shared">{{L.nav_portrait}}</a>
+    <a href="#overview" data-flavor="shared">{{L.nav_overview}}</a>
+    <a href="#persona" data-flavor="shared">{{L.nav_persona}}</a>
+    <a href="#deep" data-flavor="shared">{{L.nav_deep}}</a>
+    <a href="#theatre" data-flavor="shared">{{L.nav_theatre}}</a>
+    <a href="#subtext" data-flavor="shared">{{L.nav_subtext}}</a>
+    <a href="#quotes" data-flavor="shared">{{L.nav_quotes}}</a>
+    <a href="#health" data-flavor="shared">{{L.nav_health}}</a>
+    <a href="#advice" data-flavor="other-only">{{L.nav_advice}}</a>
+    <a href="#ways" data-flavor="other-only">{{L.nav_ways}}</a>
+    <a href="#growth" data-flavor="shared">{{L.nav_growth}}</a>
   </div>
 </nav>
 
@@ -672,49 +769,94 @@
 <section class="toc" id="toc">
   <div class="toc-label">{{L.toc_label}}</div>
   <div class="toc-grid">
-    <a class="toc-item" href="#portrait"><span class="toc-num">01</span><span class="toc-title">{{L.sec_19_title}}</span></a>
-    <a class="toc-item" href="#zodiac"><span class="toc-num">02</span><span class="toc-title">{{L.sec_06_title}}</span></a>
-    <a class="toc-item" href="#intimacy"><span class="toc-num">03</span><span class="toc-title">{{L.sec_05_title}}</span></a>
-    <a class="toc-item" href="#overview"><span class="toc-num">04</span><span class="toc-title">{{L.sec_01_title}}</span></a>
-    <a class="toc-item" href="#trend"><span class="toc-num">05</span><span class="toc-title">{{L.sec_02_title}}</span></a>
-    <a class="toc-item" href="#ratio"><span class="toc-num">06</span><span class="toc-title">{{L.sec_03_title}}</span></a>
-    <a class="toc-item" href="#active"><span class="toc-num">07</span><span class="toc-title">{{L.sec_04_title}}</span></a>
-    <a class="toc-item" href="#persona"><span class="toc-num">08</span><span class="toc-title">{{L.sec_07_title}}</span></a>
-    <a class="toc-item" href="#contradict"><span class="toc-num">09</span><span class="toc-title">{{L.sec_20_title}}</span></a>
-    <a class="toc-item" href="#emotion"><span class="toc-num">10</span><span class="toc-title">{{L.sec_11_title}}</span></a>
-    <a class="toc-item" href="#deep"><span class="toc-num star">★</span><span class="toc-title">{{L.sec_deep_title}}</span></a>
-    <a class="toc-item" href="#comm-style"><span class="toc-num">11</span><span class="toc-title">{{L.sec_10_title}}</span></a>
-    <a class="toc-item" href="#subtext"><span class="toc-num">12</span><span class="toc-title">{{L.sec_09_title}}</span></a>
-    <a class="toc-item" href="#theatre"><span class="toc-num">13</span><span class="toc-title">{{L.sec_08_title}}</span></a>
-    <a class="toc-item" href="#quotes"><span class="toc-num">14</span><span class="toc-title">{{L.sec_22_title}}</span></a>
-    <a class="toc-item" href="#relation"><span class="toc-num">15</span><span class="toc-title">{{L.sec_12_title}}</span></a>
-    <a class="toc-item" href="#signals"><span class="toc-num">16</span><span class="toc-title">{{L.sec_15_title}}</span></a>
-    <a class="toc-item" href="#health"><span class="toc-num">17</span><span class="toc-title">{{L.sec_24_title}}</span></a>
-    <a class="toc-item" href="#paths"><span class="toc-num">18</span><span class="toc-title">{{L.sec_18_title}}</span></a>
-    <a class="toc-item" href="#topics"><span class="toc-num">19</span><span class="toc-title">{{L.sec_14_title}}</span></a>
-    <a class="toc-item" href="#times"><span class="toc-num">20</span><span class="toc-title">{{L.sec_16_title}}</span></a>
-    <a class="toc-item" href="#advice"><span class="toc-num">21</span><span class="toc-title">{{L.sec_13_title}}</span></a>
-    <a class="toc-item" href="#ways"><span class="toc-num star">★</span><span class="toc-title">{{L.sec_ways_title}}</span></a>
-    <a class="toc-item" href="#compat"><span class="toc-num">22</span><span class="toc-title">{{L.sec_21_title}}</span></a>
-    <a class="toc-item" href="#next"><span class="toc-num">23</span><span class="toc-title">{{L.sec_17_title}}</span></a>
-    <a class="toc-item" href="#growth"><span class="toc-num">24</span><span class="toc-title">{{L.sec_25_title}}</span></a>
-    <a class="toc-item" href="#gifts"><span class="toc-num">25</span><span class="toc-title">{{L.sec_23_title}}</span></a>
+    <a class="toc-item" href="#portrait" data-flavor="shared"><span class="toc-num">01</span><span class="toc-title">{{L.sec_19_title}}</span></a>
+    <a class="toc-item" href="#zodiac" data-flavor="other-only"><span class="toc-num">02</span><span class="toc-title">{{L.sec_06_title}}</span></a>
+    <a class="toc-item" href="#intimacy" data-flavor="other-only"><span class="toc-num">03</span><span class="toc-title">{{L.sec_05_title}}</span></a>
+    <a class="toc-item" href="#overview" data-flavor="shared"><span class="toc-num">04</span><span class="toc-title">{{L.sec_01_title}}</span></a>
+    <a class="toc-item" href="#trend" data-flavor="shared"><span class="toc-num">05</span><span class="toc-title">{{L.sec_02_title}}</span></a>
+    <a class="toc-item" href="#ratio" data-flavor="shared"><span class="toc-num">06</span><span class="toc-title">{{L.sec_03_title}}</span></a>
+    <a class="toc-item" href="#active" data-flavor="shared"><span class="toc-num">07</span><span class="toc-title">{{L.sec_04_title}}</span></a>
+    <a class="toc-item" href="#persona" data-flavor="shared"><span class="toc-num">08</span><span class="toc-title">{{L.sec_07_title}}</span></a>
+    <a class="toc-item" href="#contradict" data-flavor="shared"><span class="toc-num">09</span><span class="toc-title">{{L.sec_20_title}}</span></a>
+    <a class="toc-item" href="#emotion" data-flavor="shared"><span class="toc-num">10</span><span class="toc-title">{{L.sec_11_title}}</span></a>
+    <a class="toc-item" href="#deep" data-flavor="shared"><span class="toc-num">11</span><span class="toc-title">{{L.sec_deep_title}}</span></a>
+    <a class="toc-item" href="#comm-style" data-flavor="shared"><span class="toc-num">12</span><span class="toc-title">{{L.sec_10_title}}</span></a>
+    <a class="toc-item" href="#subtext" data-flavor="shared"><span class="toc-num">13</span><span class="toc-title">{{L.sec_09_title}}</span></a>
+    <a class="toc-item" href="#theatre" data-flavor="shared"><span class="toc-num">14</span><span class="toc-title">{{L.sec_08_title}}</span></a>
+    <a class="toc-item" href="#quotes" data-flavor="shared"><span class="toc-num">15</span><span class="toc-title">{{L.sec_22_title}}</span></a>
+    <a class="toc-item" href="#relation" data-flavor="other-only"><span class="toc-num">16</span><span class="toc-title">{{L.sec_12_title}}</span></a>
+    <a class="toc-item" href="#signals" data-flavor="shared"><span class="toc-num">17</span><span class="toc-title">{{L.sec_15_title}}</span></a>
+    <a class="toc-item" href="#health" data-flavor="shared"><span class="toc-num">18</span><span class="toc-title">{{L.sec_24_title}}</span></a>
+    <a class="toc-item" href="#paths" data-flavor="other-only"><span class="toc-num">19</span><span class="toc-title">{{L.sec_18_title}}</span></a>
+    <a class="toc-item" href="#topics" data-flavor="shared"><span class="toc-num">20</span><span class="toc-title">{{L.sec_14_title}}</span></a>
+    <a class="toc-item" href="#times" data-flavor="shared"><span class="toc-num">21</span><span class="toc-title">{{L.sec_16_title}}</span></a>
+    <a class="toc-item" href="#advice" data-flavor="other-only"><span class="toc-num">22</span><span class="toc-title">{{L.sec_13_title}}</span></a>
+    <a class="toc-item" href="#ways" data-flavor="other-only"><span class="toc-num">23</span><span class="toc-title">{{L.sec_ways_title}}</span></a>
+    <a class="toc-item" href="#compat" data-flavor="other-only"><span class="toc-num">24</span><span class="toc-title">{{L.sec_21_title}}</span></a>
+    <a class="toc-item" href="#next" data-flavor="shared"><span class="toc-num">25</span><span class="toc-title">{{L.sec_17_title}}</span></a>
+    <a class="toc-item" href="#growth" data-flavor="shared"><span class="toc-num">26</span><span class="toc-title">{{L.sec_25_title}}</span></a>
+    <a class="toc-item" href="#gifts" data-flavor="other-only"><span class="toc-num">27</span><span class="toc-title">{{L.sec_23_title}}</span></a>
+    <a class="toc-item" href="#unique-memories" data-flavor="shared"><span class="toc-num">—</span><span class="toc-title">{{L.sec_memories_title}}</span></a>
+    <a class="toc-item" href="#relationships-map" data-flavor="self-only"><span class="toc-num star">S·1</span><span class="toc-title">{{L.sec_self_relationships_title}}</span></a>
+    <a class="toc-item" href="#identity-modes" data-flavor="self-only"><span class="toc-num star">S·2</span><span class="toc-title">{{L.sec_self_identity_title}}</span></a>
+    <a class="toc-item" href="#perceived-views" data-flavor="self-only"><span class="toc-num star">S·3</span><span class="toc-title">{{L.sec_self_perceived_title}}</span></a>
+    <a class="toc-item" href="#growth-arc" data-flavor="self-only"><span class="toc-num star">S·4</span><span class="toc-title">{{L.sec_self_growth_title}}</span></a>
+    <a class="toc-item" href="#life-timeline" data-flavor="self-only"><span class="toc-num star">S·5</span><span class="toc-title">{{L.sec_self_timeline_title}}</span></a>
   </div>
 </section>
 <!-- ═══ 19 人物画像 ═══ -->
-<section class="section" id="portrait">
+<section class="section" id="portrait" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_19_num}}</div>
+    <div class="section-number">{{L.sec_01_num}}</div>
     <h2 class="section-title">{{L.sec_19_title}}</h2>
     <p class="section-desc">{{L.sec_19_desc}}</p>
   </div>
   <div class="portrait-card">{{D.character_portrait}}</div>
 </section>
 
-<!-- ═══ 06 星座 & 化学反应 ═══ -->
-<section class="section" id="zodiac">
+<!-- ═══ SELF · 社交圈谱 (only rendered for user-agent reports) ═══ -->
+<section class="section" id="relationships-map" data-flavor="self-only">
   <div class="section-header">
-    <div class="section-number">{{L.sec_06_num}}</div>
+    <div class="section-number">{{L.sec_self_relationships_num}}</div>
+    <h2 class="section-title">{{L.sec_self_relationships_title}}</h2>
+    <p class="section-desc">{{L.sec_self_relationships_desc}}</p>
+  </div>
+  <div class="card">
+    <p class="rel-network-shape">{{D.network_shape}}</p>
+    <div class="relation-list">
+      {{HTML.relationships_map}}
+    </div>
+  </div>
+</section>
+
+<!-- ═══ SELF · 身份切换 ═══ -->
+<section class="section" id="identity-modes" data-flavor="self-only">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_self_identity_num}}</div>
+    <h2 class="section-title">{{L.sec_self_identity_title}}</h2>
+    <p class="section-desc">{{L.sec_self_identity_desc}}</p>
+  </div>
+  <div class="grid-2">
+    {{HTML.identity_modes}}
+  </div>
+</section>
+
+<!-- ═══ SELF · 他人眼中的你 ═══ -->
+<section class="section" id="perceived-views" data-flavor="self-only">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_self_perceived_num}}</div>
+    <h2 class="section-title">{{L.sec_self_perceived_title}}</h2>
+    <p class="section-desc">{{L.sec_self_perceived_desc}}</p>
+  </div>
+  <div class="grid-2">
+    {{HTML.perceived_views}}
+  </div>
+</section>
+
+<!-- ═══ 06 星座 & 化学反应 ═══ -->
+<section class="section" id="zodiac" data-flavor="other-only">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_02_num}}</div>
     <h2 class="section-title">{{L.sec_06_title}}</h2>
     <p class="section-desc">{{L.sec_06_desc}}</p>
   </div>
@@ -745,9 +887,9 @@
 </section>
 
 <!-- ═══ 05 亲密度 ═══ -->
-<section class="section" id="intimacy">
+<section class="section" id="intimacy" data-flavor="other-only">
   <div class="section-header">
-    <div class="section-number">{{L.sec_05_num}}</div>
+    <div class="section-number">{{L.sec_03_num}}</div>
     <h2 class="section-title">{{L.sec_05_title}} <span class="confidence-chip"><span class="conf-dot"></span>{{L.sec_05_conf}}</span></h2>
     <p class="section-desc">{{L.sec_05_desc}}</p>
   </div>
@@ -770,9 +912,9 @@
 </section>
 
 <!-- ═══ 01 数据概览 ═══ -->
-<section class="section" id="overview">
+<section class="section" id="overview" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_01_num}}</div>
+    <div class="section-number">{{L.sec_04_num}}</div>
     <h2 class="section-title">{{L.sec_01_title}} <span class="confidence-chip"><span class="conf-dot"></span>{{L.sec_01_conf}}</span></h2>
     <p class="section-desc">{{L.sec_01_desc}}</p>
   </div>
@@ -802,9 +944,9 @@
 </section>
 
 <!-- ═══ 02 年度趋势 ═══ -->
-<section class="section" id="trend">
+<section class="section" id="trend" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_02_num}}</div>
+    <div class="section-number">{{L.sec_05_num}}</div>
     <h2 class="section-title">{{L.sec_02_title}} <span class="confidence-chip"><span class="conf-dot"></span>{{L.sec_02_conf}}</span></h2>
     <p class="section-desc">{{L.sec_02_desc}}</p>
   </div>
@@ -816,9 +958,9 @@
 </section>
 
 <!-- ═══ 03 发送比例 & 长度 ═══ -->
-<section class="section" id="ratio">
+<section class="section" id="ratio" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_03_num}}</div>
+    <div class="section-number">{{L.sec_06_num}}</div>
     <h2 class="section-title">{{L.sec_03_title}}</h2>
     <p class="section-desc">{{L.sec_03_desc}}</p>
   </div>
@@ -832,11 +974,11 @@
           <circle cx="80" cy="80" r="60" fill="none" stroke="#CC785C" stroke-width="22"
             stroke-dasharray="{{D.donut_dash_him}}" stroke-dashoffset="{{D.donut_offset_him}}" stroke-linecap="butt"/>
           <text x="80" y="72" text-anchor="middle" font-size="22" font-weight="800" fill="#CC785C">{{D.pct_him}}%</text>
-          <text x="80" y="92" text-anchor="middle" font-size="11" fill="#6b7280">{{D.agent_name}}</text>
+          <text x="80" y="92" text-anchor="middle" font-size="11" fill="#6b7280">{{D.side_him_label}}</text>
         </svg>
         <div class="donut-legend">
-          <div class="legend-item"><div class="legend-dot" style="background:#CC785C;"></div><span class="legend-name">{{D.agent_name}}</span><span class="legend-count">{{D.total_him_fmt}}</span><span class="legend-pct">{{D.pct_him}}%</span></div>
-          <div class="legend-item"><div class="legend-dot" style="background:#e5e7eb;border:1px solid #d1d5db;"></div><span class="legend-name">{{L.sec_03_partner}}</span><span class="legend-count">{{D.total_me_fmt}}</span><span class="legend-pct">{{D.pct_me}}%</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#CC785C;"></div><span class="legend-name">{{D.side_him_label}}</span><span class="legend-count">{{D.total_him_fmt}}</span><span class="legend-pct">{{D.pct_him}}%</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#e5e7eb;border:1px solid #d1d5db;"></div><span class="legend-name">{{D.side_other_label}}</span><span class="legend-count">{{D.total_me_fmt}}</span><span class="legend-pct">{{D.pct_me}}%</span></div>
         </div>
       </div>
     </div>
@@ -854,9 +996,9 @@
 </section>
 
 <!-- ═══ 04 活跃时段 ═══ -->
-<section class="section" id="active">
+<section class="section" id="active" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_04_num}}</div>
+    <div class="section-number">{{L.sec_07_num}}</div>
     <h2 class="section-title">{{L.sec_04_title}}</h2>
     <p class="section-desc">{{L.sec_04_desc}}</p>
   </div>
@@ -875,9 +1017,9 @@
 </section>
 
 <!-- ═══ 07 人格画像 ═══ -->
-<section class="section" id="persona">
+<section class="section" id="persona" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_07_num}}</div>
+    <div class="section-number">{{L.sec_08_num}}</div>
     <h2 class="section-title">{{L.sec_07_title}} <span class="confidence-chip"><span class="conf-dot"></span>{{L.sec_07_conf}}</span></h2>
     <p class="section-desc">{{L.sec_07_desc}}</p>
   </div>
@@ -937,9 +1079,9 @@
 </section>
 
 <!-- ═══ 20 令人意外的矛盾 ═══ -->
-<section class="section" id="contradict">
+<section class="section" id="contradict" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_20_num}}</div>
+    <div class="section-number">{{L.sec_09_num}}</div>
     <h2 class="section-title">{{L.sec_20_title}}</h2>
     <p class="section-desc">{{L.sec_20_desc}}</p>
   </div>
@@ -947,9 +1089,9 @@
 </section>
 
 <!-- ═══ 11 情绪结构 ═══ -->
-<section class="section" id="emotion">
+<section class="section" id="emotion" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_11_num}}</div>
+    <div class="section-number">{{L.sec_10_num}}</div>
     <h2 class="section-title">{{L.sec_11_title}}</h2>
     <p class="section-desc">{{L.sec_11_desc}}</p>
   </div>
@@ -959,9 +1101,9 @@
 </section>
 
 <!-- ═══ ★ 深度分析 · 28 维 ═══ -->
-<section class="section" id="deep">
+<section class="section" id="deep" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_deep_num}}</div>
+    <div class="section-number">{{L.sec_11_num}}</div>
     <h2 class="section-title">{{L.sec_deep_title}} <span class="confidence-chip"><span class="conf-dot"></span>{{L.sec_deep_conf}}</span></h2>
     <p class="section-desc">{{L.sec_deep_desc}}</p>
   </div>
@@ -971,9 +1113,9 @@
 </section>
 
 <!-- ═══ 10 沟通风格 ═══ -->
-<section class="section" id="comm-style">
+<section class="section" id="comm-style" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_10_num}}</div>
+    <div class="section-number">{{L.sec_12_num}}</div>
     <h2 class="section-title">{{L.sec_10_title}}</h2>
     <p class="section-desc">{{L.sec_10_desc}}</p>
   </div>
@@ -996,9 +1138,9 @@
 </section>
 
 <!-- ═══ 09 潜台词 ═══ -->
-<section class="section" id="subtext">
+<section class="section" id="subtext" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_09_num}}</div>
+    <div class="section-number">{{L.sec_13_num}}</div>
     <h2 class="section-title">{{L.sec_09_title}}</h2>
     <p class="section-desc">{{L.sec_09_desc}}</p>
   </div>
@@ -1011,9 +1153,9 @@
 </section>
 
 <!-- ═══ 08 对话剧场 ═══ -->
-<section class="section" id="theatre">
+<section class="section" id="theatre" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_08_num}}</div>
+    <div class="section-number">{{L.sec_14_num}}</div>
     <h2 class="section-title">{{L.sec_08_title}}</h2>
     <p class="section-desc">{{L.sec_08_desc}}</p>
   </div>
@@ -1023,9 +1165,9 @@
 </section>
 
 <!-- ═══ 22 典型语录 ═══ -->
-<section class="section" id="quotes">
+<section class="section" id="quotes" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_22_num}}</div>
+    <div class="section-number">{{L.sec_15_num}}</div>
     <h2 class="section-title">{{L.sec_22_title}} <span class="confidence-chip"><span class="conf-dot"></span>{{L.sec_22_conf}}</span></h2>
     <p class="section-desc">{{L.sec_22_desc}}</p>
   </div>
@@ -1035,9 +1177,9 @@
 </section>
 
 <!-- ═══ 12 关系动态 ═══ -->
-<section class="section" id="relation">
+<section class="section" id="relation" data-flavor="other-only">
   <div class="section-header">
-    <div class="section-number">{{L.sec_12_num}}</div>
+    <div class="section-number">{{L.sec_16_num}}</div>
     <h2 class="section-title">{{L.sec_12_title}}</h2>
     <p class="section-desc">{{L.sec_12_desc}}</p>
   </div>
@@ -1060,9 +1202,9 @@
 </section>
 
 <!-- ═══ 15 关系信号灯 ═══ -->
-<section class="section" id="signals">
+<section class="section" id="signals" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_15_num}}</div>
+    <div class="section-number">{{L.sec_17_num}}</div>
     <h2 class="section-title">{{L.sec_15_title}}</h2>
     <p class="section-desc">{{L.sec_15_desc}}</p>
   </div>
@@ -1104,9 +1246,9 @@
 </section>
 
 <!-- ═══ 24 关系健康指数 ═══ -->
-<section class="section" id="health">
+<section class="section" id="health" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_24_num}}</div>
+    <div class="section-number">{{L.sec_18_num}}</div>
     <h2 class="section-title">{{L.sec_24_title}}</h2>
     <p class="section-desc">{{L.sec_24_desc}}</p>
   </div>
@@ -1117,7 +1259,9 @@
         <div class="health-lbl">{{L.health_score_label}}</div>
       </div>
       <div class="health-trend">
-        <svg id="healthTrend" width="100%" height="120" viewBox="0 0 600 120"></svg>
+        <p class="chart-hint">{{L.health_trend_hint}}</p>
+        <svg id="healthTrend" viewBox="0 0 640 180" preserveAspectRatio="xMidYMid meet"></svg>
+        <p class="chart-caption">{{L.health_trend_caption}}</p>
       </div>
     </div>
     <div class="health-alert">{{D.health_alert_text}}</div>
@@ -1125,9 +1269,9 @@
 </section>
 
 <!-- ═══ 18 三条路径 ═══ -->
-<section class="section" id="paths">
+<section class="section" id="paths" data-flavor="other-only">
   <div class="section-header">
-    <div class="section-number">{{L.sec_18_num}}</div>
+    <div class="section-number">{{L.sec_19_num}}</div>
     <h2 class="section-title">{{L.sec_18_title}}</h2>
     <p class="section-desc">{{L.sec_18_desc}}</p>
   </div>
@@ -1136,10 +1280,51 @@
   </div>
 </section>
 
-<!-- ═══ 14 话题偏好 (Apple) ═══ -->
-<section class="section" id="topics">
+<!-- ═══ SELF · 成长轨迹 ═══ -->
+<section class="section" id="growth-arc" data-flavor="self-only">
   <div class="section-header">
-    <div class="section-number">{{L.sec_14_num}}</div>
+    <div class="section-number">{{L.sec_self_growth_num}}</div>
+    <h2 class="section-title">{{L.sec_self_growth_title}}</h2>
+    <p class="section-desc">{{L.sec_self_growth_desc}}</p>
+  </div>
+  <div class="card">
+    <p class="growth-overall">{{D.growth_overall_trajectory}}</p>
+    <div class="growth-phases">
+      {{HTML.growth_phases}}
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 独特回忆（shared — 两种 flavor 都渲染） ═══ -->
+<section class="section" id="unique-memories" data-flavor="shared">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_memories_num}}</div>
+    <h2 class="section-title">{{L.sec_memories_title}}</h2>
+    <p class="section-desc">{{L.sec_memories_desc}}</p>
+  </div>
+  <div class="memory-grid">
+    {{HTML.unique_memories}}
+  </div>
+</section>
+
+<!-- ═══ SELF · 生活事件时间线 ═══ -->
+<section class="section" id="life-timeline" data-flavor="self-only">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_self_timeline_num}}</div>
+    <h2 class="section-title">{{L.sec_self_timeline_title}}</h2>
+    <p class="section-desc">{{L.sec_self_timeline_desc}}</p>
+  </div>
+  <div class="card">
+    <div class="timeline">
+      {{HTML.life_timeline}}
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 14 话题偏好 (Apple) ═══ -->
+<section class="section" id="topics" data-flavor="shared">
+  <div class="section-header">
+    <div class="section-number">{{L.sec_20_num}}</div>
     <h2 class="section-title">{{L.sec_14_title}}</h2>
     <p class="section-desc">{{L.sec_14_desc}}</p>
   </div>
@@ -1175,9 +1360,9 @@
 </section>
 
 <!-- ═══ 16 最佳沟通时机 ═══ -->
-<section class="section" id="times">
+<section class="section" id="times" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_16_num}}</div>
+    <div class="section-number">{{L.sec_21_num}}</div>
     <h2 class="section-title">{{L.sec_16_title}}</h2>
     <p class="section-desc">{{L.sec_16_desc}}</p>
   </div>
@@ -1189,9 +1374,9 @@
 </section>
 
 <!-- ═══ 13 互动建议 (Apple DO/DON'T) ═══ -->
-<section class="section" id="advice">
+<section class="section" id="advice" data-flavor="other-only">
   <div class="section-header">
-    <div class="section-number">{{L.sec_13_num}}</div>
+    <div class="section-number">{{L.sec_22_num}}</div>
     <h2 class="section-title">{{L.sec_13_title}}</h2>
     <p class="section-desc">{{L.sec_13_desc}}</p>
   </div>
@@ -1220,9 +1405,9 @@
 </section>
 
 <!-- ═══ ★ 增进关系的 10 个方式 ═══ -->
-<section class="section" id="ways">
+<section class="section" id="ways" data-flavor="other-only">
   <div class="section-header">
-    <div class="section-number">{{L.sec_ways_num}}</div>
+    <div class="section-number">{{L.sec_23_num}}</div>
     <h2 class="section-title">{{L.sec_ways_title}}</h2>
     <p class="section-desc">{{L.sec_ways_desc}}</p>
   </div>
@@ -1232,9 +1417,9 @@
 </section>
 
 <!-- ═══ 21 MBTI 兼容性 ═══ -->
-<section class="section" id="compat">
+<section class="section" id="compat" data-flavor="other-only">
   <div class="section-header">
-    <div class="section-number">{{L.sec_21_num}}</div>
+    <div class="section-number">{{L.sec_24_num}}</div>
     <h2 class="section-title">{{L.sec_21_title}}</h2>
     <p class="section-desc">{{L.sec_21_desc}}</p>
   </div>
@@ -1244,9 +1429,9 @@
 </section>
 
 <!-- ═══ 17 下一步可能 ═══ -->
-<section class="section" id="next">
+<section class="section" id="next" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_17_num}}</div>
+    <div class="section-number">{{L.sec_25_num}}</div>
     <h2 class="section-title">{{L.sec_17_title}}</h2>
     <p class="section-desc">{{L.sec_17_desc}}</p>
   </div>
@@ -1258,9 +1443,9 @@
 </section>
 
 <!-- ═══ 25 成长建议 ═══ -->
-<section class="section" id="growth">
+<section class="section" id="growth" data-flavor="shared">
   <div class="section-header">
-    <div class="section-number">{{L.sec_25_num}}</div>
+    <div class="section-number">{{L.sec_26_num}}</div>
     <h2 class="section-title">{{L.sec_25_title}}</h2>
     <p class="section-desc">{{L.sec_25_desc}}</p>
   </div>
@@ -1270,9 +1455,9 @@
 </section>
 
 <!-- ═══ 23 礼物建议 ═══ -->
-<section class="section" id="gifts">
+<section class="section" id="gifts" data-flavor="other-only">
   <div class="section-header">
-    <div class="section-number">{{L.sec_23_num}}</div>
+    <div class="section-number">{{L.sec_27_num}}</div>
     <h2 class="section-title">{{L.sec_23_title}}</h2>
     <p class="section-desc">{{L.sec_23_desc}}</p>
   </div>
@@ -1297,7 +1482,8 @@
 <script>
 (function(){
   const data = {{D.year_chart_json}};
-  const HIM_NAME = "{{D.agent_name}}";
+  const HIM_NAME = "{{D.side_him_label}}";
+  const OTHER_NAME = "{{D.side_other_label}}";
   const svg = document.getElementById('yearChart');
   const W=1020,H=260, ml=60,mr=20,mt=20,mb=50;
   const cw=W-ml-mr, ch=H-mt-mb;
@@ -1320,24 +1506,36 @@
   const hArea = hp+' L '+xp(data.length-1)+' '+(mt+ch)+' L '+xp(0)+' '+(mt+ch)+' Z';
   const mArea = mp+' L '+xp(data.length-1)+' '+(mt+ch)+' L '+xp(0)+' '+(mt+ch)+' Z';
   let xLabels='', dots='';
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
   data.forEach((d,i)=>{
     xLabels += '<text x="'+xp(i)+'" y="'+(H-10)+'" text-anchor="middle" font-size="12" fill="#6b7280">'+d.year+'</text>';
-    dots += '<circle cx="'+xp(i)+'" cy="'+yp(d.him)+'" r="4" fill="#CC785C" stroke="#fff" stroke-width="2"/>';
-    dots += '<circle cx="'+xp(i)+'" cy="'+yp(d.me)+'" r="3" fill="#E8E0CF" stroke="#fff" stroke-width="1.5"/>';
+    // data-tip attribute consumed by the custom HTML tooltip handler below.
+    // SVG <title> has a 1-2s browser delay that users miss; custom tooltip
+    // appears immediately on mouseenter.
+    const tip = esc(d.year + ' · ' + HIM_NAME + ' ' + (d.him||0).toLocaleString() + ' · ' + OTHER_NAME + ' ' + (d.me||0).toLocaleString())
+    dots += '<circle class="yc-dot" cx="'+xp(i)+'" cy="'+yp(d.him)+'" r="5" fill="#CC785C" stroke="#fff" stroke-width="2" data-tip="'+tip+'"/>';
+    dots += '<circle class="yc-dot" cx="'+xp(i)+'" cy="'+yp(d.me)+'" r="4" fill="#E8E0CF" stroke="#fff" stroke-width="1.5" data-tip="'+tip+'"/>';
   });
   let pIdx=0; for(let i=1;i<data.length;i++){ if(data[i].him>data[pIdx].him) pIdx=i; }
   const pvx=xp(pIdx), pvy=yp(data[pIdx].him);
   const peakVal = data[pIdx].him.toLocaleString();
   const labelCx = Math.max(ml+42, Math.min(W-mr-42, pvx));
+  // Keep the peak label inside the SVG: if there isn't room ABOVE the peak
+  // point (default placement), flip it BELOW so it never clips at the top.
+  const labelAbove = (pvy - 52) >= (mt - 4)
+  const lineY1 = labelAbove ? (pvy - 8)  : (pvy + 8)
+  const lineY2 = labelAbove ? (pvy - 32) : (pvy + 32)
+  const rectY  = labelAbove ? (pvy - 52) : (pvy + 32)
+  const textY  = labelAbove ? (pvy - 37) : (pvy + 47)
   const peakAnn =
-    '<line x1="'+pvx+'" y1="'+(pvy-8)+'" x2="'+pvx+'" y2="'+(pvy-32)+'" stroke="#CC785C" stroke-width="1.5" stroke-dasharray="3,2"/>'
-    + '<rect x="'+(labelCx-42)+'" y="'+(pvy-52)+'" width="84" height="22" rx="4" fill="#CC785C"/>'
-    + '<text x="'+labelCx+'" y="'+(pvy-37)+'" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">峰值 '+peakVal+'</text>';
+    '<line x1="'+pvx+'" y1="'+lineY1+'" x2="'+pvx+'" y2="'+lineY2+'" stroke="#CC785C" stroke-width="1.5" stroke-dasharray="3,2"/>'
+    + '<rect x="'+(labelCx-42)+'" y="'+rectY+'" width="84" height="22" rx="4" fill="#CC785C"/>'
+    + '<text x="'+labelCx+'" y="'+textY+'" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">峰值 '+peakVal+'</text>';
   const legend =
     '<rect x="'+(W-200)+'" y="'+mt+'" width="14" height="14" rx="3" fill="#CC785C"/>'
-    + '<text x="'+(W-182)+'" y="'+(mt+11)+'" font-size="12" fill="#374151">'+HIM_NAME+'</text>'
+    + '<text x="'+(W-182)+'" y="'+(mt+11)+'" font-size="12" fill="#374151">'+esc(HIM_NAME)+'</text>'
     + '<rect x="'+(W-200)+'" y="'+(mt+22)+'" width="14" height="14" rx="3" fill="#E8E0CF"/>'
-    + '<text x="'+(W-182)+'" y="'+(mt+33)+'" font-size="12" fill="#374151">对方（Me）</text>';
+    + '<text x="'+(W-182)+'" y="'+(mt+33)+'" font-size="12" fill="#374151">'+esc(OTHER_NAME)+'</text>';
   svg.innerHTML =
     '<defs>'
     + '<linearGradient id="hG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#CC785C" stop-opacity="0.22"/><stop offset="100%" stop-color="#CC785C" stop-opacity="0.02"/></linearGradient>'
@@ -1349,6 +1547,28 @@
     + '<path d="'+hArea+'" fill="url(#hG)"/>'
     + '<path d="'+hp+'" fill="none" stroke="#CC785C" stroke-width="3" stroke-linecap="round"/>'
     + peakAnn + dots + xLabels + legend;
+
+  // ── Custom tooltip: appears instantly on circle hover, follows cursor ──
+  // SVG <title> has a ~1.5s browser delay users miss — this replaces it.
+  let tip = document.getElementById('yc-tooltip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'yc-tooltip';
+    tip.style.cssText = 'position:fixed;pointer-events:none;background:#1f2937;color:#fff;padding:6px 10px;border-radius:4px;font-size:12px;font-family:var(--font-sans, sans-serif);white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.15);opacity:0;transition:opacity .08s;z-index:9999;';
+    document.body.appendChild(tip);
+  }
+  svg.querySelectorAll('.yc-dot').forEach(c => {
+    c.style.cursor = 'help';
+    c.addEventListener('mouseenter', (e) => {
+      tip.textContent = c.getAttribute('data-tip') || '';
+      tip.style.opacity = '1';
+    });
+    c.addEventListener('mousemove', (e) => {
+      tip.style.left = (e.clientX + 12) + 'px';
+      tip.style.top  = (e.clientY + 12) + 'px';
+    });
+    c.addEventListener('mouseleave', () => { tip.style.opacity = '0'; });
+  });
 })();
 
 (function(){
@@ -1389,24 +1609,81 @@
 
 (function(){
   const trend = {{D.health_trend_json}};
+  const months = {{D.health_trend_months_json}};
   const svg = document.getElementById('healthTrend');
-  if (!svg) return;
-  const W = 600, H = 120, pad = 10;
-  const mn = Math.min(...trend)-5, mx = Math.max(...trend)+5;
-  const xp = i => pad + i*((W-2*pad)/(trend.length-1));
-  const yp = v => pad + (H-2*pad)*(1-(v-mn)/(mx-mn));
+  if (!svg || !Array.isArray(trend) || trend.length === 0) return;
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  const W = 640, H = 180;
+  const ml = 40, mr = 16, mt = 24, mb = 32;       // plot margins (Y labels + X labels)
+  const cw = W - ml - mr, ch = H - mt - mb;
+
+  // Y range with sensible padding. Clamp to 0-100 (health score scale).
+  const rawMn = Math.min(...trend), rawMx = Math.max(...trend);
+  const span = Math.max(10, rawMx - rawMn);
+  const mn = Math.max(0, Math.floor((rawMn - span * 0.2) / 10) * 10);
+  const mx = Math.min(100, Math.ceil((rawMx + span * 0.2) / 10) * 10);
+
+  const xp = i => ml + (trend.length === 1 ? cw/2 : i * (cw / (trend.length - 1)));
+  const yp = v => mt + ch - ((v - mn) / (mx - mn)) * ch;
+
+  // ── Grid + Y-axis labels ─────────────────────────────────────
+  const gridSteps = 3;
+  let grid = '', yLabels = '';
+  for (let k = 0; k <= gridSteps; k++) {
+    const v = mn + (mx - mn) * k / gridSteps;
+    const y = yp(v);
+    grid    += '<line x1="'+ml+'" y1="'+y+'" x2="'+(W-mr)+'" y2="'+y+'" stroke="#f3f4f6" stroke-width="1"/>';
+    yLabels += '<text x="'+(ml-6)+'" y="'+(y+3)+'" text-anchor="end" font-size="10" fill="#9ca3af">'+Math.round(v)+'</text>';
+  }
+
+  // ── Area + line path ─────────────────────────────────────────
   let p = 'M '+xp(0)+' '+yp(trend[0]);
   for (let i = 1; i < trend.length; i++) {
     const cx = (xp(i-1)+xp(i))/2;
     p += ' C '+cx+' '+yp(trend[i-1])+', '+cx+' '+yp(trend[i])+', '+xp(i)+' '+yp(trend[i]);
   }
-  let area = p+' L '+xp(trend.length-1)+' '+(H-pad)+' L '+xp(0)+' '+(H-pad)+' Z';
-  let dots = ''; trend.forEach((v,i)=>{ dots += '<circle cx="'+xp(i)+'" cy="'+yp(v)+'" r="4" fill="#7E9A6D"/>'; });
+  const area = p+' L '+xp(trend.length-1)+' '+(mt+ch)+' L '+xp(0)+' '+(mt+ch)+' Z';
+
+  // ── Dots + value labels + X-axis month labels ───────────────
+  let dots = '', valueLabels = '', xLabels = '';
+  // Thin out X labels when there are many (e.g. show every other month for 12).
+  const xLabelStride = trend.length > 8 ? 2 : 1;
+  trend.forEach((v, i) => {
+    const x = xp(i), y = yp(v);
+    const tipText = esc((months[i] || ('#'+(i+1))) + ' · ' + v);
+    dots += '<circle class="ht-dot" cx="'+x+'" cy="'+y+'" r="4" fill="#7E9A6D" stroke="#fff" stroke-width="1.5" data-tip="'+tipText+'"/>';
+    // Value number above each dot — small and subtle so the line stays the hero
+    valueLabels += '<text x="'+x+'" y="'+(y-8)+'" text-anchor="middle" font-size="10" fill="#374151" font-weight="600">'+v+'</text>';
+    // X-axis: YYYY-MM → MM only to save space
+    if (i % xLabelStride === 0 || i === trend.length - 1) {
+      const m = months[i] || ''
+      const short = m.length >= 7 ? m.slice(5, 7) + '月' : m
+      xLabels += '<text x="'+x+'" y="'+(H-10)+'" text-anchor="middle" font-size="10" fill="#6b7280">'+esc(short)+'</text>';
+    }
+  });
+
   svg.innerHTML =
     '<defs><linearGradient id="hT" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7E9A6D" stop-opacity="0.22"/><stop offset="100%" stop-color="#7E9A6D" stop-opacity="0.02"/></linearGradient></defs>'
+    + grid + yLabels
     + '<path d="'+area+'" fill="url(#hT)"/>'
-    + '<path d="'+p+'" fill="none" stroke="#7E9A6D" stroke-width="3"/>'
-    + dots;
+    + '<path d="'+p+'" fill="none" stroke="#7E9A6D" stroke-width="2.5" stroke-linecap="round"/>'
+    + valueLabels + dots + xLabels;
+
+  // Custom hover tooltip — reuses the same singleton DIV as the year chart.
+  let tip = document.getElementById('yc-tooltip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'yc-tooltip';
+    tip.style.cssText = 'position:fixed;pointer-events:none;background:#1f2937;color:#fff;padding:6px 10px;border-radius:4px;font-size:12px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.15);opacity:0;transition:opacity .08s;z-index:9999;';
+    document.body.appendChild(tip);
+  }
+  svg.querySelectorAll('.ht-dot').forEach(c => {
+    c.style.cursor = 'help';
+    c.addEventListener('mouseenter', () => { tip.textContent = c.getAttribute('data-tip') || ''; tip.style.opacity = '1'; });
+    c.addEventListener('mousemove',  e => { tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY + 12) + 'px'; });
+    c.addEventListener('mouseleave', () => { tip.style.opacity = '0'; });
+  });
 })();
 </script>
 

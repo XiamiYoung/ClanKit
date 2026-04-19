@@ -381,12 +381,21 @@ class AnalyzeAgentTool extends BaseTool {
       } catch (_) { /* fallthrough to fresh extraction */ }
     }
 
+    const isSelfMode = this.targetAgentType === 'user'
     // ── Load raw message samples for dialogue theatre ────────────────
     emit('Loading message samples for dialogue theatre...')
     const samples = idx.getSampledMessages(this.targetAgentId) || { long: [], conflict: [], sweet: [], recent: [], strided: [] }
     const sampleLines = []
     const fmtMsg = (m) => {
-      const sender = m.sender === 'them' ? this.targetAgentName : 'Me'
+      // User-side label: "你(Me)" for self, "Me" for system.
+      // Partner-side label in self mode: the partner's REAL display name (from
+      // the DB's sender column — e.g. "张淑云") so the LLM produces a schema
+      // output that uses real names instead of mimicking a generic "对方".
+      // getSampledMessages now returns raw sender + senderKind flag.
+      const kind = m.senderKind || (m.sender === 'me' || m.sender === 'Me' ? 'me' : 'them')
+      const sender = kind === 'me'
+        ? (isSelfMode ? '你(Me)' : 'Me')
+        : (isSelfMode ? (m.sender || '对方') : this.targetAgentName)
       const ts = m.timestamp ? `[${m.timestamp}] ` : ''
       return `${ts}${sender}: ${m.content}`
     }
@@ -396,6 +405,60 @@ class AnalyzeAgentTool extends BaseTool {
       }
     }
     const sampleBlock = sampleLines.join('\n').slice(0, 60000)  // safety cap
+
+    // ── Self-analysis: partner stats + per-partner samples + yearly buckets ──
+    // Only fetched when isSelfMode; used exclusively by self-only groups
+    // (relationships, identity, perceived, growth_arc, timeline).
+    let selfContextBlock = ''
+    if (isSelfMode) {
+      try {
+        const partnerStats = idx.getPartnerStats(this.targetAgentId) || []
+        const yearly = idx.getYearlyBuckets(this.targetAgentId, 60) || { counts: {}, samples: {} }
+
+        const partnerLines = partnerStats.slice(0, 20).map(p =>
+          `- ${p.partner}: ${p.count} messages, ${p.first?.slice(0,10)}~${p.last?.slice(0,10)}, avg ${p.avg_len} chars`
+        ).join('\n')
+
+        // Per-partner sample: top 8 partners, 12 msgs from each.
+        // "你(Me)" = the user (analysis subject), partner name = that partner.
+        const perPartnerSections = []
+        for (const p of partnerStats.slice(0, 8)) {
+          const msgs = idx.getMessagesWithPartner(this.targetAgentId, p.partner, 24, 'both') || []
+          if (msgs.length === 0) continue
+          const lines = msgs.slice(-12).map(m => {
+            const who = m.sender === 'Me' ? '你(Me)' : p.partner
+            const ts = m.timestamp ? `[${m.timestamp.slice(0,10)}] ` : ''
+            return `  ${ts}${who}: ${String(m.content || '').slice(0, 140)}`
+          }).join('\n')
+          perPartnerSections.push(`### 和 ${p.partner} 的对话片段 (${p.count} 条消息)\n${lines}`)
+        }
+
+        // Yearly summary: counts + a handful of sample messages per year
+        const yearLines = []
+        for (const year of Object.keys(yearly.counts).sort()) {
+          yearLines.push(`- ${year}: ${yearly.counts[year]} messages`)
+        }
+        const yearSamples = []
+        for (const year of Object.keys(yearly.samples).sort()) {
+          const picks = (yearly.samples[year] || []).slice(0, 10)
+          if (picks.length === 0) continue
+          const lines = picks.map(m => {
+            const who = m.sender === 'Me' ? '你(Me)' : m.sender
+            return `  ${who}: ${String(m.content || '').slice(0, 140)}`
+          }).join('\n')
+          yearSamples.push(`### ${year}\n${lines}`)
+        }
+
+        selfContextBlock = [
+          '\n\n## 🧑‍🤝‍🧑 社交圈概览（供 self-analysis 使用）\n' + (partnerLines || '(no partner data)'),
+          '\n\n## 💬 每位对话者样本\n' + (perPartnerSections.join('\n\n') || '(no samples)'),
+          '\n\n## 📅 年度消息量\n' + (yearLines.join('\n') || '(no yearly data)'),
+          '\n\n## 📚 年度样本（用于 growth_arc）\n' + (yearSamples.join('\n\n') || '(no yearly samples)'),
+        ].join('').slice(0, 40000)  // safety cap
+      } catch (err) {
+        logger.warn('[AnalyzeAgentTool] self context load failed:', err.message)
+      }
+    }
 
     // ── Load import artifacts for extra data ────────────────────────
     let artifactBlock = ''
@@ -417,28 +480,69 @@ class AnalyzeAgentTool extends BaseTool {
     const lang = cachedAnalysis.language || 'zh'
     const zh = lang === 'zh'
 
-    // ── Grouped extraction (5 smaller LLM calls instead of one huge JSON) ──
-    // Asking a single LLM call to output all 19 sections produces unreliable
-    // JSON (truncation, fancy punctuation, schema drift). Split into 5 focused
-    // groups, each with its own 2-attempt retry + salvage.
-    const SECTION_GROUPS = [
+    // ── Grouped extraction ─────────────────────────────────────────────
+    // Structured extraction is split into small focused groups that run in
+    // parallel via Promise.allSettled. Each group owns a 2-attempt retry +
+    // salvage loop internally (see runOneGroup below).
+    //
+    // Flavor branching (system-agent vs user-agent / self-analysis):
+    // - SYSTEM (isSelf=false): analyzing a relationship partner. Original 6
+    //   groups below. Unchanged — preserves backward compat with existing
+    //   system-agent reports.
+    // - SELF   (isSelf=true) : analyzing the user themselves via multi-partner
+    //   chat imports. Shared groups (core, dialogue, interaction, portrait,
+    //   suggestions) reused — their prompts detect isSelf and address the
+    //   user in 2nd-person ("你"). Relationship-centric sections are removed
+    //   (compatibility, gifts, interaction tips with a partner). Five new
+    //   self-only groups extract relationships_map, identity_modes,
+    //   perceived_views, growth_arc, life_timeline.
+    const SECTION_GROUPS_OTHER = [
       { id: 'core',        label: zh ? '核心性格'   : 'Core personality',
         keys: ['persona_card', 'mbti', 'ocean', 'attachment'], maxTokens: 6144 },
       { id: 'dialogue',    label: zh ? '对话与语录' : 'Dialogue & quotes',
         keys: ['dialogue_theatre', 'key_quotes', 'subtext_decoder'], maxTokens: 10000 },
       { id: 'interaction', label: zh ? '互动模式'   : 'Interaction patterns',
         keys: ['interaction_tips', 'topic_preferences', 'signals', 'best_communication_times', 'expected_next'], maxTokens: 5000 },
-      // narrative split into two groups — the original 6144-token single call kept
-      // getting truncated mid-JSON for Chinese output (6x token inflation when LLMs
-      // emit \uXXXX escapes). Splitting + bumping limits gives each group enough
-      // headroom to close the JSON object cleanly.
       { id: 'portrait',    label: zh ? '人物叙事'   : 'Character narrative',
         keys: ['character_portrait', 'surprising_contradiction', 'trajectory'], maxTokens: 12288 },
       { id: 'wellbeing',   label: zh ? '健康与兼容' : 'Health & compatibility',
         keys: ['health_index', 'compatibility'], maxTokens: 8192 },
       { id: 'suggestions', label: zh ? '建议'       : 'Suggestions',
         keys: ['growth_suggestions', 'gift_suggestions'], maxTokens: 4096 },
+      { id: 'memories',    label: zh ? '独特回忆'   : 'Unique memories',
+        keys: ['unique_memories'], maxTokens: 10000 },
     ]
+
+    const SECTION_GROUPS_SELF = [
+      // Shared groups reused — relationship-centric keys pruned out
+      { id: 'core',        label: zh ? '核心性格'   : 'Core personality',
+        keys: ['persona_card', 'mbti', 'ocean', 'attachment'], maxTokens: 6144 },
+      { id: 'dialogue',    label: zh ? '对话与语录' : 'Dialogue & quotes',
+        keys: ['dialogue_theatre', 'key_quotes', 'subtext_decoder'], maxTokens: 10000 },
+      { id: 'interaction', label: zh ? '话题与信号' : 'Topics & signals',
+        keys: ['topic_preferences', 'signals', 'best_communication_times', 'expected_next'], maxTokens: 5000 },
+      { id: 'portrait',    label: zh ? '自我叙事'   : 'Self narrative',
+        keys: ['character_portrait', 'surprising_contradiction', 'trajectory'], maxTokens: 12288 },
+      { id: 'wellbeing',   label: zh ? '身心状态'   : 'Wellbeing',
+        keys: ['health_index'], maxTokens: 4096 },
+      { id: 'suggestions', label: zh ? '成长建议'   : 'Growth suggestions',
+        keys: ['growth_suggestions'], maxTokens: 3072 },
+      { id: 'memories',    label: zh ? '独特回忆'   : 'Unique memories',
+        keys: ['unique_memories'], maxTokens: 10000 },
+      // Self-only groups — only meaningful when user imported multi-partner chats
+      { id: 'relationships',  label: zh ? '社交圈谱'   : 'Relationships map',
+        keys: ['relationships_map'], maxTokens: 4096, selfOnly: true },
+      { id: 'identity',       label: zh ? '身份切换'   : 'Identity modes',
+        keys: ['identity_modes'], maxTokens: 8192, selfOnly: true },
+      { id: 'perceived',      label: zh ? '他人眼中'   : 'Perceived views',
+        keys: ['perceived_views'], maxTokens: 8192, selfOnly: true },
+      { id: 'growth_arc',     label: zh ? '成长轨迹'   : 'Growth arc',
+        keys: ['growth_arc'], maxTokens: 6144, selfOnly: true },
+      { id: 'timeline',       label: zh ? '生活事件'   : 'Life timeline',
+        keys: ['life_timeline'], maxTokens: 6144, selfOnly: true },
+    ]
+
+    const SECTION_GROUPS = isSelf ? SECTION_GROUPS_SELF : SECTION_GROUPS_OTHER
 
     emit(zh ? `正在分 ${SECTION_GROUPS.length} 组提取结构化数据...` : `Extracting structured data in ${SECTION_GROUPS.length} groups...`)
 
@@ -454,8 +558,16 @@ class AnalyzeAgentTool extends BaseTool {
       emit(zh ? `[${group.label}] 提取 ${group.keys.length} 个 section...`
              : `[${group.label}] Extracting ${group.keys.length} sections...`)
 
+      // In self mode EVERY group receives selfContextBlock — not just self-only
+      // groups. Shared groups (dialogue_theatre, key_quotes, unique_memories)
+      // need the partner-name list too so they can attribute speakers by
+      // specific names (张淑云, 洋, etc.) instead of the generic "对方".
+      // Without this, the LLM has no way to know what partners exist.
+      const extraBlock = isSelf
+        ? (artifactBlock + selfContextBlock)
+        : artifactBlock
       const groupPrompt = this._buildGroupPrompt(
-        group, name, isSelf, lang, stats, cachedAnalysis.analysis, sampleBlock, artifactBlock
+        group, name, isSelf, lang, stats, cachedAnalysis.analysis, sampleBlock, extraBlock
       )
 
       let groupSections = null
@@ -540,15 +652,28 @@ class AnalyzeAgentTool extends BaseTool {
     if (Object.keys(sections).length < 5) {
       return this._err(`Section extraction failed: only ${Object.keys(sections).length}/19 sections recovered. Group errors: ${groupErrors.map(e => `${e.group}: ${e.error}`).join('; ')}`)
     }
-    // Critical sections drive the HTML report's SECTION 18/19/20/21/24 and
-    // several dim-rows. If any are missing, the report renders with generic
-    // fallback text — fail loud so the caller retries instead of silently
-    // shipping a broken report.
-    const CRITICAL_KEYS = [
-      'persona_card', 'mbti', 'ocean',
-      'character_portrait', 'surprising_contradiction', 'trajectory',
-      'health_index', 'compatibility', 'dialogue_theatre',
-    ]
+    // Critical sections drive the HTML report's key sections and dim-rows.
+    // If any are missing, the report renders with generic fallback text —
+    // fail loud so the caller retries instead of silently shipping a broken
+    // report. The set is flavor-aware: relationship-centric keys are
+    // required for system agents (they underpin the other-only sections);
+    // self-only keys are required for user agents (relationships_map etc.).
+    // Critical keys: hard requirements that block report generation.
+    // Self-only sections (relationships_map, identity_modes, perceived_views,
+    // growth_arc, life_timeline) are NOT in this list — they degrade
+    // gracefully to "need more data" placeholders when empty, which is the
+    // right UX for single-partner imports or data-sparse cases.
+    const CRITICAL_KEYS = isSelf
+      ? [
+          'persona_card', 'mbti', 'ocean',
+          'character_portrait', 'surprising_contradiction',
+          'dialogue_theatre',
+        ]
+      : [
+          'persona_card', 'mbti', 'ocean',
+          'character_portrait', 'surprising_contradiction', 'trajectory',
+          'health_index', 'compatibility', 'dialogue_theatre',
+        ]
     const missingCritical = CRITICAL_KEYS.filter(k => !sections[k])
     if (missingCritical.length > 0) {
       const errDetail = groupErrors.map(e => `${e.group}: ${e.error}`).join('; ') || '(no LLM errors; sections simply absent)'
@@ -557,6 +682,142 @@ class AnalyzeAgentTool extends BaseTool {
     if (groupErrors.length > 0) {
       sections._group_errors = groupErrors
       logger.warn('[AnalyzeAgentTool] some groups had errors:', groupErrors)
+    }
+
+    // ── Anti-hallucination sweep for self-analysis sections ──
+    // LLMs occasionally fabricate entries even with explicit "no fabrication"
+    // rules. Drop entries that fail structural sanity checks. Cheap and
+    // uniformly applied regardless of model.
+    if (isSelf) {
+      // life_timeline: every event must have non-empty evidence and a
+      // plausible YYYY-MM date; otherwise it's a phantom.
+      if (Array.isArray(sections.life_timeline)) {
+        const before = sections.life_timeline.length
+        sections.life_timeline = sections.life_timeline.filter(ev => {
+          if (!ev || typeof ev !== 'object') return false
+          const ev2 = String(ev.evidence || '').trim()
+          const dt = String(ev.date || '').trim()
+          const hasDate = /^\d{4}(-\d{2})?/.test(dt)
+          return ev2.length >= 4 && hasDate
+        })
+        const dropped = before - sections.life_timeline.length
+        if (dropped > 0) logger.warn(`[AnalyzeAgentTool] life_timeline: dropped ${dropped} evidence-less entries`)
+      }
+      // identity_modes: need at least a partner AND a mode_label.
+      if (Array.isArray(sections.identity_modes)) {
+        const before = sections.identity_modes.length
+        sections.identity_modes = sections.identity_modes.filter(m =>
+          m && typeof m === 'object' && String(m.partner || '').trim() && String(m.mode_label || '').trim()
+        )
+        const dropped = before - sections.identity_modes.length
+        if (dropped > 0) logger.warn(`[AnalyzeAgentTool] identity_modes: dropped ${dropped} incomplete entries`)
+      }
+      // perceived_views: need partner + perception_label + at least 1 evidence item.
+      if (Array.isArray(sections.perceived_views)) {
+        const before = sections.perceived_views.length
+        sections.perceived_views = sections.perceived_views.filter(v =>
+          v && typeof v === 'object' &&
+          String(v.partner || '').trim() &&
+          String(v.perception_label || '').trim() &&
+          Array.isArray(v.evidence) && v.evidence.length > 0
+        )
+        const dropped = before - sections.perceived_views.length
+        if (dropped > 0) logger.warn(`[AnalyzeAgentTool] perceived_views: dropped ${dropped} incomplete entries`)
+      }
+      // growth_arc.phases: ordered, each with year_range + summary.
+      if (sections.growth_arc && Array.isArray(sections.growth_arc.phases)) {
+        const before = sections.growth_arc.phases.length
+        sections.growth_arc.phases = sections.growth_arc.phases.filter(p =>
+          p && String(p.year_range || '').trim() && String(p.summary || '').trim()
+        )
+        const dropped = before - sections.growth_arc.phases.length
+        if (dropped > 0) logger.warn(`[AnalyzeAgentTool] growth_arc: dropped ${dropped} incomplete phases`)
+      }
+      // relationships_map.partners: need name + positive count.
+      if (sections.relationships_map && Array.isArray(sections.relationships_map.partners)) {
+        const before = sections.relationships_map.partners.length
+        sections.relationships_map.partners = sections.relationships_map.partners.filter(p =>
+          p && String(p.name || '').trim() && (p.message_count || 0) > 0
+        )
+        const dropped = before - sections.relationships_map.partners.length
+        if (dropped > 0) logger.warn(`[AnalyzeAgentTool] relationships_map: dropped ${dropped} empty partners`)
+      }
+    }
+    // Post-process: drop/resolve generic "对方" labels that LLM may still
+    // have produced despite the schema ban. We cannot always recover the
+    // real name (the LLM had the info but chose not to use it), so the
+    // policy is: if a structural field is exactly "对方"/"them", replace
+    // with the user's TOP partner name when there's only one dominant
+    // partner, else leave as-is (render will show it generically).
+    if (isSelf) {
+      try {
+        const partnerStats = idx.getPartnerStats(this.targetAgentId) || []
+        const topPartner = partnerStats[0]?.partner || null
+        const uniquePartners = new Set(partnerStats.map(p => p.partner))
+        const isGeneric = (v) => {
+          const s = String(v || '').trim()
+          return s === '' || s === '对方' || s === 'them' || s === 'Them' || s === 'Partner'
+        }
+        // Only auto-fill when there is exactly one partner — otherwise we'd
+        // be guessing. Logged so the mismatch is visible.
+        const canFillGeneric = (existing) => {
+          if (!isGeneric(existing)) return existing
+          if (uniquePartners.size === 1 && topPartner) return topPartner
+          return existing
+        }
+        if (Array.isArray(sections.dialogue_theatre)) {
+          for (const a of sections.dialogue_theatre) {
+            if (!a || typeof a !== 'object') continue
+            a.partner = canFillGeneric(a.partner)
+            if (Array.isArray(a.messages)) {
+              for (const m of a.messages) {
+                if (m.sender !== 'me' && m.sender !== 'Me') {
+                  m.sender = canFillGeneric(m.sender)
+                }
+              }
+            }
+          }
+        }
+        if (Array.isArray(sections.key_quotes)) {
+          for (const q of sections.key_quotes) {
+            if (!q || typeof q !== 'object') continue
+            // Normalize user-side label to "我"; resolve generic partner
+            if (q.speaker === '你(Me)' || q.speaker === 'Me' || q.speaker === 'me') {
+              q.speaker = '我'
+            } else {
+              q.speaker = canFillGeneric(q.speaker)
+            }
+          }
+        }
+        if (Array.isArray(sections.unique_memories)) {
+          for (const mem of sections.unique_memories) {
+            if (!mem || !Array.isArray(mem.messages)) continue
+            for (const m of mem.messages) {
+              if (m.sender !== 'me' && m.sender !== 'Me') {
+                m.sender = canFillGeneric(m.sender)
+              }
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn('[AnalyzeAgentTool] partner-name backfill failed:', err.message)
+      }
+    }
+
+    // unique_memories applies to BOTH flavors — each memory must have at
+    // least one grounded message plus a non-empty analysis.
+    if (Array.isArray(sections.unique_memories)) {
+      const before = sections.unique_memories.length
+      sections.unique_memories = sections.unique_memories.filter(m => {
+        if (!m || typeof m !== 'object') return false
+        const hasMsgs = Array.isArray(m.messages) && m.messages.length > 0 &&
+          m.messages.some(x => String(x.text || '').trim().length > 0)
+        const hasAnalysis = String(m.analysis || '').trim().length >= 4
+        const hasTitle = String(m.title || '').trim().length > 0
+        return hasMsgs && hasAnalysis && hasTitle
+      })
+      const dropped = before - sections.unique_memories.length
+      if (dropped > 0) logger.warn(`[AnalyzeAgentTool] unique_memories: dropped ${dropped} empty/thin entries`)
     }
 
     const durationSec = Math.round((Date.now() - _startMs) / 1000)
@@ -637,9 +898,21 @@ class AnalyzeAgentTool extends BaseTool {
     if (start < 0 || end <= start) throw new Error('no JSON object braces found')
     s = s.slice(start, end + 1)
 
-    // Step 3: normalize fancy punctuation to ASCII
-    //   Chinese quotes and full-width punctuation are the #1 cause of
-    //   JSON.parse failures with Chinese-trained models (DeepSeek etc.)
+    // Step 3a: OPTIMISTIC PARSE — try the raw (brace-trimmed, fence-stripped)
+    // output first. Many models produce perfectly valid JSON that happens to
+    // contain Chinese quote characters INSIDE string values (e.g., a quoted
+    // sentence within a "decoded" field). Normalizing those quotes to ASCII
+    // would corrupt valid JSON. Only fall back to normalization if the raw
+    // parse fails — at which point the input is already broken.
+    try {
+      return JSON.parse(s)
+    } catch (_preNormErr) { /* fall through to normalization path */ }
+
+    // Step 3b: normalize fancy punctuation to ASCII
+    //   When a model emits JSON with Chinese quote/colon/comma chars as
+    //   STRUCTURAL tokens (wrapping keys, separating pairs), this rescues
+    //   otherwise-unparseable output. Applied only after the raw-parse
+    //   attempt above has already failed.
     const cleaned = s
       .replace(/[\u201C\u201D\u2033]/g, '"')  // " " ″  → ASCII "
       .replace(/[\u2018\u2019\u2032]/g, "'")  // ' ' ′  → ASCII '
@@ -657,7 +930,7 @@ class AnalyzeAgentTool extends BaseTool {
       // Raw tab/control chars inside strings
       .replace(/\t/g, '\\t')
 
-    // Step 4: try parse
+    // Step 4: try parse after normalization
     try {
       return JSON.parse(cleaned)
     } catch (err) {
@@ -701,6 +974,11 @@ class AnalyzeAgentTool extends BaseTool {
       'trajectory', 'character_portrait', 'surprising_contradiction',
       'compatibility', 'key_quotes', 'gift_suggestions', 'health_index',
       'growth_suggestions', 'ocean', 'mbti', 'attachment',
+      // Self-analysis (user-agent) only
+      'relationships_map', 'identity_modes', 'perceived_views',
+      'growth_arc', 'life_timeline',
+      // Shared
+      'unique_memories',
     ]
     for (const key of keys) {
       // Find `"key":` and walk forward to find the matching block
@@ -739,16 +1017,76 @@ class AnalyzeAgentTool extends BaseTool {
       }
       if (end < 0) continue
       const block = raw.slice(p, end)
+      // Strategy ladder:
+      //   1. Raw parse
+      //   2. Normalized parse (smart quotes → ASCII, trailing commas stripped)
+      //   3. If key is an ARRAY, walk each top-level {...} inside it and try
+      //      to parse them individually — drop the broken ones, keep the good
+      //      ones. One bad memory/quote shouldn't lose the other 15.
+      let parsed = null
       try {
-        result[key] = JSON.parse(block
-          .replace(/[\u201C\u201D\u2033]/g, '"')
-          .replace(/[\u2018\u2019\u2032]/g, "'")
-          .replace(/,(\s*[}\]])/g, '$1'))
+        parsed = JSON.parse(block)
       } catch (_) {
-        // skip this section — don't poison the rest
+        try {
+          parsed = JSON.parse(block
+            .replace(/[\u201C\u201D\u2033]/g, '"')
+            .replace(/[\u2018\u2019\u2032]/g, "'")
+            .replace(/,(\s*[}\]])/g, '$1'))
+        } catch (_) {
+          if (openChar === '[') {
+            const items = this._salvageArrayItems(block)
+            if (items.length > 0) parsed = items
+          }
+          // If still null, this key is skipped — don't poison the rest.
+        }
       }
+      if (parsed !== null) result[key] = parsed
     }
     return Object.keys(result).length > 0 ? result : null
+  }
+
+  /**
+   * Per-item array salvage: extract every top-level {...} object from a
+   * malformed JSON array string and try to parse each individually. One
+   * broken object does not kill the rest.
+   *
+   * Used when the whole array fails to parse but we want to recover the
+   * items that ARE valid. Essential for unique_memories/dialogue_theatre/
+   * key_quotes when a single LLM-generated entry has an unescaped inner
+   * quote that corrupts only that one entry.
+   */
+  _salvageArrayItems(arrayText) {
+    const items = []
+    let depth = 0, inStr = false, esc = false, start = -1
+    for (let i = 0; i < arrayText.length; i++) {
+      const ch = arrayText[i]
+      if (esc) { esc = false; continue }
+      if (ch === '\\') { esc = true; continue }
+      if (ch === '"') { inStr = !inStr; continue }
+      if (inStr) continue
+      if (ch === '{') {
+        if (depth === 0) start = i
+        depth++
+      } else if (ch === '}') {
+        depth--
+        if (depth === 0 && start >= 0) {
+          const block = arrayText.slice(start, i + 1)
+          try {
+            items.push(JSON.parse(block))
+          } catch (_) {
+            // Try normalization fallback on this one item
+            try {
+              items.push(JSON.parse(block
+                .replace(/[\u201C\u201D\u2033]/g, '"')
+                .replace(/[\u2018\u2019\u2032]/g, "'")
+                .replace(/,(\s*[}\]])/g, '$1')))
+            } catch (_) { /* skip this item, keep others */ }
+          }
+          start = -1
+        }
+      }
+    }
+    return items
   }
 
   /**
@@ -756,7 +1094,14 @@ class AnalyzeAgentTool extends BaseTool {
    * Used by _buildGroupPrompt to assemble a smaller, focused schema for each
    * group of 2-5 related sections (instead of one giant 19-section schema).
    */
-  _getSectionSchemas(zh) {
+  _getSectionSchemas(zh, isSelf = false) {
+    // In self mode, "subject" is the user (你/Me); in system mode it's the
+    // target partner (TA). Used to describe whose traits each schema field
+    // represents — critical for signals/topics/etc. where ambiguity about
+    // whose patterns are being collected caused LLMs to attribute partner
+    // behaviors to the user.
+    const subj = isSelf ? (zh ? '你(用户本人)' : 'you (the user)')
+                         : (zh ? 'TA'           : 'them')
     return {
       persona_card: `"persona_card": {
     "intimacy_score": {
@@ -798,9 +1143,10 @@ class AnalyzeAgentTool extends BaseTool {
       "act_number": 1,
       "date": "<YYYY-MM-DD>",
       "category": "${zh ? '<初次互动/表达关心/冲突/脆弱/兴奋/幽默/沉默修复/日常/转折/信任升级 之一>' : '<first_interaction/showing_care/conflict/vulnerability/excitement/humor/silence_repair/daily/turning_point/trust_upgrade>'}",
+      "partner": "<${zh ? '这场戏里对方的具体名字(来自 selfContext 的 partner 名);system 模式下是该对方的名字' : 'exact partner name for this scene (from selfContext partner names); in system mode it is that single partner'}>",
       "scene_title": "<${zh ? '5-10字场景标题' : '5-10 word scene title'}>",
       "messages": [
-        { "sender": "me|${zh ? '对方' : 'them'}", "text": "<${zh ? '消息原文 ≤120 字,超出用 … 省略。内部双引号必须用 \\\\" 转义,换行替换为空格,去掉 URL、控制字符' : 'message text ≤120 chars, elide with …. Escape inner double quotes as \\\\", replace newlines with spaces, strip URLs and control chars'}>", "time": "<HH:MM>" }
+        { "sender": "<${zh ? 'me 或 具体对方名(如 张淑云);严格对应 sender 标签' : 'me or exact partner name (e.g. Mom); strictly mirror the sender label'}>", "text": "<${zh ? '消息原文 ≤120 字,超出用 … 省略。内部双引号必须用 \\\\" 转义,换行替换为空格,去掉 URL、控制字符' : 'message text ≤120 chars, elide with …. Escape inner double quotes as \\\\", replace newlines with spaces, strip URLs and control chars'}>", "time": "<HH:MM>" }
       ],
       "analysis": "<${zh ? '2-3 句解读' : '2-3 sentence analysis'}>"
     }
@@ -808,7 +1154,7 @@ class AnalyzeAgentTool extends BaseTool {
   ]`,
 
       key_quotes: `"key_quotes": [
-    { "text": "<${zh ? '原文语录,≤100 字,内部双引号用 \\\\" 转义,去掉 URL 和控制字符' : 'quote ≤100 chars, escape inner quotes as \\\\", strip URLs and control chars'}>", "date": "<YYYY-MM-DD>", "category": "<${zh ? '场景分类' : 'scene category'}>" }
+    { "text": "<${zh ? '原文语录,≤100 字,内部双引号用 \\\\" 转义,去掉 URL 和控制字符' : 'quote ≤100 chars, escape inner quotes as \\\\", strip URLs and control chars'}>", "date": "<YYYY-MM-DD>", "category": "<${zh ? '场景分类' : 'scene category'}>", "speaker": "<${zh ? '<我 或 具体对方名(如 张淑云)> — 严格按样本里的 sender 标签来写;不要泛泛写"对方"' : '<Me or exact partner name (e.g. Mom)> — strictly mirror the sender label, never generic "them"'}>", "context": "<${zh ? '1-2 句背景,帮读者回忆当时的情境:之前发生了什么,这句话是在回应什么' : '1-2 sentence background: what was happening, what this quote responded to'}>" }
     // 16-20 items, span at least 4 different years
   ]`,
 
@@ -823,25 +1169,25 @@ class AnalyzeAgentTool extends BaseTool {
   }`,
 
       topic_preferences: `"topic_preferences": {
-    "loves": ["<${zh ? 'TA 爱聊的话题,4-6 个' : 'loves, 4-6'}>"],
-    "neutral": ["<${zh ? '日常话题,4-6 个' : 'neutral, 4-6'}>"],
-    "avoid": ["<${zh ? 'TA 回避的话题,2-4 个' : 'avoid, 2-4'}>"]
+    "loves":   ["<${zh ? `${subj} 爱聊的话题,基于${subj}自己发消息的主题,4-6 个` : `topics ${subj} actively engages with, from ${subj}'s own messages, 4-6`}>"],
+    "neutral": ["<${zh ? `${subj} 中立的日常话题,4-6 个` : `${subj}'s neutral daily topics, 4-6`}>"],
+    "avoid":   ["<${zh ? `${subj} 回避或不擅长的话题,2-4 个` : `topics ${subj} avoids, 2-4`}>"]
   }`,
 
       signals: `"signals": {
-    "green": ["<${zh ? '健康信号,3-5 条' : 'green signal, 3-5'}>"],
-    "yellow": ["<${zh ? '需留意,3-5 条' : 'yellow, 3-5'}>"],
-    "red": ["<${zh ? '警示信号,2-4 条' : 'red, 2-4'}>"]
+    "green":  ["<${zh ? `${subj} 处于健康放松状态的信号,基于${subj}自己的语言和行为模式,3-5 条` : `signals that ${subj} is healthy/engaged, based on ${subj}'s own language and behavior, 3-5`}>"],
+    "yellow": ["<${zh ? `${subj} 需要留意的早期征兆,3-5 条` : `early-warning patterns in ${subj}'s own behavior, 3-5`}>"],
+    "red":    ["<${zh ? `${subj} 压力/情绪临界点的警示信号,2-4 条` : `${subj}'s acute stress signals, 2-4`}>"]
   }`,
 
       best_communication_times: `"best_communication_times": {
-    "relaxed": { "time": "<${zh ? '时段' : 'time'}>", "advice": "<${zh ? '适合做什么' : 'what it fits'}>" },
-    "tired": { "time": "<time>", "advice": "<${zh ? '避免做什么' : 'what to avoid'}>" },
-    "happy": { "time": "<time>", "advice": "<${zh ? '适合提什么' : 'what to ask'}>" }
+    "relaxed": { "time": "<${zh ? `${subj} 放松时的时段` : `${subj}'s relaxed time`}>", "advice": "<${zh ? `在${subj}放松时适合做什么` : `what fits when ${subj} is relaxed`}>" },
+    "tired":   { "time": "<time>", "advice": "<${zh ? `在${subj}疲惫时避免做什么` : `what to avoid when ${subj} is tired`}>" },
+    "happy":   { "time": "<time>", "advice": "<${zh ? `在${subj}开心时适合提什么` : `what to ask when ${subj} is happy`}>" }
   }`,
 
       expected_next: `"expected_next": [
-    { "icon": "<emoji>", "title": "<${zh ? '预期话题/动作' : 'expected topic/action'}>", "detail": "<${zh ? '为什么这么推测' : 'why'}>", "signal": "strong|medium|weak" }
+    { "icon": "<emoji>", "title": "<${zh ? `${subj} 接下来可能关注的话题/动作` : `${subj}'s likely next topic/action`}>", "detail": "<${zh ? '为什么这么推测,结合证据' : 'why, with evidence'}>", "signal": "strong|medium|weak" }
     // 3-5 items
   ]`,
 
@@ -876,37 +1222,153 @@ class AnalyzeAgentTool extends BaseTool {
     { "icon": "<emoji>", "name": "<${zh ? '礼物名' : 'gift name'}>", "reason": "<${zh ? '基于哪个兴趣' : 'based on which interest'}>", "price_range": "${zh ? '<低/中/高>' : '<low/medium/high>'}", "scenario": "${zh ? '<生日/节日/纪念日/日常>' : '<birthday/holiday/anniversary/casual>'}" }
     // 4-6 items
   ]`,
+
+      // ── Self-analysis (user-agent) only schemas ──────────────────────────
+      relationships_map: `"relationships_map": {
+    "total_partners": <${zh ? '对话者总数' : 'total partner count'}>,
+    "partners": [
+      {
+        "name": "<${zh ? '对话者显示名(来自 partner stats)' : 'partner display name (from partner stats)'}>",
+        "message_count": <number>,
+        "relation_type": "<${zh ? '<家人/伴侣/挚友/朋友/同事/业务/长辈/弱联系 之一>' : '<family/romantic/close_friend/friend/colleague/business/elder/weak_tie>'}>",
+        "warmth": <1-10>,
+        "intimacy_level": "<${zh ? '<亲密/熟悉/一般/疏远>' : '<intimate/familiar/neutral/distant>'}>",
+        "role_in_life": "<${zh ? '这个人在你生活中扮演的角色,一句话' : 'one-line: this person role in your life'}>",
+        "date_range": "<YYYY-MM ~ YYYY-MM>"
+      }
+    ],
+    "network_shape": "<${zh ? '一句话描述你的社交圈形态,如 少而深 / 广而浅 / 以家庭为中心 等' : 'one-line: shape of your social circle'}>"
+  }`,
+
+      identity_modes: `"identity_modes": [
+    {
+      "partner": "<${zh ? '对话者名字' : 'partner name'}>",
+      "mode_label": "<${zh ? '3-6 字的身份标签,例如 可靠队友 / 耐心导师 / 倔强子女' : '3-6 word identity label'}>",
+      "voice_traits": [ "<${zh ? '和这个人聊时你的说话特点,3-5 条' : 'speech traits with this person, 3-5 items'}>" ],
+      "common_phrases": [ "<${zh ? '和这个人聊时你常说的 2-4 句原话,从样本中摘取,≤40 字' : '2-4 phrases you often use with this person, ≤40 chars each'}>" ],
+      "analysis": "<${zh ? '面对这个人时你呈现的自我的分析,2-3 句,用 你 称呼' : '2-3 sentence analysis addressing user as you'}>"
+    }
+  ]`,
+
+      perceived_views: `"perceived_views": [
+    {
+      "partner": "<${zh ? '对话者名字' : 'partner name'}>",
+      "perception_label": "<${zh ? '在对方眼中你是什么样,3-6 字' : '3-6 word label for how they perceive you'}>",
+      "evidence": [ "<${zh ? '对方消息中支持这个判断的原话,≤60 字,2-3 条' : '2-3 quotes from their messages, ≤60 chars each'}>" ],
+      "analysis": "<${zh ? '2-3 句分析对方如何看待你,用 你 称呼' : '2-3 sentence analysis addressing user as you'}>"
+    }
+  ]`,
+
+      growth_arc: `"growth_arc": {
+    "phases": [
+      {
+        "label": "<${zh ? '阶段标签,3-6 字' : '3-6 word phase label'}>",
+        "year_range": "<YYYY ~ YYYY>",
+        "dominant_themes": [ "<${zh ? '主导话题,3-5 个' : 'dominant topics, 3-5 items'}>" ],
+        "voice_shift": "<${zh ? '这个阶段你说话方式的特征,1-2 句' : '1-2 sentence voice description'}>",
+        "summary": "<${zh ? '2-3 句描述这个阶段的你,用 你 称呼' : '2-3 sentence summary addressing user as you'}>"
+      }
+    ],
+    "overall_trajectory": "<${zh ? '一句话总结你跨越这几个阶段的变化弧线' : 'one-line overall trajectory'}>"
+  }`,
+
+      life_timeline: `"life_timeline": [
+    {
+      "date": "<YYYY-MM>",
+      "category": "<${zh ? '<职业/关系/家庭/健康/搬迁/学习/丧失/成就 之一>' : '<career/relationship/family/health/relocation/study/loss/achievement>'}>",
+      "icon": "<emoji>",
+      "title": "<${zh ? '事件标题,≤20 字' : 'event title ≤20 chars'}>",
+      "evidence": "<${zh ? '聊天里支持这条事件的原话,≤80 字' : 'supporting quote from chat, ≤80 chars'}>",
+      "significance": "<${zh ? '一句话说明为什么这是一个节点' : 'one-line why this is a node'}>"
+    }
+  ]`,
+
+      // Shared — unique/memorable moments worth remembering. Different from
+      // dialogue_theatre (which is REPRESENTATIVE patterns): memories are
+      // SPECIAL events with emotional weight, the kind of moments the user
+      // wants to relive.
+      unique_memories: `"unique_memories": [
+    {
+      "date": "<YYYY-MM-DD>",
+      "icon": "<${zh ? '能代表这个瞬间情绪的 emoji' : 'emoji matching the emotional tone'}>",
+      "category": "<${zh ? '<生日/意外惊喜/共度时刻/里程碑/和解/告白/搞笑瞬间/温暖片段/共同创造 之一>' : '<birthday/surprise/shared_moment/milestone/reconciliation/confession/funny/warm/shared_creation>'}>",
+      "emotion": "<${zh ? '<温暖/惊喜/心酸/自豪/松动/会心一笑/难忘 之一>' : '<warm/surprised/bittersweet/proud/thawed/knowing_smile/unforgettable>'}>",
+      "title": "<${zh ? '一句话场景标题,≤15 字' : 'one-line scene title, ≤15 chars'}>",
+      "scene": "<${zh ? '2-3 句背景描述,帮读者回忆当时情境:之前发生了什么,为什么这个瞬间重要' : '2-3 sentence backdrop: what was happening, why this moment mattered'}>",
+      "messages": [
+        { "sender": "<${zh ? 'me | 对方 | 具体 partner 名' : 'me | them | specific partner name'}>", "text": "<${zh ? '原话,≤80 字' : 'verbatim quote, ≤80 chars'}>", "time": "<HH:MM>" }
+      ],
+      "analysis": "<${zh ? '1-2 句点出这个瞬间的独特性:为什么值得被记住' : '1-2 sentences: what makes this moment uniquely memorable'}>"
+    }
+    // 10-20 items, chronological, pick only TRULY special moments — not routine daily chat
+  ]`,
     }
   }
 
   /**
    * Group-specific hard requirements returned as a short bulleted block.
    */
-  _getGroupRequirements(groupId, zh) {
+  _getGroupRequirements(groupId, zh, isSelf = false) {
     const reqs = {
       core: zh
         ? `1. 亲密度评分 5 个维度各独立评分,总分是加权平均\n2. 星座推断标注"趣味推断"属性\n3. 所有 evidence 字段必须基于叙事分析或样本`
         : `1. Intimacy score: 5 independent dimensions, total is weighted average\n2. Constellation marked "entertainment inference"\n3. All evidence fields must be grounded in narrative or samples`,
 
       dialogue: zh
-        ? `1. dialogue_theatre 必须 10-20 条,跨至少 4 个不同年份/关系阶段\n2. key_quotes 必须 16-20 条,跨至少 4 个不同年份\n3. 所有引用的对话原文必须从聊天样本中抽取,不得编造\n4. subtext_decoder 5-8 条\n5. 🚨 **所有嵌入的对话原文**必须做以下清洗才能放进 JSON:\n   - 消息文本超长时截断到 120 字以内,末尾加 … \n   - 所有内部双引号 " 必须转义成 \\\\" \n   - 换行符替换为空格,删除制表符和其他 ASCII 控制字符 (\\x00-\\x1f)\n   - 去掉 URL 和淘宝/微信的特殊 emoji 装饰 (👉淘♂寳♀👈 等)\n   - 中文标点「」『』《》可以保留,但注意不要破坏 JSON 结构`
-        : `1. dialogue_theatre must have 10-20 items, spanning at least 4 different years/stages\n2. key_quotes must have 16-20 items, spanning at least 4 different years\n3. All quoted dialogue must come from chat samples, no fabrication\n4. subtext_decoder must have 5-8 items\n5. 🚨 **Clean all embedded quotes before placing in JSON**:\n   - Truncate message text to ≤120 chars, elide with …\n   - Escape inner double quotes as \\\\"\n   - Replace newlines with spaces, strip tabs and ASCII control chars (\\x00-\\x1f)\n   - Remove URLs and marketplace decorations\n   - Do not let embedded text break the JSON structure`,
+        ? `1. dialogue_theatre 必须 10-20 条,跨至少 4 个不同年份/关系阶段\n2. key_quotes 必须 16-20 条,跨至少 4 个不同年份\n3. 所有引用的对话原文必须从聊天样本中抽取,不得编造\n4. subtext_decoder 5-8 条\n5. 🚫 **"对方" 是被禁止的字符串**(严格禁令):\n   • dialogue_theatre.partner 必须是真实名字,如 "张淑云"、"洋",而不是 "对方"\n   • messages[].sender 必须是 "me" 或具体名字,不是 "对方"\n   • key_quotes.speaker 必须是 "我" 或具体名字,不是 "对方"\n   • context / analysis / scene / 所有叙事字段里提到他人时也必须用具体名字,不用"对方"\n   • partner 名字列表来自上面的 "社交圈概览" 和 "每位对话者样本" 区块(它们直接列出了 partner 的真实 sender 名)\n   • 如果某条消息的样本 sender 写的是"对方"(泛指),说明该样本暂不知道具体是谁——可以跳过不选这条进 theatre/quotes;不要虚构或写"对方"\n6. 🔍 **subtext_decoder 在 self 模式下**: 解码"你"常说的话的潜台词,不是对方说的。surface 必须从"你(Me)"的消息样本里抽取。\n7. 🚨 **所有嵌入的对话原文**必须做以下清洗才能放进 JSON:\n   - 消息文本超长时截断到 120 字以内,末尾加 … \n   - 所有内部双引号 " 必须转义成 \\\\" (或改用中文引号「」)\n   - 换行符替换为空格,删除制表符和其他 ASCII 控制字符 (\\x00-\\x1f)\n   - 去掉 URL 和淘宝/微信的特殊 emoji 装饰 (👉淘♂寳♀👈 等)\n8. analysis/context 用第二人称"你"称呼用户,分析用户对那个人的反应,不是对方的性格。`
+        : `1. dialogue_theatre must have 10-20 items, spanning at least 4 different years/stages\n2. key_quotes must have 16-20 items, spanning at least 4 different years\n3. All quoted dialogue must come from chat samples, no fabrication\n4. subtext_decoder must have 5-8 items\n5. 🚫 **"them"/"对方" as a partner identifier is FORBIDDEN**:\n   • dialogue_theatre.partner must be a real name (e.g. "Mom", "Alice"), never "them"/"对方"\n   • messages[].sender must be "me" or a specific name\n   • key_quotes.speaker must be "Me" or a specific name\n   • context / analysis / scene narrative also uses specific names when referring to partners\n   • Partner names come from the "社交圈概览" / "每位对话者样本" blocks above, which list partners by their real sender names\n   • If a sample's sender is unclear, skip that message rather than attributing to a generic "them"\n6. 🔍 subtext_decoder in self mode: decode phrases YOU commonly use; surface must come from user (Me) samples.\n7. 🚨 Clean embedded quotes: ≤120 chars, escape inner " as \\\\" (or use CJK 「」), strip newlines/control/URLs.\n8. analysis/context in 2nd person "you", focused on YOUR reaction to that specific person, not their personality.`,
 
       interaction: zh
-        ? `1. do/dont 各 3-5 条\n2. 所有信号和建议必须基于叙事分析中的证据`
-        : `1. do/dont each 3-5 items\n2. All signals and tips must be grounded in narrative evidence`,
+        ? (isSelf
+          ? `1. 🎯 **self 模式硬性规则**: signals(绿/黄/红)、topic_preferences(loves/neutral/avoid)、best_communication_times、expected_next 都必须**只描述用户本人**,不是任何 partner。每一条内容都要回答"这是用户(你)的什么表现/偏好/时段"。\n2. 信号必须来自样本中 sender 是 \`你(Me):\` 的消息,不是 \`张淑云:\` 或其他 partner 的消息。例如妈妈说"收下红包不收我生气"是妈妈的行为,不能作为你的 green/yellow/red 信号。\n3. topic_preferences.loves = 用户主动开话题的主题;avoid = 用户少聊或回避的话题(从 me 消息中判断)。\n4. best_communication_times = 用户自己状态最好/疲惫/开心的时段;advice 是"在这个时段用户自己适合做什么"。\n5. expected_next = 用户接下来可能关注的话题和动作,不是 partner 的。\n6. 每条建议必须基于样本中可见证据,不得泛泛。`
+          : `1. do/dont 各 3-5 条\n2. 所有信号和建议必须基于叙事分析中的证据`)
+        : (isSelf
+          ? `1. 🎯 **SELF-MODE STRICT RULE**: signals (green/yellow/red), topic_preferences (loves/neutral/avoid), best_communication_times, and expected_next describe **only the user**, not any partner. Each item must answer "this is a pattern/preference/state of the USER".\n2. Signals must come from messages where sender is \`you(Me):\` — NOT from partner messages. If Mom says "take the red packet or I'll be upset", that is Mom's behavior, NOT a user signal.\n3. topic_preferences.loves = topics the user proactively initiates; avoid = topics the user rarely engages with (inferred from me-messages).\n4. best_communication_times = when the user themselves is at their best/tired/happy; advice = what fits the user in that state.\n5. expected_next = the user's likely next topics and actions, not a partner's.\n6. Every conclusion must be grounded in visible sample evidence.`
+          : `1. do/dont each 3-5 items\n2. All signals and tips must be grounded in narrative evidence`),
 
       portrait: zh
-        ? `1. character_portrait 至少 300 字\n2. surprising_contradiction 至少 150 字,引用 2 段对话作为证据\n3. trajectory 必须包含 optimistic/baseline/pessimistic 三个场景,每个都要有 scenario 和 trigger`
-        : `1. character_portrait must be 300+ words\n2. surprising_contradiction must be 150+ words, cite 2 dialogue excerpts\n3. trajectory must contain optimistic/baseline/pessimistic, each with scenario + trigger`,
+        ? (isSelf
+          ? `1. character_portrait 至少 300 字,**描述用户(你)本人**的性格画像,不是任何 partner\n2. surprising_contradiction 至少 150 字,描述用户自己的内在矛盾,引用的 2 段对话证据必须从 sender 是 \`你(Me):\` 的消息里选(或对方说的话作为外部反馈证据,但结论必须是关于用户的)\n3. trajectory 必须包含 optimistic/baseline/pessimistic 三个场景,描述**用户自己的人生/成长轨迹**,每个都要有 scenario 和 trigger`
+          : `1. character_portrait 至少 300 字\n2. surprising_contradiction 至少 150 字,引用 2 段对话作为证据\n3. trajectory 必须包含 optimistic/baseline/pessimistic 三个场景,每个都要有 scenario 和 trigger`)
+        : (isSelf
+          ? `1. character_portrait 300+ words about the USER, not any partner. 2. surprising_contradiction 150+ words about user's inner tension, citing 2 dialogue excerpts (from user's own messages preferred; partner quotes allowed as external feedback but conclusions are about the user). 3. trajectory describes the user's own life arc.`
+          : `1. character_portrait must be 300+ words\n2. surprising_contradiction must be 150+ words, cite 2 dialogue excerpts\n3. trajectory must contain optimistic/baseline/pessimistic, each with scenario + trigger`),
 
       wellbeing: zh
-        ? `1. compatibility 至少 8 个 MBTI 类型\n2. health_index 的 monthly_trend 必须恰好 12 个数字 (0-100)\n3. health_index 必须包含 current_score, alert, monthly_trend 三个字段`
-        : `1. compatibility must have at least 8 MBTI types\n2. health_index monthly_trend must have exactly 12 numbers (0-100)\n3. health_index must contain current_score, alert, monthly_trend`,
+        ? (isSelf
+          ? `1. health_index 的 monthly_trend 必须恰好 12 个数字 (0-100),反映**用户自己的身心健康/精力状态**随时间变化\n2. health_index.alert 描述用户(你)自己当前状态的提示,不是 partner 的\n3. health_index 必须包含 current_score, alert, monthly_trend 三个字段\n4. 不要输出 compatibility 字段 (self 模式不适用)`
+          : `1. compatibility 至少 8 个 MBTI 类型\n2. health_index 的 monthly_trend 必须恰好 12 个数字 (0-100)\n3. health_index 必须包含 current_score, alert, monthly_trend 三个字段`)
+        : (isSelf
+          ? `1. health_index.alert is about USER's own state, not partner. 2. monthly_trend exactly 12 numbers 0-100 reflecting user's own wellbeing. 3. No compatibility field in self mode.`
+          : `1. compatibility must have at least 8 MBTI types\n2. health_index monthly_trend must have exactly 12 numbers (0-100)\n3. health_index must contain current_score, alert, monthly_trend`),
 
       suggestions: zh
-        ? `1. growth_suggestions 必须恰好 6 条(grid-3 × 2 行布局需要)\n2. gift_suggestions 4-6 条`
-        : `1. growth_suggestions must be EXACTLY 6 (grid-3 × 2 layout)\n2. gift_suggestions 4-6 items`,
+        ? (isSelf
+          ? `1. growth_suggestions 必须恰好 6 条(grid-3 × 2 行布局需要),每条是**对用户自己**的成长建议,用"你"称呼\n2. 每条建议必须基于观察到的用户自己的模式,不是对 partner 的建议\n3. 不要输出 gift_suggestions (self 模式不适用)`
+          : `1. growth_suggestions 必须恰好 6 条(grid-3 × 2 行布局需要)\n2. gift_suggestions 4-6 条`)
+        : (isSelf
+          ? `1. Exactly 6 growth_suggestions for the USER, addressed as "you", based on user's own observed patterns. 2. No gift_suggestions in self mode.`
+          : `1. growth_suggestions must be EXACTLY 6 (grid-3 × 2 layout)\n2. gift_suggestions 4-6 items`),
+
+      // ── Self-analysis only ──
+      relationships: zh
+        ? `1. partners 数组必须按 message_count 降序,最多 15 条,至少 5 条(如样本够多)\n2. name 字段必须照搬 partner stats 里的原名(不要翻译、不要改写)\n3. relation_type 只能选给定的枚举值,不要自造\n4. 如果数据不足以判断 relation_type,用 "弱联系" 或 "weak_tie"`
+        : `1. partners array sorted by message_count desc, max 15, min 5 (if enough samples)\n2. name must be verbatim from partner stats (no translation)\n3. relation_type must be from the given enum only\n4. Use "weak_tie" when uncertain`,
+      identity: zh
+        ? `1. 挑选 4-8 个最有 **身份差异** 的 partner,不要覆盖所有人\n2. 每个 mode_label 必须反映真实差异,不要泛泛("好朋友"一类)\n3. common_phrases 必须从 selfContext 的 per-partner 样本里摘原话,不得编造\n4. analysis 用 "你" 称呼,2-3 句`
+        : `1. Pick 4-8 partners with the MOST DIVERGENT self-expressions\n2. mode_label must reflect real contrast — not generic labels like "good friend"\n3. common_phrases must be verbatim from the per-partner samples — no fabrication\n4. Write analysis in second person "you", 2-3 sentences`,
+      perceived: zh
+        ? `1. 只使用 **对方的消息**(samples 里 sender != Me 的那部分) 作为证据,不要用你自己的消息\n2. perception_label 要具体,避免空泛词\n3. evidence 必须摘对方原话,≤60 字 × 2-3 条\n4. analysis 用 "你" 称呼`
+        : `1. Evidence MUST come from partner messages (sender != Me), not user's own\n2. perception_label must be specific — avoid vague words\n3. evidence is verbatim from partner, ≤60 chars × 2-3 items\n4. Analysis in second person "you"`,
+      growth_arc: zh
+        ? `1. phases 必须按年份升序,3-5 段,每段 year_range 不重叠\n2. 分段依据优先级: (a) 消息量显著变化 (b) 话题显著切换 (c) 语气/emoji 显著变化\n3. dominant_themes 摘自当阶段的样本,具体到行为或话题,不要泛泛\n4. summary 用 "你" 称呼,避免自夸和煽情`
+        : `1. phases chronological, 3-5 phases, non-overlapping year_range\n2. Split criteria priority: (a) volume shifts (b) topic pivots (c) voice/emoji shifts\n3. dominant_themes grounded in samples — specific behaviors or topics\n4. summary in second person "you", no flattery or melodrama`,
+      timeline: zh
+        ? `1. 只收录 **明确** 出现在聊天证据里的事件,不要编造\n2. 每条事件必须附一条 evidence 原话(≤80 字)\n3. 8-15 条,按时间升序排列\n4. category 只能选给定枚举;不确定就归到最接近的一个`
+        : `1. Only include events CLEARLY present in chat evidence — no fabrication\n2. Every event must have an evidence quote (≤80 chars)\n3. 8-15 events, chronological\n4. category from the given enum only`,
+      memories: zh
+        ? `1. 10-20 条独特回忆,按时间升序\n2. 不是代表性模式,而是**特殊、难忘、带情绪重量**的瞬间。不要选日常问候类\n3. 每条必须有 2-4 条来自聊天原文的 messages (带 sender 标签和原话)\n4. scene 字段帮读者回忆当时情境,不只是复述消息\n5. analysis 说明这个瞬间为什么独特/值得被记住,1-2 句即可\n6. 只选**能在聊天证据里找到**的瞬间,严禁编造或推断\n7. 🚫 messages[].sender 必须是 "me" 或具体名字(如"张淑云"),**严禁写"对方"或"them"**。scene/analysis 里提到他人也用具体名字。partner 名字列表见上面的 "社交圈概览"\n8. 🚨 内部双引号 " 必须转义成 \\\\" 或改用中文引号「」。title 里出现带引号的词语请使用 「词语」 而不是 "词语",否则破坏 JSON`
+        : `1. 10-20 unique memories, chronological\n2. NOT representative patterns — SPECIAL, memorable, emotionally-weighted moments. Skip routine greetings\n3. Each needs 2-4 verbatim messages from chat (with sender label + text)\n4. scene field sets the backdrop — not just a message recap\n5. analysis explains what makes this moment special, 1-2 sentences\n6. Only moments CLEARLY present in chat evidence — no fabrication\n7. 🚫 messages[].sender must be "me" or a specific name (e.g. "Mom") — NEVER "them"/"对方". scene/analysis also use specific names. See partner names in "社交圈概览" block above.\n8. 🚨 Escape inner double quotes as \\\\" or use CJK 「」 in title/scene fields to avoid JSON parse errors.`,
     }
     return reqs[groupId] || ''
   }
@@ -918,15 +1380,23 @@ class AnalyzeAgentTool extends BaseTool {
    */
   _buildGroupPrompt(group, name, isSelf, lang, stats, narrativeAnalysis, sampleBlock, artifactBlock) {
     const zh = lang === 'zh'
-    const subject = isSelf ? (zh ? '"Me"(用户自己)' : '"Me" (the user)') : `"${name}"`
+    const subject = isSelf ? (zh ? '**你**(被分析的用户本人)' : '**you** (the user being analyzed)') : `"${name}"`
+    // Self-mode directives: subject guard + voice. The subject guard is the
+    // critical piece — without it, multi-partner imports cause the LLM to
+    // silently attribute partner traits/quotes to the user.
+    const voiceDirective = isSelf
+      ? (zh
+        ? `\n\n## 🎯 分析对象（最重要,读两遍）\n\n本次分析的**唯一主体**是用户本人,即聊天记录中以 **"你(Me)"** 标签出现的那一方。用户的显示名是 **${name}**。聊天里出现的所有其他人(家人、朋友、同事等)都是"对方",不是分析对象。\n\n每一句分析性结论都必须描述**用户的**特质、模式、价值观、行为。对方的话可以作为证据或信号,但**结论永远回到用户身上**。\n\n### ⚠️ 归属检查(必做)\n\n引用聊天原文作为证据时,**必须看样本里这条消息前面的 sender 标签**:\n- 如果标签是 \`你(Me):\` → 这句话是**你**说的\n- 如果标签是 \`对方:\` 或具体 partner 名(如 \`张淑云:\`) → 这句话是**对方**说的\n\n常见的误判模式:一条"儿子,记得吃药"的消息,如果 sender 是 \`对方\`,那么是**对方(妈妈)对你说的**,表明**你**在对方眼里是需要被提醒的角色;如果 sender 是 \`你(Me)\`,那么是**你**对某人说的,表明**你**是主动关心/照料者的角色。两种情况结论完全相反。\n\n如果之前的叙事分析(narrative)对某条消息的归属有误,你**必须基于样本里的 sender 标签重新归属**,不要盲从 narrative。narrative 是参考,样本的 sender 标签是事实。\n\n### 正反例\n\n❌ 错误: "妈妈经常提醒你吃饭 → 妈妈是关心型的人。"\n(这是在分析妈妈,偏题了)\n\n✅ 正确: "妈妈频繁提醒你吃饭,反映出**你**往往把自己的生活细节让给别人照料,自己不主动管理。"\n(用对方行为作为信号,推断你的特质)\n\n❌ 错误: "老板说 '别多事' — 他重视边界。"\n(分析老板)\n\n✅ 正确: "老板直接跟你说 '别多事',说明**你**有主动介入的习惯,以至于对方需要明确划界。"\n(借对方话语推断你的模式)\n\n每写一句分析句,先问自己: **"我在描述用户,还是在描述对方?"** 如果是对方 → 停下,重新用"对方行为 → 用户特质"的路径写。\n\n特别注意 evidence 引用: 引用的原话可以是你自己的,也可以是对方的;**但结论段落必须是关于你的**。如果全段都在说对方的性格,这段就是错的。\n\n## 🗣 叙事口吻\n\n所有分析性文本用**第二人称"你"**写,像一位观察力敏锐的朋友在对你说话。\n- ✅ "你在压力下容易沉默,但会用行动补偿。"\n- ❌ "用户在压力下会沉默" / "我在压力下容易沉默"\n- 克制、温和、有洞察力。不自夸,不煽情。`
+        : `\n\n## 🎯 ANALYSIS SUBJECT (MOST IMPORTANT — read twice)\n\nThe **ONLY subject** of this analysis is the user — the "Me" speaker in the chat records. The user's name is **${name}**. Everyone else appearing in the chat (family, friends, colleagues) is a "partner", NOT an analysis subject.\n\nEvery analytical sentence must describe the **user's** traits, patterns, values, behaviors. Partner messages may serve as evidence or signal, but **conclusions always return to the user**.\n\n### Right vs Wrong\n\n❌ WRONG: "Mom often reminds you to eat → Mom is a caring person."\n(analyzes Mom, off-topic)\n\n✅ RIGHT: "Mom's frequent food reminders reveal that **you** tend to let others manage life details rather than track them yourself."\n(uses partner's behavior as signal, infers user trait)\n\n❌ WRONG: "Boss says 'don't meddle' — he values boundaries."\n(analyzes boss)\n\n✅ RIGHT: "Boss had to explicitly tell you 'don't meddle' — showing **you** have a habit of stepping in enough that partners need to draw hard lines."\n(uses partner quote to infer user pattern)\n\nBefore every analytical sentence, ask: **"Am I describing the user, or the partner?"** If partner — stop, reframe via "partner behavior → user trait".\n\nNote on evidence: quoted messages can be from you OR from partners; **but the conclusion paragraph must always be about you**. If an entire paragraph describes a partner's personality, that paragraph is wrong.\n\n## 🗣 Narrative voice\n\nAll analytical text in **second person "you"** — like a perceptive friend addressing the user directly.\n- ✅ "You tend to go silent under stress but compensate through actions."\n- ❌ "The user goes silent" / "I go silent under stress"\n- Restrained, warm, insightful. No flattery or melodrama.`)
+      : ''
 
-    const schemas = this._getSectionSchemas(zh)
+    const schemas = this._getSectionSchemas(zh, isSelf)
     const schemaBody = group.keys.map(k => '  ' + schemas[k]).join(',\n\n')
     const schemaStr = '{\n' + schemaBody + '\n}'
-    const requirements = this._getGroupRequirements(group.id, zh)
+    const requirements = this._getGroupRequirements(group.id, zh, isSelf)
 
     if (zh) {
-      return `你是一位性格分析专家。你已经完成了对 ${subject} 的深度叙事分析。现在只需要把叙事分析 + 原始聊天样本转化为 **${group.keys.length} 个 section** 的结构化 JSON 数据(${group.keys.join(', ')})。
+      return `你是一位性格分析专家。你已经完成了对 ${subject} 的深度叙事分析。现在只需要把叙事分析 + 原始聊天样本转化为 **${group.keys.length} 个 section** 的结构化 JSON 数据(${group.keys.join(', ')})。${voiceDirective}
 
 ## 🚨 JSON 输出硬性规则
 
@@ -971,7 +1441,7 @@ ${requirements}
 直接输出 JSON,开头必须是 { :`
     }
 
-    return `You are a character analyst. You've already completed the deep narrative analysis of ${subject}. Now convert that narrative + raw chat samples into structured JSON for **${group.keys.length} sections** (${group.keys.join(', ')}).
+    return `You are a character analyst. You've already completed the deep narrative analysis of ${subject}. Now convert that narrative + raw chat samples into structured JSON for **${group.keys.length} sections** (${group.keys.join(', ')}).${voiceDirective}
 
 ## 🚨 STRICT JSON OUTPUT RULES
 

@@ -244,6 +244,10 @@ export const useConfigStore = defineStore('config', () => {
     setupDismissed: false,
     setupWizardStep: 0,
     onboardingCompleted: false,
+    notifications: {
+      enabled: true,
+      silent: false,
+    },
   })
 
   function createProvider(presetType, name = null) {

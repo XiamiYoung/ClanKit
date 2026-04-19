@@ -4,33 +4,14 @@
     <!-- Header -->
     <div class="agents-header">
       <div class="agents-title-row">
-        <h1 class="agents-title">{{ t('nav.agents') }}</h1>
-        <span class="catalog-count-badge">{{ agentsStore.agents.length }}</span>
+        <h1 class="agents-title">{{ selectedView.agentType === 'system' ? t('nav.systemAgents') : t('nav.userPersonas') }}</h1>
+        <span class="catalog-count-badge">{{ selectedView.agentType === 'system' ? agentsStore.systemAgents.length : agentsStore.userAgents.length }}</span>
         <div style="flex: 1;"></div>
         <AppButton size="icon" @click="refreshAgents" :loading="refreshing" :title="t('common.refresh')">
           <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </AppButton>
       </div>
-      <p class="agents-subtitle">{{ t('agents.pageDescription') }}</p>
-      <!-- Top-level agent type tabs -->
-      <div class="agents-tab-bar">
-        <button
-          class="agents-tab" :class="{ active: selectedView.agentType === 'system' }"
-          @click="switchAgentType('system')"
-        >
-          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1M9 16h0M15 16h0"/></svg>
-          {{ t('agents.systemAgents') }}
-          <span class="agents-tab-count">{{ agentsStore.systemAgents.length }}</span>
-        </button>
-        <button
-          class="agents-tab" :class="{ active: selectedView.agentType === 'user' }"
-          @click="switchAgentType('user')"
-        >
-          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a7.5 7.5 0 0 1 13 0"/></svg>
-          {{ t('agents.userAgents') }}
-          <span class="agents-tab-count">{{ agentsStore.userAgents.length }}</span>
-        </button>
-      </div>
+      <p class="agents-subtitle">{{ selectedView.agentType === 'system' ? t('agents.systemAgentsDefinition') : t('agents.userAgentsDefinition') }}</p>
     </div>
 
     <!-- Shared header row spanning full width -->
@@ -76,17 +57,17 @@
               </svg>
             </AppButton>
           </template>
-          <AppButton v-if="selectedView.type !== 'category' && selectedView.agentType === 'system'" size="icon" @click="openGroupCreator" :title="t('agents.groupCreator.addMultiple', 'Add Multiple Agents')">
+          <AppButton v-if="selectedView.type !== 'category' && selectedView.agentType === 'system'" size="icon" @click="openGroupCreator" v-tooltip="t('agents.groupCreator.addMultiple', 'Add Multiple Agents')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
           </AppButton>
-          <AppButton v-if="selectedView.type !== 'category'" size="icon" @click="openImportWizard" :title="t('agents.import.title')">
+          <AppButton v-if="selectedView.type !== 'category'" size="icon" @click="openImportWizard" v-tooltip="t('agents.import.title')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
           </AppButton>
-          <AppButton v-if="selectedView.type !== 'category'" size="icon" @click="createNew(selectedView.agentType)" :title="t('agents.newAgent')">
+          <AppButton v-if="selectedView.type !== 'category'" size="icon" @click="createNew(selectedView.agentType)" v-tooltip="t('agents.newAgent')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </AppButton>
         </div>
@@ -416,22 +397,21 @@ onMounted(async () => {
   await agentsStore.loadAgents()
   await tasksStore.loadPlans()
 
-  // Switch to specific agent tab if requested (used by setup wizard tour)
+  // Legacy deep-link: ?agentTab=system|user → redirect to matching route
   if (route.query.agentTab === 'system' || route.query.agentTab === 'user') {
-    selectedView.agentType = route.query.agentTab
-    selectedView.type = 'all'
+    const target = route.query.agentTab === 'user' ? '/personas' : '/agents'
+    if (route.path !== target) router.replace({ path: target })
   } else if (route.query.createUserAgent === '1') {
-    selectedView.agentType = 'user'
-    selectedView.type = 'all'
-    router.replace({ path: '/agents', query: {} })
+    if (route.path !== '/personas') router.replace({ path: '/personas', query: {} })
+    else router.replace({ path: '/personas', query: {} })
     createNew('user')
   } else if (route.query.openGroupCreator === '1') {
     // Direct group creator open (non-onboarding)
     showGroupCreator.value = true
-    selectedView.agentType = 'system'
     groupCreatorInitialTab.value = route.query.tab || 'templates'
     groupCreatorHighlightCategory.value = route.query.highlight || ''
-    router.replace({ path: '/agents', query: {} })
+    if (route.path !== '/agents') router.replace({ path: '/agents', query: {} })
+    else router.replace({ path: '/agents', query: {} })
   }
 })
 
@@ -447,7 +427,8 @@ async function refreshAgents() {
 async function onAgentsCreated(ids = []) {
   await refreshAgents()
   if (ids.length > 0) {
-    // Navigate to "All system agents" so new cards are visible
+    // Imports always create system agents — navigate to /agents if not there.
+    if (route.path !== '/agents') router.push('/agents')
     selectedView.type = 'all'
     selectedView.agentType = 'system'
     selectedView.categoryId = null
@@ -495,14 +476,28 @@ function hideNavTooltip() {
 }
 
 // ── View selection ─────────────────────────────────────────────────────────
-const selectedView = reactive({ type: 'all', agentType: 'system', categoryId: null })
+// agentType is driven by route path: /personas → 'user', everything else (/agents) → 'system'
+const selectedView = reactive({
+  type: 'all',
+  agentType: route.path === '/personas' ? 'user' : 'system',
+  categoryId: null
+})
 
-// Handle agentTab query param (tour navigation between system/user tabs)
+// Sync agentType with route path (user clicking sidebar menu)
+watch(() => route.path, (path) => {
+  const next = path === '/personas' ? 'user' : 'system'
+  if (selectedView.agentType === next) return
+  selectedView.agentType = next
+  selectedView.type = 'all'
+  selectedView.categoryId = null
+  filterQuery.value = ''
+})
+
+// Handle agentTab query param (legacy tour deep-link — redirects to matching route)
 watch(() => route.query.agentTab, (tab) => {
-  if (tab === 'system' || tab === 'user') {
-    selectedView.agentType = tab
-    selectedView.type = 'all'
-  }
+  if (tab !== 'system' && tab !== 'user') return
+  const target = tab === 'user' ? '/personas' : '/agents'
+  if (route.path !== target) router.replace({ path: target })
 })
 
 const filterQuery = ref('')
@@ -513,14 +508,6 @@ function selectView(view) {
   exitSelectMode()
 }
 
-function switchAgentType(type) {
-  if (selectedView.agentType === type) return
-  selectedView.agentType = type
-  selectedView.type = 'all'
-  selectedView.categoryId = null
-  filterQuery.value = ''
-  exitSelectMode()
-}
 
 const activeCategories = computed(() => {
   return selectedView.agentType === 'system'
@@ -869,56 +856,6 @@ function isDeleteButtonDisabled(agent) {
   font-size: var(--fs-body);
   color: #6B7280;
   margin: 0.25rem 0 0;
-}
-
-/* ── Top-level tab bar ──────────────────────────────────────────────────── */
-.agents-tab-bar {
-  display: flex;
-  justify-content: center;
-  gap: 0.25rem;
-  margin-top: 0.875rem;
-  border-bottom: 1.5px solid #E5E5EA;
-  padding-bottom: 0;
-}
-.agents-tab {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  border: none;
-  background: transparent;
-  font-family: 'Inter', sans-serif;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #9CA3AF;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1.5px;
-  border-radius: 0.375rem 0.375rem 0 0;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
-}
-.agents-tab:hover {
-  color: #374151;
-  background: rgba(0,0,0,0.03);
-}
-.agents-tab.active {
-  color: #1A1A1A;
-  font-weight: 600;
-  border-bottom-color: #1A1A1A;
-}
-.agents-tab-count {
-  font-size: var(--fs-caption);
-  font-weight: 700;
-  padding: 0.0625rem 0.375rem;
-  border-radius: 9999px;
-  background: #E5E5EA;
-  color: #1A1A1A;
-  line-height: 1.4;
-}
-.agents-tab.active .agents-tab-count {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
 }
 
 /* ── Shared header ───────────────────────────────────────────────────────── */

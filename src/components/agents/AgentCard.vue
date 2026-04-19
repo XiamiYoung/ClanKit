@@ -3,27 +3,53 @@
     <!-- Gradient accent bar -->
     <div class="agent-card-accent" :style="{ background: gradient }"></div>
 
-    <!-- AI Analysis floating button — top-right corner (only when imported history exists) -->
-    <button
-      v-if="hasImportedHistory"
-      class="agent-analysis-btn"
-      :title="t('agents.analysis.buttonTitle')"
-      :aria-label="t('agents.analysis.buttonTitle')"
-      @click.stop="openOrCreateAnalysisChat(agent)"
-    >
-      <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="5" r="2"/>
-        <circle cx="5" cy="12" r="2"/>
-        <circle cx="19" cy="12" r="2"/>
-        <circle cx="8" cy="19" r="2"/>
-        <circle cx="16" cy="19" r="2"/>
-        <line x1="12" y1="7" x2="7" y2="10"/>
-        <line x1="12" y1="7" x2="17" y2="10"/>
-        <line x1="7" y1="12" x2="9" y2="17"/>
-        <line x1="17" y1="12" x2="15" y2="17"/>
-      </svg>
-      AI
-    </button>
+    <!-- Corner button cluster — top-right of the card. Analysis button (AI,
+         only for imported-history agents) sits to the LEFT of the chat
+         button (always visible for system agents). -->
+    <div class="agent-card-actions">
+      <button
+        v-if="hasImportedHistory"
+        class="agent-analysis-btn"
+        v-tooltip="t('agents.analysis.buttonTitle')"
+        :aria-label="t('agents.analysis.buttonTitle')"
+        @click.stop="openOrCreateAnalysisChat(agent)"
+      >
+        <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="5" r="2"/>
+          <circle cx="5" cy="12" r="2"/>
+          <circle cx="19" cy="12" r="2"/>
+          <circle cx="8" cy="19" r="2"/>
+          <circle cx="16" cy="19" r="2"/>
+          <line x1="12" y1="7" x2="7" y2="10"/>
+          <line x1="12" y1="7" x2="17" y2="10"/>
+          <line x1="7" y1="12" x2="9" y2="17"/>
+          <line x1="17" y1="12" x2="15" y2="17"/>
+        </svg>
+        AI
+      </button>
+      <button
+        v-if="agent.type !== 'user'"
+        class="agent-chat-btn"
+        v-tooltip="t('agents.chatWithAgent', 'Chat with this agent')"
+        :aria-label="t('agents.chatWithAgent', 'Chat with this agent')"
+        @click.stop="openChatWithAgent(agent)"
+      >
+        <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      </button>
+      <button
+        class="agent-view-btn"
+        v-tooltip="t('agents.viewAgent', 'View agent details')"
+        :aria-label="t('agents.viewAgent', 'View agent details')"
+        @click.stop="$emit('click')"
+      >
+        <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </button>
+    </div>
 
     <div class="agent-card-body">
       <!-- Avatar + title row -->
@@ -125,8 +151,10 @@
 
 <script setup>
 import { computed, ref, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { getAvatarDataUri } from './agentAvatars'
 import { useConfigStore } from '../../stores/config'
+import { useChatsStore } from '../../stores/chats'
 import { useI18n } from '../../i18n/useI18n'
 import { useAgentAnalysisChat } from '../../composables/useAgentAnalysisChat'
 import { EDGE_VOICES, OPENAI_VOICES } from '../../utils/edgeVoices'
@@ -139,6 +167,34 @@ function voiceLabel(id) {
 
 const { t } = useI18n()
 const { openOrCreateAnalysisChat } = useAgentAnalysisChat()
+const _router = useRouter()
+const _chatsStore = useChatsStore()
+
+/**
+ * Open or create a regular chat with this agent pre-selected.
+ * Looks for an existing chat that targets exactly this single agent; if none,
+ * creates a new one titled after the agent's name and navigates to /chats.
+ */
+async function openChatWithAgent(agent) {
+  if (!agent?.id) return
+  const name = agent.name || ''
+  const title = t('chats.chatWithAgentTitle', { name })
+  const existing = _chatsStore.chats.find(c =>
+    c.type !== 'analysis' &&
+    c.title === title &&
+    !c.isGroupChat &&
+    c.systemAgentId === agent.id
+  )
+  if (existing) {
+    _chatsStore.setActiveChat(existing.id)
+    _router.push('/chats')
+    return
+  }
+  const chat = await _chatsStore.createChat(title, [agent.id])
+  if (!chat) return
+  _chatsStore.setActiveChat(chat.id)
+  _router.push('/chats')
+}
 
 const PROVIDER_LABELS = {
   anthropic:  'Anthropic',
@@ -396,11 +452,16 @@ const isNoProviderConfigured = computed(() => {
 .star-btn-always:hover { background: #F5F5F5; color: #F59E0B; }
 .delete-btn-always { color: #D1D5DB; }
 .delete-btn-always:hover { background: #FEE2E2; color: #DC2626; }
-.agent-analysis-btn {
+.agent-card-actions {
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
   z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+}
+.agent-analysis-btn {
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -418,6 +479,30 @@ const isNoProviderConfigured = computed(() => {
   letter-spacing: 0.03em;
   white-space: nowrap;
 }
+.agent-chat-btn,
+.agent-view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border-radius: 9999px;
+  border: none;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  transition: all 0.15s ease;
+}
+.agent-chat-btn:hover,
+.agent-view-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.26);
+  transform: translateY(-1px);
+}
+.agent-chat-btn:active,
+.agent-view-btn:active { transform: translateY(0); }
 .agent-analysis-btn:hover {
   background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
   box-shadow: 0 4px 14px rgba(245, 158, 11, 0.5);

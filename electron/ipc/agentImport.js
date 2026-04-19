@@ -696,14 +696,27 @@ async function _extractWeChatMulti(event, contacts, dbDir) {
   }
 
   const allMessages = []
+  // partner_names: wxid → human-readable label. Used downstream by self-analysis
+  // sections (relationships_map, identity_modes, perceived_views) so the report
+  // shows "Alice"/"Mom" instead of the opaque WeChat id.
+  const partnerNames = {}
   for (let i = 0; i < contacts.length; i++) {
-    const wxid = contacts[i].wxid
+    const { wxid, displayName } = contacts[i]
+    const name = (displayName || wxid || '').toString().trim() || wxid
+    partnerNames[wxid] = name
     sendProgress(event, {
       step: 'parse',
       progress: Math.round(10 + 80 * (i / contacts.length)),
       message: `Extracting conversation ${i + 1}/${contacts.length}...`,
     })
     const msgs = wechatParser.extractMessagesFromDir(dbDir, wxid)
+    // Tag each message with its partner so messages survive the later merge-sort
+    // with partner identity intact. classifyMessages uses spread, so these
+    // fields are preserved into `classified.all_messages`.
+    for (const m of msgs) {
+      m.partner = wxid
+      m.partner_name = name
+    }
     allMessages.push(...msgs)
   }
 
@@ -722,6 +735,7 @@ async function _extractWeChatMulti(event, contacts, dbDir) {
   // classifyMessages already handles sender:'me'|'them' from wechatParser
   const classified = classifyMessages(allMessages, '')
   classified.target_name = 'me'
+  classified.partner_names = partnerNames
 
   const myCount = classified.all_messages.filter(m => m.sender === 'me').length
 

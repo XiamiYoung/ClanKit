@@ -640,7 +640,21 @@ function stripBase64(text) {
 // File-path regex: matches files with known extensions OR directory paths (trailing / or \)
 // Files:  ~/path/file.ext, /abs/path/file.ext, C:\path\file.ext, \\server\share\file.ext
 // Dirs:   ~/dir/sub/, /abs/path/dir/, C:\path\dir\, \\server\share\  (2+ segments)
-const FILE_PATH_RE = /(?:(?:~\/[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\/\-]+|\/(?:[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+\/)+[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+|[A-Z]:\\(?:[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\- ]+\\)*[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+|\\\\[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+(?:\\[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+)+)\.(?:md|txt|json|jsx|tsx|toml|yaml|yml|html|scss|sass|bash|conf|java|svelte|vue|ts|js|py|rb|go|rs|cpp|hpp|css|xml|ini|cfg|log|csv|sql|zsh|env|sh|c|h)|(?:~\/(?:[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+\/)+|\/(?:[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+\/){2,}|[A-Z]:\\(?:[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\- ]+\\){2,}|\\\\[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+(?:\\[\w\u00C0-\u024F\u4E00-\u9FFF\u3400-\u4DBF.\-]+)+\\)(?=[\s.,;:!?)'"\]}]|$))/gu
+//
+// Character-class fragments are hoisted into constants so the emoji ranges
+// (needed for filenames like `大虾米👀_report.html`) can be maintained in one
+// place. `_P_EMO` covers Supplementary Multilingual Plane pictographs commonly
+// found in WeChat nicknames — Misc Symbols/Pictographs (1F300-1F9FF), Emoticons
+// (1F600-1F64F), Misc Symbols (2600-27BF), ZWJ + variation selectors. Without
+// these, a single emoji in a filename breaks the entire path match and the
+// open/folder buttons never appear.
+const _P_FILE  = '\\w\\u00C0-\\u024F\\u4E00-\\u9FFF\\u3400-\\u4DBF.\\-\\u{1F000}-\\u{1FFFF}\\u{2600}-\\u{27BF}\\u{FE00}-\\u{FE0F}\\u{200D}'
+const _P_DIR   = _P_FILE + ' '   // directory segments may contain spaces
+const _P_DIR_S = _P_FILE         // Unix/posix segments (no spaces)
+const FILE_PATH_RE = new RegExp(
+  `(?:(?:~\\/[${_P_DIR_S}\\/]+|\\/(?:[${_P_DIR_S}]+\\/)+[${_P_DIR_S}]+|[A-Z]:\\\\(?:[${_P_DIR}]+\\\\)*[${_P_DIR_S}]+|\\\\\\\\[${_P_DIR_S}]+(?:\\\\[${_P_DIR_S}]+)+)\\.(?:md|txt|json|jsx|tsx|toml|yaml|yml|html|scss|sass|bash|conf|java|svelte|vue|ts|js|py|rb|go|rs|cpp|hpp|css|xml|ini|cfg|log|csv|sql|zsh|env|sh|c|h)|(?:~\\/(?:[${_P_DIR_S}]+\\/)+|\\/(?:[${_P_DIR_S}]+\\/){2,}|[A-Z]:\\\\(?:[${_P_DIR}]+\\\\){2,}|\\\\\\\\[${_P_DIR_S}]+(?:\\\\[${_P_DIR_S}]+)+\\\\)(?=[\\s.,;:!?)'"\\]}]|$))`,
+  'gu'
+)
 
 function _normSlash(p) { return p.replace(/\\/g, '/').toLowerCase() }
 

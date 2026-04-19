@@ -872,11 +872,11 @@ const tourStep = ref(1)
 
 const tourSteps = computed(() => [
   { route: '/config', title: t('setupWizard.tourConfig'), desc: t('setupWizard.tourConfigDesc') },
-  { route: '/agents', query: { agentTab: 'system' }, title: t('setupWizard.tourAgentsSystem'), desc: t('setupWizard.tourAgentsSystemDesc') },
-  { route: '/agents', query: { agentTab: 'user' }, title: t('setupWizard.tourAgentsUser'), desc: t('setupWizard.tourAgentsUserDesc') },
+  { route: '/agents',   title: t('setupWizard.tourAgentsSystem'), desc: t('setupWizard.tourAgentsSystemDesc') },
+  { route: '/personas', title: t('setupWizard.tourAgentsUser'),   desc: t('setupWizard.tourAgentsUserDesc') },
   { route: '/skills', title: t('setupWizard.tourSkills'), desc: t('setupWizard.tourSkillsDesc') },
   { route: '/tools', title: t('setupWizard.tourTools'), desc: t('setupWizard.tourToolsDesc') },
-  { route: '/agents', query: { agentTab: 'system' }, title: t('setupWizard.tourAssignReminder'), desc: t('setupWizard.tourAssignReminderDesc') },
+  { route: '/agents', title: t('setupWizard.tourAssignReminder'), desc: t('setupWizard.tourAssignReminderDesc') },
   { route: '/mcp', title: t('setupWizard.tourMcp'), desc: t('setupWizard.tourMcpDesc') },
   { route: '/knowledge', title: t('setupWizard.tourKnowledge'), desc: t('setupWizard.tourKnowledgeDesc') },
   { route: '/news', title: t('setupWizard.tourNews'), desc: t('setupWizard.tourNewsDesc') },

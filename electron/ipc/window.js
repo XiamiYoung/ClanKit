@@ -9,6 +9,7 @@ const { ipcMain, app, screen, shell } = require('electron')
 const { logger } = require('../logger')
 const ds = require('../lib/dataStore')
 const winRef = require('../lib/windowRef')
+const notifier = require('../lib/notifier')
 
 // -- Manual maximize state ----------------------------------------------------
 let _isMaximizedManual = false
@@ -265,6 +266,20 @@ function register() {
     // Use setBounds with pinned intended dimensions to prevent Windows DPI scaling
     // from silently growing the window width on each setPosition call.
     mainWindow.setBounds({ x: Math.round(x), y: Math.round(y), width: _minibarIntendedW, height: _minibarIntendedH })
+  })
+
+  // -- UI state reporting (drives completion-notification suppression) --------
+  // Renderer reports route + active chat id whenever they change. Focus state
+  // is tracked directly from BrowserWindow events in main.js.
+  ipcMain.handle('window:set-ui-state', (_, payload = {}) => {
+    try {
+      if (typeof payload.route === 'string') notifier.setRoute(payload.route)
+      if (Object.prototype.hasOwnProperty.call(payload, 'activeChatId')) {
+        notifier.setActiveChat(payload.activeChatId || null)
+      }
+    } catch (err) {
+      logger.warn('window:set-ui-state error:', err.message)
+    }
   })
 }
 

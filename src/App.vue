@@ -96,12 +96,16 @@ const configLoaded = ref(false)
 const bannerDismissed = ref(false)
 
 // ── Nav sidebar resize ──
+// Defaults must be wide enough for the longest English nav label ("User
+// Personas", ~155px with icon + gap + padding). Going narrower causes ellipsis
+// on sidebar items in English.
 function getDefaultNavWidth() {
-  if (window.innerWidth >= 1920) return 200
-  if (window.innerWidth >= 1440) return 180
-  if (window.innerWidth >= 1024) return 172
-  if (window.innerWidth >= 768) return 160
-  return 144
+  if (window.innerWidth >= 2400) return 230
+  if (window.innerWidth >= 1920) return 216
+  if (window.innerWidth >= 1440) return 200
+  if (window.innerWidth >= 1024) return 184
+  if (window.innerWidth >= 768) return 172
+  return 164
 }
 const navSidebarWidth = ref(getDefaultNavWidth())
 
@@ -117,7 +121,7 @@ function startNavResize(e) {
 
   function onMouseMove(ev) {
     const delta = ev.clientX - startX
-    navSidebarWidth.value = Math.max(168, Math.min(256, startWidth + delta))
+    navSidebarWidth.value = Math.max(160, Math.min(280, startWidth + delta))
   }
 
   function onMouseUp() {
@@ -154,6 +158,36 @@ watch(() => chatsStore.pendingMinibarSend, async (pending) => {
   chatsStore.clearMinibarSend()
   if (text) await chatsStore.sendMinibarMessage(text, chatId)
 })
+
+// ── Completion-notification state reporting ──
+// Report current route + active chat id to Electron main so notifier can decide
+// whether to suppress (user is already looking at the chat).
+const _reportUIState = () => {
+  try {
+    window.electronAPI?.window?.setUIState?.({
+      route:        route.path || '/',
+      activeChatId: chatsStore.activeChatId || null,
+    })
+  } catch {}
+}
+watch(() => route.path,              _reportUIState, { immediate: true })
+watch(() => chatsStore.activeChatId, _reportUIState)
+
+// ── Notification click → open chat ──
+let _offOpenChat = null
+onMounted(() => {
+  if (window.electronAPI?.onOpenChat) {
+    _offOpenChat = window.electronAPI.onOpenChat(async ({ chatId }) => {
+      if (!chatId) return
+      if (route.path !== '/chats') await router.push('/chats')
+      // setActiveChat handles folder expansion, persistence, and ensureMessages —
+      // directly assigning activeChatId skips those, leaving a stale sidebar and
+      // an unloaded conversation.
+      try { await chatsStore.setActiveChat?.(chatId) } catch {}
+    })
+  }
+})
+onUnmounted(() => { if (_offOpenChat) { try { _offOpenChat() } catch {} } })
 
 // ── Voice call handlers ──
 function handleEndCall() {

@@ -247,7 +247,7 @@ class AgentLoop {
     const check = this.permissionGate.check(toolName, toolInput)
 
     if (check.decision === 'block') {
-      logger.agent('PermissionGate: BLOCK', { toolName, commandStr: check.commandStr, reason: check.reason })
+      logger.agent('PermissionGate: BLOCK', { toolName, reason: check.reason })
       return {
         decision: 'block',
         result: { error: `Operation blocked: matches danger list pattern. Remove it from Config → Security → Danger Block List to allow. (matched: "${check.commandStr}")` }
@@ -255,13 +255,13 @@ class AgentLoop {
     }
 
     if (check.decision === 'allow') {
-      logger.agent('PermissionGate: ALLOW', { toolName, commandStr: check.commandStr, reason: check.reason })
+      logger.agent('PermissionGate: ALLOW', { toolName, reason: check.reason })
       return { decision: 'allow' }
     }
 
     // decision === 'ask' — pause and prompt the user
     const blockId = require('crypto').randomUUID()
-    logger.agent('PermissionGate: ASK', { toolName, commandStr: check.commandStr, blockId })
+    logger.agent('PermissionGate: ASK', { toolName, blockId })
 
     const userDecision = await new Promise((resolve) => {
       this._pendingPermissions.set(blockId, resolve)

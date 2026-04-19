@@ -28,6 +28,25 @@ try {
 const { AgentLoop } = require('./agent/agentLoop')
 
 const ds = require('./lib/dataStore')
+const notifier = require('./lib/notifier')
+
+function _fireTaskCompletionNotification(runDetail) {
+  try {
+    if (!runDetail?.completedAt) return
+    const started    = runDetail.startedAt   ? new Date(runDetail.startedAt).getTime()   : 0
+    const ended      = runDetail.completedAt ? new Date(runDetail.completedAt).getTime() : 0
+    const durationMs = (started && ended) ? Math.max(0, ended - started) : 0
+    const fullCfg    = ds.readJSON(ds.paths().CONFIG_FILE, {})
+    notifier.notifyTaskComplete({
+      planName:   runDetail.planName || 'Task',
+      status:     runDetail.status   || 'done',
+      durationMs,
+      config:     fullCfg,
+    }).catch(err => logger.warn('[notifier] notifyTaskComplete rejected:', err.message))
+  } catch (err) {
+    logger.warn('[notifier] _fireTaskCompletionNotification error:', err.message)
+  }
+}
 
 // Getters set by init()
 let _getMainWindow = null
@@ -83,6 +102,7 @@ async function _recordSkippedRun(plan, scheduledAt) {
   if (win && !win.isDestroyed()) {
     win.webContents.send('tasks:run-completed', { runId, planId: plan.id, status: 'skipped' })
   }
+  _fireTaskCompletionNotification(runDetail)
 }
 
 async function _checkOncePlans() {
@@ -594,6 +614,7 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
   if (win && !win.isDestroyed()) {
     win.webContents.send('tasks:run-completed', { runId, planId: plan.id, status: runStatus })
   }
+  _fireTaskCompletionNotification(runDetail)
 
   return runId
 }

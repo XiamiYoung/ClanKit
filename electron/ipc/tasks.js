@@ -8,6 +8,25 @@ const { ipcMain } = require('electron')
 const { logger } = require('../logger')
 const ds = require('../lib/dataStore')
 const winRef = require('../lib/windowRef')
+const notifier = require('../lib/notifier')
+
+function _fireTaskCompletionNotification(runDetail) {
+  try {
+    if (!runDetail?.completedAt) return
+    const started = runDetail.startedAt ? new Date(runDetail.startedAt).getTime() : 0
+    const ended   = runDetail.completedAt ? new Date(runDetail.completedAt).getTime() : 0
+    const durationMs = (started && ended) ? Math.max(0, ended - started) : 0
+    const fullCfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
+    notifier.notifyTaskComplete({
+      planName:   runDetail.planName || 'Task',
+      status:     runDetail.status   || 'done',
+      durationMs,
+      config:     fullCfg,
+    }).catch(err => logger.warn('[notifier] notifyTaskComplete rejected:', err.message))
+  } catch (err) {
+    logger.warn('[notifier] _fireTaskCompletionNotification error:', err.message)
+  }
+}
 
 function register() {
   const p = () => ds.paths()
@@ -139,6 +158,7 @@ function register() {
             status: runDetail.status,
           })
         }
+        _fireTaskCompletionNotification(runDetail)
       }
 
       return { success: true }

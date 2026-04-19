@@ -84,6 +84,51 @@
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- Notifications (General > Notifications) -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <template v-if="activeTopTab === 'general' && activeSubTab === 'notifications'">
+
+          <div class="config-card">
+            <div class="form-section-header">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+              </div>
+              <h3 class="form-section-title">{{ t('config.notifications') }}</h3>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <div class="im-enable-row">
+                <div>
+                  <span class="im-enable-label">{{ t('config.enableNotifications') }}</span>
+                  <p class="hint" style="margin-top:4px; margin-bottom:0;">{{ t('config.notificationsHint') }}</p>
+                </div>
+                <label class="im-toggle" @click.stop>
+                  <input type="checkbox"
+                    :checked="configStore.config.notifications?.enabled !== false"
+                    @change="configStore.saveConfig({ notifications: { ...(configStore.config.notifications || {}), enabled: $event.target.checked } })" />
+                  <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                </label>
+              </div>
+              <div class="im-enable-row" style="margin-top:12px;" :style="{ opacity: configStore.config.notifications?.enabled === false ? 0.5 : 1 }">
+                <div>
+                  <span class="im-enable-label">{{ t('config.silentNotifications') }}</span>
+                  <p class="hint" style="margin-top:4px; margin-bottom:0;">{{ t('config.silentNotificationsHint') }}</p>
+                </div>
+                <label class="im-toggle" @click.stop>
+                  <input type="checkbox"
+                    :checked="!!configStore.config.notifications?.silent"
+                    :disabled="configStore.config.notifications?.enabled === false"
+                    @change="configStore.saveConfig({ notifications: { ...(configStore.config.notifications || {}), silent: $event.target.checked } })" />
+                  <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+        </template>
+
+        <!-- ════════════════════════════════════════════════════════════════ -->
         <!-- Paths (General > Paths) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
         <template v-if="activeTopTab === 'general' && activeSubTab === 'paths'">
@@ -2384,7 +2429,7 @@ function openInExplorer(path) {
 }
 const showKey  = ref(false)
 const showOpenRouterKey = ref(false)
-const VALID_TABS = ['general', 'ai', 'models', 'skills', 'knowledge', 'voice', 'email', 'security']
+const VALID_TABS = ['general', 'ai', 'models', 'skills', 'knowledge', 'voice', 'email', 'security', 'notifications']
 const activeTopTab = ref('general')
 const activeProviderTab = ref('openai')
 
@@ -2694,6 +2739,12 @@ const IconLanguage = defineComponent({
     h('path', { d: 'M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z' })
   ])
 })
+const IconNotifications = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('path', { d: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9' }),
+    h('path', { d: 'M13.73 21a2 2 0 0 1-3.46 0' })
+  ])
+})
 const IconPricing = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
     h('line', { x1: '12', y1: '1', x2: '12', y2: '23' }),
@@ -2717,11 +2768,12 @@ const topTabs = computed(() => [
 
 // Sub-tab arrays
 const subTabsGeneral = computed(() => [
-  { value: 'language', label: 'Language / 语言', icon: IconLanguage },
-  { value: 'paths',    label: t('config.paths'),    icon: IconPaths    },
-  { value: 'security', label: t('config.security'), icon: IconSecurity },
-  { value: 'email',    label: t('config.email'),    icon: IconEmail    },
-  { value: 'im',       label: t('config.im'),       icon: IconIM       },
+  { value: 'language',      label: 'Language / 语言',          icon: IconLanguage      },
+  { value: 'notifications', label: t('config.notifications'),  icon: IconNotifications },
+  { value: 'paths',         label: t('config.paths'),          icon: IconPaths         },
+  { value: 'security',      label: t('config.security'),       icon: IconSecurity      },
+  { value: 'email',         label: t('config.email'),          icon: IconEmail         },
+  { value: 'im',            label: t('config.im'),             icon: IconIM            },
 ])
 const voiceMenuExpanded = ref(false)
 const vadExpanded = ref(false)
@@ -2755,6 +2807,7 @@ watch(() => route.query.tab, (tab) => {
   if (tab === 'voice') { activeTopTab.value = 'ai'; voiceMenuExpanded.value = true; activeSubTab.value = 'tts'; return }
   if (tab === 'tts') { activeTopTab.value = 'ai'; voiceMenuExpanded.value = true; activeSubTab.value = 'tts'; return }
   if (tab === 'stt') { activeTopTab.value = 'ai'; voiceMenuExpanded.value = true; activeSubTab.value = 'stt'; return }
+  if (tab === 'notifications') { activeTopTab.value = 'general'; activeSubTab.value = 'notifications'; return }
   if (tab === 'knowledge') { activeTopTab.value = 'ai'; activeSubTab.value = 'knowledge'; return }
   if (tab === 'security') { activeTopTab.value = 'general'; activeSubTab.value = 'security'; return }
   if (tab === 'email') { activeTopTab.value = 'general'; activeSubTab.value = 'email'; return }
@@ -2779,8 +2832,9 @@ function switchTopTab(tab) {
 
 function getSubTabStatus(subTab) {
   switch (subTab) {
-    case 'language':  return form.language ? 'configured' : 'empty'
-    case 'paths':     return (form.dataPath || form.artifactPath) ? 'configured' : 'empty'
+    case 'language':      return form.language ? 'configured' : 'empty'
+    case 'notifications': return 'configured'
+    case 'paths':         return (form.dataPath || form.artifactPath) ? 'configured' : 'empty'
     case 'skills':    return form.skillsPath ? 'configured' : 'empty'
     case 'aidoc':     return form.DoCPath ? 'configured' : 'empty'
     case 'security':  return 'configured'
@@ -2830,6 +2884,15 @@ watch(activeSubTab, (val) => {
   savedModelsMsg.value = ''
   testResultNew.value = null
   testUtilityModelResult.value = null
+  // Utility Model: re-sync form from persisted config on every entry into the
+  // models tab so unsaved edits never linger. The form state stays buffered —
+  // configStore.config.utilityModel is only written when save AND test both
+  // succeed inside saveModels(). Leaving the tab without saving discards edits.
+  if (val === 'models') {
+    const saved = configStore.config.utilityModel || { provider: '', model: '' }
+    form.utilityModel.provider = saved.provider || ''
+    form.utilityModel.model    = saved.model    || ''
+  }
 })
 // Ensure form.im.teams exists (handles KeepAlive cache from before Teams was added)
 watch(activeIMTab, (val) => {
@@ -3086,7 +3149,7 @@ watch(() => form.im.teams?.enabled, async (enabled) => {
 // ── Models Page: New left sidebar logic ────────────────────────────────
 // (modelsLeftNav is forward-declared near the onboarding watcher above)
 const providerAdvancedOpen = ref(false)
-watch(modelsLeftNav, () => {
+watch(modelsLeftNav, (val) => {
   providerAdvancedOpen.value = false
   modelsFetchedOnce.value = false
   savedModelsMsg.value = ''
@@ -3094,6 +3157,13 @@ watch(modelsLeftNav, () => {
   testingProviderNew.value = false
   providerModelsFetchError.value = ''
   testUtilityModelResult.value = null
+  // Re-sync the Utility Model form from persisted config every time the user
+  // enters the utility sub-page. Unsaved edits are discarded on leaving.
+  if (val === 'utility') {
+    const saved = configStore.config.utilityModel || { provider: '', model: '' }
+    form.utilityModel.provider = saved.provider || ''
+    form.utilityModel.model    = saved.model    || ''
+  }
 })
 const showAddProviderModal = ref(false)
 
@@ -3676,6 +3746,15 @@ async function saveModels() {
     delete modelFields.voiceCall
     // Include providers from configStore
     modelFields.providers = JSON.parse(JSON.stringify(configStore.config.providers))
+    // Utility model is only persisted when the save originates from the utility
+    // page (where validation + test gating runs). For saves triggered from any
+    // other models sub-page, reuse the last-known-good utilityModel from
+    // configStore so unsaved/untested edits on the utility page never leak.
+    if (modelsLeftNav.value !== 'utility') {
+      modelFields.utilityModel = JSON.parse(JSON.stringify(
+        configStore.config.utilityModel || { provider: '', model: '' }
+      ))
+    }
     await configStore.saveConfig(modelFields)
     savedModelsMsg.value = { ok: true, text: t('common.successSaved') }
   } catch (err) {

@@ -5,14 +5,15 @@
     <div class="knowledge-header">
       <div class="knowledge-header-top">
         <div>
-          <div style="display:flex; align-items:center; gap:0.5rem;">
+          <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
             <h1 class="knowledge-title">{{ t('knowledge.title') }}</h1>
             <span class="catalog-count-badge">{{ knowledgeStore.knowledgeBases.length }}</span>
             <span class="catalog-assignment-hint">
-              <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg class="catalog-assignment-hint-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
               </svg>
-              {{ t('knowledge.needsAssignmentInfo') }}
+              <span class="catalog-assignment-hint-text">{{ t('knowledge.needsAssignmentInfo') }}</span>
+              <router-link to="/agents" class="catalog-assignment-hint-link">{{ t('common.goAssign') }} &rarr;</router-link>
             </span>
           </div>
           <p class="knowledge-subtitle">
@@ -768,11 +769,38 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .catalog-assignment-hint {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  background: #FEF3C7;
+  border: 1px solid #FCD34D;
+  border-radius: 9999px;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
-  color: #9CA3AF;
-  line-height: 1;
+  font-weight: 500;
+  color: #92400E;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.catalog-assignment-hint-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: #B45309;
+}
+.catalog-assignment-hint-text {
+  white-space: nowrap;
+}
+.catalog-assignment-hint-link {
+  padding: 0.0625rem 0.375rem;
+  margin-left: 0.125rem;
+  border-radius: 9999px;
+  color: #92400E;
+  text-decoration: none;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.catalog-assignment-hint-link:hover {
+  background: rgba(180, 83, 9, 0.18);
 }
 .header-actions { display: flex; align-items: center; gap: 0.5rem; }
 .catalog-count-badge {

@@ -51,7 +51,7 @@
             @mouseleave="isCollapsed ? hideNavTooltip() : undefined"
           >
             <IconChats style="width:18px;height:18px;flex-shrink:0;" />
-            <span v-if="!isCollapsed" style="font-size:var(--fs-secondary);font-weight:500;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t('nav.chats') }}</span>
+            <span v-if="!isCollapsed" style="font-size:var(--nav-item-fs, var(--fs-secondary));font-weight:500;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t('nav.chats') }}</span>
           </RouterLink>
         </div>
         <div ref="notesHighlightRef">
@@ -66,27 +66,33 @@
         <NavItem v-if="!configStore.config.demoMode" to="/news"  :icon="IconNews"  :label="t('news.title')"   :isCollapsed="isCollapsed" />
       </div>
 
-      <!-- ── Agent Universe ── -->
+      <!-- ── AI Roles ── -->
       <div class="nav-section" :class="{ collapsed: isCollapsed }">
         <div class="nav-section-header" v-show="!isCollapsed">
-          <span class="nav-section-label">{{ t('nav.multiAgents') }}</span>
+          <span class="nav-section-label">{{ t('nav.aiRoles') }}</span>
         </div>
-        <!-- Agent main with toggle button -->
-        <div class="chats-row-wrap" :class="{ 'chats-row-active': $route.path === '/agents' || $route.path.startsWith('/agents/') }">
-          <NavItem to="/agents" :icon="IconAgents" :label="t('nav.agents')" :isCollapsed="isCollapsed" class="chats-main-item" />
+        <!-- System Agents (数字人) -->
+        <NavItem to="/agents"   :icon="IconSystemAgents" :label="t('nav.systemAgents')" :isCollapsed="isCollapsed" />
+        <!-- User Personas (用户画像) -->
+        <NavItem to="/personas" :icon="IconUserPersona"  :label="t('nav.userPersonas')" :isCollapsed="isCollapsed" />
+        <!-- Capabilities toggle (only expandable item) -->
+        <div v-if="!isCollapsed" class="chats-row-wrap" :class="{ 'chats-row-active': agentCapabilitiesOpen }">
           <button
-            v-if="!isCollapsed"
-            class="chats-config-btn"
-            :class="{ 'chats-config-btn-open': agentCapabilitiesOpen }"
-            @click.prevent.stop="agentCapabilitiesOpen = !agentCapabilitiesOpen"
-            title="Agent capabilities"
+            class="nav-item nav-item-inactive capabilities-toggle"
+            :class="{ 'capabilities-toggle-open': agentCapabilitiesOpen }"
+            v-tooltip="t('nav.capabilitiesTooltip')"
+            @click="agentCapabilitiesOpen = !agentCapabilitiesOpen"
           >
-            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            <IconCapabilities style="width:18px;height:18px;flex-shrink:0;" />
+            <span class="capabilities-label">{{ t('nav.capabilities') }}</span>
+            <svg class="capabilities-chevron" :class="{ open: agentCapabilitiesOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
             </svg>
           </button>
         </div>
-        <!-- Agent capabilities submenu -->
+        <!-- Collapsed: Capabilities as direct link to /skills -->
+        <NavItem v-else to="/skills" :icon="IconCapabilities" :label="t('nav.capabilities')" :isCollapsed="isCollapsed" />
+        <!-- Capabilities submenu -->
         <div v-if="agentCapabilitiesOpen && !isCollapsed" class="agent-submenu">
           <NavItem to="/skills"    :icon="IconSkills"    :label="t('nav.skills')"        :isCollapsed="isCollapsed" />
           <NavItem to="/tools"     :icon="IconTools"     :label="t('nav.tools')"         :isCollapsed="isCollapsed" />
@@ -351,7 +357,7 @@ watch(() => route.path, (path) => {
   if (routes.some(r => path === r || path.startsWith(r + '/'))) {
     agentCapabilitiesOpen.value = true
   }
-})
+}, { immediate: true })
 
 function applyAutoCollapse() {
   if (userOverride.value !== null) return
@@ -877,6 +883,32 @@ const IconAgents = defineComponent({
   ])
 })
 
+const IconSystemAgents = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('path', { d: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2' }),
+    h('circle', { cx: '9', cy: '7', r: '4' }),
+    h('path', { d: 'M23 21v-2a4 4 0 0 0-3-3.87' }),
+    h('path', { d: 'M16 3.13a4 4 0 0 1 0 7.75' })
+  ])
+})
+
+const IconUserPersona = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('circle', { cx: '12', cy: '12', r: '10' }),
+    h('circle', { cx: '12', cy: '10', r: '3' }),
+    h('path', { d: 'M6.5 19a6 6 0 0 1 11 0' })
+  ])
+})
+
+const IconCapabilities = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('rect', { x: '3',  y: '3',  width: '7', height: '7', rx: '1' }),
+    h('rect', { x: '14', y: '3',  width: '7', height: '7', rx: '1' }),
+    h('rect', { x: '3',  y: '14', width: '7', height: '7', rx: '1' }),
+    h('rect', { x: '14', y: '14', width: '7', height: '7', rx: '1' })
+  ])
+})
+
 const IconSkills = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
     h('polygon', { points: '13 2 3 14 12 14 11 22 21 10 12 10 13 2' })
@@ -968,7 +1000,7 @@ const NavItem = defineComponent({
         default: () => {
           const children = [h(props.icon, { style: 'width:18px;height:18px;flex-shrink:0;' })]
           if (!props.isCollapsed) {
-            children.push(h('span', { style: 'font-size:var(--fs-secondary);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }, props.label))
+            children.push(h('span', { style: 'font-size:var(--nav-item-fs, var(--fs-secondary));font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' }, props.label))
           }
           return children
         }
@@ -979,6 +1011,22 @@ const NavItem = defineComponent({
 </script>
 
 <style scoped>
+/* Responsive nav-item font size — smaller labels on smaller viewports so a
+   tight sidebar can still display the longest English labels without ellipsis.
+   Inline styles on spans read this var via `var(--nav-item-fs, ...)`. */
+nav {
+  --nav-item-fs: var(--fs-secondary);            /* 0.875rem / 14px default */
+}
+@media (max-width: 1439px) {
+  nav { --nav-item-fs: 0.8125rem; }               /* 13px */
+}
+@media (max-width: 1023px) {
+  nav { --nav-item-fs: 0.78125rem; }              /* 12.5px */
+}
+@media (max-width: 767px) {
+  nav { --nav-item-fs: 0.75rem; }                 /* 12px */
+}
+
 .nav-section {
   display: flex;
   flex-direction: column;
@@ -1224,6 +1272,34 @@ const NavItem = defineComponent({
 .chats-main-item {
   flex: 1;
   margin-bottom: 0 !important;
+}
+
+/* ── Capabilities toggle button (peer with System Agents / User Personas) ── */
+.capabilities-toggle {
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.capabilities-toggle .capabilities-label {
+  flex: 1;
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.capabilities-chevron {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #9CA3AF;
+  transition: transform 0.15s ease;
+}
+.capabilities-chevron.open {
+  transform: rotate(180deg);
 }
 
 /* ── Agent capabilities submenu ── */
