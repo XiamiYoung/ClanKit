@@ -9,6 +9,9 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -18,12 +21,10 @@ jobs:
         with:
           node-version: 24
       - run: npm install
-      - run: npm run dist:win
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ClankAI-windows
-          path: dist-release/*.exe
-          retention-days: 3
+      - name: Build and publish Windows
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build && npx electron-builder --win --publish always
 
   build-macos:
     runs-on: macos-latest
@@ -33,9 +34,7 @@ jobs:
         with:
           node-version: 24
       - run: npm install
-      - run: npm run dist:mac
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ClankAI-macos
-          path: dist-release/*.dmg
-          retention-days: 3
+      - name: Build and publish macOS
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build && npx electron-builder --mac --publish always

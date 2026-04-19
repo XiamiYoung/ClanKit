@@ -26,6 +26,11 @@
     "directories": {
       "output": "dist-release"
     },
+    "publish": {
+      "provider": "github",
+      "private": true,
+      "releaseType": "release"
+    },
     "files": [
       "dist/**/*",
       "electron/**/*",
