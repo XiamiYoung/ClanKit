@@ -21,7 +21,7 @@
           </p>
         </div>
         <div class="header-actions">
-          <AppButton size="icon" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing" :title="t('common.refresh')">
+          <AppButton size="icon" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing" v-tooltip="t('common.refresh')">
             <svg v-if="!isRefreshing" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="23 4 23 10 17 10"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -215,12 +215,12 @@
                           </div>
                         </div>
                         <div class="doc-item-actions">
-                          <button class="doc-inspect-btn" @click="inspectDocument(doc)" :title="t('knowledge.documentSummary')">
+                          <button class="doc-inspect-btn" @click="inspectDocument(doc)" v-tooltip="t('knowledge.documentSummary')">
                             <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
                             </svg>
                           </button>
-                          <button class="source-delete-btn" @click="confirmDeleteDoc(doc)" :title="t('knowledge.deleteDocument')">
+                          <button class="source-delete-btn" @click="confirmDeleteDoc(doc)" v-tooltip="t('knowledge.deleteDocument')">
                             <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                           </button>
                         </div>
@@ -464,6 +464,7 @@
 </template>
 
 <script setup>
+defineOptions({ inheritAttrs: false })
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useKnowledgeStore } from '../stores/knowledge'
 import ConfirmModal from '../components/common/ConfirmModal.vue'

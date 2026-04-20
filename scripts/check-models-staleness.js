@@ -1,7 +1,7 @@
 /**
  * Dev-time check: compare local litellm-models.json against remote.
- * Writes .models-stale flag if content differs.
- * Runs once during `npm run dev` then exits.
+ * If the local file is outdated, auto-update it in place (the remote payload
+ * has already been fetched — just write it out). Runs once during `npm run dev`.
  */
 const fs = require('fs')
 const path = require('path')
@@ -44,8 +44,25 @@ async function main() {
     console.log('\x1b[32m[check-models] litellm-models.json is up to date ✓\x1b[0m')
     // Remove stale flag if it exists from a previous run
     if (fs.existsSync(STALE_FLAG)) fs.unlinkSync(STALE_FLAG)
-  } else {
-    console.warn('\x1b[33m[check-models] litellm-models.json is OUTDATED — run: npm run update-models\x1b[0m')
+    return
+  }
+
+  // 4. Auto-update — validate JSON, write the remote payload in place.
+  console.warn('\x1b[33m[check-models] litellm-models.json is OUTDATED — auto-updating ...\x1b[0m')
+  try {
+    JSON.parse(remoteBuf.toString('utf8'))
+  } catch (e) {
+    console.error(`\x1b[31m[check-models] remote payload is not valid JSON — aborting auto-update (${e.message})\x1b[0m`)
+    fs.writeFileSync(STALE_FLAG, `local=${localHash}\nremote=${remoteHash}\n`, 'utf8')
+    return
+  }
+  try {
+    fs.writeFileSync(LOCAL_FILE, remoteBuf)
+    const kb = (remoteBuf.length / 1024).toFixed(0)
+    console.log(`\x1b[32m[check-models] updated litellm-models.json (${kb} KB) ✓\x1b[0m`)
+    if (fs.existsSync(STALE_FLAG)) fs.unlinkSync(STALE_FLAG)
+  } catch (e) {
+    console.error(`\x1b[31m[check-models] failed to write update — ${e.message}\x1b[0m`)
     fs.writeFileSync(STALE_FLAG, `local=${localHash}\nremote=${remoteHash}\n`, 'utf8')
   }
 }

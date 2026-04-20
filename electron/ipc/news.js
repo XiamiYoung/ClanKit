@@ -56,39 +56,54 @@ function register() {
       })
     }
 
+    // Generic field cleaner:
+    // 1. If the payload contains CDATA sections, extract and concatenate their contents.
+    // 2. Otherwise use the raw payload.
+    // 3. Strip any residual HTML tags, decode a handful of basic entities, collapse whitespace.
+    function cleanField(raw) {
+      if (!raw) return ''
+      let s = String(raw)
+      const cdataParts = [...s.matchAll(/<!\[CDATA\[([\s\S]*?)\]\]>/g)].map(m => m[1])
+      if (cdataParts.length > 0) s = cdataParts.join(' ')
+      s = s.replace(/<[^>]+>/g, '')
+      s = s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+           .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+      return s.replace(/\s+/g, ' ').trim()
+    }
+
     function parseArticles(xml) {
       const articles = []
       const rssItems = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) || []
       if (rssItems.length > 0) {
         for (const item of rssItems) {
-          const title = (item.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i) || [])[1] || ''
-          const link = (item.match(/<link[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/i) || [])[1] || ''
+          const title = (item.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || ''
+          const link = (item.match(/<link[^>]*>([\s\S]*?)<\/link>/i) || [])[1] || ''
           const date = (item.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i) || [])[1] ||
                        (item.match(/<dc:date[^>]*>([\s\S]*?)<\/dc:date>/i) || [])[1] || ''
-          const summary = (item.match(/<description[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i) || [])[1] || ''
+          const summary = (item.match(/<description[^>]*>([\s\S]*?)<\/description>/i) || [])[1] || ''
           articles.push({
-            title: title.replace(/<[^>]+>/g, '').trim(),
-            link: link.replace(/<[^>]+>/g, '').trim(),
+            title: cleanField(title),
+            link: cleanField(link),
             date: date.trim(),
-            summary: summary.replace(/<[^>]+>/g, '').trim().slice(0, 300)
+            summary: cleanField(summary).slice(0, 300)
           })
         }
         return articles
       }
       const atomEntries = xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi) || []
       for (const entry of atomEntries) {
-        const title = (entry.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i) || [])[1] || ''
+        const title = (entry.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || ''
         const linkMatch = entry.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/?>/i) || entry.match(/<link[^>]*>([\s\S]*?)<\/link>/i) || []
         const link = linkMatch[1] || ''
         const date = (entry.match(/<published[^>]*>([\s\S]*?)<\/published>/i) || [])[1] ||
                      (entry.match(/<updated[^>]*>([\s\S]*?)<\/updated>/i) || [])[1] || ''
-        const summary = (entry.match(/<summary[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/summary>/i) || [])[1] ||
-                        (entry.match(/<content[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/content>/i) || [])[1] || ''
+        const summary = (entry.match(/<summary[^>]*>([\s\S]*?)<\/summary>/i) || [])[1] ||
+                        (entry.match(/<content[^>]*>([\s\S]*?)<\/content>/i) || [])[1] || ''
         articles.push({
-          title: title.replace(/<[^>]+>/g, '').trim(),
+          title: cleanField(title),
           link: link.trim(),
           date: date.trim(),
-          summary: summary.replace(/<[^>]+>/g, '').trim().slice(0, 300)
+          summary: cleanField(summary).slice(0, 300)
         })
       }
       return articles

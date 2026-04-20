@@ -13,10 +13,10 @@
         </div>
       </div>
       <div class="tev-header-actions">
-        <AppButton size="compact" @click="refreshTab" :loading="isRefreshing" :title="t('common.refresh')">
+        <AppButton size="compact" @click="refreshTab" :loading="isRefreshing" v-tooltip="t('common.refresh')">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </AppButton>
-        <AppButton v-if="activeTab !== 'calendar' && activeTab !== 'dashboard'" size="compact" @click="activeTab === 'tasks' ? openTaskEditor(null) : openPlanEditor(null)" :title="activeTab === 'tasks' ? t('tasks.newTask') : t('tasks.plan.newPlan')">
+        <AppButton v-if="activeTab !== 'calendar' && activeTab !== 'dashboard'" size="compact" @click="activeTab === 'tasks' ? openTaskEditor(null) : openPlanEditor(null)" v-tooltip="activeTab === 'tasks' ? t('tasks.newTask') : t('tasks.plan.newPlan')">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </AppButton>
       </div>
@@ -54,7 +54,7 @@
           <div class="tev-cat-nav">
             <div class="tev-cat-header">
               <div class="tev-cat-header-title">{{ t('tasks.category.categories') }}</div>
-              <button class="tev-cat-add-btn" @click="openTaskCategoryEditor(null)" :title="t('tasks.category.addCategory')">
+              <button class="tev-cat-add-btn" @click="openTaskCategoryEditor(null)" v-tooltip="t('tasks.category.addCategory')">
                 <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </button>
             </div>
@@ -87,10 +87,10 @@
               <div class="nav-cat-right">
                 <span class="nav-cat-count nav-item-count">{{ taskCategoryCount(cat.id) }}</span>
                 <div class="nav-item-actions nav-cat-actions">
-                  <button class="nav-icon-btn" @click.stop="openTaskCategoryEditor(cat)" :title="t('tasks.category.renameCategory')">
+                  <button class="nav-icon-btn" @click.stop="openTaskCategoryEditor(cat)" v-tooltip="t('tasks.category.renameCategory')">
                     <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
-                  <button class="nav-icon-btn nav-icon-btn-danger" @click.stop="deleteTaskCategory(cat.id)" :title="t('common.delete')">
+                  <button class="nav-icon-btn nav-icon-btn-danger" @click.stop="deleteTaskCategory(cat.id)" v-tooltip="t('common.delete')">
                     <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                   </button>
                 </div>
@@ -123,17 +123,17 @@
                   <div class="tev-task-icon-wrap">{{ task.icon || '✍️' }}</div>
                   <div class="tev-task-name">{{ task.name }}</div>
                   <div class="tev-task-actions" @click.stop>
-                    <button class="tev-action-btn" @click="openTaskViewer(task)" :title="t('tasks.actions.view')">
+                    <button class="tev-action-btn" @click="openTaskViewer(task)" v-tooltip="t('tasks.actions.view')">
                       <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     </button>
-                    <button class="tev-action-btn" @click="openTaskEditor(task)" :title="t('tasks.actions.edit')">
+                    <button class="tev-action-btn" @click="openTaskEditor(task)" v-tooltip="t('tasks.actions.edit')">
                       <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
                     <button
                       class="tev-action-btn tev-action-danger"
                       @click="confirmDeleteTask(task)"
                       :disabled="tasksStore.taskUsedByPlanCount(task.id) > 0"
-                      :title="getTaskDeleteTooltip(task)"
+                      v-tooltip="getTaskDeleteTooltip(task)"
                     >
                       <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                     </button>
@@ -171,7 +171,7 @@
           <div class="tev-cat-nav">
             <div class="tev-cat-header">
               <div class="tev-cat-header-title">{{ t('tasks.category.categories') }}</div>
-              <button class="tev-cat-add-btn" @click="openPlanCategoryEditor(null)" :title="t('tasks.category.addCategory')">
+              <button class="tev-cat-add-btn" @click="openPlanCategoryEditor(null)" v-tooltip="t('tasks.category.addCategory')">
                 <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </button>
             </div>
@@ -204,10 +204,10 @@
               <div class="nav-cat-right">
                 <span class="nav-cat-count nav-item-count">{{ planCategoryCount(cat.id) }}</span>
                 <div class="nav-item-actions nav-cat-actions">
-                  <button class="nav-icon-btn" @click.stop="openPlanCategoryEditor(cat)" :title="t('tasks.category.renameCategory')">
+                  <button class="nav-icon-btn" @click.stop="openPlanCategoryEditor(cat)" v-tooltip="t('tasks.category.renameCategory')">
                     <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15t-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
-                  <button class="nav-icon-btn nav-icon-btn-danger" @click.stop="deletePlanCategory(cat.id)" :title="t('common.delete')">
+                  <button class="nav-icon-btn nav-icon-btn-danger" @click.stop="deletePlanCategory(cat.id)" v-tooltip="t('common.delete')">
                     <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                   </button>
                 </div>
@@ -248,7 +248,7 @@
               >
                 <div class="tev-plan-info">
                   <div class="tev-plan-name-row">
-                    <div v-if="tasksStore.activeRun?.planId === plan.id && tasksStore.isRunning" class="tev-plan-spinner" title="Running…">
+                    <div v-if="tasksStore.activeRun?.planId === plan.id && tasksStore.isRunning" class="tev-plan-spinner" v-tooltip="t('tasks.running', 'Running…')">
                       <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                     </div>
                     <div class="tev-plan-icon" v-if="plan.icon">{{ plan.icon }}</div>
@@ -275,21 +275,21 @@
                     class="tev-action-btn"
                     @click="runPlanNow(plan)"
                     :disabled="tasksStore.isRunning"
-                    :title="t('tasks.actions.runNow')"
+                    v-tooltip="t('tasks.actions.runNow')"
                   >
                     <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                   </button>
-                  <button class="tev-action-btn" @click="openPlanViewer(plan)" :title="t('tasks.actions.view')">
+                  <button class="tev-action-btn" @click="openPlanViewer(plan)" v-tooltip="t('tasks.actions.view')">
                     <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                   </button>
-                  <button class="tev-action-btn" @click="openPlanEditor(plan)" :title="t('tasks.actions.edit')">
+                  <button class="tev-action-btn" @click="openPlanEditor(plan)" v-tooltip="t('tasks.actions.edit')">
                     <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
                   <button
                     class="tev-action-btn tev-action-danger"
                     @click="confirmDeletePlan(plan)"
                     :disabled="tasksStore.planHasRuns(plan.id)"
-                    :title="getPlanDeleteTooltip(plan)"
+                    v-tooltip="getPlanDeleteTooltip(plan)"
                   >
                     <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                   </button>

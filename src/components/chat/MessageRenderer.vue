@@ -13,7 +13,7 @@
           :src="att.preview"
           :alt="att.name"
           style="max-width:280px; max-height:200px; border-radius:10px; object-fit:contain; display:block; background:rgba(255,255,255,0.12); cursor:pointer;"
-          :title="t('common.clickToOpen') + ' ' + att.name"
+          v-tooltip="t('common.clickToOpen') + ' ' + att.name"
           @click="openImage(att)"
         />
       </div>
@@ -335,7 +335,7 @@
             />
             <button
               class="inline-image-quote-btn"
-              :title="t('chats.quoteImage')"
+              v-tooltip="t('chats.quoteImage')"
               @click.stop="emit('quote-image', { img, src: resolveImageSrc(img) })"
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -452,6 +452,7 @@ import { useChatsStore } from '../../stores/chats'
 import { useConfigStore } from '../../stores/config'
 import { useAgentsStore } from '../../stores/agents'
 import { useObsidianStore } from '../../stores/obsidian'
+import { useToolsStore } from '../../stores/tools'
 import { useI18n } from '../../i18n/useI18n'
 
 const router = useRouter()
@@ -459,6 +460,7 @@ const chatsStore = useChatsStore()
 const configStore = useConfigStore()
 const agentsStore = useAgentsStore()
 const obsidianStore = useObsidianStore()
+const toolsStore = useToolsStore()
 const { t } = useI18n()
 
 const props = defineProps({
@@ -685,9 +687,9 @@ function injectFilePathChips(html) {
     parts[i] = p.replace(FILE_PATH_RE, (path) => {
       const escaped = path.replace(/"/g, '&quot;')
       const aidocBtn = _isUnderAidocDir(path)
-        ? `<button class="file-path-btn file-path-aidoc" data-action="open-in-aidoc" data-path="${escaped}" title="${t('common.openInAiDoc')}">📝</button>`
+        ? `<button class="file-path-btn file-path-aidoc" data-action="open-in-aidoc" data-path="${escaped}" data-app-tooltip title="${t('common.openInAiDoc')}">📝</button>`
         : ''
-      return `${path}${aidocBtn}<button class="file-path-btn file-path-open" data-action="open-file" data-path="${escaped}" title="${t('common.openFile')}">📄</button><button class="file-path-btn file-path-folder" data-action="open-folder" data-path="${escaped}" title="${t('common.openFolder')}">📁</button>`
+      return `${path}${aidocBtn}<button class="file-path-btn file-path-open" data-action="open-file" data-path="${escaped}" data-app-tooltip title="${t('common.openFile')}">📄</button><button class="file-path-btn file-path-folder" data-action="open-folder" data-path="${escaped}" data-app-tooltip title="${t('common.openFolder')}">📁</button>`
     })
   }
   return parts.join('')
@@ -1129,6 +1131,13 @@ function toolDisplayName(seg) {
   if (seg.name === 'read_soul_memory') return t('chats.toolReadMemory')
   if (seg.name === 'todo_manager') return t('chats.toolTodoManager')
   if (seg.name === 'search_chat_history') return t('chats.toolSearchChatHistory')
+  // User-defined tools are exposed to the LLM as `{type}_{id}` (e.g. smtp_smtp-qq-com).
+  // Strip the prefix, look up the tool by id, and fall back to the pretty name.
+  const m = typeof seg.name === 'string' ? seg.name.match(/^(http|smtp|code|prompt)_(.+)$/) : null
+  if (m) {
+    const tool = toolsStore.tools.find(x => x.id === m[2])
+    if (tool?.name) return tool.name
+  }
   return seg.name
 }
 

@@ -80,6 +80,39 @@ function hideTip() {
   _tipEl.style.opacity = '0'
 }
 
+// Document-level delegation for elements with a `title` attribute that are
+// rendered via v-html (markdown output, etc.) so we can't attach the directive
+// to them. Such elements opt in by carrying the `data-app-tooltip` attribute.
+let _delegationInstalled = false
+function installDelegation() {
+  if (_delegationInstalled) return
+  _delegationInstalled = true
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target.closest && e.target.closest('[data-app-tooltip]')
+    if (!el) return
+    if (!el._tooltipText) {
+      const t = el.getAttribute('title') || el.getAttribute('data-tooltip-text') || ''
+      if (!t) return
+      el._tooltipText = t
+      if (el.hasAttribute('title')) {
+        el.setAttribute('data-tooltip-fallback', t)
+        el.removeAttribute('title')
+      }
+    }
+    showTip(el)
+  }, true)
+  document.addEventListener('mouseout', (e) => {
+    const el = e.target.closest && e.target.closest('[data-app-tooltip]')
+    if (el) hideTip()
+  }, true)
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest && e.target.closest('[data-app-tooltip]')
+    if (el) hideTip()
+  }, true)
+}
+
+if (typeof document !== 'undefined') installDelegation()
+
 export default {
   mounted(el, binding) {
     el._tooltipText = binding.value == null ? '' : String(binding.value)

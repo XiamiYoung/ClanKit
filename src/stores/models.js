@@ -23,6 +23,36 @@ export const useModelsStore = defineStore('models', () => {
     const data = await window.electronAPI.loadModelCache()
     if (data && typeof data === 'object') {
       providerModels.value = data
+      await _enrichCachedFromCatalog()
+    }
+  }
+
+  // Fill in context_length / max_output_tokens on any cached models that are missing them,
+  // using the bundled litellm catalog on the backend. Runs once after hydration.
+  async function _enrichCachedFromCatalog() {
+    if (!window.electronAPI?.enrichModelsFromCatalog) return
+    let changed = false
+    const next = { ...providerModels.value }
+    for (const [providerId, entry] of Object.entries(next)) {
+      if (!entry?.models?.length) continue
+      const needsEnrich = entry.models.some(m => !m.context_length || !m.max_output_tokens)
+      if (!needsEnrich) continue
+      try {
+        const res = await window.electronAPI.enrichModelsFromCatalog(JSON.parse(JSON.stringify({
+          providerType: entry.type,
+          models: entry.models,
+        })))
+        if (res?.success && Array.isArray(res.models)) {
+          next[providerId] = { ...entry, models: res.models }
+          changed = true
+        }
+      } catch (err) {
+        console.warn('[models] catalog enrich failed', providerId, err)
+      }
+    }
+    if (changed) {
+      providerModels.value = next
+      await persistToDisk()
     }
   }
 
@@ -146,6 +176,16 @@ export const useModelsStore = defineStore('models', () => {
         }
       }
 
+      // Fill in missing context_length / max_output_tokens from the bundled litellm catalog
+      if (window.electronAPI?.enrichModelsFromCatalog) {
+        try {
+          const res = await window.electronAPI.enrichModelsFromCatalog({ providerType: type, models })
+          if (res?.success && Array.isArray(res.models)) models = res.models
+        } catch (err) {
+          console.warn('[models] catalog enrich after fetch failed', err)
+        }
+      }
+
       providerModels.value = {
         ...providerModels.value,
         [resolvedId]: { type, models, updatedAt: new Date().toISOString() },
@@ -167,18 +207,20 @@ export const useModelsStore = defineStore('models', () => {
   async function enrichContextWindows(providerId) {
     const resolvedId = _resolveProviderId(providerId)
     const entry = providerModels.value[resolvedId]
-    if (!entry?.models?.length) return false
+    if (!entry?.models?.length) return { success: false, error: 'No models to enrich' }
 
     const missingIds = entry.models.filter(m => !m.context_length).map(m => m.id)
-    if (missingIds.length === 0) return true // all already have context_length
+    if (missingIds.length === 0) return { success: true } // all already have context_length
 
     enrichingProviders.value = { ...enrichingProviders.value, [resolvedId]: true }
     try {
-      if (!window.electronAPI?.enrichModelContext) return false
+      if (!window.electronAPI?.enrichModelContext) {
+        return { success: false, error: 'IPC not available' }
+      }
       const result = await window.electronAPI.enrichModelContext({ modelIds: missingIds })
       if (!result.success) {
         console.error('AI enrich failed:', result.error)
-        return false
+        return { success: false, error: result.error || 'AI enrich failed' }
       }
 
       // Merge enriched context_length values
@@ -188,7 +230,7 @@ export const useModelsStore = defineStore('models', () => {
       }
       const updatedModels = entry.models.map(m => {
         if (!m.context_length && enrichMap[m.id]) {
-          return { ...m, context_length: enrichMap[m.id] }
+          return { ...m, context_length: enrichMap[m.id], contextSource: 'ai' }
         }
         return m
       })
@@ -197,10 +239,10 @@ export const useModelsStore = defineStore('models', () => {
         [resolvedId]: { ...entry, models: updatedModels, updatedAt: new Date().toISOString() },
       }
       await persistToDisk()
-      return true
+      return { success: true }
     } catch (err) {
       console.error('AI enrich error:', err)
-      return false
+      return { success: false, error: err.message || 'Unknown error' }
     } finally {
       const next = { ...enrichingProviders.value }
       delete next[resolvedId]
@@ -273,10 +315,11 @@ export const useModelsStore = defineStore('models', () => {
     return models.some(m => !m.context_length)
   }
 
-  /** Returns { modelId: context_length } for all cached models */
+  /** Returns { modelId: context_length } for all cached models.
+   * User overrides in provider.modelSettings[modelId].contextWindow always win. */
   function getAllContextWindows() {
     const map = {}
-    // All provider instances
+    // All cached provider instances
     for (const entry of Object.values(providerModels.value)) {
       for (const m of entry.models || []) {
         if (m.id && m.context_length) map[m.id] = m.context_length
@@ -285,6 +328,15 @@ export const useModelsStore = defineStore('models', () => {
     // Anthropic (from config)
     for (const m of _getAnthropicModels()) {
       if (m.id && m.context_length) map[m.id] = m.context_length
+    }
+    // Apply user overrides from config.providers[].modelSettings.<modelId>.contextWindow
+    for (const provider of (configStore.config.providers || [])) {
+      const settings = provider.modelSettings || {}
+      for (const [modelId, s] of Object.entries(settings)) {
+        if (s?.contextWindow && Number(s.contextWindow) > 0) {
+          map[modelId] = Number(s.contextWindow)
+        }
+      }
     }
     return map
   }

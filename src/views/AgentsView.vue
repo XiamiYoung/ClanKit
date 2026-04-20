@@ -7,7 +7,7 @@
         <h1 class="agents-title">{{ selectedView.agentType === 'system' ? t('nav.systemAgents') : t('nav.userPersonas') }}</h1>
         <span class="catalog-count-badge">{{ selectedView.agentType === 'system' ? agentsStore.systemAgents.length : agentsStore.userAgents.length }}</span>
         <div style="flex: 1;"></div>
-        <AppButton size="icon" @click="refreshAgents" :loading="refreshing" :title="t('common.refresh')">
+        <AppButton size="icon" @click="refreshAgents" :loading="refreshing" v-tooltip="t('common.refresh')">
           <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </AppButton>
       </div>
@@ -18,7 +18,7 @@
     <div class="shared-header">
       <div class="shared-header-nav" :style="{ width: navWidth + 'px' }">
         <span class="shared-header-title">{{ t('common.category', 'Category') }}</span>
-        <button class="nav-section-add-btn" :title="t('common.add') + ' ' + t('common.category', 'Category')" @click="openCreateCategory()">
+        <button class="nav-section-add-btn" v-tooltip="t('common.add') + ' ' + t('common.category', 'Category')" @click="openCreateCategory()">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
       </div>
@@ -51,7 +51,7 @@
             <AppButton v-if="selectMode && selectedAgentIds.size > 0" size="compact" variant="danger" @click="unassignSelected">
               {{ t('agents.remove', 'Unassign') }}
             </AppButton>
-            <AppButton size="icon" @click="selectMode ? exitSelectMode() : enterSelectMode()" :title="selectMode ? t('common.cancel') : t('agents.select', 'Select agents')">
+            <AppButton size="icon" @click="selectMode ? exitSelectMode() : enterSelectMode()" v-tooltip="selectMode ? t('common.cancel') : t('agents.select', 'Select agents')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
               </svg>
@@ -123,12 +123,12 @@
               <div class="nav-cat-right">
                 <span class="nav-cat-count nav-item-count">{{ agentsStore.agentsInCategory(cat.id).length }}</span>
                 <div class="nav-item-actions nav-cat-actions">
-                  <button class="nav-icon-btn" title="Rename" @click.stop="openRenameCategory(cat)">
+                  <button class="nav-icon-btn" v-tooltip="t('common.rename', 'Rename')" @click.stop="openRenameCategory(cat)">
                     <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
                   <button
                     class="nav-icon-btn nav-icon-btn-danger"
-                    title="Delete category"
+                    v-tooltip="t('agents.deleteCategory', 'Delete category')"
                     @click.stop="tryDeleteCategory(cat)"
                   >
                     <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
@@ -412,7 +412,27 @@ onMounted(async () => {
     groupCreatorHighlightCategory.value = route.query.highlight || ''
     if (route.path !== '/agents') router.replace({ path: '/agents', query: {} })
     else router.replace({ path: '/agents', query: {} })
+  } else if (route.query.openAgentId) {
+    const agent = agentsStore.getAgentById?.(route.query.openAgentId)
+    if (agent) {
+      const target = agent.type === 'user' ? '/personas' : '/agents'
+      if (route.path !== target) router.replace({ path: target, query: {} })
+      else router.replace({ path: target, query: {} })
+      openBodyViewer(agent)
+    } else {
+      router.replace({ path: route.path, query: {} })
+    }
   }
+})
+
+// Open body viewer when navigated to with ?openAgentId=xxx after mount (e.g. from another view)
+watch(() => route.query.openAgentId, (id) => {
+  if (!id) return
+  const agent = agentsStore.getAgentById?.(id)
+  if (agent) {
+    openBodyViewer(agent)
+  }
+  router.replace({ path: route.path, query: {} })
 })
 
 async function refreshAgents() {
@@ -800,13 +820,13 @@ function getAvatarGradient(agent) {
 }
 
 function getDeleteButtonTitle(agent) {
-  if (agent.isBuiltin) return 'Built-in agent'
+  if (agent.isBuiltin) return t('agents.deleteAgentBuiltinTooltip')
   const count = agentsStore.isAgentUsedInPlans(agent.id)
   if (count) {
-    const plural = count === 1 ? 'step' : 'steps'
-    return `Cannot delete: used in ${count} plan ${plural}`
+    const plural = count === 1 ? t('agents.planStepSingular') : t('agents.planStepPlural')
+    return t('agents.deleteAgentInUseTooltip', { count, plural })
   }
-  return 'Delete'
+  return t('common.delete')
 }
 
 function isDeleteButtonDisabled(agent) {

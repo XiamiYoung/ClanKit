@@ -21,12 +21,16 @@
           </p>
         </div>
         <div class="flex items-center gap-2">
-          <AppButton size="icon" @click="refreshServers" :loading="refreshing" :title="t('common.refresh')">
-            <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-          </AppButton>
-          <AppButton size="icon" @click="openAdd" :title="t('mcp.addServer')">
-            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          </AppButton>
+          <AppTooltip :text="t('common.refresh')">
+            <AppButton size="icon" @click="refreshServers" :loading="refreshing">
+              <svg v-if="!refreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </AppButton>
+          </AppTooltip>
+          <AppTooltip :text="t('mcp.addServer')">
+            <AppButton size="icon" @click="openAdd">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </AppButton>
+          </AppTooltip>
         </div>
       </div>
 
@@ -332,11 +336,13 @@
 </template>
 
 <script setup>
+defineOptions({ inheritAttrs: false })
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import { useMcpStore } from '../stores/mcp'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import AppButton from '../components/common/AppButton.vue'
+import AppTooltip from '../components/common/AppTooltip.vue'
 import { useConfigStore } from '../stores/config'
 import { useI18n } from '../i18n/useI18n'
 import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'

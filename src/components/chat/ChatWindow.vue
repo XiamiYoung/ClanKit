@@ -136,7 +136,7 @@
               v-if="msg.role === 'user' && hasFailedWaitingAfter(msg.id)"
               class="cw-user-resend-btn"
               @click="$emit('resend-message', msg)"
-              :title="getWaitingErrorForUser(msg.id)"
+              v-tooltip="getWaitingErrorForUser(msg.id)"
             >
               <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
@@ -154,7 +154,7 @@
                 v-if="showQuote && msg.content"
                 @click="quoteMessage(msg)"
                 class="cw-msg-action-btn"
-                :title="t('chats.quoteMessage')"
+                v-tooltip="t('chats.quoteMessage')"
                 :aria-label="t('chats.quoteMessage')"
               >
                 <svg class="w-3.5 h-3.5" style="transform:rotate(180deg);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -167,7 +167,7 @@
                 v-if="msg.content"
                 @click="copyMessage(msg)"
                 class="cw-msg-action-btn"
-                :title="copiedId === msg.id ? t('chats.messageCopied') : t('chats.copyMessage')"
+                v-tooltip="copiedId === msg.id ? t('chats.messageCopied') : t('chats.copyMessage')"
                 :aria-label="t('chats.copyMessage')"
               >
                 <svg v-if="copiedId === msg.id" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -185,7 +185,7 @@
                 class="cw-msg-action-btn"
                 :class="{ 'opacity-40 cursor-not-allowed': !voiceConfigured, 'cw-msg-action-btn-active': props.speakingMsgId === msg.id }"
                 :disabled="!voiceConfigured"
-                :title="!voiceConfigured ? t('chats.speakNeedsVoice') : props.speakingMsgId === msg.id ? t('chats.stopSpeaking') : t('chats.speakMessage')"
+                v-tooltip="!voiceConfigured ? t('chats.speakNeedsVoice') : props.speakingMsgId === msg.id ? t('chats.stopSpeaking') : t('chats.speakMessage')"
                 :aria-label="t('chats.speakMessage')"
               >
                 <!-- Loading: TTS IPC in progress -->
@@ -209,7 +209,7 @@
                 v-if="showDelete"
                 @click="$emit('delete-message', msg)"
                 class="cw-msg-action-btn cw-msg-action-btn-delete"
-                :title="t('chats.deleteMessage')"
+                v-tooltip="t('chats.deleteMessage')"
                 :aria-label="t('chats.deleteMessage')"
               >
                 <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -236,6 +236,26 @@
                     <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
                   </svg>
                 </span>
+              </div>
+              <!-- Auth error hint: typically caused by invalid key or empty balance -->
+              <div v-if="msg.isError && msg.errorCode === 'auth_error'" class="cw-error-hint">
+                <svg style="width:13px;height:13px;flex-shrink:0;margin-top:1px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+                <div class="cw-error-hint-body">
+                  <span>{{ t('chats.error_auth_hint') }}</span>
+                  <button
+                    v-if="msg.agentId"
+                    type="button"
+                    class="cw-error-hint-btn"
+                    @click="openAgentBody(msg)"
+                  >
+                    {{ t('chats.error_auth_open_agent') }}
+                    <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div :class="msg.role === 'user' ? 'user-content' : 'prose-clankai'">
                 <MessageRenderer
@@ -282,7 +302,7 @@
         <button
           class="cw-scroll-btn-float"
           @click="scrollToTop"
-          :title="t('chats.scrollToTop')"
+          v-tooltip="t('chats.scrollToTop')"
           :aria-label="t('chats.scrollToTop')"
         >
           <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -292,7 +312,7 @@
         <button
           class="cw-scroll-btn-float"
           @click="forceScrollToBottom"
-          :title="t('chats.scrollToBottom')"
+          v-tooltip="t('chats.scrollToBottom')"
           :aria-label="t('chats.scrollToBottom')"
         >
           <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -332,7 +352,7 @@
             @mouseenter="e => e.currentTarget.style.color='#1A1A1A'"
             @mouseleave="e => e.currentTarget.style.color='#9CA3AF'"
             :aria-label="t('chats.removeQuote')"
-            :title="t('chats.removeQuote')"
+            v-tooltip="t('chats.removeQuote')"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -344,7 +364,7 @@
           <template v-for="att in attachments" :key="att.id">
             <div v-if="att.type === 'image' && att.preview" class="cw-att-thumb">
               <img :src="att.preview" :alt="att.name" style="width:100%;height:100%;object-fit:cover;display:block;" />
-              <button class="cw-att-remove" @click="removeAttachment(att.id)" :title="t('common.remove')">
+              <button class="cw-att-remove" @click="removeAttachment(att.id)" v-tooltip="t('common.remove')">
                 <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
@@ -357,7 +377,7 @@
             :disabled="isRunning"
             class="cw-btn attach"
             :aria-label="t('chats.attachFiles')"
-            :title="t('chats.attachFiles')"
+            v-tooltip="t('chats.attachFiles')"
           >
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
@@ -375,7 +395,7 @@
           />
           <!-- Escape retrieve (visible while running) -->
           <template v-if="isRunning">
-            <button @click.stop="emit('escape-retrieve')" class="cw-btn escape" :aria-label="t('chats.escapeRetrieve')" :title="t('chats.escapeRetrieve')">
+            <button @click.stop="emit('escape-retrieve')" class="cw-btn escape" :aria-label="t('chats.escapeRetrieve')" v-tooltip="t('chats.escapeRetrieve')">
               <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor"/>
               </svg>
@@ -388,7 +408,7 @@
             class="cw-btn send"
             :class="{ active: defaultInputText.trim() || attachments.length > 0 }"
             :aria-label="t('chats.sendMessageBtn')"
-            :title="t('chats.sendMessageBtn')"
+            v-tooltip="t('chats.sendMessageBtn')"
           >
             <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>
@@ -431,6 +451,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useChatsStore } from '../../stores/chats'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
@@ -451,10 +472,19 @@ const props = defineProps({
 
 const emit = defineEmits(['send', 'stop', 'escape-retrieve', 'quote', 'delete-message', 'send-with-attachments', 'resend-message', 'quote-image', 'retry-waiting-indicator', 'speak-message'])
 
+const router = useRouter()
 const chatsStore = useChatsStore()
 const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 const { t } = useI18n()
+
+function openAgentBody(msg) {
+  const agentId = msg?.agentId
+  if (!agentId) return
+  const agent = agentsStore.getAgentById?.(agentId)
+  const path = agent?.type === 'user' ? '/personas' : '/agents'
+  router.push({ path, query: { openAgentId: agentId } })
+}
 
 const voiceConfigured = computed(() => {
   const c = chatsStore.chats.find(ch => ch.id === props.chatId)
@@ -1307,6 +1337,48 @@ defineExpose({ scrollToBottom })
   font-weight: 600;
   font-family: 'Inter', sans-serif;
 }
+.cw-error-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  margin-bottom: 0.5rem;
+  border-radius: 0.5rem;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #B45309;
+  font-size: var(--fs-small, 0.8125rem);
+  line-height: 1.45;
+  font-family: 'Inter', sans-serif;
+}
+.cw-error-hint-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+}
+.cw-error-hint-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.625rem;
+  border-radius: 0.375rem;
+  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151);
+  color: #FFFFFF;
+  border: none;
+  font-size: var(--fs-small, 0.8125rem);
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+.cw-error-hint-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+}
+.cw-error-hint-btn:active { transform: translateY(0); opacity: 0.9; }
 .cw-error-info {
   margin-left: auto;
   position: relative;

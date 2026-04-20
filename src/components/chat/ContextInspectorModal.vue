@@ -72,7 +72,7 @@
                 </tr>
                 <tr style="border-bottom:1px solid #1E1E1E;">
                   <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.contextWindow') }}</td>
-                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ fmtTokens(aggregateMetrics.maxTokens ?? 0) }}</td>
+                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ aggregateMetrics.maxTokens ? fmtTokens(aggregateMetrics.maxTokens) : '—' }}</td>
                 </tr>
                 <tr style="border-bottom:1px solid #1E1E1E;">
                   <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.context') }}</td>
@@ -107,21 +107,21 @@
         <!-- ── Main tab bar ── -->
         <div class="flex" style="border:1px solid #2A2A2A; border-radius:12px; overflow:hidden;">
           <button
-            @click="mainTab = 'user'"
-            class="flex-1 py-2 text-center cursor-pointer transition-colors"
-            style="font-size:var(--fs-body); font-weight:600;"
-            :style="mainTab === 'user'
-              ? 'background:#1E1E1E; color:#E5E5EA; border-right:1px solid #2A2A2A;'
-              : 'background:#161616; color:#4B5563; border-right:1px solid #2A2A2A;'"
-          >{{ t('chats.userPersona') }}</button>
-          <button
             @click="mainTab = 'system'"
             class="flex-1 py-2 text-center cursor-pointer transition-colors"
             style="font-size:var(--fs-body); font-weight:600;"
             :style="mainTab === 'system'
+              ? 'background:#1E1E1E; color:#E5E5EA; border-right:1px solid #2A2A2A;'
+              : 'background:#161616; color:#4B5563; border-right:1px solid #2A2A2A;'"
+          >{{ agentCards.length === 1 ? (agentCards[0].name || t('chats.systemAgent')) : t('chats.agents') }}</button>
+          <button
+            @click="mainTab = 'user'"
+            class="flex-1 py-2 text-center cursor-pointer transition-colors"
+            style="font-size:var(--fs-body); font-weight:600;"
+            :style="mainTab === 'user'
               ? 'background:#1E1E1E; color:#E5E5EA;'
               : 'background:#161616; color:#4B5563;'"
-          >{{ agentCards.length === 1 ? (agentCards[0].name || t('chats.systemAgent')) : t('chats.agents') }}</button>
+          >{{ userPersonaData.agent?.name || t('chats.userPersona') }}</button>
         </div>
 
         <!-- ── User Persona tab ── -->
@@ -131,7 +131,6 @@
             <div class="flex items-center gap-2 px-4 py-3" style="border-bottom:1px solid #222222;">
               <template v-if="userPersonaData.agent">
                 <span class="font-semibold" style="color:#E5E5EA; font-size:var(--fs-body);">{{ userPersonaData.agent.name }}</span>
-                <span v-if="userPersonaData.agent.modelId" style="color:#4B5563; font-size:var(--fs-small); font-family:'JetBrains Mono',monospace;">{{ userPersonaData.agent.modelId }}</span>
               </template>
               <p v-else style="color:#4B5563; font-size:var(--fs-small);">{{ t('chats.noUserPersona') }}</p>
             </div>
@@ -142,7 +141,7 @@
               class="px-4 py-3"
               :style="(userPersonaData.rawSections.length > 1 || userPersonaData.memorySections.length) ? 'border-bottom:1px solid #222222;' : ''"
             >
-              <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; max-height:220px; overflow-y:auto; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ userPersonaData.rawSections[0].content }}</pre>
+              <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ userPersonaData.rawSections[0].content }}</pre>
             </div>
             <div v-else-if="!userPersonaData.rawSections.length" class="px-4 py-3" :style="userPersonaData.memorySections.length ? 'border-bottom:1px solid #222222;' : ''">
               <p style="color:#374151; font-size:var(--fs-small);">{{ t('chats.snapshotCapturedDuringRun') }}</p>
@@ -168,7 +167,7 @@
                   <div style="margin-top:0.75rem;" class="space-y-2">
                     <template v-for="(sub, ssi) in parseSubSections(sec.content)" :key="ssi">
                       <p v-if="sub.subTitle" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; padding-top:0.25rem;">{{ sub.subTitle }}</p>
-                      <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; max-height:280px; overflow-y:auto; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ sub.content }}</pre>
+                      <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ sub.content }}</pre>
                     </template>
                   </div>
                 </div>
@@ -192,7 +191,7 @@
                   <div style="margin-top:0.75rem;" class="space-y-2">
                     <template v-for="(sub, ssi) in parseSubSections(sec.content)" :key="ssi">
                       <p v-if="sub.subTitle" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; padding-top:0.25rem;">{{ sub.subTitle }}</p>
-                      <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; max-height:280px; overflow-y:auto; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ sub.content }}</pre>
+                      <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ sub.content }}</pre>
                     </template>
                   </div>
                 </div>
@@ -241,7 +240,7 @@
             <template v-if="currentCard.promptSections.length">
               <!-- First section (identity block, no ## header): always visible inline -->
               <div v-if="currentCard.promptSections[0].title === null" class="px-4 py-3" style="border-bottom:1px solid #222222;">
-                <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; max-height:220px; overflow-y:auto; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ currentCard.promptSections[0].content }}</pre>
+                <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ currentCard.promptSections[0].content }}</pre>
               </div>
 
               <!-- Remaining ## sections: each collapsible -->
@@ -261,7 +260,7 @@
                     <div style="margin-top:0.75rem;" class="space-y-2">
                       <template v-for="(sub, ssi) in parseSubSections(sec.content)" :key="ssi">
                         <p v-if="sub.subTitle" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; padding-top:0.25rem;">{{ sub.subTitle }}</p>
-                        <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; max-height:280px; overflow-y:auto; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ sub.content }}</pre>
+                        <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ sub.content }}</pre>
                       </template>
                     </div>
                   </div>
@@ -289,7 +288,7 @@
                   <div style="margin-top:0.75rem;" class="space-y-2">
                     <template v-for="(sub, ssi) in parseSubSections(sec.content)" :key="ssi">
                       <p v-if="sub.subTitle" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; padding-top:0.25rem;">{{ sub.subTitle }}</p>
-                      <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; max-height:280px; overflow-y:auto; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ sub.content }}</pre>
+                      <pre class="whitespace-pre-wrap leading-relaxed" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small); color:#9CA3AF; background:#0D0D0D; border-radius:8px; padding:0.75rem;">{{ sub.content }}</pre>
                     </template>
                   </div>
                 </div>
@@ -413,9 +412,8 @@ import { useAgentsStore } from '../../stores/agents'
 import { useSkillsStore } from '../../stores/skills'
 import { useToolsStore }  from '../../stores/tools'
 import { useMcpStore }    from '../../stores/mcp'
+import { useModelsStore } from '../../stores/models'
 import { useI18n }        from '../../i18n/useI18n'
-
-const DEFAULT_MAX_CONTEXT_TOKENS = 1_000_000
 
 const props = defineProps({
   visible:                Boolean,
@@ -433,13 +431,14 @@ const agentsStore = useAgentsStore()
 const skillsStore = useSkillsStore()
 const toolsStore  = useToolsStore()
 const mcpStore    = useMcpStore()
+const modelsStore = useModelsStore()
 const { t }       = useI18n()
 
 // ── UI state ──────────────────────────────────────────────────────────────────
 
 const contextSnapshot  = ref(null)
 const metricsOpen      = ref(true)
-const mainTab          = ref('user')
+const mainTab          = ref('system')
 const selectedAgentIdx = ref(0)
 const sectionState     = reactive({}) // key: `${group}-${idx}` → bool (open)
 const debugDialogOpen  = ref(false)
@@ -504,6 +503,20 @@ function parsePromptSections(prompt) {
 
 // ── Aggregate metrics ─────────────────────────────────────────────────────────
 
+// Context window size for the current chat's agent(s), derived from cached provider models.
+// For single-agent chats we take the one agent's model; for groups we take the max.
+const derivedMaxTokens = computed(() => {
+  const ctxMap = modelsStore.getAllContextWindows() || {}
+  const ids = chatAgentIds.value
+  let best = 0
+  for (const agentId of ids) {
+    const agent = agentsStore.getAgentById(agentId)
+    const modelId = agent?.modelId || chatsStore.activeChat?.model
+    if (modelId && ctxMap[modelId]) best = Math.max(best, ctxMap[modelId])
+  }
+  return best || null
+})
+
 const aggregateMetrics = computed(() => {
   const messages = chatsStore.activeChat?.messages || []
   // Sum tokenUsage across all messages for conversation-wide totals
@@ -515,13 +528,14 @@ const aggregateMetrics = computed(() => {
       totalOutputTokens += msg.tokenUsage.output || 0
     }
   }
-  // maxTokens comes from ContextManager.getMetrics() via context_update chunks,
-  // which is now model-aware (passed from config.modelContextWindow in _buildAgentRuns).
-  const maxTokens       = props.contextMetrics?.maxTokens || DEFAULT_MAX_CONTEXT_TOKENS
+  // Prefer the live ContextManager value emitted via context_update chunks;
+  // otherwise fall back to the model's cached context_length.
+  const liveMax   = props.contextMetrics?.maxTokens || 0
+  const maxTokens = liveMax || derivedMaxTokens.value || 0
   const compactionCount = props.contextMetrics?.compactionCount || 0
   // Recompute percentage from the live current-window inputTokens (not the sum of all turns)
   const currentInput    = props.contextMetrics?.inputTokens || 0
-  const percentage      = Math.round((currentInput / maxTokens) * 100)
+  const percentage      = maxTokens ? Math.round((currentInput / maxTokens) * 100) : 0
   return { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, maxTokens, compactionCount, percentage }
 })
 
@@ -641,6 +655,7 @@ async function refreshContextSnapshot() {
 
 watch(() => props.visible, (open) => {
   if (open) {
+    mainTab.value = 'system'
     refreshContextSnapshot()
   } else {
     contextSnapshot.value = null

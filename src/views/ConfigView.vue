@@ -147,12 +147,14 @@
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
                 <input id="dataPath" v-model="form.dataPath" type="text" :placeholder="defaultDataPath" class="field font-mono" />
-                <button class="open-folder-btn" @click="pickDataFolder" title="Select folder">
-                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                    <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
-                  </svg>
-                </button>
+                <AppTooltip :text="t('common.selectFolder', 'Select folder')">
+                  <button class="open-folder-btn" @click="pickDataFolder">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                      <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+                    </svg>
+                  </button>
+                </AppTooltip>
               </div>
               <p class="hint">
                 {{ t('config.dataPathHint') }} <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultDataPath }}</code>
@@ -182,12 +184,14 @@
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
                 <input id="artifactPath" :value="form.artifactPath || defaultArtifactPath" @input="form.artifactPath = $event.target.value" type="text" class="field font-mono" />
-                <button class="open-folder-btn" @click="pickArtifactFolder" title="Select folder">
-                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                    <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
-                  </svg>
-                </button>
+                <AppTooltip :text="t('common.selectFolder', 'Select folder')">
+                  <button class="open-folder-btn" @click="pickArtifactFolder">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                      <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+                    </svg>
+                  </button>
+                </AppTooltip>
               </div>
               <p class="hint">
                 {{ t('config.artifactPathHint') }} <code class="font-mono" style="font-size:12px; background:#F5F5F5; padding:1px 4px; border-radius:4px;">{{ defaultArtifactPath }}</code>
@@ -222,11 +226,13 @@
               <!-- Add button in header row -->
               <div class="models-nav-header">
                 <span class="models-nav-section-label">{{ t('config.models') }}</span>
-                <button class="models-add-btn" @click="showAddProviderModal = true" :title="t('common.add', 'Add Provider')">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                  </svg>
-                </button>
+                <AppTooltip :text="t('common.add', 'Add Provider')">
+                  <button class="models-add-btn" @click="showAddProviderModal = true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                  </button>
+                </AppTooltip>
               </div>
 
               <!-- Models section -->
@@ -288,34 +294,98 @@
                     </div>
                     <h3 class="form-section-title">{{ t('config.utilityModel', 'Utility Model') }}</h3>
                   </div>
-                  <div class="form-group" style="margin-bottom:0;">
+
+                  <!-- Provider selector -->
+                  <div class="form-group">
                     <label class="form-label">
-                      {{ t('config.utilityModel') }} <span class="cfg-required">*</span>
+                      {{ t('agents.provider') }} <span class="cfg-required">*</span>
+                    </label>
+                    <div v-if="utilityActiveProviderOptions.length === 0" class="hint">
+                      {{ t('agents.noActiveProviders') }}
+                    </div>
+                    <ComboBox
+                      v-else
+                      :modelValue="form.utilityModel.provider"
+                      @update:modelValue="onUtilityProviderChange"
+                      :options="utilityActiveProviderOptions"
+                      :placeholder="t('agents.selectProvider')"
+                    />
+                  </div>
+
+                  <!-- Model picker (body-view style — filterable list with ctx / out tags) -->
+                  <div class="form-group" v-if="form.utilityModel.provider" style="margin-bottom:0;">
+                    <label class="form-label">
+                      {{ t('agents.model') }} <span class="cfg-required">*</span>
                       <span class="form-label-hint">{{ t('config.backgroundTasks') }}</span>
                     </label>
-                    <div class="test-connection-row">
-                      <div style="flex:1;">
-                        <ProviderModelPicker
-                          :provider="form.utilityModel.provider"
-                          :model="form.utilityModel.model"
-                          @update:provider="form.utilityModel.provider = $event; form.utilityModel.model = ''; testUtilityModelResult = null"
-                          @update:model="form.utilityModel.model = $event; testUtilityModelResult = null"
-                        />
-                      </div>
-                      <AppButton
-                        size="icon"
-                        :disabled="testingUtilityModel || !form.utilityModel.provider || !form.utilityModel.model"
-                        :loading="testingUtilityModel"
-                        :title="testingUtilityModel ? t('config.testing') : t('config.test')"
-                        @click="testUtilityModel"
-                      ><svg v-if="!testingUtilityModel" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
+                    <input
+                      v-model="utilityModelFilter"
+                      type="text"
+                      :placeholder="t('agents.searchModels')"
+                      class="field font-mono field-sm"
+                      style="width:100%; margin-bottom:0.5rem;"
+                    />
+                    <div class="cv-model-list">
+                      <div v-if="utilityModelsLoading" class="test-result" style="border:none; background:transparent;">{{ t('common.loading') }}...</div>
+                      <template v-else>
+                        <div
+                          v-for="m in filteredUtilityModels"
+                          :key="m.id"
+                          v-memo="[m.id, m._ctxFormatted, m._outFormatted, m._outSource, form.utilityModel.model === m.id]"
+                          class="cv-model-item"
+                          :class="{ active: form.utilityModel.model === m.id }"
+                          @click="form.utilityModel.model = m.id; testUtilityModelResult = null"
+                        >
+                          <span class="cv-model-name">{{ m.displayName }}</span>
+                          <span
+                            class="cv-model-ctx"
+                            :class="m._ctxVal ? 'has-value' : 'is-missing'"
+                            :title="m._ctxTitle"
+                          >
+                            <template v-if="m._ctxVal">
+                              <span class="cv-model-tag-label">{{ modelListI18n.contextLabel }}</span>
+                              <span class="cv-model-tag-value">{{ m._ctxFormatted }}</span>
+                            </template>
+                            <template v-else>{{ modelListI18n.ctxUnavailable }}</template>
+                          </span>
+                          <span
+                            v-if="m._outSource !== 'fallback'"
+                            class="cv-model-out-tag has-value"
+                            :title="m._outTitle"
+                          >
+                            <span class="cv-model-tag-label">{{ modelListI18n.maxOutputLabel }}</span>
+                            <span class="cv-model-tag-value">{{ m._outFormatted }}</span>
+                          </span>
+                          <span
+                            v-else
+                            class="cv-model-out-tag is-missing"
+                            :title="m._outTitle"
+                          >
+                            {{ modelListI18n.outUnavailable }}
+                            <span class="cv-model-tag-muted">· {{ modelListI18n.defaultPrefix }} {{ m._outFormatted }}</span>
+                          </span>
+                        </div>
+                        <div v-if="filteredUtilityModels.length === 0" class="hint" style="padding:0.5rem;">
+                          {{ t('config.enterApiKeyFetchModels') }}
+                        </div>
+                      </template>
+                    </div>
+
+                    <!-- Test button + result -->
+                    <div style="display:flex; justify-content:flex-end; margin-top:0.5rem;">
+                      <AppTooltip :text="testingUtilityModel ? t('config.testing') : t('config.test')">
+                        <AppButton
+                          size="icon"
+                          :disabled="testingUtilityModel || !form.utilityModel.provider || !form.utilityModel.model"
+                          :loading="testingUtilityModel"
+                          @click="testUtilityModel"
+                        ><svg v-if="!testingUtilityModel" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
+                      </AppTooltip>
                     </div>
                     <div v-if="testUtilityModelResult" class="test-result" :class="testUtilityModelResult.ok ? 'success' : 'error'" style="margin-top:0.375rem;">
                       {{ testUtilityModelResult.message }}
                     </div>
-                    <p class="hint">
-                      {{ t('config.utilityModelLabel') }}
-                    </p>
+                    <p class="hint">{{ t('config.utilityModelLabel') }}</p>
                   </div>
                 </div>
                 <div class="save-row">
@@ -346,17 +416,21 @@
                       <h3 class="form-section-title">{{ providerDisplayLabel(selectedProvider) }}</h3>
                     </div>
                     <div class="header-actions">
-                      <button class="action-btn danger icon-only" @click="deleteProvider(selectedProvider.id)" :title="t('config.deleteProvider', 'Delete provider')">
-                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                        </svg>
-                      </button>
-                      <AppButton size="icon" @click="saveModels" :disabled="savingModels" :loading="savingModels" :title="t('common.save', 'Save')">
-                        <svg v-if="!savingModels" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                          <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-                        </svg>
-                      </AppButton>
+                      <AppTooltip :text="t('config.deleteProvider', 'Delete provider')">
+                        <button class="action-btn danger icon-only" @click="deleteProvider(selectedProvider.id)">
+                          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                          </svg>
+                        </button>
+                      </AppTooltip>
+                      <AppTooltip :text="t('common.save', 'Save')">
+                        <AppButton size="icon" @click="saveModels" :disabled="savingModels" :loading="savingModels">
+                          <svg v-if="!savingModels" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+                          </svg>
+                        </AppButton>
+                      </AppTooltip>
                       <span v-if="savedModelsMsg" class="save-indicator" :class="savedModelsMsg.ok ? 'success' : 'error'">
                         <svg v-if="savedModelsMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                         <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -406,8 +480,8 @@
                         placeholder="sk-..."
                         class="field font-mono"
                       />
-                      <button @click="showProviderKey = !showProviderKey" class="field-action-btn">
-                        <svg v-if="!showProviderKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <button @click="showProviderKey = !showProviderKey" class="field-action-btn" v-tooltip="showProviderKey ? t('common.hide', 'Hide') : t('common.show', 'Show')">
+                        <svg v-if="showProviderKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                         </svg>
                         <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -463,7 +537,9 @@
                         <option value="">{{ t('config.selectModel') }}</option>
                         <option v-for="m in testableModels" :key="m.id" :value="m.id">{{ m.label }}</option>
                       </select>
-                      <AppButton size="icon" @click="testProviderNew" :disabled="testingProviderNew || !canTestNew" :loading="testingProviderNew" :title="testingProviderNew ? t('config.testing') : t('config.test')"><svg v-if="!testingProviderNew" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
+                      <AppTooltip :text="testingProviderNew ? t('config.testing') : t('config.test')">
+                        <AppButton size="icon" @click="testProviderNew" :disabled="testingProviderNew || !canTestNew" :loading="testingProviderNew"><svg v-if="!testingProviderNew" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
+                      </AppTooltip>
                     </div>
                     <div v-if="testResultNew" class="test-result" :class="testResultNew.ok ? 'success' : 'error'" style="margin-top: 0.5rem;">
                       <svg v-if="testResultNew.ok" class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
@@ -479,53 +555,64 @@
                         <p class="hint" style="margin-top:2px;">{{ selectedProviderModels.length > 0 ? t('config.modelsLoaded', '', { count: selectedProviderModels.length }) : t('config.enterApiKeyFetchModels') }}</p>
                       </div>
                       <div style="display: flex; gap: 0.375rem; align-items: center;">
-                        <AppButton size="icon" @click="fetchProviderModels" :disabled="providerModelsFetching || !selectedProvider.apiKey || (selectedProvider.type !== 'google' && !selectedProvider.baseURL && !configStore.PROVIDER_PRESETS[selectedProvider.type]?.defaultBaseURL)" :loading="providerModelsFetching" :title="providerModelsFetching ? t('config.fetching') : t('config.fetchModels')"><svg v-if="!providerModelsFetching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/></svg></AppButton>
-                        <AppButton v-if="selectedProviderModels.length > 0 && providerHasMissingContext" size="icon" @click="enrichProviderContext" :disabled="providerContextEnriching" :loading="providerContextEnriching" :title="t('config.aiFillContext')"><svg v-if="!providerContextEnriching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/></svg></AppButton>
+                        <AppTooltip :text="providerModelsFetching ? t('config.fetching') : t('config.fetchModels')">
+                          <AppButton size="icon" @click="fetchProviderModels" :disabled="providerModelsFetching || !selectedProvider.apiKey || (selectedProvider.type !== 'google' && !selectedProvider.baseURL && !configStore.PROVIDER_PRESETS[selectedProvider.type]?.defaultBaseURL)" :loading="providerModelsFetching"><svg v-if="!providerModelsFetching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/></svg></AppButton>
+                        </AppTooltip>
+                        <AppTooltip v-if="selectedProviderModels.length > 0 && providerHasMissingContext" :text="t('config.aiFillContext')">
+                          <AppButton size="icon" @click="enrichProviderContext" :disabled="providerContextEnriching" :loading="providerContextEnriching"><svg v-if="!providerContextEnriching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/></svg></AppButton>
+                        </AppTooltip>
                       </div>
                     </div>
                     <div v-if="selectedProviderModels.length > 0" style="margin-top: 0.5rem;">
                       <input v-model="providerModelFilter" type="text" placeholder="Filter models…" class="field font-mono field-sm" style="width: 100%; margin-bottom: 0.5rem;" />
                       <div class="cv-model-list">
-                        <div v-for="m in filteredProviderModels" :key="m.id" class="cv-model-item" :class="{ active: selectedProvider.model === m.id }">
-                          <button class="cv-model-select" @click="selectedProvider.model = m.id">
-                            <span class="cv-model-name">{{ m.name || m.id }}</span>
-                          </button>
-                          <span v-if="m.context_length" class="cv-model-ctx">{{ Math.round(m.context_length / 1000) }}k</span>
-                          <!-- Max output: label mode -->
-                          <template v-if="editingMaxOutputModelId !== m.id">
-                            <span class="cv-model-out-tag" :class="{ 'is-fallback': !getModelMaxOutput(selectedProvider, m.id) && getModelMaxOutputDefault(m).isFallback }">
-                              <span class="cv-model-out-label">out</span>
-                              <span class="cv-model-out-text" :class="{ 'is-custom': !!getModelMaxOutput(selectedProvider, m.id) }">{{ getModelMaxOutput(selectedProvider, m.id) || getModelMaxOutputDefault(m).value }}</span>
-                              <span v-if="!getModelMaxOutput(selectedProvider, m.id) && getModelMaxOutputDefault(m).isFallback" class="cv-model-out-fallback" :title="t('config.modelMaxOutputFallbackHint')">?</span>
-                            </span>
-                            <button class="cv-model-out-edit" :title="t('config.modelMaxOutputTokensHint')" @click.stop="startEditMaxOutput(m.id)">
+                        <div
+                          v-for="m in filteredProviderModels"
+                          :key="m.id"
+                          v-memo="[m.id, m._ctxFormatted, m._outFormatted, m._outSource, selectedProvider.model === m.id]"
+                          class="cv-model-item"
+                          :class="{ active: selectedProvider.model === m.id }"
+                          @click="selectedProvider.model = m.id"
+                        >
+                          <span class="cv-model-name">{{ m.displayName }}</span>
+                          <span
+                            class="cv-model-ctx"
+                            :class="m._ctxVal ? 'has-value' : 'is-missing'"
+                            :title="m._ctxTitle"
+                          >
+                            <template v-if="m._ctxVal">
+                              <span class="cv-model-tag-label">{{ modelListI18n.contextLabel }}</span>
+                              <span class="cv-model-tag-value">{{ m._ctxFormatted }}</span>
+                            </template>
+                            <template v-else>{{ modelListI18n.ctxUnavailable }}</template>
+                          </span>
+                          <span
+                            v-if="m._outSource !== 'fallback'"
+                            class="cv-model-out-tag has-value"
+                            :title="m._outTitle"
+                          >
+                            <span class="cv-model-tag-label">{{ modelListI18n.maxOutputLabel }}</span>
+                            <span class="cv-model-tag-value">{{ m._outFormatted }}</span>
+                          </span>
+                          <span
+                            v-else
+                            class="cv-model-out-tag is-missing"
+                            :title="m._outTitle"
+                          >
+                            {{ modelListI18n.outUnavailable }}
+                            <span class="cv-model-tag-muted">· {{ modelListI18n.defaultPrefix }} {{ m._outFormatted }}</span>
+                          </span>
+                          <AppTooltip :text="editModelLimitsLabel">
+                            <button class="cv-model-out-edit" @click.stop="openModelLimitsEditor(m)">
                               <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                             </button>
-                          </template>
-                          <!-- Max output: edit mode -->
-                          <template v-else>
-                            <span class="cv-model-out-tag editing" @click.stop>
-                              <span class="cv-model-out-label">out</span>
-                              <input
-                                ref="maxOutputEditInput"
-                                type="text"
-                                v-model="editingMaxOutputValue"
-                                class="cv-model-out-input"
-                                @keydown.enter="confirmEditMaxOutput"
-                                @keydown.escape="cancelEditMaxOutput"
-                              />
-                            </span>
-                            <button class="cv-model-out-confirm" @click.stop="confirmEditMaxOutput" :title="t('common.save')">
-                              <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                            </button>
-                            <button class="cv-model-out-cancel" @click.stop="cancelEditMaxOutput" :title="t('common.cancel')">
-                              <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            </button>
-                          </template>
+                          </AppTooltip>
                         </div>
                       </div>
                       <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
-                        <AppButton size="icon" @click="testProviderNew" :disabled="testingProviderNew || !canTestNew" :loading="testingProviderNew" :title="testingProviderNew ? t('config.testing') : t('config.test')"><svg v-if="!testingProviderNew" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
+                        <AppTooltip :text="testingProviderNew ? t('config.testing') : t('config.test')">
+                          <AppButton size="icon" @click="testProviderNew" :disabled="testingProviderNew || !canTestNew" :loading="testingProviderNew"><svg v-if="!testingProviderNew" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
+                        </AppTooltip>
                       </div>
                     </div>
                     <div v-if="providerModelsFetchError" class="test-result error" style="margin-top: 0.5rem;">
@@ -631,11 +718,13 @@
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
                 <input id="skillsPath" :value="form.skillsPath || defaultSkillsPath" @input="form.skillsPath = $event.target.value" type="text" class="field font-mono" />
-                <button class="open-folder-btn" @click="openInExplorer(form.skillsPath || defaultSkillsPath)" title="Open in file explorer">
-                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                  </svg>
-                </button>
+                <AppTooltip :text="t('common.openInExplorer', 'Open in file explorer')">
+                  <button class="open-folder-btn" @click="openInExplorer(form.skillsPath || defaultSkillsPath)">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                  </button>
+                </AppTooltip>
               </div>
               <p class="hint">{{ t('config.skillsPathHint') }}</p>
             </div>
@@ -673,17 +762,21 @@
             <div class="form-group">
               <div class="input-with-trailing-btn">
                 <input id="DoCPath" :value="form.DoCPath || defaultAidocPath" @input="form.DoCPath = $event.target.value" type="text" class="field font-mono" />
-                <button class="open-folder-btn" @click="pickAidocFolder" title="Select folder">
-                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                    <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
-                  </svg>
-                </button>
-                <button class="open-folder-btn" @click="openInExplorer(form.DoCPath || defaultAidocPath)" title="Open in file explorer">
-                  <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                  </svg>
-                </button>
+                <AppTooltip :text="t('common.selectFolder', 'Select folder')">
+                  <button class="open-folder-btn" @click="pickAidocFolder">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                      <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+                    </svg>
+                  </button>
+                </AppTooltip>
+                <AppTooltip :text="t('common.openInExplorer', 'Open in file explorer')">
+                  <button class="open-folder-btn" @click="openInExplorer(form.DoCPath || defaultAidocPath)">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                  </button>
+                </AppTooltip>
               </div>
               <p class="hint">{{ t('config.aidocPathHint') }}</p>
             </div>
@@ -1020,8 +1113,8 @@
                 <label for="whisperApiKey" class="form-label">{{ t('config.openAIAPIKey') }} <span class="form-label-hint">{{ t('config.forWhisperSTT') }}</span></label>
                 <div class="input-with-action">
                   <input id="whisperApiKey" v-model="form.voiceCall.whisperApiKey" :type="showWhisperKey ? 'text' : 'password'" placeholder="sk-..." class="field font-mono" />
-                  <button @click="showWhisperKey = !showWhisperKey" class="field-action-btn" :aria-label="showWhisperKey ? 'Hide key' : 'Show key'">
-                    <svg v-if="!showWhisperKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <button @click="showWhisperKey = !showWhisperKey" class="field-action-btn" v-tooltip="showWhisperKey ? t('common.hide', 'Hide') : t('common.show', 'Show')" :aria-label="showWhisperKey ? 'Hide key' : 'Show key'">
+                    <svg v-if="showWhisperKey" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                   </button>
                 </div>
@@ -1057,7 +1150,9 @@
                   <p class="form-section-title">{{ t('config.test') }}</p>
                   <p class="hint" style="margin-top:2px;">{{ t('config.verifyWhisperEndpoint') }}</p>
                 </div>
-                <AppButton size="icon" @click="testWhisperConnection" :disabled="testingWhisper || !form.voiceCall.whisperApiKey" :loading="testingWhisper" :title="testingWhisper ? t('config.testing') : t('config.test')"><svg v-if="!testingWhisper" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
+                <AppTooltip :text="testingWhisper ? t('config.testing') : t('config.test')">
+                  <AppButton size="icon" @click="testWhisperConnection" :disabled="testingWhisper || !form.voiceCall.whisperApiKey" :loading="testingWhisper"><svg v-if="!testingWhisper" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
+                </AppTooltip>
               </div>
               <div v-if="testResultWhisper" class="test-result" :class="testResultWhisper.ok ? 'success' : 'error'" style="margin-top:10px;">
                 <svg v-if="testResultWhisper.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1170,14 +1265,16 @@
                 <h3 class="form-section-title">{{ t('config.modelPrices') }}</h3>
                 <p class="form-section-desc">USD per 1M tokens. Overrides built-in defaults.</p>
               </div>
-              <button class="action-btn icon-only" @click="fetchOpenRouterPrices" :disabled="isFetchingPrices" :title="isFetchingPrices ? t('config.fetching') : t('config.fetchModels')">
-                <svg v-if="!isFetchingPrices" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/>
-                </svg>
-                <svg v-else class="icon-sm animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                </svg>
-              </button>
+              <AppTooltip :text="isFetchingPrices ? t('config.fetching') : t('config.fetchModels')">
+                <button class="action-btn icon-only" @click="fetchOpenRouterPrices" :disabled="isFetchingPrices">
+                  <svg v-if="!isFetchingPrices" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/>
+                  </svg>
+                  <svg v-else class="icon-sm animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  </svg>
+                </button>
+              </AppTooltip>
             </div>
             <!-- Filter -->
             <div style="margin-bottom:0.625rem;">
@@ -1203,16 +1300,20 @@
               <input type="number" step="0.001" :value="row.output"     @change="row.output     = +$event.target.value; onPriceEdit(modelId, row)" class="field font-mono" style="padding:0.25rem 0.375rem; font-size:var(--fs-caption);" placeholder="0.00" />
               <input type="number" step="0.001" :value="row.cacheWrite" @change="row.cacheWrite = +$event.target.value; onPriceEdit(modelId, row)" class="field font-mono" style="padding:0.25rem 0.375rem; font-size:var(--fs-caption);" placeholder="0.00" />
               <input type="number" step="0.001" :value="row.cacheRead"  @change="row.cacheRead  = +$event.target.value; onPriceEdit(modelId, row)" class="field font-mono" style="padding:0.25rem 0.375rem; font-size:var(--fs-caption);" placeholder="0.00" />
-              <button @click="resetModelPrice(modelId)" title="Reset to default" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0.25rem;border-radius:var(--radius-sm);color:#9CA3AF;" @mouseenter="e=>e.currentTarget.style.background='var(--bg-hover)'" @mouseleave="e=>e.currentTarget.style.background='none'">
-                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5"/>
-                </svg>
-              </button>
-              <button @click="deleteModelPrice(modelId)" title="Delete model" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0.25rem;border-radius:var(--radius-sm);color:#9CA3AF;" @mouseenter="e=>{e.currentTarget.style.background='rgba(239,68,68,0.08)';e.currentTarget.style.color='#EF4444'}" @mouseleave="e=>{e.currentTarget.style.background='none';e.currentTarget.style.color='#9CA3AF'}">
-                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                </svg>
-              </button>
+              <AppTooltip :text="t('common.resetDefault', 'Reset to default')">
+                <button @click="resetModelPrice(modelId)" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0.25rem;border-radius:var(--radius-sm);color:#9CA3AF;" @mouseenter="e=>e.currentTarget.style.background='var(--bg-hover)'" @mouseleave="e=>e.currentTarget.style.background='none'">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5"/>
+                  </svg>
+                </button>
+              </AppTooltip>
+              <AppTooltip :text="t('common.delete', 'Delete')">
+                <button @click="deleteModelPrice(modelId)" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0.25rem;border-radius:var(--radius-sm);color:#9CA3AF;" @mouseenter="e=>{e.currentTarget.style.background='rgba(239,68,68,0.08)';e.currentTarget.style.color='#EF4444'}" @mouseleave="e=>{e.currentTarget.style.background='none';e.currentTarget.style.color='#9CA3AF'}">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                  </svg>
+                </button>
+              </AppTooltip>
             </div>
             <!-- Add custom model -->
             <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border);">
@@ -1322,8 +1423,8 @@
                   placeholder="••••••••"
                   class="field font-mono"
                 />
-                <button @click="showSmtpPass = !showSmtpPass" class="field-action-btn" :aria-label="showSmtpPass ? 'Hide password' : 'Show password'">
-                  <svg v-if="!showSmtpPass" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <button @click="showSmtpPass = !showSmtpPass" class="field-action-btn" v-tooltip="showSmtpPass ? t('common.hide', 'Hide') : t('common.show', 'Show')" :aria-label="showSmtpPass ? 'Hide password' : 'Show password'">
+                  <svg v-if="showSmtpPass" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                   </svg>
                   <svg v-else class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1342,7 +1443,9 @@
                   <p class="form-section-title">{{ t('config.smtpTest') }}</p>
                   <p class="hint" style="margin-top:2px;">{{ t('config.smtpTestButton') }}</p>
                 </div>
-                <AppButton size="icon" @click="testSmtpConnection" :disabled="testingSmtp || !form.smtp.host || !form.smtp.user" :loading="testingSmtp" :title="testingSmtp ? t('config.smtpTestTesting') : t('config.smtpTestButton')"><svg v-if="!testingSmtp" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
+                <AppTooltip :text="testingSmtp ? t('config.smtpTestTesting') : t('config.smtpTestButton')">
+                  <AppButton size="icon" @click="testSmtpConnection" :disabled="testingSmtp || !form.smtp.host || !form.smtp.user" :loading="testingSmtp"><svg v-if="!testingSmtp" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></AppButton>
+                </AppTooltip>
               </div>
             <div v-if="testResultSmtp" class="test-result" :class="testResultSmtp.ok ? 'success' : 'error'" style="margin-top:10px;">
               <svg v-if="testResultSmtp.ok" class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1421,9 +1524,11 @@
                       <span class="sec-entry-pattern">{{ entry.pattern }}</span>
                       <span v-if="entry.description" class="sec-entry-desc">{{ entry.description }}</span>
                     </div>
-                    <button class="sec-entry-delete allow" @click="removeAllowEntry(idx)" title="Remove">
-                      <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
+                    <AppTooltip :text="t('common.remove', 'Remove')">
+                      <button class="sec-entry-delete allow" @click="removeAllowEntry(idx)">
+                        <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </AppTooltip>
                   </div>
                 </div>
                 <div class="sec-add-row">
@@ -1446,9 +1551,11 @@
                       <span class="sec-entry-pattern danger">{{ entry.pattern }}</span>
                       <span v-if="entry.description" class="sec-entry-desc">{{ entry.description }}</span>
                     </div>
-                    <button class="sec-entry-delete danger" @click="removeDangerEntry(idx)" title="Remove">
-                      <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
+                    <AppTooltip :text="t('common.remove', 'Remove')">
+                      <button class="sec-entry-delete danger" @click="removeDangerEntry(idx)">
+                        <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </AppTooltip>
                   </div>
                 </div>
                 <div class="sec-add-row">
@@ -1562,10 +1669,10 @@
                     class="field font-mono"
                     style="padding-right:2.5rem;"
                   />
-                  <button type="button" @click="showTgToken = !showTgToken" class="im-reveal-btn" :title="showTgToken ? 'Hide' : 'Show'">
+                  <button type="button" @click="showTgToken = !showTgToken" class="im-reveal-btn" v-tooltip="showTgToken ? t('common.hide', 'Hide') : t('common.show', 'Show')">
                     <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <template v-if="showTgToken"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></template>
-                      <template v-else><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></template>
+                      <template v-if="showTgToken"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></template>
+                      <template v-else><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></template>
                     </svg>
                   </button>
                 </div>
@@ -1776,10 +1883,10 @@
                     class="field font-mono"
                     style="padding-right:2.5rem;"
                   />
-                  <button type="button" @click="showWaSecret = !showWaSecret" class="im-reveal-btn" :title="showWaSecret ? 'Hide' : 'Show'">
+                  <button type="button" @click="showWaSecret = !showWaSecret" class="im-reveal-btn" v-tooltip="showWaSecret ? t('common.hide', 'Hide') : t('common.show', 'Show')">
                     <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <template v-if="showWaSecret"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></template>
-                      <template v-else><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></template>
+                      <template v-if="showWaSecret"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></template>
+                      <template v-else><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></template>
                     </svg>
                   </button>
                 </div>
@@ -2316,15 +2423,16 @@
             <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem; font-weight:600;">{{ t('config.dataPathWarningCopyCmd') }}</p>
             <div style="display:flex; align-items:flex-start; gap:0.5rem;">
               <code class="font-mono" style="font-size:0.75rem; flex:1; word-break:break-all; white-space:pre-wrap; line-height:1.6; user-select:all;">{{ dataPathCopyCommand }}</code>
-              <button
-                style="flex-shrink:0; padding:4px 8px; border:1px solid var(--border-primary, #ddd); border-radius:4px; background:transparent; cursor:pointer; font-size:0.7rem; color:var(--text-muted);"
-                @click="copyDataPathCmd"
-                :title="t('common.copy', 'Copy')"
-              >
-                <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-              </button>
+              <AppTooltip :text="t('common.copy', 'Copy')">
+                <button
+                  style="flex-shrink:0; padding:4px 8px; border:1px solid var(--border-primary, #ddd); border-radius:4px; background:transparent; cursor:pointer; font-size:0.7rem; color:var(--text-muted);"
+                  @click="copyDataPathCmd"
+                >
+                  <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </button>
+              </AppTooltip>
             </div>
           </div>
         </div>
@@ -2369,6 +2477,92 @@
     @close="showPreviewLimitModal = false"
   />
 
+  <!-- Model limits editor (context window + max output) -->
+  <Teleport to="body">
+    <div v-if="modelLimitsEditor.open" class="modal-backdrop" style="z-index:10000;">
+      <div class="cv-model-editor">
+        <div class="cv-model-editor-header">
+          <div>
+            <div class="cv-model-editor-title">{{ t('config.editModelLimits') }}</div>
+            <div class="cv-model-editor-subtitle font-mono">{{ modelLimitsEditor.modelId }}</div>
+          </div>
+          <button class="cv-model-editor-close" @click="closeModelLimitsEditor">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="cv-model-editor-body">
+          <div class="cv-model-editor-field">
+            <div class="cv-editor-field-head">
+              <label>{{ t('config.contextWindow') }}</label>
+              <span
+                class="cv-editor-current-badge"
+                :class="modelLimitsEditor.contextDefault ? 'ok' : 'warn'"
+              >
+                {{ modelLimitsEditor.contextDefault
+                    ? `${t('config.currentValue')} ${formatContextWindow(modelLimitsEditor.contextDefault)}`
+                    : t('config.contextLengthUnavailable') }}
+              </span>
+            </div>
+            <input
+              type="text"
+              v-model="modelLimitsEditor.contextWindow"
+              class="field font-mono"
+              :placeholder="modelLimitsEditor.contextDefault ? formatContextWindow(modelLimitsEditor.contextDefault) : '128K'"
+            />
+            <p class="hint">{{ t('config.contextWindowHint') }}</p>
+          </div>
+
+          <div class="cv-model-editor-field">
+            <div class="cv-editor-field-head">
+              <label>{{ t('config.maxOutputTokens') }}</label>
+              <span
+                class="cv-editor-current-badge"
+                :class="modelLimitsEditor.maxOutputDefault ? 'ok' : 'warn'"
+              >
+                {{ modelLimitsEditor.maxOutputDefault
+                    ? `${t('config.currentValue')} ${formatContextWindow(modelLimitsEditor.maxOutputDefault)}`
+                    : t('config.maxOutputUnavailable') }}
+              </span>
+            </div>
+            <input
+              type="text"
+              v-model="modelLimitsEditor.maxOutputTokens"
+              class="field font-mono"
+              :placeholder="modelLimitsEditor.maxOutputDefault ? formatContextWindow(modelLimitsEditor.maxOutputDefault) : '32K'"
+            />
+            <p class="hint">{{ t('config.modelMaxOutputTokensHint') }}</p>
+          </div>
+        </div>
+
+        <div class="cv-model-editor-footer">
+          <button class="cv-model-editor-btn secondary" @click="closeModelLimitsEditor">{{ t('common.cancel') }}</button>
+          <button class="cv-model-editor-btn primary" @click="saveModelLimitsEditor">{{ t('common.save') }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Missing context-window warning -->
+  <Teleport to="body">
+    <div v-if="showMissingCtxWarning" class="modal-backdrop" style="z-index:10001;">
+      <div class="cv-warn-modal">
+        <div class="cv-warn-header">
+          <svg style="width:18px;height:18px;color:#F59E0B;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>{{ t('config.missingCtxTitle') }}</span>
+        </div>
+        <div class="cv-warn-body">
+          <p>{{ t('config.missingCtxBody') }}</p>
+          <p class="cv-warn-body-muted">{{ t('config.missingCtxExplain') }}</p>
+        </div>
+        <div class="cv-warn-footer">
+          <button class="cv-model-editor-btn secondary" @click="showMissingCtxWarning = false">{{ t('common.close') }}</button>
+          <button class="cv-model-editor-btn primary" @click="openEditorForSelected">{{ t('config.setManually') }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
 </template>
 
 <script setup>
@@ -2379,7 +2573,9 @@ import { useConfigStore } from '../stores/config'
 import { useModelsStore } from '../stores/models'
 import { useKnowledgeStore } from '../stores/knowledge'
 import { useObsidianStore } from '../stores/obsidian'
+import { useToolsStore } from '../stores/tools'
 import AppButton from '../components/common/AppButton.vue'
+import AppTooltip from '../components/common/AppTooltip.vue'
 import ProviderModelPicker from '../components/common/ProviderModelPicker.vue'
 import ComboBox from '../components/common/ComboBox.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
@@ -2392,6 +2588,7 @@ const configStore = useConfigStore()
 const modelsStore = useModelsStore()
 const knowledgeStore = useKnowledgeStore()
 const obsidianStore = useObsidianStore()
+const toolsStore = useToolsStore()
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
@@ -2400,13 +2597,10 @@ const showPreviewLimitModal = ref(false)
 const previewLimitMessage = ref('')
 
 // Built-in model max output token defaults (loaded from main process)
-// { table: { modelId: maxTokens }, fallback: 32768 }
-const modelDefaultMaxOutput = ref({ table: {}, fallback: 32768 })
+// { table: { modelId: maxTokens }, fallback: 32000 }
+const modelDefaultMaxOutput = ref({ table: {}, fallback: 32000 })
 
 // Per-model max output tokens inline editing state
-const editingMaxOutputModelId = ref(null)
-const editingMaxOutputValue = ref('')
-const maxOutputEditInput = ref(null)
 
 const isElectron = !!(typeof window !== 'undefined' && window.electronAPI)
 
@@ -2448,6 +2642,116 @@ const testResults = ref({})        // { [provider]: { ok, message } }
 // Utility model test state
 const testingUtilityModel = ref(false)
 const testUtilityModelResult = ref(null)
+const utilityModelFilter = ref('')
+
+// Providers eligible as utility-model backend (must be active + have key)
+const utilityActiveProviderOptions = computed(() =>
+  (configStore.config.providers || [])
+    .filter(p => p.isActive && p.apiKey)
+    .map(p => ({ id: p.type, name: p.alias || p.name }))
+)
+
+const utilityModelsLoading = computed(() => {
+  const p = form.utilityModel.provider
+  return p ? modelsStore.isLoading(p) : false
+})
+
+// Model-list i18n strings — cached per locale so we aren't calling t() hundreds of times per render
+// across 200+ model rows (biggest single perf hit on the utility model list).
+const modelListI18n = computed(() => {
+  return {
+    contextLabel:   t('config.contextLabel'),
+    maxOutputLabel: t('config.maxOutputLabel'),
+    ctxUnavailable: t('config.contextLengthUnavailable'),
+    outUnavailable: t('config.maxOutputUnavailable'),
+    defaultPrefix:  t('config.defaultPrefix'),
+    fallbackHint:   t('config.modelMaxOutputFallbackHint'),
+    ctxFromUser:    t('config.contextFromUser'),
+    ctxFromCatalog: t('config.contextFromCatalog'),
+    ctxFromApi:     t('config.contextFromApi'),
+    ctxUnknown:     t('config.contextUnknown'),
+    outFromUser:    t('config.maxOutputFromUser'),
+    outFromCatalog: t('config.maxOutputFromCatalog'),
+    outFromApi:     t('config.maxOutputFromApi'),
+  }
+})
+
+// Total count — kept around for any future UI that needs it.
+const utilityModelsTotal = ref(0)
+
+// Model list for the utility provider — fully pre-enriched (title strings, formatted K/M,
+// all source-dependent strings resolved) so the v-for template does zero function / t() calls per row.
+const filteredUtilityModels = computed(() => {
+  const providerType = form.utilityModel.provider
+  if (!providerType) { utilityModelsTotal.value = 0; return [] }
+  const provider = (configStore.config.providers || []).find(p => p.type === providerType) || null
+  const models = modelsStore.getModelsForProvider(provider?.id || providerType) || []
+  const settings = provider?.modelSettings || {}
+  const q = utilityModelFilter.value ? utilityModelFilter.value.toLowerCase() : ''
+  const defaultsTableEntries = Object.entries(modelDefaultMaxOutput.value.table || {})
+  const fallbackOut = 32000
+  const i = modelListI18n.value
+  utilityModelsTotal.value = models.length
+
+  const out = []
+  for (const m of models) {
+    if (q && !m.id.toLowerCase().includes(q) && !(m.name || '').toLowerCase().includes(q)) continue
+    const s = settings[m.id] || null
+
+    let ctxVal, ctxSource
+    if (s?.contextWindow) { ctxVal = s.contextWindow; ctxSource = 'user' }
+    else if (m.context_length) { ctxVal = m.context_length; ctxSource = m.contextSource || 'api' }
+    else { ctxVal = null; ctxSource = null }
+
+    let outVal, outSource
+    if (s?.maxOutputTokens) { outVal = s.maxOutputTokens; outSource = 'user' }
+    else if (m.max_output_tokens) { outVal = m.max_output_tokens; outSource = m.maxOutputSource || 'api' }
+    else {
+      const id = (m.id || '').toLowerCase()
+      let bestLen = 0, bestVal = null
+      for (const [key, val] of defaultsTableEntries) {
+        const lk = key.toLowerCase()
+        if ((id === lk || id.startsWith(lk)) && lk.length > bestLen) {
+          bestLen = lk.length
+          bestVal = val
+        }
+      }
+      if (bestVal !== null) { outVal = bestVal; outSource = 'catalog' }
+      else { outVal = fallbackOut; outSource = 'fallback' }
+    }
+
+    out.push({
+      id: m.id,
+      displayName: m.name || m.id,
+      _ctxVal: ctxVal,
+      _ctxFormatted: ctxVal ? formatContextWindow(ctxVal) : '',
+      _ctxTitle: ctxVal
+        ? (ctxSource === 'user' ? i.ctxFromUser : ctxSource === 'catalog' ? i.ctxFromCatalog : i.ctxFromApi)
+        : i.ctxUnknown,
+      _outVal: outVal,
+      _outFormatted: formatContextWindow(outVal),
+      _outSource: outSource,
+      _outTitle: outSource === 'fallback'
+        ? i.fallbackHint
+        : outSource === 'user' ? i.outFromUser
+        : outSource === 'catalog' ? i.outFromCatalog
+        : i.outFromApi,
+    })
+  }
+  return out
+})
+
+function onUtilityProviderChange(providerType) {
+  form.utilityModel.provider = providerType
+  form.utilityModel.model = ''
+  testUtilityModelResult.value = null
+  utilityModelFilter.value = ''
+  // Lazy-load the provider's models on first selection (matches body-view behaviour)
+  const p = (configStore.config.providers || []).find(x => x.type === providerType)
+  if (p && !modelsStore.isCached(p.id) && !modelsStore.isLoading(p.id)) {
+    modelsStore.fetchModelsForProvider(p.id)
+  }
+}
 
 
 
@@ -2840,7 +3144,7 @@ function getSubTabStatus(subTab) {
     case 'security':  return 'configured'
     case 'email':     return form.smtp?.host ? 'configured' : 'empty'
     case 'im':        return (form.im?.telegram?.botToken || form.im?.whatsapp?.enabled || form.im?.feishu?.appId) ? 'configured' : 'empty'
-    case 'models':    return Object.values(form).some(v => v?.apiKey) ? 'configured' : 'empty'
+    case 'models':    return configStore.config.providers?.some(p => p.isActive && p.apiKey) ? 'configured' : 'empty'
     case 'voice':     return form.voiceCall?.whisperApiKey ? 'configured' : 'empty'
     case 'tts':       return 'configured' // Edge TTS always available
     case 'stt':       return (form.voiceCall?.mode && form.voiceCall.mode !== 'disabled') ? 'configured' : 'empty'
@@ -3249,12 +3553,75 @@ const providerContextEnriching = computed(() => {
   return modelsStore.isEnriching(selectedProvider.value.id || selectedProvider.value.type)
 })
 
+const providerModelsTotal = ref(0)
 const filteredProviderModels = computed(() => {
   const models = selectedProviderModels.value
-  if (!providerModelFilter.value) return models
-  const q = providerModelFilter.value.toLowerCase()
-  return models.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
+  const provider = selectedProvider.value
+  const settings = provider?.modelSettings || {}
+  const q = providerModelFilter.value ? providerModelFilter.value.toLowerCase() : ''
+  const defaultsTable = modelDefaultMaxOutput.value.table || {}
+  const defaultsTableEntries = Object.entries(defaultsTable)
+  // Hard-code the display fallback to 32K so the UI stays consistent even if the backend
+  // IPC handler was loaded before the constant in modelDefaults.js was updated (no restart).
+  const fallbackOut = 32000
+  const i = modelListI18n.value
+  providerModelsTotal.value = models.length
+
+  // Pre-compute effective context / max-output + fully-resolved titles/formatted strings
+  // for each visible row so the v-for template does zero function / t() calls per row.
+  const out = []
+  for (const m of models) {
+    if (q && !m.id.toLowerCase().includes(q) && !(m.name || '').toLowerCase().includes(q)) continue
+
+    const s = settings[m.id] || null
+
+    // Effective context window
+    let ctxVal, ctxSource
+    if (s?.contextWindow) { ctxVal = s.contextWindow; ctxSource = 'user' }
+    else if (m.context_length) { ctxVal = m.context_length; ctxSource = m.contextSource || 'api' }
+    else { ctxVal = null; ctxSource = null }
+
+    // Effective max output
+    let outVal, outSource
+    if (s?.maxOutputTokens) { outVal = s.maxOutputTokens; outSource = 'user' }
+    else if (m.max_output_tokens) { outVal = m.max_output_tokens; outSource = m.maxOutputSource || 'api' }
+    else {
+      const id = (m.id || '').toLowerCase()
+      let bestLen = 0, bestVal = null
+      for (const [key, val] of defaultsTableEntries) {
+        const lk = key.toLowerCase()
+        if ((id === lk || id.startsWith(lk)) && lk.length > bestLen) {
+          bestLen = lk.length
+          bestVal = val
+        }
+      }
+      if (bestVal !== null) { outVal = bestVal; outSource = 'catalog' }
+      else { outVal = fallbackOut; outSource = 'fallback' }
+    }
+
+    out.push({
+      id: m.id,
+      displayName: m.name || m.id,
+      _ctxVal: ctxVal,
+      _ctxFormatted: ctxVal ? formatContextWindow(ctxVal) : '',
+      _ctxTitle: ctxVal
+        ? (ctxSource === 'user' ? i.ctxFromUser : ctxSource === 'catalog' ? i.ctxFromCatalog : i.ctxFromApi)
+        : i.ctxUnknown,
+      _outVal: outVal,
+      _outFormatted: formatContextWindow(outVal),
+      _outSource: outSource,
+      _outTitle: outSource === 'fallback'
+        ? i.fallbackHint
+        : outSource === 'user' ? i.outFromUser
+        : outSource === 'catalog' ? i.outFromCatalog
+        : i.outFromApi,
+    })
+  }
+  return out
 })
+
+// Shared label for the edit-limits pencil tooltip (cached for the same perf reason as modelListI18n).
+const editModelLimitsLabel = computed(() => t('config.editModelLimits'))
 
 const testableModels = computed(() => {
   if (!selectedProvider.value) return []
@@ -3315,12 +3682,15 @@ function deleteProvider(id) {
   showDeleteConfirm.value = true
 }
 
-function confirmDeleteProvider() {
+async function confirmDeleteProvider() {
   if (deleteConfirmId.value) {
     configStore.removeProvider(deleteConfirmId.value)
     if (modelsLeftNav.value === deleteConfirmId.value) {
       modelsLeftNav.value = configStore.config.providers.length > 0 ? configStore.config.providers[0].id : 'empty'
     }
+    // Persist immediately — removeProvider() only mutates the in-memory array,
+    // without saveConfig() the deletion is lost on next app start.
+    await configStore.saveConfig({ providers: configStore.config.providers })
   }
   showDeleteConfirm.value = false
   deleteConfirmId.value = null
@@ -3348,6 +3718,15 @@ async function testProviderNew() {
       selectedProvider.value.isActive = true
       selectedProvider.value.testedAt = Date.now()
       testResultNew.value = { ok: true, message: `Connected · ${res.ms}ms` }
+      // After a successful test for a non-Anthropic provider, warn if the selected model
+      // has no known context window (neither API / catalog / manual override).
+      if (selectedProvider.value.type !== 'anthropic') {
+        const mId = selectedProvider.value.model
+        const m = mId ? selectedProviderModels.value.find(x => x.id === mId) : null
+        if (m && !getEffectiveContext(m).value) {
+          showMissingCtxWarning.value = true
+        }
+      }
     } else {
       selectedProvider.value.isActive = false
       testResultNew.value = { ok: false, message: res.error }
@@ -3386,8 +3765,12 @@ async function fetchProviderModels() {
 
 async function enrichProviderContext() {
   if (!selectedProvider.value) return
-  const success = await modelsStore.enrichContextWindows(selectedProvider.value.id)
-  if (!success) providerModelsFetchError.value = t('config.aiFillContextFailed')
+  const result = await modelsStore.enrichContextWindows(selectedProvider.value.id)
+  if (!result?.success) {
+    providerModelsFetchError.value = result?.error
+      ? `${t('config.aiFillContextFailed')} ${result.error}`
+      : t('config.aiFillContextFailed')
+  }
 }
 
 function getHardLimit(provider, key) {
@@ -3397,15 +3780,60 @@ function getHardLimit(provider, key) {
 }
 
 // Per-model max output tokens helpers
-function getModelMaxOutput(provider, modelId) {
-  return provider.modelSettings?.[modelId]?.maxOutputTokens || ''
+// Format context window / token counts with K / M units.
+// < 1000 → raw number, < 1_000_000 → "128K", ≥ 1_000_000 → "1M" / "1.04M"
+function formatContextWindow(n) {
+  if (!n || n <= 0) return ''
+  if (n >= 1_000_000) {
+    const m = n / 1_000_000
+    return (m >= 10 ? Math.round(m) : Number(m.toFixed(2))) + 'M'
+  }
+  if (n >= 1000) return Math.round(n / 1000) + 'K'
+  return String(n)
 }
 
-/** Returns { value: string, isFallback: boolean } */
-function getModelMaxOutputDefault(model) {
-  // API-cached value (e.g. Google outputTokenLimit)
-  if (model.max_output_tokens) return { value: String(model.max_output_tokens), isFallback: false }
-  // Built-in lookup table (prefix match)
+// Parse user input that may be "128K", "1M", "1.5M", "32000", etc.
+// Returns an integer number of tokens, or 0 for invalid / empty input.
+function parseTokenCount(input) {
+  if (input == null) return 0
+  const s = String(input).trim().toLowerCase().replace(/[,\s]/g, '')
+  if (!s) return 0
+  const m = s.match(/^([0-9]*\.?[0-9]+)\s*([km]?)$/)
+  if (!m) {
+    const n = Number(s)
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : 0
+  }
+  const value = parseFloat(m[1])
+  if (!Number.isFinite(value) || value <= 0) return 0
+  const unit = m[2]
+  if (unit === 'k') return Math.round(value * 1000)
+  if (unit === 'm') return Math.round(value * 1_000_000)
+  return Math.round(value)
+}
+
+function getUserContextWindow(provider, modelId) {
+  return provider?.modelSettings?.[modelId]?.contextWindow || null
+}
+
+function getUserMaxOutput(provider, modelId) {
+  return provider?.modelSettings?.[modelId]?.maxOutputTokens || null
+}
+
+/** Returns { value: number|null, source: 'user' | 'api' | 'catalog' | null } */
+function getEffectiveContext(model) {
+  const uv = getUserContextWindow(selectedProvider.value, model.id)
+  if (uv) return { value: uv, source: 'user' }
+  if (model.context_length) return { value: model.context_length, source: model.contextSource || 'api' }
+  return { value: null, source: null }
+}
+
+/** Returns { value: number|null, source: 'user' | 'api' | 'catalog' | 'fallback' | null } */
+function getEffectiveMaxOutput(model) {
+  const uv = getUserMaxOutput(selectedProvider.value, model.id)
+  if (uv) return { value: uv, source: 'user' }
+  if (model.max_output_tokens) return { value: model.max_output_tokens, source: model.maxOutputSource || 'api' }
+
+  // Look up built-in defaults table (litellm catalog via backend helper)
   const id = (model.id || '').toLowerCase()
   const table = modelDefaultMaxOutput.value.table || {}
   let bestLen = 0
@@ -3417,55 +3845,87 @@ function getModelMaxOutputDefault(model) {
       bestVal = val
     }
   }
-  if (bestVal !== null) return { value: String(bestVal), isFallback: false }
-  // Generic fallback
-  const fb = modelDefaultMaxOutput.value.fallback || 32768
-  return { value: String(fb), isFallback: true }
+  if (bestVal !== null) return { value: bestVal, source: 'catalog' }
+  const fb = 32000
+  return { value: fb, source: 'fallback' }
 }
 
-function startEditMaxOutput(modelId) {
+// ── Unified model-limits editor (context window + max output) ────────────────
+const modelLimitsEditor = reactive({
+  open: false,
+  modelId: null,
+  contextWindow: '',
+  maxOutputTokens: '',
+  contextDefault: null,
+  maxOutputDefault: null,
+})
+
+function openModelLimitsEditor(model) {
   const provider = selectedProvider.value
   if (!provider) return
-  const current = getModelMaxOutput(provider, modelId)
-  const model = filteredProviderModels.value.find(m => m.id === modelId)
-  editingMaxOutputValue.value = current || (model ? getModelMaxOutputDefault(model).value : '32768')
-  editingMaxOutputModelId.value = modelId
-  nextTick(() => {
-    const input = maxOutputEditInput.value
-    const el = Array.isArray(input) ? input[0] : input
-    if (el) { el.focus(); el.select() }
-  })
-}
 
-function confirmEditMaxOutput() {
-  const provider = selectedProvider.value
-  const modelId = editingMaxOutputModelId.value
-  if (!provider || !modelId) return
-
-  if (!provider.modelSettings) provider.modelSettings = {}
-  const num = parseInt(editingMaxOutputValue.value, 10)
-  if (!num || num <= 0) {
-    if (provider.modelSettings[modelId]) {
-      delete provider.modelSettings[modelId].maxOutputTokens
-      if (Object.keys(provider.modelSettings[modelId]).length === 0) {
-        delete provider.modelSettings[modelId]
-      }
-    }
+  // The caller may pass either an enriched row (has `_ctxVal` / `_outVal`) or a raw model
+  // entry (has `context_length` / `max_output_tokens`). Support both.
+  let ctxVal, outVal, outIsFallback
+  if ('_ctxVal' in model) {
+    ctxVal = model._ctxVal ?? null
+    outVal = model._outVal ?? null
+    outIsFallback = model._outSource === 'fallback'
   } else {
-    if (!provider.modelSettings[modelId]) provider.modelSettings[modelId] = {}
-    provider.modelSettings[modelId].maxOutputTokens = Math.min(98304, Math.max(256, num))
+    const eff = getEffectiveContext(model)
+    const out = getEffectiveMaxOutput(model)
+    ctxVal = eff.value
+    outVal = out.value
+    outIsFallback = out.source === 'fallback'
   }
 
-  // Save directly to config.json without requiring the provider Save button
-  configStore.saveConfig(configStore.config)
-
-  editingMaxOutputModelId.value = null
-  editingMaxOutputValue.value = ''
+  modelLimitsEditor.modelId = model.id
+  modelLimitsEditor.contextWindow = ctxVal ? formatContextWindow(ctxVal) : ''
+  modelLimitsEditor.maxOutputTokens = (outVal && !outIsFallback) ? formatContextWindow(outVal) : ''
+  modelLimitsEditor.contextDefault = ctxVal
+  modelLimitsEditor.maxOutputDefault = outIsFallback ? null : outVal
+  modelLimitsEditor.open = true
 }
 
-function cancelEditMaxOutput() {
-  editingMaxOutputModelId.value = null
-  editingMaxOutputValue.value = ''
+function closeModelLimitsEditor() {
+  modelLimitsEditor.open = false
+  modelLimitsEditor.modelId = null
+}
+
+function saveModelLimitsEditor() {
+  const provider = selectedProvider.value
+  const modelId = modelLimitsEditor.modelId
+  if (!provider || !modelId) return closeModelLimitsEditor()
+
+  if (!provider.modelSettings) provider.modelSettings = {}
+  const bucket = provider.modelSettings[modelId] || {}
+
+  // Context window: 1024 .. 10_000_000 tokens (accepts "128K", "1M", or raw digits)
+  const ctxNum = parseTokenCount(modelLimitsEditor.contextWindow)
+  if (!ctxNum) delete bucket.contextWindow
+  else bucket.contextWindow = Math.min(10_000_000, Math.max(1024, ctxNum))
+
+  // Max output: 256 .. 98304 tokens
+  const outNum = parseTokenCount(modelLimitsEditor.maxOutputTokens)
+  if (!outNum) delete bucket.maxOutputTokens
+  else bucket.maxOutputTokens = Math.min(98304, Math.max(256, outNum))
+
+  if (Object.keys(bucket).length === 0) delete provider.modelSettings[modelId]
+  else provider.modelSettings[modelId] = bucket
+
+  configStore.saveConfig(configStore.config)
+  closeModelLimitsEditor()
+}
+
+// ── Missing-context warning (shown after a successful Test) ────────────────
+const showMissingCtxWarning = ref(false)
+
+function openEditorForSelected() {
+  showMissingCtxWarning.value = false
+  const modelId = selectedProvider.value?.model
+  if (!modelId) return
+  const m = selectedProviderModels.value.find(x => x.id === modelId) || { id: modelId }
+  openModelLimitsEditor(m)
 }
 
 onMounted(async () => {
@@ -3950,12 +4410,42 @@ async function saveEmail() {
   savingEmail.value = true
   try {
     await configStore.saveConfig({ smtp: JSON.parse(JSON.stringify(form.smtp)) })
+    await syncSmtpTool()
     savedEmailMsg.value = { ok: true, text: t('common.successSaved') }
   } catch (err) {
     savedEmailMsg.value = { ok: false, text: err.message || t('common.saveFailed') }
   } finally {
     savingEmail.value = false
     setTimeout(() => { savedEmailMsg.value = null }, 3000)
+  }
+}
+
+// Auto-create / update a default SMTP tool so the host is reflected in the tool name.
+// Option A: single source of truth — one SMTP tool, renamed in place when host changes.
+async function syncSmtpTool() {
+  const host = (form.smtp.host || '').trim()
+  const user = (form.smtp.user || '').trim()
+  if (!host) return
+  try {
+    if (!toolsStore.tools.length) await toolsStore.loadTools()
+    const existing = toolsStore.tools.find(x => x.type === 'smtp')
+    const name = t('tools.smtpAutoName', { host })
+    const description = t('tools.smtpAutoDescription', { host, user: user || host })
+    if (existing) {
+      if (existing.name === name && existing.description === description) return
+      await toolsStore.saveTool({ ...existing, name, description })
+    } else {
+      await toolsStore.saveTool({
+        id: `smtp-${host.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        type: 'smtp',
+        name,
+        description,
+        category: t('tools.smtp'),
+      })
+    }
+  } catch (err) {
+    // Non-fatal — config was already saved; just log.
+    console.warn('[ConfigView] syncSmtpTool failed:', err?.message || err)
   }
 }
 
@@ -4283,7 +4773,7 @@ async function savePricing() {
   background: none; border: none; color: var(--text-muted); cursor: pointer;
   padding: 4px; border-radius: 4px; transition: color 0.15s;
 }
-.field-action-btn:hover { color: var(--accent); }
+.field-action-btn:hover { color: var(--text-primary); }
 
 /* ── Input with trailing button ────────────────────────────────────────── */
 .input-with-trailing-btn { display: flex; gap: 6px; align-items: stretch; }
@@ -5160,46 +5650,158 @@ async function savePricing() {
 }
 
 .cv-model-name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
 }
 
 .cv-model-ctx {
   flex-shrink: 0;
   font-size: 0.6875rem;
-  color: #9CA3AF;
   font-weight: 500;
-  padding: 0.0625rem 0.375rem;
-  background: rgba(255,255,255,0.06);
+  padding: 0 0.5rem;
   border-radius: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
 }
-.cv-model-item.active .cv-model-ctx { color: #E5E7EB; background: rgba(255,255,255,0.12); }
+.cv-model-tag-label {
+  font-size: 0.625rem;
+  opacity: 0.8;
+  letter-spacing: 0.02em;
+}
+.cv-model-tag-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+.cv-model-tag-muted {
+  opacity: 0.7;
+  font-weight: 400;
+  margin-left: 0.125rem;
+}
+/* Green when any value is known (API / catalog / user), amber when unavailable */
+.cv-model-ctx.has-value {
+  color: #059669; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.35);
+}
+.cv-model-ctx.is-missing {
+  color: #B45309; background: rgba(245,158,11,0.1); border: 1px dashed rgba(245,158,11,0.4);
+  font-style: italic;
+}
+.cv-model-out-tag.has-value {
+  background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.35);
+  color: #059669;
+}
+.cv-model-out-tag.is-missing {
+  background: rgba(245,158,11,0.1); border: 1px dashed rgba(245,158,11,0.4);
+  color: #B45309;
+}
+.cv-model-item.active .cv-model-ctx.has-value,
+.cv-model-item.active .cv-model-out-tag.has-value {
+  color: #A7F3D0; background: rgba(16,185,129,0.22); border-color: rgba(167,243,208,0.45);
+}
+.cv-model-item.active .cv-model-ctx.is-missing,
+.cv-model-item.active .cv-model-out-tag.is-missing {
+  color: #FCD34D; background: rgba(245,158,11,0.22); border-color: rgba(253,224,71,0.45);
+}
 
-/* Max output tag (label mode) */
+/* Model-limits editor modal */
+.cv-model-editor {
+  width: min(480px, 92vw);
+  background: var(--bg-surface, #FFFFFF);
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.cv-model-editor-header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-secondary, #E5E7EB);
+}
+.cv-model-editor-title { font-weight: 600; font-size: 0.95rem; color: var(--text-primary, #111827); }
+.cv-model-editor-subtitle { font-size: 0.75rem; color: var(--text-muted, #6B7280); margin-top: 0.125rem; }
+.cv-model-editor-close {
+  background: none; border: none; cursor: pointer; color: var(--text-muted, #6B7280);
+  padding: 0.25rem; border-radius: 0.25rem; display: flex; align-items: center; justify-content: center;
+}
+.cv-model-editor-close:hover { background: rgba(0,0,0,0.05); color: var(--text-primary); }
+.cv-model-editor-body { padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+.cv-model-editor-field { display: flex; flex-direction: column; gap: 0.375rem; }
+.cv-model-editor-field label {
+  font-size: 0.75rem; font-weight: 600; color: var(--text-primary);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.cv-editor-field-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+}
+.cv-editor-current-badge {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; font-weight: 600;
+  padding: 0.125rem 0.5rem; border-radius: 0.25rem; letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.cv-editor-current-badge.ok {
+  color: #059669; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.35);
+}
+.cv-editor-current-badge.warn {
+  color: #B45309; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.4);
+}
+.cv-model-editor-footer {
+  display: flex; justify-content: flex-end; gap: 0.5rem;
+  padding: 0.75rem 1.25rem; border-top: 1px solid var(--border-secondary, #E5E7EB);
+  background: var(--bg-subtle, #F9FAFB);
+}
+.cv-model-editor-btn {
+  padding: 0.375rem 0.875rem; border-radius: 0.375rem; font-size: 0.8125rem; font-weight: 500;
+  cursor: pointer; border: 1px solid transparent;
+}
+.cv-model-editor-btn.primary {
+  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151); color: #FFFFFF;
+}
+.cv-model-editor-btn.primary:hover { opacity: 0.9; }
+.cv-model-editor-btn.secondary {
+  background: var(--bg-surface); color: var(--text-primary); border-color: var(--border-primary, #D1D5DB);
+}
+.cv-model-editor-btn.secondary:hover { background: var(--bg-hover, #F3F4F6); }
+.cv-model-editor-btn.ghost {
+  background: transparent; color: var(--text-muted); border-color: transparent;
+}
+.cv-model-editor-btn.ghost:hover { background: rgba(0,0,0,0.04); color: var(--text-primary); }
+
+/* Missing-context warning modal */
+.cv-warn-modal {
+  width: min(480px, 92vw);
+  background: var(--bg-surface, #FFFFFF);
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.cv-warn-header {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-secondary, #E5E7EB);
+  font-weight: 600; font-size: 0.95rem; color: var(--text-primary);
+}
+.cv-warn-body { padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.cv-warn-body p { font-size: 0.8125rem; line-height: 1.5; color: var(--text-primary); margin: 0; }
+.cv-warn-body-muted { color: var(--text-muted) !important; }
+.cv-warn-footer {
+  display: flex; justify-content: flex-end; gap: 0.5rem;
+  padding: 0.75rem 1.25rem; border-top: 1px solid var(--border-secondary, #E5E7EB);
+  background: var(--bg-subtle, #F9FAFB);
+}
+/* Max output tag (base — specific has-value/is-missing rules above override colors) */
 .cv-model-out-tag {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 0.1875rem;
-  padding: 0.0625rem 0.25rem;
-  background: rgba(255,255,255,0.06);
+  gap: 0.25rem;
+  padding: 0 0.5rem;
   border-radius: 0.25rem;
   font-size: 0.6875rem;
   font-weight: 500;
 }
-.cv-model-out-tag.editing {
-  background: rgba(0,0,0,0.04);
-  border: 1px solid rgba(0,0,0,0.12);
-}
-.cv-model-out-tag.is-fallback {
-  border: 1px dashed rgba(0,0,0,0.15);
-  background: rgba(0,0,0,0.02);
-}
-.cv-model-item.active .cv-model-out-tag { background: rgba(255,255,255,0.12); }
-.cv-model-item.active .cv-model-out-tag.is-fallback { border: 1px dashed rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); }
-.cv-model-item.active .cv-model-out-tag.editing { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.3); }
 
 .cv-model-out-fallback {
   color: #EAB308;

@@ -4,7 +4,7 @@
     <div v-if="embeddedUrl" class="embedded-overlay">
       <!-- Header: back button + page title -->
       <div class="embedded-header">
-        <button class="back-btn" @click="closeEmbedded" :title="t('common.back')">
+        <button class="back-btn" @click="closeEmbedded" v-tooltip="t('common.back')">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
@@ -15,24 +15,24 @@
       <!-- Browser toolbar -->
       <div class="embedded-toolbar">
         <!-- Nav: Back / Forward -->
-        <button class="toolbar-btn" @click="wvGoBack" :disabled="!wvCanGoBack" :title="t('common.back')">
+        <button class="toolbar-btn" @click="wvGoBack" :disabled="!wvCanGoBack" v-tooltip="t('common.back')">
           <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
         </button>
-        <button class="toolbar-btn" @click="wvGoForward" :disabled="!wvCanGoForward" :title="t('common.forward')">
+        <button class="toolbar-btn" @click="wvGoForward" :disabled="!wvCanGoForward" v-tooltip="t('common.forward')">
           <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
         </button>
 
         <!-- Reload / Stop -->
-        <button v-if="wvIsLoading" class="toolbar-btn" @click="wvStop" :title="t('common.stop')">
+        <button v-if="wvIsLoading" class="toolbar-btn" @click="wvStop" v-tooltip="t('common.stop')">
           <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
-        <button v-else class="toolbar-btn" @click="wvReload" :title="t('common.reload')">
+        <button v-else class="toolbar-btn" @click="wvReload" v-tooltip="t('common.reload')">
           <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="23 4 23 10 17 10"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -73,7 +73,7 @@
           </div>
           <div class="news-header-actions">
           <!-- Rotate -->
-          <AppButton size="icon" @click="rotateAll" :disabled="isRefreshing" :loading="isRotating" :title="t('news.rotateFeeds')">
+          <AppButton size="icon" @click="rotateAll" :disabled="isRefreshing" :loading="isRotating" v-tooltip="t('news.rotateFeeds')">
             <svg v-if="!isRotating" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="16 3 21 3 21 8"/>
               <line x1="4" y1="20" x2="21" y2="3"/>
@@ -83,21 +83,21 @@
             </svg>
           </AppButton>
           <!-- Default (only when rotated) -->
-          <AppButton v-if="newsStore.isRotated" size="icon" @click="restoreDefaults" :disabled="isRefreshing" :title="t('news.restoreDefaults')">
+          <AppButton v-if="newsStore.isRotated" size="icon" @click="restoreDefaults" :disabled="isRefreshing" v-tooltip="t('news.restoreDefaults')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
               <polyline points="3 3 3 8 8 8"/>
             </svg>
           </AppButton>
           <!-- Refresh -->
-          <AppButton size="icon" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing" :title="t('common.refresh')">
+          <AppButton size="icon" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing" v-tooltip="t('common.refresh')">
             <svg v-if="!isRefreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="23 4 23 10 17 10"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
           </AppButton>
           <!-- Configure Feeds -->
-          <AppButton size="icon" @click="openFeedConfig" :title="t('news.configureFeeds')">
+          <AppButton size="icon" @click="openFeedConfig" v-tooltip="t('news.configureFeeds')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>
             </svg>
@@ -145,7 +145,7 @@
                   <button
                     class="add-feed-row-remove"
                     @click="removeFeedRow(i)"
-                    :title="t('common.remove')"
+                    v-tooltip="t('common.remove')"
                   >
                     <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -293,7 +293,7 @@
           </svg>
           {{ t('news.topStories') }}
           <div v-if="newsStore.topLoading" class="top-news-spinner"></div>
-          <button class="top-criteria-btn" @click="openTopCriteria" :title="t('news.topStoriesSettings')">
+          <button class="top-criteria-btn" @click="openTopCriteria" v-tooltip="t('news.topStoriesSettings')">
             <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
@@ -784,7 +784,7 @@ async function showTooltip(article, colorIdx = 0) {
 
   await clampTooltip()  // position after initial render (loading dots state)
 
-  const cacheKey = article.title
+  const cacheKey = `${configStore.language || 'en'}::${article.title}`
   if (summaryCache.has(cacheKey)) {
     tooltip.loading = false
     tooltip.text = summaryCache.get(cacheKey)
@@ -795,7 +795,8 @@ async function showTooltip(article, colorIdx = 0) {
   tooltip.loading = true
 
   const content = [article.title, article.summary || ''].filter(Boolean).join('\n\n')
-  const prompt = `Summarize this news article in 2-3 concise sentences. Focus on the key facts and why it matters. Do not include any preamble or meta-text — just the summary.\n\nArticle:\n${content}`
+  const lang = configStore.language === 'zh' ? 'Simplified Chinese (简体中文)' : 'English'
+  const prompt = `Summarize this news article in 2-3 concise sentences, written in ${lang}. Focus on the key facts and why it matters. Translate if the source article is in a different language. Do not include any preamble or meta-text — just the summary.\n\nArticle:\n${content}`
 
   try {
     const config = JSON.parse(JSON.stringify(configStore.config))

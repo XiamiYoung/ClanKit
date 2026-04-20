@@ -30,7 +30,7 @@
         </div>
         <span v-if="isRunning" class="ch-title-spinner"></span>
         <span class="chat-header-title">{{ truncatedTitle }}</span>
-        <button class="ch-edit-btn" @click.stop="startEdit" :title="t('chats.renameChat')">
+        <button class="ch-edit-btn" @click.stop="startEdit" v-tooltip="t('chats.renameChat')">
           <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -53,7 +53,7 @@
           @keydown.escape="cancelEdit"
           @blur="confirmEdit"
         />
-        <button class="ch-edit-confirm" @click.stop="confirmEdit" :title="t('common.save')">
+        <button class="ch-edit-confirm" @click.stop="confirmEdit" v-tooltip="t('common.save')">
           <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
@@ -93,7 +93,7 @@
     <!-- Hamburger tab hanging below the header -->
     <button
       class="ch-header-tab"
-      :title="headerExpanded ? 'Collapse header' : 'Expand header'"
+      v-tooltip="headerExpanded ? 'Collapse header' : 'Expand header'"
       @click.stop="headerExpanded = !headerExpanded"
     >
       <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -143,7 +143,7 @@
 
             <!-- Configure agent button -->
             <div class="agent-chip-wrap" ref="groupAddChipWrap">
-              <button class="sys-add-btn" @click.stop="openAgentCombobox" :title="t('chats.configureAgents', 'Configure agents')">
+              <button class="sys-add-btn" @click.stop="openAgentCombobox" v-tooltip="t('chats.configureAgents', 'Configure agents')">
                 <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </button>
             </div>
@@ -160,20 +160,18 @@
                     alt=""
                     class="agent-card-avatar-img"
                     @click.stop="$emit('open-soul-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
-                    title="View summary"
                   />
                   <div
                     v-else
                     class="agent-card-avatar-default user"
                     @click.stop="$emit('open-soul-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
-                    title="View summary"
                   >
                     <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                   </div>
                 </div>
               </div>
               <!-- User agent select button -->
-              <button class="sys-add-btn" @click.stop="togglePopover('user')" :title="t('chats.switchUserAgent', 'Switch user agent')">
+              <button class="sys-add-btn" @click.stop="togglePopover('user')" v-tooltip="t('chats.switchUserAgent', 'Switch user agent')">
                 <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="8" r="4"/><path d="M3 21v-2a6 6 0 0 1 9.29-5"/><path d="M19 14v6m-3-3 3 3 3-3"/></svg>
               </button>
               </div>
@@ -429,15 +427,15 @@
     >
       <template v-if="canStartCall">
         <div class="ch-call-tooltip-row">
-          <span class="cct-key">Agent</span>
+          <span class="cct-key">{{ t('chats.callTooltipAgent') }}</span>
           <span class="cct-val">{{ agentsStore.getAgentById(activeSystemAgentIds[0])?.name || '—' }}</span>
         </div>
         <div class="ch-call-tooltip-row">
-          <span class="cct-key">STT</span>
+          <span class="cct-key">{{ t('chats.callTooltipStt') }}</span>
           <span class="cct-val">Whisper</span>
         </div>
         <div class="ch-call-tooltip-row">
-          <span class="cct-key">TTS</span>
+          <span class="cct-key">{{ t('chats.callTooltipTts') }}</span>
           <span class="cct-val">{{ callTtsModeLabel }}</span>
         </div>
       </template>

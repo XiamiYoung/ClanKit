@@ -255,7 +255,7 @@
                 </select>
                 <select v-model="analyzeModelId" class="field-select" style="flex:2;">
                   <option v-for="m in analyzeModelList" :key="m.id" :value="m.id">
-                    {{ m.name || m.id }}{{ m.context_length ? ` (${Math.round(m.context_length / 1000)}k)` : '' }}
+                    {{ m.name || m.id }}{{ m.context_length ? ` (${formatContextWindow(m.context_length)})` : '' }}
                   </option>
                 </select>
               </div>
@@ -360,7 +360,7 @@
                 </select>
                 <select v-model="agentModelId" class="field-select" style="flex:2;">
                   <option v-for="m in agentModelList" :key="m.id" :value="m.id">
-                    {{ m.name || m.id }}{{ m.context_length ? ` (${Math.round(m.context_length / 1000)}k)` : '' }}
+                    {{ m.name || m.id }}{{ m.context_length ? ` (${formatContextWindow(m.context_length)})` : '' }}
                   </option>
                 </select>
               </div>
@@ -982,6 +982,16 @@ const activeProviders = computed(() => {
     id: p.id || p.type,
   }))
 })
+
+function formatContextWindow(n) {
+  if (!n || n <= 0) return ''
+  if (n >= 1_000_000) {
+    const m = n / 1_000_000
+    return (m >= 10 ? Math.round(m) : Number(m.toFixed(2))) + 'M'
+  }
+  if (n >= 1000) return Math.round(n / 1000) + 'K'
+  return String(n)
+}
 
 const analyzeModelList = computed(() => {
   if (!analyzeProviderType.value) return []

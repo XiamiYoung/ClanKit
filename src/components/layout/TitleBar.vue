@@ -10,7 +10,7 @@
       <button
         @click.stop="$emit('toggle-sidebar')"
         class="tb-btn"
-        :title="t('titlebar.toggleSidebar')"
+        v-tooltip="t('titlebar.toggleSidebar')"
         @mouseenter="onSidebarBtnHover"
         @mouseleave="onSidebarBtnLeave"
       >
@@ -22,7 +22,7 @@
         @click.stop="toggleMinibar"
         class="tb-btn"
         :class="{ 'tb-btn-active': isMinibar }"
-        :title="t('titlebar.minibarMode')"
+        v-tooltip="t('titlebar.minibarMode')"
         @mouseenter="onMinibarBtnHover"
         @mouseleave="onMinibarBtnLeave"
       >
@@ -47,14 +47,14 @@
       <button @click.stop="minimize" @dblclick.stop class="flex items-center justify-center rounded transition-colors"
         style="width:2rem;height:1.625rem;background:transparent;border:none;color:#6B7280;cursor:pointer;"
         @mouseenter="e=>e.currentTarget.style.background='#F5F5F5'"
-        @mouseleave="e=>e.currentTarget.style.background='transparent'" :title="t('titlebar.minimize')">
+        @mouseleave="e=>e.currentTarget.style.background='transparent'" v-tooltip="t('titlebar.minimize')">
         <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="5.5" width="10" height="1.2" rx="0.6" fill="currentColor"/></svg>
       </button>
       <button @click.stop="toggleMaximize" @dblclick.stop class="flex items-center justify-center rounded transition-colors"
         style="width:2rem;height:1.625rem;background:transparent;border:none;color:#6B7280;cursor:pointer;"
         @mouseenter="e=>e.currentTarget.style.background='#F5F5F5'"
         @mouseleave="e=>e.currentTarget.style.background='transparent'"
-        :title="isMaximized ? t('titlebar.restore') : t('titlebar.maximize')">
+        v-tooltip="isMaximized ? t('titlebar.restore') : t('titlebar.maximize')">
         <svg v-if="!isMaximized" width="11" height="11" viewBox="0 0 11 11">
           <rect x="0.5" y="0.5" width="10" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>
         </svg>
@@ -67,7 +67,7 @@
         style="width:2rem;height:1.625rem;background:transparent;border:none;color:#6B7280;cursor:pointer;"
         @mouseenter="e=>{e.currentTarget.style.background='#c0392b';e.currentTarget.style.color='#ffffff';}"
         @mouseleave="e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='#6B7280';}"
-        :title="t('titlebar.close')">
+        v-tooltip="t('titlebar.close')">
         <svg width="11" height="11" viewBox="0 0 11 11">
           <line x1="1" y1="1" x2="10" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
           <line x1="10" y1="1" x2="1" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>

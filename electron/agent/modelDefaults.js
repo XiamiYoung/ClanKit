@@ -12,7 +12,7 @@ const fs = require('fs')
 const path = require('path')
 const { logger } = require('../logger')
 
-const FALLBACK_MAX_OUTPUT_TOKENS = 32768
+const FALLBACK_MAX_OUTPUT_TOKENS = 32000
 const LITELLM_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json'
 
 // Bundled file path (relative to this file — works in both dev and packaged app)
@@ -300,10 +300,93 @@ function recommendModel(providerType, availableModelIds, dataDir) {
   return { modelId: pick.id, reason: `median of ${unique.length} (cost rank ${medianIdx + 1})` }
 }
 
+/**
+ * Look up a model's metadata (context_length + max_output_tokens) from the litellm catalog.
+ * Tries: exact id → bare id (drop provider prefix) → provider-prefixed id → longest-prefix match.
+ * Returns { context_length: number|null, max_output_tokens: number|null }.
+ */
+function lookupModelCatalog(modelId, providerType, dataDir) {
+  const empty = { context_length: null, max_output_tokens: null }
+  if (!modelId) return empty
+  const catalog = _loadRawCatalog(dataDir)
+  if (!catalog || Object.keys(catalog).length === 0) return empty
+
+  const id = String(modelId).toLowerCase()
+  const litellmProvider = providerType ? PROVIDER_TO_LITELLM[providerType] : null
+  const prefixed = litellmProvider ? `${litellmProvider}/${id}` : null
+
+  const pick = (meta) => ({
+    context_length:    meta?.max_input_tokens  || meta?.max_tokens || null,
+    max_output_tokens: meta?.max_output_tokens || null,
+  })
+
+  // 1. Exact match on either id or provider-prefixed id
+  for (const [key, meta] of Object.entries(catalog)) {
+    if (key === 'sample_spec') continue
+    const lk = key.toLowerCase()
+    if (lk === id || (prefixed && lk === prefixed)) return pick(meta)
+  }
+
+  // 2. Bare-id match (catalog keys like "deepseek/deepseek-chat" vs id "deepseek-chat")
+  for (const [key, meta] of Object.entries(catalog)) {
+    if (key === 'sample_spec') continue
+    const lk = key.toLowerCase()
+    const bare = lk.includes('/') ? lk.split('/').pop() : lk
+    if (bare === id) return pick(meta)
+  }
+
+  // 3. Longest-prefix match against bare keys (e.g. "qwen-max-2025-01-25" matches "qwen-max")
+  let bestLen = 0
+  let bestMeta = null
+  for (const [key, meta] of Object.entries(catalog)) {
+    if (key === 'sample_spec') continue
+    const lk = key.toLowerCase()
+    const bare = lk.includes('/') ? lk.split('/').pop() : lk
+    if (id.startsWith(bare) && bare.length > bestLen) {
+      bestLen = bare.length
+      bestMeta = meta
+    }
+  }
+  return bestMeta ? pick(bestMeta) : empty
+}
+
+/**
+ * Enrich an array of {id, name, context_length?, max_output_tokens?} entries
+ * with missing fields pulled from the litellm catalog. Mutates and returns the array.
+ *
+ * Also tags the source of each field so the UI can distinguish catalog-inferred
+ * values from values that actually came back from the provider's API:
+ *   m.contextSource   = 'api' | 'catalog' | null
+ *   m.maxOutputSource = 'api' | 'catalog' | null
+ */
+function enrichModelsFromCatalog(providerType, models, dataDir) {
+  if (!Array.isArray(models) || models.length === 0) return models
+  for (const m of models) {
+    if (!m || !m.id) continue
+    // Seed source flags from whatever the fetch handler already populated
+    if (!m.contextSource)   m.contextSource   = m.context_length    ? 'api' : null
+    if (!m.maxOutputSource) m.maxOutputSource = m.max_output_tokens ? 'api' : null
+
+    if (m.context_length && m.max_output_tokens) continue
+    const hit = lookupModelCatalog(m.id, providerType, dataDir)
+    if (!m.context_length && hit.context_length) {
+      m.context_length = hit.context_length
+      m.contextSource  = 'catalog'
+    }
+    if (!m.max_output_tokens && hit.max_output_tokens) {
+      m.max_output_tokens = hit.max_output_tokens
+      m.maxOutputSource   = 'catalog'
+    }
+  }
+  return models
+}
+
 module.exports = {
   FALLBACK_MAX_OUTPUT_TOKENS,
   lookupModelMaxOutputTokens,
   lookupModelMaxOutputTokensDetailed,
+  lookupModelCatalog,
+  enrichModelsFromCatalog,
   getAllDefaults,
   refreshFromRemote,
   recommendModel,

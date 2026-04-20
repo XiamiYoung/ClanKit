@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDefaultMaxOutputTokens: (modelId) => ipcRenderer.invoke('models:get-default-max-output-tokens', modelId),
   getAllDefaultMaxOutputTokens: () => ipcRenderer.invoke('models:get-all-default-max-output-tokens'),
   recommendModel: (params) => ipcRenderer.invoke('models:recommend', params),
+  enrichModelsFromCatalog: (params) => ipcRenderer.invoke('models:enrich-from-catalog', params),
 
   // ── Skills (filesystem-based) ───────────────────────────────────────────
   skills: {

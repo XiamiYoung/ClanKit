@@ -33,7 +33,7 @@
           @click="(e) => openCtxDialog('newFolder', '', selectedFolderId ?? chatsStore.activeFolderId ?? null)"
           class="chat-sidebar-action-btn"
           :aria-label="t('chats.newFolder')"
-          :title="t('chats.newFolder')"
+          v-tooltip="t('chats.newFolder')"
         >
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -45,7 +45,7 @@
           @click="newChat()"
           class="chat-sidebar-action-btn"
           :aria-label="t('chats.newChat')"
-          :title="t('chats.newChat')"
+          v-tooltip="t('chats.newChat')"
         >
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -56,7 +56,7 @@
           @click="enterGridMode()"
           class="chat-sidebar-action-btn"
           :aria-label="t('chats.multiChatGridView')"
-          :title="t('chats.multiChatGridView')"
+          v-tooltip="t('chats.multiChatGridView')"
         >
           <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
@@ -138,7 +138,7 @@
             <button
               v-if="hasFolders"
               class="chat-root-fold-btn"
-              :title="anyFolderExpanded ? t('chats.collapseAllFolders') : t('chats.expandAllFolders')"
+              v-tooltip="anyFolderExpanded ? t('chats.collapseAllFolders') : t('chats.expandAllFolders')"
               @click.stop="chatsStore.setAllFoldersExpanded(!anyFolderExpanded)"
             >
               <svg v-if="anyFolderExpanded" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -253,7 +253,7 @@
       <button
         @click="chatSidebarCollapsed = !chatSidebarCollapsed"
         class="chat-sidebar-expand-tab"
-        :title="chatSidebarCollapsed ? 'Expand chat list' : 'Collapse chat list'"
+        v-tooltip="chatSidebarCollapsed ? 'Expand chat list' : 'Collapse chat list'"
         :aria-label="chatSidebarCollapsed ? 'Expand chat list' : 'Collapse chat list'"
       >
         <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -396,7 +396,7 @@
               style="color:#B45309;opacity:0.6;"
               @mouseenter="e => e.currentTarget.style.opacity='1'"
               @mouseleave="e => e.currentTarget.style.opacity='0.6'"
-              :title="t('common.close')"
+              v-tooltip="t('common.close')"
             >
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -516,7 +516,7 @@
                   @mouseenter="e => e.currentTarget.style.color='#1A1A1A'"
                   @mouseleave="e => e.currentTarget.style.color='#9CA3AF'"
                   aria-label="Remove quote"
-                  title="Remove quote"
+                  v-tooltip="t('chats.removeQuote', 'Remove quote')"
                 >
                   <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -528,14 +528,14 @@
                 <div
                   v-if="isGroupChat"
                   class="chat-audience-inline"
-                  :title="audienceStatusText"
+                  v-tooltip="audienceStatusText"
                 >
                   <span class="chat-audience-label">{{ t('chats.sendTo') }}</span>
                   <div class="chat-audience-options">
                     <button
                       class="chat-audience-chip"
                       :class="{ active: groupAudienceMode === 'auto' }"
-                      :title="t('chats.audienceAutoHint')"
+                      v-tooltip="t('chats.audienceAutoHint')"
                       @click="setAudienceMode('auto')"
                     >
                       {{ t('chats.audienceAuto') }}
@@ -543,7 +543,7 @@
                     <button
                       class="chat-audience-chip"
                       :class="{ active: groupAudienceMode === 'all' }"
-                      :title="t('chats.audienceAllHint')"
+                      v-tooltip="t('chats.audienceAllHint')"
                       @click="setAudienceMode('all')"
                     >
                       {{ t('chats.audienceAll') }}
@@ -553,7 +553,7 @@
                       :key="agentId"
                       class="chat-audience-chip"
                       :class="{ active: isAudienceAgentSelected(agentId) }"
-                      :title="t('chats.audienceManualHint')"
+                      v-tooltip="t('chats.audienceManualHint')"
                       @click="toggleAudienceAgent(agentId)"
                     >
                       {{ agentsStore.getAgentById(agentId)?.name || 'Unknown' }}
@@ -583,7 +583,7 @@
                   @mouseenter="e => { if (!activeRunning) e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A'; }"
                   @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#9CA3AF'; }"
                   :aria-label="t('chats.attachFiles')"
-                  :title="t('chats.attachFiles')"
+                  v-tooltip="t('chats.attachFiles')"
                 >
                   <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
@@ -610,7 +610,7 @@
                     @mouseenter="e => e.currentTarget.style.background='rgba(255,59,48,0.12)'"
                     @mouseleave="e => e.currentTarget.style.background='rgba(255,59,48,0.08)'"
                     :aria-label="t('chats.escapeRetrieve')"
-                    :title="t('chats.escapeRetrieve')"
+                    v-tooltip="t('chats.escapeRetrieve')"
                   >
                     <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor"/>
@@ -626,7 +626,7 @@
                     ? 'background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#ffffff; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);'
                     : 'background:#E5E5EA; color:#9CA3AF; cursor:not-allowed;'"
                   aria-label="Send message"
-                  :title="t('chats.sendMessageBtn')"
+                  v-tooltip="t('chats.sendMessageBtn')"
                 >
                   <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>
@@ -646,7 +646,7 @@
                       @change="(e) => updateChatPermissionMode(e.target.value)"
                       class="permission-mode-select"
                       :class="'pms-' + chatPermissionMode"
-                      :title="permissionModeTitle"
+                      v-tooltip="permissionModeTitle"
                     >
                       <option value="inherit">{{ t('chats.inherit') }}</option>
                       <option value="chat_only">{{ t('chats.chatOnly') }}</option>
@@ -701,7 +701,7 @@
         </div>
         <div class="modal-dialog-body">
           <div class="newchat-name-row-v2">
-            <button class="newchat-icon-picker-btn" @click.stop="showRenameIconPicker = true" :title="t('chats.chatIcon')">
+            <button class="newchat-icon-picker-btn" @click.stop="showRenameIconPicker = true" v-tooltip="t('chats.chatIcon')">
               <span class="newchat-icon-display">{{ editingIcon || '💬' }}</span>
               <svg class="newchat-icon-edit" style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -1409,7 +1409,7 @@ provide('interruptShared', {
 
 // Per-chat state — reads from the active chat object in the store (must be before useSendMessage)
 const activeRunning = computed(() => chatsStore.activeChat?.isRunning ?? false)
-const activeContextMetrics = computed(() => chatsStore.activeChat?.contextMetrics ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 1000000, percentage: 0, compactionCount: 0 })
+const activeContextMetrics = computed(() => chatsStore.activeChat?.contextMetrics ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 0, percentage: 0, compactionCount: 0 })
 const activePerAgentMetrics = computed(() => chatsStore.activeChat?.perAgentContextMetrics ?? {})
 const hasContextData = computed(() => activeContextMetrics.value.inputTokens > 0)
 const hasMessages = computed(() => (chatsStore.activeChat?.messages?.length ?? 0) > 0)

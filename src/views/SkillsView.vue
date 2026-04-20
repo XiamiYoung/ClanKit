@@ -26,10 +26,10 @@
             </p>
           </div>
           <div class="flex items-center gap-2">
-            <AppButton v-if="activeTab === 'local'" size="icon" @click="refresh" :title="t('skills.refreshSkills')">
+            <AppButton v-if="activeTab === 'local'" size="icon" @click="refresh" v-tooltip="t('skills.refreshSkills')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </AppButton>
-            <AppButton v-else size="icon" @click="refreshRemote(activeTab)" :title="t('skills.refreshSkills')">
+            <AppButton v-else size="icon" @click="refreshRemote(activeTab)" v-tooltip="t('skills.refreshSkills')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </AppButton>
           </div>
@@ -326,7 +326,7 @@
                       <button
                         class="rsd-icon-btn"
                         style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0;border:none;background:none;cursor:pointer;color:#6B7280;transition:color 0.2s;"
-                        title="Open in browser"
+                        v-tooltip="t('common.openInBrowser', 'Open in browser')"
                         @click.stop="openExternal(skill.homepage, skill.sourceId, skill.id)"
                         @mouseenter="e => e.currentTarget.style.color='#1C1C1E'"
                         @mouseleave="e => e.currentTarget.style.color='#6B7280'"
@@ -346,7 +346,7 @@
                       <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'installing'" class="remote-installing-badge" @click.stop>
                         <svg class="animate-spin" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#E5E5EA" stroke-width="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#1C1C1E" stroke-width="3" stroke-linecap="round"/></svg>
                       </span>
-                      <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'error'" class="remote-error-badge" :title="skillsStore.installingSkills[skill.id]?.error" @click.stop>
+                      <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'error'" class="remote-error-badge" v-tooltip="skillsStore.installingSkills[skill.id]?.error" @click.stop>
                         ✕ Error
                       </span>
                     </div>
@@ -471,7 +471,7 @@
                     >
                       <svg class="animate-spin" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#E5E5EA" stroke-width="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#1C1C1E" stroke-width="3" stroke-linecap="round"/></svg>
                     </span>
-                    <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'error'" class="remote-error-badge" :title="skillsStore.installingSkills[skill.id]?.error" @click.stop>
+                    <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'error'" class="remote-error-badge" v-tooltip="skillsStore.installingSkills[skill.id]?.error" @click.stop>
                       ✕ Error
                     </span>
                   </div>
@@ -497,14 +497,14 @@
           </svg>
         </div>
         <h1 class="detail-title">{{ skillDisplayName(selectedSkill) }}</h1>
-        <span class="detail-title-path" :title="selectedSkill.path">{{ selectedSkill.path }}</span>
+        <span class="detail-title-path" v-tooltip="selectedSkill.path">{{ selectedSkill.path }}</span>
         <button
           @click="refreshTree"
           class="ml-auto p-1.5 rounded-lg transition-all duration-150 cursor-pointer"
           style="color:#fff; border:none; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
           @mouseenter="e => e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'"
           @mouseleave="e => e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'"
-          :title="t('common.refresh')"
+          v-tooltip="t('common.refresh')"
         >
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
@@ -575,7 +575,7 @@
                   style="color:#9CA3AF; background:#F5F5F5; border:1px solid #E5E5EA; font-family:'Inter',sans-serif;"
                   @mouseenter="e => { e.currentTarget.style.background='#E5E5EA'; e.currentTarget.style.color='#1A1A1A' }"
                   @mouseleave="e => { e.currentTarget.style.background='#F5F5F5'; e.currentTarget.style.color='#9CA3AF' }"
-                  title="Copy markdown source"
+                  v-tooltip="t('common.copyMarkdownSource', 'Copy markdown source')"
                 >
                   <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                   {{ copied ? 'Copied' : 'Copy' }}
@@ -661,7 +661,7 @@
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
                   <!-- Open homepage -->
-                  <button class="rsd-icon-btn" title="Open in browser" @click="openExternal(remoteDetailSkill.homepage, remoteDetailSkill.sourceId, remoteDetailSkill.id)">
+                  <button class="rsd-icon-btn" v-tooltip="t('common.openInBrowser', 'Open in browser')" @click="openExternal(remoteDetailSkill.homepage, remoteDetailSkill.sourceId, remoteDetailSkill.id)">
                     <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                   </button>
                   <!-- Close -->

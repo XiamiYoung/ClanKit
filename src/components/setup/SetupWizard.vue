@@ -581,20 +581,10 @@ async function handleFetchModels() {
     } else {
       const models = modelsStore.getModelsForProvider(wizardProviderId.value)
       if (models.length) {
-        // Auto-select a balanced model using litellm pricing data
-        try {
-          const rec = await window.electronAPI.recommendModel({
-            providerType: selectedProviderType.value,
-            modelIds: models.map(m => m.id),
-          })
-          if (rec?.modelId && models.some(m => m.id === rec.modelId)) {
-            selectedModelId.value = rec.modelId
-          } else {
-            selectedModelId.value = models[0].id
-          }
-        } catch {
-          selectedModelId.value = models[0].id
-        }
+        // Default to the first model in the provider's API response — predictable and matches
+        // the order shown in the dropdown (previously called recommendModel which returned
+        // a median-by-cost or last-of-two pick and surprised users).
+        selectedModelId.value = models[0].id
       }
     }
   } catch (err) {
@@ -837,8 +827,6 @@ async function goNext() {
       description: desc,
       prompt: generatedPrompt.value,
       type: 'user',
-      providerId: wizardProviderId.value || '',
-      modelId: selectedModelId.value || (selectedProviderType.value === 'anthropic' ? anthropicSonnet.value : ''),
       avatar: selectedAvatar.value,
       voiceId: selectedVoiceId.value,
     })
@@ -963,7 +951,7 @@ async function installSelectedSkills() {
 const DEFAULT_NEWS_FEEDS_EN = [
   { id: 'google-ai', name: 'Google AI', url: 'https://blog.google/technology/ai/rss/' },
   { id: 'openai', name: 'OpenAI', url: 'https://openai.com/blog/rss.xml' },
-  { id: 'anthropic', name: 'Anthropic', url: 'https://www.anthropic.com/rss.xml' },
+  { id: 'huggingface', name: 'Hugging Face', url: 'https://huggingface.co/blog/feed.xml' },
   { id: 'hackernews', name: 'Hacker News', url: 'https://hnrss.org/frontpage' },
   { id: 'arstechnica', name: 'Ars Technica', url: 'https://feeds.arstechnica.com/arstechnica/technology-lab' },
   { id: 'techcrunch', name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
@@ -989,14 +977,14 @@ const DEFAULT_NEWS_FEEDS_EN = [
   { id: 'aws-media', name: 'AWS Media Blog', url: 'https://aws.amazon.com/blogs/media/feed/' },
 ]
 const DEFAULT_NEWS_FEEDS_ZH = [
-  { id: 'google-ai', name: 'Google AI', url: 'https://blog.google/technology/ai/rss/' },
-  { id: 'openai', name: 'OpenAI', url: 'https://openai.com/blog/rss.xml' },
-  { id: 'anthropic', name: 'Anthropic', url: 'https://www.anthropic.com/rss.xml' },
   { id: '36kr', name: '36\u6c2a', url: 'https://36kr.com/feed' },
   { id: 'sspai', name: '\u5c11\u6570\u6d3e', url: 'https://sspai.com/feed' },
   { id: 'ifanr', name: '\u7231\u8303\u513f', url: 'https://www.ifanr.com/feed' },
   { id: 'infoq-cn', name: 'InfoQ \u4e2d\u6587', url: 'https://www.infoq.cn/feed' },
-  { id: 'zaobao', name: '\u8054\u5408\u65e9\u62a5', url: 'https://feedx.net/rss/zaobao.xml' },
+  { id: 'leiphone', name: '\u96f7\u950b\u7f51', url: 'https://www.leiphone.com/feed' },
+  { id: 'cnbeta', name: 'cnBeta', url: 'https://www.cnbeta.com.tw/backend.php' },
+  { id: 'tmtpost', name: '\u949b\u5a92\u4f53', url: 'https://www.tmtpost.com/feed' },
+  { id: 'geekpark', name: '\u6781\u5ba2\u516c\u56ed', url: 'https://www.geekpark.net/rss/' },
 ]
 
 async function seedDefaultNewsFeeds() {

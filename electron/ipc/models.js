@@ -40,10 +40,20 @@ If you don't know the exact value, give your best estimate. If the model is not 
 Model IDs:
 ${modelIds.join('\n')}`
 
-    try {
-      const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
-      let resultText = ''
+    // Detect errors that indicate max_tokens was too large for the utility model,
+    // so we can retry with a smaller limit (e.g. "max_tokens is too large",
+    // "must be less than", status 400 with range_error/invalid_request_error).
+    const isMaxTokensError = (err) => {
+      const msg = String(err?.message || '').toLowerCase()
+      if (err?.status !== 400 && err?.statusCode !== 400) {
+        // Some providers return 422 or include no status on the error object
+        if (!/max[_ ]?tokens|max[_ ]?completion|output.*(exceed|too large|too many|limit)|must be (less|smaller) than/i.test(msg)) return false
+      }
+      return /max[_ ]?tokens|max[_ ]?completion|output.*(exceed|too large|too many|limit)|must be (less|smaller) than|range[_ ]?error/i.test(msg)
+    }
 
+    const callOnce = async (maxTokens) => {
+      const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
       if (isOpenAI) {
         const { OpenAIClient } = require('../agent/core/OpenAIClient')
         const oaiClient = new OpenAIClient({
@@ -58,39 +68,66 @@ ${modelIds.join('\n')}`
         })
         const response = await oaiClient.getClient().chat.completions.create({
           model: um.model,
-          ...oaiClient.tokenLimit(4096),
+          ...oaiClient.tokenLimit(maxTokens),
           messages: [{ role: 'user', content: prompt }],
         })
-        resultText = response.choices?.[0]?.message?.content || ''
-      } else {
-        // Anthropic / OpenRouter
-        const { AnthropicClient } = require('../agent/core/AnthropicClient')
-        const client = new AnthropicClient({
-          apiKey: provider.apiKey,
-          baseURL: provider.baseURL.replace(/\/+$/, ''),
-          customModel: um.model,
-          _scenario: 'fetch-models',
-        }).getClient()
-        const response = await client.messages.create({
-          model: um.model,
-          max_tokens: 4096,
-          messages: [{ role: 'user', content: prompt }],
-        })
-        resultText = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+        return response.choices?.[0]?.message?.content || ''
       }
+      const { AnthropicClient } = require('../agent/core/AnthropicClient')
+      const client = new AnthropicClient({
+        apiKey: provider.apiKey,
+        baseURL: provider.baseURL.replace(/\/+$/, ''),
+        customModel: um.model,
+        _scenario: 'fetch-models',
+      }).getClient()
+      const response = await client.messages.create({
+        model: um.model,
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }],
+      })
+      return response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+    }
 
-      // Extract JSON from response
+    // Retry ladder: halve max_tokens on "max_tokens too large" errors.
+    const ladder = [4096, 2048, 1024, 512]
+    let resultText = ''
+    let lastErr = null
+    for (let i = 0; i < ladder.length; i++) {
+      try {
+        resultText = await callOnce(ladder[i])
+        if (i > 0) logger.info('models:enrich-context retry succeeded', { maxTokens: ladder[i] })
+        lastErr = null
+        break
+      } catch (err) {
+        lastErr = err
+        if (i < ladder.length - 1 && isMaxTokensError(err)) {
+          logger.warn(`models:enrich-context max_tokens=${ladder[i]} too large, retrying with ${ladder[i + 1]}`, err.message)
+          continue
+        }
+        break
+      }
+    }
+    if (lastErr) {
+      logger.error('models:enrich-context error', lastErr.message)
+      return { success: false, error: lastErr.message }
+    }
+
+    try {
       const jsonMatch = resultText.match(/\[[\s\S]*\]/)
-      if (!jsonMatch) return { success: false, error: 'Could not parse AI response' }
-
+      if (!jsonMatch) {
+        const preview = (resultText || '').trim().slice(0, 200)
+        return { success: false, error: `Could not parse AI response${preview ? ': ' + preview : ''}` }
+      }
       const enriched = JSON.parse(jsonMatch[0])
       logger.info('models:enrich-context', { count: enriched.length })
       return { success: true, enriched }
     } catch (err) {
-      logger.error('models:enrich-context error', err.message)
+      logger.error('models:enrich-context parse error', err.message)
       return { success: false, error: err.message }
     }
   })
+
+  const { enrichModelsFromCatalog } = require('../agent/modelDefaults')
 
   // ── OpenRouter fetch ───────────────────────────────────────────────────
   ipcMain.handle('openrouter:fetch-models', async (_, { apiKey, baseURL }) => {
@@ -116,6 +153,7 @@ ${modelIds.join('\n')}`
         req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')) })
       })
       const models = (data.data || []).map(m => ({ id: m.id, name: m.name || m.id, context_length: m.context_length, pricing: m.pricing }))
+      enrichModelsFromCatalog('openrouter', models, ds.paths().DATA_DIR)
 
       return { success: true, models }
     } catch (err) {
@@ -153,6 +191,7 @@ ${modelIds.join('\n')}`
         req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')) })
       })
       const models = (data.data || []).map(m => ({ id: m.id, name: m.name || m.id, context_length: m.context_length || null }))
+      enrichModelsFromCatalog(type, models, ds.paths().DATA_DIR)
 
       return { success: true, models }
     } catch (err) {
@@ -172,6 +211,7 @@ ${modelIds.join('\n')}`
       }
       const data = await resp.json()
       const models = (data.models || []).map(m => ({ id: m.name.replace('models/', ''), name: m.displayName || m.name.replace('models/', ''), context_length: m.inputTokenLimit || null, max_output_tokens: m.outputTokenLimit || null }))
+      enrichModelsFromCatalog('google', models, ds.paths().DATA_DIR)
 
       return { success: true, models }
     } catch (err) {
@@ -194,6 +234,13 @@ ${modelIds.join('\n')}`
   ipcMain.handle('models:recommend', async (_, { providerType, modelIds }) => {
     const { recommendModel } = require('../agent/modelDefaults')
     return recommendModel(providerType, modelIds, ds.paths().DATA_DIR)
+  })
+
+  // Enrich a list of already-fetched models with context_length / max_output_tokens from the litellm catalog.
+  ipcMain.handle('models:enrich-from-catalog', async (_, { providerType, models }) => {
+    const enriched = JSON.parse(JSON.stringify(models || []))
+    enrichModelsFromCatalog(providerType, enriched, ds.paths().DATA_DIR)
+    return { success: true, models: enriched }
   })
 }
 

@@ -63,7 +63,7 @@ export const useChatsStore = defineStore('chats', () => {
 
   const activeChat = computed(() => chats.value.find(c => c.id === activeChatId.value) || null)
 
-  const defaultContextMetrics = () => ({ inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 1000000, percentage: 0, compactionCount: 0, voiceInputTokens: 0, voiceOutputTokens: 0, whisperCalls: 0, whisperSecs: 0 })
+  const defaultContextMetrics = () => ({ inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 0, percentage: 0, compactionCount: 0, voiceInputTokens: 0, voiceOutputTokens: 0, whisperCalls: 0, whisperSecs: 0 })
   const AUTO_TITLE_CHECKPOINTS = [1, 3, 5]
   const _autoTitleInFlight = new Set()
 

@@ -25,7 +25,7 @@
     </div>
 
     <!-- Voice call indicator -->
-    <div v-if="voiceStore.isCallActive" class="sidebar-call-indicator" @click="goToCall" :title="isCollapsed ? t('voice.call') + ' — ' + t('common.close') : ''">
+    <div v-if="voiceStore.isCallActive" class="sidebar-call-indicator" @click="goToCall" v-tooltip="isCollapsed ? t('voice.call') + ' — ' + t('common.close') : ''">
       <div class="sidebar-call-dot"></div>
       <span v-show="!isCollapsed" class="sidebar-call-text">{{ t('voice.call') }}</span>
       <span v-show="!isCollapsed" class="sidebar-call-name">{{ voiceStore.activeAgentName }}</span>
@@ -143,7 +143,7 @@
         class="focus-bulb focus-bulb-titlebar"
         :class="{ 'focus-bulb-active': focusModeStore.isFocusMode }"
         :style="{ pointerEvents: focusModeStore.justExited ? 'none' : undefined }"
-        :title="focusModeStore.isFocusMode ? t('focusMode.exitFocusMode') : t('focusMode.enterFocusMode')"
+        v-tooltip="focusModeStore.isFocusMode ? t('focusMode.exitFocusMode') : t('focusMode.enterFocusMode')"
         @click="toggleFocusMode"
         @mouseenter="onFocusBulbHover"
         @mouseleave="onFocusBulbLeave"
@@ -191,7 +191,7 @@
     <Teleport v-if="titlebarHelpTarget" :to="titlebarHelpTarget">
       <button
         class="tb-btn"
-        :title="t('help.title')"
+        v-tooltip="t('help.title')"
         @click="toggleHelpPopover"
         ref="helpBtnRef"
       >
@@ -211,7 +211,7 @@
             <div style="font-weight:700;font-size:0.875rem;color:#1A1A1A;">ClankAI</div>
             <div style="font-size:0.6875rem;color:#999;">{{ t('app.tagline') }}</div>
           </div>
-          <button class="help-privacy-btn" :title="t('nav.privacy')" @click="showPrivacyModal = true; showHelpPopover = false">
+          <button class="help-privacy-btn" v-tooltip="t('nav.privacy')" @click="showPrivacyModal = true; showHelpPopover = false">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>

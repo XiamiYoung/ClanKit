@@ -13,6 +13,10 @@ const DEFAULT_MAX_CONTEXT_TOKENS = 1_000_000  // Claude Sonnet/Opus context wind
 class ContextManager {
   constructor(anthropicClient, maxContextTokens) {
     this.anthropicClient  = anthropicClient
+    // Track whether we actually know the model's context window (passed from Vue).
+    // When unknown, don't surface a fake number to the UI — only use the default
+    // internally for compaction thresholds.
+    this.hasKnownContext  = !!maxContextTokens
     this.maxContextTokens = maxContextTokens || DEFAULT_MAX_CONTEXT_TOKENS
     // Thresholds are proportional to the model's actual context window
     this.compactTrigger  = Math.round(this.maxContextTokens * 0.70)
@@ -41,8 +45,10 @@ class ContextManager {
       inputTokens:  this.inputTokens,
       outputTokens: this.outputTokens,
       totalTokens,
-      maxTokens:    this.maxContextTokens,
-      percentage:   Math.round((this.inputTokens / this.maxContextTokens) * 100),
+      // Only report maxTokens/percentage when the model's context window is actually known;
+      // otherwise emit 0 so the UI falls back to its own model lookup instead of displaying a fake value.
+      maxTokens:    this.hasKnownContext ? this.maxContextTokens : 0,
+      percentage:   this.hasKnownContext ? Math.round((this.inputTokens / this.maxContextTokens) * 100) : 0,
       cacheCreationInputTokens: this.cacheCreationInputTokens,
       cacheReadInputTokens:     this.cacheReadInputTokens,
       compactionCount:          this.compactionCount,

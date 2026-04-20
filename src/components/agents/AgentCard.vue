@@ -118,7 +118,7 @@
             v-if="!agent.isDefault && !hideSetDefault && !showUnassign"
             @click.stop="$emit('set-default')"
             class="agent-action-btn star-btn-always"
-            :title="t('agents.setAsDefault')"
+            v-tooltip="t('agents.setAsDefault')"
             :aria-label="t('agents.setAsDefault')"
           >
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -127,7 +127,7 @@
             v-if="showUnassign"
             @click.stop="$emit('unassign')"
             class="unassign-chip"
-            :title="t('agents.unassignFromCategory')"
+            v-tooltip="t('agents.unassignFromCategory')"
             :aria-label="t('agents.unassignFromCategory')"
           >
             <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -138,7 +138,7 @@
             @click.stop="!deleteDisabled && $emit('delete')"
             :disabled="deleteDisabled"
             class="agent-action-btn delete-btn-always"
-            :title="deleteTitle"
+            v-tooltip="deleteTitle"
             :aria-label="t('agents.deleteAgent')"
           >
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
@@ -211,7 +211,7 @@ const props = defineProps({
   hideSetDefault: { type: Boolean, default: false },
   showUnassign:   { type: Boolean, default: false },
   deleteDisabled: { type: Boolean, default: false },
-  deleteTitle:    { type: String,  default: 'Delete Agent' },
+  deleteTitle:    { type: String,  default: '' },
   refreshToken:   { type: Number,  default: 0 },
 })
 

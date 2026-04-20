@@ -322,14 +322,32 @@
                       <div class="bv-model-list">
                         <div v-if="modelsLoading" class="bv-detail-empty">{{ t('common.loading') }}...</div>
                         <button v-for="m in filteredModels" :key="m.id" class="bv-model-item" :class="{ active: draftModelId === m.id, 'bv-model-small-ctx': m.context_length && m.context_length < SMALL_CONTEXT_THRESHOLD }" @click="draftModelId = m.id; saveError = ''; testModelResult = null">
-                          <span>{{ m.name || m.label || m.id }}</span>
-                          <span v-if="m.context_length" class="bv-model-ctx">{{ Math.round(m.context_length / 1000) }}k</span>
+                          <span class="bv-model-item-name">{{ m.name || m.label || m.id }}</span>
+                          <span
+                            class="bv-model-ctx"
+                            :class="m.context_length ? 'has-value' : 'is-missing'"
+                            v-tooltip="m.context_length ? (m.contextSource === 'catalog' ? t('config.contextFromCatalog') : t('config.contextFromApi')) : t('config.contextUnknown')"
+                          >
+                            <template v-if="m.context_length">
+                              <span class="bv-model-tag-label">{{ t('config.contextLabel') }}</span>
+                              <span class="bv-model-tag-value">{{ formatContextWindow(m.context_length) }}</span>
+                            </template>
+                            <template v-else>{{ t('config.contextLengthUnavailable') }}</template>
+                          </span>
+                          <span
+                            v-if="m.max_output_tokens"
+                            class="bv-model-out has-value"
+                            v-tooltip="m.maxOutputSource === 'catalog' ? t('config.maxOutputFromCatalog') : t('config.maxOutputFromApi')"
+                          >
+                            <span class="bv-model-tag-label">{{ t('config.maxOutputLabel') }}</span>
+                            <span class="bv-model-tag-value">{{ formatContextWindow(m.max_output_tokens) }}</span>
+                          </span>
                         </button>
                       </div>
                       <!-- Context window warning -->
                       <div v-if="selectedModelContextWindow && selectedModelContextWindow < SMALL_CONTEXT_THRESHOLD" class="bv-ctx-warn">
                         <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                        <span>{{ t('agents.smallContextWarning', { size: Math.round(selectedModelContextWindow / 1000) + 'k' }) }}</span>
+                        <span>{{ t('agents.smallContextWarning', { size: formatContextWindow(selectedModelContextWindow) }) }}</span>
                       </div>
 
                       <div class="bv-test-row">
@@ -1145,7 +1163,7 @@ async function testModelConnection() {
     if (res.success) {
       const ctx = selectedModelContextWindow.value
       const ctxWarn = ctx && ctx < SMALL_CONTEXT_THRESHOLD
-        ? ` — ${t('agents.smallContextBrief', { size: Math.round(ctx / 1000) + 'k' })}`
+        ? ` — ${t('agents.smallContextBrief', { size: formatContextWindow(ctx) })}`
         : ''
       testModelResult.value = { ok: true, message: `${res.ms}ms${ctxWarn}`, smallCtx: !!ctxWarn }
     } else {
@@ -1167,6 +1185,17 @@ const filteredModels = computed(() => {
   if (!q) return models
   return models.filter(m => (m.name || m.label || '').toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
 })
+
+// Format context window / token counts with K / M units.
+function formatContextWindow(n) {
+  if (!n || n <= 0) return ''
+  if (n >= 1_000_000) {
+    const m = n / 1_000_000
+    return (m >= 10 ? Math.round(m) : Number(m.toFixed(2))) + 'M'
+  }
+  if (n >= 1000) return Math.round(n / 1000) + 'K'
+  return String(n)
+}
 
 const currentModelLabel = computed(() => {
   if (!draftModelId.value) return '—'
@@ -1559,13 +1588,14 @@ function saveAll() {
     saveError.value = t('agents.voiceRequired')
     return
   }
+  const isSystemAgent = props.agentType === 'system'
   emit('update-agent', {
     name:        draftName.value,
     avatar:      draftAvatar.value,
     description: draftDescription.value,
     prompt:      draftPrompt.value,
-    providerId:  draftProvider.value,
-    modelId:     draftModelId.value || null,
+    providerId:  isSystemAgent ? draftProvider.value : null,
+    modelId:     isSystemAgent ? (draftModelId.value || null) : null,
     voiceId:     draftVoiceId.value,
     requiredToolIds:          draftRequiredToolIds.value || [],
     requiredSkillIds:         draftRequiredSkillIds.value || [],
@@ -2007,12 +2037,31 @@ function saveAll() {
   color: #4B5563; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 7rem; flex-shrink: 0;
 }
-.bv-model-ctx {
-  font-family: 'JetBrains Mono', monospace; font-size: 0.5625rem;
-  color: #6B7280; background: rgba(255,255,255,0.08); padding: 0.0625rem 0.3125rem;
-  border-radius: 0.25rem; flex-shrink: 0;
+.bv-model-ctx,
+.bv-model-out {
+  font-family: 'Inter', sans-serif; font-size: 0.5625rem;
+  padding: 0 0.375rem; border-radius: 0.25rem; flex-shrink: 0;
+  letter-spacing: 0.02em; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 0.25rem;
 }
-.bv-model-small-ctx .bv-model-ctx { color: #D97706; background: rgba(245,158,11,0.15); }
+.bv-model-tag-label { opacity: 0.85; }
+.bv-model-tag-value { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+/* Green when value exists, amber when missing — same semantics as the config page */
+.bv-model-ctx.has-value,
+.bv-model-out.has-value {
+  color: #34D399; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.35);
+}
+.bv-model-ctx.is-missing {
+  color: #F59E0B; background: rgba(245,158,11,0.1); border: 1px dashed rgba(245,158,11,0.4);
+  font-style: italic;
+}
+/* Small-context override keeps amber-warn look when < 20k */
+.bv-model-small-ctx .bv-model-ctx.has-value {
+  color: #D97706; background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4);
+}
+.bv-model-item-name {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* Capabilities */
 .bv-cap-toolbar {
