@@ -123,6 +123,21 @@
                   <span class="im-toggle-track"><span class="im-toggle-thumb"></span></span>
                 </label>
               </div>
+              <div class="im-enable-row" style="margin-top:12px;" :style="{ opacity: configStore.config.notifications?.enabled === false ? 0.5 : 1 }">
+                <div>
+                  <span class="im-enable-label">{{ t('config.summaryTimeout') }}</span>
+                  <p class="hint" style="margin-top:4px; margin-bottom:0;">{{ t('config.summaryTimeoutHint') }}</p>
+                </div>
+                <input type="number" min="5" max="120" step="1"
+                  class="field font-mono"
+                  style="width:6rem; text-align:center; flex:0 0 auto;"
+                  :value="Math.round((configStore.config.notifications?.summaryTimeoutMs ?? 30000) / 1000)"
+                  :disabled="configStore.config.notifications?.enabled === false"
+                  @change="(e) => {
+                    const sec = Math.max(5, Math.min(120, Number(e.target.value) || 30))
+                    configStore.saveConfig({ notifications: { ...(configStore.config.notifications || {}), summaryTimeoutMs: sec * 1000 } })
+                  }" />
+              </div>
             </div>
           </div>
 
@@ -331,39 +346,57 @@
                         <div
                           v-for="m in filteredUtilityModels"
                           :key="m.id"
-                          v-memo="[m.id, m._ctxFormatted, m._outFormatted, m._outSource, form.utilityModel.model === m.id]"
+                          v-memo="[m.id, m._ctxFormatted, m._outFormatted, m._outSource, m._inPriceFormatted, m._outPriceFormatted, m._priceSource, form.utilityModel.model === m.id]"
                           class="cv-model-item"
                           :class="{ active: form.utilityModel.model === m.id }"
                           @click="form.utilityModel.model = m.id; testUtilityModelResult = null"
                         >
                           <span class="cv-model-name">{{ m.displayName }}</span>
-                          <span
-                            class="cv-model-ctx"
-                            :class="m._ctxVal ? 'has-value' : 'is-missing'"
-                            :title="m._ctxTitle"
-                          >
-                            <template v-if="m._ctxVal">
-                              <span class="cv-model-tag-label">{{ modelListI18n.contextLabel }}</span>
-                              <span class="cv-model-tag-value">{{ m._ctxFormatted }}</span>
-                            </template>
-                            <template v-else>{{ modelListI18n.ctxUnavailable }}</template>
-                          </span>
-                          <span
-                            v-if="m._outSource !== 'fallback'"
-                            class="cv-model-out-tag has-value"
-                            :title="m._outTitle"
-                          >
-                            <span class="cv-model-tag-label">{{ modelListI18n.maxOutputLabel }}</span>
-                            <span class="cv-model-tag-value">{{ m._outFormatted }}</span>
-                          </span>
-                          <span
-                            v-else
-                            class="cv-model-out-tag is-missing"
-                            :title="m._outTitle"
-                          >
-                            {{ modelListI18n.outUnavailable }}
-                            <span class="cv-model-tag-muted">· {{ modelListI18n.defaultPrefix }} {{ m._outFormatted }}</span>
-                          </span>
+                          <AppTooltip :text="m._ctxTitle" placement="top" class="cv-model-tag-tip">
+                            <span
+                              class="cv-model-ctx"
+                              :class="m._ctxVal ? 'has-value' : 'is-missing'"
+                            >
+                              <template v-if="m._ctxVal">
+                                <span class="cv-model-tag-label">{{ modelListI18n.contextLabel }}</span>
+                                <span class="cv-model-tag-value">{{ m._ctxFormatted }}</span>
+                              </template>
+                              <template v-else>{{ modelListI18n.ctxUnavailable }}</template>
+                            </span>
+                          </AppTooltip>
+                          <AppTooltip :text="m._outTitle" placement="top" class="cv-model-tag-tip">
+                            <span
+                              v-if="m._outSource !== 'fallback'"
+                              class="cv-model-out-tag has-value"
+                            >
+                              <span class="cv-model-tag-label">{{ modelListI18n.maxOutputLabel }}</span>
+                              <span class="cv-model-tag-value">{{ m._outFormatted }}</span>
+                            </span>
+                            <span
+                              v-else
+                              class="cv-model-out-tag is-missing"
+                            >
+                              {{ modelListI18n.outUnavailable }}
+                              <span class="cv-model-tag-muted">· {{ modelListI18n.defaultPrefix }} {{ m._outFormatted }}</span>
+                            </span>
+                          </AppTooltip>
+                          <AppTooltip :text="m._priceTitle" placement="top" class="cv-model-tag-tip">
+                            <span
+                              v-if="m._hasPrice"
+                              class="cv-model-price-tag has-value"
+                            >
+                              <span class="cv-model-tag-label">{{ modelListI18n.inputPriceLabel }}</span>
+                              <span class="cv-model-tag-value">{{ m._inPriceFormatted || '—' }}</span>
+                              <span class="cv-model-tag-label">{{ modelListI18n.outputPriceLabel }}</span>
+                              <span class="cv-model-tag-value">{{ m._outPriceFormatted || '—' }}</span>
+                            </span>
+                            <span
+                              v-else
+                              class="cv-model-price-tag is-missing"
+                            >
+                              {{ modelListI18n.priceUnavailable }}
+                            </span>
+                          </AppTooltip>
                         </div>
                         <div v-if="filteredUtilityModels.length === 0" class="hint" style="padding:0.5rem;">
                           {{ t('config.enterApiKeyFetchModels') }}
@@ -569,39 +602,57 @@
                         <div
                           v-for="m in filteredProviderModels"
                           :key="m.id"
-                          v-memo="[m.id, m._ctxFormatted, m._outFormatted, m._outSource, selectedProvider.model === m.id]"
+                          v-memo="[m.id, m._ctxFormatted, m._outFormatted, m._outSource, m._inPriceFormatted, m._outPriceFormatted, m._priceSource, selectedProvider.model === m.id]"
                           class="cv-model-item"
                           :class="{ active: selectedProvider.model === m.id }"
                           @click="selectedProvider.model = m.id"
                         >
                           <span class="cv-model-name">{{ m.displayName }}</span>
-                          <span
-                            class="cv-model-ctx"
-                            :class="m._ctxVal ? 'has-value' : 'is-missing'"
-                            :title="m._ctxTitle"
-                          >
-                            <template v-if="m._ctxVal">
-                              <span class="cv-model-tag-label">{{ modelListI18n.contextLabel }}</span>
-                              <span class="cv-model-tag-value">{{ m._ctxFormatted }}</span>
-                            </template>
-                            <template v-else>{{ modelListI18n.ctxUnavailable }}</template>
-                          </span>
-                          <span
-                            v-if="m._outSource !== 'fallback'"
-                            class="cv-model-out-tag has-value"
-                            :title="m._outTitle"
-                          >
-                            <span class="cv-model-tag-label">{{ modelListI18n.maxOutputLabel }}</span>
-                            <span class="cv-model-tag-value">{{ m._outFormatted }}</span>
-                          </span>
-                          <span
-                            v-else
-                            class="cv-model-out-tag is-missing"
-                            :title="m._outTitle"
-                          >
-                            {{ modelListI18n.outUnavailable }}
-                            <span class="cv-model-tag-muted">· {{ modelListI18n.defaultPrefix }} {{ m._outFormatted }}</span>
-                          </span>
+                          <AppTooltip :text="m._ctxTitle" placement="top" class="cv-model-tag-tip">
+                            <span
+                              class="cv-model-ctx"
+                              :class="m._ctxVal ? 'has-value' : 'is-missing'"
+                            >
+                              <template v-if="m._ctxVal">
+                                <span class="cv-model-tag-label">{{ modelListI18n.contextLabel }}</span>
+                                <span class="cv-model-tag-value">{{ m._ctxFormatted }}</span>
+                              </template>
+                              <template v-else>{{ modelListI18n.ctxUnavailable }}</template>
+                            </span>
+                          </AppTooltip>
+                          <AppTooltip :text="m._outTitle" placement="top" class="cv-model-tag-tip">
+                            <span
+                              v-if="m._outSource !== 'fallback'"
+                              class="cv-model-out-tag has-value"
+                            >
+                              <span class="cv-model-tag-label">{{ modelListI18n.maxOutputLabel }}</span>
+                              <span class="cv-model-tag-value">{{ m._outFormatted }}</span>
+                            </span>
+                            <span
+                              v-else
+                              class="cv-model-out-tag is-missing"
+                            >
+                              {{ modelListI18n.outUnavailable }}
+                              <span class="cv-model-tag-muted">· {{ modelListI18n.defaultPrefix }} {{ m._outFormatted }}</span>
+                            </span>
+                          </AppTooltip>
+                          <AppTooltip :text="m._priceTitle" placement="top" class="cv-model-tag-tip">
+                            <span
+                              v-if="m._hasPrice"
+                              class="cv-model-price-tag has-value"
+                            >
+                              <span class="cv-model-tag-label">{{ modelListI18n.inputPriceLabel }}</span>
+                              <span class="cv-model-tag-value">{{ m._inPriceFormatted || '—' }}</span>
+                              <span class="cv-model-tag-label">{{ modelListI18n.outputPriceLabel }}</span>
+                              <span class="cv-model-tag-value">{{ m._outPriceFormatted || '—' }}</span>
+                            </span>
+                            <span
+                              v-else
+                              class="cv-model-price-tag is-missing"
+                            >
+                              {{ modelListI18n.priceUnavailable }}
+                            </span>
+                          </AppTooltip>
                           <AppTooltip :text="editModelLimitsLabel">
                             <button class="cv-model-out-edit" @click.stop="openModelLimitsEditor(m)">
                               <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1220,147 +1271,6 @@
               <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               {{ savedVoiceMsg.text }}
             </span>
-          </div>
-        </template>
-
-        <!-- ════════════════════════════════════════════════════════════════ -->
-        <!-- Pricing (AI > Pricing) - DISABLED -->
-        <!-- ════════════════════════════════════════════════════════════════ -->
-        <template v-if="false">
-
-          <!-- Currency Rates -->
-          <div class="config-card">
-            <div class="form-section-header" style="margin-bottom:1rem;">
-              <div class="section-icon-sm">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
-                </svg>
-              </div>
-              <div>
-                <h3 class="form-section-title">{{ t('config.currencyRates') }}</h3>
-                <p class="form-section-desc">USD is the base. Enter how many units equal $1 USD.</p>
-              </div>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-              <div class="form-group">
-                <label class="form-label">CNY (¥) per $1</label>
-                <input type="number" step="0.01" v-model.number="form.pricing.currencyRates.CNY" class="field font-mono" placeholder="7.28" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">SGD (S$) per $1</label>
-                <input type="number" step="0.01" v-model.number="form.pricing.currencyRates.SGD" class="field font-mono" placeholder="1.35" />
-              </div>
-            </div>
-          </div>
-
-          <!-- Model Prices -->
-          <div class="config-card">
-            <div class="form-section-header" style="margin-bottom:0.75rem; align-items:flex-start;">
-              <div class="section-icon-sm">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                </svg>
-              </div>
-              <div style="flex:1;">
-                <h3 class="form-section-title">{{ t('config.modelPrices') }}</h3>
-                <p class="form-section-desc">USD per 1M tokens. Overrides built-in defaults.</p>
-              </div>
-              <AppTooltip :text="isFetchingPrices ? t('config.fetching') : t('config.fetchModels')">
-                <button class="action-btn icon-only" @click="fetchOpenRouterPrices" :disabled="isFetchingPrices">
-                  <svg v-if="!isFetchingPrices" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/>
-                  </svg>
-                  <svg v-else class="icon-sm animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                  </svg>
-                </button>
-              </AppTooltip>
-            </div>
-            <!-- Filter -->
-            <div style="margin-bottom:0.625rem;">
-              <input v-model="priceFilter" class="field font-mono field-sm" placeholder="Filter models…" style="width:100%;" />
-            </div>
-            <!-- Table header -->
-            <div class="pricing-table-header">
-              <span>Model ID</span>
-              <span>Input ($/1M)</span>
-              <span>Output ($/1M)</span>
-              <span>Cache Write</span>
-              <span>Cache Read</span>
-              <span></span>
-              <span></span>
-            </div>
-            <!-- Price rows -->
-            <div v-if="priceFilter && Object.keys(filteredPriceRows).length === 0" style="padding:1rem 0; text-align:center; color:var(--text-muted); font-size:var(--fs-secondary);">
-              No models match "{{ priceFilter }}"
-            </div>
-            <div v-for="(row, modelId) in filteredPriceRows" :key="modelId" class="pricing-table-row">
-              <span class="font-mono" style="font-size:var(--fs-caption); color:#1A1A1A; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ modelId }}</span>
-              <input type="number" step="0.001" :value="row.input"      @change="row.input      = +$event.target.value; onPriceEdit(modelId, row)" class="field font-mono" style="padding:0.25rem 0.375rem; font-size:var(--fs-caption);" placeholder="0.00" />
-              <input type="number" step="0.001" :value="row.output"     @change="row.output     = +$event.target.value; onPriceEdit(modelId, row)" class="field font-mono" style="padding:0.25rem 0.375rem; font-size:var(--fs-caption);" placeholder="0.00" />
-              <input type="number" step="0.001" :value="row.cacheWrite" @change="row.cacheWrite = +$event.target.value; onPriceEdit(modelId, row)" class="field font-mono" style="padding:0.25rem 0.375rem; font-size:var(--fs-caption);" placeholder="0.00" />
-              <input type="number" step="0.001" :value="row.cacheRead"  @change="row.cacheRead  = +$event.target.value; onPriceEdit(modelId, row)" class="field font-mono" style="padding:0.25rem 0.375rem; font-size:var(--fs-caption);" placeholder="0.00" />
-              <AppTooltip :text="t('common.resetDefault', 'Reset to default')">
-                <button @click="resetModelPrice(modelId)" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0.25rem;border-radius:var(--radius-sm);color:#9CA3AF;" @mouseenter="e=>e.currentTarget.style.background='var(--bg-hover)'" @mouseleave="e=>e.currentTarget.style.background='none'">
-                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5"/>
-                  </svg>
-                </button>
-              </AppTooltip>
-              <AppTooltip :text="t('common.delete', 'Delete')">
-                <button @click="deleteModelPrice(modelId)" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0.25rem;border-radius:var(--radius-sm);color:#9CA3AF;" @mouseenter="e=>{e.currentTarget.style.background='rgba(239,68,68,0.08)';e.currentTarget.style.color='#EF4444'}" @mouseleave="e=>{e.currentTarget.style.background='none';e.currentTarget.style.color='#9CA3AF'}">
-                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                  </svg>
-                </button>
-              </AppTooltip>
-            </div>
-            <!-- Add custom model -->
-            <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border);">
-              <input v-model="newModelId" class="field font-mono" placeholder="Add custom model ID" style="flex:2;" />
-              <AppButton variant="primary" size="compact" @click="addCustomModel" :disabled="!newModelId.trim()">Add</AppButton>
-            </div>
-          </div>
-
-          <!-- Model Aliases -->
-          <div class="config-card">
-            <div class="form-section-header" style="margin-bottom:0.75rem;">
-              <div class="section-icon-sm">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
-                  <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
-                </svg>
-              </div>
-              <div>
-                <h3 class="form-section-title">{{ t('config.modelAliases') }}</h3>
-                <p class="form-section-desc">Map custom or provider-prefixed model names to a known price tier.</p>
-              </div>
-            </div>
-            <div v-for="(target, alias) in form.pricing.modelPriceMap" :key="alias" style="display:grid; grid-template-columns:1fr 1.5rem 1fr 2rem; gap:0.5rem; align-items:center; padding:0.375rem 0; border-bottom:1px solid var(--border-light);">
-              <span class="font-mono" style="color:#1A1A1A; font-size:var(--fs-caption); overflow:hidden; text-overflow:ellipsis;">{{ alias }}</span>
-              <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-              <select v-model="form.pricing.modelPriceMap[alias]" class="field font-mono field-sm">
-                <option v-for="mid in allKnownModelIds" :key="mid" :value="mid">{{ mid }}</option>
-              </select>
-              <button @click="deleteAlias(alias)" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0.25rem;border-radius:var(--radius-sm);color:#EF4444;" @mouseenter="e=>e.currentTarget.style.background='var(--bg-hover)'" @mouseleave="e=>e.currentTarget.style.background='none'">
-                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border);">
-              <input v-model="newAliasFrom" class="field font-mono" placeholder="Custom model ID (alias)" style="flex:2;" />
-              <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-              <select v-model="newAliasTo" class="field font-mono field-sm" style="flex:2;">
-                <option value="">— select tier —</option>
-                <option v-for="mid in allKnownModelIds" :key="mid" :value="mid">{{ mid }}</option>
-              </select>
-              <AppButton variant="primary" size="compact" @click="addAlias" :disabled="!newAliasFrom.trim() || !newAliasTo">Add</AppButton>
-            </div>
-          </div>
-
-          <!-- Save row -->
-          <div class="config-save-row">
-            <span v-if="pricingSaved" class="save-status saved">{{ t('config.saved') }}</span>
-            <AppButton variant="primary" size="save" @click="savePricing">Save</AppButton>
           </div>
         </template>
 
@@ -2492,6 +2402,54 @@
         </div>
 
         <div class="cv-model-editor-body">
+          <!-- Catalog picker: click to open a dialog with fuzzy search. Selected
+               entry shows as a summary card with id + context/max-output/price pills. -->
+          <div class="cv-model-editor-field">
+            <div class="cv-editor-field-head">
+              <label>{{ t('config.catalogSearchLabel') }}</label>
+            </div>
+
+            <div v-if="selectedCatalogEntry" class="cv-catalog-selected">
+              <div class="cv-catalog-selected-info">
+                <div class="cv-catalog-selected-id font-mono">{{ selectedCatalogEntry.id }}</div>
+                <div class="cv-catalog-row-meta">
+                  <span v-if="selectedCatalogEntry.context_length" class="cv-catalog-pill">
+                    {{ t('config.contextLabel') }} {{ formatContextWindow(selectedCatalogEntry.context_length) }}
+                  </span>
+                  <span v-if="selectedCatalogEntry.max_output_tokens" class="cv-catalog-pill">
+                    {{ t('config.maxOutputLabel') }} {{ formatContextWindow(selectedCatalogEntry.max_output_tokens) }}
+                  </span>
+                  <span v-if="selectedCatalogEntry.input_cost_per_token != null || selectedCatalogEntry.output_cost_per_token != null" class="cv-catalog-pill price">
+                    {{ t('config.inputPriceLabel') }} {{ formatPricePerMillion(selectedCatalogEntry.input_cost_per_token) || '—' }}
+                    · {{ t('config.outputPriceLabel') }} {{ formatPricePerMillion(selectedCatalogEntry.output_cost_per_token) || '—' }}
+                  </span>
+                </div>
+              </div>
+              <div class="cv-catalog-selected-actions">
+                <button type="button" class="cv-catalog-link-btn" @click="openCatalogDialog">
+                  {{ t('config.catalogChange') }}
+                </button>
+                <button
+                  type="button"
+                  class="cv-catalog-clear-btn"
+                  :aria-label="t('config.catalogClear')"
+                  @click="clearSelectedCatalogEntry"
+                >
+                  <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <button v-else type="button" class="cv-catalog-open-btn" @click="openCatalogDialog">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>{{ t('config.catalogPickButton') }}</span>
+            </button>
+
+            <p class="hint">{{ t('config.catalogSearchHint') }}</p>
+          </div>
+
+          <div class="cv-editor-divider"></div>
+
           <div class="cv-model-editor-field">
             <div class="cv-editor-field-head">
               <label>{{ t('config.contextWindow') }}</label>
@@ -2533,11 +2491,111 @@
             />
             <p class="hint">{{ t('config.modelMaxOutputTokensHint') }}</p>
           </div>
+
+          <div class="cv-model-editor-field">
+            <div class="cv-editor-field-head">
+              <label>{{ t('config.inputPrice') }}</label>
+              <span
+                class="cv-editor-current-badge"
+                :class="modelLimitsEditor.inputPriceDefault != null ? 'ok' : 'warn'"
+              >
+                {{ modelLimitsEditor.inputPriceDefault != null
+                    ? `${t('config.currentValue')} ${formatPricePerMillion(modelLimitsEditor.inputPriceDefault)} USD / 1M`
+                    : t('config.priceUnavailableEditor') }}
+              </span>
+            </div>
+            <input
+              type="text"
+              v-model="modelLimitsEditor.inputPrice"
+              class="field font-mono"
+              :placeholder="modelLimitsEditor.inputPriceDefault != null ? String((modelLimitsEditor.inputPriceDefault * 1_000_000).toFixed(2)) : '3.00'"
+            />
+            <p class="hint">{{ t('config.inputPriceHint') }}</p>
+          </div>
+
+          <div class="cv-model-editor-field">
+            <div class="cv-editor-field-head">
+              <label>{{ t('config.outputPrice') }}</label>
+              <span
+                class="cv-editor-current-badge"
+                :class="modelLimitsEditor.outputPriceDefault != null ? 'ok' : 'warn'"
+              >
+                {{ modelLimitsEditor.outputPriceDefault != null
+                    ? `${t('config.currentValue')} ${formatPricePerMillion(modelLimitsEditor.outputPriceDefault)} USD / 1M`
+                    : t('config.priceUnavailableEditor') }}
+              </span>
+            </div>
+            <input
+              type="text"
+              v-model="modelLimitsEditor.outputPrice"
+              class="field font-mono"
+              :placeholder="modelLimitsEditor.outputPriceDefault != null ? String((modelLimitsEditor.outputPriceDefault * 1_000_000).toFixed(2)) : '15.00'"
+            />
+            <p class="hint">{{ t('config.outputPriceHint') }}</p>
+          </div>
         </div>
 
         <div class="cv-model-editor-footer">
           <button class="cv-model-editor-btn secondary" @click="closeModelLimitsEditor">{{ t('common.cancel') }}</button>
           <button class="cv-model-editor-btn primary" @click="saveModelLimitsEditor">{{ t('common.save') }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- LiteLLM catalog picker dialog (nested above the model-limits editor) -->
+  <Teleport to="body">
+    <div v-if="catalogDialogOpen" class="modal-backdrop" style="z-index:10002;">
+      <div class="cv-catalog-dialog">
+        <div class="cv-catalog-dialog-header">
+          <div class="cv-catalog-dialog-title">{{ t('config.catalogDialogTitle') }}</div>
+          <button class="cv-model-editor-close" @click="closeCatalogDialog">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="cv-catalog-dialog-search">
+          <input
+            ref="catalogDialogInputRef"
+            type="text"
+            v-model="catalogDialogQuery"
+            class="field font-mono"
+            :placeholder="t('config.catalogSearchPlaceholder')"
+            @keydown.esc="closeCatalogDialog"
+          />
+          <span v-if="catalogResults.length" class="cv-catalog-dialog-count">
+            {{ t('config.catalogMatchesCount', '', { n: catalogResults.length }) }}
+          </span>
+        </div>
+        <div class="cv-catalog-dialog-body">
+          <div v-if="catalogLoading" class="cv-catalog-status">{{ t('config.catalogLoading') }}</div>
+          <div v-else-if="catalogDialogQuery && catalogResults.length === 0" class="cv-catalog-status">
+            {{ t('config.catalogNoMatches') }}
+          </div>
+          <div v-else-if="!catalogDialogQuery" class="cv-catalog-status">
+            {{ t('config.catalogSearchHint') }}
+          </div>
+          <ul v-else class="cv-catalog-dialog-list">
+            <li
+              v-for="entry in catalogResults"
+              :key="entry.id"
+              class="cv-catalog-row"
+              @click="applyCatalogEntryFromDialog(entry)"
+            >
+              <div class="cv-catalog-row-id font-mono">{{ entry.id }}</div>
+              <div class="cv-catalog-row-meta">
+                <span v-if="entry.context_length" class="cv-catalog-pill">
+                  {{ t('config.contextLabel') }} {{ formatContextWindow(entry.context_length) }}
+                </span>
+                <span v-if="entry.max_output_tokens" class="cv-catalog-pill">
+                  {{ t('config.maxOutputLabel') }} {{ formatContextWindow(entry.max_output_tokens) }}
+                </span>
+                <span v-if="entry.input_cost_per_token != null || entry.output_cost_per_token != null" class="cv-catalog-pill price">
+                  {{ t('config.inputPriceLabel') }} {{ formatPricePerMillion(entry.input_cost_per_token) || '—' }}
+                  · {{ t('config.outputPriceLabel') }} {{ formatPricePerMillion(entry.output_cost_per_token) || '—' }}
+                </span>
+              </div>
+            </li>
+          </ul>
         </div>
       </div>
     </div>
@@ -2662,8 +2720,10 @@ const modelListI18n = computed(() => {
   return {
     contextLabel:   t('config.contextLabel'),
     maxOutputLabel: t('config.maxOutputLabel'),
-    ctxUnavailable: t('config.contextLengthUnavailable'),
-    outUnavailable: t('config.maxOutputUnavailable'),
+    ctxUnavailable:     t('config.contextLengthUnavailable'),
+    ctxUnavailableHint: t('config.contextLengthUnavailableHint'),
+    outUnavailable:     t('config.maxOutputUnavailable'),
+    outUnavailableHint: t('config.maxOutputUnavailableHint'),
     defaultPrefix:  t('config.defaultPrefix'),
     fallbackHint:   t('config.modelMaxOutputFallbackHint'),
     ctxFromUser:    t('config.contextFromUser'),
@@ -2673,8 +2733,32 @@ const modelListI18n = computed(() => {
     outFromUser:    t('config.maxOutputFromUser'),
     outFromCatalog: t('config.maxOutputFromCatalog'),
     outFromApi:     t('config.maxOutputFromApi'),
+    inputPriceLabel:     t('config.inputPriceLabel'),
+    outputPriceLabel:    t('config.outputPriceLabel'),
+    priceFromUser:       t('config.priceFromUser'),
+    priceFromCatalog:    t('config.priceFromCatalog'),
+    priceFromApi:        t('config.priceFromApi'),
+    priceUnavailable:    t('config.priceUnavailable'),
+    priceUnavailableHint: t('config.priceUnavailableHint'),
   }
 })
+
+// Format USD cost-per-token → "$3.00" style string (cost for 1M tokens, always 2 decimals).
+function formatPricePerMillion(costPerToken) {
+  if (costPerToken == null || !isFinite(costPerToken) || costPerToken < 0) return ''
+  return '$' + (costPerToken * 1_000_000).toFixed(2)
+}
+
+// Parse user input "3", "3.5", "$3.50", "15" (USD per 1M tokens) → cost per token.
+// Returns a number ≥ 0, or null for empty / invalid input.
+function parsePricePerMillion(input) {
+  if (input == null) return null
+  const s = String(input).trim().replace(/[$,\s]/g, '')
+  if (!s) return null
+  const n = parseFloat(s)
+  if (!Number.isFinite(n) || n < 0) return null
+  return n / 1_000_000
+}
 
 // Total count — kept around for any future UI that needs it.
 const utilityModelsTotal = ref(0)
@@ -2720,6 +2804,20 @@ const filteredUtilityModels = computed(() => {
       else { outVal = fallbackOut; outSource = 'fallback' }
     }
 
+    // Effective pricing (USD per token). User override > API > catalog.
+    let inCost, outCost, priceSource
+    if (s?.inputCostPerToken != null) { inCost = s.inputCostPerToken; priceSource = 'user' }
+    else if (m.input_cost_per_token != null) { inCost = m.input_cost_per_token; priceSource = m.priceSource || 'api' }
+    else { inCost = null }
+    if (s?.outputCostPerToken != null) { outCost = s.outputCostPerToken; priceSource = priceSource || 'user' }
+    else if (m.output_cost_per_token != null) { outCost = m.output_cost_per_token; priceSource = priceSource || m.priceSource || 'api' }
+    else { outCost = outCost === undefined ? null : outCost }
+
+    const hasPrice = inCost != null || outCost != null
+    const priceTitle = hasPrice
+      ? (priceSource === 'user' ? i.priceFromUser : priceSource === 'catalog' ? i.priceFromCatalog : i.priceFromApi)
+      : i.priceUnavailableHint
+
     out.push({
       id: m.id,
       displayName: m.name || m.id,
@@ -2727,7 +2825,7 @@ const filteredUtilityModels = computed(() => {
       _ctxFormatted: ctxVal ? formatContextWindow(ctxVal) : '',
       _ctxTitle: ctxVal
         ? (ctxSource === 'user' ? i.ctxFromUser : ctxSource === 'catalog' ? i.ctxFromCatalog : i.ctxFromApi)
-        : i.ctxUnknown,
+        : i.ctxUnavailableHint,
       _outVal: outVal,
       _outFormatted: formatContextWindow(outVal),
       _outSource: outSource,
@@ -2736,6 +2834,13 @@ const filteredUtilityModels = computed(() => {
         : outSource === 'user' ? i.outFromUser
         : outSource === 'catalog' ? i.outFromCatalog
         : i.outFromApi,
+      _inCost:  inCost,
+      _outCost: outCost,
+      _inPriceFormatted:  formatPricePerMillion(inCost),
+      _outPriceFormatted: formatPricePerMillion(outCost),
+      _priceSource: priceSource || null,
+      _hasPrice: hasPrice,
+      _priceTitle: priceTitle,
     })
   }
   return out
@@ -3047,12 +3152,6 @@ const IconNotifications = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
     h('path', { d: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9' }),
     h('path', { d: 'M13.73 21a2 2 0 0 1-3.46 0' })
-  ])
-})
-const IconPricing = defineComponent({
-  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
-    h('line', { x1: '12', y1: '1', x2: '12', y2: '23' }),
-    h('path', { d: 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6' })
   ])
 })
 const IconAiDoc = defineComponent({
@@ -3427,11 +3526,6 @@ const form = reactive({
     user: '',
     pass: '',
   },
-  pricing: {
-    models: {},
-    modelPriceMap: {},
-    currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 },
-  },
   im: {
     telegram: { enabled: false, botToken: '', allowedUsers: [] },
     whatsapp: { enabled: false, selfOnly: true, allowedUsers: [] },
@@ -3599,6 +3693,20 @@ const filteredProviderModels = computed(() => {
       else { outVal = fallbackOut; outSource = 'fallback' }
     }
 
+    // Effective pricing (USD per token). User override > API > catalog.
+    let inCost, outCost, priceSource
+    if (s?.inputCostPerToken != null) { inCost = s.inputCostPerToken; priceSource = 'user' }
+    else if (m.input_cost_per_token != null) { inCost = m.input_cost_per_token; priceSource = m.priceSource || 'api' }
+    else { inCost = null }
+    if (s?.outputCostPerToken != null) { outCost = s.outputCostPerToken; priceSource = priceSource || 'user' }
+    else if (m.output_cost_per_token != null) { outCost = m.output_cost_per_token; priceSource = priceSource || m.priceSource || 'api' }
+    else { outCost = outCost === undefined ? null : outCost }
+
+    const hasPrice = inCost != null || outCost != null
+    const priceTitle = hasPrice
+      ? (priceSource === 'user' ? i.priceFromUser : priceSource === 'catalog' ? i.priceFromCatalog : i.priceFromApi)
+      : i.priceUnavailableHint
+
     out.push({
       id: m.id,
       displayName: m.name || m.id,
@@ -3606,7 +3714,7 @@ const filteredProviderModels = computed(() => {
       _ctxFormatted: ctxVal ? formatContextWindow(ctxVal) : '',
       _ctxTitle: ctxVal
         ? (ctxSource === 'user' ? i.ctxFromUser : ctxSource === 'catalog' ? i.ctxFromCatalog : i.ctxFromApi)
-        : i.ctxUnknown,
+        : i.ctxUnavailableHint,
       _outVal: outVal,
       _outFormatted: formatContextWindow(outVal),
       _outSource: outSource,
@@ -3615,6 +3723,13 @@ const filteredProviderModels = computed(() => {
         : outSource === 'user' ? i.outFromUser
         : outSource === 'catalog' ? i.outFromCatalog
         : i.outFromApi,
+      _inCost:  inCost,
+      _outCost: outCost,
+      _inPriceFormatted:  formatPricePerMillion(inCost),
+      _outPriceFormatted: formatPricePerMillion(outCost),
+      _priceSource: priceSource || null,
+      _hasPrice: hasPrice,
+      _priceTitle: priceTitle,
     })
   }
   return out
@@ -3850,7 +3965,7 @@ function getEffectiveMaxOutput(model) {
   return { value: fb, source: 'fallback' }
 }
 
-// ── Unified model-limits editor (context window + max output) ────────────────
+// ── Unified model-limits editor (context window + max output + pricing) ──────
 const modelLimitsEditor = reactive({
   open: false,
   modelId: null,
@@ -3858,25 +3973,124 @@ const modelLimitsEditor = reactive({
   maxOutputTokens: '',
   contextDefault: null,
   maxOutputDefault: null,
+  inputPrice: '',          // User-entered string, USD per 1M tokens
+  outputPrice: '',
+  inputPriceDefault: null, // USD per token (cost unit), or null
+  outputPriceDefault: null,
 })
+
+// ── LiteLLM catalog (chat-model entries) — loaded lazily on first modal open ──
+const catalogEntries = ref([])
+const catalogLoading = ref(false)
+
+// Catalog picker dialog state — separate from the model-limits editor so the
+// dialog can layer on top, and so the dialog's search box doesn't churn the
+// parent modal's computed graph.
+const catalogDialogOpen = ref(false)
+const catalogDialogQuery = ref('')
+const catalogDialogInputRef = ref(null)
+
+// The catalog entry the user picked (shown as a summary card in the main modal).
+const selectedCatalogEntry = ref(null)
+
+async function _ensureCatalogLoaded() {
+  if (catalogEntries.value.length || !window.electronAPI?.getCatalogEntries) return
+  catalogLoading.value = true
+  try {
+    const res = await window.electronAPI.getCatalogEntries()
+    if (res?.entries?.length) catalogEntries.value = res.entries
+  } catch (err) {
+    console.warn('[modelLimits] failed to load catalog', err)
+  } finally {
+    catalogLoading.value = false
+  }
+}
+
+// Ranked fuzzy match. Splits the query on whitespace, comma, slash, colon, or
+// plus — so users can type `qwen flash 3.6`, `qwen + flash + 3.6`, `claude/sonnet`,
+// etc. Every token must appear in the id (order-insensitive). Scoring: exact id
+// match > bare-id exact > prefix > earliest-position hits. Returns up to 40 best
+// matches for display in the dialog list.
+const catalogResults = computed(() => {
+  const raw = (catalogDialogQuery.value || '').trim().toLowerCase()
+  if (!raw) return []
+  const tokens = raw.split(/[\s,/:+]+/).filter(Boolean)
+  if (tokens.length === 0) return []
+  const scored = []
+  for (const e of catalogEntries.value) {
+    const id = e.id.toLowerCase()
+    const bare = id.includes('/') ? id.split('/').pop() : id
+    let hitAll = true
+    let posSum = 0
+    for (const tk of tokens) {
+      const idx = id.indexOf(tk)
+      if (idx < 0) { hitAll = false; break }
+      posSum += idx
+    }
+    if (!hitAll) continue
+    let score = -posSum
+    if (id === raw) score += 1000
+    else if (bare === raw) score += 900
+    else if (id.startsWith(raw) || bare.startsWith(raw)) score += 400
+    scored.push({ entry: e, score })
+  }
+  scored.sort((a, b) => b.score - a.score)
+  return scored.slice(0, 40).map(s => s.entry)
+})
+
+function openCatalogDialog() {
+  catalogDialogQuery.value = ''
+  catalogDialogOpen.value = true
+  _ensureCatalogLoaded()
+  // Auto-focus the search box on next tick so keyboard users can type immediately.
+  nextTick(() => { catalogDialogInputRef.value?.focus?.() })
+}
+
+function closeCatalogDialog() {
+  catalogDialogOpen.value = false
+}
+
+function applyCatalogEntryFromDialog(entry) {
+  if (!entry) return
+  selectedCatalogEntry.value = entry
+  if (entry.context_length) modelLimitsEditor.contextWindow = formatContextWindow(entry.context_length)
+  if (entry.max_output_tokens) modelLimitsEditor.maxOutputTokens = formatContextWindow(entry.max_output_tokens)
+  if (entry.input_cost_per_token  != null) modelLimitsEditor.inputPrice  = (entry.input_cost_per_token  * 1_000_000).toFixed(2)
+  if (entry.output_cost_per_token != null) modelLimitsEditor.outputPrice = (entry.output_cost_per_token * 1_000_000).toFixed(2)
+  closeCatalogDialog()
+}
+
+function clearSelectedCatalogEntry() {
+  selectedCatalogEntry.value = null
+}
 
 function openModelLimitsEditor(model) {
   const provider = selectedProvider.value
   if (!provider) return
 
-  // The caller may pass either an enriched row (has `_ctxVal` / `_outVal`) or a raw model
-  // entry (has `context_length` / `max_output_tokens`). Support both.
-  let ctxVal, outVal, outIsFallback
+  // The caller may pass either an enriched row (has `_ctxVal` / `_outVal` / `_inCost`)
+  // or a raw model entry (has `context_length` / `max_output_tokens` / `input_cost_per_token`).
+  let ctxVal, outVal, outIsFallback, inCost, outCost, priceSource
   if ('_ctxVal' in model) {
     ctxVal = model._ctxVal ?? null
     outVal = model._outVal ?? null
     outIsFallback = model._outSource === 'fallback'
+    inCost  = model._inCost  ?? null
+    outCost = model._outCost ?? null
+    priceSource = model._priceSource || null
   } else {
     const eff = getEffectiveContext(model)
     const out = getEffectiveMaxOutput(model)
     ctxVal = eff.value
     outVal = out.value
     outIsFallback = out.source === 'fallback'
+    inCost  = model.input_cost_per_token  ?? null
+    outCost = model.output_cost_per_token ?? null
+    priceSource = model.priceSource || (inCost != null || outCost != null ? 'api' : null)
+    // Apply per-model user override if present
+    const s = provider.modelSettings?.[model.id] || null
+    if (s?.inputCostPerToken  != null) { inCost  = s.inputCostPerToken;  priceSource = 'user' }
+    if (s?.outputCostPerToken != null) { outCost = s.outputCostPerToken; priceSource = 'user' }
   }
 
   modelLimitsEditor.modelId = model.id
@@ -3884,7 +4098,17 @@ function openModelLimitsEditor(model) {
   modelLimitsEditor.maxOutputTokens = (outVal && !outIsFallback) ? formatContextWindow(outVal) : ''
   modelLimitsEditor.contextDefault = ctxVal
   modelLimitsEditor.maxOutputDefault = outIsFallback ? null : outVal
+  modelLimitsEditor.inputPrice  = inCost  != null ? (inCost  * 1_000_000).toFixed(2) : ''
+  modelLimitsEditor.outputPrice = outCost != null ? (outCost * 1_000_000).toFixed(2) : ''
+  modelLimitsEditor.inputPriceDefault  = inCost
+  modelLimitsEditor.outputPriceDefault = outCost
+  // Reset catalog selection/dialog — each model opens fresh.
+  selectedCatalogEntry.value = null
+  catalogDialogOpen.value = false
+  catalogDialogQuery.value = ''
   modelLimitsEditor.open = true
+  // Start loading the catalog in the background so the picker is instant when opened.
+  _ensureCatalogLoaded()
 }
 
 function closeModelLimitsEditor() {
@@ -3909,6 +4133,16 @@ function saveModelLimitsEditor() {
   const outNum = parseTokenCount(modelLimitsEditor.maxOutputTokens)
   if (!outNum) delete bucket.maxOutputTokens
   else bucket.maxOutputTokens = Math.min(98304, Math.max(256, outNum))
+
+  // Pricing: USD per 1M tokens → cost per token. Only persist when the user changed
+  // the value away from the catalog/API default (so future catalog updates still apply).
+  const inCostEntered  = parsePricePerMillion(modelLimitsEditor.inputPrice)
+  const outCostEntered = parsePricePerMillion(modelLimitsEditor.outputPrice)
+  const nearlyEqual = (a, b) => a != null && b != null && Math.abs(a - b) < 1e-12
+  if (inCostEntered == null || nearlyEqual(inCostEntered, modelLimitsEditor.inputPriceDefault)) delete bucket.inputCostPerToken
+  else bucket.inputCostPerToken = inCostEntered
+  if (outCostEntered == null || nearlyEqual(outCostEntered, modelLimitsEditor.outputPriceDefault)) delete bucket.outputCostPerToken
+  else bucket.outputCostPerToken = outCostEntered
 
   if (Object.keys(bucket).length === 0) delete provider.modelSettings[modelId]
   else provider.modelSettings[modelId] = bucket
@@ -3978,14 +4212,8 @@ onMounted(async () => {
       pollInterval: c.im?.teams?.pollInterval ?? 5,
     },
   }
-  form.pricing = {
-    models: {},
-    modelPriceMap: {},
-    currencyRates: { USD: 1, CNY: 7.28, SGD: 1.35 },
-    ...(c.pricing || {})
-  }
   // Merge top-level scalar fields
-  const NESTED_KEYS = new Set(['anthropic', 'openrouter', 'openai', 'deepseek', 'voiceCall', 'smtp', 'utilityModel', 'pricing'])
+  const NESTED_KEYS = new Set(['anthropic', 'openrouter', 'openai', 'deepseek', 'voiceCall', 'smtp', 'utilityModel'])
   for (const key of Object.keys(c)) {
     if (!NESTED_KEYS.has(key) && key in form) {
       form[key] = c[key]
@@ -4492,107 +4720,6 @@ async function checkKnowledgeModelIfNeeded() {
   }
 }
 
-// ── Pricing tab state ────────────────────────────────────────────────────────
-const isFetchingPrices = ref(false)
-const pricingSaved = ref(false)
-const newModelId   = ref('')
-const newAliasFrom = ref('')
-const newAliasTo   = ref('')
-const priceFilter  = ref('')
-
-const mergedPriceRows = computed(() => {
-  const userModels = form.pricing?.models || {}
-  const merged = { ...DEFAULT_PRICES }
-  for (const [k, v] of Object.entries(userModels)) {
-    if (v?._deleted) { delete merged[k]; continue }
-    merged[k] = { ...merged[k], ...v }
-  }
-  return Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)))
-})
-
-const filteredPriceRows = computed(() => {
-  const q = priceFilter.value.trim().toLowerCase()
-  if (!q) return mergedPriceRows.value
-  return Object.fromEntries(
-    Object.entries(mergedPriceRows.value).filter(([id]) => id.toLowerCase().includes(q))
-  )
-})
-
-const allKnownModelIds = computed(() => Object.keys(mergedPriceRows.value))
-
-function onPriceEdit(modelId, row) {
-  if (!form.pricing.models) form.pricing.models = {}
-  form.pricing.models[modelId] = { input: row.input || 0, output: row.output || 0, cacheWrite: row.cacheWrite || 0, cacheRead: row.cacheRead || 0 }
-}
-
-function resetModelPrice(modelId) {
-  if (form.pricing?.models?.[modelId]) {
-    delete form.pricing.models[modelId]
-  }
-}
-
-function deleteModelPrice(modelId) {
-  if (!form.pricing.models) form.pricing.models = {}
-  // Mark as deleted by storing a sentinel so mergedPriceRows excludes it
-  form.pricing.models[modelId] = { _deleted: true }
-}
-
-function addCustomModel() {
-  const id = newModelId.value.trim()
-  if (!id) return
-  if (!form.pricing.models) form.pricing.models = {}
-  form.pricing.models[id] = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 }
-  newModelId.value = ''
-}
-
-function addAlias() {
-  if (!newAliasFrom.value.trim() || !newAliasTo.value) return
-  if (!form.pricing.modelPriceMap) form.pricing.modelPriceMap = {}
-  form.pricing.modelPriceMap[newAliasFrom.value.trim()] = newAliasTo.value
-  newAliasFrom.value = ''
-  newAliasTo.value = ''
-}
-
-function deleteAlias(alias) {
-  if (form.pricing?.modelPriceMap) delete form.pricing.modelPriceMap[alias]
-}
-
-async function fetchOpenRouterPrices() {
-  isFetchingPrices.value = true
-  try {
-    const resp = await fetch('https://openrouter.ai/api/v1/models')
-    const data = await resp.json()
-    if (!form.pricing.models) form.pricing.models = {}
-    for (const m of (data.data || [])) {
-      const id = m.id
-      const pricing = m.pricing
-      if (!id || !pricing) continue
-      form.pricing.models[id] = {
-        input:      parseFloat(pricing.prompt)     * 1_000_000 || 0,
-        output:     parseFloat(pricing.completion) * 1_000_000 || 0,
-        cacheWrite: 0,
-        cacheRead:  0,
-      }
-    }
-  } catch (err) {
-    console.error('fetchOpenRouterPrices error', err)
-  } finally {
-    isFetchingPrices.value = false
-  }
-}
-
-async function savePricing() {
-  // Strip _deleted sentinels before persisting
-  const cleanModels = {}
-  for (const [k, v] of Object.entries(form.pricing?.models || {})) {
-    if (!v?._deleted) cleanModels[k] = v
-  }
-  configStore.config.pricing = { ...form.pricing, models: cleanModels }
-  await configStore.saveConfig()
-  pricingSaved.value = true
-  setTimeout(() => { pricingSaved.value = false }, 2000)
-}
-
 </script>
 
 <style scoped>
@@ -5097,51 +5224,7 @@ async function savePricing() {
   margin-bottom: 4px;
 }
 
-/* Pricing table */
-.pricing-table-header,
-.pricing-table-row {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 2rem 2rem;
-  gap: 0.5rem;
-  align-items: center;
-  padding: 0.375rem 0;
-}
-.pricing-table-header {
-  font-size: var(--fs-caption);
-  color: var(--text-muted);
-  font-weight: 600;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.5rem;
-  margin-bottom: 0.25rem;
-}
-.pricing-table-row {
-  border-bottom: 1px solid var(--border-light);
-}
-.pricing-table-row:last-child { border-bottom: none; }
-
-/* Pricing save row */
-.config-save-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-.save-status {
-  display: inline-flex;
-  align-items: center;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary);
-  font-weight: 600;
-  padding: 0.375rem 0.875rem;
-  border-radius: 0.5rem;
-  animation: fadeIn 0.2s ease;
-}
-.save-status.saved {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-
-/* Pricing action button */
+/* Shared action button (used for delete-provider, etc.) */
 .action-btn {
   display: flex;
   align-items: center;
@@ -5181,7 +5264,7 @@ async function savePricing() {
   background: linear-gradient(135deg, #B91C1C 0%, #DC2626 40%, #EF4444 100%);
 }
 
-/* form-section-desc used in pricing cards */
+/* Shared form section description style */
 .form-section-desc {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);
@@ -5703,8 +5786,35 @@ async function savePricing() {
   color: #A7F3D0; background: rgba(16,185,129,0.22); border-color: rgba(167,243,208,0.45);
 }
 .cv-model-item.active .cv-model-ctx.is-missing,
-.cv-model-item.active .cv-model-out-tag.is-missing {
+.cv-model-item.active .cv-model-out-tag.is-missing,
+.cv-model-item.active .cv-model-price-tag.is-missing {
   color: #FCD34D; background: rgba(245,158,11,0.22); border-color: rgba(253,224,71,0.45);
+}
+
+/* Shared helper: AppTooltip wrapper should not shrink inside the flex row */
+.cv-model-tag-tip { flex-shrink: 0; }
+
+/* Price tag (USD per 1M tokens) */
+.cv-model-price-tag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.cv-model-price-tag.has-value {
+  color: #1D4ED8; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3);
+}
+.cv-model-price-tag.is-missing {
+  color: #B45309; background: rgba(245,158,11,0.1); border: 1px dashed rgba(245,158,11,0.4);
+  font-style: italic;
+}
+.cv-model-item.active .cv-model-price-tag.has-value {
+  color: #BFDBFE; background: rgba(59,130,246,0.22); border-color: rgba(191,219,254,0.45);
 }
 
 /* Model-limits editor modal */
@@ -5727,7 +5837,198 @@ async function savePricing() {
   padding: 0.25rem; border-radius: 0.25rem; display: flex; align-items: center; justify-content: center;
 }
 .cv-model-editor-close:hover { background: rgba(0,0,0,0.05); color: var(--text-primary); }
-.cv-model-editor-body { padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+.cv-model-editor-body {
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  /* Scroll the body (not the whole modal) when the catalog picker shows many rows */
+  max-height: calc(88vh - 8rem);
+  overflow-y: auto;
+}
+.cv-editor-divider {
+  height: 1px;
+  background: var(--border-secondary, #E5E7EB);
+  margin: 0 -0.25rem;
+}
+.cv-catalog-status {
+  font-size: 0.75rem;
+  color: var(--text-muted, #6B7280);
+  padding: 0.5rem 0.25rem;
+  font-style: italic;
+}
+.cv-catalog-status.small { font-size: 0.6875rem; padding: 0.375rem 0.25rem; }
+/* Open-picker button (shown when no catalog entry is picked yet) */
+.cv-catalog-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--border-primary, #D1D5DB);
+  border-radius: 0.5rem;
+  background: var(--bg-surface, #FFFFFF);
+  color: var(--text-primary, #111827);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  align-self: flex-start;
+}
+.cv-catalog-open-btn:hover {
+  background: var(--bg-hover, #F3F4F6);
+  border-color: #6B7280;
+}
+
+/* Selected-entry summary card (shown inside the main modal after picking) */
+.cv-catalog-selected {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 0.5rem;
+  background: rgba(59, 130, 246, 0.06);
+}
+.cv-catalog-selected-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  flex: 1;
+  min-width: 0;
+}
+.cv-catalog-selected-id {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+  word-break: break-all;
+}
+.cv-catalog-selected-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+.cv-catalog-link-btn {
+  background: none;
+  border: none;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #1D4ED8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.cv-catalog-link-btn:hover { color: #1E3A8A; }
+.cv-catalog-clear-btn {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  color: var(--text-muted, #6B7280);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cv-catalog-clear-btn:hover { background: rgba(0,0,0,0.06); color: var(--text-primary); }
+
+/* Nested picker dialog (teleported above the model-limits editor) */
+.cv-catalog-dialog {
+  width: min(560px, 92vw);
+  max-height: min(640px, 88vh);
+  background: var(--bg-surface, #FFFFFF);
+  border-radius: 0.75rem;
+  box-shadow: 0 24px 72px rgba(0,0,0,0.35);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.cv-catalog-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--border-secondary, #E5E7EB);
+}
+.cv-catalog-dialog-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary, #111827);
+}
+.cv-catalog-dialog-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--border-secondary, #E5E7EB);
+}
+.cv-catalog-dialog-search .field {
+  flex: 1;
+  min-width: 0;
+}
+.cv-catalog-dialog-count {
+  font-size: 0.6875rem;
+  color: var(--text-muted, #6B7280);
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+}
+.cv-catalog-dialog-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.25rem 0;
+  scrollbar-width: thin;
+}
+.cv-catalog-dialog-body::-webkit-scrollbar { width: 6px; }
+.cv-catalog-dialog-body::-webkit-scrollbar-thumb { background: #9CA3AF; border-radius: 3px; }
+.cv-catalog-dialog-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.cv-catalog-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 0.625rem;
+  border-bottom: 1px solid var(--border-secondary, #E5E7EB);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.cv-catalog-row:last-child { border-bottom: none; }
+.cv-catalog-row:hover { background: rgba(0,0,0,0.04); }
+.cv-catalog-row-id {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-primary, #111827);
+  word-break: break-all;
+}
+.cv-catalog-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+.cv-catalog-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: #059669;
+  background: rgba(16,185,129,0.1);
+  border: 1px solid rgba(16,185,129,0.25);
+  white-space: nowrap;
+}
+.cv-catalog-pill.price {
+  color: #1D4ED8;
+  background: rgba(59,130,246,0.08);
+  border-color: rgba(59,130,246,0.25);
+}
 .cv-model-editor-field { display: flex; flex-direction: column; gap: 0.375rem; }
 .cv-model-editor-field label {
   font-size: 0.75rem; font-weight: 600; color: var(--text-primary);

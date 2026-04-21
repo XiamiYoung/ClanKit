@@ -27,8 +27,15 @@ function ensureTipEl() {
     'font-size: 0.75rem',
     'font-weight: 500',
     'line-height: 1.4',
-    'white-space: nowrap',
-    'max-width: 18rem',
+    // Shrink-to-fit width that matches the visible text exactly. `nowrap` combined
+    // with `max-width` used to give a box narrower than the overflowing text,
+    // so clamping would leave the visible characters off-screen. Letting the
+    // text wrap at max-width keeps the box == visible content.
+    'width: max-content',
+    'max-width: min(18rem, calc(100vw - 16px))',
+    'white-space: normal',
+    'word-break: break-word',
+    'box-sizing: border-box',
     'box-shadow: 0 4px 12px rgba(0,0,0,0.18)',
     'opacity: 0',
     'transform: translate(0, 2px)',

@@ -309,7 +309,7 @@
             {{ Math.round(activeContextMetrics.percentage) }}%
           </span>
           <span style="color:#9CA3AF; font-size:var(--fs-small); white-space:nowrap;">
-            {{ formatTokenCount(activeContextMetrics.inputTokens) }} {{ t('chats.tokenIn') }} / {{ formatTokenCount(activeContextMetrics.outputTokens) }} {{ t('chats.tokenOut') }}
+            {{ formatTokenCount(activeCumulativeTokens.input) }} {{ t('chats.tokenIn') }} / {{ formatTokenCount(activeCumulativeTokens.output) }} {{ t('chats.tokenOut') }}
           </span>
           <!-- Inspect button — always clickable -->
           <button
@@ -344,6 +344,23 @@
               <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/>
             </svg>
           </button>
+
+          <!-- Unknown-context-window warning button — opens Config → AI Provider -->
+          <AppTooltip v-if="activeModelContextUnknown" :text="t('chats.contextUnknownWindow')" placement="top">
+            <button
+              @click="$router.push('/config?tab=models')"
+              class="flex items-center justify-center rounded-md transition-colors cursor-pointer shrink-0"
+              style="width:1.75rem; height:1.75rem; background:#FEF2F2; color:#DC2626; border:1px solid #FECACA;"
+              @mouseenter="e => { e.currentTarget.style.background='#FEE2E2'; e.currentTarget.style.borderColor='#FCA5A5' }"
+              @mouseleave="e => { e.currentTarget.style.background='#FEF2F2'; e.currentTarget.style.borderColor='#FECACA' }"
+              :aria-label="t('chats.contextUnknownWindow')"
+            >
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </button>
+          </AppTooltip>
         </div>
         </div>
 
@@ -918,6 +935,7 @@ import ChatHeader from '../components/chat/ChatHeader.vue'
 import { parseMentions } from '../utils/mentions'
 import { v4 as uuidv4 } from 'uuid'
 import AppButton from '../components/common/AppButton.vue'
+import AppTooltip from '../components/common/AppTooltip.vue'
 import ChatGridLayout from '../components/chat/ChatGridLayout.vue'
 import CategoryModal from '../components/agents/CategoryModal.vue'
 import EmojiPicker from '../components/agents/EmojiPicker.vue'
@@ -1413,6 +1431,32 @@ const activeContextMetrics = computed(() => chatsStore.activeChat?.contextMetric
 const activePerAgentMetrics = computed(() => chatsStore.activeChat?.perAgentContextMetrics ?? {})
 const hasContextData = computed(() => activeContextMetrics.value.inputTokens > 0)
 const hasMessages = computed(() => (chatsStore.activeChat?.messages?.length ?? 0) > 0)
+// Cumulative token totals across the whole chat (sum of per-message tokenUsage).
+// The header display uses these so users see chat-wide consumption instead of
+// just the latest request's usage, which matches what Inspector already shows.
+const activeCumulativeTokens = computed(() => {
+  const messages = chatsStore.activeChat?.messages || []
+  let input = 0, output = 0
+  for (const msg of messages) {
+    if (msg.tokenUsage) {
+      input  += msg.tokenUsage.input  || 0
+      output += msg.tokenUsage.output || 0
+    }
+  }
+  return { input, output }
+})
+// True when the active chat's primary model has no known context window.
+// Shows a red "!" next to the compact button so users know automatic
+// protection (threshold-based compaction) is not available until they
+// configure the window in Config → Provider → Model Settings.
+const activeModelContextUnknown = computed(() => {
+  const chat = chatsStore.activeChat
+  if (!chat) return false
+  const agentId = chat.groupAgentIds?.[0] || chat.systemAgentId || agentsStore.defaultSystemAgent?.id
+  const modelId = agentsStore.getAgentById(agentId)?.modelId
+  if (!modelId) return false
+  return modelsStore.getContextSource(modelId) === null
+})
 const activeSystemAgentIds = computed(() => {
   const chat = chatsStore.activeChat
   if (!chat) return []

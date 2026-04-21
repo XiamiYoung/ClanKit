@@ -255,7 +255,7 @@
                 </select>
                 <select v-model="analyzeModelId" class="field-select" style="flex:2;">
                   <option v-for="m in analyzeModelList" :key="m.id" :value="m.id">
-                    {{ m.name || m.id }}{{ m.context_length ? ` (${formatContextWindow(m.context_length)})` : '' }}
+                    {{ formatModelOptionLabel(m, m.id === recommendedAnalyzeModelId) }}
                   </option>
                 </select>
               </div>
@@ -360,7 +360,7 @@
                 </select>
                 <select v-model="agentModelId" class="field-select" style="flex:2;">
                   <option v-for="m in agentModelList" :key="m.id" :value="m.id">
-                    {{ m.name || m.id }}{{ m.context_length ? ` (${formatContextWindow(m.context_length)})` : '' }}
+                    {{ formatModelOptionLabel(m, m.id === recommendedAgentModelId) }}
                   </option>
                 </select>
               </div>
@@ -972,6 +972,8 @@ function goBack() {
 // ── Provider / Model selector for analysis ─────────────────────────────────
 const analyzeProviderType = ref('')
 const analyzeModelId = ref('')
+const recommendedAnalyzeModelId = ref('')
+const recommendedAgentModelId = ref('')
 
 const activeProviders = computed(() => {
   const cfg = configStore.config || {}
@@ -993,15 +995,49 @@ function formatContextWindow(n) {
   return String(n)
 }
 
+// USD cost-per-token → "$X.XX" per 1M tokens. Null / 0 → ''.
+function _fmtPricePerMillion(costPerToken) {
+  if (costPerToken == null || !Number.isFinite(costPerToken) || costPerToken < 0) return ''
+  const perM = costPerToken * 1_000_000
+  if (perM === 0)    return '$0'
+  if (perM >= 100)   return '$' + perM.toFixed(0)
+  if (perM >= 10)    return '$' + perM.toFixed(1)
+  if (perM >= 1)     return '$' + perM.toFixed(2)
+  if (perM >= 0.01)  return '$' + perM.toFixed(3)
+  return '$' + perM.toFixed(4)
+}
+
+// Build the <option> label: "[✨] name (ctx) · $in/$out /M"
+function formatModelOptionLabel(m, isRecommended) {
+  const base = (m.name || m.id) + (m.context_length ? ` (${formatContextWindow(m.context_length)})` : '')
+  const inP  = _fmtPricePerMillion(m.input_cost_per_token)
+  const outP = _fmtPricePerMillion(m.output_cost_per_token)
+  let price = ''
+  if (inP && outP) price = ` · ${inP}/${outP} /M`
+  else if (inP)    price = ` · ${inP} /M`
+  return (isRecommended ? '✨ ' : '') + base + price
+}
+
 const analyzeModelList = computed(() => {
   if (!analyzeProviderType.value) return []
   return modelsStore.getModelsForProvider(analyzeProviderType.value) || []
 })
 
-function onAnalyzeProviderChange() {
-  // Auto-select first model when provider changes
+async function onAnalyzeProviderChange() {
   const models = analyzeModelList.value
-  analyzeModelId.value = models.length > 0 ? models[0].id : ''
+  if (models.length === 0) { analyzeModelId.value = ''; recommendedAnalyzeModelId.value = ''; return }
+  try {
+    const rec = await window.electronAPI.recommendModel({
+      providerType: analyzeProviderType.value,
+      modelIds: models.map(m => m.id),
+    })
+    const picked = (rec?.modelId && models.some(m => m.id === rec.modelId)) ? rec.modelId : models[0].id
+    analyzeModelId.value = picked
+    recommendedAnalyzeModelId.value = picked
+  } catch {
+    analyzeModelId.value = models[0].id
+    recommendedAnalyzeModelId.value = ''
+  }
 }
 
 // Initialize from utility model config
@@ -1056,9 +1092,12 @@ async function onAgentProviderChange() {
       providerType: agentProviderType.value,
       modelIds: models.map(m => m.id),
     })
-    agentModelId.value = (rec?.modelId && models.some(m => m.id === rec.modelId)) ? rec.modelId : models[0].id
+    const picked = (rec?.modelId && models.some(m => m.id === rec.modelId)) ? rec.modelId : models[0].id
+    agentModelId.value = picked
+    recommendedAgentModelId.value = picked
   } catch {
     agentModelId.value = models[0].id
+    recommendedAgentModelId.value = ''
   }
 }
 

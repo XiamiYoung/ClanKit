@@ -542,6 +542,29 @@ export function useChunkHandler({
       dbg(`thinking: ${chunk.text?.slice(0,60) ?? ''}…`, 'chunk')
     } else if (chunk.type === 'compaction') {
       dbg(`compaction: ${chunk.message || 'context compacted'}`, 'warn')
+    } else if (chunk.type === 'compaction_applied') {
+      // Reactive/auto/manual compaction happened inside the agent loop.
+      // Insert a visible system banner so the user sees when the loop
+      // recovered from overflow or auto-compacted at threshold.
+      // For group chats the IPC wrapper adds `agentId` / `agentName` to the chunk
+      // so the banner can tell the user which agent got compacted.
+      dbg(`compaction_applied: kind=${chunk.kind || 'auto'}${chunk.agentName ? ' agent=' + chunk.agentName : ''}`, 'warn')
+      if (targetChat?.messages) {
+        targetChat.messages.push({
+          id: uuidv4(),
+          role: 'system',
+          compaction: true,
+          compactionKind: chunk.kind || 'auto',
+          agentId:   chunk.agentId   || null,
+          agentName: chunk.agentName || null,
+          tokensBefore: chunk.tokensBefore || 0,
+          tokensAfter: chunk.tokensAfter || 0,
+          content: chunk.message || 'Context compacted',
+          segments: [{ type: 'text', content: chunk.message || 'Context compacted' }],
+          streaming: false,
+        })
+        scrollToBottom(false, cId)
+      }
     } else if (chunk.type === 'warning') {
       dbg(`warning: ${chunk.code || chunk.message || 'unknown'}`, 'warn')
       // Show warning as a persistent segment in the chat bubble

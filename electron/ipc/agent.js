@@ -455,6 +455,10 @@ function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetCh
     const currentUsrId   = usrAgent?.id || null
     const agentMessages  = rawMessages
       .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
+      // Per-agent standalone compaction inserts hidden summary pairs tagged with
+      // `_compactionAgentId`. Each agent must only see its own summary — drop pairs
+      // belonging to other group agents so they don't pollute this agent's context.
+      .filter(m => !(m.compaction && m._compactionAgentId && m._compactionAgentId !== pid))
       .map(m => {
         const msgAgentId = m.agentId || m._agentId || null
         const msgUsrId   = m.userAgentId || m._userAgentId || null
@@ -1124,12 +1128,25 @@ ipcMain.handle('agent:update-permission-mode', (event, chatId, { chatMode, chatA
 })
 
 ipcMain.handle('agent:compact', (event, chatId) => {
-  const loop = chatId ? activeLoops.get(chatId) : null
-  if (loop && typeof loop.requestCompaction === 'function') {
-    loop.requestCompaction()
-    return true
+  if (!chatId) return { success: false, compacted: [] }
+  const compacted = []
+  // Single-agent path: key === chatId
+  const direct = activeLoops.get(chatId)
+  if (direct && typeof direct.requestCompaction === 'function') {
+    direct.requestCompaction()
+    const meta = activeLoopMeta.get(chatId)
+    compacted.push({ agentId: meta?.agentId || null, agentName: meta?.agentName || null })
   }
-  return false
+  // Group path: loops keyed as `${chatId}:${agentId}`
+  for (const [key, loop] of activeLoops) {
+    if (key === chatId) continue
+    if (!key.startsWith(chatId + ':')) continue
+    if (typeof loop.requestCompaction !== 'function') continue
+    loop.requestCompaction()
+    const meta = activeLoopMeta.get(key)
+    compacted.push({ agentId: meta?.agentId || null, agentName: meta?.agentName || null })
+  }
+  return { success: compacted.length > 0, compacted }
 })
 
 ipcMain.handle('agent:compact-standalone', async (event, { chatId, messages, config, enabledAgents, enabledSkills }) => {

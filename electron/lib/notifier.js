@@ -22,6 +22,7 @@ const I18N = {
     taskFallback:      'task',
     permissionTitle:   'Permission needed',
     permissionBody:    '{agent} is waiting for your approval to run {tool}.',
+    summaryFallback:   'New reply · tap to view',
   },
   zh: {
     agentFinished:     '{name} 已完成',
@@ -30,7 +31,16 @@ const I18N = {
     taskFallback:      '任务',
     permissionTitle:   '需要授权',
     permissionBody:    '{agent} 正在等待你批准执行 {tool}。',
+    summaryFallback:   '有新回复 · 点击查看',
   },
+}
+
+const DEFAULT_SUMMARY_TIMEOUT_MS = 30000
+
+function _resolveSummaryTimeout(config) {
+  const v = Number(config?.notifications?.summaryTimeoutMs)
+  if (Number.isFinite(v) && v >= 5000 && v <= 120000) return v
+  return DEFAULT_SUMMARY_TIMEOUT_MS
 }
 
 function _t(lang, key, vars = {}) {
@@ -237,13 +247,21 @@ async function notifyChatComplete({ chatId, agentName, finalText, config }) {
     const decision = shouldNotify(_state, { chatId, enabled })
     logger.info(`[notifier] chat complete: chatId=${chatId} agent=${agentName || '-'} enabled=${enabled} state=${JSON.stringify(_state)} decision=${decision}`)
     if (!decision) return
-    const lang    = config?.language || 'en'
-    const summary = await buildSummary(finalText || '', config, { maxChars: 50, timeoutMs: 10000 })
-    const name    = (agentName || '').trim() || _t(lang, 'agentFallback')
-    const title   = _t(lang, 'agentFinished', { name })
+    const lang      = config?.language || 'en'
+    const timeoutMs = _resolveSummaryTimeout(config)
+    const aiSummary = await aiSummarize(finalText || '', config, { timeoutMs, maxChars: 50 })
+    const name      = (agentName || '').trim() || _t(lang, 'agentFallback')
+    const title     = _t(lang, 'agentFinished', { name })
+    let body
+    if (aiSummary && String(aiSummary).trim()) {
+      body = hardTruncate(aiSummary, 50)
+    } else {
+      body = _t(lang, 'summaryFallback')
+      logger.info(`[notifier] using fallback body (AI summary unavailable, timeoutMs=${timeoutMs}): chatId=${chatId}`)
+    }
     sendNotification({
       title,
-      body: summary || '',
+      body,
       chatId,
       silent: !!config?.notifications?.silent,
     })
@@ -279,12 +297,13 @@ async function notifyTaskComplete({ planName, status, durationMs, config }) {
     logger.info(`[notifier] task complete: plan=${planName || '-'} status=${status} enabled=${enabled} decision=${decision}`)
     // Task engine has no chat context — shouldNotify returns true when enabled.
     if (!decision) return
-    const lang    = config?.language || 'en'
-    const seconds = Math.max(0, Math.round((durationMs || 0) / 1000))
-    const rawBody = `${planName || _t(lang, 'taskFallback')} · ${status || 'done'} · ${seconds}s`
-    const summary = await buildSummary(rawBody, config, { maxChars: 50, timeoutMs: 10000 })
-    const name    = planName || _t(lang, 'taskFallback')
-    const title   = _t(lang, 'scheduledTask', { name })
+    const lang      = config?.language || 'en'
+    const timeoutMs = _resolveSummaryTimeout(config)
+    const seconds   = Math.max(0, Math.round((durationMs || 0) / 1000))
+    const rawBody   = `${planName || _t(lang, 'taskFallback')} · ${status || 'done'} · ${seconds}s`
+    const summary   = await buildSummary(rawBody, config, { maxChars: 50, timeoutMs })
+    const name      = planName || _t(lang, 'taskFallback')
+    const title     = _t(lang, 'scheduledTask', { name })
     sendNotification({
       title,
       body: summary || hardTruncate(rawBody, 50),

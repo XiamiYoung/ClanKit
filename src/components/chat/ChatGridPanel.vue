@@ -323,7 +323,6 @@ const { interrupt } = useInterrupt({
   collaborationCancelled: _interruptRefs.collaborationCancelled,
   isInCollaborationLoop: _interruptRefs.isInCollaborationLoop,
   runningAgentKeys: _interruptRefs.runningAgentKeys,
-  dbg: (msg, level) => console.log(`[grid:${props.chatId.slice(0,8)}][interrupt] ${msg}`),
 })
 
 // ── Explicit group audience selection ──

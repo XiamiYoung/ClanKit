@@ -74,7 +74,7 @@
 
           <!-- System info banner (stop/resume/compaction notifications) -->
           <div v-else-if="msg.role === 'system'" class="cw-system-banner"
-            :class="msg.compaction ? 'cw-system-banner--compact' : msg.interruptType === 'stop' ? 'cw-system-banner--stop' : msg.interruptType === 'pause' ? 'cw-system-banner--pause' : ''">
+            :class="msg.compaction ? (msg.compactionKind === 'overflow-recovery' ? 'cw-system-banner--compact-recovery' : 'cw-system-banner--compact') : msg.interruptType === 'stop' ? 'cw-system-banner--stop' : msg.interruptType === 'pause' ? 'cw-system-banner--pause' : ''">
             <!-- Compaction icon -->
             <svg v-if="msg.compaction" style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/>
@@ -92,7 +92,15 @@
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
             <template v-if="msg.compaction">
-              <span class="cw-system-banner-text">{{ t('chats.contextCompacted') }}</span>
+              <span class="cw-system-banner-text">{{
+                msg.compactionKind === 'overflow-recovery' ? t('chats.contextCompactedRecovery')
+                : msg.compactionKind === 'auto'            ? t('chats.contextCompactedAuto')
+                : t('chats.contextCompacted')
+              }}</span>
+              <template v-if="msg.agentName">
+                <span class="cw-system-banner-sep">·</span>
+                <span class="cw-system-banner-agent">{{ msg.agentName }}</span>
+              </template>
               <template v-if="msg.tokensBefore && msg.tokensAfter">
                 <span class="cw-system-banner-sep">·</span>
                 <span class="cw-system-banner-tokens">
@@ -1210,6 +1218,11 @@ defineExpose({ scrollToBottom })
   border-color: rgba(99, 102, 241, 0.2);
   color: #6366F1;
 }
+.cw-system-banner--compact-recovery {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.28);
+  color: #B45309;
+}
 .cw-system-banner-sep {
   color: rgba(99, 102, 241, 0.35);
   font-size: 0.7rem;
@@ -1225,6 +1238,13 @@ defineExpose({ scrollToBottom })
 .cw-system-banner-text {
   line-height: 1.4;
   display: block;
+}
+.cw-system-banner-agent {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: rgba(99, 102, 241, 0.9);
+  letter-spacing: 0.01em;
 }
 
 

@@ -581,10 +581,17 @@ async function handleFetchModels() {
     } else {
       const models = modelsStore.getModelsForProvider(wizardProviderId.value)
       if (models.length) {
-        // Default to the first model in the provider's API response — predictable and matches
-        // the order shown in the dropdown (previously called recommendModel which returned
-        // a median-by-cost or last-of-two pick and surprised users).
-        selectedModelId.value = models[0].id
+        try {
+          const rec = await window.electronAPI.recommendModel({
+            providerType: selectedProviderType.value,
+            modelIds: models.map(m => m.id),
+          })
+          selectedModelId.value = (rec?.modelId && models.some(m => m.id === rec.modelId))
+            ? rec.modelId
+            : models[0].id
+        } catch {
+          selectedModelId.value = models[0].id
+        }
       }
     }
   } catch (err) {

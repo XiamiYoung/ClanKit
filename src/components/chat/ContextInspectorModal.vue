@@ -63,18 +63,25 @@
             <table style="width:100%; font-size:var(--fs-body);">
               <tbody>
                 <tr style="border-bottom:1px solid #1E1E1E;">
-                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.inputTokens') }}</td>
+                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.totalInputTokens') }}</td>
                   <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ fmtTokens(aggregateMetrics.inputTokens ?? 0) }}</td>
                 </tr>
                 <tr style="border-bottom:1px solid #1E1E1E;">
-                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.outputTokens') }}</td>
+                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.totalOutputTokens') }}</td>
                   <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ fmtTokens(aggregateMetrics.outputTokens ?? 0) }}</td>
                 </tr>
-                <tr style="border-bottom:1px solid #1E1E1E;">
+                <!-- Context window / context % are only meaningful for a single agent's
+                     ContextManager. In group chat each agent has its own window; a shared
+                     number would be misleading (see user feedback), so hide these rows. -->
+                <tr v-if="!isGroupChat" style="border-bottom:1px solid #1E1E1E;">
                   <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.contextWindow') }}</td>
-                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ aggregateMetrics.maxTokens ? fmtTokens(aggregateMetrics.maxTokens) : '—' }}</td>
+                  <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;"
+                    :style="aggregateMetrics.maxTokens ? 'color:#E5E5EA;' : 'color:#f87171;'">
+                    <template v-if="aggregateMetrics.maxTokens">{{ fmtTokens(aggregateMetrics.maxTokens) }}</template>
+                    <template v-else>— <span style="font-family:'Inter',sans-serif; font-weight:500; font-size:var(--fs-caption); color:#f87171;">{{ t('chats.contextUnknownWindow') }}</span></template>
+                  </td>
                 </tr>
-                <tr style="border-bottom:1px solid #1E1E1E;">
+                <tr v-if="!isGroupChat && aggregateMetrics.maxTokens" style="border-bottom:1px solid #1E1E1E;">
                   <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.context') }}</td>
                   <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace;"
                     :style="(aggregateMetrics.percentage ?? 0) > 85 ? 'color:#f87171;' : (aggregateMetrics.percentage ?? 0) > 65 ? 'color:#fbbf24;' : 'color:#E5E5EA;'">
@@ -82,7 +89,7 @@
                   </td>
                 </tr>
                 <tr :style="(contextMetrics.voiceInputTokens || contextMetrics.voiceOutputTokens) ? 'border-bottom:1px solid #1E1E1E;' : ''">
-                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.compactions') }}</td>
+                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.compactionCount') }}</td>
                   <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ aggregateMetrics.compactionCount ?? 0 }}</td>
                 </tr>
                 <template v-if="contextMetrics.voiceInputTokens || contextMetrics.voiceOutputTokens">
@@ -548,6 +555,8 @@ const chatAgentIds = computed(() => {
   if (chat.systemAgentId) return [chat.systemAgentId]
   return []
 })
+
+const isGroupChat = computed(() => chatAgentIds.value.length > 1)
 
 // ── Agent cards ───────────────────────────────────────────────────────────────
 

@@ -18,6 +18,7 @@ const { AnthropicClient }  = require('./core/AnthropicClient')
 const { OpenAIClient }     = require('./core/OpenAIClient')
 const { GeminiClient }       = require('./core/GeminiClient')
 const { ContextManager }   = require('./core/ContextManager')
+const ctxErrorDetector     = require('./core/contextErrorDetector')
 const { ToolRegistry }     = require('./tools/ToolRegistry')
 const { SubAgentManager }  = require('./managers/SubAgentManager')
 const { TaskManager }      = require('./managers/TaskManager')
@@ -968,7 +969,7 @@ class AgentLoop {
             conversationMessages.length = 0
             conversationMessages.push(...createParams.messages)
           }
-          onChunk({ type: 'compaction', message: 'Context compacted to continue conversation' })
+          onChunk({ type: 'compaction_applied', kind: 'auto', message: 'Context compacted to continue conversation' })
           this.contextManager.inputTokens = Math.floor(this.contextManager.inputTokens * 0.4)
         }
 
@@ -979,7 +980,7 @@ class AgentLoop {
             logger.agent('Manual compaction requested', { inputTokens: this.contextManager.inputTokens })
             Object.assign(createParams, this.contextManager.applyCompaction(createParams))
             this.contextManager.compactionCount++
-            onChunk({ type: 'compaction', message: 'Manual compaction applied' })
+            onChunk({ type: 'compaction_applied', kind: 'manual', message: 'Manual compaction applied' })
           }
         }
 
@@ -996,7 +997,7 @@ class AgentLoop {
           logger.agent('Applying compaction', { inputTokens: this.contextManager.inputTokens })
           Object.assign(createParams, this.contextManager.applyCompaction(createParams))
           this.contextManager.compactionCount++
-          onChunk({ type: 'compaction', message: 'Context compacted to fit window' })
+          onChunk({ type: 'compaction_applied', kind: 'auto', message: 'Context compacted to fit window' })
         }
 
         // ── Context trimming for OpenAI-compat providers ──
@@ -1007,7 +1008,8 @@ class AgentLoop {
           )
           conversationMessages.length = 0
           conversationMessages.push(...createParams.messages)
-          onChunk({ type: 'compaction', message: 'Older messages trimmed to fit context' })
+          this.contextManager.compactionCount++
+          onChunk({ type: 'compaction_applied', kind: 'auto', message: 'Older messages trimmed to fit context' })
         }
 
         // ── Sanitize request: strip lone surrogates that break JSON encoding ──
@@ -1223,11 +1225,16 @@ class AgentLoop {
         } else if (this.isOpenAI) {
           // ── OpenAI-format streaming ──
           const openaiMessages = this._toOpenAIMessages(systemPrompt, conversationMessages)
-          // Cap max_tokens by known model context window (passed from Vue metadata)
+          // Cap max_tokens by known model context window (passed from Vue metadata).
+          // When the window is unknown, fall back to a conservative cap so we don't
+          // request 32K output from a model whose real output limit is 4K.
           let effectiveMaxTokens = configuredMaxTokens
           const ctxWindow = this.config.modelContextWindow
           if (ctxWindow && ctxWindow > 0) {
             effectiveMaxTokens = Math.min(effectiveMaxTokens, Math.floor(ctxWindow * 0.75))
+          } else {
+            const UNKNOWN_WINDOW_MAX_TOKENS = 4096
+            effectiveMaxTokens = Math.min(effectiveMaxTokens, UNKNOWN_WINDOW_MAX_TOKENS)
           }
           const openaiParams = {
             model,
@@ -1333,6 +1340,11 @@ class AgentLoop {
                     }
                   } else {
                     // Case C: messages alone exceed limit even without tools — trim messages + drop tools
+                    // Cooldown-guarded: refuse to silently compact a second time within the window.
+                    if (!ctxErrorDetector.canReactiveCompact(this.config.chatId)) {
+                      logger.warn('Reactive compaction cooldown active — surfacing error instead', { chatId: this.config.chatId })
+                      throw streamErr
+                    }
                     const trimmed = this._trimMessagesToFit(openaiParams.messages, msgTokens, ctxLimit)
                     if (trimmed.length > 0) {
                       const available = Math.max(256, Math.floor(ctxLimit * 0.25))
@@ -1342,7 +1354,7 @@ class AgentLoop {
                       try {
                         stream = await client.chat.completions.create(retryParams, { signal: this._abortController.signal })
                         retried = true
-                        onChunk({ type: 'warning', code: 'context_trimmed' })
+                        this._emitOverflowRecoveryBanner(onChunk, msgTokens, ctxLimit)
                       } catch (retryErr) {
                         logger.error('Context overflow retry (trimmed+no tools) also FAILED', retryErr.message)
                         throw retryErr
@@ -1351,6 +1363,10 @@ class AgentLoop {
                   }
                 } else if (msgTokens > ctxLimit && openaiParams.tools?.length > 0) {
                   // Case D1: total exceeds limit and tools present (no breakdown) — drop tools + trim
+                  if (!ctxErrorDetector.canReactiveCompact(this.config.chatId)) {
+                    logger.warn('Reactive compaction cooldown active — surfacing error instead', { chatId: this.config.chatId })
+                    throw streamErr
+                  }
                   const trimmed = this._trimMessagesToFit(openaiParams.messages, msgTokens, ctxLimit)
                   if (trimmed.length > 0) {
                     const available = Math.max(256, Math.floor(ctxLimit * 0.25))
@@ -1360,7 +1376,7 @@ class AgentLoop {
                     try {
                       stream = await client.chat.completions.create(retryParams, { signal: this._abortController.signal })
                       retried = true
-                      onChunk({ type: 'warning', code: 'context_trimmed' })
+                      this._emitOverflowRecoveryBanner(onChunk, msgTokens, ctxLimit)
                     } catch (retryErr) {
                       logger.error('Context overflow retry (total, trimmed+no tools) also FAILED', retryErr.message)
                       throw retryErr
@@ -1368,6 +1384,10 @@ class AgentLoop {
                   }
                 } else if (msgTokens > ctxLimit) {
                   // Case D2: no tools but messages still exceed — trim messages only
+                  if (!ctxErrorDetector.canReactiveCompact(this.config.chatId)) {
+                    logger.warn('Reactive compaction cooldown active — surfacing error instead', { chatId: this.config.chatId })
+                    throw streamErr
+                  }
                   const trimmed = this._trimMessagesToFit(openaiParams.messages, msgTokens, ctxLimit)
                   if (trimmed.length > 0) {
                     const available = Math.max(256, Math.floor(ctxLimit * 0.25))
@@ -1376,7 +1396,7 @@ class AgentLoop {
                     try {
                       stream = await client.chat.completions.create(retryParams, { signal: this._abortController.signal })
                       retried = true
-                      onChunk({ type: 'warning', code: 'context_trimmed' })
+                      this._emitOverflowRecoveryBanner(onChunk, msgTokens, ctxLimit)
                     } catch (retryErr) {
                       logger.error('Context overflow retry (trimmed) also FAILED', retryErr.message)
                       throw retryErr
@@ -1552,7 +1572,11 @@ class AgentLoop {
           const openaiToolCalls = []
           for (const [, acc] of toolCallAccumulators) {
             let parsedArgs = {}
-            try { parsedArgs = JSON.parse(acc.arguments || '{}') } catch {}
+            try {
+              parsedArgs = JSON.parse(acc.arguments || '{}')
+            } catch (e) {
+              logger.warn('[AgentLoop] tool_call arguments not valid JSON, defaulting to {}', { name: acc.name, raw: acc.arguments?.slice(0, 200) })
+            }
             assistantContent.push({
               type: 'tool_use',
               id: acc.id,
@@ -1562,7 +1586,7 @@ class AgentLoop {
             openaiToolCalls.push({
               id: acc.id,
               type: 'function',
-              function: { name: acc.name, arguments: acc.arguments || '{}' }
+              function: { name: acc.name, arguments: JSON.stringify(parsedArgs) }
             })
           }
 
@@ -2200,6 +2224,23 @@ class AgentLoop {
    */
   _toOpenAIMessages(systemPrompt, messages) {
     return mc.toOpenAIMessages(systemPrompt, messages)
+  }
+
+  /**
+   * Emit a system banner indicating that the agent loop recovered from a
+   * provider context_length_exceeded error by trimming messages inline.
+   * Bumps compactionCount, records the cooldown, and sends a `compaction_applied`
+   * chunk that the renderer turns into a visible system banner.
+   */
+  _emitOverflowRecoveryBanner(onChunk, msgTokens, ctxLimit) {
+    this.contextManager.compactionCount++
+    ctxErrorDetector.markReactiveCompact(this.config.chatId)
+    onChunk({
+      type: 'compaction_applied',
+      kind: 'overflow-recovery',
+      tokensBefore: msgTokens || 0,
+      tokensAfter: Math.floor((ctxLimit || 0) * 0.70),
+    })
   }
 
   /**

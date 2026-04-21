@@ -5,22 +5,22 @@
  * For other models, falls back to local truncation of older messages.
  *
  * Emits context usage metrics: { inputTokens, outputTokens, totalTokens, maxTokens, percentage }
+ *
+ * When maxContextTokens is not provided (unknown model), automatic compaction
+ * thresholds do not fire. Safety is delegated to reactive compaction in the
+ * agent loop, which triggers on provider `context_length_exceeded` errors.
  */
 const { logger } = require('../../logger')
-
-const DEFAULT_MAX_CONTEXT_TOKENS = 1_000_000  // Claude Sonnet/Opus context window (1M)
 
 class ContextManager {
   constructor(anthropicClient, maxContextTokens) {
     this.anthropicClient  = anthropicClient
-    // Track whether we actually know the model's context window (passed from Vue).
-    // When unknown, don't surface a fake number to the UI — only use the default
-    // internally for compaction thresholds.
+    // When maxContextTokens is falsy the window is unknown; thresholds stay null
+    // so shouldCompact() / isExhausted() / localTrim() never fire preemptively.
     this.hasKnownContext  = !!maxContextTokens
-    this.maxContextTokens = maxContextTokens || DEFAULT_MAX_CONTEXT_TOKENS
-    // Thresholds are proportional to the model's actual context window
-    this.compactTrigger  = Math.round(this.maxContextTokens * 0.70)
-    this.localTrimTarget = Math.round(this.maxContextTokens * 0.40)
+    this.maxContextTokens = this.hasKnownContext ? maxContextTokens : null
+    this.compactTrigger   = this.hasKnownContext ? Math.round(maxContextTokens * 0.70) : null
+    this.localTrimTarget  = this.hasKnownContext ? Math.round(maxContextTokens * 0.40) : null
     this.inputTokens  = 0
     this.outputTokens = 0
     this.cacheCreationInputTokens = 0
@@ -55,13 +55,18 @@ class ContextManager {
     }
   }
 
-  /** Check whether we should compact before the next API call */
+  /** Check whether we should compact before the next API call.
+   *  Returns false when the window is unknown — reactive compaction handles
+   *  the unknown-window case via provider error detection instead. */
   shouldCompact() {
+    if (!this.hasKnownContext) return false
     return this.inputTokens >= this.compactTrigger
   }
 
-  /** Check whether the context window is nearly exhausted (>90%) */
+  /** Check whether the context window is nearly exhausted (>90%).
+   *  Returns false when the window is unknown. */
   isExhausted() {
+    if (!this.hasKnownContext) return false
     return this.inputTokens >= this.maxContextTokens * 0.9
   }
 
@@ -153,7 +158,9 @@ class ContextManager {
       }
     }
 
-    // Stage 2: hard clear if total chars still over threshold
+    // Stage 2: hard clear if total chars still over threshold.
+    // Skip stage 2 entirely when window is unknown — stage 1 soft trim already happened.
+    if (!this.hasKnownContext) return msgs
     const totalChars = msgs.reduce((sum, m) => sum + JSON.stringify(m).length, 0)
     const maxChars = this.maxContextTokens * CHARS_PER_TOKEN
     if (totalChars / maxChars < HARD_CLEAR_RATIO) return msgs
@@ -179,9 +186,11 @@ class ContextManager {
   /**
    * Local truncation for non-Opus models: trim older messages keeping
    * the system context and the last N messages.
+   * When the window is unknown this is a no-op unless forced by a caller
+   * (reactive compaction passes estimatedTokens=Infinity to bypass the guard).
    */
   localTrim(messages, estimatedTokens) {
-    if (estimatedTokens < this.compactTrigger) return messages
+    if (this.hasKnownContext && estimatedTokens < this.compactTrigger) return messages
     if (messages.length <= 4) return messages
 
     logger.agent('ContextManager: local trim triggered', {

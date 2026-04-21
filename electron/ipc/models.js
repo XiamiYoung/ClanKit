@@ -231,6 +231,12 @@ ${modelIds.join('\n')}`
     return { table: getAllDefaults(ds.paths().DATA_DIR), fallback: FALLBACK_MAX_OUTPUT_TOKENS }
   })
 
+  // Full chat-model catalog for UI pickers (edit-limits modal search).
+  ipcMain.handle('models:get-catalog-entries', async () => {
+    const { getAllChatModelEntries } = require('../agent/modelDefaults')
+    return { entries: getAllChatModelEntries(ds.paths().DATA_DIR) }
+  })
+
   ipcMain.handle('models:recommend', async (_, { providerType, modelIds }) => {
     const { recommendModel } = require('../agent/modelDefaults')
     return recommendModel(providerType, modelIds, ds.paths().DATA_DIR)

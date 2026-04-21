@@ -35,7 +35,10 @@ export const useModelsStore = defineStore('models', () => {
     const next = { ...providerModels.value }
     for (const [providerId, entry] of Object.entries(next)) {
       if (!entry?.models?.length) continue
-      const needsEnrich = entry.models.some(m => !m.context_length || !m.max_output_tokens)
+      const needsEnrich = entry.models.some(m =>
+        !m.context_length || !m.max_output_tokens ||
+        (m.input_cost_per_token == null && m.output_cost_per_token == null)
+      )
       if (!needsEnrich) continue
       try {
         const res = await window.electronAPI.enrichModelsFromCatalog(JSON.parse(JSON.stringify({
@@ -341,6 +344,30 @@ export const useModelsStore = defineStore('models', () => {
     return map
   }
 
+  /** Returns the source of context_length for a given modelId:
+   *  'override' (user-set in config), 'api' (provider API), 'catalog' (litellm enrichment),
+   *  or null when the model's window is unknown.
+   *  Used by the chat UI to show a red "!" badge next to the compact button. */
+  function getContextSource(modelId) {
+    if (!modelId) return null
+    // 1. User override always wins
+    for (const provider of (configStore.config.providers || [])) {
+      const s = provider.modelSettings?.[modelId]
+      if (s?.contextWindow && Number(s.contextWindow) > 0) return 'override'
+    }
+    // 2. Cached provider entries — contextSource was tagged at enrich time ('api' or 'catalog')
+    for (const entry of Object.values(providerModels.value)) {
+      for (const m of (entry.models || [])) {
+        if (m.id === modelId && m.context_length) return m.contextSource || 'api'
+      }
+    }
+    // 3. Anthropic hardcoded fallback counts as 'catalog' — we know the window
+    for (const m of _getAnthropicModels()) {
+      if (m.id === modelId && m.context_length) return 'catalog'
+    }
+    return null
+  }
+
   /** Returns { modelId: max_output_tokens } for cached models that have the field (e.g. Google) */
   function getAllMaxOutputTokens() {
     const map = {}
@@ -368,6 +395,7 @@ export const useModelsStore = defineStore('models', () => {
     isCached,
     hasMissingContext,
     getAllContextWindows,
+    getContextSource,
     getAllMaxOutputTokens,
   }
 })

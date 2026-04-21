@@ -18,7 +18,6 @@ import { useChatsStore } from '../stores/chats'
  * @param {Ref<boolean>} opts.collaborationCancelled
  * @param {Ref<boolean>} opts.isInCollaborationLoop
  * @param {Set}          opts.runningAgentKeys
- * @param {Function}     [opts.dbg]
  */
 export function useInterrupt({
   chatId,
@@ -28,7 +27,6 @@ export function useInterrupt({
   collaborationCancelled,
   isInCollaborationLoop,
   runningAgentKeys,
-  dbg,
 }) {
   const chatsStore = useChatsStore()
 
@@ -92,42 +90,29 @@ export function useInterrupt({
   let _busy = false
 
   async function interrupt(overrideChatId) {
-    if (_busy) {
-      console.warn('[interrupt] re-entrant call blocked')
-      return
-    }
+    if (_busy) return
     const cid = _resolveChatId(overrideChatId)
-    if (!cid) { console.warn('[interrupt] no chatId → skip'); return }
+    if (!cid) return
 
     const chat = chatsStore.chats.find(c => c.id === cid)
-    if (!chat?.messages?.length) {
-      console.warn('[interrupt] no messages → skip')
-      return
-    }
+    if (!chat?.messages?.length) return
 
     // Find the last assistant msg that is streaming or waiting
     const lastAssistantMsg = [...chat.messages].reverse().find(
       m => m.role === 'assistant' && (m.streaming || m.isWaitingIndicator)
     )
-    if (!lastAssistantMsg) {
-      console.warn('[interrupt] no streaming/waiting assistant msg → skip')
-      return
-    }
+    if (!lastAssistantMsg) return
 
     _busy = true
 
     // Capture activity BEFORE stopping (stop will modify/remove the msg)
     const hasActivity = _hasActivity(lastAssistantMsg)
-    const segDetail = (lastAssistantMsg.segments || []).map(s => `{type:${s.type},output:${s.output},content:"${(s.content||'').slice(0,20)}"}`).join(',')
-    console.warn(`[interrupt] chatId=${cid} msgId=${lastAssistantMsg.id} hasActivity=${hasActivity} isWaiting=${!!lastAssistantMsg.isWaitingIndicator} streaming=${!!lastAssistantMsg.streaming} content="${(lastAssistantMsg.content || '').slice(0, 50)}" segments=[${segDetail}]`)
 
     // Step 1: terminate the agent (await ensures cleanup is done before recall)
     await _stopAgent(cid)
-    console.warn('[interrupt] _stopAgent done')
 
     // Step 2: agent had activity → keep all bubbles, done
     if (hasActivity) {
-      console.warn('[interrupt] agent had activity → keep bubbles, done')
       _busy = false
       return
     }
@@ -135,14 +120,12 @@ export function useInterrupt({
     // Step 3: agent hadn't started → recall user message to textarea
     const lastUserMsg = [...chat.messages].reverse().find(m => m.role === 'user')
     if (!lastUserMsg) {
-      console.warn('[interrupt] no user msg to recall → done')
       _busy = false
       return
     }
 
     const retrievedText = lastUserMsg.content || ''
     const retrievedAttachments = lastUserMsg.attachments || []
-    console.warn(`[interrupt] recalling: text="${retrievedText.slice(0, 50)}" attachments=${retrievedAttachments.length}`)
 
     if (inputText?.value?.trim()) {
       inputText.value = inputText.value + '\n' + retrievedText
@@ -155,7 +138,6 @@ export function useInterrupt({
 
     // Delete the user message bubble
     await chatsStore.deleteMessage(cid, lastUserMsg.id)
-    console.warn(`[interrupt] user msg deleted, inputText="${(inputText?.value || '').slice(0, 50)}" remaining msgs=${chat.messages?.length}`)
 
     nextTick(() => mentionInputRef?.value?.focus?.())
     _busy = false

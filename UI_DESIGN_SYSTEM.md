@@ -110,6 +110,29 @@ Text on gradient surfaces is always `#FFFFFF`. Secondary text on gradients uses 
 - Footer: gray background `#F9F9F9` with border-top
 - `confirmClass="danger"` for destructive actions, `"primary"` for non-destructive
 
+### AppTooltip (`src/components/common/AppTooltip.vue`)
+- The **only** tooltip allowed in the app. **Never** use the native HTML `title` attribute or custom inline tooltip CSS — always reach for this component so every hover hint shares one style, one delay, and one viewport-aware positioning pass.
+- Teleported to `<body>` with `position: fixed` + `z-index: 9999`, so it renders correctly inside modals, scroll containers, and `overflow: hidden` parents.
+- Dark surface: `#1A1A1A` background, white text, `border-radius: 0.625rem`, soft shadow `0 8px 24px rgba(0,0,0,0.18)`.
+- **Width matches content length**: the box uses `width: max-content` with `max-width: min(18rem, calc(100vw - 16px))` so short text = compact tag, long text = wraps at max-width. Never wider than the viewport.
+- **Viewport-aware positioning**: after mount, the component measures the tooltip's actual box, **flips** to the opposite side when the preferred placement would overflow (top↔bottom, left↔right), and **clamps** final coordinates so the tooltip can never render off-screen.
+- Text: Inter `0.6875rem` / `font-weight: 500`, line-height 1.5, wraps up to `max-width` — use short hints, not paragraphs.
+- Props:
+  - `text` (string) — short hint; if empty and no `content` slot provided, the tooltip is suppressed automatically.
+  - `placement` (`'top' | 'bottom' | 'left' | 'right'`, default `'bottom'`) — `top` is preferred for dense rows where `bottom` would overflow the viewport.
+  - `offset` (number, default `8`) — gap between trigger and tooltip in px.
+  - `delay` (number, default `120`) — ms before the tooltip appears; keep the default unless there's a good reason.
+  - `disabled` (boolean) — force-hide without conditionally removing the component.
+- Rich content: use the `content` slot for key/value layouts. Pair with the provided `.app-tooltip-row` / `.att-key` / `.att-val` global classes for consistent key/value pairs (e.g. a cost breakdown tooltip).
+- Usage:
+  ```vue
+  <AppTooltip :text="t('config.priceFromCatalog')" placement="top">
+    <span class="cv-model-price-tag">...</span>
+  </AppTooltip>
+  ```
+- The wrapper is an `inline-flex` span — it does not break the parent's flex layout, but wrap only the element that should own the hover target (don't wrap entire rows).
+- Shows/hides on `mouseenter` / `mouseleave` and `focusin` / `focusout`, so keyboard users get the same hint.
+
 ### Modals (General Rules)
 - **Modal-first rule**: All dialogs, pickers, confirmations, and configuration panels MUST be implemented as proper centered modals. **Never use inline popovers, anchored dropdowns, or absolutely-positioned panels attached to trigger elements.** If UI needs to float over content, it is a modal.
 - All modals are **true modals** — they do **NOT** close on backdrop click. **Never add `@click.self` or any click handler to the backdrop div.** Users must explicitly dismiss via Cancel, X button, or Escape key. No exceptions — this applies to every dialog including cost overview, settings panels, pickers, and confirmations.

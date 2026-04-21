@@ -722,11 +722,93 @@ export function useSendMessage({
   }
 
   // ── Compact Context ─────────────────────────────────────────────────────────
+  // Run one standalone compaction for a single agent. Inserts a hidden user/assistant
+  // summary pair tagged with `_compactionAgentId` (so only this agent sees it in
+  // `_buildAgentRuns` on the next turn) and a visible banner naming the agent.
+  async function _compactStandaloneForAgent(chatId, targetChat, agent, { isGroup = false } = {}) {
+    const agentId   = agent?.id || null
+    // Only expose the agent name in the banner for group chats — single-agent chats
+    // only have one participant so the label is redundant noise.
+    const agentName = (isGroup && agent?.name) ? agent.name : null
+    const tokensBefore = targetChat.contextMetrics?.inputTokens || 0
+
+    const apiMessages = targetChat.messages
+      .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
+      // Filter to this agent's relevant history: drop other agents' compaction pairs
+      // so this compaction call doesn't re-summarize another agent's summary.
+      .filter(m => !(m.compaction && m._compactionAgentId && m._compactionAgentId !== agentId))
+      .map(m => ({ role: m.role, content: m.content }))
+
+    const raw = configStore.config
+    const chatProvider = agent?.providerId || 'anthropic'
+    const cfg = { ...raw }
+    applyProviderCredsToConfig(cfg, chatProvider)
+    const resolvedModel = agent?.modelId || null
+    if (resolvedModel) cfg.customModel = resolvedModel
+
+    try {
+      const res = await window.electronAPI.compactContextStandalone({
+        chatId,
+        messages: JSON.parse(JSON.stringify(apiMessages)),
+        config: JSON.parse(JSON.stringify(cfg)),
+        enabledAgents: [],
+        enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value))
+      })
+
+      if (res.success) {
+        dbg(`Compaction done for ${agentName || 'agent'} — input tokens: ${res.metrics?.inputTokens?.toLocaleString() ?? '?'}`, 'success')
+
+        // Update chat-level metrics only for single-agent chats; group chats keep per-agent.
+        if (res.metrics && !agentId) targetChat.contextMetrics = { ...res.metrics }
+
+        await chatsStore.addMessage(chatId, {
+          role: 'user',
+          content: '[Context compaction requested]',
+          compaction: true,
+          hidden: true,
+          _compactionAgentId: agentId,
+        })
+        await chatsStore.addMessage(chatId, {
+          role: 'assistant',
+          content: res.assistantContent || '[Context compacted]',
+          compaction: true,
+          hidden: true,
+          _compactionAgentId: agentId,
+        })
+        const tokensAfter = res.metrics?.inputTokens || 0
+        await chatsStore.addMessage(chatId, {
+          role: 'system',
+          compaction: true,
+          compactionKind: 'manual',
+          agentId,
+          agentName,
+          tokensBefore,
+          tokensAfter,
+          content: 'Context compacted',
+          segments: [{ type: 'text', content: 'Context compacted' }],
+          streaming: false,
+        })
+      } else {
+        dbg(`Compaction failed for ${agentName || 'agent'}: ${res.error}`, 'error')
+        await chatsStore.addMessage(chatId, {
+          role: 'system',
+          agentId,
+          agentName,
+          content: `Context compaction failed${agentName ? ' for ' + agentName : ''}: ${res.error || 'unknown error'}`
+        })
+      }
+    } catch (err) {
+      dbg(`Compaction error for ${agentName || 'agent'}: ${err.message}`, 'error')
+    }
+  }
+
   async function compactContext() {
     const chatId = chatsStore.activeChatId
     if (!chatId) return
 
-    // If agent is running, set the flag for next iteration (existing behavior)
+    // If agent is running: backend iterates active loops (single + group) and calls
+    // requestCompaction on each. Per-agent banners are then emitted via compaction_applied
+    // chunks, which useChunkHandler renders into the chat.
     if (activeRunning.value) {
       if (window.electronAPI?.compactContext) {
         dbg('Requesting in-loop compaction…', 'info')
@@ -741,75 +823,26 @@ export function useSendMessage({
     const targetChat = chatsStore.chats.find(c => c.id === chatId)
     if (!targetChat || !targetChat.messages) return
 
-    const tokensBefore = targetChat.contextMetrics?.inputTokens || 0
-
     isCompacting.value = true
     dbg('Starting standalone compaction…', 'info')
 
     try {
-      const apiMessages = targetChat.messages
-        .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
-        .map(m => ({ role: m.role, content: m.content }))
+      const groupIds = targetChat.groupAgentIds || []
+      const isGroup  = groupIds.length > 1
 
-      // Build a flat config the AgentLoop constructor expects (same pattern as sendMessage).
-      // AnthropicClient reads config.apiKey / config.baseURL at the top level.
-      const raw = configStore.config
-      const sysAgentId = targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id
-      const sysAgent = sysAgentId ? agentsStore.getAgentById(sysAgentId) : agentsStore.defaultSystemAgent
-      const chatProvider = sysAgent?.providerId || 'anthropic'
-      const cfg = { ...raw }
-      applyProviderCredsToConfig(cfg, chatProvider)
-      const resolvedModel = sysAgent?.modelId || null
-      if (resolvedModel) cfg.customModel = resolvedModel
-
-      const res = await window.electronAPI.compactContextStandalone({
-        chatId,
-        messages: JSON.parse(JSON.stringify(apiMessages)),
-        config: JSON.parse(JSON.stringify(cfg)),
-        enabledAgents: [],
-        enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value))
-      })
-
-      if (res.success) {
-        dbg(`Compaction done — input tokens: ${res.metrics?.inputTokens?.toLocaleString() ?? '?'}`, 'success')
-
-        if (res.metrics) targetChat.contextMetrics = { ...res.metrics }
-
-        // Hidden user/assistant pair preserves the compaction exchange in LLM context,
-        // while the visible system banner is the only thing shown in the UI.
-        await chatsStore.addMessage(chatId, {
-          role: 'user',
-          content: '[Context compaction requested]',
-          compaction: true,
-          hidden: true,
-        })
-        await chatsStore.addMessage(chatId, {
-          role: 'assistant',
-          content: res.assistantContent || '[Context compacted]',
-          compaction: true,
-          hidden: true,
-        })
-        // Visible indicator shown in chat
-        const tokensAfter = res.metrics?.inputTokens || 0
-        await chatsStore.addMessage(chatId, {
-          role: 'system',
-          compaction: true,
-          tokensBefore,
-          tokensAfter,
-          content: 'Context compacted',
-          segments: [{ type: 'text', content: 'Context compacted' }],
-          streaming: false,
-        })
-        scrollToBottom()
+      if (!isGroup) {
+        // Single-agent path (system agent of this chat, or default)
+        const sysAgentId = targetChat.systemAgentId || agentsStore.defaultSystemAgent?.id
+        const sysAgent   = sysAgentId ? agentsStore.getAgentById(sysAgentId) : agentsStore.defaultSystemAgent
+        await _compactStandaloneForAgent(chatId, targetChat, sysAgent, { isGroup: false })
       } else {
-        dbg(`Compaction failed: ${res.error}`, 'error')
-        // Surface the error to the user
-        const errMsg = res.error || 'Compaction failed'
-        await chatsStore.addMessage(chatId, {
-          role: 'system',
-          content: `Context compaction failed: ${errMsg}`
-        })
+        // Group path: compact each agent's view in parallel using that agent's own provider.
+        const agents = groupIds.map(id => agentsStore.getAgentById(id)).filter(Boolean)
+        dbg(`Group compaction — ${agents.length} agent(s): ${agents.map(a => a.name).join(', ')}`, 'info')
+        await Promise.all(agents.map(a => _compactStandaloneForAgent(chatId, targetChat, a, { isGroup: true })))
       }
+
+      scrollToBottom()
     } catch (err) {
       dbg(`Compaction error: ${err.message}`, 'error')
     } finally {

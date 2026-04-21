@@ -184,6 +184,39 @@ function getAllDefaults(dataDir) {
   return result
 }
 
+/**
+ * Return the full chat-model catalog as an array suitable for UI pickers.
+ * Filters to entries that plausibly represent a chat/completion model — anything
+ * with `mode: 'chat'` OR (no mode but useful fields present). Image generation,
+ * audio, and embedding entries are dropped. Shape per entry:
+ *   { id, provider, context_length, max_output_tokens,
+ *     input_cost_per_token, output_cost_per_token }
+ */
+function getAllChatModelEntries(dataDir) {
+  const catalog = _loadRawCatalog(dataDir)
+  if (!catalog || Object.keys(catalog).length === 0) return []
+  const out = []
+  for (const [key, meta] of Object.entries(catalog)) {
+    if (key === 'sample_spec' || !meta || typeof meta !== 'object') continue
+    if (meta.mode && meta.mode !== 'chat') continue
+    const ctx = meta.max_input_tokens || meta.max_tokens || null
+    const mo  = meta.max_output_tokens || null
+    const inC = meta.input_cost_per_token  ?? null
+    const outC = meta.output_cost_per_token ?? null
+    // Skip entries with no useful fields — they're not worth showing to the user
+    if (!ctx && !mo && inC == null && outC == null) continue
+    out.push({
+      id: key,
+      provider: meta.litellm_provider || null,
+      context_length: ctx,
+      max_output_tokens: mo,
+      input_cost_per_token: inC,
+      output_cost_per_token: outC,
+    })
+  }
+  return out
+}
+
 // Map ClankAI provider type → litellm_provider name
 const PROVIDER_TO_LITELLM = {
   openai_official: 'openai',
@@ -194,6 +227,43 @@ const PROVIDER_TO_LITELLM = {
   mistral: 'mistral',
   groq: 'groq',
   xai: 'xai',
+}
+
+// Curated recommendations per provider — balanced cost/quality sweet spot.
+// Ordered by preference; first available match wins. Matching is case-insensitive
+// and accepts either exact id or id.startsWith(entry) (covers dated suffixes like
+// "qwen-plus-2025-01-25"). Update this list when new flagship-tier mid-priced
+// models ship — not for every new minor release.
+const RECOMMENDED_BY_PROVIDER = {
+  anthropic:       ['claude-sonnet-4-6', 'claude-sonnet-4-5', 'claude-3-7-sonnet', 'claude-3-5-sonnet'],
+  openai_official: ['gpt-4.1', 'gpt-4o'],
+  google:          ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'],
+  deepseek:        ['deepseek-chat'],
+  qwen:            ['qwen-plus-latest', 'qwen-plus', 'qwen-max-latest', 'qwen-max'],
+  openrouter:      ['anthropic/claude-sonnet-4.6', 'anthropic/claude-sonnet-4.5', 'anthropic/claude-3.7-sonnet'],
+  groq:            ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile'],
+  glm:             ['glm-4-plus', 'glm-4-air'],
+  moonshot:        ['kimi-k2-0905-preview', 'moonshot-v1-32k'],
+  doubao:          ['doubao-pro-32k', 'doubao-pro-128k'],
+  mistral:         ['mistral-medium-latest', 'mistral-large-latest'],
+  xai:             ['grok-3', 'grok-2'],
+}
+
+// Try the curated whitelist first. Returns a matched available model id, or null.
+function _pickFromWhitelist(providerType, availableModelIds) {
+  const list = RECOMMENDED_BY_PROVIDER[providerType]
+  if (!list || list.length === 0) return null
+  const lowered = availableModelIds.map(id => [id, id.toLowerCase()])
+  for (const entry of list) {
+    const e = entry.toLowerCase()
+    // Exact match
+    const exact = lowered.find(([, lo]) => lo === e)
+    if (exact) return exact[0]
+    // Prefix match (e.g. "qwen-plus" matches "qwen-plus-2025-01-25")
+    const prefix = lowered.find(([, lo]) => lo.startsWith(e + '-') || lo.startsWith(e + ':'))
+    if (prefix) return prefix[0]
+  }
+  return null
 }
 
 /**
@@ -234,6 +304,12 @@ function recommendModel(providerType, availableModelIds, dataDir) {
   }
   if (availableModelIds.length === 1) {
     return { modelId: availableModelIds[0], reason: 'only model' }
+  }
+
+  // 1. Curated whitelist — fastest path, most explainable, stable across model list churn.
+  const whitelisted = _pickFromWhitelist(providerType, availableModelIds)
+  if (whitelisted) {
+    return { modelId: whitelisted, reason: 'curated recommendation' }
   }
 
   const litellmProvider = PROVIDER_TO_LITELLM[providerType]
@@ -301,12 +377,17 @@ function recommendModel(providerType, availableModelIds, dataDir) {
 }
 
 /**
- * Look up a model's metadata (context_length + max_output_tokens) from the litellm catalog.
+ * Look up a model's metadata (context_length + max_output_tokens + pricing) from the litellm catalog.
  * Tries: exact id → bare id (drop provider prefix) → provider-prefixed id → longest-prefix match.
- * Returns { context_length: number|null, max_output_tokens: number|null }.
+ * Returns { context_length, max_output_tokens, input_cost_per_token, output_cost_per_token,
+ *           cache_read_input_token_cost, cache_creation_input_token_cost } — any may be null.
  */
 function lookupModelCatalog(modelId, providerType, dataDir) {
-  const empty = { context_length: null, max_output_tokens: null }
+  const empty = {
+    context_length: null, max_output_tokens: null,
+    input_cost_per_token: null, output_cost_per_token: null,
+    cache_read_input_token_cost: null, cache_creation_input_token_cost: null,
+  }
   if (!modelId) return empty
   const catalog = _loadRawCatalog(dataDir)
   if (!catalog || Object.keys(catalog).length === 0) return empty
@@ -318,6 +399,10 @@ function lookupModelCatalog(modelId, providerType, dataDir) {
   const pick = (meta) => ({
     context_length:    meta?.max_input_tokens  || meta?.max_tokens || null,
     max_output_tokens: meta?.max_output_tokens || null,
+    input_cost_per_token:             meta?.input_cost_per_token             ?? null,
+    output_cost_per_token:            meta?.output_cost_per_token            ?? null,
+    cache_read_input_token_cost:      meta?.cache_read_input_token_cost      ?? null,
+    cache_creation_input_token_cost:  meta?.cache_creation_input_token_cost  ?? null,
   })
 
   // 1. Exact match on either id or provider-prefixed id
@@ -356,8 +441,16 @@ function lookupModelCatalog(modelId, providerType, dataDir) {
  *
  * Also tags the source of each field so the UI can distinguish catalog-inferred
  * values from values that actually came back from the provider's API:
- *   m.contextSource   = 'api' | 'catalog' | null
- *   m.maxOutputSource = 'api' | 'catalog' | null
+ *   m.contextSource    = 'api' | 'catalog' | null
+ *   m.maxOutputSource  = 'api' | 'catalog' | null
+ *   m.priceSource      = 'api' | 'catalog' | null
+ *
+ * Pricing fields are normalized to USD cost-per-token (matching litellm format):
+ *   m.input_cost_per_token, m.output_cost_per_token,
+ *   m.cache_read_input_token_cost, m.cache_creation_input_token_cost
+ *
+ * OpenRouter-style `m.pricing = { prompt, completion }` strings (USD per token, already)
+ * are promoted to the normalized fields with priceSource='api'.
  */
 function enrichModelsFromCatalog(providerType, models, dataDir) {
   if (!Array.isArray(models) || models.length === 0) return models
@@ -367,7 +460,20 @@ function enrichModelsFromCatalog(providerType, models, dataDir) {
     if (!m.contextSource)   m.contextSource   = m.context_length    ? 'api' : null
     if (!m.maxOutputSource) m.maxOutputSource = m.max_output_tokens ? 'api' : null
 
-    if (m.context_length && m.max_output_tokens) continue
+    // Promote OpenRouter-style { pricing: { prompt, completion } } strings
+    if (m.pricing && typeof m.pricing === 'object') {
+      const prompt     = parseFloat(m.pricing.prompt)
+      const completion = parseFloat(m.pricing.completion)
+      if (Number.isFinite(prompt)     && prompt     >= 0 && m.input_cost_per_token  == null) m.input_cost_per_token  = prompt
+      if (Number.isFinite(completion) && completion >= 0 && m.output_cost_per_token == null) m.output_cost_per_token = completion
+    }
+    if (!m.priceSource) m.priceSource = (m.input_cost_per_token != null || m.output_cost_per_token != null) ? 'api' : null
+
+    const needsEnrich =
+      !m.context_length || !m.max_output_tokens ||
+      m.input_cost_per_token == null || m.output_cost_per_token == null
+    if (!needsEnrich) continue
+
     const hit = lookupModelCatalog(m.id, providerType, dataDir)
     if (!m.context_length && hit.context_length) {
       m.context_length = hit.context_length
@@ -377,6 +483,16 @@ function enrichModelsFromCatalog(providerType, models, dataDir) {
       m.max_output_tokens = hit.max_output_tokens
       m.maxOutputSource   = 'catalog'
     }
+    if (m.input_cost_per_token == null && hit.input_cost_per_token != null) {
+      m.input_cost_per_token = hit.input_cost_per_token
+      m.priceSource = m.priceSource || 'catalog'
+    }
+    if (m.output_cost_per_token == null && hit.output_cost_per_token != null) {
+      m.output_cost_per_token = hit.output_cost_per_token
+      m.priceSource = m.priceSource || 'catalog'
+    }
+    if (m.cache_read_input_token_cost == null     && hit.cache_read_input_token_cost     != null) m.cache_read_input_token_cost     = hit.cache_read_input_token_cost
+    if (m.cache_creation_input_token_cost == null && hit.cache_creation_input_token_cost != null) m.cache_creation_input_token_cost = hit.cache_creation_input_token_cost
   }
   return models
 }
@@ -388,6 +504,7 @@ module.exports = {
   lookupModelCatalog,
   enrichModelsFromCatalog,
   getAllDefaults,
+  getAllChatModelEntries,
   refreshFromRemote,
   recommendModel,
 }
