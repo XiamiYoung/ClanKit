@@ -86,9 +86,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopDocAgent: (requestId) => ipcRenderer.invoke('agent:doc-stop', requestId),
   docPermissionResponse: (requestId, payload) => ipcRenderer.invoke('agent:doc-permission-response', requestId, payload),
   onEditChunk: (callback) => {
-    ipcRenderer.removeAllListeners('agent:edit-chunk')
-    ipcRenderer.on('agent:edit-chunk', (_, data) => callback(data))
-    return () => ipcRenderer.removeAllListeners('agent:edit-chunk')
+    // Per-subscriber listener so concurrent users of the edit-chunk channel
+    // (inline edit + AI Doc panel) don't evict each other. The returned
+    // cleanup removes only this subscription.
+    const listener = (_, data) => callback(data)
+    ipcRenderer.on('agent:edit-chunk', listener)
+    return () => ipcRenderer.removeListener('agent:edit-chunk', listener)
   },
   sendMessage: (params) => ipcRenderer.invoke('agent:send-message', params),
   resolveAddressees: (params) => ipcRenderer.invoke('agent:resolve-addressees', params),
@@ -283,6 +286,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   window: {
     setFullScreen:   (flag) => ipcRenderer.invoke('window:set-fullscreen', flag),
     setMinibar:      (flag) => ipcRenderer.invoke('window:set-minibar', flag),
+    setMinibarExpand: (opts) => ipcRenderer.invoke('window:set-minibar-expand', opts),
     saveMinibarBounds: ()   => ipcRenderer.invoke('window:save-minibar-bounds'),
     setPosition:     (x, y) => ipcRenderer.invoke('window:set-position', x, y),
     minimize:        ()     => ipcRenderer.invoke('window:minimize'),

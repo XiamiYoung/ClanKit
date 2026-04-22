@@ -333,6 +333,19 @@
                       {{ t('agents.model') }} <span class="cfg-required">*</span>
                       <span class="form-label-hint">{{ t('config.backgroundTasks') }}</span>
                     </label>
+                    <div v-if="form.utilityModel.model" class="cv-utility-selected-chip">
+                      <span class="cv-utility-selected-label">{{ form.utilityModel.model }}</span>
+                      <button
+                        type="button"
+                        class="cv-utility-selected-remove"
+                        :title="t('common.clear') || 'Clear'"
+                        @click="form.utilityModel.model = ''; testUtilityModelResult = null"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:0.875rem;height:0.875rem;">
+                          <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+                        </svg>
+                      </button>
+                    </div>
                     <input
                       v-model="utilityModelFilter"
                       type="text"
@@ -340,7 +353,7 @@
                       class="field font-mono field-sm"
                       style="width:100%; margin-bottom:0.5rem;"
                     />
-                    <div class="cv-model-list">
+                    <div class="cv-model-list" ref="utilityModelListRef">
                       <div v-if="utilityModelsLoading" class="test-result" style="border:none; background:transparent;">{{ t('common.loading') }}...</div>
                       <template v-else>
                         <div
@@ -602,10 +615,8 @@
                         <div
                           v-for="m in filteredProviderModels"
                           :key="m.id"
-                          v-memo="[m.id, m._ctxFormatted, m._outFormatted, m._outSource, m._inPriceFormatted, m._outPriceFormatted, m._priceSource, selectedProvider.model === m.id]"
-                          class="cv-model-item"
-                          :class="{ active: selectedProvider.model === m.id }"
-                          @click="selectedProvider.model = m.id"
+                          v-memo="[m.id, m._ctxFormatted, m._outFormatted, m._outSource, m._inPriceFormatted, m._outPriceFormatted, m._priceSource]"
+                          class="cv-model-item cv-model-item-readonly"
                         >
                           <span class="cv-model-name">{{ m.displayName }}</span>
                           <AppTooltip :text="m._ctxTitle" placement="top" class="cv-model-tag-tip">
@@ -2402,16 +2413,33 @@
         </div>
 
         <div class="cv-model-editor-body">
-          <!-- Catalog picker: click to open a dialog with fuzzy search. Selected
-               entry shows as a summary card with id + context/max-output/price pills. -->
+          <!-- Catalog picker: click the button to open a dialog with fuzzy search.
+               When a catalog entry is already matched (auto-detected on open, or
+               picked by the user), a compact card is shown next to the button
+               with id + context/max-out/price pills and a clear button. -->
           <div class="cv-model-editor-field">
             <div class="cv-editor-field-head">
               <label>{{ t('config.catalogSearchLabel') }}</label>
             </div>
 
-            <div v-if="selectedCatalogEntry" class="cv-catalog-selected">
-              <div class="cv-catalog-selected-info">
-                <div class="cv-catalog-selected-id font-mono">{{ selectedCatalogEntry.id }}</div>
+            <div class="cv-catalog-header-row">
+              <button type="button" class="cv-catalog-open-btn" @click="openCatalogDialog">
+                <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span>{{ selectedCatalogEntry ? t('config.catalogChange') : t('config.catalogPickButton') }}</span>
+              </button>
+
+              <div v-if="selectedCatalogEntry" class="cv-catalog-match">
+                <div class="cv-catalog-match-head">
+                  <span class="cv-catalog-match-id font-mono" :title="selectedCatalogEntry.id">{{ selectedCatalogEntry.id }}</span>
+                  <button
+                    type="button"
+                    class="cv-catalog-clear-btn"
+                    :aria-label="t('config.catalogClear')"
+                    @click.stop="clearSelectedCatalogEntry"
+                  >
+                    <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
                 <div class="cv-catalog-row-meta">
                   <span v-if="selectedCatalogEntry.context_length" class="cv-catalog-pill">
                     {{ t('config.contextLabel') }} {{ formatContextWindow(selectedCatalogEntry.context_length) }}
@@ -2425,25 +2453,7 @@
                   </span>
                 </div>
               </div>
-              <div class="cv-catalog-selected-actions">
-                <button type="button" class="cv-catalog-link-btn" @click="openCatalogDialog">
-                  {{ t('config.catalogChange') }}
-                </button>
-                <button
-                  type="button"
-                  class="cv-catalog-clear-btn"
-                  :aria-label="t('config.catalogClear')"
-                  @click="clearSelectedCatalogEntry"
-                >
-                  <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-              </div>
             </div>
-
-            <button v-else type="button" class="cv-catalog-open-btn" @click="openCatalogDialog">
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <span>{{ t('config.catalogPickButton') }}</span>
-            </button>
 
             <p class="hint">{{ t('config.catalogSearchHint') }}</p>
           </div>
@@ -2547,55 +2557,89 @@
   <Teleport to="body">
     <div v-if="catalogDialogOpen" class="modal-backdrop" style="z-index:10002;">
       <div class="cv-catalog-dialog">
+        <!-- Header -->
         <div class="cv-catalog-dialog-header">
-          <div class="cv-catalog-dialog-title">{{ t('config.catalogDialogTitle') }}</div>
-          <button class="cv-model-editor-close" @click="closeCatalogDialog">
-            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <div class="cv-catalog-dialog-header-text">
+            <div class="cv-catalog-dialog-title">{{ t('config.catalogDialogTitle') }}</div>
+            <div class="cv-catalog-dialog-subtitle">{{ t('config.catalogDialogSubtitle') }}</div>
+          </div>
+          <button class="cv-model-editor-close" @click="closeCatalogDialog" :aria-label="t('common.close')">
+            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
+
+        <!-- Search row -->
         <div class="cv-catalog-dialog-search">
+          <svg class="cv-catalog-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input
             ref="catalogDialogInputRef"
             type="text"
             v-model="catalogDialogQuery"
-            class="field font-mono"
+            class="cv-catalog-dialog-input font-mono"
             :placeholder="t('config.catalogSearchPlaceholder')"
             @keydown.esc="closeCatalogDialog"
           />
-          <span v-if="catalogResults.length" class="cv-catalog-dialog-count">
-            {{ t('config.catalogMatchesCount', '', { n: catalogResults.length }) }}
+          <button
+            v-if="catalogDialogQuery"
+            type="button"
+            class="cv-catalog-dialog-clear"
+            @click="catalogDialogQuery = ''"
+            :aria-label="t('common.clear') || 'Clear'"
+          >
+            <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+          <span v-if="catalogRanked.length" class="cv-catalog-dialog-count">
+            {{ catalogVisibleCount < catalogRanked.length
+                ? `${catalogResults.length} / ${catalogRanked.length}`
+                : t('config.catalogMatchesCount', '', { n: catalogRanked.length }) }}
           </span>
         </div>
-        <div class="cv-catalog-dialog-body">
-          <div v-if="catalogLoading" class="cv-catalog-status">{{ t('config.catalogLoading') }}</div>
-          <div v-else-if="catalogDialogQuery && catalogResults.length === 0" class="cv-catalog-status">
-            {{ t('config.catalogNoMatches') }}
+
+        <!-- Column header -->
+        <div class="cv-catalog-table-head">
+          <div>{{ t('config.catalogColProvider') }}</div>
+          <div>{{ t('config.catalogColModel') }}</div>
+          <div class="num">{{ t('config.catalogColContext') }}</div>
+          <div class="num">{{ t('config.catalogColMaxOut') }}</div>
+          <div class="num">{{ t('config.catalogColInPrice') }}</div>
+          <div class="num">{{ t('config.catalogColOutPrice') }}</div>
+        </div>
+
+        <!-- Body: loading / empty / results -->
+        <div class="cv-catalog-dialog-body" @scroll.passive="onCatalogScroll">
+          <div v-if="catalogLoading" class="cv-catalog-empty">
+            <svg class="cv-catalog-empty-icon animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            <span>{{ t('config.catalogLoading') }}</span>
           </div>
-          <div v-else-if="!catalogDialogQuery" class="cv-catalog-status">
-            {{ t('config.catalogSearchHint') }}
+          <div v-else-if="catalogDialogQuery && catalogResults.length === 0" class="cv-catalog-empty">
+            <svg class="cv-catalog-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>{{ t('config.catalogNoMatches') }}</span>
           </div>
-          <ul v-else class="cv-catalog-dialog-list">
-            <li
+          <div v-else class="cv-catalog-table-body">
+            <div
               v-for="entry in catalogResults"
               :key="entry.id"
-              class="cv-catalog-row"
+              class="cv-catalog-tr"
+              :class="{ active: selectedCatalogEntry && selectedCatalogEntry.id === entry.id }"
               @click="applyCatalogEntryFromDialog(entry)"
             >
-              <div class="cv-catalog-row-id font-mono">{{ entry.id }}</div>
-              <div class="cv-catalog-row-meta">
-                <span v-if="entry.context_length" class="cv-catalog-pill">
-                  {{ t('config.contextLabel') }} {{ formatContextWindow(entry.context_length) }}
-                </span>
-                <span v-if="entry.max_output_tokens" class="cv-catalog-pill">
-                  {{ t('config.maxOutputLabel') }} {{ formatContextWindow(entry.max_output_tokens) }}
-                </span>
-                <span v-if="entry.input_cost_per_token != null || entry.output_cost_per_token != null" class="cv-catalog-pill price">
-                  {{ t('config.inputPriceLabel') }} {{ formatPricePerMillion(entry.input_cost_per_token) || '—' }}
-                  · {{ t('config.outputPriceLabel') }} {{ formatPricePerMillion(entry.output_cost_per_token) || '—' }}
-                </span>
+              <div class="cv-catalog-td">
+                <span class="cv-catalog-provider-pill">{{ entry.provider || '—' }}</span>
               </div>
-            </li>
-          </ul>
+              <div class="cv-catalog-td cv-catalog-td-id font-mono" :title="entry.id">{{ entry.id }}</div>
+              <div class="cv-catalog-td num font-mono">{{ entry.context_length ? formatContextWindow(entry.context_length) : '—' }}</div>
+              <div class="cv-catalog-td num font-mono">{{ entry.max_output_tokens ? formatContextWindow(entry.max_output_tokens) : '—' }}</div>
+              <div class="cv-catalog-td num font-mono price">{{ formatPricePerMillion(entry.input_cost_per_token) || '—' }}</div>
+              <div class="cv-catalog-td num font-mono price">{{ formatPricePerMillion(entry.output_cost_per_token) || '—' }}</div>
+            </div>
+            <!-- Footer hint: more available, keep scrolling -->
+            <div
+              v-if="catalogVisibleCount < catalogRanked.length"
+              class="cv-catalog-more-hint"
+            >
+              {{ t('config.catalogShowMore', '', { n: catalogRanked.length - catalogVisibleCount }) }}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2701,6 +2745,35 @@ const testResults = ref({})        // { [provider]: { ok, message } }
 const testingUtilityModel = ref(false)
 const testUtilityModelResult = ref(null)
 const utilityModelFilter = ref('')
+const utilityModelListRef = ref(null)
+
+function scrollActiveCentered(container, active) {
+  const cRect = container.getBoundingClientRect()
+  const aRect = active.getBoundingClientRect()
+  // Active's top in the container's scroll coordinate space.
+  const activeTopInScroll = aRect.top - cRect.top + container.scrollTop
+  const target = activeTopInScroll - (container.clientHeight - active.offsetHeight) / 2
+  const max = container.scrollHeight - container.clientHeight
+  container.scrollTop = Math.max(0, Math.min(max, target))
+}
+
+function scrollUtilityActiveIntoView() {
+  const tryScroll = () => {
+    const container = utilityModelListRef.value
+    if (!container) return false
+    const active = container.querySelector('.cv-model-item.active')
+    if (!active) return false
+    scrollActiveCentered(container, active)
+    return true
+  }
+  // The active row may not exist yet on the first call (list still loading,
+  // filter recomputing, or DOM not yet painted). Retry across frames.
+  if (tryScroll()) return
+  requestAnimationFrame(() => {
+    if (tryScroll()) return
+    requestAnimationFrame(() => { tryScroll() })
+  })
+}
 
 // Providers eligible as utility-model backend (must be active + have key)
 const utilityActiveProviderOptions = computed(() =>
@@ -3546,6 +3619,23 @@ watch(() => form.im.teams?.enabled, async (enabled) => {
 
 // ── Models Page: New left sidebar logic ────────────────────────────────
 // (modelsLeftNav is forward-declared near the onboarding watcher above)
+
+// Whenever the user arrives at the Models sub-tab (via top-nav, sub-tab click,
+// or ?tab=models route), auto-select the first configured provider so the
+// right panel shows real content instead of the empty "select a provider"
+// placeholder. Only fires when the current nav is 'empty' — respects any
+// explicit choice the user has already made.
+watch(
+  [activeTopTab, activeSubTab, () => configStore.config.providers?.length ?? 0],
+  ([topTab, subTab]) => {
+    if (topTab !== 'ai' || subTab !== 'models') return
+    if (modelsLeftNav.value !== 'empty') return
+    const providers = configStore.config.providers || []
+    if (providers.length > 0) modelsLeftNav.value = providers[0].id
+  },
+  { immediate: true }
+)
+
 const providerAdvancedOpen = ref(false)
 watch(modelsLeftNav, (val) => {
   providerAdvancedOpen.value = false
@@ -3561,8 +3651,16 @@ watch(modelsLeftNav, (val) => {
     const saved = configStore.config.utilityModel || { provider: '', model: '' }
     form.utilityModel.provider = saved.provider || ''
     form.utilityModel.model    = saved.model    || ''
+    nextTick(() => scrollUtilityActiveIntoView())
   }
 })
+
+// Keep the selected utility model in view as the list re-renders
+// (filter changes, models finish loading, selection changes programmatically).
+watch(
+  [filteredUtilityModels, utilityModelFilter, () => form.utilityModel.model],
+  () => { nextTick(() => scrollUtilityActiveIntoView()) }
+)
 const showAddProviderModal = ref(false)
 
 const showDeleteConfirm = ref(false)
@@ -4006,14 +4104,62 @@ async function _ensureCatalogLoaded() {
   }
 }
 
+// Client-side replica of `lookupModelCatalog` (electron/agent/modelDefaults.js):
+// exact id → provider-prefixed id → bare id → longest-prefix match. Used to
+// auto-surface the catalog entry that already matched this model so the user
+// sees it next to the "Pick from catalog" button without lifting a finger.
+const _CATALOG_PROVIDER_MAP = {
+  openai_official: 'openai',
+  anthropic: 'anthropic',
+  deepseek: 'deepseek',
+  qwen: 'dashscope',
+  google: 'gemini',
+  mistral: 'mistral',
+  groq: 'groq',
+  xai: 'xai',
+}
+function _findCatalogMatchFor(modelId, providerType) {
+  if (!modelId || !catalogEntries.value.length) return null
+  const id = String(modelId).toLowerCase()
+  const litellmProvider = providerType ? _CATALOG_PROVIDER_MAP[providerType] : null
+  const prefixed = litellmProvider ? `${litellmProvider}/${id}` : null
+  for (const e of catalogEntries.value) {
+    const lk = e.id.toLowerCase()
+    if (lk === id || (prefixed && lk === prefixed)) return e
+  }
+  for (const e of catalogEntries.value) {
+    const lk = e.id.toLowerCase()
+    const bare = lk.includes('/') ? lk.split('/').pop() : lk
+    if (bare === id) return e
+  }
+  let best = null, bestLen = 0
+  for (const e of catalogEntries.value) {
+    const lk = e.id.toLowerCase()
+    const bare = lk.includes('/') ? lk.split('/').pop() : lk
+    if (id.startsWith(bare) && bare.length > bestLen) {
+      bestLen = bare.length
+      best = e
+    }
+  }
+  return best
+}
+
 // Ranked fuzzy match. Splits the query on whitespace, comma, slash, colon, or
 // plus — so users can type `qwen flash 3.6`, `qwen + flash + 3.6`, `claude/sonnet`,
 // etc. Every token must appear in the id (order-insensitive). Scoring: exact id
-// match > bare-id exact > prefix > earliest-position hits. Returns up to 40 best
-// matches for display in the dialog list.
-const catalogResults = computed(() => {
+// match > bare-id exact > prefix > earliest-position hits.
+//
+// Empty query: return ALL entries sorted by provider then id so users can browse
+// the catalog even without typing anything.
+const catalogRanked = computed(() => {
   const raw = (catalogDialogQuery.value || '').trim().toLowerCase()
-  if (!raw) return []
+  if (!raw) {
+    return [...catalogEntries.value].sort((a, b) => {
+      const pa = (a.provider || '').localeCompare(b.provider || '')
+      if (pa !== 0) return pa
+      return a.id.localeCompare(b.id)
+    })
+  }
   const tokens = raw.split(/[\s,/:+]+/).filter(Boolean)
   if (tokens.length === 0) return []
   const scored = []
@@ -4035,15 +4181,60 @@ const catalogResults = computed(() => {
     scored.push({ entry: e, score })
   }
   scored.sort((a, b) => b.score - a.score)
-  return scored.slice(0, 40).map(s => s.entry)
+  return scored.map(s => s.entry)
 })
 
-function openCatalogDialog() {
-  catalogDialogQuery.value = ''
+// Infinite-scroll window: start with CATALOG_PAGE_SIZE rows, bump by the same
+// amount when the user scrolls near the bottom of the list. Reset to one page
+// whenever the query changes (so users always see "best first" at the top).
+const CATALOG_PAGE_SIZE = 100
+const catalogVisibleCount = ref(CATALOG_PAGE_SIZE)
+
+const catalogResults = computed(() => catalogRanked.value.slice(0, catalogVisibleCount.value))
+
+watch(catalogDialogQuery, () => {
+  catalogVisibleCount.value = CATALOG_PAGE_SIZE
+})
+
+function onCatalogScroll(e) {
+  const el = e.target
+  if (!el) return
+  // Trigger load when within ~240px of the bottom — bigger than one row height
+  // so the next page is ready before the user actually hits the end.
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < 240) {
+    const total = catalogRanked.value.length
+    if (catalogVisibleCount.value < total) {
+      catalogVisibleCount.value = Math.min(total, catalogVisibleCount.value + CATALOG_PAGE_SIZE)
+    }
+  }
+}
+
+async function openCatalogDialog() {
+  // Seed the search box with the currently-selected/matched entry id so the
+  // user sees what's active (combobox style). Clearing the box reveals the
+  // full browseable list.
+  const matched = selectedCatalogEntry.value
+  catalogDialogQuery.value = matched?.id || ''
+  catalogVisibleCount.value = CATALOG_PAGE_SIZE
   catalogDialogOpen.value = true
-  _ensureCatalogLoaded()
-  // Auto-focus the search box on next tick so keyboard users can type immediately.
-  nextTick(() => { catalogDialogInputRef.value?.focus?.() })
+  await _ensureCatalogLoaded()
+  await nextTick()
+  catalogDialogInputRef.value?.focus?.()
+  // Pre-select the seeded text so typing replaces it instantly.
+  if (matched) catalogDialogInputRef.value?.select?.()
+  // Make sure the selected/matched row is in the rendered window and scroll
+  // it to center — users should see their current pick immediately.
+  if (matched) {
+    const idx = catalogRanked.value.findIndex(e => e.id === matched.id)
+    if (idx >= 0 && idx >= catalogVisibleCount.value) {
+      catalogVisibleCount.value = Math.max(CATALOG_PAGE_SIZE, idx + 20)
+      await nextTick()
+    }
+    const el = document.querySelector('.cv-catalog-tr.active')
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'center', behavior: 'auto' })
+    }
+  }
 }
 
 function closeCatalogDialog() {
@@ -4107,8 +4298,17 @@ function openModelLimitsEditor(model) {
   catalogDialogOpen.value = false
   catalogDialogQuery.value = ''
   modelLimitsEditor.open = true
-  // Start loading the catalog in the background so the picker is instant when opened.
-  _ensureCatalogLoaded()
+  // Load catalog, then try to auto-detect a match for this model id so the
+  // user sees the current catalog match inline (next to the "Pick" button)
+  // without having to open the picker first.
+  const providerType = provider?.type || null
+  const myModelId = model.id
+  _ensureCatalogLoaded().then(() => {
+    if (!modelLimitsEditor.open || modelLimitsEditor.modelId !== myModelId) return
+    if (selectedCatalogEntry.value) return  // user already picked
+    const match = _findCatalogMatchFor(myModelId, providerType)
+    if (match) selectedCatalogEntry.value = match
+  })
 }
 
 function closeModelLimitsEditor() {
@@ -5679,6 +5879,48 @@ async function checkKnowledgeModelIfNeeded() {
   opacity: 0.6;
   transition: opacity 0.15s;
 }
+/* ── Utility model selected chip (ComboBox chip style) ─────────────────── */
+.cv-utility-selected-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.3125rem 0.5rem 0.3125rem 0.75rem;
+  border: 1px solid #1A1A1A;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  max-width: 100%;
+}
+.cv-utility-selected-label {
+  font-family: 'JetBrains Mono', 'Inter', monospace;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #FFFFFF;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.cv-utility-selected-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 0.375rem;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.cv-utility-selected-remove:hover {
+  background: rgba(255,255,255,0.25);
+  color: #FFFFFF;
+}
+
 /* ── Model list (matching AgentBodyViewer style) ───────────────────────── */
 .cv-model-list {
   display: flex;
@@ -5716,6 +5958,13 @@ async function checkKnowledgeModelIfNeeded() {
 .cv-model-item.active {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
+}
+.cv-model-item.cv-model-item-readonly {
+  cursor: default;
+}
+.cv-model-item.cv-model-item-readonly:hover {
+  background: transparent;
+  color: var(--text-secondary);
 }
 
 .cv-model-select {
@@ -5819,19 +6068,22 @@ async function checkKnowledgeModelIfNeeded() {
 
 /* Model-limits editor modal */
 .cv-model-editor {
-  width: min(480px, 92vw);
+  width: min(960px, 94vw);
+  max-height: 92vh;
   background: var(--bg-surface, #FFFFFF);
-  border-radius: 0.75rem;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  border-radius: 0.875rem;
+  box-shadow: 0 24px 72px rgba(0,0,0,0.32);
   overflow: hidden;
   display: flex; flex-direction: column;
 }
 .cv-model-editor-header {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
-  padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-secondary, #E5E7EB);
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-secondary, #E5E7EB);
+  background: linear-gradient(180deg, #FAFAFA 0%, #FFFFFF 100%);
 }
-.cv-model-editor-title { font-weight: 600; font-size: 0.95rem; color: var(--text-primary, #111827); }
-.cv-model-editor-subtitle { font-size: 0.75rem; color: var(--text-muted, #6B7280); margin-top: 0.125rem; }
+.cv-model-editor-title { font-weight: 600; font-size: 0.95rem; color: var(--text-primary, #111827); letter-spacing: -0.005em; }
+.cv-model-editor-subtitle { font-size: 0.75rem; color: var(--text-muted, #6B7280); margin-top: 0.25rem; word-break: break-all; }
 .cv-model-editor-close {
   background: none; border: none; cursor: pointer; color: var(--text-muted, #6B7280);
   padding: 0.25rem; border-radius: 0.25rem; display: flex; align-items: center; justify-content: center;
@@ -5842,8 +6094,11 @@ async function checkKnowledgeModelIfNeeded() {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  /* Scroll the body (not the whole modal) when the catalog picker shows many rows */
-  max-height: calc(88vh - 8rem);
+  /* Flex child fills available modal height; scroll the body (not the whole
+     modal) when content is tall. Outer modal's max-height + overflow:hidden
+     establishes the bounding box. */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 .cv-editor-divider {
@@ -5858,7 +6113,16 @@ async function checkKnowledgeModelIfNeeded() {
   font-style: italic;
 }
 .cv-catalog-status.small { font-size: 0.6875rem; padding: 0.375rem 0.25rem; }
-/* Open-picker button (shown when no catalog entry is picked yet) */
+/* Header: button on its own line; match card fills the full width BELOW so long
+   ids and price pills never get truncated. */
+.cv-catalog-header-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+/* Open-picker button — also acts as the "Change" trigger when a match exists */
 .cv-catalog-open-btn {
   display: inline-flex;
   align-items: center;
@@ -5873,55 +6137,41 @@ async function checkKnowledgeModelIfNeeded() {
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s;
   align-self: flex-start;
+  white-space: nowrap;
 }
 .cv-catalog-open-btn:hover {
   background: var(--bg-hover, #F3F4F6);
   border-color: #6B7280;
 }
 
-/* Selected-entry summary card (shown inside the main modal after picking) */
-.cv-catalog-selected {
+/* Match card on its own full-width row below the button */
+.cv-catalog-match {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 0.5rem;
   padding: 0.625rem 0.75rem;
   border: 1px solid rgba(59, 130, 246, 0.35);
   border-radius: 0.5rem;
   background: rgba(59, 130, 246, 0.06);
 }
-.cv-catalog-selected-info {
+.cv-catalog-match-head {
   display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-  flex: 1;
+  align-items: center;
+  gap: 0.5rem;
   min-width: 0;
 }
-.cv-catalog-selected-id {
+.cv-catalog-match-id {
+  flex: 1;
+  min-width: 0;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary, #111827);
+  /* Long ids wrap across lines rather than ellipsis-truncate — every character
+     is meaningful when identifying a model. */
   word-break: break-all;
+  white-space: normal;
 }
-.cv-catalog-selected-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  flex-shrink: 0;
-}
-.cv-catalog-link-btn {
-  background: none;
-  border: none;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: #1D4ED8;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-.cv-catalog-link-btn:hover { color: #1E3A8A; }
+
 .cv-catalog-clear-btn {
   background: none;
   border: none;
@@ -5937,74 +6187,213 @@ async function checkKnowledgeModelIfNeeded() {
 
 /* Nested picker dialog (teleported above the model-limits editor) */
 .cv-catalog-dialog {
-  width: min(560px, 92vw);
-  max-height: min(640px, 88vh);
+  width: min(960px, 94vw);
+  height: min(720px, 90vh);
   background: var(--bg-surface, #FFFFFF);
-  border-radius: 0.75rem;
-  box-shadow: 0 24px 72px rgba(0,0,0,0.35);
+  border-radius: 0.875rem;
+  box-shadow: 0 28px 80px rgba(0,0,0,0.38);
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
+
 .cv-catalog-dialog-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.875rem 1rem;
+  gap: 1.25rem;
+  padding: 1rem 1.25rem 0.875rem;
+  background: linear-gradient(180deg, #FAFAFA 0%, #FFFFFF 100%);
   border-bottom: 1px solid var(--border-secondary, #E5E7EB);
 }
+.cv-catalog-dialog-header-text { display: flex; flex-direction: column; gap: 0.25rem; }
 .cv-catalog-dialog-title {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--text-primary, #111827);
+  letter-spacing: -0.005em;
 }
+.cv-catalog-dialog-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted, #6B7280);
+  line-height: 1.4;
+}
+
+/* Search row */
 .cv-catalog-dialog-search {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.625rem 1rem;
+  padding: 0.75rem 1.25rem;
   border-bottom: 1px solid var(--border-secondary, #E5E7EB);
+  background: #FFFFFF;
 }
-.cv-catalog-dialog-search .field {
+.cv-catalog-search-icon {
+  width: 14px; height: 14px;
+  color: var(--text-muted, #6B7280);
+  flex-shrink: 0;
+}
+.cv-catalog-dialog-input {
   flex: 1;
   min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0.125rem 0;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
 }
+.cv-catalog-dialog-input::placeholder { color: #9CA3AF; }
+.cv-catalog-dialog-clear {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  border-radius: 999px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cv-catalog-dialog-clear:hover { background: rgba(0,0,0,0.06); color: var(--text-primary); }
 .cv-catalog-dialog-count {
   font-size: 0.6875rem;
   color: var(--text-muted, #6B7280);
   font-family: 'JetBrains Mono', monospace;
   white-space: nowrap;
+  padding: 0.125rem 0.5rem;
+  background: rgba(0,0,0,0.04);
+  border-radius: 999px;
 }
+
+/* Column header — matches row grid template exactly */
+.cv-catalog-table-head,
+.cv-catalog-tr {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(12rem, 1fr) 5rem 5rem 5.5rem 5.5rem;
+  align-items: center;
+  column-gap: 0.75rem;
+  padding: 0 1.25rem;
+}
+.cv-catalog-table-head {
+  padding-top: 0.625rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-secondary, #E5E7EB);
+  background: #FAFAFA;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #6B7280);
+}
+.cv-catalog-table-head .num { text-align: right; }
+
+/* Body */
 .cv-catalog-dialog-body {
   flex: 1;
   overflow-y: auto;
-  padding: 0.25rem 0;
   scrollbar-width: thin;
+  background: #FFFFFF;
 }
-.cv-catalog-dialog-body::-webkit-scrollbar { width: 6px; }
-.cv-catalog-dialog-body::-webkit-scrollbar-thumb { background: #9CA3AF; border-radius: 3px; }
-.cv-catalog-dialog-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.cv-catalog-row {
+.cv-catalog-dialog-body::-webkit-scrollbar { width: 8px; }
+.cv-catalog-dialog-body::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+.cv-catalog-dialog-body::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+.cv-catalog-empty {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.5rem 0.625rem;
-  border-bottom: 1px solid var(--border-secondary, #E5E7EB);
-  cursor: pointer;
-  transition: background 0.12s;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  height: 100%;
+  min-height: 12rem;
+  padding: 2rem 3rem;
+  color: var(--text-muted, #6B7280);
+  font-size: 0.8125rem;
+  text-align: center;
+  line-height: 1.5;
 }
-.cv-catalog-row:last-child { border-bottom: none; }
-.cv-catalog-row:hover { background: rgba(0,0,0,0.04); }
-.cv-catalog-row-id {
+.cv-catalog-empty-icon {
+  width: 28px; height: 28px;
+  color: #9CA3AF;
+  opacity: 0.7;
+}
+
+.cv-catalog-table-body { padding: 0.25rem 0; }
+
+/* Footer hint shown under the last row when more entries are available —
+   infinite-scroll loads the next page automatically as the user approaches. */
+.cv-catalog-more-hint {
+  padding: 0.625rem 1.25rem;
+  text-align: center;
+  font-size: 0.6875rem;
+  color: var(--text-muted, #6B7280);
+  font-style: italic;
+  border-top: 1px solid #F3F4F6;
+}
+
+.cv-catalog-tr {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #F3F4F6;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.cv-catalog-tr:last-child { border-bottom: none; }
+.cv-catalog-tr:hover { background: #F5F7FB; }
+.cv-catalog-tr:active { background: #E5ECFA; }
+
+/* Currently-picked / auto-matched row — persistent highlight so users see
+   their current selection after opening the dialog with an existing match. */
+.cv-catalog-tr.active {
+  background: linear-gradient(90deg, rgba(59,130,246,0.12) 0%, rgba(59,130,246,0.04) 100%);
+  box-shadow: inset 3px 0 0 0 #3B82F6;
+}
+.cv-catalog-tr.active:hover { background: linear-gradient(90deg, rgba(59,130,246,0.18) 0%, rgba(59,130,246,0.08) 100%); }
+.cv-catalog-tr.active .cv-catalog-td-id { color: #1D4ED8; }
+
+.cv-catalog-td {
   font-size: 0.75rem;
-  font-weight: 500;
   color: var(--text-primary, #111827);
-  word-break: break-all;
+  min-width: 0;
+}
+.cv-catalog-td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.cv-catalog-td.price { color: #1D4ED8; font-weight: 600; }
+.cv-catalog-td-id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.cv-catalog-provider-pill {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 0.375rem;
+  background: #EEF2FF;
+  color: #4338CA;
+  border: 1px solid #E0E7FF;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Compact mode when the viewport is narrow — collapse prices to spare columns */
+@media (max-width: 760px) {
+  .cv-catalog-table-head,
+  .cv-catalog-tr {
+    grid-template-columns: 6rem minmax(10rem, 1fr) 4rem 4rem;
+  }
+  .cv-catalog-table-head > :nth-child(5),
+  .cv-catalog-table-head > :nth-child(6),
+  .cv-catalog-tr > :nth-child(5),
+  .cv-catalog-tr > :nth-child(6) { display: none; }
 }
 .cv-catalog-row-meta {
   display: flex;

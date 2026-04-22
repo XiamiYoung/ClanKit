@@ -252,7 +252,7 @@
 
           <!-- ── RIGHT: Detail panel ── -->
           <div class="bv-right">
-            <Transition name="bv-panel" mode="out-in">
+            <Transition name="bv-panel" mode="out-in" @after-enter="onPanelAfterEnter">
               <div v-if="activePanel" :key="activePanel" class="bv-detail-inner">
                 <div class="bv-detail-header">
                   <span class="bv-detail-icon">{{ panelIcon(activePanel) }}</span>
@@ -319,7 +319,7 @@
                         </span>
                       </label>
                       <input v-if="draftProviderType !== 'anthropic'" v-model="modelFilter" type="text" :placeholder="t('agents.searchModels')" class="bv-input bv-input-sm" />
-                      <div class="bv-model-list">
+                      <div class="bv-model-list" ref="bvModelListRef">
                         <div v-if="modelsLoading" class="bv-detail-empty">{{ t('common.loading') }}...</div>
                         <button v-for="m in filteredModels" :key="m.id" class="bv-model-item" :class="{ active: draftModelId === m.id, 'bv-model-small-ctx': m.context_length && m.context_length < SMALL_CONTEXT_THRESHOLD }" @click="draftModelId = m.id; saveError = ''; testModelResult = null">
                           <span class="bv-model-item-name">{{ m.name || m.label || m.id }}</span>
@@ -758,7 +758,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useAgentsStore, BUILTIN_SYSTEM_AGENT_ID } from '../../stores/agents'
 import { useModelsStore } from '../../stores/models'
 import { useConfigStore } from '../../stores/config'
@@ -810,6 +810,13 @@ const activePanel = ref(null)
 function togglePanel(panel) {
   activePanel.value = activePanel.value === panel ? null : panel
   if (panel === 'memory' && activePanel.value === 'memory') loadMemory()
+}
+
+// Fired by the panel Transition once the enter animation completes — at this
+// point the model list DOM is mounted and laid out, so scrolling the active
+// model into view is reliable.
+function onPanelAfterEnter() {
+  if (activePanel.value === 'model') scrollActiveModelIntoView()
 }
 
 function panelLabel(panel) {
@@ -1185,6 +1192,40 @@ const filteredModels = computed(() => {
   if (!q) return models
   return models.filter(m => (m.name || m.label || '').toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
 })
+
+// ── Scroll active model into view ─────────────────────────────────────────
+const bvModelListRef = ref(null)
+
+function scrollActiveModelIntoView() {
+  const tryScroll = () => {
+    const container = bvModelListRef.value
+    if (!container) return false
+    const active = container.querySelector('.bv-model-item.active')
+    if (!active) return false
+    const cRect = container.getBoundingClientRect()
+    const aRect = active.getBoundingClientRect()
+    const activeTopInScroll = aRect.top - cRect.top + container.scrollTop
+    const target = activeTopInScroll - (container.clientHeight - active.offsetHeight) / 2
+    const max = container.scrollHeight - container.clientHeight
+    container.scrollTop = Math.max(0, Math.min(max, target))
+    return true
+  }
+  if (tryScroll()) return
+  requestAnimationFrame(() => {
+    if (tryScroll()) return
+    requestAnimationFrame(() => { tryScroll() })
+  })
+}
+
+// Re-scroll when the model panel opens, the filter changes the rendered rows,
+// the provider's model list finishes loading, or the selection moves.
+watch(
+  [() => activePanel.value, filteredModels, modelFilter, draftModelId],
+  ([panel]) => {
+    if (panel !== 'model') return
+    nextTick(() => scrollActiveModelIntoView())
+  }
+)
 
 // Format context window / token counts with K / M units.
 function formatContextWindow(n) {

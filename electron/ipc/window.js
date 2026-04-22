@@ -260,6 +260,22 @@ function register() {
 
   ipcMain.handle('window:save-minibar-bounds', () => _saveMinibarBounds())
 
+  // Temporarily resize the minibar window to host a hover tooltip, without
+  // mutating the user's intended bar dimensions. Restoring passes expanded=false.
+  ipcMain.handle('window:set-minibar-expand', (_, arg) => {
+    const mainWindow = winRef.get()
+    if (!mainWindow || !_preMinibarBounds) return
+    const cur = mainWindow.getBounds()
+    const expanded = !!(arg && arg.expanded)
+    if (expanded) {
+      const w = Math.max(_minibarIntendedW, (arg && arg.width) || 0)
+      const h = Math.max(_minibarIntendedH, (arg && arg.height) || 0)
+      mainWindow.setBounds({ x: cur.x, y: cur.y, width: w, height: h })
+    } else {
+      mainWindow.setBounds({ x: cur.x, y: cur.y, width: _minibarIntendedW, height: _minibarIntendedH })
+    }
+  })
+
   ipcMain.handle('window:set-position', (_, x, y) => {
     const mainWindow = winRef.get()
     if (!mainWindow) return

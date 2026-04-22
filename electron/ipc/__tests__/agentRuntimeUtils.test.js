@@ -1,20 +1,16 @@
-const { describe, it, expect, vi, beforeEach } = require('vitest')
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { createRequire } from 'module'
 
-const mockReadJSON = vi.fn()
-const mockPaths = {
-  AGENTS_FILE: 'agents.json',
-}
+const require = createRequire(import.meta.url)
 
-vi.mock('../../logger', () => ({
-  logger: {
-    warn: vi.fn(),
-  },
-}))
-
-vi.mock('../../lib/dataStore', () => ({
-  readJSON: (...args) => mockReadJSON(...args),
-  paths: () => mockPaths,
-}))
+// Under vitest 4.x, vi.mock does not reliably intercept `require()` calls made
+// from inside CJS production modules (e.g. the `require('../lib/dataStore')`
+// inside agentRuntimeUtils.js). Instead we patch the exported functions on the
+// real dataStore singleton — since CJS `module.exports` returns the same
+// object to every caller, replacing methods here is visible from the util.
+const ds = require('../../lib/dataStore')
+const originalPaths = ds.paths
+const originalReadJSON = ds.readJSON
 
 const {
   applyProviderCredsToConfig,
@@ -23,21 +19,33 @@ const {
   validateLoopConfig,
 } = require('../agentRuntimeUtils')
 
-describe('agentRuntimeUtils regressions', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockReadJSON.mockReturnValue({
-      agents: [
-        {
-          id: 'agent-yifei',
-          name: 'Ding Yifei',
-          providerId: 'provider-deepseek-uuid',
-          modelId: 'deepseek-chat',
-        },
-      ],
-    })
-  })
+const FAKE_AGENTS_FILE = '__virtual__/agents.json'
 
+beforeAll(() => {
+  ds.paths = () => ({ AGENTS_FILE: FAKE_AGENTS_FILE })
+  ds.readJSON = (file, fallback) => {
+    if (file === FAKE_AGENTS_FILE) {
+      return {
+        agents: [
+          {
+            id: 'agent-yifei',
+            name: 'Ding Yifei',
+            providerId: 'provider-deepseek-uuid',
+            modelId: 'deepseek-chat',
+          },
+        ],
+      }
+    }
+    return fallback
+  }
+})
+
+afterAll(() => {
+  ds.paths = originalPaths
+  ds.readJSON = originalReadJSON
+})
+
+describe('agentRuntimeUtils regressions', () => {
   it('normalizes UUID-backed DeepSeek providers into OpenAI-compatible loop config', () => {
     const cfg = {
       providers: [

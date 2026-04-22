@@ -36,8 +36,14 @@
 
     <div style="flex:1;" />
 
-    <!-- Center minibar strip — 30% of titlebar width, absolutely centered -->
-    <div class="tb-minibar" @mousedown="onMinibarDragStart" @dblclick.stop>
+    <!-- Center minibar strip — horizontally draggable within the titlebar -->
+    <div
+      ref="minibarStripRef"
+      class="tb-minibar"
+      :style="minibarStripStyle"
+      @mousedown="onMinibarStripMouseDown"
+      @dblclick.stop
+    >
       <MinibarContent />
     </div>
 
@@ -78,9 +84,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useFocusModeStore } from '../../stores/focusMode'
 import { useTasksStore } from '../../stores/tasks'
+import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
 import MinibarContent from '../focus/MinibarContent.vue'
 
@@ -88,6 +95,7 @@ defineEmits(['toggle-sidebar'])
 
 const focusModeStore = useFocusModeStore()
 const tasksStore = useTasksStore()
+const configStore = useConfigStore()
 const { t } = useI18n()
 
 const isMinibar = computed(() => focusModeStore.isMinibarMode)
@@ -175,19 +183,6 @@ async function onDragStart(e) {
   document.addEventListener('mouseup', onDragEnd)
 }
 
-async function onMinibarDragStart(e) {
-  if (isMaximized.value) return
-  const pos = await window.electronAPI?.windowGetPosition()
-  if (!pos) return
-  isDragging = true
-  dragOffsetX = e.screenX - pos[0]
-  dragOffsetY = e.screenY - pos[1]
-  window.electronAPI?.windowDragStart()
-  document.addEventListener('mousemove', onDragMove)
-  document.addEventListener('mouseup', onDragEnd)
-  e.stopPropagation()
-}
-
 function onDragMove(e) { if (!isDragging) return; window.electronAPI?.windowMoveTo(e.screenX - dragOffsetX, e.screenY - dragOffsetY) }
 function onDragEnd() {
   isDragging = false
@@ -196,18 +191,133 @@ function onDragEnd() {
   document.removeEventListener('mouseup', onDragEnd)
 }
 
+// ── Draggable minibar strip ────────────────────────────────────────────────
+// `minibarLeft` is an absolute pixel offset from the titlebar's left edge.
+// `null` means "use the default centered position" (applies before the user
+// has moved it or before the saved config has loaded).
+const MINIBAR_EDGE_MARGIN = 10
+const DRAG_THRESHOLD_PX = 5
+const minibarStripRef = ref(null)
+const minibarLeft = ref(null)
+
+const minibarStripStyle = computed(() =>
+  minibarLeft.value == null
+    ? {}
+    : { left: minibarLeft.value + 'px', transform: 'translateY(-50%)' }
+)
+
+function _getMinibarBounds() {
+  const titlebar = minibarStripRef.value?.closest('.titlebar')
+  const strip = minibarStripRef.value
+  if (!titlebar || !strip) return null
+  const tbRect = titlebar.getBoundingClientRect()
+  const focusSlot = document.getElementById('titlebar-focus-slot')
+  const helpSlot = document.getElementById('titlebar-help-slot')
+  const focusRect = focusSlot?.getBoundingClientRect()
+  const helpRect = helpSlot?.getBoundingClientRect()
+  const stripW = strip.offsetWidth
+  const minLeft = (focusRect ? focusRect.right - tbRect.left : 0) + MINIBAR_EDGE_MARGIN
+  const maxLeft = (helpRect ? helpRect.left - tbRect.left : tbRect.width) - MINIBAR_EDGE_MARGIN - stripW
+  return { minLeft, maxLeft, stripW, tbLeft: tbRect.left }
+}
+
+// Returns null when bounds are not yet valid (e.g. transient narrow titlebar
+// while the Electron window is still resizing back from minibar mode).
+// Callers must skip applying in that case so the stored value isn't corrupted.
+function _clampMinibarLeft(v) {
+  const b = _getMinibarBounds()
+  if (!b) return null
+  if (b.maxLeft < b.minLeft) return null
+  return Math.max(b.minLeft, Math.min(b.maxLeft, v))
+}
+
+// Read the saved position from config and apply it, clamped to the current
+// bounds. Idempotent; safe to call repeatedly. Skips silently when bounds are
+// not yet valid (subsequent resize events will retry).
+function _applySavedPosition() {
+  const saved = configStore.config.titlebarMinibarLeft
+  if (typeof saved !== 'number') return
+  const clamped = _clampMinibarLeft(saved)
+  if (clamped == null) return
+  minibarLeft.value = clamped
+}
+
+let _stripDrag = null
+function onMinibarStripMouseDown(e) {
+  if (e.button !== 0) return
+  // Leave interactive children to handle their own mousedown (e.g. compose input).
+  if (e.target.closest('input, textarea, .mbc-compose-wrap')) return
+  const strip = minibarStripRef.value
+  const titlebar = strip?.closest('.titlebar')
+  if (!strip || !titlebar) return
+  const tbRect = titlebar.getBoundingClientRect()
+  const stripRect = strip.getBoundingClientRect()
+  _stripDrag = {
+    startX: e.clientX,
+    startLeft: stripRect.left - tbRect.left,
+    moved: false,
+    target: e.target,
+  }
+  document.addEventListener('mousemove', onMinibarStripMouseMove)
+  document.addEventListener('mouseup', onMinibarStripMouseUp, { once: true })
+  e.stopPropagation()
+}
+
+function onMinibarStripMouseMove(e) {
+  if (!_stripDrag) return
+  const dx = e.clientX - _stripDrag.startX
+  if (!_stripDrag.moved && Math.abs(dx) < DRAG_THRESHOLD_PX) return
+  _stripDrag.moved = true
+  const clamped = _clampMinibarLeft(_stripDrag.startLeft + dx)
+  if (clamped != null) minibarLeft.value = clamped
+  e.preventDefault()
+}
+
+function onMinibarStripMouseUp() {
+  document.removeEventListener('mousemove', onMinibarStripMouseMove)
+  const moved = !!_stripDrag?.moved
+  _stripDrag = null
+  if (!moved) return
+  // Suppress ONLY the synthetic click that fires immediately after a drag ends
+  // so chat/plan sections do not navigate. Auto-expire after 200ms so a later
+  // user click (e.g. the minibar-mode toggle button) is not eaten.
+  const suppress = (ev) => { ev.stopPropagation(); ev.preventDefault(); window.removeEventListener('click', suppress, true) }
+  window.addEventListener('click', suppress, { capture: true })
+  setTimeout(() => window.removeEventListener('click', suppress, true), 200)
+  if (typeof minibarLeft.value === 'number') {
+    configStore.saveConfig({ titlebarMinibarLeft: minibarLeft.value })
+  }
+}
+
+function _onWindowResize() {
+  // Don't fight an active drag — the user's live input owns the position.
+  if (_stripDrag) return
+  nextTick(_applySavedPosition)
+}
+
 let unsubMaximized = null
 onMounted(async () => {
   isMaximized.value = (await window.electronAPI?.windowIsMaximized()) ?? false
   unsubMaximized = window.electronAPI?.onWindowMaximized(v => { isMaximized.value = v })
   tasksStore.subscribeToScheduledRuns()
+  window.addEventListener('resize', _onWindowResize)
 })
+
+// Apply the saved position whenever it changes (initial config load, or after a drag).
+watch(
+  () => configStore.config.titlebarMinibarLeft,
+  () => { nextTick(_applySavedPosition) },
+  { immediate: true }
+)
+
 onUnmounted(() => {
   unsubMaximized?.()
   clearTimeout(sidebarBtnAnimTimer)
   clearTimeout(minibarBtnAnimTimer)
   document.removeEventListener('mousemove', onDragMove)
   document.removeEventListener('mouseup', onDragEnd)
+  document.removeEventListener('mousemove', onMinibarStripMouseMove)
+  window.removeEventListener('resize', _onWindowResize)
 })
 </script>
 
@@ -289,5 +399,7 @@ onUnmounted(() => {
   padding: 0 0.5rem;
   overflow: hidden;
   pointer-events: auto;
+  cursor: grab;
 }
+.tb-minibar:active { cursor: grabbing; }
 </style>
