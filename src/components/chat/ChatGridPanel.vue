@@ -661,12 +661,12 @@ async function onMentionSend(text) {
 }
 
 // ── Send with attachments ──
-async function onSendWithAttachments(text, pendingAttachments) {
-  return onSend(text, pendingAttachments)
+async function onSendWithAttachments(text, pendingAttachments, longBlobs) {
+  return onSend(text, pendingAttachments, longBlobs)
 }
 
 // ── Send (receives text from ChatWindow default input) ──
-async function onSend(text, pendingAttachments = []) {
+async function onSend(text, pendingAttachments = [], longBlobs = {}) {
   if (!text && pendingAttachments.length === 0) return
   if (!props.chatId) return
   const chatId = props.chatId
@@ -686,12 +686,19 @@ async function onSend(text, pendingAttachments = []) {
     await chatsStore.addMessage(chatId, { role: 'assistant', content: t('chats.gridBrowserMode') })
     return
   }
-  await chatsStore.addMessage(chatId, { role: 'user', content: displayContent, ...(attachmentMeta.length > 0 ? { attachments: attachmentMeta } : {}) })
+  const hasLongBlobs = longBlobs && Object.keys(longBlobs).length > 0
+  await chatsStore.addMessage(chatId, { role: 'user', content: displayContent, ...(attachmentMeta.length > 0 ? { attachments: attachmentMeta } : {}), ...(hasLongBlobs ? { longBlobs } : {}) })
   if (targetChat.messages) for (const m of targetChat.messages) if (m.streaming) m.streaming = false
   const streamingMsgId = uuidv4()
   await chatsStore.addMessage(chatId, { id: streamingMsgId, role: 'assistant', content: '', streaming: true, streamingStartedAt: Date.now(), segments: [] })
   targetChat.isRunning = true
-  const apiMessages = targetChat.messages.filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content)).map(m => ({ role: m.role, content: m.content }))
+  const apiMessages = targetChat.messages.filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content)).map(m => {
+    let content = m.content || ''
+    if (m.longBlobs && Object.keys(m.longBlobs).length > 0) {
+      content = content.replace(/\{\{BLOB:([a-z0-9-]+)\}\}/g, (_, id) => m.longBlobs[id] ?? '')
+    }
+    return { role: m.role, content }
+  })
   const cfg = { ...configStore.config }
   const chatProvider = targetChat.provider || 'anthropic'
   applyProviderCredsToConfig(cfg, chatProvider)

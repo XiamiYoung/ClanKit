@@ -116,17 +116,20 @@ function writeJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8')
 }
 
-async function writeJSONAtomic(file, data, _retries = 2) {
+async function writeJSONAtomic(file, data, _retries = 3) {
   const dir = path.dirname(file)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   const tmp = file + `.tmp.${process.pid}.${Date.now()}`
   try {
     await fs.promises.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
+    // Small delay on Windows: antivirus may briefly hold the tmp file after write,
+    // causing the rename to fail with ENOENT even though we just wrote it.
+    if (process.platform === 'win32') await new Promise(r => setTimeout(r, 15))
     await fs.promises.rename(tmp, file)
   } catch (err) {
     try { await fs.promises.unlink(tmp) } catch {}
-    if (_retries > 0 && (err.code === 'ENOENT' || err.code === 'EPERM')) {
-      await new Promise(r => setTimeout(r, 50))
+    if (_retries > 0 && (err.code === 'ENOENT' || err.code === 'EPERM' || err.code === 'EACCES')) {
+      await new Promise(r => setTimeout(r, 100 * (4 - _retries)))
       return writeJSONAtomic(file, data, _retries - 1)
     }
     throw err

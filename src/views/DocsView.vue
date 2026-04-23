@@ -35,23 +35,19 @@
       <div class="docs-catalog-header">
         <div style="display:flex; align-items:center; justify-content:space-between;">
           <div>
-            <h1 class="docs-catalog-title">{{ t('notes.title') }}</h1>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <h1 class="docs-catalog-title">{{ t('notes.title') }}</h1>
+              <span
+                class="catalog-count-badge"
+                style="max-width:32rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                v-tooltip="store.vaultPath"
+              >{{ store.vaultPath }}</span>
+            </div>
             <p class="docs-catalog-subtitle">{{ t('notes.filesFromVault') }}</p>
           </div>
           <div class="flex items-center gap-2">
             <AppButton size="icon" @click="refreshAll" v-tooltip="t('common.refresh')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            </AppButton>
-            <AppButton
-              v-if="store.vaultPath"
-              size="icon"
-              @click="openVaultInExplorer"
-              v-tooltip="`${t('notes.openInExplorer')} — ${store.vaultPath}`"
-              :aria-label="t('notes.openInExplorer')"
-            >
-              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-              </svg>
             </AppButton>
             <!-- Info icon: tells user to go to Config → AI → AiDoc to change path -->
             <div class="docs-path-info-btn" v-tooltip="t('notes.changePathHint')">
@@ -531,8 +527,6 @@
           @stop="stopAiDoc"
           @apply="onAiDocApply"
           @revert="onAiDocRevert"
-          @tool-revert="onAiDocToolRevert"
-          @tool-reapply="onAiDocToolReapply"
           @permission-respond="onDocPermissionRespond"
           @clear-selection="onAiDocClearSelection"
         />
@@ -905,10 +899,6 @@ const {
   open: openAiDoc, close: _closeAiDocRaw, send: _sendAiDocRaw, stop: stopAiDoc,
   updateSelection: updateAiDocSelection, updateFileContent: updateAiDocFileContent,
   getReplacementInfo, markApplied: markAiDocApplied, markReverted: markAiDocReverted,
-  markApplyFailed: markAiDocApplyFailed,
-  markToolEdit: markAiDocToolEdit,
-  markToolEditReverted: markAiDocToolEditReverted,
-  markToolEditReapplied: markAiDocToolEditReapplied,
 } = useAiMagic()
 
 // ── Document read-aloud ──────────────────────────────────────────────────
@@ -1108,15 +1098,8 @@ function _currentFileChangedByToolRun(newMessages) {
   return false
 }
 
-async function _reloadActiveTextFileFromDisk(opts = {}) {
+async function _reloadActiveTextFileFromDisk() {
   if (!store.activeFile?.path || store.activeFile?.binary) return
-  // Protect unsaved local edits — a tool-driven disk refresh should not
-  // silently overwrite the user's in-progress work. Callers that have
-  // already captured a pre-edit snapshot (see sendAiDoc) can pass force=true.
-  if (store.activeFile?.dirty && !opts.force) {
-    console.warn('[AI Doc] Skipped disk reload: active file has unsaved changes')
-    return
-  }
   const readRes = await window.electronAPI.obsidian.readFile(store.activeFile.path)
   if (readRes?.error || typeof readRes?.content !== 'string') return
 
@@ -1135,11 +1118,6 @@ async function _reloadActiveTextFileFromDisk(opts = {}) {
 /** Wrap sendAiDoc to inject agent config from stores. */
 async function sendAiDoc(userText) {
   const beforeMsgCount = aiDocMessages.value.length
-  // Capture pre-turn content so we can offer a Revert for tool-based edits
-  // (file_operation) that bypass the <replacement> flow.
-  const preTurnContent = store.activeFile?.content ?? editorContent.value ?? ''
-  const preTurnPath = store.activeFile?.path || ''
-
   const agent = agentsStore.getAgentById(selectedAgentId.value)
   const reqSkills = agent?.requiredSkillIds ?? []
   const reqMcp    = agent?.requiredMcpServerIds ?? []
@@ -1159,35 +1137,17 @@ async function sendAiDoc(userText) {
   }
   await _sendAiDocRaw(userText, agentConfig)
 
-  // Auto-apply the latest generated replacement from THIS turn only.
-  // Prior turns' edits that the user reverted (applied=false) must not be
-  // resurrected here — scope the search to messages produced by this send.
-  const runMessages = aiDocMessages.value.slice(beforeMsgCount)
-  const latestEdit = [...runMessages]
+  // Auto-apply the latest generated replacement so users can edit directly.
+  const latestEdit = [...aiDocMessages.value]
     .reverse()
     .find(m => m.role === 'ai' && m.type === 'edit' && m.replacement && !m.applied)
   if (latestEdit) onAiDocApply(latestEdit.id)
 
   // If the agent edited the current file via file_operation, reload it so
-  // the latest on-disk content is visible. Also attach a revert snapshot to
-  // the most recent AI message so the user has an undo path (both via the
-  // pill on the message and via Ctrl+Z).
+  // the latest on-disk content is visible in this window immediately.
+  const runMessages = aiDocMessages.value.slice(beforeMsgCount)
   if (_currentFileChangedByToolRun(runMessages)) {
-    // force-reload even if dirty: the tool just wrote to disk, and we already
-    // had the user's pre-turn snapshot captured above.
-    await _reloadActiveTextFileFromDisk({ force: true })
-    const latestAi = [...runMessages].reverse().find(m => m.role === 'ai')
-    if (latestAi && preTurnPath) {
-      markAiDocToolEdit(latestAi.id, preTurnContent, preTurnPath)
-      const postContent = store.activeFile?.content ?? editorContent.value ?? ''
-      _pushAiEditHistory({
-        source: 'tool',
-        msgId: latestAi.id,
-        preContent: preTurnContent,
-        postContent,
-        filePath: preTurnPath,
-      })
-    }
+    await _reloadActiveTextFileFromDisk()
   }
 }
 
@@ -1224,101 +1184,6 @@ const aiDocEnabled = ref(false)
 const hasSelection = ref(false)
 // Revert snapshots: msgId → previous file content
 const _revertSnapshots = new Map()
-
-// ── AI edit history (Ctrl+Z / Ctrl+Y) ─────────────────────────────────────
-// Entries: { source: 'replacement'|'tool', msgId, preContent, postContent, filePath? }
-// Each AI-initiated write pushes a new entry. Ctrl+Z pops when current content
-// matches entry.postContent (otherwise native undo takes over, so manual
-// keystrokes the user made AFTER an AI edit are still undoable first).
-const _aiUndoStack = []
-const _aiRedoStack = []
-const AI_UNDO_CAP = 50
-
-function _pushAiEditHistory(entry) {
-  _aiUndoStack.push(entry)
-  if (_aiUndoStack.length > AI_UNDO_CAP) _aiUndoStack.shift()
-  // New edit invalidates any pending redo.
-  _aiRedoStack.length = 0
-}
-
-function _currentEditorContent() {
-  return store.activeFile?.content ?? editorContent.value ?? ''
-}
-
-async function _applyHistoryContent(entry, targetContent) {
-  // Route to the right editor based on the current file type.
-  if (isMarkdown.value && !editMode.value && formattedEl.value) {
-    editorContent.value = targetContent
-    store.updateContent(targetContent)
-    await nextTick()
-    await refreshFormattedHtml()
-  } else if (isMarkdown.value && editMode.value) {
-    editorContent.value = targetContent
-    store.updateContent(targetContent)
-  } else if (isTextLike.value) {
-    store.updateContent(targetContent)
-    editorContent.value = targetContent
-  } else if (store.activeFile?.content !== undefined) {
-    store.updateContent(targetContent)
-    editorContent.value = targetContent
-  }
-  updateAiDocFileContent(_currentEditorContent())
-
-  // If the original edit was a tool-based write, persist back to disk so
-  // the undo/redo mirrors the on-disk state.
-  if (entry.source === 'tool' && entry.filePath) {
-    try {
-      await window.electronAPI.obsidian.writeFile(entry.filePath, targetContent)
-      if (store.activeFile?.path === entry.filePath) {
-        store.activeFile.content = targetContent
-        store.activeFile.dirty = false
-      }
-    } catch (err) {
-      console.warn('[AI Doc] Failed to write undo/redo to disk:', err?.message)
-    }
-  }
-}
-
-/** Returns true if our stack owns this undo (and has started consuming it). */
-function _tryUndoAiEdit() {
-  if (_aiUndoStack.length === 0) return false
-  const top = _aiUndoStack[_aiUndoStack.length - 1]
-  // Only consume our undo entry when current content matches what we applied.
-  // Otherwise the user has made further manual edits — let native undo run first.
-  if (_currentEditorContent() !== top.postContent) return false
-  _aiUndoStack.pop()
-  _aiRedoStack.push(top)
-  _applyHistoryContent(top, top.preContent).then(() => {
-    if (top.source === 'replacement') markAiDocReverted(top.msgId)
-    else if (top.source === 'tool') markAiDocToolEditReverted(top.msgId)
-  })
-  return true
-}
-
-function _tryRedoAiEdit() {
-  if (_aiRedoStack.length === 0) return false
-  const top = _aiRedoStack[_aiRedoStack.length - 1]
-  if (_currentEditorContent() !== top.preContent) return false
-  _aiRedoStack.pop()
-  _aiUndoStack.push(top)
-  _applyHistoryContent(top, top.postContent).then(() => {
-    if (top.source === 'replacement') markAiDocApplied(top.msgId)
-    else if (top.source === 'tool') markAiDocToolEditReapplied(top.msgId)
-  })
-  return true
-}
-
-function _onDocsKeydown(e) {
-  const ctrlLike = e.ctrlKey || e.metaKey
-  if (!ctrlLike) return
-  const k = (e.key || '').toLowerCase()
-  // Ctrl/Cmd+Z → undo; Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z → redo.
-  if (k === 'z' && !e.shiftKey) {
-    if (_tryUndoAiEdit()) { e.preventDefault(); e.stopPropagation() }
-  } else if (k === 'y' || (k === 'z' && e.shiftKey)) {
-    if (_tryRedoAiEdit()) { e.preventDefault(); e.stopPropagation() }
-  }
-}
 
 // Floating AI Doc panel state (position + size)
 const AI_PANEL_STORAGE_KEY = 'clankai-aidoc-panel'
@@ -1703,7 +1568,6 @@ onBeforeUnmount(() => {
   // Flush any pending save
   if (store.activeFile?.dirty) store.saveFile()
   document.removeEventListener('keydown', onGlobalKeydown, true)
-  document.removeEventListener('keydown', _onDocsKeydown, true)
   document.removeEventListener('selectionchange', _snapshotSelection)
   window.removeEventListener('resize', _onWindowResize)
   clearTimeout(_selectionDebounce)
@@ -1815,16 +1679,6 @@ async function refreshAll() {
   }
 }
 
-async function openVaultInExplorer() {
-  const p = store.vaultPath
-  if (!p) return
-  try {
-    await window.electronAPI.openFile(p)
-  } catch (err) {
-    console.warn('[Docs] Failed to open vault in explorer:', err?.message)
-  }
-}
-
 async function saveFile() {
   if (saveStatus.value === 'saving') return
   if (_saveStatusTimer) clearTimeout(_saveStatusTimer)
@@ -1860,6 +1714,7 @@ function _ensureAiDocPanel() {
     const text = docxEditorRef.value.getPlainText()
     if (text) fullContent = `[Document: ${store.activeFile.name}]\n\n${text}`
   }
+  _pendingBinaryContent = null
 
   const fileCtx = {
     fileName: store.activeFile.name || '',
@@ -1967,6 +1822,9 @@ function handleSheetChanged({ sheetName, sheetIndex, totalSheets, text, fileName
   }
 }
 
+// No longer needed — always load full content from editor refs directly
+let _pendingBinaryContent = null
+
 /** Apply AI replacement to the document. Stores a revert snapshot. */
 function onAiDocApply(msgId) {
   const info = getReplacementInfo(msgId)
@@ -1974,28 +1832,17 @@ function onAiDocApply(msgId) {
 
   const { replacement, targetText } = info
 
-  // Snapshot full file content for revert BEFORE attempting apply,
-  // but roll it back if apply refuses (e.g. stale selection).
-  const snapshot = store.activeFile?.content || editorContent.value
-  _revertSnapshots.set(msgId, snapshot)
+  // Snapshot full file content for revert
+  _revertSnapshots.set(msgId, store.activeFile?.content || editorContent.value)
 
-  const ok = _applyReplacement(targetText, replacement)
-  if (!ok) {
-    // Apply refused — don't keep a bogus revert snapshot and don't mark applied.
-    _revertSnapshots.delete(msgId)
-    markAiDocApplyFailed(msgId)
-    return
-  }
+  // Apply the replacement
+  _applyReplacement(targetText, replacement)
 
+  // Mark as applied in composable
   markAiDocApplied(msgId)
-  const postContent = _currentEditorContent()
-  updateAiDocFileContent(postContent)
-  _pushAiEditHistory({
-    source: 'replacement',
-    msgId,
-    preContent: snapshot,
-    postContent,
-  })
+
+  // Update the composable's file content to reflect the change
+  updateAiDocFileContent(store.activeFile?.content || editorContent.value)
 }
 
 /** Revert a previously applied AI edit. */
@@ -2020,146 +1867,83 @@ function onAiDocRevert(msgId) {
   _revertSnapshots.delete(msgId)
 }
 
-/** Revert a file_operation tool-based AI edit. Restores pre-turn disk content. */
-async function onAiDocToolRevert(msgId) {
-  const msg = aiDocMessages.value.find(m => m.id === msgId)
-  const te = msg?.toolEdit
-  if (!te || te.reverted) return
-  try {
-    await window.electronAPI.obsidian.writeFile(te.filePath, te.preContent)
-    if (store.activeFile?.path === te.filePath) {
-      store.activeFile.content = te.preContent
-      store.activeFile.dirty = false
-      editorContent.value = te.preContent
-      if (isMarkdown.value && !editMode.value) {
-        await nextTick()
-        await refreshFormattedHtml()
-      }
-      updateAiDocFileContent(te.preContent)
-    }
-    markAiDocToolEditReverted(msgId)
-  } catch (err) {
-    console.warn('[AI Doc] Tool-revert failed:', err?.message)
-  }
-}
-
-/** Re-apply a previously reverted tool-based AI edit. */
-async function onAiDocToolReapply(msgId) {
-  const msg = aiDocMessages.value.find(m => m.id === msgId)
-  const te = msg?.toolEdit
-  if (!te || !te.reverted || !te.filePath) return
-  // Find the post-content from our undo/redo stacks — tool entries store it.
-  const match =
-    [..._aiUndoStack, ..._aiRedoStack].reverse().find(
-      e => e.source === 'tool' && e.msgId === msgId
-    )
-  if (!match) return
-  try {
-    await window.electronAPI.obsidian.writeFile(te.filePath, match.postContent)
-    if (store.activeFile?.path === te.filePath) {
-      store.activeFile.content = match.postContent
-      store.activeFile.dirty = false
-      editorContent.value = match.postContent
-      if (isMarkdown.value && !editMode.value) {
-        await nextTick()
-        await refreshFormattedHtml()
-      }
-      updateAiDocFileContent(match.postContent)
-    }
-    markAiDocToolEditReapplied(msgId)
-  } catch (err) {
-    console.warn('[AI Doc] Tool-reapply failed:', err?.message)
-  }
-}
-
-/**
- * Apply replacement text into the current editor.
- * Returns true on success, false when refused (e.g. stale selection not found).
- */
+/** Apply replacement text into the current editor. */
 function _applyReplacement(targetText, newText) {
-  // 1) If there's an editor-provided callback (DOCX/PPTX/XLSX), use it.
-  //    Do NOT null it out after use — the editor registers it per file open,
-  //    and the user may apply multiple edits in one session.
+  // 1) If there's an editor-provided callback (DOCX/PPTX/XLSX), use it
   if (_editorReplaceCallback) {
     try {
       _editorReplaceCallback(newText)
-      return true
-    } catch {
-      // Callback threw — fall through to text-based apply.
-    }
+      _editorReplaceCallback = null
+      return
+    } catch { /* fall through */ }
   }
 
-  const currentFullContent =
-    (isMarkdown.value || isTextLike.value ? editorContent.value : null) ??
-    store.activeFile?.content ?? ''
-
-  // Determine whether this replacement targets the WHOLE file or a SUBSTRING.
-  // A whole-file edit is one where targetText equals the current full content
-  // (or is empty — e.g. "write a poem about X" into an empty file).
-  const isWholeFileEdit = !targetText || targetText === currentFullContent
-  const idx = isWholeFileEdit ? -1 : currentFullContent.indexOf(targetText)
-
-  // If it's a substring edit and the substring is not found, the selection
-  // went stale (user typed after selecting, or AI returned wrong target).
-  // Refuse rather than silently overwriting the whole file.
-  if (!isWholeFileEdit && idx < 0) {
-    console.warn('[AI Doc] Refused replacement: target text not found in current content')
-    return false
-  }
-
-  // Markdown formatted mode
+  // 2) Markdown formatted mode: find and replace via innerHTML
   if (isMarkdown.value && !editMode.value && formattedEl.value) {
-    const updated = isWholeFileEdit
-      ? newText
-      : currentFullContent.slice(0, idx) + newText + currentFullContent.slice(idx + targetText.length)
-    editorContent.value = updated
-    store.updateContent(updated)
-    nextTick(() => refreshFormattedHtml())
+    const content = editorContent.value
+    const idx = content.indexOf(targetText)
+    if (idx >= 0) {
+      const updated = content.slice(0, idx) + newText + content.slice(idx + targetText.length)
+      editorContent.value = updated
+      store.updateContent(updated)
+      nextTick(() => refreshFormattedHtml())
+    } else {
+      // Whole-file replace
+      editorContent.value = newText
+      store.updateContent(newText)
+      nextTick(() => refreshFormattedHtml())
+    }
     _addHighlights()
-    return true
+    return
   }
 
-  // Markdown source mode
+  // 3) Markdown source mode: splice in textarea
   if (isMarkdown.value && editMode.value) {
-    const updated = isWholeFileEdit
-      ? newText
-      : currentFullContent.slice(0, idx) + newText + currentFullContent.slice(idx + targetText.length)
-    editorContent.value = updated
-    store.updateContent(updated)
-    return true
+    const content = editorContent.value
+    const idx = content.indexOf(targetText)
+    if (idx >= 0) {
+      const before = content.slice(0, idx)
+      const after = content.slice(idx + targetText.length)
+      editorContent.value = before + newText + after
+    } else {
+      editorContent.value = newText
+    }
+    store.updateContent(editorContent.value)
+    return
   }
 
-  // Code viewer (isTextLike)
+  // 4) Code viewer
   if (isTextLike.value) {
     const cv = codeViewerRef.value
-    if (isWholeFileEdit) {
-      store.updateContent(newText)
-      editorContent.value = newText
-    } else {
-      const startLine = currentFullContent.slice(0, idx).split('\n').length - 1
+    const content = store.activeFile?.content || editorContent.value
+    const idx = content.indexOf(targetText)
+    if (idx >= 0) {
+      const startLine = content.slice(0, idx).split('\n').length - 1
       const newLineCount = newText.split('\n').length
-      const updated = currentFullContent.slice(0, idx) + newText + currentFullContent.slice(idx + targetText.length)
-      store.updateContent(updated)
-      editorContent.value = updated
-      nextTick(() => cv?.setHighlightedLines?.(startLine, startLine + newLineCount - 1))
-    }
-    return true
-  }
-
-  // Whole-file fallback for any other text-bearing file
-  if (store.activeFile?.content !== undefined) {
-    const content = store.activeFile.content
-    if (isWholeFileEdit) {
-      store.updateContent(newText)
-      editorContent.value = newText
-    } else {
       const updated = content.slice(0, idx) + newText + content.slice(idx + targetText.length)
       store.updateContent(updated)
       editorContent.value = updated
+      nextTick(() => cv?.setHighlightedLines?.(startLine, startLine + newLineCount - 1))
+    } else {
+      store.updateContent(newText)
+      editorContent.value = newText
     }
-    return true
+    return
   }
-  return false
+
+  // 5) Whole-file replace fallback
+  if (store.activeFile?.content !== undefined) {
+    const content = store.activeFile.content
+    const idx = content.indexOf(targetText)
+    if (idx >= 0) {
+      const updated = content.slice(0, idx) + newText + content.slice(idx + targetText.length)
+      store.updateContent(updated)
+      editorContent.value = updated
+    } else {
+      store.updateContent(newText)
+      editorContent.value = newText
+    }
+  }
 }
 
 /** Add green highlight spans to formatted view. */
@@ -2233,10 +2017,6 @@ onMounted(() => {
   document.addEventListener('keydown', onGlobalKeydown, true)
   document.addEventListener('selectionchange', _snapshotSelection)
   window.addEventListener('resize', _onWindowResize)
-  // AI Doc undo/redo (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z). Capture phase so we can
-  // steal the keystroke before a focused textarea's native undo runs, but we
-  // only preventDefault when our stack actually has a matching entry.
-  document.addEventListener('keydown', _onDocsKeydown, true)
 })
 
 // Auto-open AI Doc panel when a supported file is opened (if switch is on)
@@ -2246,9 +2026,8 @@ watch(() => store.activeFile?.path, (newPath, oldPath) => {
     _clearHighlights()
     // Clear revert snapshots from previous file
     _revertSnapshots.clear()
-    _aiUndoStack.length = 0
-    _aiRedoStack.length = 0
     _editorReplaceCallback = null
+    _pendingBinaryContent = null
     hasSelection.value = false
     searchBarOpen.value = false
 

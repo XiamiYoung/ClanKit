@@ -274,6 +274,8 @@
                   :on-refine-plan="() => props.onRefinePlan?.(msg)"
                   :on-reject-plan="() => props.onRejectPlan?.(msg)"
                   @quote-image="emit('quote-image', $event)"
+                  @delete-message="emit('delete-message', $event)"
+                  @view-blob="viewingBlobContent = $event"
                 />
               </div>
             </div>
@@ -391,15 +393,15 @@
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
             </svg>
           </button>
-          <textarea
-            ref="inputEl"
+          <ChatMentionInput
             v-model="defaultInputText"
-            @keydown="onKeydown"
+            v-model:longBlobs="defaultLongBlobs"
+            :isRunning="isRunning"
+            @send="defaultSend"
             @focus="inputFocused = true"
             @blur="inputFocused = false"
-            :placeholder="t('chats.placeholder')"
-            rows="2"
-            class="cw-textarea"
+            @attach="atts => { attachments.push(...atts) }"
+            @preview-blob="content => inputBlobDialog = { content }"
           />
           <!-- Escape retrieve (visible while running) -->
           <template v-if="isRunning">
@@ -412,9 +414,9 @@
           <!-- Send -->
           <button
             @click.stop="defaultSend"
-            :disabled="!defaultInputText.trim() && attachments.length === 0"
+            :disabled="!defaultInputText.trim() && !hasDefaultBlobs && attachments.length === 0"
             class="cw-btn send"
-            :class="{ active: defaultInputText.trim() || attachments.length > 0 }"
+            :class="{ active: defaultInputText.trim() || hasDefaultBlobs || attachments.length > 0 }"
             :aria-label="t('chats.sendMessageBtn')"
             v-tooltip="t('chats.sendMessageBtn')"
           >
@@ -426,6 +428,36 @@
       </div>
     </slot>
   </div>
+
+  <!-- Blob view dialog for input area -->
+  <Teleport to="body">
+    <div v-if="inputBlobDialog" class="long-input-overlay">
+      <div class="long-input-dialog">
+        <div class="long-input-dialog__header">
+          <span>{{ t('chats.longInputDialogTitle', { count: inputBlobDialog.content.length }) }}</span>
+          <button class="long-input-dialog__close" @click="inputBlobDialog = null">×</button>
+        </div>
+        <div class="long-input-dialog__body">
+          <pre>{{ inputBlobDialog.content }}</pre>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Blob view dialog for sent messages (bubbled from MessageRenderer) -->
+  <Teleport to="body">
+    <div v-if="viewingBlobContent" class="long-input-overlay">
+      <div class="long-input-dialog">
+        <div class="long-input-dialog__header">
+          <span>{{ t('chats.longInputDialogTitle', { count: viewingBlobContent.length }) }}</span>
+          <button class="long-input-dialog__close" @click="viewingBlobContent = null">×</button>
+        </div>
+        <div class="long-input-dialog__body">
+          <pre>{{ viewingBlobContent }}</pre>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- Floating agent tooltip (Teleport to body so it escapes overflow) -->
   <Teleport to="body">
@@ -466,6 +498,7 @@ import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
 import { getAvatarDataUri } from '../agents/agentAvatars'
 import MessageRenderer from './MessageRenderer.vue'
+import ChatMentionInput from './ChatMentionInput.vue'
 
 const props = defineProps({
   chatId: { type: String, required: true },
@@ -508,7 +541,14 @@ const messagesEl = ref(null)
 const inputEl = ref(null)
 const errorDialogText = ref(null)
 const inputFocused = ref(false)
+const inputBlobDialog = ref(null)
+const viewingBlobContent = ref(null)
+// Default input (fallback when no #input slot is supplied). modelValue carries
+// {{BLOB:id}} markers; longBlobs holds the id→content map that gets expanded
+// on send.
 const defaultInputText = ref('')
+const defaultLongBlobs = ref({})
+const hasDefaultBlobs = computed(() => Object.keys(defaultLongBlobs.value).length > 0)
 const copiedId = ref(null)
 const attachments = ref([])
 const userScrolled = ref(false)
@@ -992,50 +1032,41 @@ async function pickFiles() {
 function removeAttachment(id) {
   const att = attachments.value.find(a => a.id === id)
   if (att?.placeholderText) {
-    const placeholder = att.placeholderText
     defaultInputText.value = defaultInputText.value
       .split('\n')
-      .filter(line => line !== placeholder)
+      .filter(line => line !== att.placeholderText)
       .join('\n')
   }
   attachments.value = attachments.value.filter(a => a.id !== id)
 }
 
 // ── Default input handlers (used when no custom input slot is provided) ──
-function onKeydown(e) {
-  if (e.key === 'Escape' && isRunning.value) {
-    e.preventDefault()
-    emit('escape-retrieve')
-    return
-  }
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
-    defaultSend()
-  }
-}
-
 function defaultSend() {
   const rawText = defaultInputText.value.trim()
+  const blobs = defaultLongBlobs.value
+  const hasBlob = Object.keys(blobs).length > 0
   const hasAttachments = attachments.value.length > 0
-  if (!rawText && !hasAttachments) return
+  if (!rawText && !hasBlob && !hasAttachments) return
+
+  let text = defaultInputText.value
 
   // Prepend quoted message if present
-  let text = rawText
   if (quotedMessage.value) {
     const quotedName = getQuotedSenderName(quotedMessage.value)
-    text = `> **${quotedName}:** ${quotedMessage.value.content.slice(0, 500)}${quotedMessage.value.content.length > 500 ? '...' : ''}\n\n${rawText}`
+    text = `> **${quotedName}:** ${quotedMessage.value.content.slice(0, 500)}${quotedMessage.value.content.length > 500 ? '...' : ''}\n\n${text}`
     quotedMessage.value = null
   }
 
   const pendingAttachments = [...attachments.value]
   defaultInputText.value = ''
+  defaultLongBlobs.value = {}
   attachments.value = []
   inputFocused.value = false
   userScrolled.value = false
   if (hasAttachments) {
-    emit('send-with-attachments', text, pendingAttachments)
+    emit('send-with-attachments', text, pendingAttachments, hasBlob ? { ...blobs } : undefined)
   } else {
-    emit('send', text)
+    emit('send', text, hasBlob ? { ...blobs } : undefined)
   }
 }
 
@@ -1070,6 +1101,7 @@ defineExpose({ scrollToBottom })
 .cw-messages {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;
@@ -1303,6 +1335,8 @@ defineExpose({ scrollToBottom })
   border-radius: 1.125rem;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
+  word-break: break-word;
+  min-width: 0;
 }
 .cw-msg-bubble :deep(> div:last-child p:last-child),
 .cw-msg-bubble :deep(> div:last-child ul:last-child),
@@ -1615,21 +1649,66 @@ defineExpose({ scrollToBottom })
   border-color: #1A1A1A;
   box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
 }
-.cw-textarea {
-  flex: 1;
-  resize: none;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body, 0.9375rem);
-  color: var(--text-primary, #1A1A1A);
-  line-height: 1.5;
-  min-height: 2.75rem;
-  max-height: 7.5rem;
-  overflow-y: auto;
+/* Long input dialog (also used by MessageRenderer, but scoped separately there) */
+.long-input-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.cw-textarea::placeholder { color: var(--text-muted, #9CA3AF); }
+.long-input-dialog {
+  width: 70vw;
+  max-width: 900px;
+  height: 70vh;
+  background: #0F0F0F;
+  border-radius: 1.125rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.18), 0 20px 60px rgba(0,0,0,0.45);
+}
+.long-input-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid rgba(255,248,240,0.15);
+  color: #FFF8F0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.long-input-dialog__close {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: rgba(255,248,240,0.12);
+  border: none;
+  color: rgba(255,248,240,0.8);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.long-input-dialog__close:hover { background: rgba(255,248,240,0.2); color: #FFF8F0; }
+.long-input-dialog__body {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem 1.25rem;
+}
+.long-input-dialog__body pre {
+  margin: 0;
+  color: #FFF8F0;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+}
 
 .cw-btn {
   width: 2.25rem;

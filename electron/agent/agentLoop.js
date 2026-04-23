@@ -34,7 +34,7 @@ const te  = require('./toolExecutor')
 
 // Module-level helpers (re-imported from extracted modules for use in run())
 const { serializeToolResult, uiResult, sliceToLastNTurns } = mc
-const { readFileIfExists } = spb
+const { readSoulFile, readFileIfExists } = spb
 
 // Strip lone Unicode surrogates that break JSON.stringify / Anthropic API.
 // Replaces unpaired high/low surrogates with U+FFFD (replacement character).
@@ -302,7 +302,7 @@ class AgentLoop {
    * For OpenAI-compat providers: falls back to local message trimming.
    */
   async compactStandalone(messages, enabledAgents, enabledSkills, onChunk, agentPrompts) {
-    this.toolRegistry.loadForAgents(enabledAgents || [], this.config.excludedToolNames || [])
+    this.toolRegistry.loadForAgents(enabledAgents || [])
 
     this.skillPrompts = new Map()
     this.loadedSkills = new Map()  // tracks skills actually loaded by LLM via load_skill tool
@@ -377,8 +377,8 @@ class AgentLoop {
    * @param {Array<string|{id:string, name:string, systemPrompt?:string}>} enabledSkills
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
-  buildSystemPrompt(enabledAgents, enabledSkills, agentContext = {}, memoryContext = {}, ragContext = null) {
-    return spb.buildSystemPrompt(this.config, this.mcpServers, this.httpTools, enabledAgents, enabledSkills, agentContext, memoryContext, ragContext)
+  buildSystemPrompt(enabledAgents, enabledSkills, agentContext = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
+    return spb.buildSystemPrompt(this.config, this.mcpServers, this.httpTools, enabledAgents, enabledSkills, agentContext, userSoulContent, systemSoulContent, participantSouls, memoryContext, ragContext)
   }
   /**
    * Build conversation messages, transforming the last user message's
@@ -410,7 +410,7 @@ class AgentLoop {
     this.httpTools = httpTools || []
 
     // Load tools for enabled agents
-    this.toolRegistry.loadForAgents(enabledAgents || [], this.config.excludedToolNames || [])
+    this.toolRegistry.loadForAgents(enabledAgents || [])
 
     // Register agent-specific tools
     if (this.config.memoryDir && agentPrompts?.systemAgentId) {
@@ -530,6 +530,24 @@ class AgentLoop {
     // Store RAG context for system prompt injection
     this.ragContext = ragContext || null
 
+    // ── Load soul memory before building system prompt ──
+    const soulsDir = this.config.soulsDir
+    const userAgentId = agentPrompts?.userAgentId
+    const systemAgentId = agentPrompts?.systemAgentId
+    const userSoulContent = readSoulFile(soulsDir, userAgentId, 'users')
+    const systemSoulContent = readSoulFile(soulsDir, systemAgentId, 'system')
+
+    // Load soul content for other group chat participants
+    const participantSouls = []
+    if (agentPrompts?.groupChatContext?.otherParticipants) {
+      for (const p of agentPrompts.groupChatContext.otherParticipants) {
+        if (p.id) {
+          const content = readSoulFile(soulsDir, p.id, 'system')
+          if (content) participantSouls.push({ name: p.name, content })
+        }
+      }
+    }
+
     // ── Load user profile ──
     const memoryDir = this.config.memoryDir
     let userMd = null
@@ -541,6 +559,7 @@ class AgentLoop {
 
     let systemPrompt = this.buildSystemPrompt(
       enabledAgents, enabledSkills, agentPrompts,
+      userSoulContent, systemSoulContent, participantSouls,
       { userMd },
       this.ragContext
     )

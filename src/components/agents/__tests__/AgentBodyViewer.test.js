@@ -20,8 +20,6 @@ vi.mock('../../../stores/models', () => ({
     models: [],
     loadModels: vi.fn(),
     getModelLabel: vi.fn(() => ''),
-    getModelsForProvider: vi.fn(() => []),
-    isLoading: vi.fn(() => false),
   }),
 }))
 

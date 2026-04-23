@@ -114,7 +114,7 @@
     <Teleport to="body">
       <!-- Chat toolkit -->
       <div
-        v-if="chatKitVisible"
+        v-if="chatKitVisible && !isMinibarMode"
         class="mbc-toolkit"
         :style="{ top: chatKitPos.top + 'px', left: chatKitPos.left + 'px' }"
         @mouseenter="showChatKit"
@@ -143,7 +143,7 @@
 
       <!-- Plan toolkit -->
       <div
-        v-if="planKitVisible"
+        v-if="planKitVisible && !isMinibarMode"
         class="mbc-toolkit"
         :style="{ top: planKitPos.top + 'px', left: planKitPos.left + 'px' }"
         @mouseenter="showPlanKit"
@@ -427,54 +427,23 @@ const planKitPos = ref({ top: 0, left: 0 })
 let chatKitHideTimer = null
 let planKitHideTimer = null
 
-// Expanded minibar window size for hosting the hover tooltip (only in minibar mode)
-const EXPANDED_W = 360
-const EXPANDED_H = 280
-
-function _expandMinibarForKit() {
-  if (!isMinibarMode.value) return
-  // Pin the bar's visual width so it does not stretch when the Electron window grows.
-  const bar = document.querySelector('.minibar-bar')
-  if (bar && !bar.style.maxWidth) bar.style.maxWidth = window.innerWidth + 'px'
-  window.electronAPI?.window?.setMinibarExpand?.({ expanded: true, width: EXPANDED_W, height: EXPANDED_H })
-}
-
-async function _collapseMinibarIfIdle() {
-  if (!isMinibarMode.value) return
-  if (chatKitVisible.value || planKitVisible.value) return
-  await window.electronAPI?.window?.setMinibarExpand?.({ expanded: false })
-  document.querySelector('.minibar-bar')?.style.removeProperty('max-width')
-}
-
 function showChatKit() {
   clearTimeout(chatKitHideTimer)
-  _expandMinibarForKit()
   const rect = chatSectionRef.value?.getBoundingClientRect()
   if (!rect) return
   chatKitPos.value = { top: rect.bottom + 8, left: Math.max(8, Math.min(rect.left + rect.width / 2 - 130, window.innerWidth - 276)) }
   chatKitVisible.value = true
 }
-function hideChatKit() {
-  chatKitHideTimer = setTimeout(() => {
-    chatKitVisible.value = false
-    _collapseMinibarIfIdle()
-  }, 150)
-}
+function hideChatKit() { chatKitHideTimer = setTimeout(() => { chatKitVisible.value = false }, 150) }
 
 function showPlanKit() {
   clearTimeout(planKitHideTimer)
-  _expandMinibarForKit()
   const rect = planSectionRef.value?.getBoundingClientRect()
   if (!rect) return
   planKitPos.value = { top: rect.bottom + 8, left: Math.max(8, Math.min(rect.left + rect.width / 2 - 130, window.innerWidth - 276)) }
   planKitVisible.value = true
 }
-function hidePlanKit() {
-  planKitHideTimer = setTimeout(() => {
-    planKitVisible.value = false
-    _collapseMinibarIfIdle()
-  }, 150)
-}
+function hidePlanKit() { planKitHideTimer = setTimeout(() => { planKitVisible.value = false }, 150) }
 
 onUnmounted(() => {
   clearTimeout(chatKitHideTimer)

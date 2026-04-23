@@ -17,7 +17,18 @@
           @click="openImage(att)"
         />
       </div>
-      <div v-if="message.content" class="prose-clankai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleContentClick" />
+      <!-- Inline content: text segments interleaved with blob chips -->
+      <template v-if="contentSegments.length === 1 && contentSegments[0].type === 'text'">
+        <div v-if="message.content" class="prose-clankai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleContentClick" />
+      </template>
+      <template v-else-if="contentSegments.length > 0">
+        <span v-for="(seg, si) in contentSegments" :key="si">
+          <span v-if="seg.type === 'text' && seg.value" class="prose-clankai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(seg.value)" />
+          <span v-else-if="seg.type === 'blob'" class="msg-blob-chip" @click="emit('view-blob', seg.content)">
+            📄 {{ t('chats.longInputChip', { preview: seg.content.slice(0, 10), count: seg.content.length }) }}
+          </span>
+        </span>
+      </template>
       <BabylonViewer v-for="url in modelUrls" :key="url" :src="url" />
     </template>
 
@@ -472,7 +483,25 @@ const props = defineProps({
   onRejectPlan: { type: Function, default: null }
 })
 
-const emit = defineEmits(['quote-image'])
+const emit = defineEmits(['quote-image', 'delete-message', 'view-blob'])
+
+// Split message.content into text/blob segments using {{BLOB:id}} markers
+const contentSegments = computed(() => {
+  const content = props.message.content || ''
+  const blobs = props.message.longBlobs
+  if (!blobs || Object.keys(blobs).length === 0) return [{ type: 'text', value: content }]
+  const parts = content.split(/(\{\{BLOB:[a-z0-9-]+\}\})/)
+  const segments = []
+  for (const part of parts) {
+    const m = part.match(/^\{\{BLOB:([a-z0-9-]+)\}\}$/)
+    if (m && blobs[m[1]]) {
+      segments.push({ type: 'blob', id: m[1], content: blobs[m[1]] })
+    } else if (part) {
+      segments.push({ type: 'text', value: part })
+    }
+  }
+  return segments.length > 0 ? segments : [{ type: 'text', value: content }]
+})
 
 // ── Image attachments (from clipboard paste / file attach) ────────────────────
 const imageAttachments = computed(() =>
@@ -1687,6 +1716,85 @@ function diffMarker(type) {
 @keyframes wavebar-text-sweep {
   from { background-position: 150% center; }
   to   { background-position: -50% center; }
+}
+
+/* ── Inline blob chip (sent messages) ── */
+.msg-blob-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem 0.2rem 0.4rem;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,248,240,0.35);
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: #FFF8F0;
+  vertical-align: middle;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.msg-blob-chip:hover { background: rgba(255,255,255,0.25); }
+
+/* ── Long input dialog ── */
+.long-input-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.long-input-dialog {
+  width: 70vw;
+  max-width: 900px;
+  height: 70vh;
+  background: #0F0F0F;
+  border-radius: 1.125rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.18), 0 20px 60px rgba(0,0,0,0.45);
+}
+.long-input-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid rgba(255,248,240,0.15);
+  color: #FFF8F0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.long-input-dialog__close {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: rgba(255,248,240,0.12);
+  border: none;
+  color: rgba(255,248,240,0.8);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.long-input-dialog__close:hover { background: rgba(255,248,240,0.2); color: #FFF8F0; }
+.long-input-dialog__body {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem 1.25rem;
+}
+.long-input-dialog__body pre {
+  margin: 0;
+  color: #FFF8F0;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
 }
 
 </style>

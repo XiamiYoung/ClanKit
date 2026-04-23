@@ -607,8 +607,9 @@
                   </svg>
                 </button>
                 <ChatMentionInput
-                  ref="mentionInputRef"
+                  ref="mentionInputEl"
                   v-model="inputText"
+                  v-model:longBlobs="inputLongBlobs"
                   :agentIds="activeSystemAgentIds"
                   :isGroupChat="isGroupChat"
                   :isRunning="activeRunning"
@@ -616,7 +617,8 @@
                   @escape="interrupt(chatsStore.activeChatId)"
                   @focus="inputFocused = true"
                   @blur="onInputBlur"
-                  @attach="atts => attachments.push(...atts)"
+                  @attach="atts => handleAttachResults(atts)"
+                  @preview-blob="content => viewingBlobContent = content"
                 />
                 <!-- Escape retrieve button (visible while running) -->
                 <template v-if="activeRunning">
@@ -907,6 +909,21 @@
     </div>
   </Teleport>
 
+  <!-- Blob view dialog (input-area long-paste chips) -->
+  <Teleport to="body">
+    <div v-if="viewingBlobContent" class="long-input-overlay">
+      <div class="long-input-dialog">
+        <div class="long-input-dialog__header">
+          <span>{{ t('chats.longInputDialogTitle', { count: viewingBlobContent.length }) }}</span>
+          <button class="long-input-dialog__close" @click="viewingBlobContent = null">×</button>
+        </div>
+        <div class="long-input-dialog__body">
+          <pre>{{ viewingBlobContent }}</pre>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
 </template>
 
 <script setup>
@@ -932,6 +949,7 @@ import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import MessageRenderer from '../components/chat/MessageRenderer.vue'
 import ChatWindow from '../components/chat/ChatWindow.vue'
 import ChatHeader from '../components/chat/ChatHeader.vue'
+import ChatMentionInput from '../components/chat/ChatMentionInput.vue'
 import { parseMentions } from '../utils/mentions'
 import { v4 as uuidv4 } from 'uuid'
 import AppButton from '../components/common/AppButton.vue'
@@ -939,7 +957,6 @@ import AppTooltip from '../components/common/AppTooltip.vue'
 import ChatGridLayout from '../components/chat/ChatGridLayout.vue'
 import CategoryModal from '../components/agents/CategoryModal.vue'
 import EmojiPicker from '../components/agents/EmojiPicker.vue'
-import ChatMentionInput from '../components/chat/ChatMentionInput.vue'
 import ChatSettingsModal from '../components/chat/ChatSettingsModal.vue'
 import NewChatModal from '../components/chat/NewChatModal.vue'
 import ContextInspectorModal from '../components/chat/ContextInspectorModal.vue'
@@ -979,6 +996,8 @@ const enabledSkillObjects = computed(() => {
 })
 
 const inputText = ref('')
+const inputLongBlobs = ref({}) // id → long-paste content; populated by ChatMentionInput chips
+const viewingBlobContent = ref(null)
 
 // ── Voice recording composable ──
 // inputText moved here; sendMessage is a function declaration (hoisted).
@@ -1260,8 +1279,8 @@ watch(() => chatsStore.pendingInputPrefill, async (pending) => {
   inputText.value = text
 })
 
-const inputEl = ref(null) // legacy: no longer bound to a DOM element; use mentionInputRef
-const mentionInputRef = ref(null)
+const mentionInputEl = ref(null) // ChatMentionInput component instance
+const mentionInputRef = mentionInputEl
 
 // ── Attachments / Drag-and-Drop ──
 const {
@@ -1343,6 +1362,7 @@ const {
   mentionInputRef,
   confirmDeleteTarget,
   sendMessage: (...args) => sendMessage(...args),
+  setPendingLongBlobs: (blobs) => setPendingLongBlobs?.(blobs),
 })
 
 // Wrapper so useChunkHandler can call _fireGroupAgentsDirect before it's bound
@@ -1472,8 +1492,9 @@ const {
   _saveDraftForChat, _restoreDraftForChat,
   _codingModeContext, isCompacting,
   startStreamingTimer, stopStreamingTimer,
+  setPendingLongBlobs,
 } = useSendMessage({
-  inputText, attachments, quotedMessage, mentionInputRef, userScrolled,
+  inputText, inputLongBlobs, attachments, quotedMessage, mentionInputRef, userScrolled,
   scrollToBottom, dbg, getQuotedSenderName,
   perChatStreamingMsgId, perChatStreamingSegments,
   collaborationCancelled, isInCollaborationLoop, runningAgentKeys,
@@ -1840,6 +1861,7 @@ function setGroupAgentOverrideField(agentId, field, value) {
 function onInputBlur() {
   inputFocused.value = false
 }
+
 
 function scrollToBottom (force = false, forChatId = null) {
   // If called for a specific chat, only scroll if that chat is currently visible
@@ -3532,5 +3554,62 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   color: #1A1A1A;
   padding: 0.375rem 0.5rem;
   font-weight: normal;
+}
+
+/* ── Blob view dialog (matches the user-message bubble gradient) ── */
+.long-input-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.long-input-dialog {
+  background: #0F0F0F;
+  color: #FFF8F0;
+  border-radius: 1.125rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.08);
+  width: min(90vw, 700px);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.long-input-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255,248,240,0.15);
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #FFF8F0;
+  flex-shrink: 0;
+}
+.long-input-dialog__close {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  color: rgba(255,248,240,0.7);
+  padding: 0 0.25rem;
+}
+.long-input-dialog__close:hover { color: #FFF8F0; }
+.long-input-dialog__body {
+  overflow: auto;
+  padding: 1rem;
+  flex: 1;
+}
+.long-input-dialog__body pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Inter', monospace;
+  font-size: 0.85rem;
+  color: #FFF8F0;
+  line-height: 1.6;
 }
 </style>

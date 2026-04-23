@@ -2,7 +2,7 @@
   "name": "clankai",
   "version": "0.0.3",
   "description": "ClankAI - Multi-LLM Desktop Application",
-  "license": "GPL-3.0-only",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "electron/main.js",
   "scripts": {
     "test": "vitest run",

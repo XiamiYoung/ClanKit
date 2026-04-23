@@ -131,11 +131,14 @@ function readFileIfExists(filePath) {
  * @param {object} agentContext  { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId,
  *                                 systemAgentName, systemAgentDescription, userAgentName,
  *                                 userAgentDescription, groupChatContext, chatHandoverNote }
- * @param {object} memoryContext { userMd }
+ * @param {string|null} userSoulContent      Soul content for the user agent
+ * @param {string|null} systemSoulContent    Soul content for the system agent
+ * @param {Array|null}  participantSouls     Soul content for group participants
+ * @param {object} memoryContext { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, todayDate, yesterdayDate, historicalContext }
  * @param {object|null} ragContext           RAG retrieval results
  * @returns {string} The assembled system prompt
  */
-function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName, analysisTargetAgentType } = {}, memoryContext = {}, ragContext = null) {
+function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName, analysisTargetAgentType } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
   // When a named agent is active, use it as the opening identity (highest priority).
   // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
   let openingIdentity

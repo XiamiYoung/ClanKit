@@ -24,6 +24,7 @@ export function useMessageOps({
   mentionInputRef,
   confirmDeleteTarget,
   sendMessage,
+  setPendingLongBlobs,
 } = {}) {
   const chatsStore = useChatsStore()
   const agentsStore = useAgentsStore()
@@ -122,8 +123,9 @@ export function useMessageOps({
   }
 
   // Bridge for ChatWindow's send event (only fires if default input is used)
-  function handleChatWindowSend(text) {
+  function handleChatWindowSend(text, longBlobs) {
     if (text) inputText.value = text
+    if (longBlobs && setPendingLongBlobs) setPendingLongBlobs(longBlobs)
     sendMessage()
   }
 

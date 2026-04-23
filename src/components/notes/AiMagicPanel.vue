@@ -28,7 +28,7 @@
       </div>
 
       <!-- Conversation area -->
-      <div ref="conversationRef" class="ai-magic-conversation" @scroll="onConversationScroll">
+      <div ref="conversationRef" class="ai-magic-conversation">
         <div v-if="messages.length === 0" class="ai-magic-empty">
           <svg style="width:32px;height:32px;color:#374151;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M15 4V2m0 2v2m0-2h-2m2 0h2"/>
@@ -104,13 +104,6 @@
                 {{ t('notes.replacement') }}
               </div>
               <pre class="ai-magic-replacement-code">{{ msg.replacement }}</pre>
-              <!-- Apply-failed hint (stale selection) -->
-              <div v-if="msg.applyFailed" class="ai-magic-apply-failed">
-                <svg style="width:11px;height:11px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                <span>{{ t('notes.applyFailedStale') }}</span>
-              </div>
               <!-- Apply / Revert buttons -->
               <div class="ai-magic-replacement-actions">
                 <button
@@ -133,39 +126,6 @@
                     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
                   </svg>
                   {{ t('notes.revert') }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Tool-edit pill: AI modified the file directly via file_operation -->
-            <div v-if="msg.toolEdit" class="ai-magic-tool-edit">
-              <div class="ai-magic-tool-edit-header">
-                <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                </svg>
-                <span>{{ msg.toolEdit.reverted ? t('notes.toolEditReverted') : t('notes.toolEditApplied') }}</span>
-              </div>
-              <div class="ai-magic-replacement-actions">
-                <button
-                  v-if="!msg.toolEdit.reverted"
-                  class="ai-magic-revert-btn"
-                  @click="$emit('tool-revert', msg.id)"
-                >
-                  <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="1 4 1 10 7 10"/>
-                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-                  </svg>
-                  {{ t('notes.revert') }}
-                </button>
-                <button
-                  v-else
-                  class="ai-magic-apply-btn"
-                  @click="$emit('tool-reapply', msg.id)"
-                >
-                  <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                  {{ t('notes.applyToDoc') }}
                 </button>
               </div>
             </div>
@@ -229,7 +189,7 @@ const props = defineProps({
   permissionMode: { type: String, default: 'allow_all' },
 })
 
-const emit = defineEmits(['close', 'send', 'stop', 'apply', 'revert', 'tool-revert', 'tool-reapply', 'permission-respond', 'clear-selection'])
+const emit = defineEmits(['close', 'send', 'stop', 'apply', 'revert', 'permission-respond', 'clear-selection'])
 
 function onPermAllow(tc, decision) {
   if (tc.status !== 'pending') return
@@ -246,33 +206,6 @@ function onPermDeny(tc) {
 const inputRef = ref(null)
 const conversationRef = ref(null)
 const inputText = ref('')
-
-// Auto-scroll state — mirrors the ChatWindow pattern.
-// Default ON; user scrolling up disables it; returning to bottom re-enables.
-const autoScroll = ref(true)
-// Guards against our own programmatic scrolls flipping autoScroll off.
-let _programmaticScroll = false
-const NEAR_BOTTOM_PX = 24
-
-function _isNearBottom() {
-  const el = conversationRef.value
-  if (!el) return true
-  return (el.scrollHeight - el.scrollTop - el.clientHeight) <= NEAR_BOTTOM_PX
-}
-
-function _scrollToBottom() {
-  const el = conversationRef.value
-  if (!el) return
-  _programmaticScroll = true
-  el.scrollTop = el.scrollHeight
-  // scroll event fires async — clear the flag on the next frame.
-  requestAnimationFrame(() => { _programmaticScroll = false })
-}
-
-function onConversationScroll() {
-  if (_programmaticScroll) return
-  autoScroll.value = _isNearBottom()
-}
 
 const hasSelection = computed(() => {
   const ctx = props.selectionContext
@@ -338,36 +271,32 @@ function autoGrow() {
   ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'
 }
 
-
-// When a NEW message arrives (array length changes), we want to stick to bottom
-// regardless of prior autoScroll state — mirrors chat UX where a new turn
-// re-engages follow mode.
-watch(() => props.messages.length, async () => {
-  autoScroll.value = true
-  await nextTick()
-  _scrollToBottom()
+// Auto-focus input when panel opens
+watch(() => props.panelOpen, async (v) => {
+  if (v) {
+    await nextTick()
+    inputRef.value?.focus()
+  }
 })
 
-// During streaming (last AI message content grows), only follow if the user
-// hasn't scrolled away. Re-entering the bottom area flips autoScroll back on
-// via onConversationScroll.
+// Auto-scroll conversation on new messages
+watch(() => props.messages.length, async () => {
+  await nextTick()
+  if (conversationRef.value) {
+    conversationRef.value.scrollTop = conversationRef.value.scrollHeight
+  }
+})
+
+// Also scroll during streaming
 watch(
   () => lastAiMessage.value?.content,
   async () => {
-    if (!autoScroll.value) return
     await nextTick()
-    _scrollToBottom()
+    if (conversationRef.value) {
+      conversationRef.value.scrollTop = conversationRef.value.scrollHeight
+    }
   }
 )
-
-// Panel reopening — focus input, jump to bottom, reset follow mode.
-watch(() => props.panelOpen, async (v) => {
-  if (!v) return
-  autoScroll.value = true
-  await nextTick()
-  inputRef.value?.focus()
-  _scrollToBottom()
-})
 
 function focusInput() {
   nextTick(() => inputRef.value?.focus())
@@ -570,36 +499,6 @@ defineExpose({ focusInput })
 }
 .ai-magic-replacement-actions {
   border-top: 1px solid #2A2A2A;
-}
-.ai-magic-apply-failed {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.625rem;
-  background: rgba(251, 191, 36, 0.08);
-  border-top: 1px solid rgba(251, 191, 36, 0.2);
-  color: #FBBF24;
-  font-size: var(--fs-small);
-  line-height: 1.4;
-}
-
-/* Tool-edit pill (AI modified file via file_operation, not <replacement>) */
-.ai-magic-tool-edit {
-  margin-top: 0.5rem;
-  border: 1px solid #2A2A2A;
-  border-radius: 0.5rem;
-  overflow: hidden;
-}
-.ai-magic-tool-edit-header {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.625rem;
-  background: #161616;
-  color: #9CA3AF;
-  font-size: var(--fs-small);
-  font-weight: 600;
-  border-bottom: 1px solid #2A2A2A;
 }
 .ai-magic-apply-btn,
 .ai-magic-revert-btn {

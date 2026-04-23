@@ -31,6 +31,7 @@ export function buildToolLog(toolSegs) {
 
 export function useSendMessage({
   inputText,
+  inputLongBlobs,
   attachments,
   quotedMessage,
   mentionInputRef,
@@ -64,6 +65,8 @@ export function useSendMessage({
   // ── Internal state ──────────────────────────────────────────────────────────
   const pendingInterrupt = reactive({ text: '', attachments: [], visible: false, countdown: 0 })
   let _interruptTimerId = null
+  // longBlobs for the current pending send (set by handleChatWindowSend before calling sendMessage)
+  let _pendingLongBlobs = null
 
   const perChatDrafts = new Map() // chatId → { text, attachments }
   let streamingTimer = null
@@ -91,17 +94,24 @@ export function useSendMessage({
   // ── Draft save/restore ──────────────────────────────────────────────────────
   function _saveDraftForChat(chatId) {
     if (!chatId) return
-    if (!inputText.value && attachments.value.length === 0) {
+    const blobs = inputLongBlobs?.value || {}
+    const hasBlobs = Object.keys(blobs).length > 0
+    if (!inputText.value && attachments.value.length === 0 && !hasBlobs) {
       perChatDrafts.delete(chatId)
       return
     }
-    perChatDrafts.set(chatId, { text: inputText.value, attachments: [...attachments.value] })
+    perChatDrafts.set(chatId, {
+      text: inputText.value,
+      attachments: [...attachments.value],
+      longBlobs: hasBlobs ? { ...blobs } : {},
+    })
   }
 
   function _restoreDraftForChat(chatId) {
     const draft = perChatDrafts.get(chatId)
     inputText.value = draft?.text || ''
     attachments.value = draft?.attachments ? [...draft.attachments] : []
+    if (inputLongBlobs) inputLongBlobs.value = draft?.longBlobs ? { ...draft.longBlobs } : {}
   }
 
   // ── Interrupt management ─────────────────────────────────────────────────────
@@ -183,6 +193,14 @@ export function useSendMessage({
       quotedMessage.value = null
     }
 
+    // Pull any chip-backed long blobs from the unified editor. Callers that use
+    // the legacy explicit path (setPendingLongBlobs + inputText with markers)
+    // still work — we merge rather than overwrite.
+    if (inputLongBlobs?.value && Object.keys(inputLongBlobs.value).length > 0) {
+      _pendingLongBlobs = { ...(_pendingLongBlobs || {}), ...inputLongBlobs.value }
+      inputLongBlobs.value = {}
+    }
+
     // If agents are running, show interrupt confirmation instead of sending directly
     const cid = chatsStore.activeChatId
     const thisChat = chatsStore.chats.find(c => c.id === cid)
@@ -254,6 +272,10 @@ export function useSendMessage({
     // Reset scroll-lock for this new answer
     userScrolled.value = false
 
+    // Capture and clear longBlobs for this send
+    const longBlobs = _pendingLongBlobs || {}
+    _pendingLongBlobs = null
+
     // Display content — paths are already in the textarea text
     let displayContent = text
 
@@ -277,7 +299,8 @@ export function useSendMessage({
       role: 'user',
       content: displayContent,
       ...(stampUserAgentId ? { userAgentId: stampUserAgentId } : {}),
-      ...(attachmentMeta.length > 0 ? { attachments: attachmentMeta } : {})
+      ...(attachmentMeta.length > 0 ? { attachments: attachmentMeta } : {}),
+      ...(Object.keys(longBlobs).length > 0 ? { longBlobs } : {})
     })
 
     // Add temporary "waiting for response" indicator
@@ -361,6 +384,10 @@ export function useSendMessage({
       })
       .map(m => {
         let content = m.content || ''
+        // Resolve long-blob markers so the LLM sees the full content
+        if (m.longBlobs && Object.keys(m.longBlobs).length > 0) {
+          content = content.replace(/\{\{BLOB:([a-z0-9-]+)\}\}/g, (_, id) => m.longBlobs[id] ?? '')
+        }
         // Inject tool execution log so the LLM can see previous tool interactions
         // and learn from failures across turns (avoid repeating the same mistakes).
         const toolSegs = (m.segments || []).filter(s => s.type === 'tool' && !s._fromLog)
@@ -430,12 +457,16 @@ export function useSendMessage({
       // Electron handles: provider resolution, @mention parsing, resolveAddressees,
       // dispatchGroupTasks, buildAgentRuns, collaboration loop, memory extraction.
       // Completion is signalled via send_message_complete / send_message_error chunks.
+      // Resolve blob markers for the IPC call (LLM always sees full content)
+      const resolvedText = Object.keys(longBlobs).length > 0
+        ? text.replace(/\{\{BLOB:([a-z0-9-]+)\}\}/g, (_, id) => longBlobs[id] ?? '')
+        : text
       window.electronAPI.sendMessage({
         chatId,
         messages: JSON.parse(JSON.stringify(apiMessagesRaw)),
         groupIds: JSON.parse(JSON.stringify(activeSystemAgentIds.value)),
         isGroup,
-        text,
+        text: resolvedText,
         pendingAttachments: pendingAttachments.length > 0 ? JSON.parse(JSON.stringify(pendingAttachments)) : [],
         enabledSkills: JSON.parse(JSON.stringify(enabledSkillObjects.value)),
         stickyTargetIds: JSON.parse(JSON.stringify(stickyTarget.value || [])),
@@ -855,9 +886,12 @@ export function useSendMessage({
   function removeFromQueue() {}
   function processQueuedMessage() {}
 
+  function setPendingLongBlobs(blobs) { _pendingLongBlobs = blobs || null }
+
   // ── Return public API ───────────────────────────────────────────────────────
   return {
     sendMessage,
+    setPendingLongBlobs,
     interrupt,
     approvePlan,
     rejectPlan,
