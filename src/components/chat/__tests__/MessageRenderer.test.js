@@ -50,6 +50,8 @@ vi.mock('../../../stores/agents', () => ({
 vi.mock('../../../stores/obsidian', () => ({
   useObsidianStore: () => ({
     openFile: vi.fn(),
+    probeCache: {},
+    probeFile: vi.fn(() => Promise.resolve(true)),
   }),
 }))
 vi.mock('../../../i18n/useI18n', () => ({

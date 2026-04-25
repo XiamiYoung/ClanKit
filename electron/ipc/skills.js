@@ -477,7 +477,7 @@ function register() {
             else if (data.data && Array.isArray(data.data)) skills = data.data
             else if (data.skills && Array.isArray(data.skills)) skills = data.skills
             else if (Array.isArray(data)) skills = data
-            logger.info(`[Skills] Parsed ${skills.length} top skills from Tencent`)
+
             return skills.map(s => ({
               id: s.slug || s.id || s.name?.toLowerCase().replace(/\s+/g, '-'),
               name: s.name || '',
@@ -502,7 +502,6 @@ function register() {
 
         tencent: async () => {
           try {
-            logger.info(`[Skills] Fetching Tencent SkillHub skills from lightmake.site`)
 
             const url = new URL('https://lightmake.site/api/skills')
             url.searchParams.append('page', String(options.page || 1))
@@ -527,7 +526,6 @@ function register() {
             }
 
             const data = await response.json()
-            logger.info(`[Skills] Tencent raw response:`, JSON.stringify(data).substring(0, 300))
 
             let skills = []
 
@@ -545,7 +543,6 @@ function register() {
               return []
             }
 
-            logger.info(`[Skills] Parsed ${skills.length} skills from Tencent`)
 
             return skills.map(s => ({
               id: s.slug || s.id || s.name?.toLowerCase().replace(/\s+/g, '-'),
@@ -598,6 +595,16 @@ function register() {
       const slug = skillUrl.split('/').pop()
       skillUrl = `https://wry-manatee-359.convex.site/api/v1/download?slug=${slug}`
       logger.info(`[Skills] Normalized clawhub web URL to download URL: ${skillUrl}`)
+    }
+
+    // Tencent skillhub.cn listing returns `homepage: https://api.skillhub.cn/{owner}/{slug}`
+    // and no real package URL. The site's own SPA downloads via:
+    //   https://api.skillhub.cn/api/v1/download?slug={slug}
+    // which 302-redirects to a COS-hosted zip (Node fetch follows redirects).
+    if (skillUrl && /^https:\/\/(api\.)?skillhub\.cn\/[^/]+\/[^/?#]+\/?$/.test(skillUrl)) {
+      const slug = skillUrl.replace(/\/$/, '').split('/').pop()
+      skillUrl = `https://api.skillhub.cn/api/v1/download?slug=${slug}`
+      logger.info(`[Skills] Normalized skillhub.cn URL to download endpoint: ${skillUrl}`)
     }
 
     try {

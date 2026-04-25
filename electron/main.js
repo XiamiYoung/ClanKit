@@ -544,64 +544,6 @@ app.whenReady().then(async () => {
 
   ensureDataDir()
 
-  // ── Go core subprocess (behind CLANK_USE_GO flag) ──
-  if (process.env.CLANK_USE_GO === '1') {
-    try {
-      const goSessionKey = crypto.randomBytes(32).toString('hex')
-      const goPort = 7731
-      const isDev = !!process.env.ELECTRON_DEV
-
-      // Locate binary: dev → air output, prod → bundled resource
-      let goBin
-      if (isDev) {
-        goBin = path.join(__dirname, '..', 'core', 'tmp', process.platform === 'win32' ? 'clank-core.exe' : 'clank-core')
-      } else {
-        const ext = process.platform === 'win32' ? '.exe' : ''
-        goBin = path.join(process.resourcesPath, 'core', 'clank-core' + ext)
-      }
-
-      if (fs.existsSync(goBin)) {
-        logger.info(`[GoCore] spawning ${goBin} on port ${goPort}`)
-        const goDataDir = ds.paths().DATA_DIR
-        const goProc = spawn(goBin, ['--mode', 'embedded', '--port', String(goPort), '--data-dir', goDataDir], {
-          env: {
-            ...process.env,
-            CLANK_SESSION_KEY: goSessionKey,
-            CLANK_ENV: isDev ? 'development' : '',
-          },
-          stdio: ['pipe', 'pipe', 'pipe'],
-        })
-
-        goProc.stderr.on('data', (d) => logger.info(`[GoCore] ${d.toString().trim()}`))
-
-        // Wait for READY signal on stdout (max 10s)
-        await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('GoCore: READY timeout (10s)')), 10000)
-          let buf = ''
-          goProc.stdout.on('data', (chunk) => {
-            buf += chunk.toString()
-            if (buf.includes('READY')) {
-              clearTimeout(timeout)
-              resolve()
-            }
-          })
-          goProc.on('error', (err) => { clearTimeout(timeout); reject(err) })
-          goProc.on('exit', (code) => {
-            if (code !== null) { clearTimeout(timeout); reject(new Error(`GoCore exited with code ${code}`)) }
-          })
-        })
-
-        global.goCore = { port: goPort, sessionKey: goSessionKey, process: goProc }
-        logger.info(`[GoCore] ready on port ${goPort}`)
-      } else {
-        logger.warn(`[GoCore] binary not found at ${goBin}, falling back to JS engine`)
-      }
-    } catch (err) {
-      logger.error(`[GoCore] failed to start: ${err.message}`)
-      logger.warn('[GoCore] falling back to JS engine')
-    }
-  }
-
   // Initialize local RAG modules (path-only, no model loading)
   const localEmbedding = require('./lib/localEmbedding')
   const localVectorStore = require('./lib/localVectorStore')
@@ -635,11 +577,7 @@ app.whenReady().then(async () => {
     })
   }
   ipcMain.handle('html-preview:port', () => _ensureHtmlServer())
-  ipcMain.handle('app:get-locale', () => {
-    const locale = app.getLocale()
-    console.log('[main] app.getLocale():', locale)
-    return locale
-  })
+  ipcMain.handle('app:get-locale', () => app.getLocale())
 
   // Register all IPC handlers (must be after dataStore.init() and createWindow())
   ipcAgent = require('./ipc').registerAll({ DEFAULT_CONFIG, imBridge, mcpManager }).ipcAgent
@@ -781,15 +719,6 @@ app.on('before-quit', async (e) => {
       ipcAgent.activeLoops.delete(key)
       ipcAgent.activeLoopMeta.delete(key)
     }
-  }
-
-  // Stop Go core subprocess
-  if (global.goCore?.process) {
-    try {
-      logger.info('[GoCore] stopping subprocess')
-      global.goCore.process.kill('SIGTERM')
-    } catch (err) { logger.error('[GoCore] cleanup error:', err.message) }
-    global.goCore = null
   }
 
   // Stop local voice server if running

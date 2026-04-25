@@ -10,11 +10,20 @@ const mockObsidianStore = {
   fileTree: [],
   activeFile: null,
   activeContent: '',
+  probeCache: {},
+  probeReasons: {},
+  failedPaths: {},
+  expandedFolders: {},
   pickVault: vi.fn(),
   loadVault: vi.fn(),
   loadTree: vi.fn(),
   saveFile: vi.fn(),
   readFile: vi.fn(),
+  openFile: vi.fn(),
+  restoreLastOpenedDoc: vi.fn(),
+  resetFailureCache: vi.fn(),
+  probeFile: vi.fn(() => Promise.resolve(true)),
+  toggleFolder: vi.fn(),
 }
 
 vi.mock('../../stores/obsidian', () => ({

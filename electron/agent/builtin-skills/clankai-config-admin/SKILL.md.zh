@@ -1,6 +1,6 @@
 ---
 name: ClankAI 配置管理
-description: 创建或修改 ClankAI 应用的配置文件 —— HTTP 工具、MCP 服务器、智能体、知识库、任务、计划。当用户要求添加、修改或删除上述任一项时，必须加载此技能。
+description: 创建或修改 ClankAI 应用的配置文件 —— 工具、MCP 服务器、智能体、知识库、任务、计划。当用户要求添加、修改或删除上述任一项时，必须加载此技能。
 ---
 
 # ClankAI 配置管理
@@ -24,35 +24,57 @@ description: 创建或修改 ClankAI 应用的配置文件 —— HTTP 工具、
 
 每新增一条记录都要生成一个新的 UUID。已有的 `id` 字段要完整保留，绝不要重写。
 
-## 1. HTTP 工具 — `<DATA_DIR>/tools.json`
+## 1. 工具 — `<DATA_DIR>/tools.json`
 
-触发场景："添加一个工具"、"创建一个 HTTP 工具"、"改一下这个 API 工具" 等。
+触发场景："添加一个工具"、"创建一个工具"、"改一下这个工具" 等。
 
-**数据格式：**
+工具有四种类型：`http`、`code`、`prompt`、`smtp`。如果用户没指定类型，要主动询问。
+
+**数据格式（扁平字典 —— 工具 id 为 key）：**
 ```json
 {
-  "categories": {
-    "分类名": {
-      "tools": [
-        {
-          "id": "<uuid>",
-          "name": "天气接口",
-          "method": "GET",
-          "endpoint": "https://api.example.com/weather",
-          "headers": { "Authorization": "Bearer $API_KEY" },
-          "bodyTemplate": "",
-          "description": "获取某城市的当前天气"
-        }
-      ]
-    }
+  "<tool-id>": {
+    "name": "天气接口",
+    "description": "获取某城市的当前天气",
+    "category": "APIs",
+    "type": "http",
+    "method": "GET",
+    "endpoint": "https://api.example.com/weather?city={city}",
+    "headers": { "Authorization": "Bearer $API_KEY" },
+    "bodyTemplate": "{}"
   }
 }
 ```
 
-规则：
+工具 id：取 name 小写，非字母数字字符替换为连字符（如 `"Weather API"` → `"weather-api"`）。
+
+### 各类型特有字段
+
+**`http`**（默认类型）：
 - `method`：`GET`、`POST`、`PUT`、`PATCH`、`DELETE` 其中之一。
-- `bodyTemplate`：GET 请求留空字符串；POST/PUT 请求可以是包含 `{占位符}` 的 JSON 字符串。
-- 新工具尽量放到已有的分类下；只有在完全不匹配时才新建分类。
+- `endpoint`：URL，用 `{placeholder}` 标记运行时由 LLM 填入的参数。
+- `headers`：键值对对象。
+- `bodyTemplate`：含 `{placeholder}` 占位符的 JSON 字符串。GET 请求用 `"{}"`。
+
+**`code`**（代码片段）：
+- `language`：`"javascript"`、`"python"` 或 `"bash"`。
+- `code`：要执行的代码字符串。
+
+**`prompt`**（提示词模板）：
+- `promptText`：提示词模板字符串。
+
+**`smtp`**（邮件）：
+- 无额外字段 —— 使用应用配置中的邮件凭据。
+
+### 公共字段（所有类型）
+- `name`（必填）：显示名称。
+- `description`：工具功能描述。
+- `category`：分组标签（可选）。
+- `type`（必填）：`http`、`code`、`prompt`、`smtp` 其中之一。
+
+规则：
+- 文件是扁平 JSON 对象，不是数组，也不是嵌套在 `categories` 下的结构。
+- 如果文件中有 `__deletedBuiltins` 键，不要碰它 —— 它用于追踪用户删除的内置工具。
 
 写入完成后：告诉用户在 **工具** 页面点击刷新。
 

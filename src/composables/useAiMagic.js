@@ -170,6 +170,7 @@ export function useAiMagic() {
           language: selectionContext.language,
         },
         config,
+        agentId: selectedAgentId.value,
         agentPrompt: agentConfig.agentPrompt || '',
         enabledSkills: agentConfig.enabledSkills || [],
         mcpServers: agentConfig.mcpServers || [],
@@ -178,14 +179,17 @@ export function useAiMagic() {
         permissionMode: agentConfig.permissionMode || 'allow_all',
       })
     } catch (err) {
-      if (requestId.value === rid && streaming.value) {
+      const msg = messages.value.find(m => m.id === aiMsgId)
+      if (msg) {
+        msg.type = 'error'
+        if (!msg.content) msg.content = err?.message || 'Request failed'
+      }
+    } finally {
+      // Always release the streaming lock for THIS request. If a later
+      // request has already taken over (requestId.value !== rid), don't clobber it.
+      if (requestId.value === rid) {
         streaming.value = false
         requestId.value = null
-        const msg = messages.value.find(m => m.id === aiMsgId)
-        if (msg) {
-          msg.type = 'error'
-          if (!msg.content) msg.content = err.message || 'Request failed'
-        }
       }
     }
   }
@@ -212,7 +216,43 @@ export function useAiMagic() {
 
   function markReverted(msgId) {
     const msg = messages.value.find(m => m.id === msgId)
-    if (msg) msg.applied = false
+    if (msg) {
+      msg.applied = false
+      msg.applyFailed = false
+    }
+  }
+
+  /** Flag a message as "apply was refused" (stale selection, target not found). */
+  function markApplyFailed(msgId) {
+    const msg = messages.value.find(m => m.id === msgId)
+    if (msg) {
+      msg.applied = false
+      msg.applyFailed = true
+    }
+  }
+
+  /**
+   * Mark a message as having modified the current file via a tool call
+   * (file_operation). Stores the pre-edit snapshot so the user can revert.
+   */
+  function markToolEdit(msgId, preContent, filePath) {
+    const msg = messages.value.find(m => m.id === msgId)
+    if (!msg) return
+    msg.toolEdit = {
+      preContent,
+      filePath,
+      reverted: false,
+    }
+  }
+
+  function markToolEditReverted(msgId) {
+    const msg = messages.value.find(m => m.id === msgId)
+    if (msg?.toolEdit) msg.toolEdit.reverted = true
+  }
+
+  function markToolEditReapplied(msgId) {
+    const msg = messages.value.find(m => m.id === msgId)
+    if (msg?.toolEdit) msg.toolEdit.reverted = false
   }
 
   function _parseReplacement(msg) {
@@ -280,5 +320,9 @@ export function useAiMagic() {
     getReplacementInfo,
     markApplied,
     markReverted,
+    markApplyFailed,
+    markToolEdit,
+    markToolEditReverted,
+    markToolEditReapplied,
   }
 }

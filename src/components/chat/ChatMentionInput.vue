@@ -121,7 +121,21 @@ const placeholderText = computed(() => {
   return props.isGroupChat ? t('chats.groupMessagePlaceholder') : t('chats.placeholder')
 })
 
-const isEmpty = computed(() => !props.modelValue)
+// Bumped whenever the editor DOM mutates (input, render, paste, mention insert).
+// `isEmpty` consults the live DOM — relying on props.modelValue alone can lie
+// during transient states (external set to empty, post-paste before round-trip,
+// chip-only content with no text node, etc.) and leaks the placeholder.
+const editorVersion = ref(0)
+function bumpEditorVersion() { editorVersion.value++ }
+
+const isEmpty = computed(() => {
+  editorVersion.value
+  if (props.modelValue) return false
+  const root = editorEl.value
+  if (!root) return true
+  if (root.querySelector('.cmi-blob-chip')) return false
+  return !(root.textContent && root.textContent.replace(/​/g, '').length > 0)
+})
 
 // ── Long-blob chip helpers ───────────────────────────────────────────────
 const LONG_PASTE_THRESHOLD = 500
@@ -209,6 +223,7 @@ function renderFromModel(value, blobs) {
   const root = editorEl.value
   if (!root) return
   root.innerHTML = ''
+  bumpEditorVersion()
   if (!value) return
   const parts = value.split(/(\{\{BLOB:[a-z0-9-]+\}\})/)
   for (const part of parts) {
@@ -342,12 +357,14 @@ function checkMentionTrigger() {
 // ── Input handling ─────────────────────────────────────────────────────────
 function emitModel() {
   const { text, longBlobs } = extractFromDOM()
+  bumpEditorVersion()
   _suppressNextModelWatch = true
   emit('update:modelValue', text)
   emit('update:longBlobs', longBlobs)
 }
 
 function onInput() {
+  bumpEditorVersion()
   emitModel()
   nextTick(checkMentionTrigger)
 }

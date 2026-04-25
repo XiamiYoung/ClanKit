@@ -99,10 +99,10 @@
           </div>
 
           <!-- Categories for active tab -->
-          <template v-for="cat in activeCategories" :key="cat.id">
+          <template v-for="(cat, catIdx) in activeCategories" :key="cat.id">
             <div
               class="nav-item-wrap nav-cat-wrap"
-              :class="{ 'drag-over': dragOverCategoryId === cat.id, 'drag-reject': dragRejectCategoryId === cat.id, 'cat-drag-over': catDragOverId === cat.id, 'cat-dragging': draggingCatId === cat.id }"
+              :class="[`nav-cat-wrap--${catIdx % 8}`, { 'drag-over': dragOverCategoryId === cat.id, 'drag-reject': dragRejectCategoryId === cat.id, 'cat-drag-over': catDragOverId === cat.id, 'cat-dragging': draggingCatId === cat.id }]"
               draggable="true"
               @dragstart="onCatDragStart($event, cat)"
               @dragend="onCatDragEnd"
@@ -157,7 +157,7 @@
         <div class="agents-grid-scroll">
           <div v-if="visibleAgents.length > 0" class="agents-grid">
             <div
-              v-for="agent in visibleAgents"
+              v-for="(agent, agentIdx) in visibleAgents"
               :key="agent.id"
               class="agent-card-wrap"
               :class="{ 'select-mode': selectMode, 'is-selected': selectedAgentIds.has(agent.id), 'newly-added': newlyAddedIds.has(agent.id) }"
@@ -174,6 +174,7 @@
               <div class="agent-card-inner-wrap">
                 <AgentCard
                   :agent="agent"
+                  :index="agentIdx"
                   :gradient="getAvatarGradient(agent)"
                   :hide-delete="selectedView.type === 'category'"
                   :hide-set-default="selectedView.type === 'category'"
@@ -274,12 +275,13 @@
       @close="deleteCategoryError = null"
     />
 
-    <!-- Category Modal (create / rename) -->
+    <!-- Category Modal (create / rename) — type is implicit from the current page -->
     <CategoryModal
       :visible="categoryModal.open"
       :mode="categoryModal.mode"
       :type="categoryModal.catType"
       :initial="categoryModal.initial"
+      :show-type-selector="false"
       :existingCategories="agentsStore.categories"
       @confirm="onCategoryModalConfirm"
       @close="categoryModal.open = false"
@@ -1135,11 +1137,25 @@ function isDeleteButtonDisabled(agent) {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
-/* Active: same gradient + bold */
-.nav-cat-wrap:has(.nav-item.active) {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
+
+/* Per-category colored hover + active gradients — active matches hover so the
+   selected row stays in its own color instead of flipping to deep black. */
+.nav-cat-wrap--0:hover,
+.nav-cat-wrap--0:has(.nav-item.active) { background: linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%); box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28); }
+.nav-cat-wrap--1:hover,
+.nav-cat-wrap--1:has(.nav-item.active) { background: linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%); box-shadow: 0 2px 8px rgba(124, 58, 237, 0.28); }
+.nav-cat-wrap--2:hover,
+.nav-cat-wrap--2:has(.nav-item.active) { background: linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%); box-shadow: 0 2px 8px rgba(5, 150, 105, 0.28); }
+.nav-cat-wrap--3:hover,
+.nav-cat-wrap--3:has(.nav-item.active) { background: linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%); box-shadow: 0 2px 8px rgba(217, 119, 6, 0.28); }
+.nav-cat-wrap--4:hover,
+.nav-cat-wrap--4:has(.nav-item.active) { background: linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%); box-shadow: 0 2px 8px rgba(220, 38, 38, 0.28); }
+.nav-cat-wrap--5:hover,
+.nav-cat-wrap--5:has(.nav-item.active) { background: linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%); box-shadow: 0 2px 8px rgba(8, 145, 178, 0.28); }
+.nav-cat-wrap--6:hover,
+.nav-cat-wrap--6:has(.nav-item.active) { background: linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%); box-shadow: 0 2px 8px rgba(202, 138, 4, 0.28); }
+.nav-cat-wrap--7:hover,
+.nav-cat-wrap--7:has(.nav-item.active) { background: linear-gradient(135deg, #831843 0%, #BE185D 60%, #EC4899 100%); box-shadow: 0 2px 8px rgba(190, 24, 93, 0.28); }
 /* The button inside a category row is transparent — wrapper provides bg */
 .nav-cat-btn {
   flex: 1;

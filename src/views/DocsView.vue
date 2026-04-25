@@ -35,19 +35,23 @@
       <div class="docs-catalog-header">
         <div style="display:flex; align-items:center; justify-content:space-between;">
           <div>
-            <div style="display:flex; align-items:center; gap:0.5rem;">
-              <h1 class="docs-catalog-title">{{ t('notes.title') }}</h1>
-              <span
-                class="catalog-count-badge"
-                style="max-width:32rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
-                v-tooltip="store.vaultPath"
-              >{{ store.vaultPath }}</span>
-            </div>
+            <h1 class="docs-catalog-title">{{ t('notes.title') }}</h1>
             <p class="docs-catalog-subtitle">{{ t('notes.filesFromVault') }}</p>
           </div>
           <div class="flex items-center gap-2">
             <AppButton size="icon" @click="refreshAll" v-tooltip="t('common.refresh')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </AppButton>
+            <AppButton
+              v-if="store.vaultPath"
+              size="icon"
+              @click="openVaultInExplorer"
+              v-tooltip="`${t('notes.openInExplorer')} — ${store.vaultPath}`"
+              :aria-label="t('notes.openInExplorer')"
+            >
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
             </AppButton>
             <!-- Info icon: tells user to go to Config → AI → AiDoc to change path -->
             <div class="docs-path-info-btn" v-tooltip="t('notes.changePathHint')">
@@ -94,9 +98,10 @@
               <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">{{ t('notes.noFilesFound') }}</p>
             </div>
             <TreeNode
-              v-for="node in store.fileTree"
+              v-for="(node, nodeIdx) in visibleFileTree"
               :key="node.path"
               :node="node"
+              :index="nodeIdx"
               :depth="0"
               :active-path="store.activeFile?.path"
               :expanded-folders="store.expandedFolders"
@@ -201,7 +206,7 @@
                 {{ t('notes.aiAssistant') }}
               </button>
 
-              <!-- Read-aloud button (reads current document via TTS) -->
+              <!-- Speak button (plays current document via TTS) -->
               <button
                 v-if="!isDrawio && !isImage && !isPptx && !isDocx && !isXlsx"
                 class="docs-speak-btn"
@@ -527,6 +532,8 @@
           @stop="stopAiDoc"
           @apply="onAiDocApply"
           @revert="onAiDocRevert"
+          @tool-revert="onAiDocToolRevert"
+          @tool-reapply="onAiDocToolReapply"
           @permission-respond="onDocPermissionRespond"
           @clear-selection="onAiDocClearSelection"
         />
@@ -884,6 +891,17 @@ const configStore = useConfigStore()
 const focusModeStore = useFocusModeStore()
 const voiceStore = useVoiceStore()
 
+// Tree visibility filter. A file node is hidden ONLY when the session probe has
+// confirmed it's not openable (binary content / too large / IO failure). Dirs
+// are always shown, and unprobed files stay visible — the filter tightens as
+// the background batch probe reports results.
+function _isNodeVisible(node) {
+  if (!node) return false
+  if (node.type === 'dir') return true
+  return store.probeCache[node.path] !== false
+}
+const visibleFileTree = computed(() => (store.fileTree || []).filter(_isNodeVisible))
+
 // This instance should render the floating AI panel only when:
 // - it IS the embedded focus-mode instance, OR
 // - focus mode is not active (normal standalone use)
@@ -899,9 +917,13 @@ const {
   open: openAiDoc, close: _closeAiDocRaw, send: _sendAiDocRaw, stop: stopAiDoc,
   updateSelection: updateAiDocSelection, updateFileContent: updateAiDocFileContent,
   getReplacementInfo, markApplied: markAiDocApplied, markReverted: markAiDocReverted,
+  markApplyFailed: markAiDocApplyFailed,
+  markToolEdit: markAiDocToolEdit,
+  markToolEditReverted: markAiDocToolEditReverted,
+  markToolEditReapplied: markAiDocToolEditReapplied,
 } = useAiMagic()
 
-// ── Document read-aloud ──────────────────────────────────────────────────
+// ── Document speak (TTS playback) ────────────────────────────────────────
 const docSpeakingActive = ref(false)
 const docSpeakLoading = ref(false)
 let _docSpeakAudioEl = null
@@ -1098,8 +1120,15 @@ function _currentFileChangedByToolRun(newMessages) {
   return false
 }
 
-async function _reloadActiveTextFileFromDisk() {
+async function _reloadActiveTextFileFromDisk(opts = {}) {
   if (!store.activeFile?.path || store.activeFile?.binary) return
+  // Protect unsaved local edits — a tool-driven disk refresh should not
+  // silently overwrite the user's in-progress work. Callers that have
+  // already captured a pre-edit snapshot (see sendAiDoc) can pass force=true.
+  if (store.activeFile?.dirty && !opts.force) {
+    console.warn('[AI Doc] Skipped disk reload: active file has unsaved changes')
+    return
+  }
   const readRes = await window.electronAPI.obsidian.readFile(store.activeFile.path)
   if (readRes?.error || typeof readRes?.content !== 'string') return
 
@@ -1118,6 +1147,11 @@ async function _reloadActiveTextFileFromDisk() {
 /** Wrap sendAiDoc to inject agent config from stores. */
 async function sendAiDoc(userText) {
   const beforeMsgCount = aiDocMessages.value.length
+  // Capture pre-turn content so we can offer a Revert for tool-based edits
+  // (file_operation) that bypass the <replacement> flow.
+  const preTurnContent = store.activeFile?.content ?? editorContent.value ?? ''
+  const preTurnPath = store.activeFile?.path || ''
+
   const agent = agentsStore.getAgentById(selectedAgentId.value)
   const reqSkills = agent?.requiredSkillIds ?? []
   const reqMcp    = agent?.requiredMcpServerIds ?? []
@@ -1137,17 +1171,35 @@ async function sendAiDoc(userText) {
   }
   await _sendAiDocRaw(userText, agentConfig)
 
-  // Auto-apply the latest generated replacement so users can edit directly.
-  const latestEdit = [...aiDocMessages.value]
+  // Auto-apply the latest generated replacement from THIS turn only.
+  // Prior turns' edits that the user reverted (applied=false) must not be
+  // resurrected here — scope the search to messages produced by this send.
+  const runMessages = aiDocMessages.value.slice(beforeMsgCount)
+  const latestEdit = [...runMessages]
     .reverse()
     .find(m => m.role === 'ai' && m.type === 'edit' && m.replacement && !m.applied)
   if (latestEdit) onAiDocApply(latestEdit.id)
 
   // If the agent edited the current file via file_operation, reload it so
-  // the latest on-disk content is visible in this window immediately.
-  const runMessages = aiDocMessages.value.slice(beforeMsgCount)
+  // the latest on-disk content is visible. Also attach a revert snapshot to
+  // the most recent AI message so the user has an undo path (both via the
+  // pill on the message and via Ctrl+Z).
   if (_currentFileChangedByToolRun(runMessages)) {
-    await _reloadActiveTextFileFromDisk()
+    // force-reload even if dirty: the tool just wrote to disk, and we already
+    // had the user's pre-turn snapshot captured above.
+    await _reloadActiveTextFileFromDisk({ force: true })
+    const latestAi = [...runMessages].reverse().find(m => m.role === 'ai')
+    if (latestAi && preTurnPath) {
+      markAiDocToolEdit(latestAi.id, preTurnContent, preTurnPath)
+      const postContent = store.activeFile?.content ?? editorContent.value ?? ''
+      _pushAiEditHistory({
+        source: 'tool',
+        msgId: latestAi.id,
+        preContent: preTurnContent,
+        postContent,
+        filePath: preTurnPath,
+      })
+    }
   }
 }
 
@@ -1184,6 +1236,101 @@ const aiDocEnabled = ref(false)
 const hasSelection = ref(false)
 // Revert snapshots: msgId → previous file content
 const _revertSnapshots = new Map()
+
+// ── AI edit history (Ctrl+Z / Ctrl+Y) ─────────────────────────────────────
+// Entries: { source: 'replacement'|'tool', msgId, preContent, postContent, filePath? }
+// Each AI-initiated write pushes a new entry. Ctrl+Z pops when current content
+// matches entry.postContent (otherwise native undo takes over, so manual
+// keystrokes the user made AFTER an AI edit are still undoable first).
+const _aiUndoStack = []
+const _aiRedoStack = []
+const AI_UNDO_CAP = 50
+
+function _pushAiEditHistory(entry) {
+  _aiUndoStack.push(entry)
+  if (_aiUndoStack.length > AI_UNDO_CAP) _aiUndoStack.shift()
+  // New edit invalidates any pending redo.
+  _aiRedoStack.length = 0
+}
+
+function _currentEditorContent() {
+  return store.activeFile?.content ?? editorContent.value ?? ''
+}
+
+async function _applyHistoryContent(entry, targetContent) {
+  // Route to the right editor based on the current file type.
+  if (isMarkdown.value && !editMode.value && formattedEl.value) {
+    editorContent.value = targetContent
+    store.updateContent(targetContent)
+    await nextTick()
+    await refreshFormattedHtml()
+  } else if (isMarkdown.value && editMode.value) {
+    editorContent.value = targetContent
+    store.updateContent(targetContent)
+  } else if (isTextLike.value) {
+    store.updateContent(targetContent)
+    editorContent.value = targetContent
+  } else if (store.activeFile?.content !== undefined) {
+    store.updateContent(targetContent)
+    editorContent.value = targetContent
+  }
+  updateAiDocFileContent(_currentEditorContent())
+
+  // If the original edit was a tool-based write, persist back to disk so
+  // the undo/redo mirrors the on-disk state.
+  if (entry.source === 'tool' && entry.filePath) {
+    try {
+      await window.electronAPI.obsidian.writeFile(entry.filePath, targetContent)
+      if (store.activeFile?.path === entry.filePath) {
+        store.activeFile.content = targetContent
+        store.activeFile.dirty = false
+      }
+    } catch (err) {
+      console.warn('[AI Doc] Failed to write undo/redo to disk:', err?.message)
+    }
+  }
+}
+
+/** Returns true if our stack owns this undo (and has started consuming it). */
+function _tryUndoAiEdit() {
+  if (_aiUndoStack.length === 0) return false
+  const top = _aiUndoStack[_aiUndoStack.length - 1]
+  // Only consume our undo entry when current content matches what we applied.
+  // Otherwise the user has made further manual edits — let native undo run first.
+  if (_currentEditorContent() !== top.postContent) return false
+  _aiUndoStack.pop()
+  _aiRedoStack.push(top)
+  _applyHistoryContent(top, top.preContent).then(() => {
+    if (top.source === 'replacement') markAiDocReverted(top.msgId)
+    else if (top.source === 'tool') markAiDocToolEditReverted(top.msgId)
+  })
+  return true
+}
+
+function _tryRedoAiEdit() {
+  if (_aiRedoStack.length === 0) return false
+  const top = _aiRedoStack[_aiRedoStack.length - 1]
+  if (_currentEditorContent() !== top.preContent) return false
+  _aiRedoStack.pop()
+  _aiUndoStack.push(top)
+  _applyHistoryContent(top, top.postContent).then(() => {
+    if (top.source === 'replacement') markAiDocApplied(top.msgId)
+    else if (top.source === 'tool') markAiDocToolEditReapplied(top.msgId)
+  })
+  return true
+}
+
+function _onDocsKeydown(e) {
+  const ctrlLike = e.ctrlKey || e.metaKey
+  if (!ctrlLike) return
+  const k = (e.key || '').toLowerCase()
+  // Ctrl/Cmd+Z → undo; Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z → redo.
+  if (k === 'z' && !e.shiftKey) {
+    if (_tryUndoAiEdit()) { e.preventDefault(); e.stopPropagation() }
+  } else if (k === 'y' || (k === 'z' && e.shiftKey)) {
+    if (_tryRedoAiEdit()) { e.preventDefault(); e.stopPropagation() }
+  }
+}
 
 // Floating AI Doc panel state (position + size)
 const AI_PANEL_STORAGE_KEY = 'clankai-aidoc-panel'
@@ -1568,6 +1715,7 @@ onBeforeUnmount(() => {
   // Flush any pending save
   if (store.activeFile?.dirty) store.saveFile()
   document.removeEventListener('keydown', onGlobalKeydown, true)
+  document.removeEventListener('keydown', _onDocsKeydown, true)
   document.removeEventListener('selectionchange', _snapshotSelection)
   window.removeEventListener('resize', _onWindowResize)
   clearTimeout(_selectionDebounce)
@@ -1670,12 +1818,24 @@ function toggleAiDoc() {
   }
 }
 
-/** Explicit save — clears dirty flag without auto-save timer. */
+/** Top-right refresh — clears session-only probe + failure caches and reloads
+ *  the tree. This is the sole user-visible "retry unopenable files" action. */
 async function refreshAll() {
+  store.resetFailureCache()
   await store.loadTree()
   if (store.activeFile?.path && !store.activeFile.binary) {
     await store.openFile(store.activeFile.path, store.activeFile.name)
     // HTML webview reload is handled by the content watch
+  }
+}
+
+async function openVaultInExplorer() {
+  const p = store.vaultPath
+  if (!p) return
+  try {
+    await window.electronAPI.openFile(p)
+  } catch (err) {
+    console.warn('[Docs] Failed to open vault in explorer:', err?.message)
   }
 }
 
@@ -1714,7 +1874,6 @@ function _ensureAiDocPanel() {
     const text = docxEditorRef.value.getPlainText()
     if (text) fullContent = `[Document: ${store.activeFile.name}]\n\n${text}`
   }
-  _pendingBinaryContent = null
 
   const fileCtx = {
     fileName: store.activeFile.name || '',
@@ -1822,9 +1981,6 @@ function handleSheetChanged({ sheetName, sheetIndex, totalSheets, text, fileName
   }
 }
 
-// No longer needed — always load full content from editor refs directly
-let _pendingBinaryContent = null
-
 /** Apply AI replacement to the document. Stores a revert snapshot. */
 function onAiDocApply(msgId) {
   const info = getReplacementInfo(msgId)
@@ -1832,17 +1988,28 @@ function onAiDocApply(msgId) {
 
   const { replacement, targetText } = info
 
-  // Snapshot full file content for revert
-  _revertSnapshots.set(msgId, store.activeFile?.content || editorContent.value)
+  // Snapshot full file content for revert BEFORE attempting apply,
+  // but roll it back if apply refuses (e.g. stale selection).
+  const snapshot = store.activeFile?.content || editorContent.value
+  _revertSnapshots.set(msgId, snapshot)
 
-  // Apply the replacement
-  _applyReplacement(targetText, replacement)
+  const ok = _applyReplacement(targetText, replacement)
+  if (!ok) {
+    // Apply refused — don't keep a bogus revert snapshot and don't mark applied.
+    _revertSnapshots.delete(msgId)
+    markAiDocApplyFailed(msgId)
+    return
+  }
 
-  // Mark as applied in composable
   markAiDocApplied(msgId)
-
-  // Update the composable's file content to reflect the change
-  updateAiDocFileContent(store.activeFile?.content || editorContent.value)
+  const postContent = _currentEditorContent()
+  updateAiDocFileContent(postContent)
+  _pushAiEditHistory({
+    source: 'replacement',
+    msgId,
+    preContent: snapshot,
+    postContent,
+  })
 }
 
 /** Revert a previously applied AI edit. */
@@ -1867,83 +2034,146 @@ function onAiDocRevert(msgId) {
   _revertSnapshots.delete(msgId)
 }
 
-/** Apply replacement text into the current editor. */
+/** Revert a file_operation tool-based AI edit. Restores pre-turn disk content. */
+async function onAiDocToolRevert(msgId) {
+  const msg = aiDocMessages.value.find(m => m.id === msgId)
+  const te = msg?.toolEdit
+  if (!te || te.reverted) return
+  try {
+    await window.electronAPI.obsidian.writeFile(te.filePath, te.preContent)
+    if (store.activeFile?.path === te.filePath) {
+      store.activeFile.content = te.preContent
+      store.activeFile.dirty = false
+      editorContent.value = te.preContent
+      if (isMarkdown.value && !editMode.value) {
+        await nextTick()
+        await refreshFormattedHtml()
+      }
+      updateAiDocFileContent(te.preContent)
+    }
+    markAiDocToolEditReverted(msgId)
+  } catch (err) {
+    console.warn('[AI Doc] Tool-revert failed:', err?.message)
+  }
+}
+
+/** Re-apply a previously reverted tool-based AI edit. */
+async function onAiDocToolReapply(msgId) {
+  const msg = aiDocMessages.value.find(m => m.id === msgId)
+  const te = msg?.toolEdit
+  if (!te || !te.reverted || !te.filePath) return
+  // Find the post-content from our undo/redo stacks — tool entries store it.
+  const match =
+    [..._aiUndoStack, ..._aiRedoStack].reverse().find(
+      e => e.source === 'tool' && e.msgId === msgId
+    )
+  if (!match) return
+  try {
+    await window.electronAPI.obsidian.writeFile(te.filePath, match.postContent)
+    if (store.activeFile?.path === te.filePath) {
+      store.activeFile.content = match.postContent
+      store.activeFile.dirty = false
+      editorContent.value = match.postContent
+      if (isMarkdown.value && !editMode.value) {
+        await nextTick()
+        await refreshFormattedHtml()
+      }
+      updateAiDocFileContent(match.postContent)
+    }
+    markAiDocToolEditReapplied(msgId)
+  } catch (err) {
+    console.warn('[AI Doc] Tool-reapply failed:', err?.message)
+  }
+}
+
+/**
+ * Apply replacement text into the current editor.
+ * Returns true on success, false when refused (e.g. stale selection not found).
+ */
 function _applyReplacement(targetText, newText) {
-  // 1) If there's an editor-provided callback (DOCX/PPTX/XLSX), use it
+  // 1) If there's an editor-provided callback (DOCX/PPTX/XLSX), use it.
+  //    Do NOT null it out after use — the editor registers it per file open,
+  //    and the user may apply multiple edits in one session.
   if (_editorReplaceCallback) {
     try {
       _editorReplaceCallback(newText)
-      _editorReplaceCallback = null
-      return
-    } catch { /* fall through */ }
+      return true
+    } catch {
+      // Callback threw — fall through to text-based apply.
+    }
   }
 
-  // 2) Markdown formatted mode: find and replace via innerHTML
+  const currentFullContent =
+    (isMarkdown.value || isTextLike.value ? editorContent.value : null) ??
+    store.activeFile?.content ?? ''
+
+  // Determine whether this replacement targets the WHOLE file or a SUBSTRING.
+  // A whole-file edit is one where targetText equals the current full content
+  // (or is empty — e.g. "write a poem about X" into an empty file).
+  const isWholeFileEdit = !targetText || targetText === currentFullContent
+  const idx = isWholeFileEdit ? -1 : currentFullContent.indexOf(targetText)
+
+  // If it's a substring edit and the substring is not found, the selection
+  // went stale (user typed after selecting, or AI returned wrong target).
+  // Refuse rather than silently overwriting the whole file.
+  if (!isWholeFileEdit && idx < 0) {
+    console.warn('[AI Doc] Refused replacement: target text not found in current content')
+    return false
+  }
+
+  // Markdown formatted mode
   if (isMarkdown.value && !editMode.value && formattedEl.value) {
-    const content = editorContent.value
-    const idx = content.indexOf(targetText)
-    if (idx >= 0) {
-      const updated = content.slice(0, idx) + newText + content.slice(idx + targetText.length)
-      editorContent.value = updated
-      store.updateContent(updated)
-      nextTick(() => refreshFormattedHtml())
-    } else {
-      // Whole-file replace
-      editorContent.value = newText
-      store.updateContent(newText)
-      nextTick(() => refreshFormattedHtml())
-    }
+    const updated = isWholeFileEdit
+      ? newText
+      : currentFullContent.slice(0, idx) + newText + currentFullContent.slice(idx + targetText.length)
+    editorContent.value = updated
+    store.updateContent(updated)
+    nextTick(() => refreshFormattedHtml())
     _addHighlights()
-    return
+    return true
   }
 
-  // 3) Markdown source mode: splice in textarea
+  // Markdown source mode
   if (isMarkdown.value && editMode.value) {
-    const content = editorContent.value
-    const idx = content.indexOf(targetText)
-    if (idx >= 0) {
-      const before = content.slice(0, idx)
-      const after = content.slice(idx + targetText.length)
-      editorContent.value = before + newText + after
-    } else {
-      editorContent.value = newText
-    }
-    store.updateContent(editorContent.value)
-    return
+    const updated = isWholeFileEdit
+      ? newText
+      : currentFullContent.slice(0, idx) + newText + currentFullContent.slice(idx + targetText.length)
+    editorContent.value = updated
+    store.updateContent(updated)
+    return true
   }
 
-  // 4) Code viewer
+  // Code viewer (isTextLike)
   if (isTextLike.value) {
     const cv = codeViewerRef.value
-    const content = store.activeFile?.content || editorContent.value
-    const idx = content.indexOf(targetText)
-    if (idx >= 0) {
-      const startLine = content.slice(0, idx).split('\n').length - 1
+    if (isWholeFileEdit) {
+      store.updateContent(newText)
+      editorContent.value = newText
+    } else {
+      const startLine = currentFullContent.slice(0, idx).split('\n').length - 1
       const newLineCount = newText.split('\n').length
-      const updated = content.slice(0, idx) + newText + content.slice(idx + targetText.length)
+      const updated = currentFullContent.slice(0, idx) + newText + currentFullContent.slice(idx + targetText.length)
       store.updateContent(updated)
       editorContent.value = updated
       nextTick(() => cv?.setHighlightedLines?.(startLine, startLine + newLineCount - 1))
-    } else {
-      store.updateContent(newText)
-      editorContent.value = newText
     }
-    return
+    return true
   }
 
-  // 5) Whole-file replace fallback
+  // Whole-file fallback for any other text-bearing file
   if (store.activeFile?.content !== undefined) {
     const content = store.activeFile.content
-    const idx = content.indexOf(targetText)
-    if (idx >= 0) {
+    if (isWholeFileEdit) {
+      store.updateContent(newText)
+      editorContent.value = newText
+    } else {
       const updated = content.slice(0, idx) + newText + content.slice(idx + targetText.length)
       store.updateContent(updated)
       editorContent.value = updated
-    } else {
-      store.updateContent(newText)
-      editorContent.value = newText
     }
+    return true
   }
+  return false
 }
 
 /** Add green highlight spans to formatted view. */
@@ -2017,6 +2247,10 @@ onMounted(() => {
   document.addEventListener('keydown', onGlobalKeydown, true)
   document.addEventListener('selectionchange', _snapshotSelection)
   window.addEventListener('resize', _onWindowResize)
+  // AI Doc undo/redo (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z). Capture phase so we can
+  // steal the keystroke before a focused textarea's native undo runs, but we
+  // only preventDefault when our stack actually has a matching entry.
+  document.addEventListener('keydown', _onDocsKeydown, true)
 })
 
 // Auto-open AI Doc panel when a supported file is opened (if switch is on)
@@ -2026,8 +2260,9 @@ watch(() => store.activeFile?.path, (newPath, oldPath) => {
     _clearHighlights()
     // Clear revert snapshots from previous file
     _revertSnapshots.clear()
+    _aiUndoStack.length = 0
+    _aiRedoStack.length = 0
     _editorReplaceCallback = null
-    _pendingBinaryContent = null
     hasSelection.value = false
     searchBarOpen.value = false
 
@@ -2346,9 +2581,16 @@ watch(editMode, async (val) => {
   if (!val) await refreshFormattedHtml()
 })
 
-// Refresh tree + re-render active md file when navigating to this view
+// Refresh tree + re-render active md file when navigating to this view.
+// Also lazy-restore the last opened doc here (NOT in store.loadConfig) so
+// file I/O never happens during app launch — only when the user actually
+// opens the AI Doc page.
 async function onViewEnter() {
-  if (store.vaultPath) store.loadTree()
+  if (!store.vaultPath) return
+  await store.loadTree()
+  if (!store.activeFile) {
+    await store.restoreLastOpenedDoc()
+  }
   if (store.activeFile && store.activeFile.name?.endsWith('.md')) {
     await refreshFormattedHtml()
   }
@@ -2889,6 +3131,29 @@ function fileTypeIcon(name, color, active = false) {
   ])
 }
 
+// Per-file hover palette (matches NewsView / Skills / Tools / MCP / Chat tree).
+const DOC_HOVER_GRADIENTS = [
+  'linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%)',
+  'linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%)',
+  'linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%)',
+  'linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%)',
+  'linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%)',
+  'linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%)',
+  'linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%)',
+  'linear-gradient(135deg, #831843 0%, #BE185D 60%, #EC4899 100%)',
+]
+function _docHoverGradient(pathOrIdx) {
+  // Sequential index → clean color cycle (no birthday-paradox clustering).
+  if (typeof pathOrIdx === 'number') {
+    return DOC_HOVER_GRADIENTS[((pathOrIdx % DOC_HOVER_GRADIENTS.length) + DOC_HOVER_GRADIENTS.length) % DOC_HOVER_GRADIENTS.length]
+  }
+  const path = pathOrIdx
+  if (!path) return DOC_HOVER_GRADIENTS[0]
+  let hash = 0
+  for (let i = 0; i < path.length; i++) hash = ((hash << 5) - hash + path.charCodeAt(i)) | 0
+  return DOC_HOVER_GRADIENTS[Math.abs(hash) % DOC_HOVER_GRADIENTS.length]
+}
+
 // ── TreeNode: recursive file tree component ──
 const TreeNode = defineComponent({
   name: 'TreeNode',
@@ -2896,7 +3161,8 @@ const TreeNode = defineComponent({
     node: Object,
     depth: Number,
     activePath: String,
-    expandedFolders: Object
+    expandedFolders: Object,
+    index: { type: Number, default: 0 },
   },
   emits: ['select-file', 'toggle-folder', 'delete-item', 'move-item', 'copy-files', 'context-menu'],
   setup(props, { emit }) {
@@ -2959,8 +3225,10 @@ const TreeNode = defineComponent({
       }
 
       // Row background: drag-over highlight takes priority
-      let rowBg = isActive ? 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' : (hovered.value ? 'rgba(0,0,0,0.03)' : 'transparent')
+      const isHovered = hovered.value && !isActive
+      let rowBg = (isActive || isHovered) ? _docHoverGradient(props.index) : 'transparent'
       if (dragOver.value && isDir) rowBg = 'rgba(0, 122, 255, 0.12)'
+      const isDark = isActive || (isHovered && !(dragOver.value && isDir))
 
       // Main row
       children.push(
@@ -2969,10 +3237,10 @@ const TreeNode = defineComponent({
           style: {
             paddingLeft: indent + 'px',
             background: rowBg,
-            color: isActive ? '#fff' : '#6B7280',
-            boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none',
-            borderRadius: (isActive || (dragOver.value && isDir)) ? '8px' : '0',
-            margin: (isActive || (dragOver.value && isDir)) ? '0 8px' : '0',
+            color: isDark ? '#fff' : '#6B7280',
+            boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : (isHovered ? '0 2px 8px rgba(0,0,0,0.10)' : 'none'),
+            borderRadius: (isActive || isHovered || (dragOver.value && isDir)) ? '8px' : '0',
+            margin: (isActive || isHovered || (dragOver.value && isDir)) ? '0 8px' : '0',
             fontFamily: "'Inter',sans-serif",
             fontSize: 'var(--fs-body)',
             border: dragOver.value && isDir ? '1px dashed #007AFF' : '1px solid transparent',
@@ -2989,7 +3257,7 @@ const TreeNode = defineComponent({
           // Chevron for folders
           isDir ? h('svg', {
             style: {
-              width: '14px', height: '14px', flexShrink: 0, color: isActive ? '#fff' : '#9CA3AF',
+              width: '14px', height: '14px', flexShrink: 0, color: isDark ? '#fff' : '#9CA3AF',
               transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
               transition: 'transform 0.15s'
             },
@@ -2998,10 +3266,10 @@ const TreeNode = defineComponent({
 
           // Icon
           isDir
-            ? h('svg', { style: `width:18px;height:18px;flex-shrink:0;color:${isActive ? '#fff' : '#6B7280'};`, viewBox: '0 0 24 24', fill: 'currentColor' }, [
+            ? h('svg', { style: `width:18px;height:18px;flex-shrink:0;color:${isDark ? '#fff' : '#6B7280'};`, viewBox: '0 0 24 24', fill: 'currentColor' }, [
                 h('path', { d: 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z' })
               ])
-            : fileTypeIcon(props.node.name, isActive ? '#fff' : '#9CA3AF', isActive),
+            : fileTypeIcon(props.node.name, isDark ? '#fff' : '#9CA3AF', isDark),
 
           // Name
           h('span', {
@@ -3013,10 +3281,13 @@ const TreeNode = defineComponent({
 
       // Children (if expanded directory)
       if (isDir && isExpanded && props.node.children) {
+        let visibleIdx = 0
         for (const child of props.node.children) {
+          if (!_isNodeVisible(child)) continue
           children.push(
             h(TreeNode, {
               node: child,
+              index: visibleIdx++,
               depth: props.depth + 1,
               activePath: props.activePath,
               expandedFolders: props.expandedFolders,
@@ -3355,17 +3626,6 @@ defineExpose({ docTreeCollapsed })
   color: #6B7280;
   margin: 0.25rem 0 0 0;
 }
-.catalog-count-badge {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-caption);
-  font-weight: 700;
-  color: #FFFFFF;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  padding: 0.1875rem 0.5rem;
-  border-radius: 9999px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-  line-height: 1.4;
-}
 .doc-tree-icon-btn {
   display: flex;
   align-items: center;
@@ -3562,7 +3822,7 @@ defineExpose({ docTreeCollapsed })
   color: #6B7280;
 }
 
-/* ── Read-aloud button (similar to ai-doc-toggle-btn) ── */
+/* ── Speak button (similar to ai-doc-toggle-btn) ── */
 .docs-speak-btn {
   display: inline-flex;
   align-items: center;

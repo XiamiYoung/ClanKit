@@ -46,7 +46,7 @@
               <span class="switch-label-text">{{ knowledgeStore.ragEnabled ? t('knowledge.on') : t('knowledge.off') }}</span>
               <span v-if="saveMsg" class="save-msg" :class="saveMsg.ok ? 'save-ok' : 'save-err'">{{ saveMsg.text }}</span>
             </div>
-            <AppButton size="compact" @click="openCreateKb" :disabled="!knowledgeStore.modelReady">
+            <AppButton size="compact" @click="addMethodOpen = true" :disabled="!knowledgeStore.modelReady">
               <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
@@ -453,6 +453,16 @@
       @close="deleteKbTarget = null"
     />
 
+    <!-- Add KB method picker -->
+    <CreateMethodModal
+      :visible="addMethodOpen"
+      :title="t('knowledge.createKnowledgeBase')"
+      :chat-preview="t('knowledge.emptyGuideChatMsg')"
+      @chat="startChatGuide(t('knowledge.emptyGuideChatMsg'), t('knowledge.title'))"
+      @manual="openCreateKb()"
+      @close="addMethodOpen = false"
+    />
+
   </div>
 
   <!-- Preview limit modal -->
@@ -471,6 +481,7 @@ import ConfirmModal from '../components/common/ConfirmModal.vue'
 import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import AppButton from '../components/common/AppButton.vue'
 import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
+import CreateMethodModal from '../components/common/CreateMethodModal.vue'
 import { useI18n } from '../i18n/useI18n'
 import { useChatToCreate } from '../composables/useChatToCreate'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
@@ -478,6 +489,7 @@ import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 const knowledgeStore = useKnowledgeStore()
 const { t } = useI18n()
 const { startChatGuide } = useChatToCreate()
+const addMethodOpen = ref(false)
 
 // ── Lifecycle ──
 onMounted(async () => {

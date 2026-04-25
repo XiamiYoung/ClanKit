@@ -4,6 +4,7 @@
  */
 const path = require('path')
 const fs = require('fs')
+const fsp = require('fs').promises
 const { ipcMain, dialog } = require('electron')
 const { execFile } = require('child_process')
 const { logger } = require('../logger')
@@ -15,6 +16,79 @@ const fh = require('../lib/fileHelpers')
 function toLinuxPath(p) {
   if (!p) return p
   return p
+}
+
+// Hard caps for AI Doc open path. 20MB is well above any realistic markdown/code
+// file; anything larger is almost certainly binary or a log dump.
+const AIDOC_MAX_BYTES = 20 * 1024 * 1024
+// Probe reads the file head to decide if it looks like text.
+const PROBE_HEAD_BYTES = 8 * 1024
+const PROBE_TIMEOUT_MS = 3000
+
+// Read up to `head` bytes from a file with a hard timeout. Never throws; on
+// failure returns null so callers can treat it as "unprobable".
+async function _readHeadWithTimeout(filePath, head, timeoutMs) {
+  let fh = null
+  let timer = null
+  try {
+    const openP = fsp.open(filePath, 'r')
+    fh = await Promise.race([
+      openP,
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('probe_timeout')), timeoutMs) }),
+    ])
+    clearTimeout(timer); timer = null
+    const buf = Buffer.alloc(head)
+    const { bytesRead } = await Promise.race([
+      fh.read(buf, 0, head, 0),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('probe_timeout')), timeoutMs) }),
+    ])
+    clearTimeout(timer); timer = null
+    return buf.subarray(0, bytesRead)
+  } catch {
+    return null
+  } finally {
+    if (timer) clearTimeout(timer)
+    if (fh) { try { await fh.close() } catch {} }
+  }
+}
+
+// Heuristic: decide if a buffer looks like text.
+//   - Any NUL byte (0x00) → binary.
+//   - Otherwise strictly validate as UTF-8 with TextDecoder fatal mode.
+function _looksLikeText(buf) {
+  if (!buf || buf.length === 0) return true // empty file is editable
+  for (let i = 0; i < buf.length; i++) if (buf[i] === 0x00) return false
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(buf)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Extensions that are binary but DO have dedicated renderers in AI Doc.
+// These skip the text-probe and are always considered openable (size permitting).
+const AIDOC_BINARY_RENDERABLE = new Set([
+  'pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls',
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'tiff', 'svg',
+  'drawio',
+])
+
+async function _probeSingle(rawPath) {
+  const filePath = toLinuxPath(rawPath)
+  let stat
+  try { stat = await fsp.stat(filePath) } catch (err) { return { openable: false, reason: 'stat_error', error: err.message } }
+  if (stat.isDirectory()) return { openable: false, reason: 'is_directory' }
+  if (stat.size > AIDOC_MAX_BYTES) return { openable: false, reason: 'too_large', size: stat.size }
+
+  const ext = (path.extname(filePath) || '').slice(1).toLowerCase()
+  if (AIDOC_BINARY_RENDERABLE.has(ext)) return { openable: true, kind: 'binary_renderable', size: stat.size }
+
+  const head = await _readHeadWithTimeout(filePath, PROBE_HEAD_BYTES, PROBE_TIMEOUT_MS)
+  if (head === null) return { openable: false, reason: 'probe_timeout_or_io' }
+  return _looksLikeText(head)
+    ? { openable: true, kind: 'text', size: stat.size }
+    : { openable: false, reason: 'binary_content', size: stat.size }
 }
 
 function register() {
@@ -92,18 +166,10 @@ function register() {
           const children = readDir(fullPath, depth + 1)
           items.push({ name: entry.name, path: fullPath, type: 'dir', children })
         } else {
-          const binaryExts = new Set([
-            'exe','dll','so','dylib','bin','o','a','lib',
-            'zip','gz','tar','bz2','7z','rar','xz','zst',
-            'woff','woff2','ttf','otf','eot',
-            'class','pyc','pyo','wasm',
-            'db','sqlite','sqlite3',
-            'DS_Store',
-          ])
-          const ext = (entry.name.split('.').pop() || '').toLowerCase()
-          if (!binaryExts.has(ext)) {
-            items.push({ name: entry.name, path: fullPath, type: 'file' })
-          }
+          // All files are returned. The renderer filters the tree by probing
+          // each file's content (see obsidian:probe-files) — we no longer
+          // maintain an extension blocklist here because it can't be exhaustive.
+          items.push({ name: entry.name, path: fullPath, type: 'file' })
         }
       }
       return items
@@ -115,9 +181,17 @@ function register() {
     }
   })
 
-  ipcMain.handle('obsidian:read-file', (_, rawPath) => {
-    try { return { content: fs.readFileSync(toLinuxPath(rawPath), 'utf8') } }
-    catch (err) { return { error: err.message } }
+  // Async read with 20MB stat precheck. Sync readFileSync used to block the
+  // main process event loop on slow/stub files (OneDrive placeholders, hangs),
+  // defeating the renderer-side timeout. Async + stat guard fixes both.
+  ipcMain.handle('obsidian:read-file', async (_, rawPath) => {
+    try {
+      const fp = toLinuxPath(rawPath)
+      const stat = await fsp.stat(fp)
+      if (stat.size > AIDOC_MAX_BYTES) return { error: 'FILE_TOO_LARGE', code: 'too_large', size: stat.size }
+      const content = await fsp.readFile(fp, 'utf8')
+      return { content }
+    } catch (err) { return { error: err.message, code: 'io_error' } }
   })
 
   ipcMain.handle('obsidian:write-file', (_, rawPath, content) => {
@@ -125,9 +199,36 @@ function register() {
     catch (err) { return { error: err.message } }
   })
 
-  ipcMain.handle('obsidian:read-file-binary', (_, rawPath) => {
-    try { return { base64: fs.readFileSync(toLinuxPath(rawPath)).toString('base64') } }
-    catch (err) { return { error: err.message } }
+  ipcMain.handle('obsidian:read-file-binary', async (_, rawPath) => {
+    try {
+      const fp = toLinuxPath(rawPath)
+      const stat = await fsp.stat(fp)
+      if (stat.size > AIDOC_MAX_BYTES) return { error: 'FILE_TOO_LARGE', code: 'too_large', size: stat.size }
+      const buf = await fsp.readFile(fp)
+      return { base64: buf.toString('base64') }
+    } catch (err) { return { error: err.message, code: 'io_error' } }
+  })
+
+  ipcMain.handle('obsidian:probe-file', async (_, rawPath) => _probeSingle(rawPath))
+
+  // Batch probe — returns a dict keyed by path. Runs probes in parallel but
+  // caps concurrency to avoid saturating the libuv threadpool on large vaults.
+  ipcMain.handle('obsidian:probe-files', async (_, rawPaths) => {
+    if (!Array.isArray(rawPaths) || rawPaths.length === 0) return {}
+    const result = {}
+    const CONCURRENCY = 16
+    let i = 0
+    async function worker() {
+      while (i < rawPaths.length) {
+        const idx = i++
+        const p = rawPaths[idx]
+        try { result[p] = await _probeSingle(p) }
+        catch (err) { result[p] = { openable: false, reason: 'probe_exception', error: err.message } }
+      }
+    }
+    const workers = Array.from({ length: Math.min(CONCURRENCY, rawPaths.length) }, worker)
+    await Promise.all(workers)
+    return result
   })
 
   ipcMain.handle('obsidian:write-file-binary', (_, rawPath, base64) => {

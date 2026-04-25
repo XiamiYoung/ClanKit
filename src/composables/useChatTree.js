@@ -12,6 +12,7 @@ import { useAgentsStore } from '../stores/agents'
 import { useVoiceStore } from '../stores/voice'
 import { useI18n } from '../i18n/useI18n'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
+import { triggerAgentGreeting } from './useAgentGreeting'
 
 export function useChatTree({ mentionInputRef } = {}) {
   const chatsStore = useChatsStore()
@@ -601,8 +602,9 @@ export function useChatTree({ mentionInputRef } = {}) {
     const userAgentId = newChatUserAgentId.value || null
     const agentCfg = selectedIds.length > 0 ? [...selectedIds] : null
     const folderId = newChatFolderId.value
+    let createdChat = null
     try {
-      await chatsStore.createChat(title, agentCfg, folderId, {
+      createdChat = await chatsStore.createChat(title, agentCfg, folderId, {
         icon: chatIcon,
         userAgentId,
         autoTitleEligible: !typedName,
@@ -610,6 +612,13 @@ export function useChatTree({ mentionInputRef } = {}) {
     } catch (e) {
       if (_handlePreviewLimitError(e)) return
       throw e
+    }
+    // Single-system-agent new chats get a streaming in-character greeting.
+    if (createdChat?.id && Array.isArray(agentCfg) && agentCfg.length === 1) {
+      const targetAgent = agentsStore.getAgentById?.(agentCfg[0])
+      if (!targetAgent || targetAgent.type !== 'user') {
+        triggerAgentGreeting({ chatId: createdChat.id, agentId: agentCfg[0] })
+      }
     }
     // Expand the target folder and all its ancestors so the new chat is visible
     if (folderId) {

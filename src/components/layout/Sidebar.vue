@@ -486,37 +486,8 @@ const logoWrapRef = ref(null)
 let logoBubbleTimer = null
 let logoDanceTimer = null
 
-const LOAD_QUIPS_EN = [
-  'I\'m awake!', 'System online ✓', 'Let\'s go!', 'Ready to assist!',
-  'Fully charged!', 'Booting up…', 'At your service.', 'Hello again!',
-  'Brain = loaded.', 'Fresh and ready!',
-]
-const FOCUS_EXIT_QUIPS_EN = [
-  'Welcome back!', 'Miss me?', 'Focus mode off!', 'Back to normal!',
-  'Returning to base.', 'I\'m still here!', 'Did you miss me?', 'Unfocused!',
-  'Ahh, open air!', 'Freedom restored!',
-]
-
-const LOAD_QUIPS_ZH = [
-  '我醒了！', '系统上线 ✓', '开始吧！', '随时待命！',
-  '满电出发！', '启动中…', '为您服务。', '又见面了！',
-  '大脑加载完成。', '焕然一新！',
-]
-const FOCUS_EXIT_QUIPS_ZH = [
-  '欢迎回来！', '想我了吗？', '专注模式关闭！', '回归正常！',
-  '返回基地。', '我还在！', '想我没？', '不专注了！',
-  '啊，自由空气！', '自由恢复！',
-]
-
-const LOAD_QUIPS = computed(() => {
-  const locale = configStore.config?.language || 'en'
-  return locale.startsWith('zh') ? LOAD_QUIPS_ZH : LOAD_QUIPS_EN
-})
-
-const FOCUS_EXIT_QUIPS = computed(() => {
-  const locale = configStore.config?.language || 'en'
-  return locale.startsWith('zh') ? FOCUS_EXIT_QUIPS_ZH : FOCUS_EXIT_QUIPS_EN
-})
+const LOAD_QUIPS = computed(() => t('sidebar.loadQuips'))
+const FOCUS_EXIT_QUIPS = computed(() => t('sidebar.focusExitQuips'))
 
 function bubbleStyle(rawX, rawY) {
   return { left: rawX + 'px', top: rawY + 'px', '--bubble-anchor': rawX + 'px', '--arrow-offset': '0px' }

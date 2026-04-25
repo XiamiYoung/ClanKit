@@ -32,6 +32,9 @@
             <AppButton v-else size="icon" @click="refreshRemote(activeTab)" v-tooltip="t('skills.refreshSkills')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </AppButton>
+            <AppButton size="icon" @click="addMethodOpen = true" v-tooltip="t('common.add') + ' ' + t('skills.title')">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </AppButton>
           </div>
         </div>
 
@@ -148,6 +151,7 @@
               :key="skill.id"
               @click="selectSkill(skill)"
               class="skill-card"
+              :class="`skill-card--${idx % 8}`"
             >
               <!-- Gradient accent bar -->
               <div class="skill-card-accent" :style="{ background: cardGradient(idx) }"></div>
@@ -295,6 +299,7 @@
                   v-for="(skill, idx) in tencentDisplaySkills"
                   :key="skill.id"
                   class="skill-card remote-skill-card"
+                  :class="`skill-card--${idx % 8}`"
                   @click="openRemoteDetail(skill)"
                 >
                   <div class="skill-card-accent" :style="{ background: cardGradient(idx) }"></div>
@@ -413,6 +418,7 @@
                 v-for="(skill, idx) in filteredClawhubSkills"
                 :key="skill.id"
                 class="skill-card remote-skill-card"
+                :class="`skill-card--${idx % 8}`"
                 @click="openRemoteDetail(skill)"
               >
                 <div class="skill-card-accent" :style="{ background: cardGradient(idx) }"></div>
@@ -768,6 +774,19 @@
       :message="previewLimitMessage"
       @close="showPreviewLimitModal = false"
     />
+
+    <!-- Add Skill method picker — chat path drafts a skill, manual path opens the hub -->
+    <CreateMethodModal
+      :visible="addMethodOpen"
+      :title="t('common.add') + ' ' + t('skills.title')"
+      :chat-preview="t('skills.emptyGuideChatMsg')"
+      :manual-tab-label="t('createMethod.skillsManualLabel')"
+      :manual-desc="t('createMethod.skillsManualDesc')"
+      :manual-cta-label="t('createMethod.skillsManualCta')"
+      @chat="startChatGuide(t('skills.emptyGuideChatMsg'), t('skills.title'))"
+      @manual="switchTab('tencent')"
+      @close="addMethodOpen = false"
+    />
   </div>
 </template>
 
@@ -781,6 +800,7 @@ import { useI18n } from '../i18n/useI18n'
 import AppButton from '../components/common/AppButton.vue'
 import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
 import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
+import CreateMethodModal from '../components/common/CreateMethodModal.vue'
 import { useChatToCreate } from '../composables/useChatToCreate'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
@@ -790,6 +810,7 @@ const skillsStore = useSkillsStore()
 const configStore = useConfigStore()
 const showPreviewLimitModal = ref(false)
 const previewLimitMessage = ref('')
+const addMethodOpen = ref(false)
 
 // ── Uninstall dialog state (must be after skillsStore) ──
 const showUninstallDialog = ref(false)
@@ -814,8 +835,19 @@ function cancelUninstall() {
   uninstallSkill.value = null
 }
 
-function cardGradient() {
-  return 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'
+const CARD_GRADIENTS = [
+  'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)',
+  'linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%)',
+  'linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%)',
+  'linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%)',
+  'linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%)',
+  'linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%)',
+  'linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%)',
+  'linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%)',
+]
+
+function cardGradient(idx = 0) {
+  return CARD_GRADIENTS[idx % CARD_GRADIENTS.length]
 }
 
 function formatName(name) {
@@ -1766,14 +1798,44 @@ const SkillTreeNode = defineComponent({
 }
 .skill-card:hover {
   transform: translateY(-0.1875rem);
-  background: #FFFFFF;
   border-color: #D1D1D6;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.10);
 }
 .skill-card:active {
   transform: translateY(-0.0625rem);
   transition-duration: 0.1s;
 }
+
+/* Built-in badge — match each card's accent color at rest */
+.skill-card--0 .skill-builtin-badge { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
+.skill-card--1 .skill-builtin-badge { background: linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%); }
+.skill-card--2 .skill-builtin-badge { background: linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%); }
+.skill-card--3 .skill-builtin-badge { background: linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%); }
+.skill-card--4 .skill-builtin-badge { background: linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%); }
+.skill-card--5 .skill-builtin-badge { background: linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%); }
+.skill-card--6 .skill-builtin-badge { background: linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%); }
+.skill-card--7 .skill-builtin-badge { background: linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%); }
+
+/* Footer-only colored hover — body of the card stays white. */
+.skill-card-footer {
+  transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              border-top-color 0.2s ease,
+              color 0.2s ease,
+              padding 0.2s ease;
+}
+.skill-card--0:hover .skill-card-footer { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
+.skill-card--1:hover .skill-card-footer { background: linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%); }
+.skill-card--2:hover .skill-card-footer { background: linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%); }
+.skill-card--3:hover .skill-card-footer { background: linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%); }
+.skill-card--4:hover .skill-card-footer { background: linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%); }
+.skill-card--5:hover .skill-card-footer { background: linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%); }
+.skill-card--6:hover .skill-card-footer { background: linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%); }
+.skill-card--7:hover .skill-card-footer { background: linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%); }
+
+/* Footer-content legibility on colored bg */
+.skill-card:hover .skill-card-footer { border-top-color: transparent; }
+.skill-card:hover .skill-card-file { color: rgba(255, 255, 255, 0.9); }
+.skill-card:hover .skill-card-date { color: rgba(255, 255, 255, 0.9); }
 
 /* Top accent bar */
 .skill-card-accent {
@@ -1848,11 +1910,11 @@ const SkillTreeNode = defineComponent({
   overflow: hidden;
 }
 
-/* Footer */
+/* Footer — bleeds to card edges so the hover gradient covers the full strip */
 .skill-card-footer {
   border-top: 1px solid #E5E5EA;
-  padding-top: 0.75rem;
-  margin-top: auto;
+  margin: auto -1.25rem -1rem -1.25rem;
+  padding: 0.75rem 1.25rem 1rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;

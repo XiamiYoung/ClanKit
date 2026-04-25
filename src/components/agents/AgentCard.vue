@@ -1,7 +1,7 @@
 <template>
-  <div class="agent-card" @click="$emit('click')">
-    <!-- Gradient accent bar -->
-    <div class="agent-card-accent" :style="{ background: gradient }"></div>
+  <div class="agent-card" :class="`agent-card--${(props.index ?? 0) % 8}`" @click="$emit('click')">
+    <!-- Gradient accent bar — matches the per-card hover background -->
+    <div class="agent-card-accent" :style="{ background: accentGradient }"></div>
 
     <!-- Corner button cluster — top-right of the card. Analysis button (AI,
          only for imported-history agents) sits to the LEFT of the chat
@@ -157,6 +157,7 @@ import { useConfigStore } from '../../stores/config'
 import { useChatsStore } from '../../stores/chats'
 import { useI18n } from '../../i18n/useI18n'
 import { useAgentAnalysisChat } from '../../composables/useAgentAnalysisChat'
+import { triggerAgentGreeting } from '../../composables/useAgentGreeting'
 import { EDGE_VOICES, OPENAI_VOICES } from '../../utils/edgeVoices'
 
 const _allVoices = [...EDGE_VOICES, ...OPENAI_VOICES]
@@ -193,6 +194,8 @@ async function openChatWithAgent(agent) {
   const chat = await _chatsStore.createChat(title, [agent.id])
   if (!chat) return
   _chatsStore.setActiveChat(chat.id)
+  // Brand-new single-agent chat → fire an in-character greeting.
+  triggerAgentGreeting({ chatId: chat.id, agentId: agent.id })
   _router.push('/chats')
 }
 
@@ -207,6 +210,7 @@ const configStore = useConfigStore()
 const props = defineProps({
   agent:      { type: Object,  required: true },
   gradient:     { type: String,  default: 'linear-gradient(135deg, #0F0F0F, #374151)' },
+  index:        { type: Number,  default: 0 },
   hideDelete:     { type: Boolean, default: false },
   hideSetDefault: { type: Boolean, default: false },
   showUnassign:   { type: Boolean, default: false },
@@ -230,6 +234,19 @@ async function checkImportedHistory() {
 }
 onMounted(checkImportedHistory)
 watch(() => props.refreshToken, checkImportedHistory)
+
+// Shared 8-color palette used across the app (NewsView / Skills / Tools / MCP / Chat tree).
+const CARD_GRADIENTS = [
+  'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)',
+  'linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%)',
+  'linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%)',
+  'linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%)',
+  'linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%)',
+  'linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%)',
+  'linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%)',
+  'linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%)',
+]
+const accentGradient = computed(() => CARD_GRADIENTS[(props.index ?? 0) % CARD_GRADIENTS.length])
 
 const avatarDataUri = computed(() => getAvatarDataUri(props.agent.avatar))
 
@@ -305,14 +322,38 @@ const isNoProviderConfigured = computed(() => {
 }
 .agent-card:hover {
   transform: translateY(-0.1875rem);
-  background: #FFFFFF;
-  border-color: #E5E5EA;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  border-color: #D1D1D6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.10);
 }
 .agent-card:active {
   transform: translateY(-0.0625rem);
   transition-duration: 0.1s;
 }
+
+/* Footer-only colored hover — body of the card stays white. */
+.agent-card-footer {
+  transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              border-top-color 0.2s ease,
+              padding 0.2s ease;
+}
+.agent-card--0:hover .agent-card-footer { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
+.agent-card--1:hover .agent-card-footer { background: linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%); }
+.agent-card--2:hover .agent-card-footer { background: linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%); }
+.agent-card--3:hover .agent-card-footer { background: linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%); }
+.agent-card--4:hover .agent-card-footer { background: linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%); }
+.agent-card--5:hover .agent-card-footer { background: linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%); }
+.agent-card--6:hover .agent-card-footer { background: linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%); }
+.agent-card--7:hover .agent-card-footer { background: linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%); }
+
+/* Footer-content legibility on colored bg */
+.agent-card:hover .agent-card-footer { border-top-color: transparent; }
+.agent-card:hover .agent-card-builtin-badge,
+.agent-card:hover .agent-card-voice-badge { background: rgba(255, 255, 255, 0.22); color: #FFFFFF; }
+.agent-card:hover .agent-card-default-badge { background: rgba(255, 255, 255, 0.28); box-shadow: none; }
+.agent-card:hover .star-btn-always,
+.agent-card:hover .delete-btn-always { color: rgba(255, 255, 255, 0.7); }
+.agent-card:hover .star-btn-always:hover { background: rgba(255, 255, 255, 0.22); color: #FBBF24; }
+.agent-card:hover .delete-btn-always:hover { background: rgba(239, 68, 68, 0.45); color: #FFFFFF; }
 
 .agent-card-accent { height: 3px; width: 100%; flex-shrink: 0; }
 .agent-card-body { padding: 1rem 1rem 0.75rem; display: flex; flex-direction: column; flex: 1; min-height: 0; }
@@ -418,7 +459,9 @@ const isNoProviderConfigured = computed(() => {
   font-weight: 600;
 }
 .agent-card-footer {
-  border-top: 1px solid rgba(229, 229, 234, 0.5); padding-top: 0.75rem; margin-top: auto;
+  border-top: 1px solid rgba(229, 229, 234, 0.5);
+  margin: auto -1rem -0.75rem -1rem;
+  padding: 0.75rem 1rem;
   display: flex; align-items: center; justify-content: space-between;
   min-height: 2.875rem;
 }

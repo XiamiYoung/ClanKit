@@ -1,6 +1,36 @@
 import { defineComponent, ref, h } from 'vue'
 import { useI18n } from '../../i18n/useI18n'
 
+// Per-chat hover palette — 8 colored gradients (no grayscale, so every chat
+// looks distinct from both the resting/active states on hover).
+const CHAT_HOVER_GRADIENTS = [
+  'linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%)',
+  'linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%)',
+  'linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%)',
+  'linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%)',
+  'linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%)',
+  'linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%)',
+  'linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%)',
+  'linear-gradient(135deg, #831843 0%, #BE185D 60%, #EC4899 100%)',
+]
+
+// Pick a color slot from the 8-color palette. Sibling index guarantees adjacent
+// chats never share a color; createdAt / id hash are fallbacks only.
+function gradientForChat(node, idx) {
+  const palette = CHAT_HOVER_GRADIENTS
+  if (typeof idx === 'number') {
+    return palette[((idx % palette.length) + palette.length) % palette.length]
+  }
+  if (node && typeof node.createdAt === 'number') {
+    return palette[node.createdAt % palette.length]
+  }
+  const id = node?.id || ''
+  if (!id) return palette[0]
+  let hash = 0
+  for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0
+  return palette[Math.abs(hash) % palette.length]
+}
+
 /**
  * Recursive tree node component for the chat sidebar.
  * Renders folder rows and chat rows with drag-drop support.
@@ -20,6 +50,7 @@ const ChatTreeNodeView = defineComponent({
     contextMenuNodeId: { type: String, default: null },
     onShowTooltip: { type: Function, default: null },
     onHideTooltip: { type: Function, default: null },
+    index: { type: Number, default: 0 },
   },
   emits: [
     'select-chat', 'toggle-folder',
@@ -79,10 +110,15 @@ const ChatTreeNodeView = defineComponent({
       else emit('drop-after', nodeId, props.node.id)
     }
 
-    function showTooltip(text, el) {
+    function showTooltip(text, el, background) {
       if (props.onShowTooltip) {
         const rect = el.getBoundingClientRect()
-        props.onShowTooltip({ text, right: (globalThis.innerWidth ?? document.documentElement.clientWidth) - rect.right, top: rect.top })
+        props.onShowTooltip({
+          text,
+          right: (globalThis.innerWidth ?? document.documentElement.clientWidth) - rect.right,
+          top: rect.top,
+          background: background || null,
+        })
       }
     }
 
@@ -91,10 +127,11 @@ const ChatTreeNodeView = defineComponent({
     }
 
     // Shared child props passthrough
-    function childProps(child) {
+    function childProps(child, idx) {
       return {
         key: child.id,
         node: child,
+        index: idx,
         depth: props.depth + 1,
         activeChatId: props.activeChatId,
         unreadChatIds: props.unreadChatIds,
@@ -144,11 +181,13 @@ const ChatTreeNodeView = defineComponent({
         const isExpanded = node.expanded
         const dragOverFolder = dragOver.value === 'middle'
         const hasCtxMenu = props.contextMenuNodeId === node.id
-        let rowBg = (hovered.value || hasCtxMenu)
-          ? '#F5F5F5'
+        const isHighlighted = hovered.value || hasCtxMenu
+        let rowBg = isHighlighted
+          ? gradientForChat(node, props.index)
           : 'transparent'
         if (dragOverFolder) rowBg = 'rgba(0, 122, 255, 0.08)'
-        const textColor = '#1A1A1A'
+        const isDark = isHighlighted && !dragOverFolder
+        const textColor = isDark ? '#FFFFFF' : '#1A1A1A'
 
         const folderRow = h('div', {
           class: 'flex items-center gap-0.5 pr-1 cursor-pointer group relative chat-tree-row',
@@ -158,13 +197,14 @@ const ChatTreeNodeView = defineComponent({
             paddingBottom: '0px',
             background: rowBg,
             color: textColor,
-            borderRadius: '4px',
+            borderRadius: '0.5rem',
             margin: '0px 2px',
             fontFamily: "'Inter',sans-serif",
             fontSize: 'var(--fs-caption)',
             fontWeight: '600',
             letterSpacing: '0.01em',
-            transition: 'background 0.15s',
+            transition: 'background 0.15s, color 0.15s',
+            boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : 'none',
             borderTop: dragOver.value === 'top' ? '2px solid #1A1A1A' : '2px solid transparent',
             borderRight: '0px solid transparent',
             borderBottom: dragOver.value === 'bottom' ? '2px solid #1A1A1A' : '2px solid transparent',
@@ -177,7 +217,7 @@ const ChatTreeNodeView = defineComponent({
             hovered.value = true
             const nameEl = e.currentTarget.querySelector('.truncate')
             if (nameEl && nameEl.scrollWidth > nameEl.clientWidth) {
-              showTooltip(node.name, e.currentTarget)
+              showTooltip(node.name, e.currentTarget, gradientForChat(node, props.index))
             }
           },
           onMouseleave: () => { hovered.value = false; hideTooltip() },
@@ -185,7 +225,7 @@ const ChatTreeNodeView = defineComponent({
         }, [
           // Chevron
           h('svg', {
-            style: { width: '14px', height: '14px', flexShrink: 0, color: '#9CA3AF', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' },
+            style: { width: '14px', height: '14px', flexShrink: 0, color: isDark ? 'rgba(255,255,255,0.85)' : '#9CA3AF', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s, color 0.15s' },
             viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2',
           }, [h('polyline', { points: '9 18 15 12 9 6' })]),
           // Folder emoji
@@ -194,17 +234,17 @@ const ChatTreeNodeView = defineComponent({
           }, node.emoji || '📁'),
           // Spinner: show when folder is collapsed and has a running chat inside
           (!isExpanded && subtreeHasRunning(node))
-            ? h('span', { class: 'chat-unread-spinner' })
+            ? h('span', { class: isDark ? 'chat-unread-spinner chat-unread-spinner--light' : 'chat-unread-spinner' })
             : null,
           // Name
           h('span', {
             class: 'truncate flex-1',
-            style: { color: '#1A1A1A', userSelect: 'none', textTransform: 'uppercase', letterSpacing: '0.03em' },
+            style: { color: textColor, userSelect: 'none', textTransform: 'uppercase', letterSpacing: '0.03em', transition: 'color 0.15s' },
           }, node.name),
         ])
 
         const childNodes = (isExpanded && node.children?.length)
-          ? node.children.map(child => h(ChatTreeNodeView, childProps(child)))
+          ? node.children.map((child, i) => h(ChatTreeNodeView, childProps(child, i)))
           : []
 
         return h('div', { style: { marginTop: depth === 0 ? '2px' : '0' } }, [folderRow, ...childNodes])
@@ -218,11 +258,9 @@ const ChatTreeNodeView = defineComponent({
         const showSpinner = (isUnread || (node.isRunning && !isActive)) && !isCompleted && !isPendingPermission
 
         const isDark = isActive || hovered.value
-        const rowBg = isActive
-          ? 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'
-          : hovered.value
-            ? 'linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)'
-            : 'transparent'
+        const rowBg = (isActive || hovered.value)
+          ? gradientForChat(node, props.index)
+          : 'transparent'
 
         return h('div', {
           class: 'flex items-center gap-0.5 pr-1 cursor-pointer group relative chat-tree-row',
@@ -249,7 +287,7 @@ const ChatTreeNodeView = defineComponent({
             hovered.value = true
             const nameEl = e.currentTarget.querySelector('.truncate')
             if (nameEl && nameEl.scrollWidth > nameEl.clientWidth) {
-              showTooltip(node.title, e.currentTarget)
+              showTooltip(node.title, e.currentTarget, gradientForChat(node, props.index))
             }
           },
           onMouseleave: () => { hovered.value = false; hideTooltip() },

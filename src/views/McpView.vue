@@ -27,7 +27,7 @@
             </AppButton>
           </AppTooltip>
           <AppTooltip :text="t('mcp.addServer')">
-            <AppButton size="icon" @click="openAdd">
+            <AppButton size="icon" @click="addMethodOpen = true">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </AppButton>
           </AppTooltip>
@@ -90,6 +90,7 @@
             :key="server.id"
             @click="openEdit(server)"
             class="mcp-card"
+            :class="`mcp-card--${idx % 8}`"
           >
             <!-- Gradient accent bar -->
             <div class="mcp-card-accent" :style="{ background: cardGradient(idx) }"></div>
@@ -325,6 +326,16 @@
       @close="showConfirmDelete = false"
     />
 
+    <!-- Add MCP method picker -->
+    <CreateMethodModal
+      :visible="addMethodOpen"
+      :title="t('mcp.addServer')"
+      :chat-preview="t('mcp.emptyGuideChatMsg')"
+      @chat="startChatGuide(t('mcp.emptyGuideChatMsg'), t('mcp.title'))"
+      @manual="openAdd()"
+      @close="addMethodOpen = false"
+    />
+
   </div>
 
   <!-- Preview limit modal -->
@@ -346,6 +357,7 @@ import AppTooltip from '../components/common/AppTooltip.vue'
 import { useConfigStore } from '../stores/config'
 import { useI18n } from '../i18n/useI18n'
 import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
+import CreateMethodModal from '../components/common/CreateMethodModal.vue'
 import { useChatToCreate } from '../composables/useChatToCreate'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
@@ -355,6 +367,7 @@ const { startChatGuide } = useChatToCreate()
 const mcpStore = useMcpStore()
 const configStore = useConfigStore()
 const refreshing = ref(false)
+const addMethodOpen = ref(false)
 const showPreviewLimitModal = ref(false)
 const previewLimitMessage = ref('')
 
@@ -599,8 +612,19 @@ async function executeDelete() {
   closeModal()
 }
 
-function cardGradient() {
-  return 'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)'
+const CARD_GRADIENTS = [
+  'linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)',
+  'linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%)',
+  'linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%)',
+  'linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%)',
+  'linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%)',
+  'linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%)',
+  'linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%)',
+  'linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%)',
+]
+
+function cardGradient(idx = 0) {
+  return CARD_GRADIENTS[idx % CARD_GRADIENTS.length]
 }
 </script>
 
@@ -762,9 +786,35 @@ function cardGradient() {
 .mcp-card:hover {
   transform: translateY(-0.1875rem);
   border-color: #D1D1D6;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.10);
 }
 .mcp-card:active { transform: translateY(-0.0625rem); transition-duration: 0.1s; }
+
+/* Footer-only colored hover — body of the card stays white. */
+.mcp-card-test-row {
+  transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              border-top-color 0.2s ease,
+              padding 0.2s ease;
+}
+.mcp-card--0:hover .mcp-card-test-row { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
+.mcp-card--1:hover .mcp-card-test-row { background: linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%); }
+.mcp-card--2:hover .mcp-card-test-row { background: linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%); }
+.mcp-card--3:hover .mcp-card-test-row { background: linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%); }
+.mcp-card--4:hover .mcp-card-test-row { background: linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%); }
+.mcp-card--5:hover .mcp-card-test-row { background: linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%); }
+.mcp-card--6:hover .mcp-card-test-row { background: linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%); }
+.mcp-card--7:hover .mcp-card-test-row { background: linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%); }
+
+/* Footer-content legibility on colored bg */
+.mcp-card:hover .mcp-card-test-row { border-top-color: transparent; }
+.mcp-card:hover .mcp-card-countdown { color: rgba(255, 255, 255, 0.92); }
+.mcp-card:hover .mcp-card-test-btn {
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: none;
+}
+.mcp-card:hover .mcp-card-test-btn:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
 .mcp-card-accent { height: 4px; width: 100%; flex-shrink: 0; }
 .mcp-card-body { padding: 1.25rem 1.25rem 1rem; display: flex; flex-direction: column; flex: 1; }
 
@@ -846,7 +896,9 @@ function cardGradient() {
 }
 /* ── Card test row ─────────────────────────────────────────────────────────── */
 .mcp-card-test-row {
-  border-top: 1px solid #E5E5EA; padding-top: 0.5rem; margin-top: auto;
+  border-top: 1px solid #E5E5EA;
+  margin: auto -1.25rem -1rem -1.25rem;
+  padding: 0.5rem 1.25rem 0.875rem 1.25rem;
   display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem;
 }
 .mcp-card-test-btn {

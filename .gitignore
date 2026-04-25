@@ -53,16 +53,12 @@ scripts/*
 !scripts/after-pack.js
 !scripts/check-models-staleness.js
 !scripts/update-models.js
-!scripts/build-core.js
 !scripts/recorder/
 
 # Model staleness check flag (dev-only)
 .models-stale
 
-# Go build artifacts (air hot reload)
-core/tmp/
-
-# Compiled Go binaries for distribution
+# Compiled Go binaries for distribution (Go source lives in the ClankCore repo)
 resources/
 
 # Python

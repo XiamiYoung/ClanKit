@@ -1333,6 +1333,129 @@ ipcMain.handle('agent:edit-stop', async (_event, requestId) => {
   return { success: true }
 })
 
+// -- Streaming agent greeting -----------------------------------------------
+// Fired when the user creates a brand-new single-agent chat (chat-sidebar
+// "New Chat" or AgentCard "Chat with this agent"). The agent introduces itself
+// in its own voice + the current UI language. Streams via 'agent:greet-chunk'.
+const _activeGreetings = new Map() // chatId → AbortController
+
+ipcMain.handle('agent:generate-greeting', async (event, { chatId, agentId, language, userPersona }) => {
+  let abort = null
+  const send = (payload) => {
+    if (!event.sender.isDestroyed()) event.sender.send('agent:greet-chunk', { chatId, ...payload })
+  }
+  try {
+    const cfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
+    const agents = normalizeAgents(ds.readJSON(ds.paths().AGENTS_FILE, []))
+    const agent = agents.find(a => a.id === agentId)
+    if (!agent) { send({ type: 'error', text: 'Agent not found' }); return { success: false } }
+    if (agent.type === 'user') { send({ type: 'done' }); return { success: false, skipped: true } }
+
+    const loopCfg = _normalizeLoopConfig({ ...cfg }, agentId)
+    if (!loopCfg.customModel) { send({ type: 'error', text: 'No model configured' }); return { success: false } }
+    const validationError = _validateLoopConfig(loopCfg)
+    if (validationError) { send({ type: 'error', text: validationError }); return { success: false } }
+
+    const langLabel = language === 'zh'
+      ? 'Simplified Chinese (简体中文)'
+      : (language === 'en' ? 'English' : (language || 'English'))
+    const personaPrompt = (agent.prompt || '').trim()
+    const personaBlock = personaPrompt
+      ? `${personaPrompt}\n\n---\n`
+      : `You are ${agent.name || 'an AI assistant'}.\n\n`
+
+    // User-persona context: address the user by name and tailor tone.
+    const userName = (userPersona?.name || '').trim()
+    const userDesc = (userPersona?.description || '').trim()
+    const userPrompt = (userPersona?.prompt || '').trim()
+    let userBlock = ''
+    if (userName || userDesc || userPrompt) {
+      userBlock = '\n\nWho you are speaking to:\n'
+      if (userName) userBlock += `- Name: ${userName}\n`
+      if (userDesc) userBlock += `- About them: ${userDesc}\n`
+      if (userPrompt) userBlock += `- Their persona / context: ${userPrompt}\n`
+    }
+
+    const addressLine = userName
+      ? `Address them by name ("${userName}") at least once to feel personal — pick the form of address that fits your own persona (e.g. friendly nickname, respectful title, casual). Tailor what you offer to who they are.`
+      : `Keep the greeting personal and warm.`
+
+    const systemPrompt = `${personaBlock}You have just been opened in a brand new chat by the user — they have not said anything yet.${userBlock}
+
+Write a short opening greeting (2-4 sentences) in ${langLabel}, fully in character with the personality and role described above. ${addressLine} Briefly hint at who you are and what you can help this specific person with, then warmly invite them to share what they need. Keep the tone natural, never robotic, never generic. Do NOT use markdown headings, bullet points, code blocks, or quotation marks around the greeting. Output only the greeting text itself.`
+
+    abort = new AbortController()
+    _activeGreetings.set(chatId, abort)
+
+    const providerType = loopCfg.provider?.type || loopCfg._resolvedProvider || _detectModelProviderType(loopCfg.customModel) || 'anthropic'
+    const useAnthropic = providerType === 'anthropic'
+
+    if (providerType === 'google') {
+      // Greetings are best-effort — silently skip rather than break chat creation.
+      _activeGreetings.delete(chatId)
+      send({ type: 'done' })
+      return { success: false, skipped: true }
+    }
+
+    if (useAnthropic) {
+      const { AnthropicClient } = require('../agent/core/AnthropicClient')
+      const client = new AnthropicClient({
+        apiKey: loopCfg.apiKey,
+        baseURL: loopCfg.baseURL,
+        customModel: loopCfg.customModel,
+        _scenario: 'agent-greeting',
+      }).getClient()
+      const stream = client.messages.stream({
+        model: loopCfg.customModel,
+        max_tokens: 512,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: 'Greet me now.' }],
+      }, { signal: abort.signal })
+      stream.on('text', (text) => {
+        if (!abort.signal.aborted) send({ type: 'delta', text })
+      })
+      await stream.finalMessage()
+    } else {
+      const { OpenAIClient } = require('../agent/core/OpenAIClient')
+      const oaiClient = new OpenAIClient({ ...loopCfg, _scenario: 'agent-greeting' })
+      const client = oaiClient.getClient()
+      const stream = await client.chat.completions.create({
+        model: loopCfg.customModel,
+        ...oaiClient.tokenLimit(512),
+        stream: true,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: 'Greet me now.' },
+        ],
+      }, { signal: abort.signal })
+      for await (const chunk of stream) {
+        if (abort.signal.aborted) break
+        const delta = chunk.choices?.[0]?.delta?.content
+        if (delta) send({ type: 'delta', text: delta })
+      }
+    }
+
+    _activeGreetings.delete(chatId)
+    send({ type: 'done' })
+    return { success: true }
+  } catch (err) {
+    _activeGreetings.delete(chatId)
+    if (err.name === 'AbortError' || abort?.signal?.aborted) {
+      send({ type: 'done' })
+      return { success: false, cancelled: true }
+    }
+    logger.error('agent:generate-greeting error', err.message)
+    send({ type: 'error', text: err.message })
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('agent:cancel-greeting', async (_event, chatId) => {
+  const abort = _activeGreetings.get(chatId)
+  if (abort) { abort.abort(); _activeGreetings.delete(chatId) }
+  return { success: true }
+})
+
 // -- AI Doc: full agent loop for document editing ----------------------------
 const _activeDocLoops = new Map() // requestId → AgentLoop
 

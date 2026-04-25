@@ -1,27 +1,41 @@
-const { describe, it, expect, vi, beforeEach } = require('vitest')
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
+import { createRequire } from 'node:module'
+
+// vi.mock() does NOT reliably intercept internal `require()` calls inside CJS
+// modules (see LESSONS.md: "Vitest 4.x ... monkey-patch the CJS singleton").
+// Instead we grab the real singletons via `createRequire` and mutate them —
+// `module.exports` is shared, so the CUT sees our stubs through its own
+// `const ds = require('../lib/dataStore')` binding.
+const require_ = createRequire(import.meta.url)
+const ds = require_('../../lib/dataStore')
+const { logger } = require_('../../logger')
 
 const mockReadJSON = vi.fn()
-const mockPaths = {
-  AGENTS_FILE: 'agents.json',
-}
+const mockPaths = { AGENTS_FILE: 'agents.json' }
 
-vi.mock('../../logger', () => ({
-  logger: {
-    warn: vi.fn(),
-  },
-}))
+const origReadJSON = ds.readJSON
+const origPaths = ds.paths
+const origWarn = logger.warn
 
-vi.mock('../../lib/dataStore', () => ({
-  readJSON: (...args) => mockReadJSON(...args),
-  paths: () => mockPaths,
-}))
+beforeAll(() => {
+  ds.readJSON = mockReadJSON
+  ds.paths = () => mockPaths
+  logger.warn = vi.fn()
+})
+afterAll(() => {
+  ds.readJSON = origReadJSON
+  ds.paths = origPaths
+  logger.warn = origWarn
+})
 
+// Dynamic import AFTER mutating the singletons so any load-time captures
+// inside the CUT see the stubs.
 const {
   applyProviderCredsToConfig,
   buildHeuristicSequentialDispatch,
   normalizeLoopConfig,
   validateLoopConfig,
-} = require('../agentRuntimeUtils')
+} = await import('../agentRuntimeUtils')
 
 describe('agentRuntimeUtils regressions', () => {
   beforeEach(() => {

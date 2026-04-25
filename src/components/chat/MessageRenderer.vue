@@ -695,6 +695,20 @@ function _isUnderAidocDir(filePath) {
   return _normSlash(filePath).startsWith(_normSlash(docPath))
 }
 
+// Only show the "open in AI Doc" chip when the file is under the aidoc dir AND
+// the session probe has confirmed it's openable. Unknown (unprobed) paths get
+// a lazy probe fired in the background; when the result arrives it updates
+// `obsidianStore.probeCache` (reactive), which triggers this render to re-run
+// and the button appears. Confirmed-binary paths never get the button.
+function _shouldShowAidocButton(filePath) {
+  if (!_isUnderAidocDir(filePath)) return false
+  const cache = obsidianStore.probeCache
+  if (filePath in cache) return cache[filePath] === true
+  // Fire-and-forget probe. De-duped inside the store.
+  Promise.resolve().then(() => obsidianStore.probeFile(filePath))
+  return false
+}
+
 function injectFilePathChips(html) {
   // Split HTML into tags vs text runs so we never match inside tags or <pre>/<a>
   // Note: inline <code> is intentionally allowed so backtick-wrapped paths get chips
@@ -715,7 +729,7 @@ function injectFilePathChips(html) {
     // Replace file paths with chips containing open buttons (use data-* for event delegation)
     parts[i] = p.replace(FILE_PATH_RE, (path) => {
       const escaped = path.replace(/"/g, '&quot;')
-      const aidocBtn = _isUnderAidocDir(path)
+      const aidocBtn = _shouldShowAidocButton(path)
         ? `<button class="file-path-btn file-path-aidoc" data-action="open-in-aidoc" data-path="${escaped}" data-app-tooltip title="${t('common.openInAiDoc')}">📝</button>`
         : ''
       return `${path}${aidocBtn}<button class="file-path-btn file-path-open" data-action="open-file" data-path="${escaped}" data-app-tooltip title="${t('common.openFile')}">📄</button><button class="file-path-btn file-path-folder" data-action="open-folder" data-path="${escaped}" data-app-tooltip title="${t('common.openFolder')}">📁</button>`

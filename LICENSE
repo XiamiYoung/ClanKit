@@ -34,10 +34,23 @@ this software, subject to the following conditions:
    these marks requires separate written permission.
 
 4. CONTRIBUTIONS
-   By submitting a pull request or contributing code, you agree to license
-   your contribution under the same terms as this license, and grant the
-   copyright holder the right to use your contribution in commercial
-   offerings.
+   By submitting a pull request, contributing code, or otherwise providing
+   any work for inclusion in this project, you agree that:
+
+   a) You grant the copyright holder a perpetual, worldwide, non-exclusive,
+      royalty-free, irrevocable license to use, reproduce, modify,
+      distribute, sublicense, and relicense your contribution under any
+      terms, including but not limited to the current license, other open
+      source licenses, proprietary licenses, or commercial offerings.
+
+   b) The copyright holder may adjust or change the license terms of this
+      project in the future as deemed necessary, and such changes apply to
+      your past and future contributions.
+
+   c) You represent that your contribution is your original work and that
+      you have the legal right to grant the above license.
+
+   d) Your contribution is provided "as is" without warranty of any kind.
 
 5. NO WARRANTY
    This software is provided "as is", without warranty of any kind.

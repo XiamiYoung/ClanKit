@@ -82,6 +82,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   enhancePrompt: (params) => ipcRenderer.invoke('agent:enhance-prompt', params),
   editText: (params) => ipcRenderer.invoke('agent:edit-text', params),
   stopEdit: (requestId) => ipcRenderer.invoke('agent:edit-stop', requestId),
+  generateGreeting: (params) => ipcRenderer.invoke('agent:generate-greeting', params),
+  cancelGreeting: (chatId) => ipcRenderer.invoke('agent:cancel-greeting', chatId),
+  onGreetChunk: (callback) => {
+    const listener = (_, data) => callback(data)
+    ipcRenderer.on('agent:greet-chunk', listener)
+    return () => ipcRenderer.removeListener('agent:greet-chunk', listener)
+  },
   runDocAgent: (params) => ipcRenderer.invoke('agent:doc-run', params),
   stopDocAgent: (requestId) => ipcRenderer.invoke('agent:doc-stop', requestId),
   docPermissionResponse: (requestId, payload) => ipcRenderer.invoke('agent:doc-permission-response', requestId, payload),
@@ -180,6 +187,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     writeFile:    (filePath, content)  => ipcRenderer.invoke('obsidian:write-file', filePath, content),
     readFileBinary:  (filePath)           => ipcRenderer.invoke('obsidian:read-file-binary', filePath),
     writeFileBinary: (filePath, base64)   => ipcRenderer.invoke('obsidian:write-file-binary', filePath, base64),
+    probeFile:    (filePath)           => ipcRenderer.invoke('obsidian:probe-file', filePath),
+    probeFiles:   (filePaths)          => ipcRenderer.invoke('obsidian:probe-files', filePaths),
     saveImage:    (dir, name, base64)  => ipcRenderer.invoke('obsidian:save-image', dir, name, base64),
     readImageBase64: (filePath)        => ipcRenderer.invoke('obsidian:read-image-base64', filePath),
     createFile:   (dir, name)          => ipcRenderer.invoke('obsidian:create-file', dir, name),

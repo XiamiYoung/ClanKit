@@ -27,7 +27,7 @@
             </AppButton>
           </AppTooltip>
           <AppTooltip :text="t('tools.addTool')">
-            <AppButton size="icon" @click="openAdd">
+            <AppButton size="icon" @click="addMethodOpen = true">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </AppButton>
           </AppTooltip>
@@ -133,10 +133,11 @@
       <div style="padding:24px 32px;">
         <div class="tools-grid">
           <div
-            v-for="tool in filteredTools"
+            v-for="(tool, idx) in filteredTools"
             :key="tool.id"
             @click="openEdit(tool)"
             class="tools-card"
+            :class="`tools-card--${idx % 8}`"
           >
             <!-- Gradient accent bar -->
             <div class="tools-card-accent"></div>
@@ -420,6 +421,16 @@
       @close="showConfirmDelete = false"
     />
 
+    <!-- Add Tool method picker -->
+    <CreateMethodModal
+      :visible="addMethodOpen"
+      :title="t('tools.addTool')"
+      :chat-preview="t('tools.emptyGuideChatMsg')"
+      @chat="startChatGuide(t('tools.emptyGuideChatMsg'), t('tools.title'))"
+      @manual="openAdd()"
+      @close="addMethodOpen = false"
+    />
+
   </div>
 
   <!-- Preview limit modal -->
@@ -441,6 +452,7 @@ import AppTooltip from '../components/common/AppTooltip.vue'
 import { useConfigStore } from '../stores/config'
 import { useI18n } from '../i18n/useI18n'
 import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
+import CreateMethodModal from '../components/common/CreateMethodModal.vue'
 import { useChatToCreate } from '../composables/useChatToCreate'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
@@ -449,6 +461,7 @@ const configStore = useConfigStore()
 const { t } = useI18n()
 const { startChatGuide } = useChatToCreate()
 const refreshing = ref(false)
+const addMethodOpen = ref(false)
 const showPreviewLimitModal = ref(false)
 const previewLimitMessage = ref('')
 
@@ -886,12 +899,53 @@ function truncateEndpoint(ep) {
 .tools-card:hover {
   transform: translateY(-0.1875rem);
   border-color: #D1D1D6;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.10);
 }
 .tools-card:active { transform: translateY(-0.0625rem); transition-duration: 0.1s; }
-.tools-card-accent {
-  height: 4px; width: 100%; flex-shrink: 0;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+
+/* Per-card resting accent + icon colors */
+.tools-card--0 .tools-card-accent, .tools-card--0 .tools-card-icon { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
+.tools-card--1 .tools-card-accent, .tools-card--1 .tools-card-icon { background: linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%); }
+.tools-card--2 .tools-card-accent, .tools-card--2 .tools-card-icon { background: linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%); }
+.tools-card--3 .tools-card-accent, .tools-card--3 .tools-card-icon { background: linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%); }
+.tools-card--4 .tools-card-accent, .tools-card--4 .tools-card-icon { background: linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%); }
+.tools-card--5 .tools-card-accent, .tools-card--5 .tools-card-icon { background: linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%); }
+.tools-card--6 .tools-card-accent, .tools-card--6 .tools-card-icon { background: linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%); }
+.tools-card--7 .tools-card-accent, .tools-card--7 .tools-card-icon { background: linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%); }
+
+/* Type badge + method chip — match each card's accent */
+.tools-card--0 .tools-type-badge, .tools-card--0 .tools-card-method { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
+.tools-card--1 .tools-type-badge, .tools-card--1 .tools-card-method { background: linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%); }
+.tools-card--2 .tools-type-badge, .tools-card--2 .tools-card-method { background: linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%); }
+.tools-card--3 .tools-type-badge, .tools-card--3 .tools-card-method { background: linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%); }
+.tools-card--4 .tools-type-badge, .tools-card--4 .tools-card-method { background: linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%); }
+.tools-card--5 .tools-type-badge, .tools-card--5 .tools-card-method { background: linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%); }
+.tools-card--6 .tools-type-badge, .tools-card--6 .tools-card-method { background: linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%); }
+.tools-card--7 .tools-type-badge, .tools-card--7 .tools-card-method { background: linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%); }
+
+/* Footer-only colored hover — body of the card stays white. */
+.tools-card-footer {
+  transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              border-top-color 0.2s ease,
+              color 0.2s ease,
+              padding 0.2s ease;
+}
+.tools-card--0:hover .tools-card-footer { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
+.tools-card--1:hover .tools-card-footer { background: linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%); }
+.tools-card--2:hover .tools-card-footer { background: linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%); }
+.tools-card--3:hover .tools-card-footer { background: linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%); }
+.tools-card--4:hover .tools-card-footer { background: linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%); }
+.tools-card--5:hover .tools-card-footer { background: linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%); }
+.tools-card--6:hover .tools-card-footer { background: linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%); }
+.tools-card--7:hover .tools-card-footer { background: linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%); }
+
+/* Footer-content legibility on colored bg */
+.tools-card:hover .tools-card-footer { border-top-color: transparent; }
+.tools-card:hover .tools-card-endpoint { color: rgba(255, 255, 255, 0.92); }
+.tools-card:hover .tools-card-method {
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #FFFFFF;
+  box-shadow: none;
 }
 .tools-card-body { padding: 1.25rem 1.25rem 1rem; display: flex; flex-direction: column; flex: 1; }
 
@@ -942,8 +996,8 @@ function truncateEndpoint(ep) {
 }
 .tools-card-footer {
   border-top: 1px solid #E5E5EA;
-  padding-top: 0.75rem;
-  margin-top: auto;
+  margin: auto -1.25rem -1rem -1.25rem;
+  padding: 0.75rem 1.25rem 1rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;

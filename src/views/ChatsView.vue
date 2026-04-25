@@ -153,9 +153,10 @@
           <!-- Tree nodes (visible when root is expanded) -->
           <template v-if="rootExpanded">
             <ChatTreeNodeView
-              v-for="node in chatsStore.chatTree"
+              v-for="(node, nodeIdx) in chatsStore.chatTree"
               :key="node.id"
               :node="node"
+              :index="nodeIdx"
               :depth="1"
               :activeChatId="chatsStore.activeChatId"
               :unreadChatIds="chatsStore.unreadChatIds"
@@ -892,7 +893,12 @@
     <div
       v-if="treeTooltip.visible"
       class="tree-name-tooltip"
-      :style="{ right: treeTooltip.right + 'px', top: (treeTooltip.top - 4) + 'px' }"
+      :style="{
+        right: treeTooltip.right + 'px',
+        top: (treeTooltip.top - 4) + 'px',
+        background: treeTooltip.background || undefined,
+        borderColor: treeTooltip.background ? 'transparent' : undefined,
+      }"
     >{{ treeTooltip.text }}</div>
   </Teleport>
 

@@ -1,6 +1,6 @@
 ---
 name: ClankAI Config Admin
-description: Create or edit ClankAI app configuration files — HTTP tools, MCP servers, agents, knowledge bases, tasks, and plans. Load this skill whenever the user asks you to add, modify, or remove any of these.
+description: Create or edit ClankAI app configuration files — tools, MCP servers, agents, knowledge bases, tasks, and plans. Load this skill whenever the user asks you to add, modify, or remove any of these.
 ---
 
 # ClankAI Config Admin
@@ -24,35 +24,57 @@ If the file does not exist yet, create it with an empty root (`[]` for arrays, `
 
 Generate new UUIDs for every new entry. Preserve existing `id` fields — never rewrite them.
 
-## 1. HTTP Tools — `<DATA_DIR>/tools.json`
+## 1. Tools — `<DATA_DIR>/tools.json`
 
-Triggered by: "add a tool", "create an HTTP tool", "edit this API tool", etc.
+Triggered by: "add a tool", "create a tool", "edit this tool", etc.
 
-**Schema:**
+Tools come in four types: `http`, `code`, `prompt`, `smtp`. If the user doesn't specify the type, ask them which type they want.
+
+**Schema (flat dictionary — tool id as key):**
 ```json
 {
-  "categories": {
-    "CategoryName": {
-      "tools": [
-        {
-          "id": "<uuid>",
-          "name": "Weather API",
-          "method": "GET",
-          "endpoint": "https://api.example.com/weather",
-          "headers": { "Authorization": "Bearer $API_KEY" },
-          "bodyTemplate": "",
-          "description": "Fetch current weather for a city"
-        }
-      ]
-    }
+  "<tool-id>": {
+    "name": "Weather API",
+    "description": "Fetch current weather for a city",
+    "category": "APIs",
+    "type": "http",
+    "method": "GET",
+    "endpoint": "https://api.example.com/weather?city={city}",
+    "headers": { "Authorization": "Bearer $API_KEY" },
+    "bodyTemplate": "{}"
   }
 }
 ```
 
-Rules:
+Tool id: use the name lowercased with non-alphanumeric chars replaced by hyphens (e.g. `"Weather API"` → `"weather-api"`).
+
+### Type-specific fields
+
+**`http`** (default):
 - `method`: one of `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.
-- `bodyTemplate`: empty string for GET; JSON string with `{placeholders}` for POST/PUT.
-- Place the new tool in an existing category when there is a natural fit; otherwise create a new category.
+- `endpoint`: URL. Use `{placeholder}` for parameters the LLM fills at runtime.
+- `headers`: object of key-value pairs.
+- `bodyTemplate`: JSON string with `{placeholder}` patterns. Use `"{}"` for GET.
+
+**`code`** (code snippet):
+- `language`: `"javascript"`, `"python"`, or `"bash"`.
+- `code`: the code string to execute.
+
+**`prompt`** (prompt template):
+- `promptText`: the prompt template string.
+
+**`smtp`** (email):
+- No extra fields — uses the app's email credentials from Config.
+
+### Common fields (all types)
+- `name` (required): display name.
+- `description`: what the tool does.
+- `category`: grouping label (optional).
+- `type` (required): one of `http`, `code`, `prompt`, `smtp`.
+
+Rules:
+- The file is a flat JSON object, NOT an array and NOT nested under `categories`.
+- Do not touch the `__deletedBuiltins` key if present — it tracks user deletions of built-in tools.
 
 After writing: tell the user to click Refresh on the **Tools** page.
 
