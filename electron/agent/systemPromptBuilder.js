@@ -167,7 +167,8 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
 
     openingIdentity = line
   } else {
-    openingIdentity = (config.systemPrompt || '').trim()
+    openingIdentity = systemAgentPrompt
+      || (config.systemPrompt || '').trim()
       || 'You are a versatile AI assistant running in a desktop application. You help users with a wide range of tasks including research, writing, analysis, coding, creative work, file management, and general knowledge. Always respond in the same language as the user\'s most recent message.'
   }
 

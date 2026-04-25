@@ -53,6 +53,14 @@ vi.mock('../../stores/tools', () => ({
   useToolsStore: () => mockToolsStore,
 }))
 
+const mockAgentsStore = {
+  agents: [],
+  loadAgents: vi.fn(),
+}
+vi.mock('../../stores/agents', () => ({
+  useAgentsStore: () => mockAgentsStore,
+}))
+
 const mockNewsStore = {
   feeds: [],
   articles: [],

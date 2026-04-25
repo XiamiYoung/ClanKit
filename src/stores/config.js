@@ -244,6 +244,10 @@ export const useConfigStore = defineStore('config', () => {
     setupDismissed: false,
     setupWizardStep: 0,
     onboardingCompleted: false,
+    // Auth-specific onboarding: true once the user has either signed in OR
+    // explicitly tapped Skip on the auth screen. Used by App.vue to decide
+    // whether to redirect to /auth on first launch.
+    authOnboarded: false,
     notifications: {
       enabled: true,
       silent: false,

@@ -165,7 +165,9 @@
                     </svg>
                   </div>
                   <h3 class="skill-card-name">{{ skillDisplayName(skill) }}</h3>
-                  <span v-if="skill.isBuiltin" class="skill-builtin-badge">{{ t('skills.builtinBadge') }}</span>
+                  <span v-if="skill.isBuiltin" class="skill-builtin-icon" v-tooltip="t('skills.builtinBadge')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+                  </span>
                 </div>
 
                 <!-- Description -->
@@ -173,19 +175,16 @@
 
                 <!-- Meta and actions -->
                 <div class="skill-card-footer">
-                  <!-- Installed date row -->
-                  <div v-if="skill.installedAt" style="display:flex;align-items:center;gap:0.375rem;width:100%;font-size:var(--fs-caption);color:#D1D5DB;">
-                    <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    {{ new Date(skill.installedAt).toISOString().split('T')[0] }}
-                  </div>
-
-                  <!-- Uninstall button row (hidden for built-in skills) -->
-                  <div v-if="!skill.isBuiltin" style="display:flex;justify-content:flex-end;width:100%;margin-top:0.5rem;">
-                    <button
-                      class="remote-uninstall-btn"
-                      @click.stop="confirmUninstall(skill)"
-                    >{{ t('skills.uninstall') }}</button>
-                  </div>
+                  <AgentUsageChip :agents="skillUsageAgents[skill.id] || []" :gradient="cardGradient(idx)" />
+                  <button
+                    v-if="!skill.isBuiltin"
+                    class="remote-icon-action-btn"
+                    :style="{ background: cardGradient(idx) }"
+                    v-tooltip="t('skills.uninstall')"
+                    @click.stop="confirmUninstall(skill)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                  </button>
                 </div>
               </div>
             </div>
@@ -326,34 +325,40 @@
                           {{ skill.downloads.toLocaleString() }}
                         </span>
                       </div>
-                    </div>
-                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgb(242, 242, 247); margin-top: 0.5rem;">
-                      <button
-                        class="rsd-icon-btn"
-                        style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0;border:none;background:none;cursor:pointer;color:#6B7280;transition:color 0.2s;"
-                        v-tooltip="t('common.openInBrowser', 'Open in browser')"
-                        @click.stop="openExternal(skill.homepage, skill.sourceId, skill.id)"
-                        @mouseenter="e => e.currentTarget.style.color='#1C1C1E'"
-                        @mouseleave="e => e.currentTarget.style.color='#6B7280'"
-                      >
-                        <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                      </button>
-                      <button
-                        v-if="!skill.installed && !skillsStore.installingSkills[skill.id]"
-                        class="remote-install-btn"
-                        @click.stop="installSkill('tencent', skill)"
-                      >{{ t('skills.install') }}</button>
-                      <button
-                        v-else-if="skill.installed || skillsStore.installingSkills[skill.id]?.status === 'completed'"
-                        class="remote-uninstall-btn"
-                        @click.stop="confirmUninstall(skill)"
-                      >{{ t('skills.uninstall') }}</button>
-                      <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'installing'" class="remote-installing-badge" @click.stop>
-                        <svg class="animate-spin" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#E5E5EA" stroke-width="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#1C1C1E" stroke-width="3" stroke-linecap="round"/></svg>
-                      </span>
-                      <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'error'" class="remote-error-badge" v-tooltip="skillsStore.installingSkills[skill.id]?.error" @click.stop>
-                        ✕ Error
-                      </span>
+                      <div class="remote-skill-actions">
+                        <button
+                          class="remote-icon-action-btn"
+                          :style="{ background: cardGradient(idx) }"
+                          v-tooltip="t('common.openInBrowser')"
+                          @click.stop="openExternal(skill.homepage, skill.sourceId, skill.id)"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </button>
+                        <button
+                          v-if="!skill.installed && !skillsStore.installingSkills[skill.id]"
+                          class="remote-icon-action-btn"
+                          :style="{ background: cardGradient(idx) }"
+                          v-tooltip="t('skills.install')"
+                          @click.stop="installSkill('tencent', skill)"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        </button>
+                        <button
+                          v-else-if="skill.installed || skillsStore.installingSkills[skill.id]?.status === 'completed'"
+                          class="remote-icon-action-btn"
+                          :style="{ background: cardGradient(idx) }"
+                          v-tooltip="t('skills.uninstall')"
+                          @click.stop="confirmUninstall(skill)"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                        <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'installing'" class="remote-icon-action-btn remote-icon-action-btn--badge" :style="{ background: cardGradient(idx) }" v-tooltip="t('skills.installing')" @click.stop>
+                          <svg class="animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.4)" stroke-width="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+                        </span>
+                        <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'error'" class="remote-icon-action-btn remote-icon-action-btn--error" v-tooltip="skillsStore.installingSkills[skill.id]?.error || t('skills.installError')" @click.stop>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -447,39 +452,46 @@
                         {{ skill.downloads }}
                       </span>
                     </div>
-                  </div>
-
-                  <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgb(242, 242, 247); margin-top: 0.5rem;">
-                    <button
-                      class="rsd-icon-btn"
-                      style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0;border:none;background:none;cursor:pointer;color:#6B7280;transition:color 0.2s;"
-                      title="Open in browser"
-                      @click.stop="openExternal(skill.homepage, skill.sourceId, skill.id)"
-                      @mouseenter="e => e.currentTarget.style.color='#1C1C1E'"
-                      @mouseleave="e => e.currentTarget.style.color='#6B7280'"
-                    >
-                      <svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                    </button>
-                    <button
-                      v-if="!skill.installed && !skillsStore.installingSkills[skill.id]"
-                      class="remote-install-btn"
-                      @click.stop="installSkill('clawhub', skill)"
-                    >{{ t('skills.install') }}</button>
-                    <button
-                      v-else-if="skill.installed || skillsStore.installingSkills[skill.id]?.status === 'completed'"
-                      class="remote-uninstall-btn"
-                      @click.stop="confirmUninstall(skill)"
-                    >{{ t('skills.uninstall') }}</button>
-                    <span
-                      v-else-if="skillsStore.installingSkills[skill.id]?.status === 'installing'"
-                      class="remote-installing-badge"
-                      @click.stop
-                    >
-                      <svg class="animate-spin" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#E5E5EA" stroke-width="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#1C1C1E" stroke-width="3" stroke-linecap="round"/></svg>
-                    </span>
-                    <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'error'" class="remote-error-badge" v-tooltip="skillsStore.installingSkills[skill.id]?.error" @click.stop>
-                      ✕ Error
-                    </span>
+                    <div class="remote-skill-actions">
+                      <button
+                        class="remote-icon-action-btn"
+                        :style="{ background: cardGradient(idx) }"
+                        v-tooltip="t('common.openInBrowser')"
+                        @click.stop="openExternal(skill.homepage, skill.sourceId, skill.id)"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                      </button>
+                      <button
+                        v-if="!skill.installed && !skillsStore.installingSkills[skill.id]"
+                        class="remote-icon-action-btn"
+                        :style="{ background: cardGradient(idx) }"
+                        v-tooltip="t('skills.install')"
+                        @click.stop="installSkill('clawhub', skill)"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      </button>
+                      <button
+                        v-else-if="skill.installed || skillsStore.installingSkills[skill.id]?.status === 'completed'"
+                        class="remote-icon-action-btn"
+                        :style="{ background: cardGradient(idx) }"
+                        v-tooltip="t('skills.uninstall')"
+                        @click.stop="confirmUninstall(skill)"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                      </button>
+                      <span
+                        v-else-if="skillsStore.installingSkills[skill.id]?.status === 'installing'"
+                        class="remote-icon-action-btn remote-icon-action-btn--badge"
+                        :style="{ background: cardGradient(idx) }"
+                        v-tooltip="t('skills.installing')"
+                        @click.stop
+                      >
+                        <svg class="animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.4)" stroke-width="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+                      </span>
+                      <span v-else-if="skillsStore.installingSkills[skill.id]?.status === 'error'" class="remote-icon-action-btn remote-icon-action-btn--error" v-tooltip="skillsStore.installingSkills[skill.id]?.error || t('skills.installError')" @click.stop>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      </span>
+                    </div>
                   </div>
                   </div>
                 </div>
@@ -791,11 +803,13 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch, onBeforeUnmount, defineComponent, h, Teleport } from 'vue'
+import { ref, computed, reactive, watch, onMounted, onBeforeUnmount, defineComponent, h, Teleport } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useSkillsStore } from '../stores/skills'
 import { useConfigStore } from '../stores/config'
+import { useAgentsStore } from '../stores/agents'
+import AgentUsageChip from '../components/common/AgentUsageChip.vue'
 import { useI18n } from '../i18n/useI18n'
 import AppButton from '../components/common/AppButton.vue'
 import EmptyStateGuide from '../components/common/EmptyStateGuide.vue'
@@ -808,6 +822,23 @@ const { t } = useI18n()
 const { startChatGuide } = useChatToCreate()
 const skillsStore = useSkillsStore()
 const configStore = useConfigStore()
+const agentsStore = useAgentsStore()
+
+const skillUsageAgents = computed(() => {
+  const map = Object.create(null)
+  for (const agent of agentsStore.agents || []) {
+    for (const sid of agent.requiredSkillIds || []) {
+      if (!map[sid]) map[sid] = []
+      map[sid].push(agent)
+    }
+  }
+  return map
+})
+
+onMounted(() => {
+  if (!agentsStore.agents.length) agentsStore.loadAgents()
+})
+
 const showPreviewLimitModal = ref(false)
 const previewLimitMessage = ref('')
 const addMethodOpen = ref(false)
@@ -1806,15 +1837,15 @@ const SkillTreeNode = defineComponent({
   transition-duration: 0.1s;
 }
 
-/* Built-in badge — match each card's accent color at rest */
-.skill-card--0 .skill-builtin-badge { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
-.skill-card--1 .skill-builtin-badge { background: linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%); }
-.skill-card--2 .skill-builtin-badge { background: linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%); }
-.skill-card--3 .skill-builtin-badge { background: linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%); }
-.skill-card--4 .skill-builtin-badge { background: linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%); }
-.skill-card--5 .skill-builtin-badge { background: linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%); }
-.skill-card--6 .skill-builtin-badge { background: linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%); }
-.skill-card--7 .skill-builtin-badge { background: linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%); }
+/* Built-in badge — colored shield icon matching each card's accent. */
+.skill-card--0 .skill-builtin-icon { color: #1A1A1A; }
+.skill-card--1 .skill-builtin-icon { color: #2563EB; }
+.skill-card--2 .skill-builtin-icon { color: #7C3AED; }
+.skill-card--3 .skill-builtin-icon { color: #059669; }
+.skill-card--4 .skill-builtin-icon { color: #D97706; }
+.skill-card--5 .skill-builtin-icon { color: #DC2626; }
+.skill-card--6 .skill-builtin-icon { color: #0891B2; }
+.skill-card--7 .skill-builtin-icon { color: #CA8A04; }
 
 /* Footer-only colored hover — body of the card stays white. */
 .skill-card-footer {
@@ -1836,6 +1867,8 @@ const SkillTreeNode = defineComponent({
 .skill-card:hover .skill-card-footer { border-top-color: transparent; }
 .skill-card:hover .skill-card-file { color: rgba(255, 255, 255, 0.9); }
 .skill-card:hover .skill-card-date { color: rgba(255, 255, 255, 0.9); }
+.skill-card:hover .remote-skill-author,
+.skill-card:hover .remote-skill-stat { color: rgba(255, 255, 255, 0.9); }
 
 /* Top accent bar */
 .skill-card-accent {
@@ -1882,17 +1915,16 @@ const SkillTreeNode = defineComponent({
   flex: 1;
   min-width: 0;
 }
-.skill-builtin-badge {
+.skill-builtin-icon {
   flex-shrink: 0;
-  padding: 0.125rem 0.5rem;
-  border-radius: var(--radius-sm, 0.25rem);
-  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151);
-  color: #fff;
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-caption, 0.6875rem);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1.4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+}
+.skill-builtin-icon svg {
+  width: 0.9375rem;
+  height: 0.9375rem;
 }
 
 /* Description — the main content */
@@ -1918,6 +1950,7 @@ const SkillTreeNode = defineComponent({
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
 }
 .skill-card-file {
   font-family: 'Inter', sans-serif;
@@ -1977,6 +2010,12 @@ const SkillTreeNode = defineComponent({
   flex: 1;
   min-width: 0;
   overflow: hidden;
+}
+.remote-skill-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 .remote-skill-author {
   display: flex;
@@ -2052,6 +2091,51 @@ const SkillTreeNode = defineComponent({
   font-size: var(--fs-caption);
   font-weight: 600;
   cursor: help;
+}
+
+/* Unified compact icon-action button used on remote skill cards
+   (Open in browser / Install / Uninstall / Installing / Error).
+   Background is supplied inline as cardGradient(idx) so each card's
+   action buttons match the card's own color. */
+.remote-icon-action-btn {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.remote-icon-action-btn svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.remote-icon-action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+}
+.remote-icon-action-btn:active {
+  transform: scale(0.95);
+}
+.remote-icon-action-btn--badge {
+  cursor: default;
+}
+.remote-icon-action-btn--badge:hover {
+  transform: none;
+  box-shadow: none;
+}
+.remote-icon-action-btn--error {
+  background: rgba(220,38,38,0.12);
+  color: #dc2626;
+  cursor: help;
+}
+.remote-icon-action-btn--error:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2766,18 +2850,18 @@ const SkillTreeNode = defineComponent({
 .uninstall-confirm-btn:hover { background: #b91c1c; }
 .remote-uninstall-btn {
   flex-shrink: 0;
-  padding: 0.3125rem 0.875rem;
-  border-radius: 0.5rem;
-  border: 1.5px solid rgba(255,59,48,0.2);
-  background: rgba(255,59,48,0.06);
-  color: #FF3B30;
+  padding: 0.1875rem 0.625rem;
+  border-radius: 9999px;
+  border: none;
+  color: #fff;
   font-family: 'Inter', sans-serif;
-  font-size: var(--fs-caption);
+  font-size: var(--fs-small);
   font-weight: 600;
+  line-height: 1.4;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.remote-uninstall-btn:hover { background: #dc2626; color: #fff; border-color: transparent; box-shadow: 0 2px 12px rgba(220,38,38,0.25); }
+.remote-uninstall-btn:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
 .remote-uninstall-btn:active { transform: scale(0.97); }
 .skill-open-btn {
   flex-shrink: 0;

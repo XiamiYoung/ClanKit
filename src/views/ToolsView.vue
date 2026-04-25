@@ -175,42 +175,18 @@
               <!-- Description -->
               <p class="tools-card-desc">{{ toolDisplayDesc(tool) || t('tools.noDescription') }}</p>
 
-              <!-- Footer — adapts by type -->
+              <!-- Footer — usage chip (left) + delete icon (right) -->
               <div class="tools-card-footer">
-                <div class="tools-card-footer-info">
-                  <!-- HTTP footer -->
-                  <template v-if="tool.type === 'http' || !tool.type">
-                    <span class="tools-card-method">
-                      {{ tool.method || 'GET' }}
-                    </span>
-                    <span class="tools-card-endpoint" :title="tool.endpoint">
-                      {{ truncateEndpoint(tool.endpoint) }}
-                    </span>
-                  </template>
-                  <!-- Code footer -->
-                  <template v-else-if="tool.type === 'code'">
-                    <span class="tools-card-method">
-                      {{ (tool.language || 'javascript').toUpperCase().slice(0, 4) }}
-                    </span>
-                    <span class="tools-card-endpoint">
-                      {{ t('tools.lines', { n: (tool.code || '').split('\n').length }) }}
-                    </span>
-                  </template>
-                  <!-- SMTP footer -->
-                  <template v-else-if="tool.type === 'smtp'">
-                    <span class="tools-card-method">SMTP</span>
-                    <span class="tools-card-endpoint">{{ t('tools.viaConfigEmail') }}</span>
-                  </template>
-                  <!-- Prompt footer -->
-                  <template v-else>
-                    <span class="tools-card-method">
-                      TMPL
-                    </span>
-                    <span class="tools-card-endpoint">
-                      {{ t('tools.chars', { n: (tool.promptText || '').length }) }}
-                    </span>
-                  </template>
-                </div>
+                <AgentUsageChip :agents="toolUsageAgents[tool.id] || []" :gradient="cardGradient(idx)" />
+                <button
+                  v-if="!String(tool.id || '').startsWith('builtin-')"
+                  class="tools-card-icon-btn"
+                  :style="{ background: cardGradient(idx) }"
+                  v-tooltip="t('common.delete')"
+                  @click.stop="requestCardDelete(tool)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                </button>
               </div>
             </div>
           </div>
@@ -445,6 +421,9 @@
 defineOptions({ inheritAttrs: false })
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useToolsStore } from '../stores/tools'
+import { useAgentsStore } from '../stores/agents'
+import AgentUsageChip from '../components/common/AgentUsageChip.vue'
+import { cardGradient } from '../utils/cardGradients'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import AppButton from '../components/common/AppButton.vue'
@@ -458,7 +437,19 @@ import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
 const toolsStore = useToolsStore()
 const configStore = useConfigStore()
+const agentsStore = useAgentsStore()
 const { t } = useI18n()
+
+const toolUsageAgents = computed(() => {
+  const map = Object.create(null)
+  for (const agent of agentsStore.agents || []) {
+    for (const tid of agent.requiredToolIds || []) {
+      if (!map[tid]) map[tid] = []
+      map[tid].push(agent)
+    }
+  }
+  return map
+})
 const { startChatGuide } = useChatToCreate()
 const refreshing = ref(false)
 const addMethodOpen = ref(false)
@@ -501,6 +492,7 @@ async function refreshTools() {
 
 onMounted(async () => {
   await toolsStore.loadTools()
+  if (!agentsStore.agents.length) agentsStore.loadAgents()
 })
 
 const searchQuery = ref('')
@@ -688,16 +680,19 @@ function confirmDelete() {
   showConfirmDelete.value = true
 }
 
+// Card-level delete: stash the tool into editingTool so the existing
+// confirm dialog + executeDelete pipeline picks it up, without opening
+// the edit modal.
+function requestCardDelete(tool) {
+  editingTool.value = tool
+  showConfirmDelete.value = true
+}
+
 async function executeDelete() {
   if (!editingTool.value) return
   showConfirmDelete.value = false
   await toolsStore.deleteTool(editingTool.value.id)
   closeModal()
-}
-
-function truncateEndpoint(ep) {
-  if (!ep) return ''
-  return ep.length > 50 ? ep.slice(0, 47) + '...' : ep
 }
 
 </script>
@@ -941,7 +936,6 @@ function truncateEndpoint(ep) {
 
 /* Footer-content legibility on colored bg */
 .tools-card:hover .tools-card-footer { border-top-color: transparent; }
-.tools-card:hover .tools-card-endpoint { color: rgba(255, 255, 255, 0.92); }
 .tools-card:hover .tools-card-method {
   background: rgba(255, 255, 255, 0.22) !important;
   color: #FFFFFF;
@@ -1003,30 +997,32 @@ function truncateEndpoint(ep) {
   justify-content: space-between;
   gap: 0.5rem;
 }
-.tools-card-footer-info {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex: 1;
-  min-width: 0;
-}
-.tools-card-method {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: var(--fs-caption);
-  font-weight: 700;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
+/* Compact icon-action button — matches the unified style on Skills/MCP cards.
+   Background is supplied inline via cardGradient(idx) so each card's button
+   tracks its own accent color. */
+.tools-card-icon-btn {
   flex-shrink: 0;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.tools-card-endpoint {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: var(--fs-caption);
-  color: #9CA3AF;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  flex: 1;
+.tools-card-icon-btn svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.tools-card-icon-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+}
+.tools-card-icon-btn:active {
+  transform: scale(0.95);
 }
 
 /* ── Modal ─────────────────────────────────────────────────────────────────── */

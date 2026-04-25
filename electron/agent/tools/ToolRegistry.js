@@ -103,8 +103,10 @@ class ToolRegistry {
    *
    * @param {Array<string|{id:string}>} enabledAgents  Either plain IDs or full agent objects
    *        from the store (only agents whose toggle is on are passed here)
+   * @param {Array<string>} [excludedToolNames]  Tool names to forcibly exclude,
+   *        even from the always-on list (e.g. doc editing drops soul tools).
    */
-  loadForAgents(enabledAgents) {
+  loadForAgents(enabledAgents, excludedToolNames = []) {
     this.tools.clear()
     // Always have todo
     this.registerTool('todo_manager', todoTool)
@@ -140,9 +142,16 @@ class ToolRegistry {
       }
     }
 
+    // Drop any explicitly-excluded tool names. Runs last so it overrides
+    // all prior always-on registrations.
+    for (const name of (excludedToolNames || [])) {
+      this.tools.delete(name)
+    }
+
     logger.agent('ToolRegistry loaded', {
       agents: (enabledAgents || []).map(e => typeof e === 'string' ? e : e.id),
-      tools: [...this.tools.keys()]
+      tools: [...this.tools.keys()],
+      excluded: excludedToolNames || [],
     })
   }
 

@@ -96,7 +96,7 @@
               </div>
               <div v-else class="index-list">
                 <button
-                  v-for="kb in knowledgeStore.knowledgeBases"
+                  v-for="(kb, idx) in knowledgeStore.knowledgeBases"
                   :key="kb.id"
                   class="index-list-item"
                   :class="{ selected: knowledgeStore.selectedKbId === kb.id }"
@@ -106,6 +106,7 @@
                     <span class="index-item-name">{{ kb.name }}</span>
                     <span class="index-item-meta">{{ kb.documentCount || 0 }} {{ t('knowledge.knowledgeDocuments').toLowerCase() }}</span>
                   </div>
+                  <AgentUsageChip :agents="kbUsageAgents[kb.id] || []" :gradient="cardGradient(idx)" />
                   <span
                     class="index-enabled-chip"
                     :class="isKbEnabled(kb.id) ? 'chip-enabled' : 'chip-disabled'"
@@ -477,6 +478,9 @@
 defineOptions({ inheritAttrs: false })
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useKnowledgeStore } from '../stores/knowledge'
+import { useAgentsStore } from '../stores/agents'
+import AgentUsageChip from '../components/common/AgentUsageChip.vue'
+import { cardGradient } from '../utils/cardGradients'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import AppButton from '../components/common/AppButton.vue'
@@ -487,13 +491,26 @@ import { useChatToCreate } from '../composables/useChatToCreate'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
 const knowledgeStore = useKnowledgeStore()
+const agentsStore = useAgentsStore()
 const { t } = useI18n()
+
+const kbUsageAgents = computed(() => {
+  const map = Object.create(null)
+  for (const agent of agentsStore.agents || []) {
+    for (const kbid of agent.requiredKnowledgeBaseIds || []) {
+      if (!map[kbid]) map[kbid] = []
+      map[kbid].push(agent)
+    }
+  }
+  return map
+})
 const { startChatGuide } = useChatToCreate()
 const addMethodOpen = ref(false)
 
 // ── Lifecycle ──
 onMounted(async () => {
   await knowledgeStore.refresh()
+  if (!agentsStore.agents.length) agentsStore.loadAgents()
 })
 
 // ── Local state ──

@@ -1460,43 +1460,22 @@ ipcMain.handle('agent:cancel-greeting', async (_event, chatId) => {
 const _activeDocLoops = new Map() // requestId → AgentLoop
 
 ipcMain.handle('agent:doc-run', async (event, {
-  requestId, messages, config, agentPrompt, fileContext,
+  requestId, messages, config, agentId, agentPrompt, fileContext,
   selectedText, fullFileContent,
   enabledSkills, mcpServers, httpTools, knowledgeConfig,
   permissionMode
 }) => {
   try {
-    // Resolve provider from the new config.providers[] array.
-    // Try config.defaultProvider (type string), then fall back to first active provider.
-    const providerType = config.defaultProvider || null
-    const providerCfg = providerType
-      ? (config.providers || []).find(p => (p.type === providerType || p.id === providerType) && p.isActive)
-      : (config.providers || []).find(p => p.isActive && p.apiKey)
-    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
-      event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: `No active provider with credentials found. Configure it in Config → AI → Models.` })
-      return { success: false }
-    }
-    const provider = providerCfg.type || 'anthropic'
-
-    // Build loop config — promote provider-specific apiKey/baseURL to top-level,
-    // because AnthropicClient/OpenAIClient read config.apiKey / config.baseURL.
+    // Resolve provider/model from the selected agent's providerId/modelId,
+    // falling back to config.defaultProvider. This is the same path used by
+    // the main chat flow (see _normalizeLoopConfig in agentRuntimeUtils.js).
     const fullCfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
-    const loopConfig = { ...config, soulsDir: ds.paths().SOULS_DIR }
+    const loopConfig = _normalizeLoopConfig({ ...config, soulsDir: ds.paths().SOULS_DIR }, agentId || null)
 
-    if (provider === 'anthropic') {
-      loopConfig.apiKey  = providerCfg.apiKey
-      loopConfig.baseURL = providerCfg.baseURL
-    } else if (provider === 'openrouter') {
-      loopConfig.apiKey  = providerCfg.apiKey
-      loopConfig.baseURL = providerCfg.baseURL
-    } else {
-      loopConfig.defaultProvider   = 'openai'
-      loopConfig._resolvedProvider = 'openai'
-      loopConfig.openaiApiKey      = providerCfg.apiKey
-      loopConfig.openaiBaseURL     = providerCfg.baseURL
-      loopConfig.apiKey            = providerCfg.apiKey
-      loopConfig.baseURL           = providerCfg.baseURL
-      if (provider !== 'openai') loopConfig._directAuth = true
+    const loopConfigError = _validateLoopConfig(loopConfig)
+    if (loopConfigError) {
+      event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: loopConfigError })
+      return { success: false }
     }
 
     loopConfig.sandboxConfig = fullCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
@@ -1509,6 +1488,10 @@ ipcMain.handle('agent:doc-run', async (event, {
     loopConfig.skillsPath   = fullCfg.skillsPath   || ''
     loopConfig.DoCPath      = fullCfg.DoCPath      || ''
     loopConfig.memoryDir    = ds.paths().MEMORY_DIR
+    // Doc editing is a narrow-scope task — drop tools that are irrelevant here
+    // and that could surprise users if accidentally invoked (soul memory
+    // mutates long-term agent state; newsfeed is unrelated).
+    loopConfig.excludedToolNames = ['update_soul_memory', 'read_soul_memory', 'fetch_newsfeed']
     _injectCachedModelMaxOutputTokens(loopConfig)
 
     const loop = new AgentLoop(loopConfig)
@@ -1518,6 +1501,28 @@ ipcMain.handle('agent:doc-run', async (event, {
     const fPath = fileContext?.filePath || ''
     const fName = fileContext?.fileName || 'unknown'
     const fLang = fileContext?.language ? ` (${fileContext.language})` : ''
+    const hasSelection = !!(selectedText && selectedText !== fullFileContent)
+
+    const selectionScopeRules = hasSelection
+      ? `SCOPE — A selection is active. The user has selected a portion of the file and your modifications must be scoped to ONLY that selection.
+- Treat the "Selected section" below as the ONLY text eligible for modification.
+- The "Full file content" is provided for context/reference only; do NOT rewrite or touch anything outside the selected section.
+- When producing <replacement>...</replacement>, output ONLY the replacement for the selected section — never the whole file.
+- If answering a question, answer about the selected section first; reference the rest of the file only when necessary.`
+      : `SCOPE — No selection. The user is asking about (or editing) the whole file.
+- When producing <replacement>...</replacement>, output the full replaced file content.`
+
+    // UI language the user has configured — the assistant's prose, explanations,
+    // and any <replacement> text it generates (unless the task explicitly requires
+    // a different language, e.g. "translate to English") must match this.
+    const uiLangRaw = String(fullCfg.language || 'en').toLowerCase()
+    const uiLangName = uiLangRaw.startsWith('zh') ? 'Chinese (中文)' : 'English'
+    const languageDirective = `LANGUAGE — The user's interface language is ${uiLangName}. Respond in ${uiLangName} for all prose, explanations, and status messages. Only switch languages if the user's request explicitly asks for a different target language (e.g. "translate to French" → output French inside <replacement>, but still explain in ${uiLangName}).`
+
+    // For edits to the CURRENT file, we strongly prefer the inline <replacement>
+    // tag over the file_operation tool so the user gets the Apply/Revert UI
+    // and undo stack. file_operation may still be used to READ other files.
+    const toolingDirective = `TOOLING — To modify the CURRENT file, ALWAYS use <replacement>...</replacement> tags. Do NOT call file_operation with operation=write/edit/append on the current file path (${fPath}) — the editor cannot show an Apply/Revert UI for tool-based writes, and the user loses the ability to undo. Only use file_operation for reading other files or writing to paths that are not the current file.`
 
     const docSystemPrompt = `${agentPrompt || ''}
 
@@ -1528,28 +1533,60 @@ Current file:
 - File path: ${fPath}
 - Language: ${fileContext?.language || 'plain text'}
 
+${languageDirective}
+
+${selectionScopeRules}
+
+${toolingDirective}
+
 When asked to modify text (translate, rewrite, summarize, edit, etc.), output the replacement wrapped in <replacement>...</replacement> tags. The editor will apply it to the current file automatically — never ask the user where to save or which file to update.
 When asked questions about the text, answer directly without tags.
 Output ONLY the replacement text inside the tags — no markdown fences inside, no preamble inside the tags.
 NEVER ask "where would you like to save" or "which file should I update" — always target the current file shown above.
 
-If you use tools to read or write files, use the exact file path above: ${fPath}`
+If you use tools to read other files, use absolute paths. The current file's path is: ${fPath}`
 
-    // Build file context message prefix
+    // Soft cap on how much raw file content we inject into context.
+    // Prevents a 500K-char file from silently overflowing the provider's
+    // context window. If exceeded, truncate the middle and leave a marker.
+    const DOC_CONTEXT_CHAR_CAP = 60000
+    const truncateForContext = (text) => {
+      if (!text || text.length <= DOC_CONTEXT_CHAR_CAP) return { text: text || '', truncated: false }
+      const head = Math.floor(DOC_CONTEXT_CHAR_CAP * 0.6)
+      const tail = DOC_CONTEXT_CHAR_CAP - head
+      const omitted = text.length - head - tail
+      const marker = `\n\n[... ${omitted} chars truncated from the middle to fit context — ask to read specific lines/sections if needed ...]\n\n`
+      return { text: text.slice(0, head) + marker + text.slice(text.length - tail), truncated: true }
+    }
+    const fullFit = truncateForContext(fullFileContent)
+    const selFit  = truncateForContext(selectedText)
+
+    // Build file context message prefix. When a selection is active, make the
+    // selection the primary focus and relegate the full file to reference-only.
     let contextPrefix = ''
-    if (fullFileContent) {
-      contextPrefix += `Full file content of "${fName}"${fLang}:\n\`\`\`\n${fullFileContent}\n\`\`\`\n\n`
-    }
-    if (selectedText && selectedText !== fullFileContent) {
-      contextPrefix += `Currently focused section:\n\`\`\`\n${selectedText}\n\`\`\`\n\n`
-    }
-    if (!fullFileContent && selectedText) {
-      contextPrefix = `Text from "${fName}"${fLang}:\n\`\`\`\n${selectedText}\n\`\`\`\n\n`
+    if (hasSelection) {
+      contextPrefix += `>>> Selected section (THIS is what the user is asking about / wants modified) <<<\n\`\`\`\n${selFit.text}\n\`\`\`\n\n`
+      if (fullFit.text) {
+        contextPrefix += `(For reference only — do NOT modify anything outside the selection above.)\nFull file "${fName}"${fLang}:\n\`\`\`\n${fullFit.text}\n\`\`\`\n\n`
+      }
+    } else if (fullFit.text) {
+      contextPrefix += `Full file content of "${fName}"${fLang}:\n\`\`\`\n${fullFit.text}\n\`\`\`\n\n`
+    } else if (selFit.text) {
+      contextPrefix = `Text from "${fName}"${fLang}:\n\`\`\`\n${selFit.text}\n\`\`\`\n\n`
     }
 
-    // Prepend file context to the first user message
+    // Attach the (fresh) file context to the LATEST user message, not the first.
+    // This way, multi-turn conversations always see the current file state —
+    // if the user edits the file between turns, subsequent questions reflect
+    // the up-to-date content.
+    const lastUserIdx = (() => {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user') return i
+      }
+      return -1
+    })()
     const chatMessages = messages.map((m, i) => {
-      if (i === 0 && m.role === 'user') {
+      if (i === lastUserIdx && m.role === 'user' && contextPrefix) {
         return { role: 'user', content: contextPrefix + m.content }
       }
       return { role: m.role, content: m.content }

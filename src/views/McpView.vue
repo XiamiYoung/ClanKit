@@ -122,22 +122,41 @@
 
               <!-- Test connection row -->
               <div class="mcp-card-test-row">
+                <AgentUsageChip :agents="mcpUsageAgents[server.id] || []" :gradient="cardGradient(idx)" />
+                <div style="flex:1;"></div>
                 <template v-if="cardTests[server.id]?.status === 'testing'">
                   <span class="mcp-card-countdown">
                     <svg class="spin" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                     {{ cardTests[server.id].countdown }}s
                   </span>
-                  <button class="mcp-card-stop-btn" @click="stopCardTest(server.id, $event)">
-                    <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
-                    {{ t('common.stop') }}
+                  <button
+                    class="mcp-card-icon-btn"
+                    :style="{ background: cardGradient(idx) }"
+                    v-tooltip="t('common.stop')"
+                    @click="stopCardTest(server.id, $event)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
                   </button>
                 </template>
-                <button v-else class="mcp-card-test-btn" @click="runCardTest(server, $event)">
-                  <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <button
+                  v-else
+                  class="mcp-card-icon-btn"
+                  :style="{ background: cardGradient(idx) }"
+                  v-tooltip="t('mcp.testConnection')"
+                  @click="runCardTest(server, $event)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
                     <polyline points="22 4 12 14.01 9 11.01"/>
                   </svg>
-                  {{ t('mcp.testConnection') }}
+                </button>
+                <button
+                  class="mcp-card-icon-btn"
+                  :style="{ background: cardGradient(idx) }"
+                  v-tooltip="t('common.delete')"
+                  @click.stop="requestCardDelete(server)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
                 </button>
               </div>
             </div>
@@ -350,6 +369,8 @@
 defineOptions({ inheritAttrs: false })
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import { useMcpStore } from '../stores/mcp'
+import { useAgentsStore } from '../stores/agents'
+import AgentUsageChip from '../components/common/AgentUsageChip.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import AppButton from '../components/common/AppButton.vue'
@@ -366,6 +387,18 @@ const { startChatGuide } = useChatToCreate()
 
 const mcpStore = useMcpStore()
 const configStore = useConfigStore()
+const agentsStore = useAgentsStore()
+
+const mcpUsageAgents = computed(() => {
+  const map = Object.create(null)
+  for (const agent of agentsStore.agents || []) {
+    for (const sid of agent.requiredMcpServerIds || []) {
+      if (!map[sid]) map[sid] = []
+      map[sid].push(agent)
+    }
+  }
+  return map
+})
 const refreshing = ref(false)
 const addMethodOpen = ref(false)
 const showPreviewLimitModal = ref(false)
@@ -386,6 +419,7 @@ let statusPollInterval = null
 onMounted(async () => {
   await mcpStore.loadServers()
   await mcpStore.loadStatus()
+  if (!agentsStore.agents.length) agentsStore.loadAgents()
   statusPollInterval = setInterval(() => mcpStore.loadStatus(), 5000)
 })
 
@@ -602,6 +636,14 @@ const showConfirmDelete = ref(false)
 
 function confirmDelete() {
   if (!editingServer.value) return
+  showConfirmDelete.value = true
+}
+
+// Card-level delete: stash the server into editingServer so the existing
+// confirm dialog + executeDelete pipeline picks it up, without opening
+// the edit modal.
+function requestCardDelete(server) {
+  editingServer.value = server
   showConfirmDelete.value = true
 }
 
@@ -923,6 +965,34 @@ function cardGradient(idx = 0) {
 }
 .mcp-card-stop-btn:hover { background: #b91c1c; box-shadow: 0 2px 12px rgba(220,38,38,0.3); }
 .mcp-card-stop-btn:active { transform: scale(0.97); }
+
+/* Compact icon-action button — matches the unified style on Skills cards.
+   Background is supplied inline via cardGradient(idx) so the button color
+   tracks the card's own accent. */
+.mcp-card-icon-btn {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.mcp-card-icon-btn svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.mcp-card-icon-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+}
+.mcp-card-icon-btn:active {
+  transform: scale(0.95);
+}
 
 /* ── Test Result Dialog ────────────────────────────────────────────────────── */
 .mcp-test-dialog {

@@ -49,6 +49,9 @@
 
   <!-- Setup Wizard for first-time users -->
   <SetupWizard :visible="showSetupWizard" @close="handleWizardDismiss" @complete="handleSetupComplete" />
+
+  <!-- Auth Dialog — opens on first launch (or when user clicks "Sign in" in Settings). -->
+  <AuthDialog />
 </template>
 
 <script setup>
@@ -61,6 +64,8 @@ import CallOverlay from './components/voice/CallOverlay.vue'
 import CallPip from './components/voice/CallPip.vue'
 import FocusModeView from './views/FocusModeView.vue'
 import MinibarOverlay from './components/focus/MinibarOverlay.vue'
+import AuthDialog from './components/common/AuthDialog.vue'
+import { useAuth } from './composables/useAuth'
 import { useChatsStore }  from './stores/chats'
 import { useSkillsStore } from './stores/skills'
 import { useConfigStore }   from './stores/config'
@@ -213,6 +218,23 @@ onMounted(async () => {
   // Load config first so skillsPath is available
   await configStore.loadConfig()
   configLoaded.value = true
+
+  // First-launch auth gate: if the user has neither signed in nor explicitly
+  // dismissed the auth dialog, open it modally on top of the regular UI.
+  // After they sign in OR tap Skip / close, `authOnboarded` is set in config.json
+  // and the dialog won't auto-open again.
+  const auth = useAuth()
+  const hasToken = !!auth.accessToken.value
+  if (!hasToken && !configStore.config.authOnboarded) {
+    auth.openAuthDialog()
+  } else if (hasToken) {
+    // Logged-in user: proactively refresh the access token if it's near expiry,
+    // so the first business API call doesn't trip on a stale token. If the
+    // refresh token has also expired (>1y idle), this signs the user out
+    // silently and they'll see the auth dialog the next time they hit
+    // anything that requires auth.
+    auth.ensureFreshAccessToken().catch(() => {})
+  }
 
   // Load cached model lists from disk (instant, no API calls)
   modelsStore.loadFromDisk()

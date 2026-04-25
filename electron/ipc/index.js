@@ -22,6 +22,7 @@ function registerAll({ DEFAULT_CONFIG, imBridge, mcpManager } = {}) {
   require('./voice').register()
   require('./agentImport').register()
   require('./agentAnalysis').register()
+  require('./auth').register()
 
   // Agent must be last — it depends on store.accumulateUsage and knowledge.queryRAG
   const ipcAgent = require('./agent')

@@ -15,6 +15,9 @@ const mockSkillsStore = {
 vi.mock('../../stores/skills', () => ({
   useSkillsStore: () => mockSkillsStore,
 }))
+vi.mock('../../stores/agents', () => ({
+  useAgentsStore: () => ({ agents: [], loadAgents: vi.fn() }),
+}))
 vi.mock('../../stores/config', () => ({
   useConfigStore: () => ({ language: 'en', config: { providers: [] } }),
 }))
