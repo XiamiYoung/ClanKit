@@ -92,7 +92,7 @@ async function aiSummarize(text, config, { timeoutMs = 10000, maxChars = 50 } = 
   try {
     const um = config?.utilityModel
     if (!um?.provider || !um?.model) return null
-    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.apiKey)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) return null
 
     const input = String(text).slice(0, 1500)

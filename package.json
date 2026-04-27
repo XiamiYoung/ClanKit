@@ -8,6 +8,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "concurrently \"vite\" \"wait-on tcp:5173 && node scripts/run-electron.js\" \"node scripts/check-models-staleness.js\"",
+    "prod": "cross-env CLANKIT_ENV=prod concurrently \"vite\" \"wait-on tcp:5173 && node scripts/run-electron.js\" \"node scripts/check-models-staleness.js\"",
     "build": "vite build",
     "preview": "vite preview",
     "electron": "node scripts/run-electron.js",
@@ -31,6 +32,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "!electron/build-config.dev.json",
       "package.json"
     ],
     "asar": true,

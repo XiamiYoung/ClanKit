@@ -16,41 +16,31 @@ const { normalizeAgents, normalizeTools, normalizeMcpServers } = require('../../
 // ── agents.json normalization ───────────────────────────────────────────────
 
 describe('normalizeAgents', () => {
-  it('extracts .agents array from object format { categories, agents }', () => {
+  it('flattens agents.items + personas.items into a single array', () => {
     const raw = {
-      categories: [{ id: 'cat1', name: 'General' }],
-      agents: [
-        { id: 'a1', name: 'Agent A' },
-        { id: 'a2', name: 'Agent B' },
-      ],
+      agents:   { categories: [{ id: 'cat1' }], items: [{ id: 's1', name: 'Sys A' }] },
+      personas: { categories: [{ id: 'cat2' }], items: [{ id: 'u1', name: 'User A' }] },
     }
     const result = normalizeAgents(raw)
     expect(result).toEqual([
-      { id: 'a1', name: 'Agent A' },
-      { id: 'a2', name: 'Agent B' },
+      { id: 's1', name: 'Sys A' },
+      { id: 'u1', name: 'User A' },
     ])
   })
 
-  it('passes through plain array format', () => {
-    const raw = [
-      { id: 'a1', name: 'Agent A' },
-      { id: 'a3', name: 'Agent C' },
-    ]
-    const result = normalizeAgents(raw)
-    expect(result).toBe(raw) // same reference — no transformation
-    expect(result).toHaveLength(2)
+  it('handles missing personas section', () => {
+    const raw = { agents: { categories: [], items: [{ id: 's1' }] } }
+    expect(normalizeAgents(raw)).toEqual([{ id: 's1' }])
   })
 
-  it('returns empty array for object with empty agents', () => {
-    const raw = { categories: [], agents: [] }
-    const result = normalizeAgents(raw)
-    expect(result).toEqual([])
+  it('handles missing agents section', () => {
+    const raw = { personas: { categories: [], items: [{ id: 'u1' }] } }
+    expect(normalizeAgents(raw)).toEqual([{ id: 'u1' }])
   })
 
-  it('returns empty array for object missing agents key', () => {
-    const raw = { categories: [{ id: 'c1' }] }
-    const result = normalizeAgents(raw)
-    expect(result).toEqual([])
+  it('returns empty array when both sections are empty', () => {
+    const raw = { agents: { items: [] }, personas: { items: [] } }
+    expect(normalizeAgents(raw)).toEqual([])
   })
 
   it('returns empty array for null/undefined', () => {

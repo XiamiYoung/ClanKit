@@ -374,7 +374,7 @@ function onAgentImported() {
 function resolveDefaultProviderModel() {
   const cfg = configStore.config || {}
   const providers = Array.isArray(cfg.providers) ? cfg.providers : []
-  const active = providers.filter(p => p?.isActive)
+  const active = providers.filter(p => p?.apiKey)
 
   const preferredProvider = cfg.utilityModel?.provider || ''
   const preferredModel = cfg.utilityModel?.model || ''
@@ -609,11 +609,49 @@ function createNew(type) {
 
 async function onBodyViewerUpdate(updates) {
   if (!bodyViewerAgent.value) return
+  // Strip the Nuwa seed payload before persisting — soul/speech belong on
+  // disk under souls/system/, not in agents.json.
+  const { _soulSeed, _speechSeed, ...agentUpdates } = updates
   const updated = { ...bodyViewerAgent.value }
   delete updated.isNew
-  Object.assign(updated, updates)
+  Object.assign(updated, agentUpdates)
   if (!updated.name) updated.name = 'Untitled Agent'
   await agentsStore.saveAgent(updated)
+
+  // After save the agent has a stable id (existing or freshly minted by the
+  // store). If the AI generation step produced Nuwa-style seed data, write it
+  // to the soul + speech files now. Best-effort — failures don't block save.
+  if (_soulSeed || _speechSeed) {
+    try {
+      const { templateSoulToSections, templateSpeechToDna } = await import('../data/agentTemplates')
+      const persisted = agentsStore.agents.find(a => a.id === updated.id) || updated
+      const agentType = persisted.type === 'user' ? 'user' : 'system'
+      if (_soulSeed) {
+        const sections = templateSoulToSections(_soulSeed)
+        if (sections) {
+          await window.electronAPI.agentImport.writeNuwaSections({
+            agentId:    persisted.id,
+            agentName:  persisted.name,
+            agentType,
+            sections,
+            evidenceIndex: null,
+          })
+        }
+      }
+      if (_speechSeed) {
+        const dna = templateSpeechToDna(_speechSeed, persisted.name)
+        if (dna) {
+          await window.electronAPI.agentImport.writeSpeechDna({
+            agentId:   persisted.id,
+            agentType,
+            speechDna: dna,
+          })
+        }
+      }
+    } catch (err) {
+      console.warn('[AgentsView] failed to write Nuwa seed for', updated.name, err)
+    }
+  }
 }
 
 // ── Delete agent ────────────────────────────────────────────────────────────

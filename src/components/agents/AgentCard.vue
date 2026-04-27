@@ -95,7 +95,6 @@
           <span v-if="agentProviderLabel" class="pc-provider-badge">{{ agentProviderLabel }}</span>
           <span v-if="agent.modelId" class="pc-model-id">{{ agent.modelId }}</span>
           <span v-if="isProviderInactive" class="pc-inactive-warn">&#9888; {{ t('agents.providerInactive') }}</span>
-          <span v-else-if="isProviderModelMismatch" class="pc-mismatch-warn">&#9888; {{ t('agents.providerModelMismatch') }}</span>
         </template>
         <span v-else-if="isNoProviderConfigured" class="pc-no-provider-warn">&#9888; {{ t('agents.noProviderConfigured') }}</span>
       </div>
@@ -158,6 +157,7 @@ import { useChatsStore } from '../../stores/chats'
 import { useI18n } from '../../i18n/useI18n'
 import { useAgentAnalysisChat } from '../../composables/useAgentAnalysisChat'
 import { triggerAgentGreeting } from '../../composables/useAgentGreeting'
+import { useNewChatGuard } from '../../composables/useNewChatGuard'
 import { EDGE_VOICES, OPENAI_VOICES } from '../../utils/edgeVoices'
 
 const _allVoices = [...EDGE_VOICES, ...OPENAI_VOICES]
@@ -170,6 +170,7 @@ const { t } = useI18n()
 const { openOrCreateAnalysisChat } = useAgentAnalysisChat()
 const _router = useRouter()
 const _chatsStore = useChatsStore()
+const _newChatGuard = useNewChatGuard()
 
 /**
  * Open or create a regular chat with this agent pre-selected.
@@ -178,6 +179,8 @@ const _chatsStore = useChatsStore()
  */
 async function openChatWithAgent(agent) {
   if (!agent?.id) return
+  // Click-to-chat already supplies the system side, so only require a user agent.
+  if (_newChatGuard.blockIfNeeded({ requireSystem: false })) return
   const name = agent.name || ''
   const title = t('chats.chatWithAgentTitle', { name })
   const existing = _chatsStore.chats.find(c =>
@@ -265,40 +268,19 @@ const agentProviderLabel = computed(() => {
 const isProviderInactive = computed(() => {
   if (!props.agent.providerId) return false
   const provider = configStore.config.providers?.find(p => p.id === props.agent.providerId || p.type === props.agent.providerId)
-  return !provider?.isActive
+  // "Inactive" now means: provider's apiKey was cleared / provider was deleted.
+  // The user no longer has to flip an explicit isActive flag to "activate" a
+  // provider — credentials alone make it usable.
+  return !provider?.apiKey
 })
 
 // Show "no provider" warning when an agent has no provider/model set.
 // For custom agents: always warn (they must have an explicit provider).
 // For builtin/default agents: warn only when no active providers exist at all.
-function detectModelProviderType(modelId) {
-  if (!modelId) return null
-  const m = modelId.toLowerCase()
-  if (m.includes('deepseek')) return 'deepseek'
-  if (m.includes('claude') || m.startsWith('anthropic/')) return 'anthropic'
-  if (m.includes('gemini') || m.startsWith('google/')) return 'google'
-  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('openai/')) return 'openai'
-  return null
-}
-
-const isProviderModelMismatch = computed(() => {
-  if (!props.agent.providerId || !props.agent.modelId) return false
-  const provider = configStore.config.providers?.find(p => p.id === props.agent.providerId || p.type === props.agent.providerId)
-  if (!provider) return false
-  // OpenRouter and OpenAI Compatible can proxy any model — skip mismatch check
-  if (provider.type === 'openrouter' || provider.type === 'openai') return false
-  const detectedType = detectModelProviderType(props.agent.modelId)
-  if (!detectedType) return false
-  if (detectedType === provider.type) return false
-  // openai_official is compatible with 'openai' detected type (gpt-*, o1-*, etc.)
-  if (detectedType === 'openai' && provider.type === 'openai_official') return false
-  return true
-})
-
 const isNoProviderConfigured = computed(() => {
   if (props.agent.providerId || props.agent.modelId) return false
   if (props.agent.isBuiltin || props.agent.isDefault) {
-    return !(configStore.config.providers?.some(p => p.isActive))
+    return !(configStore.config.providers?.some(p => p.apiKey))
   }
   return true
 })
@@ -446,11 +428,6 @@ const isNoProviderConfigured = computed(() => {
 .pc-inactive-warn {
   font-size: var(--fs-small);
   color: #EF4444;
-  font-weight: 600;
-}
-.pc-mismatch-warn {
-  font-size: var(--fs-small);
-  color: #F59E0B;
   font-weight: 600;
 }
 .pc-no-provider-warn {

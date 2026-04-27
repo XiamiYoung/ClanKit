@@ -24,9 +24,11 @@ function resolveProviderCreds(cfg, providerType) {
 
 function isProviderActive(cfg, providerType) {
   if (cfg.providers && Array.isArray(cfg.providers)) {
-    return cfg.providers.some(item => (item.type === providerType || item.id === providerType) && item.isActive)
+    return cfg.providers.some(item => (item.type === providerType || item.id === providerType) && item.apiKey)
   }
-  return !!(cfg[providerType]?.isActive)
+  // Legacy single-provider-per-type object format ({ anthropic: {...}, openai: {...} })
+  // is no longer in use — credentials live exclusively in cfg.providers[].
+  return false
 }
 
 function applyProviderCredsToConfig(cfg, providerType) {

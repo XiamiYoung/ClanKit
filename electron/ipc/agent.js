@@ -147,7 +147,7 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
       logger.debug('[Memory] skip: utility model not configured', { chatId })
       return
     }
-    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.apiKey)
     if (!providerCfg?.apiKey) {
       logger.debug('[Memory] skip: provider missing apiKey', { chatId, provider: um.provider })
       return
@@ -376,7 +376,7 @@ function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetCh
     const resolvedModel    = perChatOverride?.model    || agent.modelId    || null
 
     const isBuiltinOrDefault = agent.isBuiltin || agent.isDefault
-    const hasGlobalProvider = baseCfg.providers?.some(p => p.isActive)
+    const hasGlobalProvider = baseCfg.providers?.some(p => p.apiKey)
     if (!resolvedProvider && !isBuiltinOrDefault && !hasGlobalProvider) return null
     // Non-builtin agents must have a model configured
     if (!isBuiltinOrDefault && !resolvedModel) {
@@ -1185,7 +1185,7 @@ ipcMain.handle('agent:edit-text', async (event, { requestId, selectedText, fullF
       event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: 'Utility model not configured. Set it in Config → AI → Models → Global Model Settings.' })
       return { success: false }
     }
-    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.apiKey)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       event.sender.send('agent:edit-chunk', { requestId, type: 'error', text: `Utility model provider "${um.provider}" is missing apiKey or baseURL.` })
       return { success: false }
@@ -1445,8 +1445,10 @@ Write a short opening greeting (2-4 sentences) in ${langLabel}, fully in charact
       return { success: false, cancelled: true }
     }
     logger.error('agent:generate-greeting error', err.message)
-    send({ type: 'error', text: err.message })
-    return { success: false, error: err.message }
+    // Surface error code so the renderer can render the same auth-error /
+    // rate-limited / context-overflow / etc. hint UI as the regular chat path.
+    send({ type: 'error', text: err.message, errorCode: _classifyError(err) })
+    return { success: false, error: err.message, errorCode: _classifyError(err) }
   }
 })
 
@@ -1703,7 +1705,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
 
     // Fallback: pick the first active provider that has credentials
     if (!um) {
-      const activeProviders = (config.providers || []).filter(p => p.isActive && p.apiKey)
+      const activeProviders = (config.providers || []).filter(p => p.apiKey)
       const fallback = activeProviders.find(p => p.type === 'google' || p.baseURL) || activeProviders[0]
       if (!fallback) {
         return { success: false, error: 'No configured provider found. Add and activate a provider in Config → AI → Providers.' }
@@ -1723,7 +1725,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
       }
     }
 
-    const providerCfg = um._fallbackProviderCfg || (config.providers || []).find(p => p.type === um.provider && p.isActive)
+    const providerCfg = um._fallbackProviderCfg || (config.providers || []).find(p => p.type === um.provider && p.apiKey)
     if (!providerCfg?.apiKey) {
       return { success: false, error: `Provider "${um.provider}" is missing apiKey. Check provider configuration.` }
     }
@@ -1832,7 +1834,7 @@ If none should respond, reply with [].`
       logger.warn('agent:resolve-addressees: no global utilityModel configured, treating all mentions as addressees')
       return { addresseeIds: agents.map(p => p.id) }
     }
-    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.apiKey)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       logger.warn(`agent:resolve-addressees: utilityModel provider "${um.provider}" missing apiKey/baseURL, treating all mentions as addressees`)
       return { addresseeIds: agents.map(p => p.id) }
@@ -1971,7 +1973,7 @@ Examples:
       logger.warn('agent:route-group-audience: no utilityModel configured, falling back to all participants')
       return { audienceIds: agents.map(agent => agent.id) }
     }
-    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.apiKey)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       logger.warn(`agent:route-group-audience: utilityModel provider "${um.provider}" missing apiKey/baseURL, falling back to all participants`)
       return { audienceIds: agents.map(agent => agent.id) }
@@ -2092,7 +2094,7 @@ Reply with ONLY a JSON object:
       logger.warn('agent:dispatch-group-tasks: no utilityModel configured, skipping dispatch')
       return heuristicSequential || { dispatched: null }
     }
-    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.apiKey)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       logger.warn('agent:dispatch-group-tasks: utilityModel missing credentials, skipping dispatch')
       return heuristicSequential || { dispatched: null }
@@ -2190,7 +2192,7 @@ ipcMain.handle('agent:suggest-chat-title', async (_event, { chatId, messages, at
       return { success: false, clear: false, error: 'utility model not configured' }
     }
 
-    const providerCfg = (cfg.providers || []).find(p => (p.type === um.provider || p.id === um.provider) && p.isActive)
+    const providerCfg = (cfg.providers || []).find(p => (p.type === um.provider || p.id === um.provider) && p.apiKey)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       logger.warn('agent:suggest-chat-title: utility provider missing credentials', { chatId, provider: um.provider })
       return { success: false, clear: false, error: 'utility model credentials missing' }

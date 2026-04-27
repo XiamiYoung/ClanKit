@@ -69,12 +69,19 @@ async function exchangeCodeForTokens({ code, verifier, clientId, clientSecret, r
     grant_type: 'authorization_code',
     code_verifier: verifier,
   })
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-    signal: AbortSignal.timeout(15000),
-  })
+  let res
+  try {
+    res = await fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+      signal: AbortSignal.timeout(15000),
+    })
+  } catch (err) {
+    const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError'
+    if (isTimeout) throw new Error('Google token exchange timed out after 15s — check network / proxy / GFW for accounts.google.com')
+    throw new Error(`Google token exchange network error: ${err?.message || err}`)
+  }
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     const detail = data.error_description || data.error || `HTTP ${res.status}`
@@ -141,10 +148,10 @@ async function signInWithGoogle() {
   const clientId = cfg.googleOAuthClientId
   const clientSecret = cfg.googleOAuthClientSecret
   if (!clientId || clientId === 'GOOGLE_OAUTH_CLIENT_ID_PLACEHOLDER') {
-    throw new Error('Google OAuth client_id is not configured (electron/build-config.json)')
+    throw new Error('Google OAuth client_id is not configured (electron/build-config.<env>.json)')
   }
   if (!clientSecret || clientSecret === 'GOOGLE_OAUTH_CLIENT_SECRET_PLACEHOLDER') {
-    throw new Error('Google OAuth client_secret is not configured (electron/build-config.json)')
+    throw new Error('Google OAuth client_secret is not configured (electron/build-config.<env>.json)')
   }
 
   const { verifier, challenge } = makePkcePair()
@@ -162,7 +169,7 @@ async function signInWithGoogle() {
     serverHandle = await startLoopbackServer({
       stateToken,
       onCode: (code) => resolveCode(code),
-      onError: (err) => rejectFlow(err),
+      onError: (err) => { console.error('[auth] loopback callback error:', err?.message || err); rejectFlow(err) },
     })
 
     const redirectUri = `http://127.0.0.1:${serverHandle.port}/callback`
@@ -194,7 +201,7 @@ async function signInWithGoogle() {
       const result = { idToken: tokens.id_token }
       if (cfg.mockBackend) {
         result.mockResponse = buildMockResponse(tokens.id_token)
-        console.log('[auth] mockBackend enabled — bypassing real /auth/google call')
+        console.log('[auth] mockBackend=true — bypassing real /auth/google call')
       }
       return result
     } finally {
@@ -219,6 +226,12 @@ function register() {
       console.error('[auth] Google sign-in failed:', err?.message || err)
       throw err
     }
+  })
+
+  ipcMain.handle('auth:get-base-url', async () => {
+    const { load } = require('../lib/buildConfig')
+    const cfg = load()
+    return { apiBaseUrl: cfg.apiBaseUrl || '', env: cfg._env || '' }
   })
 }
 

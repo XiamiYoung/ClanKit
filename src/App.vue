@@ -52,6 +52,23 @@
 
   <!-- Auth Dialog — opens on first launch (or when user clicks "Sign in" in Settings). -->
   <AuthDialog />
+  <SessionExpiredDialog />
+
+  <!-- New-chat blocker — fired from sidebar new-chat button or AgentCard "chat with agent" -->
+  <ConfirmModal
+    v-if="newChatBlockReason"
+    :visible="true"
+    :title="newChatBlockReason === 'no-system'
+      ? t('chats.noSystemAgent', 'System Agent Required')
+      : t('chats.noUserAgent', 'User Agent Required')"
+    :message="newChatBlockReason === 'no-system'
+      ? t('chats.noSystemAgentMessage', 'Please create a System Agent first on the Agents page before starting a chat.')
+      : t('chats.noUserAgentMessage', 'Please create a User Agent first on the Agents page before starting a chat.')"
+    :confirm-text="t('chats.goToAgents', 'Go to Agents')"
+    confirm-class="primary"
+    @confirm="onNewChatBlockConfirm"
+    @close="clearNewChatBlock()"
+  />
 </template>
 
 <script setup>
@@ -65,7 +82,10 @@ import CallPip from './components/voice/CallPip.vue'
 import FocusModeView from './views/FocusModeView.vue'
 import MinibarOverlay from './components/focus/MinibarOverlay.vue'
 import AuthDialog from './components/common/AuthDialog.vue'
+import SessionExpiredDialog from './components/common/SessionExpiredDialog.vue'
+import ConfirmModal from './components/common/ConfirmModal.vue'
 import { useAuth } from './composables/useAuth'
+import { useNewChatGuard } from './composables/useNewChatGuard'
 import { useChatsStore }  from './stores/chats'
 import { useSkillsStore } from './stores/skills'
 import { useConfigStore }   from './stores/config'
@@ -94,6 +114,17 @@ const modelsStore   = useModelsStore()
 const toolsStore    = useToolsStore()
 const knowledgeStore = useKnowledgeStore()
 const focusModeStore = useFocusModeStore()
+const { blockReason: newChatBlockReason, clearBlock: clearNewChatBlock } = useNewChatGuard()
+
+function onNewChatBlockConfirm() {
+  const reason = newChatBlockReason.value
+  clearNewChatBlock()
+  if (reason === 'no-system') {
+    router.push({ path: '/agents' })
+  } else {
+    router.push({ path: '/agents', query: { createUserAgent: '1' } })
+  }
+}
 
 const voiceStore = useVoiceStore()
 
@@ -223,17 +254,31 @@ onMounted(async () => {
   // dismissed the auth dialog, open it modally on top of the regular UI.
   // After they sign in OR tap Skip / close, `authOnboarded` is set in config.json
   // and the dialog won't auto-open again.
+  // Exception: when the SetupWizard is going to show, skip — the wizard's step 2
+  // already drives auth, and we don't want both showing at once.
   const auth = useAuth()
   const hasToken = !!auth.accessToken.value
-  if (!hasToken && !configStore.config.authOnboarded) {
+  const wizardWillShow = !configStore.config.onboardingCompleted && !configStore.config.setupDismissed
+  if (!hasToken && !configStore.config.authOnboarded && !wizardWillShow) {
     auth.openAuthDialog()
   } else if (hasToken) {
-    // Logged-in user: proactively refresh the access token if it's near expiry,
-    // so the first business API call doesn't trip on a stale token. If the
-    // refresh token has also expired (>1y idle), this signs the user out
-    // silently and they'll see the auth dialog the next time they hit
-    // anything that requires auth.
-    auth.ensureFreshAccessToken().catch(() => {})
+    // 1) Refresh if near expiry (local exp check, may hit /auth/refresh).
+    // 2) If we didn't just refresh, hit GET /auth/me so the backend confirms
+    //    the token is still recognized (catches jwt_secret rotation, account
+    //    deletion, tampering) AND bumps last_opened_at. 401 → signOut;
+    //    network failure → keep state.
+    ;(async () => {
+      try {
+        const r = await auth.ensureFreshAccessToken()
+        if (r.ok && !r.refreshed) {
+          await auth.fetchMe()
+        } else if (!r.ok) {
+          console.warn('[auth] startup: ensureFreshAccessToken failed (' + r.error + ') — skipping /auth/me')
+        }
+      } catch (err) {
+        console.error('[auth] startup auth check threw:', err)
+      }
+    })()
   }
 
   // Load cached model lists from disk (instant, no API calls)

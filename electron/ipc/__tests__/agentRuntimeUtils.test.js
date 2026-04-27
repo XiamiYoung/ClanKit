@@ -40,15 +40,21 @@ const {
 describe('agentRuntimeUtils regressions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // agents.json now uses the nested {agents:{items}, personas:{items}} schema —
+    // normalizeAgents flattens both sections back into a single array.
     mockReadJSON.mockReturnValue({
-      agents: [
-        {
-          id: 'agent-yifei',
-          name: 'Ding Yifei',
-          providerId: 'provider-deepseek-uuid',
-          modelId: 'deepseek-chat',
-        },
-      ],
+      agents: {
+        categories: [],
+        items: [
+          {
+            id: 'agent-yifei',
+            name: 'Ding Yifei',
+            providerId: 'provider-deepseek-uuid',
+            modelId: 'deepseek-chat',
+          },
+        ],
+      },
+      personas: { categories: [], items: [] },
     })
   })
 
@@ -61,7 +67,6 @@ describe('agentRuntimeUtils regressions', () => {
           apiKey: 'deepseek-key',
           baseURL: 'https://api.deepseek.com/',
           model: 'deepseek-chat',
-          isActive: true,
         },
       ],
     }

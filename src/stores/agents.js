@@ -116,8 +116,21 @@ function arrayEquals(a, b) {
 // BUILTIN_USER_AGENT removed — user must create their own via onboarding
 
 export const useAgentsStore = defineStore('agents', () => {
-  const agents     = ref([])
-  const categories = ref([])
+  // ── Internal split storage ───────────────────────────────────────────────
+  // Disk schema:
+  //   {
+  //     "agents":   { "categories": [...], "items": [...] },   // type=system
+  //     "personas": { "categories": [...], "items": [...] }    // type=user
+  //   }
+  // Splitting in memory + on disk means a bug in any system-agent flow
+  // (template install, surprise-me, batch generate) can never accidentally
+  // wipe user personas — saveAgent routes by `agent.type` and persist writes
+  // each section from its own ref.
+  const _systemAgents     = ref([])
+  const _userAgents       = ref([])
+  const _systemCategories = ref([])
+  const _userCategories   = ref([])
+
   const configStore = useConfigStore()
   const toolsStore = useToolsStore()
   const mcpStore = useMcpStore()
@@ -127,14 +140,32 @@ export const useAgentsStore = defineStore('agents', () => {
 
   const byCreatedDesc = (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
 
-  const systemAgents = computed(() => agents.value.filter(p => p.type === 'system').sort(byCreatedDesc))
-  const userAgents   = computed(() => agents.value.filter(p => p.type === 'user').sort(byCreatedDesc))
+  // Public merged read-only views — preserve the legacy `agents` / `categories`
+  // surface so external consumers don't need to know the split exists.
+  const agents     = computed(() => [..._systemAgents.value, ..._userAgents.value])
+  const categories = computed(() => [..._systemCategories.value, ..._userCategories.value])
 
-  const systemCategories = computed(() => categories.value.filter(c => c.type === 'system'))
-  const userCategories   = computed(() => categories.value.filter(c => c.type === 'user'))
+  const systemAgents = computed(() => _systemAgents.value.slice().sort(byCreatedDesc))
+  const userAgents   = computed(() => _userAgents.value.slice().sort(byCreatedDesc))
 
-  const defaultSystemAgent = computed(() => agents.value.find(p => p.type === 'system' && p.isDefault) || null)
-  const defaultUserAgent   = computed(() => agents.value.find(p => p.type === 'user'   && p.isDefault) || null)
+  const systemCategories = computed(() => _systemCategories.value.slice())
+  const userCategories   = computed(() => _userCategories.value.slice())
+
+  const defaultSystemAgent = computed(() => _systemAgents.value.find(p => p.isDefault) || null)
+  const defaultUserAgent   = computed(() => _userAgents.value.find(p => p.isDefault) || null)
+
+  // Internal: pick the right ref for an agent by id (search system first, then user)
+  function _refForAgentId(id) {
+    if (_systemAgents.value.some(a => a.id === id)) return _systemAgents
+    if (_userAgents.value.some(a => a.id === id))   return _userAgents
+    return null
+  }
+  function _refForAgentType(type) {
+    return type === 'user' ? _userAgents : _systemAgents
+  }
+  function _catRefForType(type) {
+    return type === 'user' ? _userCategories : _systemCategories
+  }
 
   function collectBuiltinCapabilities() {
     return {
@@ -202,14 +233,14 @@ export const useAgentsStore = defineStore('agents', () => {
   }
 
   async function syncBuiltinDocEditorAgent(persistChanges = true) {
-    const docIdx = agents.value.findIndex(p => p.id === BUILTIN_DOC_EDITOR_ID)
+    const docIdx = _systemAgents.value.findIndex(p => p.id === BUILTIN_DOC_EDITOR_ID)
     if (docIdx === -1 || builtinSyncInFlight) return
-    const current = agents.value[docIdx]
+    const current = _systemAgents.value[docIdx]
     const next = mergeBuiltinDocEditorAgent(current)
     if (!builtinDocEditorAgentNeedsSync(current, next)) return
 
     builtinSyncInFlight = true
-    agents.value[docIdx] = {
+    _systemAgents.value[docIdx] = {
       ...next,
       updatedAt: Date.now(),
     }
@@ -253,14 +284,14 @@ export const useAgentsStore = defineStore('agents', () => {
   }
 
   async function syncBuiltinAnalystAgent(persistChanges = true) {
-    const analystIdx = agents.value.findIndex(p => p.id === BUILTIN_ANALYST_ID)
+    const analystIdx = _systemAgents.value.findIndex(p => p.id === BUILTIN_ANALYST_ID)
     if (analystIdx === -1 || builtinSyncInFlight) return
-    const current = agents.value[analystIdx]
+    const current = _systemAgents.value[analystIdx]
     const next = mergeBuiltinAnalystAgent(current)
     if (!builtinAnalystAgentNeedsSync(current, next)) return
 
     builtinSyncInFlight = true
-    agents.value[analystIdx] = {
+    _systemAgents.value[analystIdx] = {
       ...next,
       updatedAt: Date.now(),
     }
@@ -285,14 +316,14 @@ export const useAgentsStore = defineStore('agents', () => {
   }
 
   async function syncBuiltinSystemAgent(persistChanges = true) {
-    const sysIdx = agents.value.findIndex(p => p.id === BUILTIN_SYSTEM_AGENT_ID)
+    const sysIdx = _systemAgents.value.findIndex(p => p.id === BUILTIN_SYSTEM_AGENT_ID)
     if (sysIdx === -1 || builtinSyncInFlight) return
-    const current = agents.value[sysIdx]
+    const current = _systemAgents.value[sysIdx]
     const next = mergeBuiltinSystemAgent(current)
     if (!builtinSystemAgentNeedsSync(current, next)) return
 
     builtinSyncInFlight = true
-    agents.value[sysIdx] = {
+    _systemAgents.value[sysIdx] = {
       ...next,
       updatedAt: Date.now(),
     }
@@ -304,64 +335,69 @@ export const useAgentsStore = defineStore('agents', () => {
   }
 
   function getAgentById(id) {
-    return agents.value.find(p => p.id === id) || null
+    return _systemAgents.value.find(p => p.id === id)
+        || _userAgents.value.find(p => p.id === id)
+        || null
   }
 
   function getCategoryById(id) {
-    return categories.value.find(c => c.id === id) || null
+    return _systemCategories.value.find(c => c.id === id)
+        || _userCategories.value.find(c => c.id === id)
+        || null
   }
 
   function agentsInCategory(categoryId) {
-    return agents.value.filter(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(categoryId)).sort(byCreatedDesc)
+    // Categories are type-scoped, so an agent only matches a category of its own type.
+    const cat = getCategoryById(categoryId)
+    if (!cat) return []
+    const pool = _refForAgentType(cat.type).value
+    return pool.filter(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(categoryId)).sort(byCreatedDesc)
   }
 
   function uncategorizedAgents(type) {
-    return agents.value.filter(p => p.type === type && (!Array.isArray(p.categoryIds) || p.categoryIds.length === 0)).sort(byCreatedDesc)
+    const pool = _refForAgentType(type).value
+    return pool.filter(p => !Array.isArray(p.categoryIds) || p.categoryIds.length === 0).sort(byCreatedDesc)
   }
 
   async function loadAgents() {
     const stored = await storage.getAgents()
 
-    // Handle both old (plain array) and new ({ categories, agents }) formats
-    let list, cats
-    if (Array.isArray(stored)) {
-      list = stored || []
-      cats = []
-    } else {
-      list = stored?.agents || []
-      cats = stored?.categories || []
-    }
+    // Schema: { agents: { categories, items }, personas: { categories, items } }
+    // (No legacy migration — production data was direct-edited to new shape;
+    // tests use the same schema.)
+    const sysList  = stored?.agents?.items        || []
+    const sysCats  = stored?.agents?.categories   || []
+    const userList = stored?.personas?.items      || []
+    const userCats = stored?.personas?.categories || []
 
-    // Ensure built-in system agent exists
-    const sysIdx = list.findIndex(p => p.id === BUILTIN_SYSTEM_AGENT_ID)
+    // Ensure built-in system agent exists (lives in system list)
+    const sysIdx = sysList.findIndex(p => p.id === BUILTIN_SYSTEM_AGENT_ID)
     if (sysIdx >= 0) {
-      list[sysIdx] = mergeBuiltinSystemAgent(list[sysIdx])
+      sysList[sysIdx] = mergeBuiltinSystemAgent(sysList[sysIdx])
     } else {
-      list.unshift(createBuiltinSystemAgent())
+      sysList.unshift(createBuiltinSystemAgent())
     }
-
     // Ensure built-in doc editor agent exists
-    const docIdx = list.findIndex(p => p.id === BUILTIN_DOC_EDITOR_ID)
+    const docIdx = sysList.findIndex(p => p.id === BUILTIN_DOC_EDITOR_ID)
     if (docIdx >= 0) {
-      list[docIdx] = mergeBuiltinDocEditorAgent(list[docIdx])
+      sysList[docIdx] = mergeBuiltinDocEditorAgent(sysList[docIdx])
     } else {
-      list.push(createBuiltinDocEditorAgent())
+      sysList.push(createBuiltinDocEditorAgent())
     }
-
     // Ensure built-in analyst agent exists
-    const analystIdx = list.findIndex(p => p.id === BUILTIN_ANALYST_ID)
+    const analystIdx = sysList.findIndex(p => p.id === BUILTIN_ANALYST_ID)
     if (analystIdx >= 0) {
-      list[analystIdx] = mergeBuiltinAnalystAgent(list[analystIdx])
+      sysList[analystIdx] = mergeBuiltinAnalystAgent(sysList[analystIdx])
     } else {
-      list.push(createBuiltinAnalystAgent())
+      sysList.push(createBuiltinAnalystAgent())
     }
 
-    // Remove legacy built-in default user agent from disk data
-    const usrIdx = list.findIndex(p => p.id === BUILTIN_USER_AGENT_ID)
-    if (usrIdx >= 0) list.splice(usrIdx, 1)
+    // Remove legacy built-in default user agent — it's implicit, never persisted
+    const usrIdx = userList.findIndex(p => p.id === BUILTIN_USER_AGENT_ID)
+    if (usrIdx >= 0) userList.splice(usrIdx, 1)
 
-    // Backfill optional agent fields
-    for (const p of list) {
+    // Backfill optional agent fields on both lists
+    const backfillFields = (p) => {
       if (p.providerId === undefined) p.providerId = null
       if (p.modelId === undefined) p.modelId = null
       if (p.enabledSkillIds === undefined) p.enabledSkillIds = null
@@ -373,28 +409,44 @@ export const useAgentsStore = defineStore('agents', () => {
       if (!Array.isArray(p.requiredKnowledgeBaseIds)) p.requiredKnowledgeBaseIds = []
       if (!Array.isArray(p.categoryIds)) p.categoryIds = []
     }
+    sysList.forEach(backfillFields)
+    userList.forEach(backfillFields)
+
+    // Force the type field to match the section the entry lives in. Catches
+    // any drift introduced during legacy migration or hand-edits.
+    sysList.forEach(p => { if (p.type !== 'system') p.type = 'system' })
+    userList.forEach(p => { if (p.type !== 'user')   p.type = 'user' })
+    sysCats.forEach(c => { if (c.type !== 'system') c.type = 'system' })
+    userCats.forEach(c => { if (c.type !== 'user')  c.type = 'user' })
 
     // Ensure at least one default per type
-    if (!list.some(p => p.type === 'system' && p.isDefault)) {
-      const sys = list.find(p => p.id === BUILTIN_SYSTEM_AGENT_ID)
+    if (!sysList.some(p => p.isDefault)) {
+      const sys = sysList.find(p => p.id === BUILTIN_SYSTEM_AGENT_ID)
       if (sys) sys.isDefault = true
     }
-    if (!list.some(p => p.type === 'user' && p.isDefault)) {
-      const firstUser = list.find(p => p.type === 'user')
-      if (firstUser) firstUser.isDefault = true
+    if (!userList.some(p => p.isDefault) && userList.length > 0) {
+      userList[0].isDefault = true
     }
 
-    agents.value     = list
-    categories.value = cats
+    _systemAgents.value     = sysList
+    _userAgents.value       = userList
+    _systemCategories.value = sysCats
+    _userCategories.value   = userCats
     await persist()
   }
 
   async function saveAgent(agent) {
-    const idx = agents.value.findIndex(p => p.id === agent.id)
-    if (idx >= 0) {
-      const existing = agents.value[idx]
-      agents.value[idx] = {
+    // Update path: locate the agent in either ref by id (the type field on a
+    // freshly-edited agent might have been reassigned by mistake — trust the
+    // ref the agent already lives in over the incoming type field).
+    const existingRef = agent.id ? _refForAgentId(agent.id) : null
+    if (existingRef) {
+      const list = existingRef.value
+      const idx = list.findIndex(p => p.id === agent.id)
+      const existing = list[idx]
+      list[idx] = {
         ...agent,
+        type: existing.type, // never re-type an existing agent through saveAgent
         isBuiltin: existing.isBuiltin || false,
         categoryIds: existing.categoryIds || [],
         requiredToolIds: agent.requiredToolIds ?? existing.requiredToolIds ?? [],
@@ -403,33 +455,41 @@ export const useAgentsStore = defineStore('agents', () => {
         requiredKnowledgeBaseIds: agent.requiredKnowledgeBaseIds ?? existing.requiredKnowledgeBaseIds ?? [],
         updatedAt: Date.now(),
       }
-    } else {
-      const newAgent = {
-        id: uuidv4(),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        isBuiltin: false,
-        categoryIds: [],
-        requiredToolIds: [],
-        requiredSkillIds: [],
-        requiredMcpServerIds: [],
-        requiredKnowledgeBaseIds: [],
-        ...agent,
-      }
-      if (!newAgent.voiceId) newAgent.voiceId = getDefaultVoiceForLocale(configStore.language)
-      // Auto-set as default when it's the first user agent
-      if (newAgent.type === 'user' && !agents.value.some(p => p.type === 'user' && p.isDefault)) {
-        newAgent.isDefault = true
-      }
-      agents.value.push(newAgent)
+      await persist()
+      return list[idx]
     }
+    // Create path: route by incoming type (default 'system')
+    const type = agent.type === 'user' ? 'user' : 'system'
+    const targetRef = _refForAgentType(type)
+    const newAgent = {
+      id: uuidv4(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      isBuiltin: false,
+      categoryIds: [],
+      requiredToolIds: [],
+      requiredSkillIds: [],
+      requiredMcpServerIds: [],
+      requiredKnowledgeBaseIds: [],
+      ...agent,
+      type,
+    }
+    if (!newAgent.voiceId) newAgent.voiceId = getDefaultVoiceForLocale(configStore.language)
+    // Auto-set as default when it's the first agent of its type
+    if (type === 'user' && !_userAgents.value.some(p => p.isDefault)) {
+      newAgent.isDefault = true
+    }
+    targetRef.value.push(newAgent)
     await persist()
+    return newAgent
   }
 
   async function deleteAgent(id) {
-    const agent = agents.value.find(p => p.id === id)
+    const targetRef = _refForAgentId(id)
+    if (!targetRef) return
+    const agent = targetRef.value.find(p => p.id === id)
     if (agent?.isBuiltin) return
-    agents.value = agents.value.filter(p => p.id !== id)
+    targetRef.value = targetRef.value.filter(p => p.id !== id)
     await persist()
     // Clean up soul file + memory directory for deleted agent
     try {
@@ -439,11 +499,12 @@ export const useAgentsStore = defineStore('agents', () => {
   }
 
   async function setDefault(id) {
-    const target = agents.value.find(p => p.id === id)
+    const targetRef = _refForAgentId(id)
+    if (!targetRef) return
+    const target = targetRef.value.find(p => p.id === id)
     if (!target) return
-    for (const p of agents.value) {
-      if (p.type === target.type) p.isDefault = false
-    }
+    // Reset isDefault only within the same type's ref
+    for (const p of targetRef.value) p.isDefault = false
     target.isDefault = true
     target.updatedAt = Date.now()
     await persist()
@@ -453,13 +514,14 @@ export const useAgentsStore = defineStore('agents', () => {
 
   async function addCategory(name, emoji, type) {
     const id = uuidv4()
-    categories.value.push({ id, name, emoji, type })
+    const targetRef = _catRefForType(type)
+    targetRef.value.push({ id, name, emoji, type: type === 'user' ? 'user' : 'system' })
     await persist()
     return id
   }
 
   async function renameCategory(id, name, emoji) {
-    const cat = categories.value.find(c => c.id === id)
+    const cat = getCategoryById(id)
     if (!cat) return
     cat.name  = name
     cat.emoji = emoji
@@ -467,16 +529,22 @@ export const useAgentsStore = defineStore('agents', () => {
   }
 
   async function deleteCategory(id) {
-    // Only allowed when no agents are assigned
-    const assigned = agents.value.some(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(id))
+    // Only allowed when no agents are assigned (search both refs to be safe)
+    const assigned = _systemAgents.value.some(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(id))
+                  || _userAgents.value.some(p => Array.isArray(p.categoryIds) && p.categoryIds.includes(id))
     if (assigned) return false
-    categories.value = categories.value.filter(c => c.id !== id)
+    _systemCategories.value = _systemCategories.value.filter(c => c.id !== id)
+    _userCategories.value   = _userCategories.value.filter(c => c.id !== id)
     await persist()
     return true
   }
 
   async function reorderCategory(draggedId, targetId) {
-    const list = categories.value
+    // Categories only reorder within their own type pool. Identify the dragged
+    // category's type, then reorder against a target of the same type.
+    const dragged = getCategoryById(draggedId)
+    if (!dragged) return
+    const list = _catRefForType(dragged.type).value
     const from = list.findIndex(c => c.id === draggedId)
     const to   = list.findIndex(c => c.id === targetId)
     if (from === -1 || to === -1 || from === to) return
@@ -488,8 +556,10 @@ export const useAgentsStore = defineStore('agents', () => {
   // ── Assignment ────────────────────────────────────────────────────────────
 
   async function assignToCategory(agentId, categoryId) {
-    const agent    = agents.value.find(p => p.id === agentId)
-    const category = categories.value.find(c => c.id === categoryId)
+    const agentRef = _refForAgentId(agentId)
+    if (!agentRef) return
+    const agent = agentRef.value.find(p => p.id === agentId)
+    const category = getCategoryById(categoryId)
     if (!agent || !category) return
     if (agent.type !== category.type) return
     if (!Array.isArray(agent.categoryIds)) agent.categoryIds = []
@@ -500,7 +570,9 @@ export const useAgentsStore = defineStore('agents', () => {
   }
 
   async function unassignFromCategory(agentId, categoryId) {
-    const agent = agents.value.find(p => p.id === agentId)
+    const agentRef = _refForAgentId(agentId)
+    if (!agentRef) return
+    const agent = agentRef.value.find(p => p.id === agentId)
     if (!agent || !Array.isArray(agent.categoryIds)) return
     agent.categoryIds = agent.categoryIds.filter(id => id !== categoryId)
     await persist()
@@ -508,8 +580,14 @@ export const useAgentsStore = defineStore('agents', () => {
 
   async function persist() {
     await storage.saveAgents({
-      categories: JSON.parse(JSON.stringify(categories.value)),
-      agents:     JSON.parse(JSON.stringify(agents.value)),
+      agents: {
+        categories: JSON.parse(JSON.stringify(_systemCategories.value)),
+        items:      JSON.parse(JSON.stringify(_systemAgents.value)),
+      },
+      personas: {
+        categories: JSON.parse(JSON.stringify(_userCategories.value)),
+        items:      JSON.parse(JSON.stringify(_userAgents.value)),
+      },
     })
   }
 
@@ -553,14 +631,18 @@ export const useAgentsStore = defineStore('agents', () => {
   async function cleanStaleKnowledgeRefs(validIndexIds) {
     const validSet = new Set(validIndexIds)
     let changed = false
-    for (const agent of agents.value) {
-      if (!agent.requiredKnowledgeBaseIds?.length) continue
-      const cleaned = agent.requiredKnowledgeBaseIds.filter(id => validSet.has(id))
-      if (cleaned.length !== agent.requiredKnowledgeBaseIds.length) {
-        agent.requiredKnowledgeBaseIds = cleaned
-        changed = true
+    const sweep = (list) => {
+      for (const agent of list) {
+        if (!agent.requiredKnowledgeBaseIds?.length) continue
+        const cleaned = agent.requiredKnowledgeBaseIds.filter(id => validSet.has(id))
+        if (cleaned.length !== agent.requiredKnowledgeBaseIds.length) {
+          agent.requiredKnowledgeBaseIds = cleaned
+          changed = true
+        }
       }
     }
+    sweep(_systemAgents.value)
+    sweep(_userAgents.value)
     if (changed) await persist()
   }
 

@@ -426,7 +426,7 @@ function _parseTokenError(err) {
  */
 async function _callLLM(prompt, config, maxTokens = 8192, options = {}) {
   const um = config.utilityModel
-  const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
+  const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.apiKey)
   const isGoogle  = um.provider === 'google'
   const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && !isGoogle
   // jsonMode: force the model to emit a strictly-valid JSON object. Supported
@@ -826,7 +826,7 @@ async function generatePersona(fullPrompt, config, onProgress, profile, contextW
       return { success: false, error: 'Utility model not configured. Set it in Config → AI → Models → Global Model Settings.' }
     }
 
-    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
+    const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.apiKey)
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       return { success: false, error: `Utility model provider "${um.provider}" is missing apiKey or baseURL.` }
     }

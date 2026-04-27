@@ -978,7 +978,7 @@ const recommendedAgentModelId = ref('')
 const activeProviders = computed(() => {
   const cfg = configStore.config || {}
   const providers = Array.isArray(cfg.providers) ? cfg.providers : []
-  return providers.filter(p => p?.isActive).map(p => ({
+  return providers.filter(p => p?.apiKey).map(p => ({
     type: p.type,
     label: p.label || p.type,
     id: p.id || p.type,

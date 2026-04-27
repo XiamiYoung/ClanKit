@@ -245,8 +245,18 @@ function register({ DEFAULT_CONFIG }) {
     }
   })
 
-  ipcMain.handle('store:get-agents', async () => ds.readJSONAsync(p().AGENTS_FILE, { categories: [], agents: [] }))
-  ipcMain.handle('store:save-agents', async (_, data) => { await ds.writeJSONAtomic(p().AGENTS_FILE, data); return true })
+  ipcMain.handle('store:get-agents', async () => ds.readJSONAsync(p().AGENTS_FILE, {
+    agents:   { categories: [], items: [] },
+    personas: { categories: [], items: [] },
+  }))
+  ipcMain.handle('store:save-agents', async (_, data) => {
+    // Snapshot the current agents.json to .bak before overwriting. Recovery
+    // path of last resort if a write ever drops user agents (or anything else)
+    // by mistake. Best-effort — never blocks the write.
+    ds.backupFile(p().AGENTS_FILE)
+    await ds.writeJSONAtomic(p().AGENTS_FILE, data)
+    return true
+  })
 }
 
 module.exports = { register, accumulateUsage, accumulateUtilityUsage }

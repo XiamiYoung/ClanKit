@@ -68,8 +68,9 @@ function removeMessage(chatId, msgId) {
 }
 
 function readAgents() {
-  const data = readJSON(ds.paths().AGENTS_FILE, [])
-  return Array.isArray(data) ? data : (data.agents || [])
+  // Schema-agnostic flat list (handles new nested + both legacy formats).
+  const { normalizeAgents } = require('../agent/dataNormalizers')
+  return normalizeAgents(readJSON(ds.paths().AGENTS_FILE, []))
 }
 
 

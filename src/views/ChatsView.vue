@@ -755,18 +755,6 @@
     />
   </div>
 
-  <!-- No User Agent warning -->
-  <ConfirmModal
-    v-if="newChatBlockedNoUserAgent"
-    :visible="true"
-    :title="t('chats.noUserAgent', 'User Agent Required')"
-    :message="t('chats.noUserAgentMessage', 'Please create a User Agent first on the Agents page before starting a chat.')"
-    confirm-text="Go to Agents"
-    confirm-class="primary"
-    @confirm="newChatBlockedNoUserAgent = false; $router.push({ path: '/agents', query: { createUserAgent: '1' } })"
-    @close="newChatBlockedNoUserAgent = false"
-  />
-
   <!-- New Chat Modal -->
   <NewChatModal
     :visible="showNewChatModal"
@@ -776,13 +764,11 @@
     :new-chat-folder-id="newChatFolderId"
     :new-chat-agent-ids="newChatAgentIds"
     :show-new-chat-icon-picker="showNewChatIconPicker"
-    :show-new-chat-agent-popover="showNewChatAgentPopover"
     :new-chat-agent-search="newChatAgentSearch"
-    :show-new-chat-user-popover="showNewChatUserPopover"
+    :new-chat-agent-category-id="newChatAgentCategoryId"
     :new-chat-user-search="newChatUserSearch"
+    :new-chat-user-category-id="newChatUserCategoryId"
     :new-chat-folder-tree-expanded="newChatFolderTreeExpanded"
-    :ncp-expanded-cat-ids="ncpExpandedCatIds"
-    :nup-expanded-cat-ids="nupExpandedCatIds"
     :filtered-new-chat-agents="filteredNewChatAgents"
     :filtered-new-chat-users="filteredNewChatUsers"
     :active-new-chat-user-agent="activeNewChatUserAgent"
@@ -798,10 +784,8 @@
     @update:new-chat-agent-search="newChatAgentSearch = $event"
     @update:new-chat-user-search="newChatUserSearch = $event"
     @update:show-new-chat-icon-picker="showNewChatIconPicker = $event"
-    @update:show-new-chat-agent-popover="showNewChatAgentPopover = $event"
-    @update:show-new-chat-user-popover="showNewChatUserPopover = $event"
-    @toggle-ncp-cat="toggleNcpCat($event)"
-    @toggle-nup-cat="toggleNupCat($event)"
+    @select-new-chat-agent-category="selectNewChatAgentCategory($event)"
+    @select-new-chat-user-category="selectNewChatUserCategory($event)"
     @toggle-new-chat-agent="toggleNewChatAgent($event)"
     @toggle-new-chat-folder-expand="toggleNewChatFolderExpand($event)"
     @select-new-chat-user-agent="selectNewChatUserAgent($event)"
@@ -1313,15 +1297,15 @@ const {
   doDeleteFolder, folderNonEmptyAlert,
   showNewChatModal, newChatName, newChatIcon, newChatUserAgentId,
   showNewChatIconPicker, newChatFolderId, newChatNameInputRef,
-  newChatAgentIds, showNewChatAgentPopover, newChatAgentSearch, newChatAgentSearchEl,
-  showNewChatUserPopover, newChatUserSearch, newChatUserSearchEl,
-  newChatFolderTreeExpanded, ncpExpandedCatIds, nupExpandedCatIds,
+  newChatAgentIds, newChatAgentSearch, newChatAgentCategoryId,
+  newChatUserSearch, newChatUserCategoryId,
+  newChatFolderTreeExpanded,
   filteredNewChatAgents, filteredNewChatUsers,
   activeNewChatUserAgent, effectiveNewChatUserAgentId, displayedSystemPersonaAgents,
   onNewChatIconSelect, selectNewChatUserAgent, isNewChatUserSelected,
   clearNewChatUserSelection, removeNewChatSystemAgent, toggleNewChatAgent,
-  toggleNcpCat, toggleNupCat, toggleNewChatFolderExpand,
-  newChat, newChatBlockedNoUserAgent, confirmNewChat, cancelNewChat,
+  selectNewChatAgentCategory, selectNewChatUserCategory, toggleNewChatFolderExpand,
+  newChat, confirmNewChat, cancelNewChat,
   confirmDeleteTarget, requestDeleteChat, requestRemoveGroupAgent, executeConfirmedDelete,
   showPreviewLimitModal, previewLimitMessage,
 } = useChatTree({ mentionInputRef })

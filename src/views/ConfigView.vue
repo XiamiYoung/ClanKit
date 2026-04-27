@@ -85,8 +85,16 @@
                   {{ (auth.name.value || auth.email.value || '?').slice(0, 1).toUpperCase() }}
                 </div>
                 <div class="account-info">
-                  <div class="account-name">{{ auth.name.value || auth.email.value || t('account.signedIn') }}</div>
-                  <div v-if="auth.name.value && auth.email.value" class="account-email-secondary">{{ auth.email.value }}</div>
+                  <div class="account-name">{{ auth.name.value || maskEmail(auth.email.value) || t('account.signedIn') }}</div>
+                  <div v-if="auth.name.value && auth.email.value" class="account-email-secondary">{{ maskEmail(auth.email.value) }}</div>
+                  <div v-if="auth.createdAt.value" class="account-meta-row">
+                    <span class="account-meta-label">{{ t('account.registeredAt') }}</span>
+                    <span class="account-meta-value">{{ formatRegisteredAt(auth.createdAt.value) }}</span>
+                  </div>
+                  <div v-if="auth.lastOpenedAt.value" class="account-meta-row">
+                    <span class="account-meta-label">{{ t('account.lastOpenedAt') }}</span>
+                    <span class="account-meta-value">{{ formatRegisteredAt(auth.lastOpenedAt.value) }}</span>
+                  </div>
                 </div>
               </div>
 
@@ -325,7 +333,6 @@
                   @click="modelsLeftNav = p.id"
                 >
                   <span class="models-nav-name">{{ providerDisplayLabel(p) }}</span>
-                  <span class="models-nav-dot" :class="p.isActive ? 'active' : 'inactive'"></span>
                 </button>
                 <div v-if="configStore.config.providers.length === 0" class="models-nav-empty">
                   {{ t('config.noProvidersConfigured') }}
@@ -534,18 +541,12 @@
                           </svg>
                         </button>
                       </AppTooltip>
-                      <AppTooltip :text="t('common.save', 'Save')">
-                        <AppButton size="icon" @click="saveModels" :disabled="savingModels" :loading="savingModels">
-                          <svg v-if="!savingModels" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                            <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-                          </svg>
-                        </AppButton>
-                      </AppTooltip>
-                      <span v-if="savedModelsMsg" class="save-indicator" :class="savedModelsMsg.ok ? 'success' : 'error'">
-                        <svg v-if="savedModelsMsg.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <!-- Save button removed: provider edits debounce-save automatically.
+                           The auto-save indicator below replaces the manual button. -->
+                      <span v-if="providerAutoSaveStatus" class="save-indicator" :class="providerAutoSaveStatus.ok ? 'success' : 'error'">
+                        <svg v-if="providerAutoSaveStatus.ok" class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                         <svg v-else class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                        {{ savedModelsMsg.text }}
+                        {{ providerAutoSaveStatus.text }}
                       </span>
                     </div>
                   </div>
@@ -584,6 +585,10 @@
                     </div>
                     <p v-if="selectedProvider.type === 'ollama'" class="hint" style="margin-bottom:0.4rem;">Ollama runs locally — no API key required. Leave blank.</p>
                     <p v-if="selectedProvider.type === 'doubao'" class="hint" style="margin-bottom:0.4rem;">模型 ID 请填写火山方舟控制台创建的推理接入点 ID（格式：ep-xxxxxxxxxx-xxxxx）</p>
+                    <div class="apikey-privacy-notice">
+                      <svg class="apikey-privacy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                      <span>{{ t('setupWizard.apiKeyPrivacyNotice') }}</span>
+                    </div>
                     <div class="input-with-action">
                       <input
                         v-model="selectedProvider.apiKey"
@@ -675,15 +680,39 @@
                       </div>
                     </div>
                     <div v-if="selectedProviderModels.length > 0" style="margin-top: 0.5rem;">
+                      <!-- Default model header — pure label, no interaction. The set-default action
+                           lives on each row's star button below. -->
+                      <div class="cv-default-model-header">
+                        <span class="cv-default-model-label">{{ t('config.defaultModelLabel') }}</span>
+                        <span class="cv-default-model-value" v-if="selectedProvider.model">{{ selectedProvider.model }}</span>
+                        <span class="cv-default-model-value cv-default-model-empty" v-else>{{ t('config.noDefaultModel') }}</span>
+                      </div>
                       <input v-model="providerModelFilter" type="text" placeholder="Filter models…" class="field font-mono field-sm" style="width: 100%; margin-bottom: 0.5rem;" />
                       <div class="cv-model-list">
                         <div
                           v-for="m in filteredProviderModels"
                           :key="m.id"
-                          v-memo="[m.id, m._ctxFormatted, m._outFormatted, m._outSource, m._inPriceFormatted, m._outPriceFormatted, m._priceSource]"
-                          class="cv-model-item cv-model-item-readonly"
+                          class="cv-model-item"
+                          :class="{ active: testTargetModel === m.id }"
+                          @click="selectModelForTest(m.id)"
                         >
                           <span class="cv-model-name">{{ m.displayName }}</span>
+                          <!-- Set-as-default button — sits before the metric tags. Click ONLY this
+                               to change the persisted default model. Clicking the row body just
+                               highlights the model as the Test button's target (transient). -->
+                          <button
+                            class="cv-model-set-default-btn"
+                            :class="{ active: selectedProvider.model === m.id }"
+                            :disabled="selectedProvider.model === m.id"
+                            @click.stop="setProviderDefaultModel(m.id)"
+                            :title="selectedProvider.model === m.id ? t('config.isDefaultModel') : t('config.setAsDefaultModel')"
+                            :aria-label="t('config.setAsDefaultModel')"
+                            type="button"
+                          >
+                            <svg v-if="selectedProvider.model === m.id" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                            <svg v-else style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                            <span class="cv-model-set-default-label">{{ selectedProvider.model === m.id ? t('config.defaultBadge') : t('config.setAsDefaultShort') }}</span>
+                          </button>
                           <AppTooltip :text="m._ctxTitle" placement="top" class="cv-model-tag-tip">
                             <span
                               class="cv-model-ctx"
@@ -2797,6 +2826,34 @@ function goToAuth() {
 function onSignOut() {
   auth.signOut()
 }
+
+// Mask the local part of an email by replacing 3 contiguous middle characters
+// with `***`. Falls back gracefully for very short locals (where there's no
+// natural middle to mask).
+function maskEmail(email) {
+  if (!email || typeof email !== 'string') return ''
+  const at = email.indexOf('@')
+  if (at < 0) return email
+  const local = email.slice(0, at)
+  const domain = email.slice(at)
+  if (local.length <= 2) return '***' + domain
+  const startKeep = Math.max(1, Math.floor((local.length - 3) / 2))
+  const endKeep   = local.length - startKeep - 3
+  if (endKeep < 1) return local[0] + '***' + domain
+  return local.slice(0, startKeep) + '***' + local.slice(-endKeep) + domain
+}
+
+// Format the registration timestamp as a locale-aware date. Uses YYYY-MM-DD
+// for stability — relative ("2 months ago") would be cuter but drifts daily.
+function formatRegisteredAt(ms) {
+  if (!ms || !Number.isFinite(ms)) return ''
+  const d = new Date(ms)
+  if (isNaN(d.getTime())) return ''
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
 const showKey  = ref(false)
 const showOpenRouterKey = ref(false)
 const VALID_TABS = ['general', 'ai', 'account', 'models', 'skills', 'knowledge', 'voice', 'email', 'security', 'notifications']
@@ -2808,6 +2865,12 @@ const activeProviderTab = ref('openai')
 // Per-tab save state
 const savingModels = ref(false)
 const savedModelsMsg = ref('')
+
+// Provider auto-save lives here as a forward declaration; the actual watch is
+// installed AFTER selectedProvider is defined further down. Keeping the state
+// up here so the template can bind to providerAutoSaveStatus without ordering
+// issues.
+const providerAutoSaveStatus = ref(null) // { ok: bool, text: string } | null
 const savingSkills = ref(false)
 const savedSkillsMsg = ref('')
 
@@ -2849,10 +2912,13 @@ function scrollUtilityActiveIntoView() {
   })
 }
 
-// Providers eligible as utility-model backend (must be active + have key)
+// Providers eligible as utility-model backend — anything with an apiKey.
+// Verification of a specific (provider, model) combo happens in the agent
+// editor via its Test button; we don't gate the picker on a global "active"
+// flag.
 const utilityActiveProviderOptions = computed(() =>
   (configStore.config.providers || [])
-    .filter(p => p.isActive && p.apiKey)
+    .filter(p => p.apiKey)
     .map(p => ({ id: p.type, name: p.alias || p.name }))
 )
 
@@ -3398,11 +3464,12 @@ function getSubTabStatus(subTab) {
     case 'security':  return 'configured'
     case 'email':     return form.smtp?.host ? 'configured' : 'empty'
     case 'im':        return (form.im?.telegram?.botToken || form.im?.whatsapp?.enabled || form.im?.feishu?.appId) ? 'configured' : 'empty'
-    case 'models':    return configStore.config.providers?.some(p => p.isActive && p.apiKey) ? 'configured' : 'empty'
+    case 'models':    return configStore.config.providers?.some(p => p.apiKey) ? 'configured' : 'empty'
     case 'voice':     return form.voiceCall?.whisperApiKey ? 'configured' : 'empty'
     case 'tts':       return 'configured' // Edge TTS always available
     case 'stt':       return (form.voiceCall?.mode && form.voiceCall.mode !== 'disabled') ? 'configured' : 'empty'
     case 'knowledge': return knowledgeStore.modelReady ? 'configured' : 'empty'
+    case 'account':   return auth.isAuthenticated.value ? 'configured' : 'empty'
     default:          return 'empty'
   }
 }
@@ -3621,7 +3688,7 @@ async function testUtilityModel() {
   testingUtilityModel.value = true
   testUtilityModelResult.value = null
   const providerType = form.utilityModel.provider
-  const providerCfg = configStore.config.providers?.find(p => p.type === providerType && p.isActive) || {}
+  const providerCfg = configStore.config.providers?.find(p => p.type === providerType && p.apiKey) || {}
   try {
     const res = await window.electronAPI.testProvider({
       provider: providerType,
@@ -3800,16 +3867,106 @@ const selectedProvider = computed(() => {
   return configStore.config.providers.find(p => p.id === modelsLeftNav.value)
 })
 
+// Local UI state — which model the user has highlighted for testing. Does NOT
+// persist; clicking a row only marks it as the Test button's target. Only the
+// explicit "set as default" star in the row updates `provider.model` (the
+// persisted default model used as fallback for new agents).
+const testTargetModel = ref('')
+
+// Reset / hydrate testTargetModel when the user navigates between providers,
+// defaulting to the provider's saved default model so the Test button always
+// has a sensible target without a fresh click.
+watch(
+  () => selectedProvider.value?.id,
+  (newId) => {
+    if (!newId) { testTargetModel.value = ''; return }
+    const p = configStore.config.providers.find(x => x.id === newId)
+    testTargetModel.value = p?.model || ''
+    testResultNew.value = null
+  },
+  { immediate: true }
+)
+
+function selectModelForTest(modelId) {
+  if (!modelId) return
+  if (testTargetModel.value === modelId) return
+  testTargetModel.value = modelId
+  // Stale test result — was for a different model
+  testResultNew.value = null
+}
+
+function setProviderDefaultModel(modelId) {
+  if (!selectedProvider.value || !modelId) return
+  if (selectedProvider.value.model === modelId) return
+  selectedProvider.value.model = modelId
+  // Auto-align the test target with the new default. User would expect this:
+  // "I just chose this as my default, of course Test should hit it next."
+  testTargetModel.value = modelId
+  testResultNew.value = null
+}
+
+// Provider auto-save (debounced): replaces the manual Save Provider button.
+// Any edit to apiKey / baseURL / alias / model / settings persists 500ms after
+// the last change. The status indicator in the header surfaces the result.
+let _providerAutoSaveTimer = null
+let _providerAutoSaveLastKey = ''
+function triggerProviderAutoSave() {
+  if (!selectedProvider.value) return
+  const key = selectedProvider.value.id
+  _providerAutoSaveLastKey = key
+  if (_providerAutoSaveTimer) clearTimeout(_providerAutoSaveTimer)
+  _providerAutoSaveTimer = setTimeout(async () => {
+    try {
+      await configStore.saveConfig({ providers: configStore.config.providers })
+      // Success: stay silent. The user's mental model is "settings just persist";
+      // a flashing "Saved!" chip after every keystroke is noise and steals
+      // attention from the test result, which IS the meaningful feedback.
+      // Only failures need the user's eyes.
+    } catch (err) {
+      if (_providerAutoSaveLastKey !== key) return
+      providerAutoSaveStatus.value = { ok: false, text: err.message || t('common.saveFailed') }
+      setTimeout(() => { providerAutoSaveStatus.value = null }, 4000)
+    }
+  }, 500)
+}
+// Split id from content signature: navigation (id changes) is NOT an edit, so
+// it must not trigger save. Only when the SAME provider's content changes do
+// we persist. This kills the "click around → spurious 'saved' chip" noise.
+watch(
+  () => selectedProvider.value && {
+    id: selectedProvider.value.id,
+    sig: JSON.stringify({
+      apiKey: selectedProvider.value.apiKey,
+      baseURL: selectedProvider.value.baseURL,
+      alias: selectedProvider.value.alias,
+      model: selectedProvider.value.model,
+      settings: selectedProvider.value.settings,
+      modelSettings: selectedProvider.value.modelSettings,
+    }),
+  },
+  (val, old) => {
+    if (!val || !old) return        // initial mount or selectedProvider became null
+    if (val.id !== old.id) return   // navigation between providers — not an edit
+    if (val.sig === old.sig) return // identical content — no edit
+    triggerProviderAutoSave()
+  }
+)
+
+// The Test button hits whichever model the user selected in the list (the
+// "test target" — transient UI state). Falls back to the persisted default
+// model when nothing has been clicked yet.
+const effectiveTestModel = computed(() => testTargetModel.value || selectedProvider.value?.model || '')
+
 const canTestNew = computed(() => {
   if (!selectedProvider.value) return false
   if (selectedProvider.value.type === 'anthropic') {
     return !!(selectedProvider.value.apiKey && selectedProvider.value.baseURL && selectedTestModel.value)
   }
   if (selectedProvider.value.type === 'google') {
-    return !!(selectedProvider.value.apiKey && selectedProvider.value.model)
+    return !!(selectedProvider.value.apiKey && effectiveTestModel.value)
   }
   const hasBaseURL = !!(selectedProvider.value.baseURL || configStore.PROVIDER_PRESETS[selectedProvider.value.type]?.defaultBaseURL)
-  return !!(selectedProvider.value.apiKey && hasBaseURL && selectedProvider.value.model)
+  return !!(selectedProvider.value.apiKey && hasBaseURL && effectiveTestModel.value)
 })
 
 const selectedProviderModels = computed(() => {
@@ -3998,7 +4155,13 @@ async function testProviderNew() {
   testingProviderNew.value = true
   testResultNew.value = null
   try {
-    const model = selectedProvider.value.type === 'anthropic' ? selectedTestModel.value : selectedProvider.value.model
+    // For non-Anthropic, test whichever model the user highlighted in the list
+    // (testTargetModel) — falls back to the persisted default. Anthropic still
+    // uses its dedicated dropdown since its model is set via sonnet/opus/haiku
+    // override fields, not the model list.
+    const model = selectedProvider.value.type === 'anthropic'
+      ? selectedTestModel.value
+      : effectiveTestModel.value
     const baseURL = selectedProvider.value.baseURL ||
       configStore.PROVIDER_PRESETS[selectedProvider.value.type]?.defaultBaseURL || ''
     const res = await window.electronAPI.testProvider({
@@ -4010,22 +4173,23 @@ async function testProviderNew() {
     // Guard: user may have switched providers while the request was in-flight
     if (selectedProvider.value?.id !== myProviderId) return
     if (res.success) {
-      selectedProvider.value.isActive = true
       selectedProvider.value.testedAt = Date.now()
-      testResultNew.value = { ok: true, message: `Connected · ${res.ms}ms` }
-      // After a successful test for a non-Anthropic provider, warn if the selected model
-      // has no known context window (neither API / catalog / manual override).
+      testResultNew.value = { ok: true, message: `Connected · ${res.ms}ms · ${model}` }
+      // After a successful test for a non-Anthropic provider, warn if the tested
+      // model has no known context window (neither API / catalog / manual override).
       if (selectedProvider.value.type !== 'anthropic') {
-        const mId = selectedProvider.value.model
-        const m = mId ? selectedProviderModels.value.find(x => x.id === mId) : null
+        const m = model ? selectedProviderModels.value.find(x => x.id === model) : null
         if (m && !getEffectiveContext(m).value) {
           showMissingCtxWarning.value = true
         }
       }
     } else {
-      selectedProvider.value.isActive = false
       testResultNew.value = { ok: false, message: res.error }
     }
+    // The Test button used to flip provider.isActive; that gate is gone now —
+    // a provider is usable in the agent picker as soon as it has an apiKey.
+    // Test is still useful to verify creds, just doesn't drive any persisted
+    // state beyond `testedAt` for the result hint.
     await configStore.saveConfig({ providers: configStore.config.providers })
   } catch (err) {
     if (selectedProvider.value?.id !== myProviderId) return
@@ -4052,8 +4216,25 @@ async function fetchProviderModels() {
   providerModelsFetchError.value = ''
   try {
     const success = await modelsStore.fetchModelsForProvider(selectedProvider.value.id)
-    if (success) modelsFetchedOnce.value = true
-    else providerModelsFetchError.value = 'Fetch failed — check API key and Base URL.'
+    if (success) {
+      modelsFetchedOnce.value = true
+      // Auto-pick the first model if the user hasn't picked one yet — the
+      // model list used to be read-only, so existing providers may have an
+      // empty `model` field. Auto-fill so the Test button has something to hit
+      // and the provider's default model is set for any agent that doesn't
+      // override it.
+      const list = selectedProviderModels.value || []
+      if (list.length > 0 && !selectedProvider.value.model) {
+        selectedProvider.value.model = list[0].id
+      }
+      // Sync the test target so the user doesn't see the Test button as disabled
+      // right after fetch finishes.
+      if (!testTargetModel.value) {
+        testTargetModel.value = selectedProvider.value.model || list[0]?.id || ''
+      }
+    } else {
+      providerModelsFetchError.value = 'Fetch failed — check API key and Base URL.'
+    }
   } catch (err) { providerModelsFetchError.value = err.message }
   finally { providerModelsFetching.value = false }
 }
@@ -5123,10 +5304,13 @@ async function checkKnowledgeModelIfNeeded() {
 .config-content-inner { max-width: 860px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 /* Models page needs the full viewport height — disable scroll on parent, let inner fill */
 .config-content:has(.models-page-layout) { overflow-y: hidden; padding-bottom: 1.5rem; display: flex; flex-direction: column; }
-.config-content-inner:has(.models-page-layout) { max-width: 80%; flex: 1; min-height: 0; }
+/* Models page: stretch the inner full-width so the left nav sits flush against
+   the config sidebar (only the parent's 2rem padding separates them) and the
+   right config-card uses every remaining pixel up to the viewport edge. */
+.config-content-inner:has(.models-page-layout) { max-width: none; flex: 1; min-height: 0; }
 @media (min-width: 2560px) {
   .config-content-inner { max-width: 1000px; }
-  .config-content-inner:has(.models-page-layout) { max-width: 80%; }
+  .config-content-inner:has(.models-page-layout) { max-width: none; }
 }
 
 /* ── Provider tabs ──────────────────────────────────────────────────────── */
@@ -6041,12 +6225,66 @@ async function checkKnowledgeModelIfNeeded() {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
 }
-.cv-model-item.cv-model-item-readonly {
-  cursor: default;
-}
-.cv-model-item.cv-model-item-readonly:hover {
+
+/* "Set as default" pill — sits before the metric tags. Outlined when not
+   default, filled gold when default (and disabled — clicking the already-
+   default row is a no-op so we make that visible). */
+.cv-model-set-default-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.4375rem;
+  height: 1.375rem;
+  border: 1px solid rgba(251,191,36,0.4);
   background: transparent;
+  border-radius: 0.25rem;
+  color: #FBBF24;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.cv-model-set-default-btn:hover {
+  background: rgba(251,191,36,0.12);
+  border-color: #FBBF24;
+}
+.cv-model-set-default-btn.active {
+  background: rgba(251,191,36,0.18);
+  cursor: default;
+  text-transform: uppercase;
+}
+.cv-model-set-default-btn.active:hover { background: rgba(251,191,36,0.18); }
+.cv-model-set-default-btn:disabled { cursor: default; }
+.cv-model-set-default-label { line-height: 1; }
+
+/* "Default" badge inside the row, next to the model name. */
+/* Header row above the model list — pure label, no interaction. */
+.cv-default-model-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  margin-bottom: 0.5rem;
+  background: rgba(251,191,36,0.06);
+  border: 1px solid rgba(251,191,36,0.2);
+  border-radius: 0.375rem;
+  font-size: var(--fs-caption);
+}
+.cv-default-model-label {
   color: var(--text-secondary);
+  font-weight: 500;
+}
+.cv-default-model-value {
+  color: #FBBF24;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+.cv-default-model-value.cv-default-model-empty {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-style: italic;
 }
 
 .cv-model-select {
@@ -6737,7 +6975,18 @@ async function checkKnowledgeModelIfNeeded() {
   color: var(--text-secondary);
   word-break: break-all;
   margin-top: 2px;
+  font-family: 'JetBrains Mono', monospace;
 }
+.account-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--fs-caption);
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+.account-meta-label { color: var(--text-muted); }
+.account-meta-value { color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; }
 .account-avatar-img {
   background: transparent;
   object-fit: cover;
@@ -7161,6 +7410,27 @@ async function checkKnowledgeModelIfNeeded() {
   white-space: nowrap;
 }
 .provider-apikey-link:hover { color: #A5B4FC; text-decoration: underline; }
+
+.apikey-privacy-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  margin-bottom: 0.5rem;
+  background: rgba(34, 197, 94, 0.06);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.apikey-privacy-icon {
+  flex-shrink: 0;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: 0.125rem;
+  color: #22C55E;
+}
 
 /* Add Provider modal — freeInfo banner */
 .add-provider-free-info {

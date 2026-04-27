@@ -156,20 +156,20 @@ function seedBuiltinSkillsIntoAgents(agentsFile, builtinIds) {
     return { updated: 0 }
   }
 
-  const agents = Array.isArray(data)
-    ? data
-    : (Array.isArray(data?.agents) ? data.agents : null)
-  if (!agents) return { updated: 0 }
-
+  // Schema-agnostic iteration so this seeding works against legacy flat files
+  // AND the new nested {agents:{items}, personas:{items}} schema. Mutating
+  // through iterateAgentsInFile keeps changes inside the original structure
+  // so the write below preserves the on-disk shape.
+  const ds = require('./dataStore')
   let updated = 0
-  for (const agent of agents) {
+  ds.iterateAgentsInFile(data, agent => {
     const current = Array.isArray(agent.requiredSkillIds) ? agent.requiredSkillIds : []
     const missing = builtinIds.filter(id => !current.includes(id))
     if (missing.length > 0) {
       agent.requiredSkillIds = [...current, ...missing]
       updated++
     }
-  }
+  })
 
   if (updated > 0) {
     try {

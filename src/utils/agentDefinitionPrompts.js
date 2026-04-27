@@ -343,13 +343,46 @@ ${profSections}
 ## If TYPE B — use this structure:
 ${charSections}
 
+## Nuwa Persona Layer (REQUIRED — adds depth so the agent feels real on first contact)
+After writing the prompt, also produce a "soul" object and a "speech" object that capture the agent's deep persona — these are persistent memory that gets injected into the system prompt at runtime, simulating what would normally come from imported chat history.
+
+The "soul" object MUST have these fields (each list item one short sentence, in ${lang || 'the same language as the prompt'}):
+- "identity": one or two first-person sentences, the agent's own self-intro (50 words max)
+- "mentalModels": 3-5 beliefs in "believe X → therefore Y → always Z" causal-chain form
+- "decisionHeuristics": 4-6 concrete decision rules ("when X happens, I do Y")
+- "valuesAntiPatterns": 3-5 mixed entries — values they hold AND patterns they actively avoid
+- "honestBoundaries": 3-5 things they refuse to fake — domains they openly say they don't know
+- "coreTensions": 2-4 genuinely contradictory traits (real people are not internally consistent)
+
+The "speech" object MUST have these fields:
+- "catchphrases": 3-6 short phrases they actually say (NOT motivational quotes — real speech ticks)
+- "emoji": array of emoji characters they use, or empty array if they don't use emoji
+- "sentenceStyle": object with "avgLength" (number, chars), "punctuation" ("low"|"moderate"|"high"), "endsWith" (array of common ending chars)
+- "conventions": object with "selfReference" (array, how they refer to themselves), "callsYou" (array, how they address user), "insideJokes" (array, can be empty)
+- "neverDoes": 3-5 specific surface behaviors they avoid (NOT abstract values — concrete things like "never says 'as an AI'")
+
 ## Output Format (CRITICAL)
 - Return ONLY valid JSON, no markdown fences, no extra text
 - The "prompt" field MUST be a single plain string with markdown section headers inside — NOT a nested object
 {
   "name": "realistic personal name",
   "description": "keyword-style summary, max 100 characters, no prose sentences",
-  "prompt": "### Section\\ncontent\\n\\n### Section\\ncontent..."
+  "prompt": "### Section\\ncontent\\n\\n### Section\\ncontent...",
+  "soul": {
+    "identity": "...",
+    "mentalModels": ["..."],
+    "decisionHeuristics": ["..."],
+    "valuesAntiPatterns": ["..."],
+    "honestBoundaries": ["..."],
+    "coreTensions": ["..."]
+  },
+  "speech": {
+    "catchphrases": ["..."],
+    "emoji": [],
+    "sentenceStyle": { "avgLength": 30, "punctuation": "moderate", "endsWith": ["."] },
+    "conventions": { "selfReference": ["I"], "callsYou": [], "insideJokes": [] },
+    "neverDoes": ["..."]
+  }
 }`
 }
 

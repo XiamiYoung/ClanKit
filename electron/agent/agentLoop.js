@@ -484,7 +484,7 @@ class AgentLoop {
     // Set compaction config for soul file auto-compression
     const um = this.config.utilityModel
     if (um?.provider && um?.model) {
-      const providerCfg = (this.config.providers || []).find(p => p.type === um.provider && p.isActive)
+      const providerCfg = (this.config.providers || []).find(p => p.type === um.provider && p.apiKey)
       if (providerCfg?.apiKey) {
         this.toolRegistry.setSoulCompactionConfig({
           model:        um.model,

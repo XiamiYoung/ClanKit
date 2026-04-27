@@ -361,6 +361,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Returns { idToken } on success; throws on user cancel / timeout / config error.
   // The renderer then forwards idToken to the backend via /auth/google.
   signInWithGoogle: () => ipcRenderer.invoke('auth:google-sign-in'),
+  getAuthBaseUrl: () => ipcRenderer.invoke('auth:get-base-url'),
 
   // ── Draw.io ─────────────────────────────────────────────────────────────────
   drawio: {

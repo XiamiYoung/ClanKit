@@ -52,8 +52,18 @@
               </div>
             </template>
 
-            <!-- Step 2: Choose Provider -->
+            <!-- Step 2: Choose how to use ClankAI — Google or email-based account. -->
             <template v-else-if="step === 2">
+              <div class="sw-step-content sw-step-auth">
+                <AuthForm :reset-signal="0" :signup-only="true" @success="onAuthStepSuccess" />
+                <button class="sw-btn-text sw-auth-skip" @click="onAuthStepSkip">
+                  {{ t('setupWizard.signInLater') }}
+                </button>
+              </div>
+            </template>
+
+            <!-- Step 3: Choose Provider -->
+            <template v-else-if="step === 3">
               <div class="sw-step-content">
                 <div class="sw-provider-list">
                   <button
@@ -73,8 +83,8 @@
               </div>
             </template>
 
-            <!-- Step 3: Configure Provider -->
-            <template v-else-if="step === 3">
+            <!-- Step 4: Configure Provider -->
+            <template v-else-if="step === 4">
               <div class="sw-step-content">
                 <!-- API Key help panel -->
                 <div class="sw-apikey-help-panel">
@@ -96,6 +106,10 @@
                     <code class="sw-apikey-example">{{ t('setupWizard.apiKeyExample') }}</code>
                     <p class="sw-apikey-help-steps">{{ t('setupWizard.apiKeySteps') }}</p>
                   </div>
+                </div>
+                <div class="sw-apikey-privacy">
+                  <svg class="sw-apikey-privacy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <p class="sw-apikey-privacy-text">{{ t('setupWizard.apiKeyPrivacyNotice') }}</p>
                 </div>
                 <div class="sw-form-group">
                   <label class="sw-label">{{ t('setupWizard.apiKey') }}</label>
@@ -160,8 +174,8 @@
               </div>
             </template>
 
-            <!-- Step 4: Your Profile -->
-            <template v-else-if="step === 4">
+            <!-- Step 5: Your Profile -->
+            <template v-else-if="step === 5">
               <div class="sw-step-content">
                 <div class="sw-form-group">
                   <label class="sw-label">{{ t('setupWizard.yourName') }}</label>
@@ -198,8 +212,8 @@
               </div>
             </template>
 
-            <!-- Step 5: Customize Agent -->
-            <template v-else>
+            <!-- Step 6: Customize Agent -->
+            <template v-else-if="step === 6">
               <div class="sw-step-content">
                 <!-- Agent intro card -->
                 <div class="sw-intro-card">
@@ -241,6 +255,7 @@
                 </div>
               </div>
             </template>
+
           </div>
 
           <!-- Footer -->
@@ -253,7 +268,7 @@
             </div>
             <div class="sw-footer-right">
               <button class="sw-btn-text" @click="skipSetup">{{ t('setupWizard.configureLater') }}</button>
-              <AppButton variant="primary" size="modal" :disabled="!canProceed || aiGenerating" :loading="aiGenerating" @click="goNext">
+              <AppButton v-if="step !== 2" variant="primary" size="modal" :disabled="!canProceed || aiGenerating || installingRecommended" :loading="aiGenerating || installingRecommended" @click="goNext">
                 {{ t('common.next') }}
               </AppButton>
             </div>
@@ -372,8 +387,11 @@ import { useI18n } from '../../i18n/useI18n'
 import { EDGE_VOICES, getDefaultVoiceForLocale } from '../../utils/edgeVoices'
 import { getAvatarDataUri, STYLES } from '../agents/agentAvatars'
 import { buildAgentGenerationPrompt, extractJsonPayload, detectAgentLanguage } from '../../utils/agentDefinitionPrompts'
+import { getAgentTemplates, getRecommendedTemplateIds, installRecommendedTemplates } from '../../data/agentTemplates'
 import AppButton from '../common/AppButton.vue'
 import AvatarPicker from '../agents/AvatarPicker.vue'
+import AuthForm from '../common/AuthForm.vue'
+import { useAuth } from '../../composables/useAuth'
 
 const props = defineProps({
   visible: { type: Boolean, default: false }
@@ -386,6 +404,7 @@ const configStore = useConfigStore()
 const modelsStore = useModelsStore()
 const agentsStore = useAgentsStore()
 const chatsStore = useChatsStore()
+const auth = useAuth()
 const skillsStore = useSkillsStore()
 const { t } = useI18n()
 
@@ -399,6 +418,7 @@ const step = ref(1)
 
 const stepLabels = computed(() => [
   t('setupWizard.stepLanguage'),
+  t('setupWizard.stepAccount'),
   t('setupWizard.stepProvider'),
   t('setupWizard.stepConfigure'),
   t('setupWizard.stepProfile'),
@@ -408,10 +428,11 @@ const stepLabels = computed(() => [
 const stepTitle = computed(() => {
   switch (step.value) {
     case 1: return t('setupWizard.welcomeToClankAI')
-    case 2: return t('setupWizard.chooseProvider')
-    case 3: return t('setupWizard.configureProvider')
-    case 4: return t('setupWizard.yourProfile')
-    case 5: return t('setupWizard.customizeAgent')
+    case 2: return t('setupWizard.signInTitle')
+    case 3: return t('setupWizard.chooseProvider')
+    case 4: return t('setupWizard.configureProvider')
+    case 5: return t('setupWizard.yourProfile')
+    case 6: return t('setupWizard.customizeAgent')
     default: return ''
   }
 })
@@ -419,13 +440,43 @@ const stepTitle = computed(() => {
 const stepSubtitle = computed(() => {
   switch (step.value) {
     case 1: return t('setupWizard.selectLanguage')
-    case 2: return t('setupWizard.chooseProviderDesc')
-    case 3: return t('setupWizard.configureProviderDesc')
-    case 4: return t('setupWizard.yourProfileDesc')
-    case 5: return t('setupWizard.customizeAgentDesc')
+    case 2: return t('setupWizard.signInDesc')
+    case 3: return t('setupWizard.chooseProviderDesc')
+    case 4: return t('setupWizard.configureProviderDesc')
+    case 5: return t('setupWizard.yourProfileDesc')
+    case 6: return t('setupWizard.customizeAgentDesc')
     default: return ''
   }
 })
+
+// ── Recommended-agent silent install (runs after step 5) ──────────────────
+// User-facing UI was removed — every recommended group ships by default. The
+// loading state surfaces in the footer button so the user sees the transition
+// take a second instead of feeling like a hang.
+
+const installingRecommended = ref(false)
+
+async function runInstallRecommended() {
+  if (installingRecommended.value) return
+  installingRecommended.value = true
+  try {
+    const lang = configStore.config.language || selectedLanguage.value || 'en'
+    const recIds = getRecommendedTemplateIds(lang)
+    const templates = getAgentTemplates(lang).filter(t => recIds.includes(t.id))
+    if (templates.length === 0) return
+    const providerId = selectedProviderType.value
+    const modelId = selectedProviderType.value === 'anthropic' ? anthropicSonnet.value : selectedModelId.value
+    await installRecommendedTemplates({
+      templates,
+      agentsStore,
+      providerModel: { providerId, modelId },
+    })
+  } catch (err) {
+    console.error('[SetupWizard] silent install recommended failed:', err)
+  } finally {
+    installingRecommended.value = false
+  }
+}
 
 // ── Step 1: Language ───────────────────────────────────────────────────────
 
@@ -779,10 +830,11 @@ async function previewVoice() {
 const canProceed = computed(() => {
   switch (step.value) {
     case 1: return true
-    case 2: return !!selectedProviderType.value
-    case 3: return !!testResult.value?.ok
-    case 4: return !!profileName.value.trim()
-    case 5: return true
+    case 2: return true                          // auth is optional; AuthForm/skip button drive progression
+    case 3: return !!selectedProviderType.value
+    case 4: return !!testResult.value?.ok
+    case 5: return !!profileName.value.trim()
+    case 6: return !installingRecommended.value
     default: return true
   }
 })
@@ -800,27 +852,30 @@ async function goNext() {
   if (current === 1) {
     await configStore.saveConfig({ language: selectedLanguage.value, setupWizardStep: 1 })
   } else if (current === 2) {
-    ensureWizardProvider()
+    // Auth step — AuthForm.success or onAuthStepSkip drives advancement; just persist progress.
     await configStore.saveConfig({ setupWizardStep: 2 })
   } else if (current === 3) {
+    ensureWizardProvider()
+    await configStore.saveConfig({ setupWizardStep: 3 })
+  } else if (current === 4) {
     syncProviderFields()
-    // Set utilityModel so AI generation works in step 5
+    // Set utilityModel so AI generation works in step 6
     const model = selectedProviderType.value === 'anthropic' ? anthropicSonnet.value : selectedModelId.value
     await configStore.saveConfig({
       defaultProvider: selectedProviderType.value,
       utilityModel: { provider: selectedProviderType.value, model },
-      setupWizardStep: 3,
+      setupWizardStep: 4,
     })
-  } else if (current === 4) {
-    // Set defaults, then generate prompt + avatar with AI before entering step 5
+  } else if (current === 5) {
+    // Set defaults, then generate prompt + avatar with AI before entering step 6
     selectedAvatar.value = `agents:${buildAvatarSeed()}`
     selectedVoiceId.value = pickVoiceForProfile(null)
     generatedPrompt.value = ''
-    await configStore.saveConfig({ setupWizardStep: 4 })
-    // Block on AI generation — loading shown in step 4
+    await configStore.saveConfig({ setupWizardStep: 5 })
+    // Block on AI generation — loading shown in step 5
     const ok = await generateAgentWithAI()
-    if (!ok) return // Stay on step 4 if AI failed
-  } else if (current === 5) {
+    if (!ok) return // Stay on step 5 if AI failed
+  } else if (current === 6) {
     // Create the agent
     const name = profileName.value.trim()
     const age = profileAge.value
@@ -837,8 +892,12 @@ async function goNext() {
       avatar: selectedAvatar.value,
       voiceId: selectedVoiceId.value,
     })
-    await configStore.saveConfig({ defaultProvider: selectedProviderType.value, setupWizardStep: 5 })
-    // Transition to tour
+    await configStore.saveConfig({ defaultProvider: selectedProviderType.value, setupWizardStep: 6 })
+    // Silently install all recommended built-in agents (with their pre-fab
+    // Soul + Speech DNA) before entering the tour. Failures are swallowed so
+    // a hiccup here can't block onboarding — user can re-install via the
+    // Templates panel later.
+    await runInstallRecommended()
     phase.value = 'tour'
     tourStep.value = 1
     navigateTour()
@@ -846,6 +905,17 @@ async function goNext() {
   }
 
   step.value = current + 1
+}
+
+// ── Step 2 (auth) callbacks ────────────────────────────────────────────────
+async function onAuthStepSuccess() {
+  // Sign-in succeeded — applyTokens already marked authOnboarded. Advance.
+  if (step.value === 2) await goNext()
+}
+async function onAuthStepSkip() {
+  // User clicked "Sign in later" — mark onboarded and advance past the auth step.
+  await auth.markAuthOnboarded()
+  if (step.value === 2) await goNext()
 }
 
 // ── Tour ───────────────────────────────────────────────────────────────────
@@ -1071,17 +1141,18 @@ watch(() => props.visible, (val) => {
   if (!val) return
   const lastCompleted = configStore.config.setupWizardStep || 0
   let resumeStep = lastCompleted + 1
-  if (resumeStep > 4) {
+  // step 5 = profile (creates user agent); step 4 = configure (verifies provider)
+  if (resumeStep > 5) {
     const hasUserAgent = agentsStore.userAgents.some(a => !a.isBuiltin)
-    if (!hasUserAgent) resumeStep = 4
+    if (!hasUserAgent) resumeStep = 5
   }
-  if (resumeStep > 3) {
+  if (resumeStep > 4) {
     const hasActiveProvider = configStore.config.providers.some(p => p.isActive)
-    if (!hasActiveProvider) resumeStep = 3
+    if (!hasActiveProvider) resumeStep = 4
   }
 
-  // If step 5 was completed, go directly to tour
-  if (resumeStep > 5) {
+  // If step 6 (final agent step) was completed, go directly to tour
+  if (resumeStep > 6) {
     phase.value = 'tour'
     tourStep.value = 1
     navigateTour()
@@ -1139,10 +1210,6 @@ watch(step, (val) => {
   if (val === 3) {
     const provider = ensureWizardProvider()
     if (!provider?.isActive) testResult.value = null
-  }
-  // Auto-play voice preview when entering step 5
-  if (val === 5) {
-    setTimeout(() => previewVoice(), 300)
   }
 })
 </script>
@@ -1304,6 +1371,15 @@ watch(step, (val) => {
 }
 
 .sw-step-content { animation: sw-fade 0.2s ease; }
+.sw-step-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.sw-auth-skip {
+  align-self: center;
+  margin-top: 0.5rem;
+}
 
 @keyframes sw-fade {
   from { opacity: 0; transform: translateY(0.5rem); }
@@ -1392,6 +1468,30 @@ watch(step, (val) => {
   border-radius: 0.5rem;
   padding: 0.625rem 0.75rem;
   margin-bottom: 0.875rem;
+}
+
+.sw-apikey-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  margin-bottom: 0.875rem;
+  background: rgba(110, 231, 183, 0.06);
+  border: 1px solid rgba(110, 231, 183, 0.2);
+  border-radius: 0.5rem;
+}
+.sw-apikey-privacy-icon {
+  flex-shrink: 0;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: 0.125rem;
+  color: #6EE7B7;
+}
+.sw-apikey-privacy-text {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #D1D5DB;
 }
 
 .sw-apikey-help-top {

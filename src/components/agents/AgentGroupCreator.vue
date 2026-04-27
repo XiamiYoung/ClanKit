@@ -210,7 +210,7 @@ import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
-import { getAgentTemplates, PROFESSIONAL_TEMPLATE_IDS, getEntertainmentTemplateIds } from '../../data/agentTemplates'
+import { getAgentTemplates, PROFESSIONAL_TEMPLATE_IDS, getEntertainmentTemplateIds, templateSoulToSections, templateSpeechToDna } from '../../data/agentTemplates'
 import AppButton from '../common/AppButton.vue'
 import { getCharacterPromptSections, getProfessionalPromptSections } from '../../utils/agentDefinitionPrompts'
 
@@ -522,7 +522,7 @@ function parseProposalJSON(rawText) {
 function resolveDefaultProviderModel() {
   const cfg = configStore.config || {}
   const providers = Array.isArray(cfg.providers) ? cfg.providers : []
-  const active = providers.filter(p => p?.isActive)
+  const active = providers.filter(p => p?.apiKey)
 
   const preferredProvider = cfg.utilityModel?.provider || ''
   const preferredModel = cfg.utilityModel?.model || ''
@@ -798,6 +798,8 @@ ${profSections}
 
 The "prompt" field must be a plain string with markdown section headers.
 
+Each agent must ALSO ship with a Nuwa-style "soul" and "speech" block — these become persistent memory injected into the system prompt at runtime, simulating what would normally come from imported chat history. Without them, the agent feels generic on first contact.
+
 Return ONLY valid JSON — no markdown, no code fences, no explanation:
 {
   "category": { "name": "Category Name", "emoji": "emoji" },
@@ -806,7 +808,22 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation:
       "name": "Agent Name",
       "role": "brief role (3-8 words)",
       "description": "keyword-style summary, max 100 characters",
-      "prompt": "full agent definition prompt text"
+      "prompt": "full agent definition prompt text",
+      "soul": {
+        "identity": "1-2 sentence first-person self-intro",
+        "mentalModels": ["3-5 beliefs in 'believe X → therefore Y → always Z' form"],
+        "decisionHeuristics": ["4-6 concrete decision rules"],
+        "valuesAntiPatterns": ["3-5 mixed values + things they avoid"],
+        "honestBoundaries": ["3-5 things they openly refuse to fake"],
+        "coreTensions": ["2-4 genuinely contradictory traits"]
+      },
+      "speech": {
+        "catchphrases": ["3-6 short phrases they actually say"],
+        "emoji": [],
+        "sentenceStyle": { "avgLength": 30, "punctuation": "moderate", "endsWith": ["."] },
+        "conventions": { "selfReference": ["I"], "callsYou": [], "insideJokes": [] },
+        "neverDoes": ["3-5 specific surface behaviors they avoid"]
+      }
     }
   ]
 }
@@ -823,7 +840,8 @@ Rules:
 - Category name must not duplicate existing category names
 - The "prompt" field MUST follow the COMPLETE chosen section template above — all sections, full instructions, full detail. Do NOT abbreviate or shorten.
 - Use ALL sections defined in the chosen template — do not skip any section
-- Do NOT write fixed dialogue lines in trigger rules — write strategy descriptions instead${langInstruction}`,
+- Do NOT write fixed dialogue lines in trigger rules — write strategy descriptions instead
+- soul.mentalModels / decisionHeuristics / etc. items must be one short sentence each, NOT objects or nested structures${langInstruction}`,
       config,
     })
 
@@ -869,7 +887,11 @@ Rules:
             description: a.description || 'Domain-focused AI assistant',
             prompt: isRichPrompt(a.prompt)
               ? a.prompt.trim()
-              : buildFallbackPrompt(a, lang)
+              : buildFallbackPrompt(a, lang),
+            // Pass through Nuwa-style assets (may be undefined if AI omitted them).
+            // The install path turns these into souls/system/{id}.md and .speech.json.
+            soul:   (a.soul && typeof a.soul === 'object') ? a.soul : null,
+            speech: (a.speech && typeof a.speech === 'object') ? a.speech : null,
           })
         }
         generatedProposal.value = {
@@ -921,6 +943,11 @@ async function createAgents() {
         .map(c => normalizeName(c.name))
     )
 
+    // Map of normalizedName → { soul, speech } for built-in templates that ship
+    // pre-fabricated Nuwa-style memory. Populated only on the template path so
+    // the AI-proposal path stays unchanged.
+    let templateSoulMap = null
+
     if (activeTab.value === 'templates' && selectedTemplate.value) {
       const tmpl = selectedTemplate.value
       const existingCat = agentsStore.categories.find(c =>
@@ -939,6 +966,12 @@ async function createAgents() {
         prompt: a.prompt,
         avatar: a.avatar || `a${Math.floor(Math.random() * 36) + 1}`
       }))
+      templateSoulMap = new Map()
+      for (const a of tmpl.agents) {
+        if (a.soul || a.speech) {
+          templateSoulMap.set(normalizeName(a.name), { soul: a.soul, speech: a.speech })
+        }
+      }
     } else if (generatedProposal.value) {
       const prop = generatedProposal.value
       const existingCat = agentsStore.categories.find(c =>
@@ -957,6 +990,12 @@ async function createAgents() {
         prompt: a.prompt,
         avatar: `a${Math.floor(Math.random() * 36) + 1}`
       }))
+      templateSoulMap = new Map()
+      for (const a of prop.agents) {
+        if (a.soul || a.speech) {
+          templateSoulMap.set(normalizeName(a.name), { soul: a.soul, speech: a.speech })
+        }
+      }
     }
 
     const { providerId: utilityProviderId, modelId: utilityModelId } = resolveDefaultProviderModel()
@@ -975,9 +1014,13 @@ async function createAgents() {
       }
 
       if (toCreate.length > 0) {
-        const existingCount = agentsStore.agents.length
+        // saveAgent returns the persisted agent — collect them by id rather
+        // than relying on positional `slice(beforeCount)` since the store's
+        // merged `agents` view groups system + user separately and new entries
+        // don't necessarily land at the array tail.
+        const newAgents = []
         for (const agent of toCreate) {
-          await agentsStore.saveAgent({
+          const created = await agentsStore.saveAgent({
             ...agent,
             type: props.agentType,
             providerId: utilityProviderId,
@@ -988,12 +1031,48 @@ async function createAgents() {
             requiredMcpServerIds: [],
             requiredKnowledgeBaseIds: []
           })
+          if (created) newAgents.push(created)
         }
-
-        const newAgents = agentsStore.agents.slice(existingCount)
         for (const agent of newAgents) {
           await agentsStore.assignToCategory(agent.id, categoryId)
           createdIds.push(agent.id)
+        }
+
+        // Built-in templates ship with pre-fabricated soul + speech DNA so the
+        // first conversation feels deep instead of starting from scratch. Write
+        // those assets to disk now that we have stable agent IDs. Best-effort —
+        // a failure here must not abort the install.
+        if (templateSoulMap && templateSoulMap.size > 0) {
+          for (const newAgent of newAgents) {
+            const assets = templateSoulMap.get(normalizeName(newAgent.name))
+            if (!assets) continue
+            try {
+              if (assets.soul) {
+                const sections = templateSoulToSections(assets.soul)
+                if (sections) {
+                  await window.electronAPI.agentImport.writeNuwaSections({
+                    agentId:    newAgent.id,
+                    agentName:  newAgent.name,
+                    agentType:  props.agentType,
+                    sections,
+                    evidenceIndex: null,
+                  })
+                }
+              }
+              if (assets.speech) {
+                const speechDna = templateSpeechToDna(assets.speech, newAgent.name)
+                if (speechDna) {
+                  await window.electronAPI.agentImport.writeSpeechDna({
+                    agentId:   newAgent.id,
+                    agentType: props.agentType,
+                    speechDna,
+                  })
+                }
+              }
+            } catch (err) {
+              console.warn('[AgentGroupCreator] failed to write soul/speech for', newAgent.name, err)
+            }
+          }
         }
       }
     }

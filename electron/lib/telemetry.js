@@ -4,14 +4,18 @@ const os = require('os')
 const path = require('path')
 const { app } = require('electron')
 
-// Must match the `signing_salt` field in the AWS Secrets Manager bundle
-// (see iac/configs/382888552944.yaml clankit_secrets.keys).
-const SIGNING_SALT = 'clankai-t3l3m-2026-sg'
-
+// signingSalt and apiBaseUrl come from electron/build-config.{dev,prod}.json (gitignored).
+// signingSalt must match the `signing_salt` field in the AWS Secrets Manager
+// bundle for this environment (see iac/configs/<account>.yaml clankit_secrets).
 function getTelemetryEndpoint(action) {
   const { load } = require('./buildConfig')
   const base = load().apiBaseUrl
   return base ? `${base.replace(/\/$/, '')}/telemetry/${action}` : ''
+}
+
+function getSigningSalt() {
+  const { load } = require('./buildConfig')
+  return load().signingSalt || ''
 }
 
 function getMachineHash() {
@@ -30,13 +34,15 @@ function getMachineHash() {
   return crypto.createHash('sha256').update(parts.join('|')).digest('hex')
 }
 
-function signBody(rawBody) {
-  return crypto.createHmac('sha256', SIGNING_SALT).update(rawBody).digest('hex')
+function signBody(rawBody, salt) {
+  return crypto.createHmac('sha256', salt).update(rawBody).digest('hex')
 }
 
 async function postSigned(endpoint, payload) {
+  const salt = getSigningSalt()
+  if (!salt) throw new Error('telemetry: signingSalt missing in build-config.{dev,prod}.json')
   const rawBody = JSON.stringify(payload)
-  const signature = signBody(rawBody)
+  const signature = signBody(rawBody, salt)
   return fetch(endpoint, {
     method: 'POST',
     headers: {

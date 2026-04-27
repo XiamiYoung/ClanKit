@@ -276,7 +276,6 @@ export const useConfigStore = defineStore('config', () => {
       model: preset.defaultModels[0] || '',
       settings,
       modelSettings: {},
-      isActive: false,
       testedAt: null,
     }
   }
@@ -320,12 +319,15 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   const isConfigured = computed(() => {
-    return config.value.providers.some(p => p.apiKey && p.baseURL && p.isActive)
+    return config.value.providers.some(p => p.apiKey && p.baseURL)
   })
 
+  // Providers usable as agent backends — anything with credentials. The user
+  // verifies a (provider, model) combo at agent-edit time via the Test button
+  // there; we don't gate the picker on a separate "active" flag.
   const activeProviders = computed(() => {
     return config.value.providers
-      .filter(p => p.isActive)
+      .filter(p => p.apiKey)
       .map(p => p.id)
   })
 

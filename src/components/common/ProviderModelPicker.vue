@@ -96,7 +96,7 @@ const modelSearch = ref('')
 
 const activeProviderOptions = computed(() =>
   configStore.config.providers
-    .filter(p => p.isActive && p.apiKey && p.baseURL)
+    .filter(p => p.apiKey && p.baseURL)
     .map(p => ({
       id: p.type,
       label: p.alias || p.name,
@@ -131,7 +131,7 @@ function toggleModelMenu() {
 }
 
 function selectProvider(type) {
-  const provider = configStore.config.providers.find(p => p.type === type && p.isActive && p.apiKey)
+  const provider = configStore.config.providers.find(p => p.type === type && p.apiKey)
   if (provider) {
     emit('update:provider', type)
     emit('update:model', null)

@@ -36,6 +36,8 @@ Thumbs.db
 release/
 dist-release/
 electron/build-config.json
+electron/build-config.dev.json
+electron/build-config.prod.json
 electron/.backup/
 electron-compiled/
 

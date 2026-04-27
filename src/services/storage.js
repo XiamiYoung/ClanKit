@@ -25,21 +25,18 @@ function browserDefaultConfig() {
       opusModel:   '',
       haikuModel:  '',
       utilityModel: '',
-      isActive: false,
       testedAt: null,
     },
     openrouter: {
       apiKey:  '',
       baseURL: '',
       utilityModel: '',
-      isActive: false,
       testedAt: null,
     },
     openai: {
       apiKey:       '',
       baseURL:      '',
       utilityModel: '',
-      isActive: false,
       testedAt: null,
     },
     deepseek: {
@@ -47,7 +44,6 @@ function browserDefaultConfig() {
       baseURL:  '',
       maxTokens: 8192,
       utilityModel: '',
-      isActive: false,
       testedAt: null,
     },
     systemPrompt: ''

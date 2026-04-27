@@ -304,11 +304,6 @@
                         :placeholder="t('agents.selectProvider')"
                       />
                     </div>
-                    <!-- Mismatch warning -->
-                    <div v-if="providerModelMismatch" class="bv-mismatch-warn">
-                      <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                      <span>{{ t('agents.providerModelMismatchDetail', providerModelMismatch) }}</span>
-                    </div>
                     <div class="bv-model-section bv-model-section-grow" v-if="draftProvider">
                       <label class="bv-field-label">
                         {{ t('agents.model') }}
@@ -845,6 +840,13 @@ const draftPrompt      = ref(props.agentPrompt || '')
 const draftAvatar      = ref(props.agentAvatar || null)
 const draftVoiceId     = ref(props.agentVoiceId || getDefaultVoiceForLocale(configStore.config.language))
 
+// Soul + Speech DNA produced by surpriseMe / generateFromDescription. Held in
+// memory until the user clicks save, then flushed to disk by the parent
+// component via writeNuwaSections / writeSpeechDna IPC calls. Cleared after a
+// successful save so editing an existing agent doesn't keep re-writing.
+const draftSoul   = ref(null)
+const draftSpeech = ref(null)
+
 // Pre-fill prompt template for new user agents
 if (props.isNew && props.agentType !== 'system' && !draftPrompt.value) {
   draftPrompt.value = t('agents.userPromptTemplate')
@@ -1117,29 +1119,6 @@ const hasValidSelectedModel = computed(() => {
   return availableProviderModels.value.some(model => model.id === draftModelId.value)
 })
 
-function _detectModelProviderType(modelId) {
-  if (!modelId) return null
-  const m = modelId.toLowerCase()
-  if (m.includes('deepseek')) return 'deepseek'
-  if (m.includes('claude') || m.startsWith('anthropic/')) return 'anthropic'
-  if (m.includes('gemini') || m.startsWith('google/')) return 'google'
-  if (m.startsWith('gpt') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('openai/')) return 'openai'
-  return null
-}
-
-const providerModelMismatch = computed(() => {
-  if (!draftModelId.value || !draftProviderType.value) return null
-  // OpenRouter and OpenAI Compatible can proxy any model — skip mismatch check
-  if (draftProviderType.value === 'openrouter' || draftProviderType.value === 'openai') return null
-  const detectedType = _detectModelProviderType(draftModelId.value)
-  if (!detectedType) return null
-  if (detectedType === draftProviderType.value) return null
-  // openai_official is compatible with 'openai' detected type (gpt-*, o1-*, etc.)
-  if (detectedType === 'openai' && draftProviderType.value === 'openai_official') return null
-  const LABELS = { anthropic: 'Anthropic', openai_official: 'OpenAI', openai: 'OpenAI Compatible', deepseek: 'DeepSeek', openrouter: 'OpenRouter', google: 'Google' }
-  return { model: draftModelId.value, detected: LABELS[detectedType] || detectedType, provider: LABELS[draftProviderType.value] || draftProviderType.value }
-})
-
 const modelsLoading = computed(() => modelsStore.isLoading(draftProviderKey.value))
 
 function selectProvider(prov) {
@@ -1361,6 +1340,10 @@ async function surpriseMe() {
       if (data.name) draftName.value = data.name
       if (data.description) draftDescription.value = String(data.description)
       if (data.prompt)      draftPrompt.value = typeof data.prompt === 'string' ? data.prompt : JSON.stringify(data.prompt, null, 2)
+      // Capture the Nuwa-style soul + speech blocks if the AI returned them.
+      // Held in draft state until user clicks save; parent then writes to disk.
+      if (data.soul && typeof data.soul === 'object') draftSoul.value = data.soul
+      if (data.speech && typeof data.speech === 'object') draftSpeech.value = data.speech
       _applyAiAvatarVoice(data)
     } else {
       aiError.value = res.error || 'Generation failed. Check utility model config.'
@@ -1399,6 +1382,8 @@ async function generateFromDescription() {
       }
       if (data.description) draftDescription.value = String(data.description)
       if (data.prompt)      draftPrompt.value = typeof data.prompt === 'string' ? data.prompt : JSON.stringify(data.prompt, null, 2)
+      if (data.soul && typeof data.soul === 'object') draftSoul.value = data.soul
+      if (data.speech && typeof data.speech === 'object') draftSpeech.value = data.speech
       _applyAiAvatarVoice(data)
     } else {
       aiError.value = res.error || 'Generation failed. Check utility model config.'
@@ -1599,11 +1584,6 @@ function saveAll() {
       saveError.value = t('agents.invalidModelSelection')
       return
     }
-    if (providerModelMismatch.value) {
-      activePanel.value = 'model'
-      saveError.value = t('agents.providerModelMismatchDetail', providerModelMismatch.value)
-      return
-    }
     const modelChanged = draftProvider.value !== props.agentProviderId || draftModelId.value !== props.agentModelId
     if (modelChanged && !testModelResult.value?.ok) {
       activePanel.value = 'model'
@@ -1630,6 +1610,13 @@ function saveAll() {
     return
   }
   const isSystemAgent = props.agentType === 'system'
+  // Snapshot + clear soul/speech so a subsequent save (after edits) doesn't
+  // re-write the same Nuwa assets. The parent uses these to populate the
+  // soul.md and speech.json files via writeNuwaSections / writeSpeechDna IPC.
+  const _soulOnce   = draftSoul.value
+  const _speechOnce = draftSpeech.value
+  draftSoul.value   = null
+  draftSpeech.value = null
   emit('update-agent', {
     name:        draftName.value,
     avatar:      draftAvatar.value,
@@ -1642,6 +1629,10 @@ function saveAll() {
     requiredSkillIds:         draftRequiredSkillIds.value || [],
     requiredMcpServerIds:     draftRequiredMcpServerIds.value || [],
     requiredKnowledgeBaseIds: draftRequiredKnowledgeBaseIds.value || [],
+    // Non-persistent fields — parent handler reads these and writes to disk
+    // via the chat-import IPC, then drops them before saveAgent.
+    _soulSeed:   _soulOnce,
+    _speechSeed: _speechOnce,
   })
   if (memoryLoaded.value) {
     window.electronAPI.souls.write(props.agentId, props.agentType, draftMemory.value)
@@ -2550,22 +2541,6 @@ function saveAll() {
 }
 
 /* ── Provider/model mismatch warning ─────────────────────────────────────── */
-.bv-mismatch-warn {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.375rem;
-  padding: 0.5rem 0.625rem;
-  border-radius: var(--radius-sm);
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-caption);
-  color: #92400E;
-  font-weight: 500;
-  line-height: 1.4;
-  margin-top: 0.5rem;
-}
-
 /* ── Required field highlight ────────────────────────────────────────────── */
 .bv-input.error,
 .bv-textarea.error {

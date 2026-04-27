@@ -7,7 +7,7 @@ const mammoth = require('mammoth')
 // Helper to get provider config by type from the new providers array
 function getProviderByType(config, type) {
   if (config.providers && Array.isArray(config.providers)) {
-    return config.providers.find(p => p.type === type && p.isActive)
+    return config.providers.find(p => p.type === type && p.apiKey)
   }
   return null
 }
@@ -367,6 +367,18 @@ function createWindow() {
 
   // Publish to shared windowRef so extracted IPC modules can access it
   require('./lib/windowRef').set(mainWindow)
+
+  // In dev, forward renderer console output to the main-process terminal so
+  // `npm run dev` shows everything in one place. Production builds skip this
+  // (renderer logs stay in DevTools to avoid leaking debug info to user logs).
+  if (isDev) {
+    const LEVEL = ['LOG', 'WARN', 'ERROR', 'INFO']
+    mainWindow.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+      const tag = LEVEL[level] || `L${level}`
+      const src = sourceId ? sourceId.split('/').pop() + ':' + line : ''
+      console.log(`[renderer ${tag}] ${message}${src ? '  (' + src + ')' : ''}`)
+    })
+  }
 
   mainWindow.once('ready-to-show', () => { mainWindow.maximize(); mainWindow.show() })
 

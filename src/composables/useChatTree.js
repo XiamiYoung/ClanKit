@@ -13,6 +13,7 @@ import { useVoiceStore } from '../stores/voice'
 import { useI18n } from '../i18n/useI18n'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 import { triggerAgentGreeting } from './useAgentGreeting'
+import { useNewChatGuard } from './useNewChatGuard'
 
 export function useChatTree({ mentionInputRef } = {}) {
   const chatsStore = useChatsStore()
@@ -426,15 +427,11 @@ export function useChatTree({ mentionInputRef } = {}) {
   const newChatFolderId = ref(null)
   const newChatNameInputRef = ref(null)
   const newChatAgentIds = ref([])
-  const showNewChatAgentPopover = ref(false)
   const newChatAgentSearch = ref('')
-  const newChatAgentSearchEl = ref(null)
-  const showNewChatUserPopover = ref(false)
+  const newChatAgentCategoryId = ref('__all__')
   const newChatUserSearch = ref('')
-  const newChatUserSearchEl = ref(null)
+  const newChatUserCategoryId = ref('__all__')
   const newChatFolderTreeExpanded = ref(new Set())
-  const ncpExpandedCatIds = ref(new Set())
-  const nupExpandedCatIds = ref(new Set())
 
   const NEW_CHAT_ICON_POOL = ['💬', '✨', '🚀', '🎯', '🧠', '📌', '🌟', '🪄', '🗂️', '📝', '🎉', '🔥']
 
@@ -442,16 +439,12 @@ export function useChatTree({ mentionInputRef } = {}) {
     return NEW_CHAT_ICON_POOL[Math.floor(Math.random() * NEW_CHAT_ICON_POOL.length)]
   }
 
-  function toggleNcpCat(id) {
-    const s = new Set(ncpExpandedCatIds.value)
-    s.has(id) ? s.delete(id) : s.add(id)
-    ncpExpandedCatIds.value = s
+  function selectNewChatAgentCategory(id) {
+    newChatAgentCategoryId.value = id || '__all__'
   }
 
-  function toggleNupCat(id) {
-    const s = new Set(nupExpandedCatIds.value)
-    s.has(id) ? s.delete(id) : s.add(id)
-    nupExpandedCatIds.value = s
+  function selectNewChatUserCategory(id) {
+    newChatUserCategoryId.value = id || '__all__'
   }
 
   function toggleNewChatFolderExpand(folderId) {
@@ -464,7 +457,12 @@ export function useChatTree({ mentionInputRef } = {}) {
 
   const filteredNewChatAgents = computed(() => {
     const q = newChatAgentSearch.value.toLowerCase().trim()
-    const list = sortedSystemAgents.value
+    const catId = newChatAgentCategoryId.value
+    let list = sortedSystemAgents.value
+    if (catId && catId !== '__all__') {
+      const inCat = new Set((agentsStore.agentsInCategory?.(catId) || []).map(a => a.id))
+      list = list.filter(a => inCat.has(a.id))
+    }
     if (!q) return list
     return list.filter(p =>
       p.name.toLowerCase().includes(q) ||
@@ -474,7 +472,12 @@ export function useChatTree({ mentionInputRef } = {}) {
 
   const filteredNewChatUsers = computed(() => {
     const q = newChatUserSearch.value.toLowerCase().trim()
-    const list = sortedUserAgents.value
+    const catId = newChatUserCategoryId.value
+    let list = sortedUserAgents.value
+    if (catId && catId !== '__all__') {
+      const inCat = new Set((agentsStore.agentsInCategory?.(catId) || []).map(a => a.id))
+      list = list.filter(a => inCat.has(a.id))
+    }
     if (!q) return list
     return list.filter(p =>
       p.name.toLowerCase().includes(q) ||
@@ -498,22 +501,6 @@ export function useChatTree({ mentionInputRef } = {}) {
     const fallbackId = agentsStore.defaultSystemAgent?.id
     const fallback = fallbackId ? agentsStore.getAgentById(fallbackId) : null
     return fallback ? [fallback] : []
-  })
-
-  watch(showNewChatAgentPopover, (open) => {
-    if (open) {
-      newChatAgentSearch.value = ''
-      ncpExpandedCatIds.value = new Set()
-      nextTick(() => newChatAgentSearchEl.value?.focus())
-    }
-  })
-
-  watch(showNewChatUserPopover, (open) => {
-    if (open) {
-      newChatUserSearch.value = ''
-      nupExpandedCatIds.value = new Set()
-      nextTick(() => newChatUserSearchEl.value?.focus())
-    }
   })
 
   function onNewChatIconSelect(emoji) {
@@ -549,16 +536,11 @@ export function useChatTree({ mentionInputRef } = {}) {
   }
 
   // folderId: null = root, undefined = use active folder context
-  const newChatBlockedNoUserAgent = ref(false)
+  const newChatGuard = useNewChatGuard()
 
   function newChat(folderId) {
-    // Block chat creation if no user agent exists
-    const hasUserAgent = agentsStore.userAgents.some(a => !a.isBuiltin)
-    if (!hasUserAgent) {
-      newChatBlockedNoUserAgent.value = true
-      return
-    }
-    newChatBlockedNoUserAgent.value = false
+    // Block chat creation if no user agent OR no system agent exists
+    if (newChatGuard.blockIfNeeded()) return
     const resolvedFolder = folderId !== undefined ? folderId : (chatsStore.activeFolderId?.value ?? null)
     showNewChatModal.value = true
     newChatName.value = ''
@@ -567,10 +549,10 @@ export function useChatTree({ mentionInputRef } = {}) {
     showNewChatIconPicker.value = false
     newChatFolderId.value = resolvedFolder
     newChatAgentIds.value = []
-    showNewChatAgentPopover.value = false
     newChatAgentSearch.value = ''
-    showNewChatUserPopover.value = false
+    newChatAgentCategoryId.value = '__all__'
     newChatUserSearch.value = ''
+    newChatUserCategoryId.value = '__all__'
     // Pre-expand ancestors of pre-selected folder
     newChatFolderTreeExpanded.value = new Set(getAncestorFolderIds(resolvedFolder, chatsStore.chatTree))
     nextTick(() => newChatNameInputRef.value?.focus())
@@ -637,10 +619,10 @@ export function useChatTree({ mentionInputRef } = {}) {
     showNewChatIconPicker.value = false
     newChatFolderId.value = null
     newChatAgentIds.value = []
-    showNewChatAgentPopover.value = false
     newChatAgentSearch.value = ''
-    showNewChatUserPopover.value = false
+    newChatAgentCategoryId.value = '__all__'
     newChatUserSearch.value = ''
+    newChatUserCategoryId.value = '__all__'
   }
 
   // ── Delete Confirm ─────────────────────────────────────────────────────────
@@ -750,15 +732,11 @@ export function useChatTree({ mentionInputRef } = {}) {
     newChatFolderId,
     newChatNameInputRef,
     newChatAgentIds,
-    showNewChatAgentPopover,
     newChatAgentSearch,
-    newChatAgentSearchEl,
-    showNewChatUserPopover,
+    newChatAgentCategoryId,
     newChatUserSearch,
-    newChatUserSearchEl,
+    newChatUserCategoryId,
     newChatFolderTreeExpanded,
-    ncpExpandedCatIds,
-    nupExpandedCatIds,
     filteredNewChatAgents,
     filteredNewChatUsers,
     activeNewChatUserAgent,
@@ -770,10 +748,10 @@ export function useChatTree({ mentionInputRef } = {}) {
     clearNewChatUserSelection,
     removeNewChatSystemAgent,
     toggleNewChatAgent,
-    toggleNcpCat,
-    toggleNupCat,
+    selectNewChatAgentCategory,
+    selectNewChatUserCategory,
     toggleNewChatFolderExpand,
-    newChat, newChatBlockedNoUserAgent,
+    newChat,
     confirmNewChat,
     cancelNewChat,
     // Delete confirm

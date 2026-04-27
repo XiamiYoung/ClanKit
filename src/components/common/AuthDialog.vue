@@ -62,161 +62,15 @@
               </div>
             </Teleport>
 
-            <!-- ── Mode tabs ────────────────────────────────────────────── -->
-            <div class="auth-tabs">
-              <button class="auth-tab" :class="{ active: mode === 'login' }" @click="setMode('login')">
-                {{ t('auth.signIn') }}
-              </button>
-              <button class="auth-tab" :class="{ active: mode === 'register' }" @click="setMode('register')">
-                {{ t('auth.signUp') }}
-              </button>
-            </div>
-
-            <!-- ── Email + password panel ───────────────────────────────── -->
-            <div v-if="visibleMethod === 'email'" class="auth-panel">
-
-              <template v-if="step === 'credentials'">
-                <template v-if="mode === 'register'">
-                  <label class="auth-label">{{ t('auth.nameLabel') }}</label>
-                  <input
-                    v-model="form.name" type="text" class="auth-input"
-                    autocomplete="name" :placeholder="t('auth.namePlaceholder')"
-                    @keyup.enter="onSubmitCredentials"
-                  />
-                </template>
-
-                <label class="auth-label">{{ t('auth.emailLabel') }}</label>
-                <input
-                  v-model="form.email" type="email" class="auth-input"
-                  autocomplete="email" :placeholder="t('auth.emailPlaceholder')"
-                  @keyup.enter="onSubmitCredentials"
-                />
-
-                <label class="auth-label">{{ t('auth.passwordLabel') }}</label>
-                <input
-                  v-model="form.password" type="password" class="auth-input"
-                  :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
-                  :placeholder="t('auth.passwordPlaceholder')"
-                  @keyup.enter="onSubmitCredentials"
-                />
-
-                <p v-if="error" class="auth-error">{{ error }}</p>
-
-                <button
-                  class="auth-cta"
-                  :disabled="busy || !form.email || !form.password || (mode === 'register' && !form.name)"
-                  @click="onSubmitCredentials"
-                >
-                  <span v-if="busy" class="auth-spinner" />
-                  {{ busy ? t('auth.busy') : (mode === 'login' ? t('auth.signIn') : t('auth.sendCode')) }}
-                </button>
-
-                <button v-if="mode === 'login'" class="auth-link" @click="step = 'forgot'; error = ''">
-                  {{ t('auth.forgotPassword') }}
-                </button>
-              </template>
-
-              <template v-if="step === 'verify'">
-                <p class="auth-helper">{{ t('auth.otpHelper', { email: form.email }) }}</p>
-                <label class="auth-label">{{ t('auth.otpLabel') }}</label>
-                <input
-                  v-model="form.otp" type="text" inputmode="numeric" maxlength="6"
-                  class="auth-input auth-input-otp" autocomplete="one-time-code"
-                  placeholder="••••••" @keyup.enter="onSubmitOtp"
-                />
-
-                <p v-if="error" class="auth-error">{{ error }}</p>
-                <p v-if="info"  class="auth-info">{{ info }}</p>
-
-                <button class="auth-cta" :disabled="busy || form.otp.length !== 6" @click="onSubmitOtp">
-                  <span v-if="busy" class="auth-spinner" />
-                  {{ busy ? t('auth.busy') : t('auth.verifyAndContinue') }}
-                </button>
-
-                <button class="auth-link" @click="step = 'credentials'; error = ''">{{ t('auth.backToStart') }}</button>
-              </template>
-
-              <template v-if="step === 'forgot'">
-                <p class="auth-helper">{{ t('auth.forgotHelper') }}</p>
-
-                <label class="auth-label">{{ t('auth.emailLabel') }}</label>
-                <input
-                  v-model="form.email" type="email" class="auth-input"
-                  autocomplete="email" @keyup.enter="onRequestReset"
-                />
-
-                <p v-if="error" class="auth-error">{{ error }}</p>
-                <p v-if="info"  class="auth-info">{{ info }}</p>
-
-                <button class="auth-cta" :disabled="busy || !form.email" @click="onRequestReset">
-                  <span v-if="busy" class="auth-spinner" />
-                  {{ busy ? t('auth.busy') : t('auth.sendResetCode') }}
-                </button>
-
-                <button class="auth-link" @click="step = 'credentials'; error = ''">{{ t('auth.backToStart') }}</button>
-              </template>
-
-              <template v-if="step === 'reset'">
-                <p class="auth-helper">{{ t('auth.resetHelper', { email: form.email }) }}</p>
-
-                <label class="auth-label">{{ t('auth.otpLabel') }}</label>
-                <input
-                  v-model="form.otp" type="text" inputmode="numeric" maxlength="6"
-                  class="auth-input auth-input-otp" placeholder="••••••"
-                />
-
-                <label class="auth-label">{{ t('auth.newPasswordLabel') }}</label>
-                <input
-                  v-model="form.newPassword" type="password" class="auth-input"
-                  autocomplete="new-password" @keyup.enter="onConfirmReset"
-                />
-
-                <p v-if="error" class="auth-error">{{ error }}</p>
-
-                <button
-                  class="auth-cta"
-                  :disabled="busy || form.otp.length !== 6 || !form.newPassword"
-                  @click="onConfirmReset"
-                >
-                  <span v-if="busy" class="auth-spinner" />
-                  {{ busy ? t('auth.busy') : t('auth.resetPassword') }}
-                </button>
-              </template>
-            </div>
-
-            <!-- ── Google panel — vertically centered within the reserved height ── -->
-            <div v-if="visibleMethod === 'google'" class="auth-panel auth-panel-google">
-              <p class="auth-helper">{{ t('auth.googleHelper') }}</p>
-
-              <button class="auth-google-btn" :disabled="busy" @click="onGoogleSignIn">
-                <svg class="auth-google-icon" viewBox="0 0 18 18" aria-hidden="true">
-                  <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-                  <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
-                  <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
-                  <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-                </svg>
-                <span>{{ busy ? t('auth.busy') : t('auth.continueWithGoogle') }}</span>
-              </button>
-
-              <p v-if="error" class="auth-error">{{ error }}</p>
-            </div>
-
-            <!-- ── Footer: switch method + skip ────────────────────────── -->
-            <div v-if="step === 'credentials'" class="auth-divider">
-              <span class="auth-divider-line"></span>
-              <span class="auth-divider-or">{{ t('auth.or') }}</span>
-              <span class="auth-divider-line"></span>
-            </div>
-
-            <button v-if="step === 'credentials'" class="auth-method-toggle" @click="toggleMethod">
-              {{ secondaryMethod === 'google' ? t('auth.useGoogleInstead') : t('auth.useEmailInstead') }}
-            </button>
-
-            <p class="auth-foot">{{ t('auth.legalNote') }}</p>
+            <AuthForm :reset-signal="resetSignal" @success="onAuthSuccess" />
 
             <button type="button" class="auth-skip" @click="onSkip">
               {{ t('auth.skipForNow') }}
             </button>
+
+            <p class="auth-skip-hint">{{ t('auth.emailFirstHelper') }}</p>
+
+            <p class="auth-foot">{{ t('auth.legalNote') }}</p>
 
           </div>
         </Transition>
@@ -230,6 +84,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '../../i18n/useI18n'
 import { useAuth } from '../../composables/useAuth'
 import { useConfigStore } from '../../stores/config'
+import AuthForm from './AuthForm.vue'
 import appIconUrl from '@/assets/icon.png'
 
 const { t } = useI18n()
@@ -245,61 +100,10 @@ function setLanguage(lang) {
   configStore.saveConfig({ language: lang })
 }
 
-// ── Mode + step state, reset whenever the dialog opens ─────────────────────
-const mode = ref('login')          // 'login' | 'register'
-const step = ref('credentials')    // 'credentials' | 'verify' | 'forgot' | 'reset'
-
-// User-driven override of the locale-default method. null = follow language.
-const userMethodOverride = ref(null)
-const visibleMethod = computed(() => userMethodOverride.value ?? auth.primaryMethod.value)
-const secondaryMethod = computed(() => visibleMethod.value === 'google' ? 'email' : 'google')
-
-const form = ref({ name: '', email: '', password: '', otp: '', newPassword: '' })
-const error = ref('')
-const info  = ref('')
-const busy  = ref(false)
-
-watch(visible, (open) => {
-  if (open) {
-    userMethodOverride.value = null     // re-follow language default each time the dialog opens
-    mode.value = 'login'
-    step.value = 'credentials'
-    form.value = { name: '', email: '', password: '', otp: '', newPassword: '' }
-    error.value = ''
-    info.value  = ''
-    busy.value  = false
-  }
-})
-
-// When language changes mid-session, snap back to that language's default method.
-watch(() => configStore.config.language, () => {
-  userMethodOverride.value = null
-  step.value = 'credentials'
-  error.value = ''
-  info.value  = ''
-})
-
-watch(step, (s) => {
-  if (s === 'credentials') {
-    form.value.otp = ''
-    form.value.newPassword = ''
-  }
-})
-
-function setMode(next) {
-  if (next === mode.value) return
-  mode.value = next
-  step.value = 'credentials'
-  error.value = ''
-  info.value = ''
-}
-
-function toggleMethod() {
-  userMethodOverride.value = visibleMethod.value === 'google' ? 'email' : 'google'
-  step.value = 'credentials'
-  error.value = ''
-  info.value = ''
-}
+// AuthForm owns all form state; we only nudge it to reset every time the
+// dialog opens by bumping a counter prop.
+const resetSignal = ref(0)
+watch(visible, (open) => { if (open) resetSignal.value++ })
 
 function closeAndOnboard() {
   // Close = treat as Skip — mark onboarded so the dialog doesn't reopen next launch.
@@ -381,79 +185,10 @@ function onAuthSuccess() {
   auth.closeAuthDialog()
 }
 
-async function onSubmitCredentials() {
-  error.value = ''
-  busy.value = true
-  try {
-    if (mode.value === 'login') {
-      const r = await auth.signInWithEmail(form.value.email.trim().toLowerCase(), form.value.password)
-      if (!r.ok) { error.value = r.error || t('auth.errorGeneric'); return }
-      onAuthSuccess()
-    } else {
-      const r = await auth.signUpStart(
-        form.value.email.trim().toLowerCase(),
-        form.value.password,
-        form.value.name.trim(),
-      )
-      if (!r.ok) { error.value = r.error || t('auth.errorGeneric'); return }
-      step.value = 'verify'
-      info.value = ''
-    }
-  } finally { busy.value = false }
-}
-
-async function onSubmitOtp() {
-  error.value = ''
-  busy.value = true
-  try {
-    const r = await auth.signUpVerify(form.value.email.trim().toLowerCase(), form.value.otp)
-    if (!r.ok) { error.value = r.error || t('auth.errorOtp'); return }
-    onAuthSuccess()
-  } finally { busy.value = false }
-}
-
-async function onRequestReset() {
-  error.value = ''
-  info.value = ''
-  busy.value = true
-  try {
-    const r = await auth.requestPasswordReset(form.value.email.trim().toLowerCase())
-    if (!r.ok) { error.value = r.error || t('auth.errorGeneric'); return }
-    info.value = t('auth.resetCodeSent')
-    step.value = 'reset'
-  } finally { busy.value = false }
-}
-
-async function onConfirmReset() {
-  error.value = ''
-  busy.value = true
-  try {
-    const r = await auth.confirmPasswordReset(
-      form.value.email.trim().toLowerCase(),
-      form.value.otp,
-      form.value.newPassword,
-    )
-    if (!r.ok) { error.value = r.error || t('auth.errorGeneric'); return }
-    const login = await auth.signInWithEmail(form.value.email.trim().toLowerCase(), form.value.newPassword)
-    if (login.ok) onAuthSuccess()
-    else { mode.value = 'login'; step.value = 'credentials'; info.value = t('auth.resetSuccessLogin') }
-  } finally { busy.value = false }
-}
-
-async function onGoogleSignIn() {
-  error.value = ''
-  busy.value = true
-  try {
-    const r = await auth.signInWithGoogle()
-    if (!r.ok) { error.value = r.error || t('auth.errorGoogle'); return }
-    onAuthSuccess()
-  } finally { busy.value = false }
-}
-
 // ESC key closes the dialog (treated as Skip).
 function onKeydown(e) {
   if (!visible.value) return
-  if (e.key === 'Escape' && !busy.value) {
+  if (e.key === 'Escape') {
     e.stopPropagation()
     closeAndOnboard()
   }
@@ -601,47 +336,14 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown, true))
   line-height: 1.2;
 }
 
-/* ── Mode tabs ──────────────────────────────────────────────────────────── */
-.auth-tabs {
-  display: flex;
-  background: var(--bg-hover);
-  border-radius: 12px;
-  padding: 4px;
-  margin-bottom: 20px;
-}
-.auth-tab {
-  flex: 1;
-  padding: 9px 12px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  border: none;
-  background: transparent;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 140ms, color 140ms, box-shadow 140ms;
-  font-family: inherit;
-}
-.auth-tab.active {
-  background: var(--bg-card);
-  color: var(--text-primary);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
-}
-
 /* ── Form panel ─────────────────────────────────────────────────────────── */
-/* Reserve enough space for the largest variant (email credentials step) so the
- * dialog height stays put when the user toggles between Google and email. */
+/* Reserve enough space for the largest variant (create-account step) so the
+ * dialog height stays put when the user moves between steps. */
 .auth-panel {
   display: flex;
   flex-direction: column;
   min-height: 280px;
 }
-/* The Google panel is short — vertically center its content within the reserved height. */
-.auth-panel-google {
-  justify-content: center;
-  gap: 16px;
-}
-.auth-panel-google .auth-helper { margin: 0; text-align: center; }
 
 .auth-label {
   font-size: 12px;
@@ -790,25 +492,6 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown, true))
   text-transform: uppercase;
 }
 
-.auth-method-toggle {
-  display: block;
-  width: 100%;
-  padding: 10px 14px;
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--text-primary);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 120ms, border-color 120ms;
-  font-family: inherit;
-}
-.auth-method-toggle:hover {
-  background: var(--bg-hover);
-  border-color: var(--text-secondary);
-}
-
 /* ── Footer + skip ──────────────────────────────────────────────────────── */
 .auth-foot {
   margin-top: 22px;
@@ -821,20 +504,29 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown, true))
 .auth-skip {
   display: block;
   width: 100%;
-  margin-top: 10px;
-  padding: 8px 12px;
-  background: transparent;
-  border: none;
-  font-size: 13px;
-  color: var(--text-secondary);
+  margin-top: 18px;
+  padding: 11px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
   cursor: pointer;
-  border-radius: 8px;
-  transition: color 120ms, background 120ms;
+  transition: background 120ms, border-color 120ms, color 120ms;
   font-family: inherit;
 }
 .auth-skip:hover {
-  color: var(--text-primary);
   background: var(--bg-hover);
+  border-color: var(--text-secondary);
+}
+
+.auth-skip-hint {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.5;
 }
 
 /* ── Spinner ────────────────────────────────────────────────────────────── */

@@ -34,7 +34,8 @@ describe('configStore', () => {
       expect(p.type).toBe('anthropic')
       expect(p.baseURL).toBe('https://api.anthropic.com')
       expect(p.apiKey).toBe('')
-      expect(p.isActive).toBe(false)
+      // isActive field has been removed — usability is decided by apiKey alone.
+      expect(p.isActive).toBeUndefined()
       expect(store.config.providers).toHaveLength(1)
     })
 
@@ -56,10 +57,10 @@ describe('configStore', () => {
     it('updateProvider merges updates into existing provider', () => {
       const store = useConfigStore()
       const p = store.addProvider('deepseek')
-      store.updateProvider(p.id, { apiKey: 'sk-test', isActive: true })
+      store.updateProvider(p.id, { apiKey: 'sk-test', baseURL: 'https://x' })
       const updated = store.getProvider(p.id)
       expect(updated.apiKey).toBe('sk-test')
-      expect(updated.isActive).toBe(true)
+      expect(updated.baseURL).toBe('https://x')
       expect(updated.type).toBe('deepseek') // original preserved
     })
 
@@ -77,18 +78,19 @@ describe('configStore', () => {
       expect(store.isConfigured).toBe(false)
     })
 
-    it('isConfigured is true when active provider has key + baseURL', () => {
+    it('isConfigured is true when provider has key + baseURL', () => {
       const store = useConfigStore()
       const p = store.addProvider('anthropic')
-      store.updateProvider(p.id, { apiKey: 'sk-test', isActive: true })
+      store.updateProvider(p.id, { apiKey: 'sk-test' })
       expect(store.isConfigured).toBe(true)
     })
 
-    it('activeProviders returns only active provider ids', () => {
+    it('activeProviders returns providers with apiKey set', () => {
       const store = useConfigStore()
       const p1 = store.addProvider('anthropic')
       const p2 = store.addProvider('openai')
-      store.updateProvider(p1.id, { isActive: true })
+      // Only p1 has credentials → only p1 is "usable" (no separate isActive flag).
+      store.updateProvider(p1.id, { apiKey: 'sk-test' })
       expect(store.activeProviders).toEqual([p1.id])
     })
   })

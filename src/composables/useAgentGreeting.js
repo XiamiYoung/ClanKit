@@ -3,6 +3,22 @@ import { useChatsStore } from '../stores/chats'
 import { useAgentsStore, BUILTIN_SYSTEM_AGENT_ID } from '../stores/agents'
 import { useConfigStore } from '../stores/config'
 
+// Classify an error message into the same code set ChatWindow's error UI
+// recognizes (auth_error / rate_limited / context_overflow / etc). Mirrors
+// electron/ipc/agent.js::_classifyError. Renderer-side fallback for any
+// chunk source that forgets to set errorCode — keeps the hint UI working
+// even if a backend path lags behind a refactor.
+function _classifyErrorText(text) {
+  const msg = String(text || '').toLowerCase()
+  if (msg.includes('maximum context length') || msg.includes('context_length_exceeded')) return 'context_overflow'
+  if (msg.includes('max_tokens') || msg.includes('max_completion_tokens')) return 'max_tokens_invalid'
+  if (msg.includes('rate limit') || /\b429\b/.test(msg)) return 'rate_limited'
+  if (msg.includes('authentication') || msg.includes('unauthorized') || msg.includes('api key') || /\b401\b/.test(msg) || /\b403\b/.test(msg)) return 'auth_error'
+  if (msg.includes('timeout') || msg.includes('econnrefused') || msg.includes('econnreset') || msg.includes('enotfound') || msg.includes('fetch failed')) return 'connection_error'
+  if (msg.includes('content filter') || msg.includes('content_policy')) return 'content_filtered'
+  return 'unknown'
+}
+
 // Tracks chats that already have a greeting in flight so we never start two.
 const _inFlight = new Set()
 
@@ -38,11 +54,28 @@ function _ensureSubscription(chatsStore) {
       chat.updatedAt = Date.now()
       chatsStore.persist?.()
     } else if (type === 'error') {
-      // Drop the placeholder silently — greeting is best-effort.
-      const idx = chat.messages.indexOf(msg)
-      if (idx >= 0) chat.messages.splice(idx, 1)
+      // Surface the error in the placeholder so ChatWindow renders the same
+      // error UI as the regular chat path (auth_error hint with "open persona
+      // settings" button, etc.). Falls back to a generic indicator when the
+      // electron side didn't classify the error.
+      const errorDetail = text || ''
+      // Trust the electron-classified code; fall back to renderer-side
+      // classification when missing (covers stale main-process builds and
+      // any chunk source that forgets to set errorCode).
+      const errorCode = data.errorCode || _classifyErrorText(errorDetail)
+      msg.streaming = false
+      msg.isError = true
+      msg.errorCode = errorCode
+      msg.errorDetail = errorDetail
+      if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
+      // Leave content empty — formatErrorLabel renders a localized label from
+      // errorCode + errorDetail, and the bubble shouldn't show "_No response_".
+      msg.content = ''
+      msg.segments = []
       _activeMsgIdByChat.delete(chatId)
       _inFlight.delete(chatId)
+      chat.updatedAt = Date.now()
+      chatsStore.persist?.()
     }
   })
   _subscribed = true
@@ -115,13 +148,23 @@ export async function triggerAgentGreeting({ chatId, agentId }) {
       userPersona: userPersonaPayload,
     })
   } catch (err) {
-    // Best-effort: drop placeholder on hard failure.
+    // IPC itself failed (e.g. handler not registered, serialization error).
+    // Convert to a visible error in the placeholder bubble — same shape as the
+    // streaming-error branch so ChatWindow renders the unified error UI.
     const placeholder = chat.messages.find(m => m.id === msgId)
     if (placeholder) {
-      const idx = chat.messages.indexOf(placeholder)
-      if (idx >= 0) chat.messages.splice(idx, 1)
+      const detail = err?.message || String(err)
+      placeholder.streaming = false
+      placeholder.isError = true
+      placeholder.errorCode = _classifyErrorText(detail)
+      placeholder.errorDetail = detail
+      if (placeholder.streamingStartedAt) placeholder.durationMs = Date.now() - placeholder.streamingStartedAt
+      placeholder.content = ''
+      placeholder.segments = []
     }
     _activeMsgIdByChat.delete(chatId)
     _inFlight.delete(chatId)
+    chat.updatedAt = Date.now()
+    chatsStore.persist?.()
   }
 }

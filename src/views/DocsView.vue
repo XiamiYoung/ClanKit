@@ -3240,7 +3240,7 @@ const TreeNode = defineComponent({
             color: isDark ? '#fff' : '#6B7280',
             boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)' : (isHovered ? '0 2px 8px rgba(0,0,0,0.10)' : 'none'),
             borderRadius: (isActive || isHovered || (dragOver.value && isDir)) ? '8px' : '0',
-            margin: (isActive || isHovered || (dragOver.value && isDir)) ? '2px 8px' : '2px 0',
+            margin: (isActive || isHovered || (dragOver.value && isDir)) ? '4px 8px' : '4px 0',
             fontFamily: "'Inter',sans-serif",
             fontSize: 'var(--fs-body)',
             border: dragOver.value && isDir ? '1px dashed #007AFF' : '1px solid transparent',

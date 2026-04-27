@@ -5,6 +5,7 @@ const path    = require('path')
 const { v4: uuidv4 } = require('uuid')
 
 const ds = require('../lib/dataStore')
+const { normalizeAgents } = require('../agent/dataNormalizers')
 const PAGE_SIZE   = 20
 
 function readIndex() {
@@ -12,9 +13,9 @@ function readIndex() {
 }
 
 function readAgents() {
+  // Schema-agnostic flat list (handles new nested + both legacy formats).
   try {
-    const data = JSON.parse(fs.readFileSync(ds.paths().AGENTS_FILE, 'utf8'))
-    return Array.isArray(data) ? data : (data.agents || [])
+    return normalizeAgents(JSON.parse(fs.readFileSync(ds.paths().AGENTS_FILE, 'utf8')))
   } catch { return [] }
 }
 

@@ -6,9 +6,24 @@
  * agent orchestration pipeline.
  */
 
-/** Normalize agents.json: may be { categories, agents: [] } or plain array */
+/**
+ * Flatten agents.json into a single array of agent records.
+ *
+ * On-disk schema:
+ *   { agents:   { categories, items: [system agents] },
+ *     personas: { categories, items: [user personas]  } }
+ *
+ * The renderer-side store keeps system agents and user personas in separate
+ * refs (and separate top-level keys on disk) so a bug in any system-agent
+ * flow can't accidentally wipe personas. Electron-side readers don't care
+ * about the split — they just want one list of agents — so this normalizer
+ * flattens both sections back together.
+ */
 function normalizeAgents(raw) {
-  return Array.isArray(raw) ? raw : (raw?.agents || [])
+  if (!raw || typeof raw !== 'object') return []
+  const sys = Array.isArray(raw.agents?.items) ? raw.agents.items : []
+  const usr = Array.isArray(raw.personas?.items) ? raw.personas.items : []
+  return [...sys, ...usr]
 }
 
 /** Normalize tools.json: may be dict { "id": config } or array. Filters __deletedBuiltins. */

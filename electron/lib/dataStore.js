@@ -145,6 +145,60 @@ async function readJSONAsync(file, fallback) {
   }
 }
 
+// ── agents.json structure-aware helpers ─────────────────────────────────────
+// agents.json shape: { agents: {items}, personas: {items} }. Mutating one
+// section's items must not touch the other — these helpers iterate / find
+// across both lists without callers having to know about the split.
+
+/** Return both in-place agent arrays inside the parsed agents.json object. */
+function _agentsListsFromData(data) {
+  if (!data || typeof data !== 'object') return []
+  const lists = []
+  if (Array.isArray(data.agents?.items))   lists.push(data.agents.items)
+  if (Array.isArray(data.personas?.items)) lists.push(data.personas.items)
+  return lists
+}
+
+/**
+ * Iterate every agent record in agents.json regardless of schema. Mutations
+ * applied inside `fn` are persisted by writing `data` back via writeJSONAtomic.
+ */
+function iterateAgentsInFile(data, fn) {
+  for (const list of _agentsListsFromData(data)) {
+    for (const agent of list) fn(agent)
+  }
+}
+
+/**
+ * Find an agent by id inside an agents.json object (any schema). Returns the
+ * live object reference (mutations stick) or null if not found.
+ */
+function findAgentInFile(data, id) {
+  for (const list of _agentsListsFromData(data)) {
+    const found = list.find(a => a.id === id)
+    if (found) return found
+  }
+  return null
+}
+
+// Single-slot rolling backup. Copies `file` to `file + '.bak'` before the
+// caller overwrites it, so the previous version is always recoverable from one
+// step back. Best-effort — never throws or blocks the caller.
+//
+// Limitation: only the most recent backup is kept. If two bad writes happen in
+// a row (e.g. corrupt write, then app restart that re-persists the corruption),
+// the original state is gone. That's acceptable for the cases this guards
+// (one-off accidental wipes), and the cost of N-rotation isn't worth it for
+// files this small.
+function backupFile(file) {
+  try {
+    if (!fs.existsSync(file)) return
+    fs.copyFileSync(file, file + '.bak')
+  } catch (err) {
+    // Swallow — backup must never block the actual write that follows
+  }
+}
+
 // --- Chat index helper -------------------------------------------------------
 function chatMetaFromChat(chat) {
   const { messages, ...meta } = chat
@@ -154,7 +208,7 @@ function chatMetaFromChat(chat) {
 // --- Provider config helpers -------------------------------------------------
 function getProviderByType(config, type) {
   if (config.providers && Array.isArray(config.providers)) {
-    return config.providers.find(p => p.type === type && p.isActive)
+    return config.providers.find(p => p.type === type && p.apiKey)
   }
   return null
 }
@@ -205,6 +259,9 @@ module.exports = {
   writeJSON,
   writeJSONAtomic,
   readJSONAsync,
+  backupFile,
+  iterateAgentsInFile,
+  findAgentInFile,
   // Helpers
   chatMetaFromChat,
   getEnvPaths,

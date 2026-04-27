@@ -134,7 +134,7 @@ class AnalyzeAgentTool extends BaseTool {
   _buildLlmConfigFromProviderModel(providerType, model) {
     if (!this.llmConfig) return null
     const providers = this.llmConfig.providers || []
-    const provider = providers.find(p => p.type === providerType && p.isActive)
+    const provider = providers.find(p => p.type === providerType && p.apiKey)
     if (!provider || !provider.apiKey) return null
     return {
       ...this.llmConfig,

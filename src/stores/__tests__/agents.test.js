@@ -33,11 +33,26 @@ vi.stubGlobal('window', {
 import { useAgentsStore, BUILTIN_SYSTEM_AGENT_ID, BUILTIN_DOC_EDITOR_ID, BUILTIN_ANALYST_ID } from '../agents'
 import { storage } from '../../services/storage'
 
+// agents.json schema:
+//   { agents: {categories, items}, personas: {categories, items} }
+function emptyStore() {
+  return {
+    agents:   { categories: [], items: [] },
+    personas: { categories: [], items: [] },
+  }
+}
+function withSystem(items, categories = []) {
+  return { ...emptyStore(), agents: { categories, items } }
+}
+function withPersonas(items, categories = []) {
+  return { ...emptyStore(), personas: { categories, items } }
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
   uuidCounter = 0
   vi.clearAllMocks()
-  storage.getAgents.mockResolvedValue([])
+  storage.getAgents.mockResolvedValue(emptyStore())
 })
 
 describe('agentsStore', () => {
@@ -58,10 +73,10 @@ describe('agentsStore', () => {
     })
 
     it('preserves existing agents and backfills fields', async () => {
-      storage.getAgents.mockResolvedValue([
+      storage.getAgents.mockResolvedValue(withSystem([
         { id: 'custom-1', name: 'Custom', type: 'system' },
         { id: BUILTIN_SYSTEM_AGENT_ID, name: 'Old Clank', type: 'system', providerId: 'my-provider' },
-      ])
+      ]))
       const store = useAgentsStore()
       await store.loadAgents()
       // Custom agent preserved
@@ -76,10 +91,10 @@ describe('agentsStore', () => {
       expect(sys.isBuiltin).toBe(true)
     })
 
-    it('handles { categories, agents } format', async () => {
+    it('routes system agents and user personas into separate sections', async () => {
       storage.getAgents.mockResolvedValue({
-        categories: [{ id: 'cat1', name: 'Test', emoji: '', type: 'system' }],
-        agents: [{ id: 'a1', name: 'Agent', type: 'user', isDefault: true }],
+        agents:   { categories: [{ id: 'cat1', name: 'Test', emoji: '', type: 'system' }], items: [] },
+        personas: { categories: [], items: [{ id: 'a1', name: 'Agent', type: 'user', isDefault: true }] },
       })
       const store = useAgentsStore()
       await store.loadAgents()
@@ -119,9 +134,9 @@ describe('agentsStore', () => {
   // ── deleteAgent ──
   describe('deleteAgent', () => {
     it('removes non-builtin agent', async () => {
-      storage.getAgents.mockResolvedValue([
+      storage.getAgents.mockResolvedValue(withPersonas([
         { id: 'user-1', name: 'User Agent', type: 'user' },
-      ])
+      ]))
       const store = useAgentsStore()
       await store.loadAgents()
       const before = store.agents.length
@@ -142,10 +157,10 @@ describe('agentsStore', () => {
   // ── setDefault ──
   describe('setDefault', () => {
     it('clears previous default of same type and sets new', async () => {
-      storage.getAgents.mockResolvedValue([
+      storage.getAgents.mockResolvedValue(withPersonas([
         { id: 'u1', name: 'A', type: 'user', isDefault: true },
         { id: 'u2', name: 'B', type: 'user', isDefault: false },
-      ])
+      ]))
       const store = useAgentsStore()
       await store.loadAgents()
       await store.setDefault('u2')
@@ -179,10 +194,10 @@ describe('agentsStore', () => {
     })
 
     it('deleteCategory blocks when agents assigned', async () => {
-      storage.getAgents.mockResolvedValue({
-        categories: [{ id: 'cat1', name: 'C', emoji: '', type: 'system' }],
-        agents: [{ id: 'a1', name: 'A', type: 'system', categoryIds: ['cat1'] }],
-      })
+      storage.getAgents.mockResolvedValue(withSystem(
+        [{ id: 'a1', name: 'A', type: 'system', categoryIds: ['cat1'] }],
+        [{ id: 'cat1', name: 'C', emoji: '', type: 'system' }]
+      ))
       const store = useAgentsStore()
       await store.loadAgents()
       const result = await store.deleteCategory('cat1')
@@ -203,9 +218,9 @@ describe('agentsStore', () => {
   // ── Computed: systemAgents / userAgents ──
   describe('computed filters', () => {
     it('systemAgents and userAgents filter by type', async () => {
-      storage.getAgents.mockResolvedValue([
+      storage.getAgents.mockResolvedValue(withPersonas([
         { id: 'u1', name: 'U', type: 'user', isDefault: true, createdAt: 1 },
-      ])
+      ]))
       const store = useAgentsStore()
       await store.loadAgents()
       // 3 builtins are system type
@@ -214,9 +229,9 @@ describe('agentsStore', () => {
     })
 
     it('defaultSystemAgent / defaultUserAgent return correct agents', async () => {
-      storage.getAgents.mockResolvedValue([
+      storage.getAgents.mockResolvedValue(withPersonas([
         { id: 'u1', name: 'U', type: 'user', isDefault: true },
-      ])
+      ]))
       const store = useAgentsStore()
       await store.loadAgents()
       expect(store.defaultSystemAgent.id).toBe(BUILTIN_SYSTEM_AGENT_ID)

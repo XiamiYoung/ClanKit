@@ -29,11 +29,20 @@ const DEFAULT_MODELS = {
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
 }
 
+const { normalizeAgents } = require('../agent/dataNormalizers')
+
 function readAgents() {
+  // Schema-agnostic flat list — for browse / find-by-id only.
   try {
-    const data = JSON.parse(fs.readFileSync(ds.paths().AGENTS_FILE, 'utf8'))
-    return Array.isArray(data) ? data : (data.agents || [])
+    return normalizeAgents(JSON.parse(fs.readFileSync(ds.paths().AGENTS_FILE, 'utf8')))
   } catch { return [] }
+}
+
+function readAgentsRaw() {
+  // Returns the full file structure so a subsequent write preserves the schema.
+  try {
+    return JSON.parse(fs.readFileSync(ds.paths().AGENTS_FILE, 'utf8'))
+  } catch { return null }
 }
 
 function writeAtomic(filePath, data) {
@@ -145,8 +154,12 @@ function handleCallback(key, cbQueryId, data, sendButtons, answerCallback) {
       return
     }
 
-    const agents = readAgents()
-    const agent  = agents.find(a => a.id === flow.agentId)
+    // Read the full file structure so the write preserves the on-disk schema
+    // (legacy flat array, legacy {categories,agents}, or new {agents,personas}).
+    // Mutating just the flat list returned by readAgents() and writing it back
+    // would corrupt the new nested schema and wipe the personas section.
+    const fullData = readAgentsRaw()
+    const agent = fullData ? ds.findAgentInFile(fullData, flow.agentId) : null
     if (!agent) {
       sendButtons('⚠️ Agent not found — it may have been deleted.', null)
       pendingFlows.delete(key)
@@ -155,7 +168,7 @@ function handleCallback(key, cbQueryId, data, sendButtons, answerCallback) {
 
     agent.providerId = flow.selectedProvider
     agent.modelId    = model
-    writeAtomic(ds.paths().AGENTS_FILE, agents)
+    writeAtomic(ds.paths().AGENTS_FILE, fullData)
     pendingFlows.delete(key)
 
     sendButtons(

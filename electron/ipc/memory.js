@@ -76,7 +76,7 @@ function register({ lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtracti
     try {
       const um = config.utilityModel
       if (!um?.provider || !um?.model) return { success: true, count: 0 }
-      const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.isActive)
+      const providerCfg = (config.providers || []).find(p => p.type === um.provider && p.apiKey)
       if (!providerCfg?.apiKey) return { success: true, count: 0 }
       if (!providerCfg?.baseURL && um.provider !== 'google') return { success: true, count: 0 }
 
