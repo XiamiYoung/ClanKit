@@ -119,16 +119,18 @@ function _injectSkillsIntoRuns(agentRuns, loadedSkills) {
   }
 }
 
-/** Read a soul file from disk. Returns null if not found. */
+const _soulStoreMod = require('../memory/soulStore')
+
+/** Read a soul as markdown via the SQLite-backed SoulStore. Returns null when missing. */
 function readSoulFileSync(agentId, agentType) {
   if (!agentId) return null
   try {
-    const filePath = path.join(ds.paths().SOULS_DIR, agentType, `${agentId}.md`)
-    if (fs.existsSync(filePath)) return fs.readFileSync(filePath, 'utf8')
+    const store = _soulStoreMod.getInstance(ds.paths().MEMORY_DIR)
+    return store.readMarkdown(agentId, agentType)
   } catch (err) {
     logger.error('readSoulFileSync error', err.message)
+    return null
   }
-  return null
 }
 
 /**
@@ -231,10 +233,10 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
     // Auto-save high-confidence facts directly to soul files
     if (autoSave.length > 0) {
       const { SoulUpdateTool: SoulUpdateToolForMemory } = require('../agent/tools/SoulTool')
+      // soulsDir param is kept for back-compat but the tool now writes via SoulStore
       const soulTool = new SoulUpdateToolForMemory(ds.paths().SOULS_DIR)
       for (const item of autoSave) {
-        const filePath = require('path').join(ds.paths().SOULS_DIR, item.agentType, `${item.agentId}.md`)
-        logger.debug('[Memory] writing', { filePath, section: item.section, entry: item.entry?.slice(0, 80) })
+        logger.debug('[Memory] writing', { agentId: item.agentId, agentType: item.agentType, section: item.section, entry: item.entry?.slice(0, 80) })
         await soulTool.execute('memory-auto', {
           agent_id: item.agentId,
           agent_type: item.agentType,

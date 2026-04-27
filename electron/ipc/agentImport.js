@@ -453,15 +453,15 @@ ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, age
     const type = agentType === 'user' || agentType === 'users' ? 'users' : 'system'
     const soulsDir = ds.paths().SOULS_DIR
     const dir = path.join(soulsDir, type)
-    fs.mkdirSync(dir, { recursive: true })
+    fs.mkdirSync(dir, { recursive: true })  // still used for evidence sidecar
 
     const { createTemplate, parseSoul, serializeSoul, updateTimestamp } = require('../agent/tools/SoulTool')
+    const soulStoreMod = require('../memory/soulStore')
+    const store = soulStoreMod.getInstance(ds.paths().MEMORY_DIR)
 
-    const soulPath = path.join(dir, `${agentId}.md`)
-    let content
-    if (fs.existsSync(soulPath)) {
-      content = fs.readFileSync(soulPath, 'utf8')
-    } else {
+    // Hydrate from store (markdown view), or template if this is a fresh agent.
+    let content = store.readMarkdown(agentId, type)
+    if (!content) {
       content = createTemplate(agentName || agentId, type === 'users' ? 'user' : 'system')
     }
 
@@ -472,23 +472,25 @@ ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, age
     for (const [sectionName, sectionBody] of Object.entries(sections)) {
       if (!sectionBody || !sectionBody.trim()) continue
       const bodyLines = sectionBody.split('\n')
-      // Trailing blank line so the next section reads cleanly
       if (bodyLines[bodyLines.length - 1] !== '') bodyLines.push('')
       soulSections.set(sectionName, bodyLines)
     }
 
     updateTimestamp(headerLines)
     const newContent = serializeSoul(headerLines, soulSections)
-    fs.writeFileSync(soulPath, newContent, 'utf8')
 
-    // Write evidence index sidecar
+    // Write through the store — its diff preserves IDs of unchanged entries.
+    store.upsertMeta(agentId, type, agentName)
+    const result = store.writeMarkdown(agentId, type, newContent)
+
+    // Evidence index sidecar still lives next to soulsDir as JSON
     if (evidenceIndex) {
       const evidencePath = path.join(dir, `${agentId}.evidence.json`)
       fs.writeFileSync(evidencePath, JSON.stringify(evidenceIndex, null, 2), 'utf8')
     }
 
-    logger.info(`agent:import-write-nuwa-sections: wrote ${soulPath}`)
-    return { success: true, written: true, soulPath }
+    logger.info(`agent:import-write-nuwa-sections: wrote (store)`, { agentId, ...result })
+    return { success: true, written: true, ...result }
   } catch (err) {
     logger.error('agent:import-write-nuwa-sections error', err.message)
     return { success: false, error: err.message }

@@ -147,6 +147,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     extractCollaboration: (params) => ipcRenderer.invoke('memory:extract-collaboration', params),
   },
 
+  // ── Structured Memory (per-entry CRUD on SoulStore) ──────────────────
+  memories: {
+    list:    (agentId, agentType)              => ipcRenderer.invoke('memories:list', agentId, agentType),
+    add:     (payload)                         => ipcRenderer.invoke('memories:add', payload),
+    update:  (payload)                         => ipcRenderer.invoke('memories:update', payload),
+    delete:  (id)                              => ipcRenderer.invoke('memories:delete', id),
+    search:  (payload)                         => ipcRenderer.invoke('memories:search', payload),
+    reindex: ()                                => ipcRenderer.invoke('memories:reindex'),
+  },
+
   // ── Knowledge / Local RAG ────────────────────────────────────────────────
   knowledge: {
     getConfig:            ()       => ipcRenderer.invoke('knowledge:get-config'),

@@ -51,19 +51,24 @@ function readSpeechDna(soulsDir, agentId) {
 }
 
 /**
- * Read a soul file from disk. Returns null if not found.
+ * Read a soul file. Returns the markdown reconstructed from the SQLite-backed
+ * SoulStore, or null when the agent has no entries.
+ *
+ * The `soulsDir` parameter is preserved for back-compat with callers that still
+ * pass it (older code, tests). It is no longer used — the SoulStore is the
+ * single source of truth and resolves its own path via dataStore.
  */
 function readSoulFile(soulsDir, agentId, agentType) {
-  if (!soulsDir || !agentId) return null
+  if (!agentId) return null
   try {
-    const filePath = path.join(soulsDir, agentType, `${agentId}.md`)
-    if (fs.existsSync(filePath)) {
-      return fs.readFileSync(filePath, 'utf8')
-    }
+    const ds = require('../lib/dataStore')
+    const soulStore = require('../memory/soulStore')
+    const store = soulStore.getInstance(ds.paths().MEMORY_DIR)
+    return store.readMarkdown(agentId, agentType)
   } catch (err) {
     logger.error('readSoulFile error', err.message)
+    return null
   }
-  return null
 }
 
 /**
@@ -104,6 +109,82 @@ function prepareSoulContent(content) {
   if (size < 4096) return content
   if (size < 16384) return extractKeySections(content)
   return extractKeySections(content) + '\n\n(Warning: Soul memory is large. Consider pruning old entries.)'
+}
+
+/**
+ * Retrieve top-K most relevant soul entries for a query, formatted as markdown
+ * suitable for direct prompt injection. Uses SoulStore.searchHybrid (BM25 +
+ * semantic). Falls back gracefully on any error — the size-gated full-content
+ * path remains the safety net.
+ *
+ * @param {string} agentId
+ * @param {string} agentType  'system' | 'users'
+ * @param {string} query      The user's most recent message text
+ * @param {object} [opts]     { topK?: number, minK?: number }
+ * @returns {Promise<string|null>}  Markdown block or null if retrieval is empty/failed
+ */
+async function retrieveTopKSoulContent(agentId, agentType, query, opts = {}) {
+  if (!agentId || !agentType || !query || !query.trim()) return null
+  const topK = opts.topK || 8
+  try {
+    const ds = require('../lib/dataStore')
+    const soulStore = require('../memory/soulStore')
+    const store = soulStore.getInstance(ds.paths().MEMORY_DIR)
+    const rows = await store.searchHybrid(agentId, agentType, query, topK)
+    if (!rows || rows.length === 0) return null
+
+    const meta = store.getMeta(agentId, agentType)
+    const header = meta?.agent_name
+      ? `# Soul: ${meta.agent_name}\n> Most relevant ${rows.length} entries (hybrid retrieval)\n`
+      : `# Soul\n> Most relevant ${rows.length} entries (hybrid retrieval)\n`
+
+    const bySection = new Map()
+    for (const r of rows) {
+      if (!bySection.has(r.section)) bySection.set(r.section, [])
+      bySection.get(r.section).push(r)
+    }
+
+    const out = [header]
+    for (const [section, entries] of bySection) {
+      out.push(`\n## ${section}`)
+      for (const e of entries) {
+        out.push(`- ${e.content}`)
+      }
+    }
+    return out.join('\n')
+  } catch (err) {
+    logger.debug('[systemPromptBuilder] retrieveTopKSoulContent failed', err.message)
+    return null
+  }
+}
+
+/**
+ * Top-K aware variant of prepareSoulContent. When a query is supplied AND the
+ * full content is large enough that retrieval would help (>4KB), try hybrid
+ * retrieval first. Otherwise fall back to size-gated full content.
+ *
+ * @param {string|null} fullContent  The full soul markdown (may be null)
+ * @param {string} agentId
+ * @param {string} agentType
+ * @param {string|null} query        Recent user message text
+ * @returns {Promise<string|null>}
+ */
+async function prepareSoulContentSmart(fullContent, agentId, agentType, query) {
+  if (!fullContent) return null
+  const size = Buffer.byteLength(fullContent, 'utf8')
+
+  // Small souls: always inject the whole thing — retrieval would only lose info
+  if (size < 4096) return fullContent
+
+  // Large souls + a query: try retrieval first
+  if (query && query.trim()) {
+    const retrieved = await retrieveTopKSoulContent(agentId, agentType, query)
+    if (retrieved) return retrieved
+  }
+
+  // Fallback: size-gated key sections
+  if (size < 16384) return extractKeySections(fullContent)
+  return extractKeySections(fullContent) + '\n\n(Warning: Soul memory is large. Consider pruning old entries.)'
 }
 
 /**
@@ -549,10 +630,21 @@ ${subfolderList}
   }
 
   // ── Memory context injection ──
-  const { userMd } = memoryContext
+  const { userMd, relevantUserSoul, relevantSystemSoul } = memoryContext
 
   if (userMd) {
     system += `\n\n## User Profile\n${prepareSoulContent(userMd)}`
+  }
+
+  // Soul memory injection — top-K relevant entries pre-resolved by the agent
+  // runtime (agentLoop.resolveSoulContentForPrompt) using the latest user
+  // message as the retrieval query. Falls back to full soul content for small
+  // souls. Strings are already prepared markdown — no further transformation.
+  if (relevantUserSoul) {
+    system += `\n\n## What I remember about the user\n${relevantUserSoul}`
+  }
+  if (relevantSystemSoul) {
+    system += `\n\n## What I remember about myself\n${relevantSystemSoul}`
   }
 
   // Current date — essential for LLMs to interpret relative dates ("去年", "last month", etc.)
@@ -608,6 +700,8 @@ function stripInfraFromPrompt(fullPrompt) {
     'Your Assigned Tools',
     'Knowledge Context',
     'User Profile',
+    'What I remember about the user',
+    'What I remember about myself',
     'MEMORY RECALL',
   ]
   for (const title of STRIP_SECTIONS) {
@@ -619,4 +713,31 @@ function stripInfraFromPrompt(fullPrompt) {
   return out.trim()
 }
 
-module.exports = { buildSystemPrompt, stripInfraFromPrompt, readSoulFile, readSpeechDna, prepareSoulContent, extractKeySections, readFileIfExists, SOUL_KEY_SECTIONS }
+/**
+ * Resolve the soul content to inject into the prompt for one agent. Picks
+ * between full content (small soul) and top-K hybrid retrieval (large soul,
+ * query available) and returns a markdown string ready for `memoryContext.userMd`.
+ *
+ * Caller is the agent runtime (agentLoop, voiceSession). Designed to be the
+ * SINGLE async resolution step before the synchronous buildSystemPrompt.
+ *
+ * @param {string} agentId
+ * @param {string} agentType  'system' | 'users'
+ * @param {string|null} query Recent user message — drives retrieval
+ * @returns {Promise<string|null>}
+ */
+async function resolveSoulContentForPrompt(agentId, agentType, query) {
+  if (!agentId || !agentType) return null
+  try {
+    const ds = require('../lib/dataStore')
+    const soulStore = require('../memory/soulStore')
+    const store = soulStore.getInstance(ds.paths().MEMORY_DIR)
+    const fullContent = store.readMarkdown(agentId, agentType)
+    return await prepareSoulContentSmart(fullContent, agentId, agentType, query)
+  } catch (err) {
+    logger.debug('[systemPromptBuilder] resolveSoulContentForPrompt failed', err.message)
+    return null
+  }
+}
+
+module.exports = { buildSystemPrompt, stripInfraFromPrompt, readSoulFile, readSpeechDna, prepareSoulContent, prepareSoulContentSmart, retrieveTopKSoulContent, resolveSoulContentForPrompt, extractKeySections, readFileIfExists, SOUL_KEY_SECTIONS }

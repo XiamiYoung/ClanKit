@@ -1,55 +1,42 @@
 /**
- * SoulTool — allows the agent to read and update agent memory ("soul") files.
+ * SoulTool — agent tools for read/update of soul memory.
  *
- * Soul files are structured markdown documents stored at:
- *   {DATA_DIR}/souls/system/{agentId}.md  (system agents)
- *   {DATA_DIR}/souls/users/{agentId}.md   (user agents)
- *
- * Two tools are exported:
+ * Two tools exported:
  *   - SoulUpdateTool: add/update/remove entries in soul memory
  *   - SoulReadTool:   read existing soul memory (or a specific section)
+ *
+ * Storage: SQLite-backed SoulStore at {DATA_DIR}/memory/souls.db.
+ * The legacy {DATA_DIR}/souls/{type}/{id}.md files are no longer authoritative —
+ * they are seeded into the store on first migration and then ignored at runtime.
+ *
+ * Backwards-compat helpers (`createTemplate`, `parseSoul`, `serializeSoul`,
+ * `SECTIONS`) are still exported because the chat-import nuwa pipeline (Phase B)
+ * builds soul markdown directly from chat-derived sections, then writes it via
+ * `souls:write` — that path now lands in the store via the markdown adapter.
  */
-const fs = require('fs')
 const path = require('path')
+const fs = require('fs')
 const { BaseTool } = require('./BaseTool')
 const { logger } = require('../../logger')
+const soulStoreMod = require('../../memory/soulStore')
+const soulMarkdown = require('../../memory/soulMarkdown')
 
-// ── Standard section headings ──────────────────────────────────────────────
-// Order matters: Identity first, then Nuwa-methodology sections (populated by
-// the chatImport pipeline), then existing free-form sections (populated by
-// MemoryExtractor at runtime), then logs at the bottom.
-const SECTIONS = [
-  'Identity',
-  // Nuwa-methodology sections (populated by chatImport 4-phase pipeline)
-  'Mental Models',
-  'Decision Heuristics',
-  'Values & Anti-Patterns',
-  'Relational Genealogy',
-  'Honest Boundaries',
-  'Core Tensions',
-  'Relationship Timeline',
-  // Existing free-form sections (populated by runtime MemoryExtractor)
-  'Preferences',
-  'Communication',
-  'Technical',
-  'Projects',
-  'Personal',
-  'Interaction Notes',
-  'Memory Updates Log',
-]
+// Re-export for chatImport / agentLoop compatibility
+const SECTIONS = soulMarkdown.SECTIONS
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Compat helpers used by chatImport ──────────────────────────────────────
 
 function isoNow() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
 }
-
 function dateStamp() {
   return new Date().toISOString().slice(0, 10)
 }
 
 /**
- * Create a blank soul file template.
+ * Create a blank soul file template. Used by chatImport when synthesizing
+ * a fresh soul from a chat dump. Output is markdown; caller writes via
+ * `souls:write` which lands in the SoulStore.
  */
 function createTemplate(agentName, agentType) {
   const lines = [
@@ -62,15 +49,15 @@ function createTemplate(agentName, agentType) {
     '',
   ]
   for (const section of SECTIONS) {
-    if (section === 'Identity') continue // already added
+    if (section === 'Identity') continue
     lines.push(`## ${section}`, '', '')
   }
   return lines.join('\n')
 }
 
 /**
- * Parse a soul markdown file into { header, sections: Map<name, lines[]> }.
- * Preserves ordering.
+ * Compat: parse a soul markdown into { headerLines, sections: Map<name, lines[]> }.
+ * Used by chat-import nuwa pipeline.
  */
 function parseSoul(content) {
   const lines = content.split('\n')
@@ -82,21 +69,18 @@ function parseSoul(content) {
     const sectionMatch = line.match(/^## (.+)$/)
     if (sectionMatch) {
       currentSection = sectionMatch[1]
-      if (!sections.has(currentSection)) {
-        sections.set(currentSection, [])
-      }
+      if (!sections.has(currentSection)) sections.set(currentSection, [])
     } else if (currentSection) {
       sections.get(currentSection).push(line)
     } else {
       headerLines.push(line)
     }
   }
-
   return { headerLines, sections }
 }
 
 /**
- * Serialize parsed soul back to markdown string.
+ * Compat: serialize parsed soul back to markdown.
  */
 function serializeSoul(headerLines, sections) {
   const parts = [...headerLines]
@@ -108,7 +92,7 @@ function serializeSoul(headerLines, sections) {
 }
 
 /**
- * Update the "Last updated" timestamp in header lines.
+ * Compat: update the "Last updated" header timestamp in place.
  */
 function updateTimestamp(headerLines) {
   for (let i = 0; i < headerLines.length; i++) {
@@ -117,17 +101,16 @@ function updateTimestamp(headerLines) {
       return
     }
   }
-  // If not found, insert after the title
   headerLines.splice(1, 0, `> Last updated: ${isoNow()}`)
 }
 
 // ── SoulUpdateTool ─────────────────────────────────────────────────────────
 
-const COMPACTION_THRESHOLD = 4096 // bytes — trigger compaction above this
-const COMPACTION_COOLDOWN  = 300000 // ms — at most once per 5 minutes per agent
-const _compactionTimestamps = new Map() // agentId → last compaction time
-
 class SoulUpdateTool extends BaseTool {
+  /**
+   * @param {string} soulsDir — kept for ctor signature back-compat (the legacy
+   *                            on-disk path); no longer functionally used.
+   */
   constructor(soulsDir) {
     super(
       'update_soul_memory',
@@ -135,90 +118,17 @@ class SoulUpdateTool extends BaseTool {
       'update_soul_memory'
     )
     this.soulsDir = soulsDir
-    this._compactionConfig = null // { model, apiKey, baseURL, isOpenAI, directAuth }
+    this._compactionConfig = null
   }
 
   /**
-   * Set utility model config for LLM-based compaction.
-   * Called by agentLoop after tool registration.
+   * Compatibility shim: kept so agentLoop can still call it during tool
+   * registration. The new store-based flow doesn't need LLM compaction —
+   * structured rows are deduped + retrieved on demand, so unbounded growth
+   * is no longer the concern markdown files faced. Method is a no-op.
    */
   setCompactionConfig(config) {
     this._compactionConfig = config
-  }
-
-  /**
-   * Async LLM-based soul file compaction. Merges duplicates, removes outdated entries,
-   * and consolidates the file to stay within a reasonable size.
-   * Fire-and-forget — errors are logged but never surface to the user.
-   */
-  async _runCompaction(filePath, agentId) {
-    const cfg = this._compactionConfig
-    if (!cfg?.model || !cfg?.apiKey) return
-
-    const content = fs.readFileSync(filePath, 'utf8')
-    const prompt = `You are a memory maintenance system. The following is an agent's soul/memory file in markdown format. It has grown too large and needs compaction.
-
-Rules:
-- Merge duplicate or near-duplicate entries into single entries
-- Remove entries that are clearly outdated or no longer relevant (e.g., "meeting tomorrow" from weeks ago)
-- Preserve ALL unique preferences, personality traits, corrections, and important facts
-- Keep the exact same markdown structure (## section headings, bullet points)
-- Keep the header (# Soul: ... and > Last updated: ...) unchanged
-- In Memory Updates Log, keep only the 10 most recent entries
-- Output ONLY the compacted markdown, nothing else
-
-Current soul file:
-${content}`
-
-    try {
-      let compacted
-      if (cfg.isOpenAI) {
-        const { OpenAIClient } = require('../core/OpenAIClient')
-        const client = new OpenAIClient({
-          openaiApiKey: cfg.apiKey,
-          openaiBaseURL: cfg.baseURL,
-          customModel: cfg.model,
-          _resolvedProvider: 'openai',
-          defaultProvider: 'openai',
-          _scenario: 'soul-tool',
-          ...(cfg.directAuth ? { _directAuth: true } : {}),
-          provider: { type: cfg.providerType || 'openai' },
-        })
-        const response = await client.getClient().chat.completions.create({
-          model: cfg.model,
-          max_tokens: 4096,
-          messages: [{ role: 'user', content: prompt }],
-        })
-        compacted = response.choices?.[0]?.message?.content || ''
-      } else {
-        const { AnthropicClient } = require('../core/AnthropicClient')
-        const client = new AnthropicClient({
-          apiKey: cfg.apiKey,
-          baseURL: cfg.baseURL,
-          customModel: cfg.model,
-          _scenario: 'soul-tool',
-        }).getClient()
-        const response = await client.messages.create({
-          model: cfg.model,
-          max_tokens: 4096,
-          messages: [{ role: 'user', content: prompt }],
-        })
-        compacted = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
-      }
-
-      // Validate compaction result — must still be valid markdown with sections
-      if (compacted && compacted.includes('## ') && compacted.length > 100) {
-        const oldSize = Buffer.byteLength(content, 'utf8')
-        const newSize = Buffer.byteLength(compacted, 'utf8')
-        // Only apply if it actually reduced size
-        if (newSize < oldSize) {
-          fs.writeFileSync(filePath, compacted, 'utf8')
-          logger.info('[SoulTool] compaction complete', { agentId, oldSize, newSize, reduction: `${((1 - newSize / oldSize) * 100).toFixed(0)}%` })
-        }
-      }
-    } catch (err) {
-      logger.error('[SoulTool] compaction LLM call failed', err.message)
-    }
   }
 
   schema() {
@@ -227,14 +137,20 @@ ${content}`
       properties: {
         agent_id:   { type: 'string', description: 'ID of the agent whose memory to update' },
         agent_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user agent' },
-        section:      { type: 'string', description: 'Section name. Free-form sections (use these for runtime memory updates): Preferences, Communication, Technical, Projects, Personal, Interaction Notes. Nuwa-methodology sections (populated by chat import, do not modify casually): Mental Models, Decision Heuristics, Values & Anti-Patterns, Relational Genealogy, Honest Boundaries, Core Tensions, Relationship Timeline.' },
-        action:       { type: 'string', enum: ['add', 'update', 'remove'], description: 'What to do' },
-        entry:        { type: 'string', description: 'The memory entry to add/update/remove' },
-        old_entry:    { type: 'string', description: 'For update action: the existing entry text to replace' },
-        agent_name: { type: 'string', description: 'Display name of the agent (used when creating a new soul file)' },
+        section:    { type: 'string', description: 'Section name. Free-form sections (use these for runtime memory updates): Preferences, Communication, Technical, Projects, Personal, Interaction Notes. Nuwa-methodology sections (populated by chat import, do not modify casually): Mental Models, Decision Heuristics, Values & Anti-Patterns, Relational Genealogy, Honest Boundaries, Core Tensions, Relationship Timeline.' },
+        action:     { type: 'string', enum: ['add', 'update', 'remove'], description: 'What to do' },
+        entry:      { type: 'string', description: 'The memory entry to add/update/remove' },
+        old_entry:  { type: 'string', description: 'For update action: the existing entry text to replace' },
+        agent_name: { type: 'string', description: 'Display name of the agent (recorded on first write)' },
       },
       required: ['agent_id', 'agent_type', 'section', 'action', 'entry']
     }
+  }
+
+  _getStore() {
+    // Resolve memory dir at call time — dataStore must already be init()'d
+    const ds = require('../../lib/dataStore')
+    return soulStoreMod.getInstance(ds.paths().MEMORY_DIR)
   }
 
   async execute(toolCallId, params, signal, onUpdate) {
@@ -244,125 +160,77 @@ ${content}`
       return this._err('Missing required fields: agent_id, agent_type, section, action, entry')
     }
 
-    const dir = path.join(this.soulsDir, agent_type)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    const store = this._getStore()
+    if (agent_name) store.upsertMeta(agent_id, agent_type, agent_name)
 
-    const filePath = path.join(dir, `${agent_id}.md`)
-
-    // Read or create
-    let content
-    if (fs.existsSync(filePath)) {
-      content = fs.readFileSync(filePath, 'utf8')
-    } else {
-      content = createTemplate(agent_name || agent_id, agent_type)
-    }
-
-    const { headerLines, sections } = parseSoul(content)
-
-    // Ensure section exists
-    if (!sections.has(section)) {
-      sections.set(section, [''])
-    }
-
-    const sectionLines = sections.get(section)
+    const existingRows = store.listRows(agent_id, agent_type)
+    const sectionRows = existingRows.filter(r => r.section === section)
 
     switch (action) {
       case 'add': {
-        // Dedup: check if a similar entry already exists in this section
+        // Dedup: case-insensitive substring inclusion either direction
         const entryLower = entry.toLowerCase().trim()
-        for (const line of sectionLines) {
-          const lineTrimmed = line.replace(/^-\s*/, '').toLowerCase().trim()
-          if (lineTrimmed && (lineTrimmed === entryLower || lineTrimmed.includes(entryLower) || entryLower.includes(lineTrimmed))) {
-            return this._ok(`Similar entry already exists in ${section}: "${line.trim()}"`, { agent_id, section, action: 'skipped_duplicate' })
+        for (const r of sectionRows) {
+          const existing = r.content.toLowerCase().trim()
+          if (existing && (existing === entryLower || existing.includes(entryLower) || entryLower.includes(existing))) {
+            return this._ok(`Similar entry already exists in ${section}: "${r.content}"`, { agent_id, section, action: 'skipped_duplicate' })
           }
         }
-        // Add entry as a bullet point
-        let insertIdx = sectionLines.length
-        while (insertIdx > 0 && sectionLines[insertIdx - 1].trim() === '') insertIdx--
-        sectionLines.splice(insertIdx, 0, `- ${entry}`)
+        store.addRow({
+          agentId: agent_id,
+          agentType: agent_type,
+          section,
+          content: entry,
+          source: 'tool',
+        })
+        // Append to Memory Updates Log so audit trail is preserved
+        this._appendLog(store, agent_id, agent_type, action, entry)
         break
       }
       case 'update': {
-        if (!old_entry) {
-          return this._err('update action requires old_entry field')
-        }
-        let found = false
-        for (let i = 0; i < sectionLines.length; i++) {
-          if (sectionLines[i].includes(old_entry)) {
-            sectionLines[i] = `- ${entry}`
-            found = true
-            break
-          }
-        }
-        if (!found) {
-          return this._err(`Could not find entry matching: "${old_entry}"`)
-        }
+        if (!old_entry) return this._err('update action requires old_entry field')
+        const target = sectionRows.find(r => r.content.includes(old_entry))
+        if (!target) return this._err(`Could not find entry matching: "${old_entry}"`)
+        store.updateRow(target.id, { content: entry })
+        this._appendLog(store, agent_id, agent_type, action, entry)
         break
       }
       case 'remove': {
-        let found = false
-        for (let i = 0; i < sectionLines.length; i++) {
-          if (sectionLines[i].includes(entry)) {
-            sectionLines.splice(i, 1)
-            found = true
-            break
-          }
-        }
-        if (!found) {
-          return this._err(`Could not find entry matching: "${entry}"`)
-        }
+        const target = sectionRows.find(r => r.content.includes(entry))
+        if (!target) return this._err(`Could not find entry matching: "${entry}"`)
+        store.deleteRow(target.id)
+        this._appendLog(store, agent_id, agent_type, action, entry)
         break
       }
       default:
         return this._err(`Unknown action: ${action}`)
     }
 
-    // Update timestamp
-    updateTimestamp(headerLines)
-
-    // Append to Memory Updates Log (keep last 20 entries)
-    if (sections.has('Memory Updates Log')) {
-      const logLines = sections.get('Memory Updates Log')
-      let insertIdx = logLines.length
-      while (insertIdx > 0 && logLines[insertIdx - 1].trim() === '') insertIdx--
-      logLines.splice(insertIdx, 0, `- [${dateStamp()}] ${action}: ${entry}`)
-
-      // Trim to last 20 log entries
-      const MAX_LOG_ENTRIES = 50
-      const logEntries = logLines.filter(l => l.startsWith('- ['))
-      if (logEntries.length > MAX_LOG_ENTRIES) {
-        const toRemove = logEntries.length - MAX_LOG_ENTRIES
-        let removed = 0
-        for (let i = 0; i < logLines.length && removed < toRemove; i++) {
-          if (logLines[i].startsWith('- [')) {
-            logLines.splice(i, 1)
-            removed++
-            i-- // adjust index after splice
-          }
-        }
-      }
-    }
-
-    // Write back
-    const newContent = serializeSoul(headerLines, sections)
-    fs.writeFileSync(filePath, newContent, 'utf8')
-
     logger.agent('SoulUpdateTool', { agent_type, section, action })
+    return this._ok(`Memory ${action}d in ${section}: ${entry}`, { agent_id, section, action })
+  }
 
-    const fileSize = Buffer.byteLength(newContent, 'utf8')
-
-    // Trigger async LLM compaction if file is too large
-    if (fileSize > COMPACTION_THRESHOLD && this._compactionConfig) {
-      const lastCompaction = _compactionTimestamps.get(agent_id) || 0
-      if (Date.now() - lastCompaction > COMPACTION_COOLDOWN) {
-        _compactionTimestamps.set(agent_id, Date.now())
-        this._runCompaction(filePath, agent_id).catch(err =>
-          logger.error('[SoulTool] compaction error (non-fatal)', err.message)
-        )
+  /**
+   * Append a Memory Updates Log entry. Bounded — prunes oldest log rows
+   * past 50 to keep the section a useful audit trail without unbounded growth.
+   */
+  _appendLog(store, agentId, agentType, action, entry) {
+    try {
+      store.addRow({
+        agentId,
+        agentType,
+        section: 'Memory Updates Log',
+        content: `[${dateStamp()}] ${action}: ${entry}`,
+        source: 'tool',
+      })
+      const allLog = store.listRows(agentId, agentType).filter(r => r.section === 'Memory Updates Log')
+      if (allLog.length > 50) {
+        const toDelete = allLog.slice(0, allLog.length - 50)
+        for (const r of toDelete) store.deleteRow(r.id)
       }
+    } catch (err) {
+      logger.warn('[SoulUpdateTool] _appendLog failed (non-fatal)', err.message)
     }
-
-    return this._ok(`Memory ${action}d in ${section}: ${entry}`, { agent_id, section, action, fileSize })
   }
 }
 
@@ -384,10 +252,15 @@ class SoulReadTool extends BaseTool {
       properties: {
         agent_id:   { type: 'string', description: 'ID of the agent whose memory to read' },
         agent_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user agent' },
-        section:      { type: 'string', description: 'Optional: specific section to read (e.g. Preferences). Omit to read all.' },
+        section:    { type: 'string', description: 'Optional: specific section to read (e.g. Preferences). Omit to read all.' },
       },
       required: ['agent_id', 'agent_type']
     }
+  }
+
+  _getStore() {
+    const ds = require('../../lib/dataStore')
+    return soulStoreMod.getInstance(ds.paths().MEMORY_DIR)
   }
 
   async execute(toolCallId, params, signal, onUpdate) {
@@ -397,35 +270,29 @@ class SoulReadTool extends BaseTool {
       return this._err('Missing required fields: agent_id, agent_type')
     }
 
-    const filePath = path.join(this.soulsDir, agent_type, `${agent_id}.md`)
+    const store = this._getStore()
 
-    if (!fs.existsSync(filePath)) {
+    if (!store.exists(agent_id, agent_type)) {
       return this._ok('No soul file exists for this agent yet.', { exists: false })
     }
 
-    const content = fs.readFileSync(filePath, 'utf8')
-
     if (!section) {
-      return this._ok(content, { exists: true })
+      const md = store.readMarkdown(agent_id, agent_type)
+      return this._ok(md || '(empty)', { exists: true })
     }
 
-    // Extract specific section
-    const { sections } = parseSoul(content)
-    if (sections.has(section)) {
-      const lines = sections.get(section).filter(l => l.trim() !== '')
-      return this._ok(lines.join('\n'), { exists: true, section })
+    const rows = store.listRows(agent_id, agent_type).filter(r => r.section === section)
+    if (rows.length === 0) {
+      return this._ok(`Section "${section}" is empty or not found.`, { exists: true, section, empty: true })
     }
-
-    return this._ok(`Section "${section}" is empty or not found.`, { exists: true, section, empty: true })
+    return this._ok(rows.map(r => `- ${r.content}`).join('\n'), { exists: true, section })
   }
 }
 
 module.exports = {
   SoulUpdateTool,
   SoulReadTool,
-  // Internal helpers exposed for the chat-import nuwa pipeline (Phase B).
-  // Use these to read/write soul files directly when bulk-importing structured
-  // sections instead of going through the per-entry SoulUpdateTool interface.
+  // Compat helpers — chatImport pipeline still uses these for direct .md synthesis
   createTemplate,
   parseSoul,
   serializeSoul,

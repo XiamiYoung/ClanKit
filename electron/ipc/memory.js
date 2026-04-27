@@ -12,16 +12,18 @@ const { accumulateUtilityUsage } = require('../ipc/store')
 const { MemoryExtractor } = require('../agent/core/MemoryExtractor')
 const { HistoryIndex }   = require('../memory/HistoryIndex')
 
-/** Read a soul file from disk. Returns null if not found. */
+const soulStore = require('../memory/soulStore')
+
+/** Read a soul as markdown via the SQLite-backed SoulStore. Returns null when missing. */
 function readSoulFileSync(agentId, agentType) {
   if (!agentId) return null
   try {
-    const filePath = path.join(ds.paths().SOULS_DIR, agentType, `${agentId}.md`)
-    if (fs.existsSync(filePath)) return fs.readFileSync(filePath, 'utf8')
+    const store = soulStore.getInstance(ds.paths().MEMORY_DIR)
+    return store.readMarkdown(agentId, agentType)
   } catch (err) {
     logger.error('readSoulFileSync error', err.message)
+    return null
   }
-  return null
 }
 
 /**

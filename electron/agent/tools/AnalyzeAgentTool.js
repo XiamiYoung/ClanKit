@@ -1503,13 +1503,25 @@ Output JSON directly, starting with { :`
       harness: null,
     }
 
-    // Determine soul file locations — check both system/ and users/
+    // Determine soul presence — check the SQLite SoulStore first, then fall
+    // back to legacy on-disk .md detection for sidecar JSON discovery
+    // (speech.json / evidence.json / harness.json still live next to the
+    // legacy soulsDir as separate files).
     const soulsDir = path.join(this.dataPath, 'souls')
+    const soulStoreMod = require('../../memory/soulStore')
+    const memoryDir = path.join(this.dataPath, 'memory')
+    const _soulStore = soulStoreMod.getInstance(memoryDir)
     let soulType = null
     for (const t of ['system', 'users']) {
-      if (fs.existsSync(path.join(soulsDir, t, `${agentId}.md`))) {
-        soulType = t
-        break
+      if (_soulStore.exists(agentId, t)) { soulType = t; break }
+    }
+    if (!soulType) {
+      // Fallback: legacy .md files (e.g. on systems where migration hasn't run yet)
+      for (const t of ['system', 'users']) {
+        if (fs.existsSync(path.join(soulsDir, t, `${agentId}.md`))) {
+          soulType = t
+          break
+        }
       }
     }
 
@@ -1558,8 +1570,7 @@ Output JSON directly, starting with { :`
     // 4. Nuwa sections from the soul file (extract only Nuwa-specific sections)
     if (soulType) {
       try {
-        const soulPath = path.join(soulsDir, soulType, `${agentId}.md`)
-        const content = fs.readFileSync(soulPath, 'utf8')
+        const content = _soulStore.readMarkdown(agentId, soulType) || ''
         const nuwaSectionNames = ['Mental Models', 'Decision Heuristics', 'Values & Anti-Patterns',
           'Relational Genealogy', 'Honest Boundaries', 'Core Tensions', 'Relationship Timeline']
         const sections = {}

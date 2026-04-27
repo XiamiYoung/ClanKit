@@ -562,10 +562,41 @@ class AgentLoop {
       userMd = readFileIfExists(path.join(memoryDir, 'users', userId, 'USER.md'))
     }
 
+    // ── Hybrid Top-K retrieval from SoulStore (BM25 + semantic) ──
+    // Picks the most relevant soul entries for the latest user message and
+    // injects them into the prompt. For agents with small souls (<4KB) the
+    // resolver short-circuits to full content. Empty / no-query → null →
+    // section is skipped in buildSystemPrompt.
+    let relevantUserSoul = null
+    let relevantSystemSoul = null
+    try {
+      const lastUserText = (() => {
+        const lu = [...messages].reverse().find(m => m.role === 'user')
+        if (!lu) return null
+        if (typeof lu.content === 'string') return lu.content
+        if (Array.isArray(lu.content)) {
+          return lu.content.filter(b => b.type === 'text').map(b => b.text).join(' ')
+        }
+        return null
+      })()
+      if (lastUserText && lastUserText.trim()) {
+        const { resolveSoulContentForPrompt } = require('./systemPromptBuilder')
+        const [u, s] = await Promise.all([
+          userAgentId ? resolveSoulContentForPrompt(userAgentId, 'users', lastUserText) : null,
+          systemAgentId ? resolveSoulContentForPrompt(systemAgentId, 'system', lastUserText) : null,
+        ])
+        relevantUserSoul = u
+        relevantSystemSoul = s
+      }
+    } catch (rErr) {
+      // Retrieval failures must never break agent runs — log and continue
+      try { require('../logger').logger.debug('[agentLoop] soul retrieval failed', rErr.message) } catch {}
+    }
+
     let systemPrompt = this.buildSystemPrompt(
       enabledAgents, enabledSkills, agentPrompts,
       userSoulContent, systemSoulContent, participantSouls,
-      { userMd },
+      { userMd, relevantUserSoul, relevantSystemSoul },
       this.ragContext
     )
 
