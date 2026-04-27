@@ -85,26 +85,32 @@
                   {{ (auth.name.value || auth.email.value || '?').slice(0, 1).toUpperCase() }}
                 </div>
                 <div class="account-info">
-                  <div class="account-name">{{ auth.name.value || maskEmail(auth.email.value) || t('account.signedIn') }}</div>
-                  <div v-if="auth.name.value && auth.email.value" class="account-email-secondary">{{ maskEmail(auth.email.value) }}</div>
-                  <div v-if="auth.createdAt.value" class="account-meta-row">
-                    <span class="account-meta-label">{{ t('account.registeredAt') }}</span>
-                    <span class="account-meta-value">{{ formatRegisteredAt(auth.createdAt.value) }}</span>
+                  <div class="account-name-row">
+                    <span class="account-name">{{ auth.name.value || displayedEmail || t('account.signedIn') }}</span>
+                    <span v-if="accountMethodLabel" class="account-method-badge">{{ accountMethodLabel }}</span>
                   </div>
-                  <div v-if="auth.lastOpenedAt.value" class="account-meta-row">
-                    <span class="account-meta-label">{{ t('account.lastOpenedAt') }}</span>
-                    <span class="account-meta-value">{{ formatRegisteredAt(auth.lastOpenedAt.value) }}</span>
-                  </div>
+                  <div v-if="auth.name.value && displayedEmail" class="account-email-secondary">{{ displayedEmail }}</div>
+                </div>
+              </div>
+
+              <div v-if="auth.createdAt.value || auth.lastOpenedAt.value" class="account-meta">
+                <div v-if="auth.createdAt.value" class="account-meta-row">
+                  <span class="account-meta-label">{{ t('account.registeredAt') }}</span>
+                  <span class="account-meta-value">{{ formatRegisteredAt(auth.createdAt.value) }}</span>
+                </div>
+                <div v-if="auth.lastOpenedAt.value" class="account-meta-row">
+                  <span class="account-meta-label">{{ t('account.lastOpenedAt') }}</span>
+                  <span class="account-meta-value">{{ formatRegisteredAt(auth.lastOpenedAt.value) }}</span>
                 </div>
               </div>
 
               <div class="account-actions">
-                <button class="account-btn" @click="goToAuth">
+                <AppButton size="compact" variant="secondary" @click="goToAuth">
                   {{ t('account.switchAccount') }}
-                </button>
-                <button class="account-btn account-btn-danger" @click="onSignOut">
+                </AppButton>
+                <AppButton size="compact" variant="danger-ghost" @click="onSignOut">
                   {{ t('account.signOut') }}
-                </button>
+                </AppButton>
               </div>
             </div>
 
@@ -119,9 +125,9 @@
                 <p class="account-empty-hint">{{ t('account.notSignedInHint') }}</p>
               </div>
               <div class="account-actions">
-                <button class="account-btn account-btn-primary" @click="goToAuth">
+                <AppButton size="compact" variant="primary" @click="goToAuth">
                   {{ t('account.signInOrRegister') }}
-                </button>
+                </AppButton>
               </div>
             </div>
           </div>
@@ -692,6 +698,7 @@
                         <div
                           v-for="m in filteredProviderModels"
                           :key="m.id"
+                          v-memo="[m.id, m._ctxFormatted, m._outFormatted, m._outSource, m._inPriceFormatted, m._outPriceFormatted, m._priceSource, testTargetModel === m.id, selectedProvider.model === m.id]"
                           class="cv-model-item"
                           :class="{ active: testTargetModel === m.id }"
                           @click="selectModelForTest(m.id)"
@@ -2842,6 +2849,21 @@ function maskEmail(email) {
   if (endKeep < 1) return local[0] + '***' + domain
   return local.slice(0, startKeep) + '***' + local.slice(-endKeep) + domain
 }
+
+// Only show email when it's a real address. Google sign-in without a returned
+// email stores the placeholder `(google)` — never display that as an email.
+const displayedEmail = computed(() => {
+  const e = auth.email.value
+  if (!e || typeof e !== 'string' || !e.includes('@')) return ''
+  return maskEmail(e)
+})
+
+const accountMethodLabel = computed(() => {
+  const m = auth.lastMethod.value
+  if (m === 'google') return t('account.signedInWithGoogle')
+  if (m === 'email')  return t('account.signedInWithEmail')
+  return ''
+})
 
 // Format the registration timestamp as a locale-aware date. Uses YYYY-MM-DD
 // for stability — relative ("2 months ago") would be cuter but drifts daily.
@@ -6930,93 +6952,94 @@ async function checkKnowledgeModelIfNeeded() {
 .demo-info-icon:hover { opacity: 1; }
 
 /* ── Account section (General > Account) ───────────────────────────────── */
-.account-block { padding: 8px 0 0; }
+.account-block { padding: 0.25rem 0 0; }
 .account-row {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: 14px;
-  padding: 16px 0 8px;
+  gap: 0.875rem;
+  padding: 0.25rem 0 0.75rem;
 }
 .account-avatar {
-  width: 64px; height: 64px;
+  width: 2.75rem; height: 2.75rem;
   border-radius: 50%;
-  background: var(--primary);
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #fff;
   font-weight: 600;
-  font-size: 24px;
+  font-size: var(--fs-body);
   display: grid; place-items: center;
   flex-shrink: 0;
 }
+.account-avatar-img {
+  background: transparent;
+  object-fit: cover;
+}
 .account-info {
-  width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
+  gap: 0.125rem;
 }
-.account-email {
-  font-size: var(--fs-subtitle);
-  font-weight: 600;
-  color: var(--text-primary);
-  word-break: break-all;
-  line-height: 1.3;
+.account-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 .account-name {
-  font-size: var(--fs-subtitle);
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--text-primary);
-  line-height: 1.3;
+  line-height: 1.25;
+}
+.account-method-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.4375rem;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  line-height: 1.4;
 }
 .account-email-secondary {
   font-size: var(--fs-caption);
   color: var(--text-secondary);
   word-break: break-all;
-  margin-top: 2px;
   font-family: 'JetBrains Mono', monospace;
+}
+.account-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.75rem 0;
+  margin: 0.25rem 0 0;
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
 }
 .account-meta-row {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.75rem;
   font-size: var(--fs-caption);
-  margin-top: 4px;
-  color: var(--text-muted);
 }
-.account-meta-label { color: var(--text-muted); }
-.account-meta-value { color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; }
-.account-avatar-img {
-  background: transparent;
-  object-fit: cover;
+.account-meta-label {
+  color: var(--text-muted);
+  min-width: 5.5rem;
+}
+.account-meta-value {
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
 }
 .account-actions {
   display: flex;
-  gap: 10px;
+  gap: 0.5rem;
   flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-light);
+  margin-top: 0.875rem;
 }
-.account-btn {
-  padding: 8px 16px;
-  font-size: var(--fs-secondary);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-primary);
-  transition: background 120ms, border-color 120ms, color 120ms;
-}
-.account-btn:hover { background: var(--bg-hover); }
-.account-btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
-.account-btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
-.account-btn-danger { color: #d92d20; border-color: rgba(217, 45, 32, 0.3); }
-.account-btn-danger:hover { background: rgba(217, 45, 32, 0.06); border-color: rgba(217, 45, 32, 0.5); }
 
-.account-empty { text-align: center; padding: 24px 16px; }
+.account-empty { text-align: center; padding: 1.5rem 1rem; }
 .account-empty-icon {
   display: block;
   width: 36px;

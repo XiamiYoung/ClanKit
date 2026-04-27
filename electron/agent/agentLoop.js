@@ -419,6 +419,11 @@ class AgentLoop {
       this.toolRegistry.registerSearchHistoryTool(this.config.memoryDir, searchTargetId)
     }
 
+    // (Cross-agent recommendation lives in the built-in `agent-recommendation`
+    // skill rather than as a core tool. The skill ships a tool.js that loads
+    // automatically when Clank's skill set includes the skill id — see
+    // electron/agent/builtin-skills/agent-recommendation/.)
+
     // Register dedicated analysis tool for analysis chats
     if (this.config.memoryDir && agentPrompts?.analysisTargetAgentId) {
       const { AnalyzeAgentTool } = require('./tools/AnalyzeAgentTool')

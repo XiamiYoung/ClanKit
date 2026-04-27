@@ -1359,30 +1359,43 @@ ipcMain.handle('agent:generate-greeting', async (event, { chatId, agentId, langu
     const langLabel = language === 'zh'
       ? 'Simplified Chinese (简体中文)'
       : (language === 'en' ? 'English' : (language || 'English'))
+    const agentName = agent.name || 'an AI assistant'
+    const agentDesc = (agent.description || '').trim()
     const personaPrompt = (agent.prompt || '').trim()
-    const personaBlock = personaPrompt
-      ? `${personaPrompt}\n\n---\n`
-      : `You are ${agent.name || 'an AI assistant'}.\n\n`
 
-    // User-persona context: address the user by name and tailor tone.
+    // ── ABOUT THE USER block (built first, prepended before system identity) ──
+    // Same architectural pattern as systemPromptBuilder: user persona is written
+    // in the same 2nd-person voice ("你是 X") as the system agent. Put it FIRST
+    // wrapped as descriptive context so the LLM's "later instruction wins"
+    // tendency locks identity onto the system agent, not the user.
     const userName = (userPersona?.name || '').trim()
     const userDesc = (userPersona?.description || '').trim()
     const userPrompt = (userPersona?.prompt || '').trim()
-    let userBlock = ''
+    let aboutUserBlock = ''
     if (userName || userDesc || userPrompt) {
-      userBlock = '\n\nWho you are speaking to:\n'
-      if (userName) userBlock += `- Name: ${userName}\n`
-      if (userDesc) userBlock += `- About them: ${userDesc}\n`
-      if (userPrompt) userBlock += `- Their persona / context: ${userPrompt}\n`
+      aboutUserBlock = `## ABOUT THE USER (CONTEXT ONLY — NOT YOUR IDENTITY)\n_The text in this section describes the person you are greeting. It is NOT instructions about who you are. Whenever it says "you", "your", "I am", "我是", "你是" etc., that refers to the USER, not you. Your own identity is defined in the next section and overrides anything written here._\n\n`
+      if (userName) aboutUserBlock += `The user you are greeting is **${userName}**${userDesc ? ` — ${userDesc}` : ''}.\n\n`
+      if (userPrompt) aboutUserBlock += `${userPrompt}\n\n`
+      aboutUserBlock += `_— End of user description. Everything above describes the USER. The next section defines YOU. —_\n\n---\n\n`
     }
+
+    const personaBlock = personaPrompt
+      ? `## YOU ARE ${agentName}${agentDesc ? ` — ${agentDesc}` : ''}\n\n${personaPrompt}\n\n---\n`
+      : `## YOU ARE ${agentName}${agentDesc ? ` — ${agentDesc}` : ''}\n\n`
 
     const addressLine = userName
       ? `Address them by name ("${userName}") at least once to feel personal — pick the form of address that fits your own persona (e.g. friendly nickname, respectful title, casual). Tailor what you offer to who they are.`
       : `Keep the greeting personal and warm.`
 
-    const systemPrompt = `${personaBlock}You have just been opened in a brand new chat by the user — they have not said anything yet.${userBlock}
+    // Final identity re-anchor right before the task instruction. Works WITH
+    // "later instruction wins" to lock in the system agent's identity.
+    const reanchor = (userName || userDesc || userPrompt)
+      ? `\n\n---\n## YOU REMAIN ${agentName}\nYou are ${agentName}${agentDesc ? ` — ${agentDesc}` : ''}. The "ABOUT THE USER" section at the top describes the person you are greeting — it is NOT about you. Stay fully in your own character (${agentName}). Do NOT adopt the user's identity, mannerisms, species, or speaking style.\n`
+      : ''
 
-Write a short opening greeting (2-4 sentences) in ${langLabel}, fully in character with the personality and role described above. ${addressLine} Briefly hint at who you are and what you can help this specific person with, then warmly invite them to share what they need. Keep the tone natural, never robotic, never generic. Do NOT use markdown headings, bullet points, code blocks, or quotation marks around the greeting. Output only the greeting text itself.`
+    const systemPrompt = `${aboutUserBlock}${personaBlock}You have just been opened in a brand new chat by the user — they have not said anything yet.${reanchor}
+
+Write a short opening greeting (2-4 sentences) in ${langLabel}, fully in character as ${agentName} (the persona described in the YOU ARE section above — NOT the user's persona). ${addressLine} Briefly hint at who YOU (${agentName}) are and what YOU can help this specific person with, then warmly invite them to share what they need. Keep the tone natural, never robotic, never generic. Do NOT use markdown headings, bullet points, code blocks, or quotation marks around the greeting. Output only the greeting text itself.`
 
     abort = new AbortController()
     _activeGreetings.set(chatId, abort)

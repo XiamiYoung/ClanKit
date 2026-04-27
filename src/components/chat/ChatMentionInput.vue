@@ -361,6 +361,12 @@ function emitModel() {
   _suppressNextModelWatch = true
   emit('update:modelValue', text)
   emit('update:longBlobs', longBlobs)
+  // Watcher only fires on actual value change; an emit that round-trips to
+  // the same modelValue (e.g. IME composition no-ops) leaves the latch set.
+  // A later external clear (sendMessage → inputText='') would then be silently
+  // suppressed, leaving the editor showing stale text. Reset on next tick so
+  // the latch never outlives the emit it was meant to guard.
+  nextTick(() => { _suppressNextModelWatch = false })
 }
 
 function onInput() {
@@ -453,6 +459,21 @@ function onBlur() {
 }
 
 // ── Selection helpers ─────────────────────────────────────────────────────
+// Vue can rebuild the contenteditable's children between a setStart() call
+// and the eventual addRange(), leaving the range pointing at a detached node.
+// Browsers throw "addRange(): The given range isn't in document" in that case.
+// safeAddRange swallows the error path by verifying both endpoints are still
+// connected to the live document before applying the selection.
+function safeAddRange(sel, range) {
+  if (!sel || !range) return
+  const start = range.startContainer
+  const end = range.endContainer
+  if (!start || !start.isConnected) return
+  if (end && !end.isConnected) return
+  sel.removeAllRanges()
+  sel.addRange(range)
+}
+
 function placeCaretAtTextOffset(targetOffset) {
   const root = editorEl.value
   if (!root) return
@@ -464,8 +485,7 @@ function placeCaretAtTextOffset(targetOffset) {
     const range = document.createRange()
     range.setStart(node, offset)
     range.collapse(true)
-    sel.removeAllRanges()
-    sel.addRange(range)
+    safeAddRange(sel, range)
   }
 
   const walk = (node) => {
@@ -517,8 +537,7 @@ function placeCaretAtTextOffset(targetOffset) {
     const range = document.createRange()
     range.selectNodeContents(root)
     range.collapse(false)
-    sel.removeAllRanges()
-    sel.addRange(range)
+    safeAddRange(sel, range)
   }
 }
 
@@ -532,6 +551,7 @@ function replaceTextRange(startOffset, endOffset, replacement) {
   // Do the DOM rewrite explicitly so the caret math stays correct.
   renderFromModel(newValue, props.longBlobs)
   nextTick(() => {
+    _suppressNextModelWatch = false
     editorEl.value?.focus()
     placeCaretAtTextOffset(before.length + replacement.length)
   })
@@ -577,6 +597,7 @@ function appendTextAtEnd(text) {
   _suppressNextModelWatch = true
   emit('update:modelValue', newValue)
   renderFromModel(newValue, props.longBlobs)
+  nextTick(() => { _suppressNextModelWatch = false })
 }
 
 function insertTextAtCursor(text) {
@@ -718,8 +739,7 @@ async function onPaste(e) {
         range.setStartAfter(insertedChip)
       }
       range.collapse(true)
-      sel?.removeAllRanges()
-      sel?.addRange(range)
+      safeAddRange(sel, range)
     }
     nextTick(emitModel)
     return
@@ -775,8 +795,7 @@ function focus() {
   const range = document.createRange()
   range.selectNodeContents(el)
   range.collapse(false)
-  sel.removeAllRanges()
-  sel.addRange(range)
+  safeAddRange(sel, range)
 }
 
 function resetHeight() {

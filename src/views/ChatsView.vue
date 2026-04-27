@@ -21,11 +21,6 @@
 
     <!-- ── Chat List Sidebar (single mode) ────────────────────────────────── -->
     <aside v-if="!gridMode" class="chat-sidebar" :style="{ width: chatSidebarCollapsed ? '0' : sidebarWidth + 'px', minWidth: chatSidebarCollapsed ? '0' : undefined, overflow: chatSidebarCollapsed ? 'hidden' : undefined }">
-      <!-- Header -->
-      <div class="chat-sidebar-header">
-        <span class="chat-sidebar-title">{{ t('nav.chats') }}</span>
-      </div>
-
       <!-- Action bar: New Folder, New Chat, Grid Mode -->
       <div class="chat-sidebar-action-bar">
         <!-- New Folder button -->
@@ -2257,20 +2252,6 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
 .chat-sidebar-resize:active {
   background: #D1D1D6;
 }
-.chat-sidebar-header {
-  padding: 0.875rem 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-bottom: 1px solid #E5E5EA;
-}
-.chat-sidebar-title {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-page-title);
-  font-weight: 700;
-  color: #1A1A1A;
-}
-
 /* ── Action bar below header ── */
 .chat-sidebar-action-bar {
   display: flex;

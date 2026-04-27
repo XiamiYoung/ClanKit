@@ -12,11 +12,22 @@ export const useSkillsStore = defineStore('skills', () => {
   const error = ref(null)
   const installingSkills = ref({}) // { skillId: { sourceId, progress, status, error } }
 
-  // All skills are always "enabled" — return all as skill objects for agent loop
+  // All skills are always "enabled" — return all as skill objects for agent loop.
+  // `description` is the SKILL.md frontmatter description — this is what the
+  // system prompt's ACTIVE SKILLS block surfaces to the LLM as the trigger
+  // description. Dropping it would force a fallback to `summary` (the first
+  // body paragraph), which is usually less precise about WHEN to load.
   const allSkillObjects = computed(() =>
     skills.value
       .filter(s => s.systemPrompt)
-      .map(s => ({ id: s.id, name: s.name, summary: s.summary || '', systemPrompt: s.systemPrompt }))
+      .map(s => ({
+        id: s.id,
+        name: s.name,
+        displayName: s.displayName || '',
+        description: s.description || '',
+        summary: s.summary || '',
+        systemPrompt: s.systemPrompt,
+      }))
   )
 
   // Combined remote skills (flatten by sourceId)

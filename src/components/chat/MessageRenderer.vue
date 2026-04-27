@@ -738,13 +738,45 @@ function injectFilePathChips(html) {
   return parts.join('')
 }
 
+// Replace <recommend-agent id="..." reason="..."/> tags in the raw text with
+// button HTML before marked.parse. The button survives DOMPurify because it
+// uses only standard data-attributes (same shape as the file-path chips).
+// Match both self-closing (<recommend-agent ... />) and paired forms.
+// Only matches COMPLETE tags — partial streaming output stays as plain text
+// until the closing slash arrives, then snaps to a button on the next frame.
+function expandRecommendAgentTags(text) {
+  if (!text || typeof text !== 'string') return text
+  const re = /<recommend-agent\s+([^>]*?)\/?\s*>(?:\s*<\/recommend-agent>)?/gi
+  return text.replace(re, (full, attrStr) => {
+    const idMatch = attrStr.match(/\bid\s*=\s*["']([^"']+)["']/i)
+    const reasonMatch = attrStr.match(/\breason\s*=\s*["']([^"']*)["']/i)
+    const id = idMatch ? idMatch[1] : ''
+    const reason = reasonMatch ? reasonMatch[1] : ''
+    if (!id) return full
+    const agent = (agentsStore.agents || []).find(a => a.id === id)
+    // Unknown agent id (model hallucinated) — drop the tag silently rather
+    // than render a button that goes nowhere.
+    if (!agent) return ''
+    const escAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const escText = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const name = agent.name || 'Agent'
+    // Reason is rendered as a sibling span AFTER the button (not inside it),
+    // so the button stays compact while the description reads as natural prose
+    // alongside the click target.
+    const button = `<button class="recommend-agent-btn" data-action="recommend-agent" data-agent-id="${escAttr(id)}" type="button"><span class="recommend-agent-arrow">→</span><span class="recommend-agent-name">${escText(name)}</span></button>`
+    const reasonHtml = reason ? `<span class="recommend-agent-caption">${escText(reason)}</span>` : ''
+    return button + reasonHtml
+  })
+}
+
 function renderMarkdown(text) {
   if (!text) return ''
   try {
     // Strip DeepSeek-style tool execution log blocks: [Tool execution log from this response: ... ]
     // Match from the marker to either a standalone ] line or end of string
     const stripped = String(text).replace(/\n?\[Tool execution log[\s\S]*?(?:\n\]|$)/g, '').trim()
-    const clean = stripBase64(stripped)
+    const withRecommendButtons = expandRecommendAgentTags(stripped)
+    const clean = stripBase64(withRecommendButtons)
     const raw = marked.parse(clean, { breaks: true, gfm: true })
     const sanitized = DOMPurify.sanitize(raw)
     // Highlight @mentions using exact agent names from the store.
@@ -775,7 +807,42 @@ function renderMarkdown(text) {
 }
 
 // ── Click handler for code-copy + file-path buttons (event delegation) ───────
-function handleContentClick(e) {
+async function handleContentClick(e) {
+  // Recommend-agent button: jump to existing single-agent chat with this agent,
+  // or create a fresh one (mirrors the AgentCard "open chat" flow).
+  const recBtn = e.target.closest('[data-action="recommend-agent"]')
+  if (recBtn) {
+    e.stopPropagation()
+    e.preventDefault()
+    const agentId = recBtn.dataset.agentId
+    if (!agentId) return
+    const agent = (agentsStore.agents || []).find(a => a.id === agentId)
+    if (!agent) return
+    const title = t('chats.chatWithAgentTitle', { name: agent.name })
+    const existing = chatsStore.chats.find(c =>
+      c.type !== 'analysis' &&
+      c.title === title &&
+      !c.isGroupChat &&
+      c.systemAgentId === agent.id
+    )
+    if (existing) {
+      chatsStore.setActiveChat(existing.id)
+      router.push('/chats')
+      return
+    }
+    const chat = await chatsStore.createChat(title, [agent.id])
+    if (!chat) return
+    chatsStore.setActiveChat(chat.id)
+    // Best-effort greeting trigger — same as AgentCard. Lazy-import to avoid
+    // a hard dependency from the renderer module graph.
+    try {
+      const { triggerAgentGreeting } = await import('../../composables/useAgentGreeting')
+      triggerAgentGreeting({ chatId: chat.id, agentId: agent.id })
+    } catch { /* greeting is optional, swallow errors */ }
+    router.push('/chats')
+    return
+  }
+
   // File path chip buttons
   const fpBtn = e.target.closest('[data-action]')
   if (fpBtn) {
@@ -1544,6 +1611,56 @@ function diffMarker(type) {
 
 :deep(.file-path-btn:hover) {
   opacity: 1;
+}
+
+/* Recommend-agent button (Clank's cross-agent recommendation).
+   Black gradient — same primary visual signature as other CTAs in the app. */
+:deep(.recommend-agent-btn) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.15rem 0.5rem 0.15rem 0;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  font-weight: 500;
+  transition: transform 0.12s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  vertical-align: middle;
+}
+
+:deep(.recommend-agent-btn:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+:deep(.recommend-agent-btn:active) {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+:deep(.recommend-agent-arrow) {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+:deep(.recommend-agent-name) {
+  font-weight: 600;
+}
+
+/* Description text rendered as a sibling AFTER the button — not part of the
+   click target, just inline prose explaining why the recommendation fits. */
+:deep(.recommend-agent-caption) {
+  display: inline;
+  margin-left: 0.1rem;
+  color: var(--text-secondary, rgba(0, 0, 0, 0.6));
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 /* ── Spotlight scan animation ────────────────────────────────────────────────
