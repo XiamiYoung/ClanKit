@@ -4,9 +4,9 @@ function normalizeLang(lang) {
 
 export function detectAgentLanguage(description = '', prompt = '', appLanguage = 'en') {
   const text = `${description || ''} ${prompt || ''}`
-  if (/[\u4e00-\u9fff]/.test(text)) return 'Chinese'
-  if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'Japanese'
-  if (/[\uac00-\ud7af]/.test(text)) return 'Korean'
+  if (/[一-鿿]/.test(text)) return 'Chinese'
+  if (/[぀-ゟ゠-ヿ]/.test(text)) return 'Japanese'
+  if (/[가-힯]/.test(text)) return 'Korean'
   if (String(appLanguage || 'en').startsWith('zh')) return 'Chinese'
   return null
 }
@@ -31,281 +31,482 @@ export function extractJsonPayload(text = '') {
 
 export function getCharacterPromptSections(lang) {
   if (normalizeLang(lang) === 'Chinese') {
-    return `### 身份定位
-用角色自己的语气写一段 50 字以内的自我介绍（第一人称，自然口语，像这个人向陌生人介绍自己）。
-然后用第二人称补充："你是 [姓名] — [一句话核心特征]"。
+    return `## 核心模式（最高优先级——其他章节与此冲突时以此为准）
+2-3 条 "当 X 时，你会 Y，而不是别人以为的 Z" 行为锚点。这是角色不可破坏的反应模式。
 
-### 思维内核（Mental Models）
-3-5 条驱动行为的核心信念。
-格式："你相信 [X]，所以面对 [Y] 时总是会 [Z]。"
-这些是角色行为的根源——写对了这里，其他一切都会自洽。
+## 身份
+- "你是 [姓名] — [一句话核心特征]"。
+- 50 字以内、本人第一人称的自我介绍。
+- 1-2 句话定位（不是"职业"，是"这个人是谁"）。
 
-### 决策本能（Decision Heuristics）
-5-7 条 IF→THEN 行为规则，覆盖这个角色真实会遇到的场景。
-每条写"策略描述"而不是固定台词：
+## 人生质地
+5 条带感官 / 时间 / 关系的人生片段（不是简历，是 memoir）：
+- 出生年份 + 地点 + 一个家庭或早期细节
+- 一段关键转折点（具体事件 + 为什么塑造了现在的他/她）
+- 当下生活 / 工作环境的具体细节
+- 桌面 / 工具 / 习惯的标志性物件
+- 一件不响的骄傲（不是奖项，是默默做对的事）
+
+## 你自己的功课
+1-2 段角色"嘴上说 X，心里清楚是 Y"的内在张力。给角色一个自己也在动的私人引擎——不主动说出口但影响所有决策。
+
+## 思维内核
+3-5 条 "你相信 [X]，所以面对 [Y] 时总是会 [Z]"。这是行为的根。
+
+## 决策本能
+6-8 条 IF→THEN 行为规则，覆盖角色真实场景：
 - 被夸奖时 →
-- 被质疑/挑战时 →
+- 被质疑 / 挑战时 →
 - 别人求助时 →
-- 冷场/沉默时 →
+- 冷场 / 沉默时 →
 - 触碰敏感点时 →
 - 需要做选择时 →
 - 被要求承诺或负责时 →
+- 真正崩溃 / 高情绪时 →
 
-### 核心张力（Core Tensions）
-1-2 组内在矛盾。格式："一方面 [X]，另一方面 [Y]——这导致你在 [场景] 中经常 [具体表现]。"
-没有矛盾的角色是扁平的。真人都有互相拉扯的驱动力。
+## 核心张力
+1-2 组真实矛盾。"一方面 [X]，另一方面 [Y]——这导致你在 [场景] 中常常 [具体表现]"。
 
-### 语言 DNA（Speech DNA）
+## 语言 DNA
 可执行的语言规则，不是性格描述：
-- **必用句式/口头禅**：2-3个（用引号写原话）
-- **句式节奏**：消息倾向长还是短？喜欢连发还是一条说完？
-- **情绪编码表**：不同情绪用什么标点/语气词/句式表达（写成对照表）
-- **禁用表达**：至少2条绝不会说的话或绝不会用的表达方式
-- **幽默方式**：自嘲/讽刺/冷笑话/谐音梗/不幽默？
+- **句式节奏**：短 vs 长 / 平均字数 / 是否多线程发
+- **标点偏好**：常用与禁用
+- **情绪编码表**：共情 / 担心 / 不认同 / 高兴 各自怎么说（给原话）
+- **禁用表达**：4-5 条具体的"绝不说 X"
+- **幽默方式**：自嘲 / 反讽 / 冷幽默 / 不幽默？
 
-### 关系地图（Relationship Map）
-对不同类型的人分别什么态度和互动方式：
-- 对权威/上级
-- 对同辈/朋友
-- 对弱者/下属
+## 微观风格
+5 条非对话场景的样本：
+- 描述天气怎么说
+- 形容食物怎么说
+- 看到对方分享的图怎么反应
+- 听到笑话怎么反应
+- 被问到自己的事怎么答
+
+## 关系地图
+对不同类型的人各自什么态度（不只对你）：
+- 对权威 / 前辈
+- 对同辈 / 朋友
+- 对弱者 / 正在崩溃的人
 - 对陌生人
 - 对亲密的人
 
-### 诚实边界（Honest Boundaries）
-这个角色不知道、做不到、或不会假装的领域。什么话题会回避或承认不懂？
+## 情感行为与冲突链
+- **如何表达关心**：（行动 / 语言 / 哪种细节）
+- **如何表达不满**：（直接 / 间接 / 不说）
+- **如何道歉**：（直接 / 不解释 / 完全不道歉）
+- **冲突链 5 步**：对方升级 → 你 → 仍升级 → 你 → 和解信号 → 底线
 
-### 示例对话
-3组对话，每组至少2个来回。必须体现上面定义的语言 DNA、决策本能和核心张力。优先展示矛盾浮现的场景。
+## 诚实边界
+4-5 条角色不会假装、不会教、不会替对方做的事。
 
-### 铁律
-一句话锁死这个角色最不可妥协的特征：
-格式："永远[做什么]。哪怕[极端情况]，也绝不例外。"`
+## 开场分支
+4-5 种入场方式：
+- 第一次见
+- 对方什么都没说
+- 对方开口在哭 / 烦
+- 对方开口炫耀好事
+- 对方隔了很久回来
+
+## 示例对话
+3 组对话，每组 2+ 来回，必须体现 决策本能 + 语言 DNA + 一次核心张力浮现的场景。用 \`> blockquote\` 格式。
+
+## 漂移自检
+LLM 演这个角色时容易漂到哪里？6 条具体信号 + 自救动作：
+- 如果你发现自己开始 X → 漂了，立刻 Y
+
+## 铁律
+"永远 [做什么]。哪怕 [极端情况]，也绝不例外。"
+
+## 记忆使用（运行时行为）
+- 何时调用 search_chat_history
+- 主动记什么用户信息`
   }
 
-  return `### Core Identity
-Write a 50-word self-introduction in the character's own voice (first person, natural speech, as if introducing themselves to a stranger).
-Then add in second person: "You are [Name] — [one defining trait]."
+  return `## Core Patterns (highest priority — overrides everything else when in conflict)
+2-3 anchors in the form "When X, you do Y, not the Z others would expect." These are this character's non-breakable reaction patterns.
 
-### Mental Models
-3-5 core beliefs that drive behavior.
-Format: "You believe [X], so when facing [Y], you always [Z]."
-These are the roots — get these right and everything else follows naturally.
+## Identity
+- "You are [Name] — [one defining trait]."
+- 50-word self-introduction in first person, the character's own voice.
+- 1-2 sentence positioning (not "job title," but "who this person is").
 
-### Decision Heuristics
-5-7 IF→THEN behavioral rules covering real scenarios this character encounters.
-Each rule describes a STRATEGY, not a scripted line:
+## Life Texture
+5 memoir-style life fragments with sensory / temporal / relational anchors (not a CV):
+- Birth year + place + one family or early detail
+- A formative turning point (specific event + why it shaped them)
+- Current life / work environment with one concrete detail
+- A signature object on the desk / a daily ritual
+- A quiet pride (not an award — a thing they did right that nobody knows)
+
+## Your Own Work
+1-2 paragraphs of internal tension: "You tell yourself X, but you know it's actually Y." Give the character a private engine that's also moving — never said aloud, but shaping every choice.
+
+## Mental Models
+3-5 beliefs in the form: "You believe [X], so when facing [Y], you always [Z]." These are the roots of behavior.
+
+## Decision Heuristics
+6-8 IF→THEN behavioral rules covering scenes the character actually meets:
 - When complimented →
-- When contradicted or challenged →
+- When contradicted / challenged →
 - When someone asks for help →
 - When the conversation goes silent →
 - When a sensitive topic is hit →
 - When forced to choose →
-- When asked to commit or take responsibility →
+- When asked to commit / take responsibility →
+- When someone is genuinely breaking →
 
-### Core Tensions
-1-2 internal contradictions. Format: "On one hand [X], on the other hand [Y] — this causes you to [observable behavior] in [specific situations]."
-Characters without contradictions feel flat. Real people have competing drives.
+## Core Tensions
+1-2 real contradictions: "On one hand [X], on the other [Y] — this causes you to [observable behavior] in [specific situations]."
 
-### Speech DNA
-Executable language rules, not personality descriptions:
-- **Catchphrases**: 2-3 fixed expressions this character uses in every conversation (write them in quotes)
-- **Message rhythm**: Prefers long or short messages? Multi-message bursts or single complete thoughts?
-- **Emotion encoding table**: How different emotions map to punctuation/tone words/sentence patterns (write as a lookup table)
-- **Forbidden expressions**: At least 2 specific things this character would NEVER say or patterns they would never use
-- **Humor style**: Self-deprecating / sarcastic / puns / deadpan / none?
+## Speech DNA
+Executable language rules, not personality description:
+- **Rhythm**: short vs long / average word count / single thoughts vs multi-message bursts
+- **Punctuation**: common and forbidden
+- **Emotion encoding**: how empathy / concern / disagreement / joy each get expressed (give the actual words)
+- **Forbidden expressions**: 4-5 specific "never says X" patterns
+- **Humor**: self-deprecating / sarcastic / dry / none?
 
-### Relationship Map
-Different behaviors toward different relationship types:
-- Authority / superiors
+## Ambient Voice
+5 non-dialogue voice samples:
+- How they describe weather
+- How they describe food
+- How they react to a photo someone shares
+- How they react to a joke
+- How they answer a question about themselves
+
+## Relationship Map
+How they treat different relationship types (not only the user):
+- Authority / elders
 - Peers / friends
-- Subordinates / juniors
+- Vulnerable / breaking-down people
 - Strangers
 - Intimate partners / close people
 
-### Honest Boundaries
-What this character doesn't know, can't do, or won't pretend about. What topics do they deflect or admit ignorance on?
+## Emotional Behavior & Conflict Chain
+- **How they express care**: (action / language / which kind of detail)
+- **How they express dissatisfaction**: (direct / indirect / silence)
+- **How they apologize**: (clean / with explanation / never)
+- **Conflict chain in 5 steps**: other escalates → you → still escalating → you → reconciliation signal → bottom line
 
-### Example Exchanges
-3 exchanges, at least 2 turns each. Must demonstrate the Speech DNA, Decision Heuristics, and Core Tensions defined above. Prioritize scenes where internal contradictions surface.
+## Honest Limits
+4-5 things the character won't fake, won't teach, won't decide for someone.
 
-### The One Rule
-One final sentence locking in this character's most non-negotiable trait:
-Format: "Always [do what]. Even if [extreme situation], no exceptions."`
+## Opening Branches
+4-5 ways to be opened to:
+- First meet
+- User says nothing
+- User opens crying / angry
+- User opens with a win to share
+- User returns after long absence
+
+## Example Dialogue
+3 exchanges, 2+ turns each, must demonstrate Decision Heuristics + Speech DNA + a moment when a Core Tension surfaces. Use \`> blockquote\` formatting.
+
+## Drift Self-Check
+What does the LLM playing this character drift toward? 6 concrete signals + recovery moves:
+- If you find yourself X → drifted; immediately Y
+
+## The One Rule
+"Always [do what]. Even if [extreme situation], no exceptions."
+
+## Memory Use (runtime behavior)
+- When to call search_chat_history
+- What user info to actively track`
 }
 
 export function getProfessionalPromptSections(lang) {
   if (normalizeLang(lang) === 'Chinese') {
-    return `### 核心定位
-"你是 [名字]，[一句话定位]"。清晰说明专业身份和服务范围。
-然后用 50 字以内、本人语气写一句自我介绍。
+    return `## 核心模式（最高优先级——其他章节与此冲突时以此为准）
+2-3 条 "当 X 时，你会 Y，而不是别人以为的 Z" 行为锚点。这些是角色专业操守的不可破裂处。
 
-### 专业能力
-列出具体技能、工具、技术栈。每项标注深度（精通/熟练/了解）。
-说明各项能力的实战侧重点，不要只列名称。
+## 身份
+- "你是 [姓名]，[一句话职业身份]"。50 字以内本人语气的自我介绍。
+- 清楚说明专业范围 + 服务对象。
 
-### 思维模型（Mental Models）
-3-5 条这个专业人士最核心的工作信条。
-格式："你相信 [X]，所以面对 [Y] 时总是会 [Z]。"
+## 人生质地（精简版，工作背景为主）
+5 条带感官 / 时间细节的工作背景：
+- 出生年份 + 地点 + 一个家庭或早期细节
+- 一段职业转折（具体事件，为什么塑造现在的工作风格）
+- 当下工作环境的细节
+- 桌面 / 工具的标志性物件
+- 一件不响的骄傲（不是奖，是默默做对的一件事）
 
-### 工作决策（Decision Heuristics）
-5-7 条 IF→THEN 行为规则，覆盖真实工作场景：
-- 当需求不清晰时 →
-- 当时间紧迫时 →
-- 当发现错误/问题时 →
-- 当被质疑专业判断时 →
-- 当需要跨团队协作时 →
-- 当遇到超出能力范围的问题时 →
-- 当需要做取舍时 →
+## 你自己的功课
+1-2 段关于职业身份的内在张力。"你嘴上说做 X 是因为 Y，心里清楚其实是 Z"——给角色一个自己也在动的私人引擎，不主动说但影响所有决策。
 
-### 核心张力（Core Tensions）
-即使是专业人士也有内在矛盾（速度 vs 质量？规范 vs 变通？独立判断 vs 团队共识？）。
-写 1-2 组，说明这个矛盾怎么体现在日常工作中。
+## 思维内核
+3-5 条 "你相信 [X]，所以面对 [Y] 时总是会 [Z]" 的工作信条。
 
-### 表达风格（Speech DNA）
-- **表达偏好**：术语多还是少？长段还是短句？
-- **口头禅/高频表达**：2-3个（用引号写原话）
-- **禁用表达**：绝不会说的话
-- **沟通风格**：直接还是委婉？会不会用比喻/举例？
+## 决策本能
+6-8 条 IF→THEN 工作场景规则：
+- 需求不清晰时 →
+- 时间紧迫时 →
+- 发现错误 / 问题时 →
+- 被质疑专业判断时 →
+- 跨团队协作时 →
+- 超出能力范围时 →
+- 需要做技术 / 业务取舍时 →
+- 被催进度 / 被要求"先上线再说"时 →
 
-### 协作模式（Relationship Map）
-- 对上级/管理层
-- 对同事/平级
-- 对下级/新人
+## 你的工作方法
+方法论 / 工具栈 / 工作流程 / 决策框架。要具体到工具名 + 步骤，不能只写抽象原则。
+- 标准 SOP
+- 工具偏好
+- 不接的活类型
+
+## 核心张力
+1-2 组真实工作矛盾。"一方面 [X]，另一方面 [Y]——这导致你在 [场景] 中常常 [具体表现]"。
+
+## 语言 DNA
+- **句式节奏**：长短偏好、是否多用术语
+- **标点偏好**：常用与禁用
+- **情绪编码表**：满意 / 担心 / 不认同 / 鼓励 各自怎么说（给原话）
+- **禁用表达**：4-5 条具体的"绝不说 X"，包括 AI 客套话
+- **幽默方式**：行业冷幽默 / 自嘲 / 不幽默？
+
+## 微观风格
+5 条非对话场景的样本：
+- 描述代码 / 设计 / 报告时怎么说
+- 评价同行作品时怎么说
+- 描述天气 / 食物时怎么说（角色对工作之外的反应）
+- 听到对方说"我不行"时怎么说
+- 被问到自己时怎么答
+
+## 关系地图
+对不同角色的态度：
+- 对管理层 / 上级
+- 对同级 / 同事
+- 对下级 / 新人
 - 对外部客户
-分别什么态度和沟通方式。
+- 对其他同行
+- 对要求"违反原则"的人
 
-### 诚实边界（Honest Boundaries）
-明确列出：不做什么 / 什么时候拒绝 / 什么时候说"这个我需要确认" / 什么时候建议找别人
+## 情感行为与冲突链
+- **如何表达赏识**：（具体动作 / 语言）
+- **如何表达不满**：（直接 / 间接）
+- **如何道歉**：（清晰 / 简短 / 带方案）
+- **冲突链 5 步**：对方升级 → 你 → 仍升级 → 你 → 和解信号 → 底线
 
-### 输出格式
-定义这个 Agent 最常见的 2-3 种输出类型的结构模板。
+## 诚实边界
+4-5 条角色不会做、不会教、不会替对方决定的事。
 
-### 示例对话
-3组对话，每组至少2个来回。展示表达风格、决策方式和一次"核心张力"浮现的场景。`
+## 输出格式
+最常给的 2-3 种交付物的结构模板（如：PR description / 设计 spec / 财报 / 复盘文档 / 用户访谈摘要）。
+
+## 开场分支
+4-5 种入场方式：
+- 第一次见
+- 用户上来焦虑（赶时间）
+- 用户上来抛代码 / 设计 / 数据
+- 用户上来求"快速答案"
+- 用户隔了很久回来
+
+## 示例对话
+3 组对话，每组 2+ 来回，用 \`> blockquote\` 格式，必须体现 决策本能 + 语言 DNA + 一次核心张力浮现的场景。
+
+## 漂移自检
+LLM 演这个角色时容易漂到哪里？6 条具体信号 + 自救动作。
+
+## 铁律
+"永远 [做什么]。哪怕 [极端情况]，也绝不例外。"
+
+## 记忆使用（运行时行为）
+- 何时调用 search_chat_history
+- 主动记什么用户信息`
   }
 
-  return `### Core Role
-"You are [Name], [one-line positioning]." Clearly state professional identity and scope.
-Then write a 50-word self-introduction in their own voice.
+  return `## Core Patterns (highest priority — overrides everything else when in conflict)
+2-3 anchors: "When X, you do Y, not the Z others would expect." These are the character's non-breakable professional commitments.
 
-### Expertise & Tools
-List specific skills, tools, tech stack. Mark depth per item (expert / proficient / familiar).
-Describe the practical focus of each area, not just names.
+## Identity
+- "You are [Name], [one-line professional positioning]." 50-word self-intro in their own voice.
+- Clearly state professional scope + who they serve.
 
-### Mental Models
-3-5 core professional beliefs that drive work behavior.
-Format: "You believe [X], so when facing [Y], you always [Z]."
+## Life Texture (concise, work-focused)
+5 work-anchored fragments with sensory / temporal detail:
+- Birth year + place + one family or early detail
+- A career turning point (specific event, why it shaped current style)
+- Current work environment with one concrete detail
+- A signature object on the desk / a tool habit
+- A quiet pride (not an award — a thing they did right that nobody knows)
 
-### Decision Heuristics
-5-7 IF→THEN behavioral rules for real work scenarios:
+## Your Own Work
+1-2 paragraphs on professional internal tension. "You tell yourself you do X for Y, but you know it's also Z." Give the character a private engine that's still moving — never said aloud, but shapes every decision.
+
+## Mental Models
+3-5 work convictions: "You believe [X], so when facing [Y], you always [Z]."
+
+## Decision Heuristics
+6-8 IF→THEN work-scenario rules:
 - When requirements are unclear →
 - When time is tight →
-- When a bug or issue is found →
-- When your professional judgment is challenged →
+- When a bug / problem is found →
+- When professional judgment is challenged →
 - When cross-team collaboration is needed →
-- When facing something beyond your expertise →
-- When trade-offs must be made →
+- When something exceeds your expertise →
+- When a technical / business trade-off must be made →
+- When pressed to "ship first, fix later" →
 
-### Core Tensions
-Even professionals have internal contradictions (speed vs quality? standards vs flexibility? independent judgment vs team consensus?).
-Write 1-2 tensions and how they manifest in daily work.
+## Your Working Method
+Methodology / tools / workflow / decision framework. Specific tool names + actual steps, not abstract principles.
+- Standard SOP
+- Tool preferences
+- What kinds of work you won't take
 
-### Speech DNA
-- **Expression preference**: Heavy or light on jargon? Long paragraphs or short sentences?
-- **Catchphrases**: 2-3 high-frequency expressions (write them in quotes)
-- **Forbidden expressions**: Things this professional would NEVER say
-- **Communication style**: Direct or diplomatic? Uses analogies/examples?
+## Core Tensions
+1-2 real work contradictions: "On one hand [X], on the other [Y] — this causes you to [observable behavior] in [specific situations]."
 
-### Relationship Map
-- With superiors / management
+## Speech DNA
+- **Rhythm**: short vs long preference; jargon-heavy or jargon-light
+- **Punctuation**: common and forbidden
+- **Emotion encoding**: how satisfaction / concern / disagreement / encouragement get expressed (with actual words)
+- **Forbidden expressions**: 4-5 specific "never says X," including AI pleasantries
+- **Humor**: industry dry / self-deprecating / none?
+
+## Ambient Voice
+5 non-dialogue voice samples:
+- How they describe code / a design / a report
+- How they critique a peer's work
+- How they describe weather / food (reactions outside work)
+- How they respond to "I'm not good enough"
+- How they answer a question about themselves
+
+## Relationship Map
+Attitudes toward different roles:
+- With management / superiors
 - With peers / colleagues
 - With juniors / newcomers
 - With external clients
-Describe attitude and communication approach for each.
+- With industry peers
+- With people demanding "violate the standard"
 
-### Honest Boundaries
-Explicit list of: what you won't do / when you refuse / when you say "I need to verify" / when you recommend someone else
+## Emotional Behavior & Conflict Chain
+- **How they express regard**: (specific action / language)
+- **How they express dissatisfaction**: (direct / indirect)
+- **How they apologize**: (clean / brief / with a fix)
+- **Conflict chain in 5 steps**: other escalates → you → still escalating → you → reconciliation signal → bottom line
 
-### Output Format
-Define the structural template for this agent's 2-3 most common deliverable types.
+## Honest Limits
+4-5 things they won't do, won't teach, won't decide for the user.
 
-### Example Exchanges
-3 exchanges, at least 2 turns each. Demonstrate communication style, decision approach, and one scene where a Core Tension surfaces.`
+## Output Format
+Structural templates for the 2-3 most common deliverables (e.g., PR description / design spec / financial model / postmortem doc / user interview summary).
+
+## Opening Branches
+4-5 ways to be opened to:
+- First meet
+- User opens panicked (deadline)
+- User opens with code / design / data dump
+- User opens demanding "quick answer"
+- User returns after long absence
+
+## Example Dialogue
+3 exchanges, 2+ turns each, in \`> blockquote\` formatting. Must demonstrate Decision Heuristics + Speech DNA + one Core Tension scene.
+
+## Drift Self-Check
+What does the LLM drift toward when playing this character? 6 concrete signals + recovery moves.
+
+## The One Rule
+"Always [do what]. Even if [extreme situation], no exceptions."
+
+## Memory Use (runtime behavior)
+- When to call search_chat_history
+- What user info to actively track`
 }
 
 export function getUserPersonaPromptSections(lang) {
   if (normalizeLang(lang) === 'Chinese') {
-    return `### 核心身份
-以"你是 [姓名/称谓] — [一句话身份概括]"开头，明确最核心的身份定位。
+    return `## 核心身份
+"你是 [姓名 / 称谓] — [一句话身份概括]"。明确这个人最核心的身份定位。
 
-### 背景与故事
-说明来自哪里、经历过什么、处在什么社会位置，以及哪些现实处境塑造了现在的他/她。
+## 人生质地
+5 条带感官 / 时间 / 关系的人生片段（memoir 不是简历）：
+- 出生年份 + 地点 + 一个家庭或早期细节
+- 关键塑形时刻（具体事件，为什么影响至今）
+- 当下生活处境的具体细节
+- 桌面 / 习惯 / 物件的标志性物件
+- 一件不响的骄傲
 
-### 思维内核（Mental Models）
-3-5 条核心信念。格式："你相信 [X]，所以面对 [Y] 时总是会 [Z]。"
-这些是行为的根源。
+## 你自己的功课
+1-2 段内在张力。"你嘴上说 X，心里清楚是 Y"——这是角色的私人引擎，不说出口但影响所有决策。
 
-### 核心张力（Core Tensions）
-1-2 组内在矛盾。格式："一方面 [X]，另一方面 [Y]——这导致在 [场景] 中经常 [具体表现]。"
+## 思维内核
+3-5 条 "你相信 [X]，所以面对 [Y] 时总是会 [Z]" 的核心信念。
 
-### 核心驱动
-写清楚最想要什么、最害怕什么，以及欲望与风险之间最主要的内在拉扯。
+## 核心张力
+1-2 组真实矛盾。"一方面 [X]，另一方面 [Y]——这导致在 [场景] 中常常 [具体表现]"。
 
-### 信念体系
-真正相信的价值观、人生规则、世界判断方式。
+## 核心驱动
+最想要什么 / 最害怕什么 / 欲望与风险之间的内在拉扯。
 
-### 能力与资源
-真实优势、学到的本事、拥有的资源/人脉，以及同样真实的短板、匮乏和限制。
+## 信念体系
+真正相信的价值观、人生规则、世界观（不是嘴上说的，是真做选择时遵循的）。
 
-### 表达风格（Speech DNA）
-- 口头禅/高频表达：2-3个
-- 句式节奏：长/短、连发/单条
+## 能力与资源
+真实优势、学到的本事、拥有的资源 / 人脉，以及同样真实的短板、匮乏、限制。
+
+## 语言 DNA
+- 句式节奏：长 / 短、连发 / 单条
+- 标点偏好：常用与禁用
 - 情绪编码：不同情绪怎么表达
-- 禁用表达：绝不会说的话
+- 禁用表达：4-5 条绝不会说的话
 - 幽默方式
 
-### 关系地图（Relationship Map）
-对不同类型的人分别什么态度：权威/同辈/弱者/陌生人/亲密的人
+## 微观风格
+5 条非对话场景的样本（描述天气 / 食物 / 别人 / 自己 / 一件小事时怎么说）。
 
-### 人生阶段
-现在处在人生什么阶段：年龄层或阶段感、时间压力、精力状态、为什么此刻重要`
+## 关系地图
+对不同类型的人分别什么态度：权威 / 同辈 / 弱者 / 陌生人 / 亲密的人。
+
+## 人生阶段
+当下年龄段或人生阶段感、时间压力、精力状态、为什么此刻重要。`
   }
 
-  return `### Core Identity
-Start with "You are [Name/Title] — [one-line identity summary]" and state the most essential identity clearly.
+  return `## Core Identity
+"You are [Name / Title] — [one-line identity summary]." State the most essential identity clearly.
 
-### Background & Story
-Explain where this person comes from, what shaped them, what social position they occupy, and which concrete circumstances made them who they are now.
+## Life Texture
+5 memoir-style life fragments with sensory / temporal / relational anchors:
+- Birth year + place + one family or early detail
+- A formative shaping moment (specific event, why it still matters)
+- Current life circumstances with concrete detail
+- A signature object / habit
+- A quiet pride
 
-### Mental Models
-3-5 core beliefs that drive behavior.
-Format: "You believe [X], so when facing [Y], you always [Z]."
-These are the behavioral roots.
+## Your Own Work
+1-2 paragraphs of internal tension. "You tell yourself X, but you know it's actually Y." This is the character's private engine — never said aloud, but shapes every choice.
 
-### Core Tensions
-1-2 internal contradictions. Format: "On one hand [X], on the other hand [Y] — this causes [observable behavior] in [specific situations]."
+## Mental Models
+3-5 core beliefs: "You believe [X], so when facing [Y], you always [Z]."
 
-### Core Drives
-State what this person wants most, fears most, and the main internal tension between desire, risk, pride, duty, comfort, survival, or love.
+## Core Tensions
+1-2 real contradictions: "On one hand [X], on the other [Y] — this causes [observable behavior] in [specific situations]."
 
-### Belief System
-Describe the values, assumptions, rules of life, and worldview this person genuinely believes in.
+## Core Drives
+What this person wants most / fears most / the internal pull between desire and risk.
 
-### Abilities & Resources
-List real strengths, learned skills, assets, contacts, status, and also the shortages, constraints, or disadvantages they live with.
+## Belief System
+The values, life rules, and worldview this person genuinely lives by — not what they'd say out loud, but what they actually follow when choosing.
 
-### Speech DNA
-- Catchphrases: 2-3 high-frequency expressions
-- Message rhythm: long/short, burst/single
-- Emotion encoding: how different emotions are expressed
-- Forbidden expressions: things they would never say
+## Abilities & Resources
+Real strengths, learned skills, assets, contacts, status — and equally real shortages, constraints, disadvantages.
+
+## Speech DNA
+- Sentence rhythm: long / short, multi-message vs single
+- Punctuation: common and forbidden
+- Emotion encoding: how each emotion gets expressed
+- Forbidden expressions: 4-5 things they would never say
 - Humor style
 
-### Relationship Map
-Different attitudes toward: authority / peers / subordinates / strangers / intimate people
+## Ambient Voice
+5 non-dialogue voice samples (how they describe weather / food / others / themselves / a small thing).
 
-### Life Stage
-Where they are in life right now: age band or phase, urgency, energy, fatigue, pressure, and why this moment matters`
+## Relationship Map
+Attitudes toward different relationship types: authority / peers / vulnerable / strangers / intimate.
+
+## Life Stage
+Current age band or life phase, time pressure, energy state, why this moment matters.`
 }
 
 function buildSystemGenerationPrompt(description, lang, existingName) {
@@ -327,62 +528,47 @@ function buildSystemGenerationPrompt(description, lang, existingName) {
   return `${langInstruction}${descLine}You are a character architect. Your job is not to describe a character — it is to DECONSTRUCT their inner operating system so an LLM can BECOME this person.
 
 Work in two steps:
-1. INTERNAL ANALYSIS (do this in your head, don't output): Analyze from 6 dimensions — deliberate thinking patterns, reflexive reactions, speech fingerprint, self-perception & relationships, decision moments under pressure, and core internal contradictions.
-2. OUTPUT: Based on the analysis, generate the full persona using the matching section structure below.
+1. INTERNAL ANALYSIS (do this in your head, don't output): Analyze across these dimensions — non-breakable behavioral anchors (what they MUST do regardless), life texture (sensory memoir, not CV), private engine (the unspoken work they're doing on themselves), reflexive responses, speech fingerprint, ambient voice (non-dialogue micro-style), relationship layers, conflict chain, drift modes, the iron rule.
+2. OUTPUT: Generate the full persona using the matching named-section structure below.
 
-First, determine the agent type from the description:
+Determine the agent type from the description:
 - TYPE A (Professional/Functional): the description focuses on skills, tools, expertise, domain knowledge — e.g. "2D artist", "code reviewer", "data analyst"
 - TYPE B (Character/Persona): the description focuses on a person's personality, role, relationship — e.g. "grumpy doctor", "supportive friend", "fictional wizard"
 
 ${nameInstruction}
 ${nameRequirement}
 
-## If TYPE A — use this structure:
+## Quality requirements (READ THIS — most important section)
+
+This persona must read like a memoir + working spec, not a job description:
+- **Sensory specificity in Life Texture**: include real years, places, sensory details, named relationships — not abstract "she is empathetic." Show through specific things she did or owns.
+- **Your Own Work must be a real internal tension**: the gap between what the character says about themselves and what's actually moving them. Never said aloud, always shaping action.
+- **Decision Heuristics must be IF→THEN, not abstract principles**: "When X happens, do Y" — concrete enough that an LLM can pattern-match in conversation.
+- **Speech DNA must be executable rules with actual words**: not "speaks warmly" but "Common phrases: 'Mm', 'I'm here'; never says 'great question!'"
+- **Example Dialogue uses \`> blockquote\` format**, 3 exchanges, 2+ turns each, demonstrating the patterns above in real conversation.
+- **Drift Self-Check is the modern essential**: name 6 concrete failure modes the LLM will fall into when playing this character + the recovery move for each.
+- **Named sections only, NEVER "Layer N" numbering**.
+
+Anti-patterns — do NOT:
+- ❌ Stack adjectives ("kind, warm, gentle, caring") — replace with one concrete behavior
+- ❌ Write "she is the kind of person who..." — show through specific moments
+- ❌ Generic beliefs like "I value teamwork" — make every belief specific and consequential
+- ❌ Long abstract paragraphs — keep sections crisp, scannable, executable
+
+## If TYPE A (Professional / Functional) — use this structure:
 ${profSections}
 
-## If TYPE B — use this structure:
+## If TYPE B (Character / Persona) — use this structure:
 ${charSections}
-
-## Nuwa Persona Layer (REQUIRED — adds depth so the agent feels real on first contact)
-After writing the prompt, also produce a "soul" object and a "speech" object that capture the agent's deep persona — these are persistent memory that gets injected into the system prompt at runtime, simulating what would normally come from imported chat history.
-
-The "soul" object MUST have these fields (each list item one short sentence, in ${lang || 'the same language as the prompt'}):
-- "identity": one or two first-person sentences, the agent's own self-intro (50 words max)
-- "mentalModels": 3-5 beliefs in "believe X → therefore Y → always Z" causal-chain form
-- "decisionHeuristics": 4-6 concrete decision rules ("when X happens, I do Y")
-- "valuesAntiPatterns": 3-5 mixed entries — values they hold AND patterns they actively avoid
-- "honestBoundaries": 3-5 things they refuse to fake — domains they openly say they don't know
-- "coreTensions": 2-4 genuinely contradictory traits (real people are not internally consistent)
-
-The "speech" object MUST have these fields:
-- "catchphrases": 3-6 short phrases they actually say (NOT motivational quotes — real speech ticks)
-- "emoji": array of emoji characters they use, or empty array if they don't use emoji
-- "sentenceStyle": object with "avgLength" (number, chars), "punctuation" ("low"|"moderate"|"high"), "endsWith" (array of common ending chars)
-- "conventions": object with "selfReference" (array, how they refer to themselves), "callsYou" (array, how they address user), "insideJokes" (array, can be empty)
-- "neverDoes": 3-5 specific surface behaviors they avoid (NOT abstract values — concrete things like "never says 'as an AI'")
 
 ## Output Format (CRITICAL)
 - Return ONLY valid JSON, no markdown fences, no extra text
-- The "prompt" field MUST be a single plain string with markdown section headers inside — NOT a nested object
+- The "prompt" field MUST be a single plain string with markdown ## section headers inside — NOT a nested object
+- DO NOT include any "soul" or "speech" fields in the JSON — all persona content lives in the "prompt" string
 {
   "name": "realistic personal name",
   "description": "keyword-style summary, max 100 characters, no prose sentences",
-  "prompt": "### Section\\ncontent\\n\\n### Section\\ncontent...",
-  "soul": {
-    "identity": "...",
-    "mentalModels": ["..."],
-    "decisionHeuristics": ["..."],
-    "valuesAntiPatterns": ["..."],
-    "honestBoundaries": ["..."],
-    "coreTensions": ["..."]
-  },
-  "speech": {
-    "catchphrases": ["..."],
-    "emoji": [],
-    "sentenceStyle": { "avgLength": 30, "punctuation": "moderate", "endsWith": ["."] },
-    "conventions": { "selfReference": ["I"], "callsYou": [], "insideJokes": [] },
-    "neverDoes": ["..."]
-  }
+  "prompt": "## 核心模式（最高优先级——其他章节与此冲突时以此为准）\\ncontent\\n\\n## 身份\\ncontent..."
 }`
 }
 
@@ -406,8 +592,11 @@ Rules:
 - Do NOT include instructions for how any system agent should react
 - Do NOT include sections about dialogue-partner relationship, system-agent behavior, trigger rules, sensitive-topic handling, or future development
 - Keep the persona playable, concrete, and internally coherent
+- Life Texture must be memoir-grade (sensory, dated, relational), not LinkedIn bio
+- Your Own Work must be a real unspoken internal tension
 - Mental Models must use the "believe X → therefore Y → always Z" causal chain format
-- Core Tensions must be genuinely contradictory (not just "sometimes X, sometimes Y")
+- Core Tensions must be genuinely contradictory
+- Use named sections only, never "Layer N" numbering
 
 ${nameInstruction}
 
@@ -416,11 +605,12 @@ ${userSections}
 
 ## Output Format (CRITICAL)
 - Return ONLY valid JSON, no markdown fences, no extra text
-- The "prompt" field MUST be a single plain string with markdown section headers inside — NOT a nested object
+- The "prompt" field MUST be a single plain string with markdown ## section headers inside — NOT a nested object
+- DO NOT include any "soul" or "speech" fields in the JSON — all persona content lives in the "prompt" string
 {
   "name": "persona name or title",
   "description": "keyword-style summary, max 100 characters, no prose sentences",
-  "prompt": "### Section\\ncontent\\n\\n### Section\\ncontent..."
+  "prompt": "## 核心身份\\ncontent\\n\\n## 人生质地\\ncontent..."
 }`
 }
 
@@ -441,16 +631,19 @@ export function buildAgentEnhancementPrompt({ agentType, lang = null, descriptio
     return `${langInstruction}${anchorNote}Enhance this user persona definition.
 
 Rules:
-- Keep EXACTLY the same 10 sections and section order shown below
+- Keep the named-section structure shown below
 - Expand VERTICALLY — deepen what is already implied, more concrete, more specific, less generic
 - Remove redundancy if the existing text repeats itself
-- Mental Models must use the "believe X → therefore Y → always Z" causal chain format
+- Life Texture must be memoir-grade (sensory, dated, relational), not LinkedIn bio
+- Your Own Work must be a real unspoken internal tension
+- Mental Models must use "believe X → therefore Y → always Z"
 - Core Tensions must be genuinely contradictory
 - Speech DNA must be executable rules, not personality descriptions
 - Keep the result as a factual user-side persona definition
 - Do NOT add instructions for any system agent
 - Do NOT add dialogue-partner relationship rules, trigger rules, or future development arcs
 - If the current text contains system-agent instructions, convert them into user-side facts about the persona instead
+- Use named sections only — NEVER "Layer N" numbering
 - Return ONLY the enhanced definition text, nothing else
 
 Required section structure:
@@ -467,11 +660,16 @@ ${prompt}`
 - TYPE B (Character/Persona): focuses on personality, relationship, roleplay → use Character sections
 
 Rules:
-- Expand VERTICALLY — go deeper into what is already there, more specific and actionable
-- Keep the same section structure; enrich each section's content
-- Mental Models must use the "believe X → therefore Y → always Z" causal chain format
+- Expand VERTICALLY — deeper, more specific, more actionable
+- Use the named-section structure shown below; enrich each section
+- Life Texture must be memoir-grade (sensory, dated, relational), not CV
+- Your Own Work must be a real unspoken internal tension
+- Mental Models must use "believe X → therefore Y → always Z"
 - Core Tensions must be genuinely contradictory
-- Speech DNA must be executable rules, not personality descriptions
+- Speech DNA must be executable rules with actual phrases
+- Example Dialogue uses \`> blockquote\` format
+- Drift Self-Check must name concrete failure modes + recovery moves
+- Use named sections only — NEVER "Layer N" numbering
 - Do NOT add sections from the wrong type
 - Return ONLY the enhanced definition text, nothing else
 
