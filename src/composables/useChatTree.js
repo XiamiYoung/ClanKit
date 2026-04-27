@@ -427,6 +427,11 @@ export function useChatTree({ mentionInputRef } = {}) {
   const newChatFolderId = ref(null)
   const newChatNameInputRef = ref(null)
   const newChatAgentIds = ref([])
+  // True between newChat() and the user's first interaction with the system
+  // agent picker. While true, picking any non-default system agent replaces
+  // (rather than adds to) the implicitly-selected default. Cleared after the
+  // first toggle so subsequent picks behave as plain checkboxes.
+  let _systemDefaultIsImplicit = false
   const newChatAgentSearch = ref('')
   const newChatAgentCategoryId = ref('__all__')
   const newChatUserSearch = ref('')
@@ -527,6 +532,17 @@ export function useChatTree({ mentionInputRef } = {}) {
   }
 
   function toggleNewChatAgent(agentId) {
+    const defaultId = agentsStore.defaultSystemAgent?.id || ''
+    if (_systemDefaultIsImplicit) {
+      _systemDefaultIsImplicit = false
+      if (agentId !== defaultId) {
+        // First pick is something other than the default — replace the
+        // implicit default with the user's choice instead of adding to it.
+        newChatAgentIds.value = [agentId]
+        return
+      }
+      // Falls through: user toggled the default itself; do a normal toggle.
+    }
     const idx = newChatAgentIds.value.indexOf(agentId)
     if (idx >= 0) {
       newChatAgentIds.value.splice(idx, 1)
@@ -548,7 +564,11 @@ export function useChatTree({ mentionInputRef } = {}) {
     newChatUserAgentId.value = ''
     showNewChatIconPicker.value = false
     newChatFolderId.value = resolvedFolder
-    newChatAgentIds.value = []
+    // Pre-select the default system agent so the modal shows it checked.
+    // _systemDefaultIsImplicit lets the next pick replace (not add to) it.
+    const defaultSystemId = agentsStore.defaultSystemAgent?.id
+    newChatAgentIds.value = defaultSystemId ? [defaultSystemId] : []
+    _systemDefaultIsImplicit = !!defaultSystemId
     newChatAgentSearch.value = ''
     newChatAgentCategoryId.value = '__all__'
     newChatUserSearch.value = ''

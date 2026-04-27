@@ -2196,20 +2196,53 @@ ipcMain.handle('agent:dispatch-group-tasks', async (event, { message, agents, co
  * Input:  { chatId, messages: [{role, content}], attempt }
  * Output: { success: boolean, clear: boolean, title?: string }
  */
-ipcMain.handle('agent:suggest-chat-title', async (_event, { chatId, messages, attempt }) => {
+ipcMain.handle('agent:suggest-chat-title', async (_event, { chatId, messages, attempt, fallbackAgentId }) => {
   try {
     const cfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
-    const um = cfg.utilityModel
-    if (!um?.provider || !um?.model) {
-      logger.warn('agent:suggest-chat-title: utility model not configured', { chatId })
-      return { success: false, clear: false, error: 'utility model not configured' }
+    const um = cfg.utilityModel || {}
+
+    // Resolve provider+model+credentials. Try utility model first; if it isn't
+    // configured or its provider has no apiKey, fall back to the chat's main
+    // system agent so users who skipped the utility-model wizard step still
+    // get auto-titled chats. Last resort: any provider with an apiKey.
+    let resolvedProvider = um.provider || null
+    let resolvedModel    = um.model    || null
+    let providerCfg = resolvedProvider
+      ? (cfg.providers || []).find(p => (p.type === resolvedProvider || p.id === resolvedProvider) && p.apiKey)
+      : null
+
+    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
+      // Fallback 1: chat's primary agent's provider/model.
+      if (fallbackAgentId) {
+        const agentsData = normalizeAgents(ds.readJSON(ds.paths().AGENTS_FILE, { agents: [] }))
+        const agent = agentsData.find(a => a.id === fallbackAgentId)
+        if (agent?.providerId && agent?.modelId) {
+          const agentProvCfg = (cfg.providers || []).find(p => (p.type === agent.providerId || p.id === agent.providerId) && p.apiKey)
+          if (agentProvCfg?.apiKey && agentProvCfg?.baseURL) {
+            resolvedProvider = agent.providerId
+            resolvedModel    = agent.modelId
+            providerCfg      = agentProvCfg
+          }
+        }
+      }
+      // Fallback 2: first provider with credentials, using its first model.
+      if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
+        const anyProv = (cfg.providers || []).find(p => p.apiKey && p.baseURL)
+        const anyModel = anyProv?.models?.[0]?.id || anyProv?.models?.[0]?.modelId || null
+        if (anyProv && anyModel) {
+          resolvedProvider = anyProv.type || anyProv.id
+          resolvedModel    = anyModel
+          providerCfg      = anyProv
+        }
+      }
     }
 
-    const providerCfg = (cfg.providers || []).find(p => (p.type === um.provider || p.id === um.provider) && p.apiKey)
-    if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
-      logger.warn('agent:suggest-chat-title: utility provider missing credentials', { chatId, provider: um.provider })
-      return { success: false, clear: false, error: 'utility model credentials missing' }
+    if (!resolvedProvider || !resolvedModel || !providerCfg?.apiKey || !providerCfg?.baseURL) {
+      logger.warn('agent:suggest-chat-title: no usable provider for title generation', { chatId })
+      return { success: false, clear: false, error: 'no usable provider' }
     }
+    // Re-bind um to the resolved values so the rest of the handler uses them.
+    const resolvedUm = { provider: resolvedProvider, model: resolvedModel }
 
     const strictness = Number(attempt || 1) <= 1
       ? 'VERY_STRICT'
@@ -2241,22 +2274,22 @@ Rules:
     const userContent = `Conversation:\n${convo}`
 
     let raw = ''
-    const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
+    const isOpenAI = resolvedUm.provider !== 'anthropic' && resolvedUm.provider !== 'openrouter' && resolvedUm.provider !== 'google'
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const clientCfg = {
         openaiApiKey: providerCfg.apiKey,
         openaiBaseURL: providerCfg.baseURL.replace(/\/+$/, ''),
-        customModel: um.model,
+        customModel: resolvedUm.model,
         _resolvedProvider: 'openai',
         defaultProvider: 'openai',
         _scenario: 'suggest-title',
-        ...(um.provider !== 'openai' ? { _directAuth: true } : {}),
-        provider: { type: um.provider },
+        ...(resolvedUm.provider !== 'openai' ? { _directAuth: true } : {}),
+        provider: { type: resolvedUm.provider },
       }
       const oaiClient = new OpenAIClient(clientCfg)
       const resp = await oaiClient.getClient().chat.completions.create({
-        model: um.model,
+        model: resolvedUm.model,
         ...oaiClient.tokenLimit(120),
         messages: [
           { role: 'system', content: systemPrompt },
@@ -2264,23 +2297,23 @@ Rules:
         ],
       })
       raw = resp.choices?.[0]?.message?.content || ''
-      accumulateUtilityUsage(um.model, um.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
+      accumulateUtilityUsage(resolvedUm.model, resolvedUm.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
     } else {
       const { AnthropicClient } = require('../agent/core/AnthropicClient')
       const clientCfg = {
         apiKey: providerCfg.apiKey,
         baseURL: providerCfg.baseURL.replace(/\/+$/, ''),
-        customModel: um.model,
+        customModel: resolvedUm.model,
         _scenario: 'suggest-title',
       }
       const resp = await new AnthropicClient(clientCfg).getClient().messages.create({
-        model: um.model,
+        model: resolvedUm.model,
         max_tokens: 120,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }],
       })
       raw = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
-      accumulateUtilityUsage(um.model, um.provider, resp.usage?.input_tokens || 0, resp.usage?.output_tokens || 0).catch(() => {})
+      accumulateUtilityUsage(resolvedUm.model, resolvedUm.provider, resp.usage?.input_tokens || 0, resp.usage?.output_tokens || 0).catch(() => {})
     }
 
     const match = raw.match(/\{[\s\S]*\}/m)

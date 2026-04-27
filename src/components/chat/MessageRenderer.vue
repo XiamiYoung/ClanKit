@@ -742,12 +742,22 @@ function injectFilePathChips(html) {
 // button HTML before marked.parse. The button survives DOMPurify because it
 // uses only standard data-attributes (same shape as the file-path chips).
 // Match both self-closing (<recommend-agent ... />) and paired forms.
-// Only matches COMPLETE tags — partial streaming output stays as plain text
-// until the closing slash arrives, then snaps to a button on the next frame.
+//
+// Streaming hygiene: while the LLM types the tag character-by-character, we
+// would otherwise leak the raw tag text to the UI until the closing chars
+// arrive. To prevent that flash, we ALSO strip any unclosed
+// "<recommend-agent ..." fragment that sits at the very end of the buffer.
+// On the next streaming frame the closing chars arrive and the full-tag
+// regex below converts the (now-complete) fragment to a button.
 function expandRecommendAgentTags(text) {
   if (!text || typeof text !== 'string') return text
+  // Strip a half-typed tag at the trailing edge of the buffer. The match must
+  // be anchored to end-of-string and must NOT contain a `>` (which would mean
+  // the tag is actually closed and should be handled by the full-tag regex).
+  const trailingPartial = /<recommend-agent\b[^>]*$/i
+  let cleaned = text.replace(trailingPartial, '')
   const re = /<recommend-agent\s+([^>]*?)\/?\s*>(?:\s*<\/recommend-agent>)?/gi
-  return text.replace(re, (full, attrStr) => {
+  return cleaned.replace(re, (full, attrStr) => {
     const idMatch = attrStr.match(/\bid\s*=\s*["']([^"']+)["']/i)
     const reasonMatch = attrStr.match(/\breason\s*=\s*["']([^"']*)["']/i)
     const id = idMatch ? idMatch[1] : ''

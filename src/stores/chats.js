@@ -742,12 +742,20 @@ export const useChatsStore = defineStore('chats', () => {
       .map(m => ({ role: m.role, content: _messageToPlainText(m).trim() }))
       .filter(m => m.content)
 
+    // Pass the chat's system agent so the backend can fall back to that
+    // agent's provider/model when no utility model is configured. Without this,
+    // users who skipped the utility-model setup never get auto-titled chats.
+    const fallbackAgentId = chat.systemAgentId
+      || chat.groupAgentIds?.[0]
+      || null
+
     _autoTitleInFlight.add(chatId)
     try {
       const res = await window.electronAPI.suggestChatTitle({
         chatId,
         messages: recent,
         attempt: chat.autoTitleAttemptCount,
+        fallbackAgentId,
       })
       if (res?.success && res?.title && chat.autoTitleEligible && !chat.autoTitleLocked) {
         chat.title = String(res.title).trim()
@@ -756,6 +764,8 @@ export const useChatsStore = defineStore('chats', () => {
         chat.autoTitleEligible = false
         await persistChat(chatId)
         await persistIndex()
+      } else if (!res?.success) {
+        console.warn('[chats] suggestChatTitle backend reported:', res?.error || 'no title')
       }
     } catch (err) {
       console.warn('[chats] suggestChatTitle failed:', err?.message || err)

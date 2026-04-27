@@ -75,6 +75,21 @@
           <!-- Grouped mode: by category -->
           <template v-else>
             <div class="np-grouped-list" v-if="sortedUserAgents.length > 0">
+              <div class="np-cat-group np-cat-group--default" v-if="defaultUserAgent">
+                <div class="np-cat-group-header">
+                  <span class="np-cat-group-emoji">⭐</span>
+                  <span class="np-cat-group-name">{{ t('common.default') }}</span>
+                </div>
+                <div class="np-agent-grid np-agent-grid--in-group">
+                  <AgentCardItem
+                    :agent="defaultUserAgent"
+                    :selected="isUserSelected(defaultUserAgent.id)"
+                    :show-default="true"
+                    kind="user"
+                    @click="emit('select-new-chat-user-agent', defaultUserAgent.id)"
+                  />
+                </div>
+              </div>
               <template v-for="cat in agentsStore.userCategories" :key="cat.id">
                 <div class="np-cat-group" v-if="agentsInUserCat(cat.id).length > 0">
                   <div class="np-cat-group-header">
@@ -163,6 +178,21 @@
           <!-- Grouped mode: by category -->
           <template v-else>
             <div class="np-grouped-list" v-if="sortedSystemAgents.length > 0">
+              <div class="np-cat-group np-cat-group--default" v-if="defaultSystemAgent">
+                <div class="np-cat-group-header">
+                  <span class="np-cat-group-emoji">⭐</span>
+                  <span class="np-cat-group-name">{{ t('common.default') }}</span>
+                </div>
+                <div class="np-agent-grid np-agent-grid--in-group">
+                  <AgentCardItem
+                    :agent="defaultSystemAgent"
+                    :selected="newChatAgentIds.includes(defaultSystemAgent.id)"
+                    :show-default="true"
+                    kind="system"
+                    @click="emit('toggle-new-chat-agent', defaultSystemAgent.id)"
+                  />
+                </div>
+              </div>
               <template v-for="cat in agentsStore.systemCategories" :key="cat.id">
                 <div class="np-cat-group" v-if="agentsInSystemCat(cat.id).length > 0">
                   <div class="np-cat-group-header">
@@ -312,21 +342,37 @@ const defaultSystemAgentId = computed(() => agentsStore.defaultSystemAgent?.id |
 const defaultUserAgentId = computed(() => agentsStore.defaultUserAgent?.id || null)
 
 // ── Grouping helpers — operate on the already-sorted/typed arrays from props ──
+// The default agent renders in a dedicated top group (see template); exclude
+// it from category and uncategorized groups so it doesn't appear twice.
 function agentsInUserCat(catId) {
   return props.sortedUserAgents.filter(a =>
+    a.id !== defaultUserAgentId.value &&
     Array.isArray(a.categoryIds) && a.categoryIds.includes(catId)
   )
 }
 function agentsInSystemCat(catId) {
   return props.sortedSystemAgents.filter(a =>
+    a.id !== defaultSystemAgentId.value &&
     Array.isArray(a.categoryIds) && a.categoryIds.includes(catId)
   )
 }
 const uncategorizedUserAgents = computed(() =>
-  props.sortedUserAgents.filter(a => !Array.isArray(a.categoryIds) || a.categoryIds.length === 0)
+  props.sortedUserAgents.filter(a =>
+    a.id !== defaultUserAgentId.value &&
+    (!Array.isArray(a.categoryIds) || a.categoryIds.length === 0)
+  )
 )
 const uncategorizedSystemAgents = computed(() =>
-  props.sortedSystemAgents.filter(a => !Array.isArray(a.categoryIds) || a.categoryIds.length === 0)
+  props.sortedSystemAgents.filter(a =>
+    a.id !== defaultSystemAgentId.value &&
+    (!Array.isArray(a.categoryIds) || a.categoryIds.length === 0)
+  )
+)
+const defaultUserAgent = computed(() =>
+  props.sortedUserAgents.find(a => a.id === defaultUserAgentId.value) || null
+)
+const defaultSystemAgent = computed(() =>
+  props.sortedSystemAgents.find(a => a.id === defaultSystemAgentId.value) || null
 )
 
 // ── AgentCardItem — single-source-of-truth card render ──────────────────
