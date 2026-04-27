@@ -93,6 +93,14 @@ vi.stubGlobal('window', {
     sendUtilityMessage: vi.fn().mockResolvedValue({ text: '{}' }),
     loadMemory: vi.fn().mockResolvedValue([]),
     souls: { read: vi.fn().mockResolvedValue(''), write: vi.fn().mockResolvedValue(true) },
+    memories: {
+      list:    vi.fn().mockResolvedValue({ rows: [], meta: null }),
+      add:     vi.fn().mockResolvedValue({ success: true, row: { id: 'new-row', section: 'Preferences', content: 'x' } }),
+      update:  vi.fn().mockResolvedValue({ success: true }),
+      delete:  vi.fn().mockResolvedValue({ success: true }),
+      search:  vi.fn().mockResolvedValue({ rows: [] }),
+      reindex: vi.fn().mockResolvedValue({ success: true, count: 0 }),
+    },
   },
   IntersectionObserver: class { observe() {} unobserve() {} disconnect() {} },
   ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
@@ -155,5 +163,19 @@ describe('AgentBodyViewer', () => {
     // System agents should have tool/skill/knowledge/mcp hotspots
     const hotspots = wrapper.findAll('.bv-hotspot')
     expect(hotspots.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('calls memories:list via electronAPI when mounting an existing agent', async () => {
+    window.electronAPI.memories.list.mockClear()
+    mountViewer({ agentType: 'system' })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(window.electronAPI.memories.list).toHaveBeenCalledWith('agent-1', 'system')
+  })
+
+  it('does not call memories:list when isNew=true (creation flow)', () => {
+    window.electronAPI.memories.list.mockClear()
+    mountViewer({ isNew: true })
+    expect(window.electronAPI.memories.list).not.toHaveBeenCalled()
   })
 })

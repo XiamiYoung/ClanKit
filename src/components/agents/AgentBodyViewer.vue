@@ -262,17 +262,55 @@
                   </button>
                 </div>
 
-                <!-- Memory -->
+                <!-- Memory (structured cards backed by SoulStore) -->
                 <div v-if="activePanel === 'memory'" class="bv-detail-body">
                   <div v-if="memoryLoading" class="bv-detail-empty">{{ t('common.loading') }}...</div>
-                  <template v-else-if="memorySections.length > 0">
-                    <div v-for="(sec, idx) in memorySections" :key="idx" class="bv-mem-section">
-                      <div v-if="sec.title" class="bv-mem-title">{{ sec.title.replace(/^#+\s*/, '') }}</div>
-                      <div v-if="readOnly" class="bv-mem-content-ro">{{ sec.body || t('agents.noMemory') }}</div>
-                      <textarea v-else :value="sec.body" @input="updateMemorySection(idx, $event.target.value)" class="bv-mem-textarea" spellcheck="false"></textarea>
+                  <template v-else-if="memoryGroups.length > 0">
+                    <div v-for="grp in memoryGroups" :key="grp.title" class="bv-mem-section">
+                      <div class="bv-mem-title">{{ grp.title }}</div>
+                      <ul class="bv-mem-cards">
+                        <li v-for="row in grp.rows" :key="row.id" class="bv-mem-card">
+                          <template v-if="!readOnly && editingEntryId === row.id">
+                            <textarea v-model="editingEntryDraft" class="bv-mem-card-edit" spellcheck="false" rows="2"></textarea>
+                            <div class="bv-mem-card-actions">
+                              <button class="bv-mem-card-btn bv-mem-card-btn-primary" @click="saveEditEntry">{{ t('common.save') }}</button>
+                              <button class="bv-mem-card-btn" @click="cancelEditEntry">{{ t('common.cancel') }}</button>
+                            </div>
+                          </template>
+                          <template v-else>
+                            <div class="bv-mem-card-content">{{ row.content }}</div>
+                            <div class="bv-mem-card-meta">
+                              <span v-if="row.source && row.source !== 'unknown'" class="bv-mem-chip">{{ row.source }}</span>
+                              <span v-if="row.confidence != null" class="bv-mem-chip">conf {{ row.confidence.toFixed(2) }}</span>
+                              <span v-if="row.updatedAt" class="bv-mem-meta-date">{{ formatMemoryDate(row.updatedAt) }}</span>
+                              <span v-if="!readOnly" class="bv-mem-card-buttons">
+                                <button class="bv-mem-card-icon" :title="t('common.edit')" @click="startEditEntry(row)">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                </button>
+                                <button class="bv-mem-card-icon bv-mem-card-icon-danger" :title="t('common.delete')" @click="deleteMemoryEntry(row)">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                                </button>
+                              </span>
+                            </div>
+                          </template>
+                        </li>
+                      </ul>
+                      <div v-if="!readOnly" class="bv-mem-add-row">
+                        <input
+                          v-model="newEntryDrafts[grp.title]"
+                          type="text"
+                          class="bv-mem-add-input"
+                          :placeholder="t('agents.memoryAddPlaceholder', '') || 'Add an entry...'"
+                          @keydown.enter.prevent="addMemoryEntry(grp.title)"
+                        />
+                        <button class="bv-mem-add-btn" :disabled="!(newEntryDrafts[grp.title] || '').trim()" @click="addMemoryEntry(grp.title)">+</button>
+                      </div>
                     </div>
                   </template>
                   <template v-else>
+                    <!-- Fallback: no structured rows yet — keep the legacy textarea so
+                         users can dump raw markdown for brand-new agents. The blob
+                         is round-tripped through souls.write into the store on save. -->
                     <div v-if="readOnly" class="bv-readonly-text bv-readonly-multiline bv-readonly-grow">{{ draftMemory || t('agents.noMemory') }}</div>
                     <textarea v-else v-model="draftMemory" class="bv-textarea bv-textarea-grow" :placeholder="t('agents.memoryPlaceholder')" spellcheck="false"></textarea>
                   </template>
@@ -753,7 +791,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, watch } from 'vue'
 import { useAgentsStore, BUILTIN_SYSTEM_AGENT_ID } from '../../stores/agents'
 import { useModelsStore } from '../../stores/models'
 import { useConfigStore } from '../../stores/config'
@@ -945,74 +983,151 @@ function onAvatarFileUpload(event) {
   reader.readAsDataURL(file)
 }
 
-// ── Memory ─────────────────────────────────────────────────────────────────
-const draftMemory   = ref('')
+// ── Memory (structured rows from SoulStore) ────────────────────────────────
+// Replaces the legacy "load full markdown blob into a textarea" pattern. The
+// SQLite-backed SoulStore now exposes per-entry CRUD via `memories:*` IPC,
+// so each memory has a stable id, section, source, confidence and timestamps —
+// editable as discrete cards instead of a free-form text field.
+//
+// `draftMemory` (the markdown string) is retained as a fallback view: when
+// the agent has no structured rows yet (e.g. brand-new agent) we still let
+// users dump raw markdown in. On save, that blob is round-tripped through
+// `souls.write` which lands in the store via the markdown adapter.
+const memoryRows    = ref([])             // [{ id, section, content, source, confidence, createdAt, updatedAt }]
+const draftMemory   = ref('')             // fallback markdown view
 const memoryLoading = ref(!props.isNew)
 const memoryLoaded  = ref(false)
-const memoryLineCount = computed(() => draftMemory.value.split('\n').filter(l => l.trimStart().startsWith('- ')).length)
 
-// Ensure blank lines between list entries and line breaks between numbered items
-function normalizeMemoryBody(body) {
-  let s = body
-  // Blank line between - [...] entries
-  s = s.replace(/([^\n])\n(- \[)/g, '$1\n\n$2')
-  // Line break before numbered items: "1)", "2)" etc. after punctuation
-  s = s.replace(/([;:])\s*(\d+\))/g, '$1\n$2')
-  return s
-}
+// New entry composer state — keyed per-section so multiple sections can have
+// open composers simultaneously. `null` means no draft for that section.
+const newEntryDrafts = reactive({})       // { [sectionName]: string }
+const editingEntryId = ref(null)
+const editingEntryDraft = ref('')
 
-const memorySections = computed(() => {
-  const text = draftMemory.value || ''
-  if (!text.trim()) return []
-  const parts = text.split(/^(#{1,3}\s+.+)$/m)
-  const sections = []
-  let currentTitle = ''
-  let currentBody = ''
-  for (const part of parts) {
-    if (/^#{1,3}\s+/.test(part)) {
-      if (currentTitle || currentBody.trim()) {
-        sections.push({ title: currentTitle, body: normalizeMemoryBody(currentBody.trim()) })
-      }
-      currentTitle = part.trim()
-      currentBody = ''
-    } else {
-      currentBody += part
-    }
+// Canonical section ordering — mirrors electron/memory/soulMarkdown.js.
+const MEMORY_SECTION_ORDER = [
+  'Identity',
+  'Mental Models', 'Decision Heuristics', 'Values & Anti-Patterns',
+  'Relational Genealogy', 'Honest Boundaries', 'Core Tensions', 'Relationship Timeline',
+  'Preferences', 'Communication', 'Technical', 'Projects', 'Personal', 'Interaction Notes',
+  'Memory Updates Log',
+]
+const SECTION_RANK = new Map(MEMORY_SECTION_ORDER.map((s, i) => [s, i]))
+
+const memoryEntryCount = computed(() => memoryRows.value.length)
+
+// Group rows by section for card rendering. Sections appear in canonical order;
+// unknown sections sort alphabetically after.
+const memoryGroups = computed(() => {
+  const bySection = new Map()
+  for (const r of memoryRows.value) {
+    if (!bySection.has(r.section)) bySection.set(r.section, [])
+    bySection.get(r.section).push(r)
   }
-  if (currentTitle || currentBody.trim()) {
-    sections.push({ title: currentTitle, body: normalizeMemoryBody(currentBody.trim()) })
-  }
-  return sections
+  const groups = [...bySection.entries()].map(([title, rows]) => ({
+    title,
+    rows: [...rows].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)),
+  }))
+  groups.sort((a, b) => {
+    const ra = SECTION_RANK.has(a.title) ? SECTION_RANK.get(a.title) : 1000
+    const rb = SECTION_RANK.has(b.title) ? SECTION_RANK.get(b.title) : 1000
+    if (ra !== rb) return ra - rb
+    return a.title.localeCompare(b.title)
+  })
+  return groups
 })
-
-function updateMemorySection(index, newBody) {
-  const secs = memorySections.value.map((s, i) => i === index ? { ...s, body: newBody } : s)
-  draftMemory.value = secs.map(s => s.title ? `${s.title}\n\n${s.body}` : s.body).join('\n\n')
-}
-
-// On first load, normalize memory to add blank lines between entries
-function normalizeMemoryOnLoad() {
-  if (draftMemory.value) {
-    let s = draftMemory.value
-    s = s.replace(/([^\n])\n(- \[)/g, '$1\n\n$2')
-    s = s.replace(/([;:])\s*(\d+\))/g, '$1\n$2')
-    if (s !== draftMemory.value) draftMemory.value = s
-  }
-}
 
 async function loadMemory() {
   if (memoryLoaded.value || props.isNew) return
   memoryLoading.value = true
   try {
-    const data = await window.electronAPI.souls.read(props.agentId, props.agentType)
-    draftMemory.value = data || ''
-    normalizeMemoryOnLoad()
+    if (window.electronAPI?.memories?.list) {
+      const result = await window.electronAPI.memories.list(props.agentId, props.agentType)
+      memoryRows.value = (result?.rows) || []
+    }
+    // Always also pull the markdown view for the fallback editor when there
+    // are zero rows (brand-new agent case).
+    const md = await window.electronAPI.souls.read(props.agentId, props.agentType)
+    draftMemory.value = md || ''
     memoryLoaded.value = true
   } catch (err) {
-    console.error('[Memory] souls.read error', err)
+    console.error('[Memory] load failed', err)
   }
   memoryLoading.value = false
 }
+
+async function refreshMemory() {
+  try {
+    if (window.electronAPI?.memories?.list) {
+      const result = await window.electronAPI.memories.list(props.agentId, props.agentType)
+      memoryRows.value = (result?.rows) || []
+    }
+  } catch (err) {
+    console.error('[Memory] refresh failed', err)
+  }
+}
+
+async function addMemoryEntry(section) {
+  const text = (newEntryDrafts[section] || '').trim()
+  if (!text) return
+  try {
+    const r = await window.electronAPI.memories.add({
+      agentId: props.agentId,
+      agentType: props.agentType,
+      section,
+      content: text,
+      source: 'user',
+    })
+    if (r?.success) {
+      newEntryDrafts[section] = ''
+      await refreshMemory()
+    }
+  } catch (err) {
+    console.error('[Memory] add failed', err)
+  }
+}
+
+function startEditEntry(row) {
+  editingEntryId.value = row.id
+  editingEntryDraft.value = row.content
+}
+function cancelEditEntry() {
+  editingEntryId.value = null
+  editingEntryDraft.value = ''
+}
+async function saveEditEntry() {
+  const id = editingEntryId.value
+  const content = editingEntryDraft.value.trim()
+  if (!id || !content) return cancelEditEntry()
+  try {
+    const r = await window.electronAPI.memories.update({ id, content })
+    if (r?.success) await refreshMemory()
+  } catch (err) {
+    console.error('[Memory] update failed', err)
+  }
+  cancelEditEntry()
+}
+async function deleteMemoryEntry(row) {
+  if (!row?.id) return
+  try {
+    const r = await window.electronAPI.memories.delete(row.id)
+    if (r?.success) await refreshMemory()
+  } catch (err) {
+    console.error('[Memory] delete failed', err)
+  }
+}
+
+function formatMemoryDate(ms) {
+  if (!ms) return ''
+  try {
+    const d = new Date(ms)
+    if (isNaN(d.getTime())) return ''
+    return d.toISOString().slice(0, 10)
+  } catch { return '' }
+}
+
+// Backwards-compat: the summary row still needs a count.
+const memoryLineCount = memoryEntryCount
 
 // Pre-load memory on mount so summary row shows correct count immediately.
 onMounted(() => {
@@ -1634,7 +1749,11 @@ function saveAll() {
     _soulSeed:   _soulOnce,
     _speechSeed: _speechOnce,
   })
-  if (memoryLoaded.value) {
+  // Memory persistence: structured rows are saved live via memories:add/update/
+  // delete as the user edits cards, so nothing to flush there. Only the legacy
+  // textarea fallback (shown when the agent has zero rows) needs an explicit
+  // souls.write — that blob gets diffed into rows on the main side.
+  if (memoryLoaded.value && memoryRows.value.length === 0 && (draftMemory.value || '').trim()) {
     window.electronAPI.souls.write(props.agentId, props.agentType, draftMemory.value)
       .catch(err => console.error('Memory save failed:', err))
   }
@@ -1833,6 +1952,93 @@ function saveAll() {
 .bv-mem-content-ro::-webkit-scrollbar { width: 4px; }
 .bv-mem-content-ro::-webkit-scrollbar-track { background: transparent; }
 .bv-mem-content-ro::-webkit-scrollbar-thumb { background: #333; border-radius: 9999px; }
+
+/* ── Memory: structured cards (Path B — backed by SoulStore) ── */
+.bv-mem-cards {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 0.25rem;
+}
+.bv-mem-card {
+  background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 0.375rem;
+  padding: 0.4375rem 0.5625rem; display: flex; flex-direction: column; gap: 0.25rem;
+}
+.bv-mem-card:hover { border-color: #3A3A3A; }
+.bv-mem-card-content {
+  font-size: 0.75rem; color: #D1D5DB; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+}
+.bv-mem-card-meta {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+  font-size: 0.625rem; color: #6B7280;
+}
+.bv-mem-chip {
+  background: #232323; color: #9CA3AF;
+  padding: 0.0625rem 0.4375rem; border-radius: 999px;
+  font-size: 0.625rem; font-weight: 500;
+}
+.bv-mem-meta-date {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.625rem; color: #6B7280;
+}
+.bv-mem-card-buttons {
+  margin-left: auto; display: inline-flex; gap: 0.25rem;
+}
+.bv-mem-card-icon {
+  background: transparent; border: 1px solid transparent;
+  color: #9CA3AF; cursor: pointer;
+  width: 1.375rem; height: 1.375rem; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 0.25rem;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.bv-mem-card-icon:hover { background: #232323; color: #FFFFFF; border-color: #2A2A2A; }
+.bv-mem-card-icon-danger:hover { color: #FCA5A5; }
+.bv-mem-card-edit {
+  resize: vertical; min-height: 1.75rem;
+  background: #0F0F0F; border: 1px solid #4B5563; border-radius: 0.25rem;
+  color: #FFFFFF; font-family: 'Inter', sans-serif; font-size: 0.75rem;
+  padding: 0.375rem 0.5rem; outline: none; line-height: 1.5;
+  width: 100%; box-sizing: border-box;
+}
+.bv-mem-card-actions {
+  display: flex; gap: 0.375rem; justify-content: flex-end;
+}
+.bv-mem-card-btn {
+  background: transparent; border: 1px solid #2A2A2A; color: #9CA3AF;
+  padding: 0.1875rem 0.625rem; border-radius: 0.25rem; cursor: pointer;
+  font-size: 0.6875rem; font-weight: 500;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.bv-mem-card-btn:hover { background: #232323; color: #FFFFFF; }
+.bv-mem-card-btn-primary {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF; border-color: #4B5563;
+}
+.bv-mem-card-btn-primary:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+}
+
+/* New-entry composer row */
+.bv-mem-add-row {
+  display: flex; gap: 0.25rem; margin-top: 0.0625rem;
+}
+.bv-mem-add-input {
+  flex: 1; background: #1A1A1A; border: 1px solid #2A2A2A;
+  border-radius: 0.375rem; color: #FFFFFF;
+  font-family: 'Inter', sans-serif; font-size: 0.75rem;
+  padding: 0.3125rem 0.5rem; outline: none;
+}
+.bv-mem-add-input:focus { border-color: #4B5563; }
+.bv-mem-add-btn {
+  width: 1.875rem; flex-shrink: 0;
+  background: #1A1A1A; border: 1px solid #2A2A2A;
+  border-radius: 0.375rem; color: #9CA3AF;
+  font-size: 0.875rem; line-height: 1; cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.bv-mem-add-btn:hover:not(:disabled) {
+  background: #232323; color: #FFFFFF; border-color: #3A3A3A;
+}
+.bv-mem-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* AI buttons */
 .bv-ai-btn-row {
