@@ -45,7 +45,7 @@ You must still have run `extract_sections` first — the cache is what that step
 ### 📁 Output path
 
 - If the user has set an AI Doc folder (DoCPath), the report is written to `<DoCPath>/<AgentName>_report.html` — visible to the user alongside their notes.
-- If DoCPath is empty, the tool falls back to `<dataPath>/souls/agents/<agentId>.report.html` (internal).
+- If DoCPath is empty, the tool falls back to `<dataPath>/agent-artifacts/agents/<agentId>.report.html` (internal).
 
 You don't need to move the file yourself — the tool writes to the right place.
 

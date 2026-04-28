@@ -23,16 +23,16 @@ function resolveVenvPath() {
 
 /** @deprecated resolvePreferredPython removed — no longer needed. */
 
-const soulStore = require('../memory/soulStore')
+const memoryStore = require('../memory/memoryStore')
 
-/** Read a soul as markdown via the SQLite-backed SoulStore. Returns null when missing. */
-function readSoulFileSync(agentId, agentType) {
+/** Read agent memory as markdown via the SQLite-backed MemoryStore. Returns null when missing. */
+function readMemoryFileSync(agentId, agentType) {
   if (!agentId) return null
   try {
-    const store = soulStore.getInstance(ds.paths().MEMORY_DIR)
+    const store = memoryStore.getInstance(ds.paths().MEMORY_DIR)
     return store.readMarkdown(agentId, agentType)
   } catch (err) {
-    logger.error('readSoulFileSync error', err.message)
+    logger.error('readMemoryFileSync error', err.message)
     return null
   }
 }
@@ -78,11 +78,11 @@ function register() {
         activeVoiceSession = null
       }
 
-      // Load soul memory for both agents.
-      // systemSoulContent = system agent's personality/knowledge
-      // userSoulContent = factual profile data about the user (NOT roleplay instructions)
-      const systemSoulContent = readSoulFileSync(agent?.id || agentId, 'system')
-      const userSoulContent = readSoulFileSync(userAgent?.id, 'users')
+      // Load memory for both agents.
+      // systemMemoryContent = system agent's personality/knowledge
+      // userMemoryContent = factual profile data about the user (NOT roleplay instructions)
+      const systemMemoryContent = readMemoryFileSync(agent?.id || agentId, 'system')
+      const userMemoryContent = readMemoryFileSync(userAgent?.id, 'users')
 
       // Build llmCall function that routes to the correct provider.
       // Returns { text, inputTokens, outputTokens } for usage tracking.
@@ -253,8 +253,8 @@ function register() {
         localConfig,
         agent,
         userAgent: userAgent || {},
-        systemSoulContent: systemSoulContent || '',
-        userSoulContent: userSoulContent || '',
+        systemMemoryContent: systemMemoryContent || '',
+        userMemoryContent: userMemoryContent || '',
         history: history || [],
         llmCall,
         onStatus:        (s)    => sendToRenderer('voice:status', s),

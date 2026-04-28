@@ -119,16 +119,16 @@ function _injectSkillsIntoRuns(agentRuns, loadedSkills) {
   }
 }
 
-const _soulStoreMod = require('../memory/soulStore')
+const _memoryStoreMod = require('../memory/memoryStore')
 
-/** Read a soul as markdown via the SQLite-backed SoulStore. Returns null when missing. */
-function readSoulFileSync(agentId, agentType) {
+/** Read agent memory as markdown via the SQLite-backed MemoryStore. Returns null when missing. */
+function readMemoryFileSync(agentId, agentType) {
   if (!agentId) return null
   try {
-    const store = _soulStoreMod.getInstance(ds.paths().MEMORY_DIR)
+    const store = _memoryStoreMod.getInstance(ds.paths().MEMORY_DIR)
     return store.readMarkdown(agentId, agentType)
   } catch (err) {
-    logger.error('readSoulFileSync error', err.message)
+    logger.error('readMemoryFileSync error', err.message)
     return null
   }
 }
@@ -137,7 +137,7 @@ function readSoulFileSync(agentId, agentType) {
  * Run post-turn memory extraction using the configured utility model.
  * Non-fatal -- failures are logged and silently ignored.
  *
- * High-confidence (≥0.8): auto-saved directly to soul files.
+ * High-confidence (≥0.8): auto-saved directly to memory store.
  * Medium-confidence (0.5–0.8): stored as pending facts for conversational confirmation.
  * Low-confidence (<0.5): discarded (filtered out in MemoryExtractor).
  */
@@ -205,14 +205,14 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
 
     logger.debug('[Memory] agentIds', { chatId, userAgentId, systemAgentId })
 
-    const userSoulContent = readSoulFileSync(userAgentId, 'users')
-    const systemSoulContent = readSoulFileSync(systemAgentId, 'system')
+    const userMemoryContent = readMemoryFileSync(userAgentId, 'users')
+    const systemMemoryContent = readMemoryFileSync(systemAgentId, 'system')
 
     const suggestions = await extractor.extract({
       lastUserMessage: lastUserText,
       lastAssistantMessage: lastAssistantText,
-      userSoulContent,
-      systemSoulContent,
+      userMemoryContent,
+      systemMemoryContent,
       userAgentId,
       systemAgentId,
       participants: participants || null,
@@ -230,14 +230,13 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
 
     logger.debug('[Memory] confidence split', { chatId, autoSave: autoSave.length, pending: pending.length })
 
-    // Auto-save high-confidence facts directly to soul files
+    // Auto-save high-confidence facts directly to memory store
     if (autoSave.length > 0) {
-      const { SoulUpdateTool: SoulUpdateToolForMemory } = require('../agent/tools/SoulTool')
-      // soulsDir param is kept for back-compat but the tool now writes via SoulStore
-      const soulTool = new SoulUpdateToolForMemory(ds.paths().SOULS_DIR)
+      const { MemoryUpdateTool } = require('../agent/tools/MemoryTool')
+      const memoryTool = new MemoryUpdateTool()
       for (const item of autoSave) {
         logger.debug('[Memory] writing', { agentId: item.agentId, agentType: item.agentType, section: item.section, entry: item.entry?.slice(0, 80) })
-        await soulTool.execute('memory-auto', {
+        await memoryTool.execute('memory-auto', {
           agent_id: item.agentId,
           agent_type: item.agentType,
           section: item.section,
@@ -633,7 +632,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     const groupCfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
     const promises = agentRuns.map(run => {
       const loopKey = `${chatId}:${run.agentId}`
-      const loopConfig = _normalizeLoopConfig({ ...(run.config || normalizedIncomingConfig), soulsDir: ds.paths().SOULS_DIR }, run.agentId)
+      const loopConfig = _normalizeLoopConfig({ ...(run.config || normalizedIncomingConfig), agentArtifactsDir: ds.paths().AGENT_ARTIFACTS_DIR }, run.agentId)
       if (injectedPlan) loopConfig.injectedPlan = injectedPlan
       loopConfig.sandboxConfig = groupCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
       loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
@@ -683,7 +682,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
               '\n\n[MEMORY PENDING CONFIRMATION]',
               'The following facts were observed but need user confirmation.',
               'At an appropriate moment, naturally ask the user if they want you to remember them.',
-              'If confirmed, call update_soul_memory. Do not be abrupt — integrate naturally.',
+              'If confirmed, call update_memory. Do not be abrupt — integrate naturally.',
               ...groupPending.map(p => `- [${p.section}] ${p.entry} (for ${p.target})`),
               '[/MEMORY PENDING CONFIRMATION]',
             ].join('\n')
@@ -773,7 +772,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
 
   // -- Single agent (backward compat) --
   const fullCfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
-  const loopConfig = _normalizeLoopConfig({ ...normalizedIncomingConfig, soulsDir: ds.paths().SOULS_DIR }, agentPrompts?.systemAgentId || null)
+  const loopConfig = _normalizeLoopConfig({ ...normalizedIncomingConfig, agentArtifactsDir: ds.paths().AGENT_ARTIFACTS_DIR }, agentPrompts?.systemAgentId || null)
   if (injectedPlan) loopConfig.injectedPlan = injectedPlan
   loopConfig.sandboxConfig = fullCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
   loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
@@ -810,7 +809,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       '\n\n[MEMORY PENDING CONFIRMATION]',
       'The following facts were observed but need user confirmation.',
       'At an appropriate moment, naturally ask the user if they want you to remember them.',
-      'If confirmed, call update_soul_memory. Do not be abrupt — integrate naturally.',
+      'If confirmed, call update_memory. Do not be abrupt — integrate naturally.',
       ...singlePending.map(p => `- [${p.section}] ${p.entry} (for ${p.target})`),
       '[/MEMORY PENDING CONFIRMATION]',
     ].join('\n')
@@ -918,7 +917,7 @@ ipcMain.handle('agent:run-additional', async (event, {
 
   const promises = filteredRuns.map(run => {
     const loopKey = `${chatId}:${run.agentId}`
-    const loopConfig = { ...(run.config || groupCfg), soulsDir: ds.paths().SOULS_DIR }
+    const loopConfig = { ...(run.config || groupCfg), agentArtifactsDir: ds.paths().AGENT_ARTIFACTS_DIR }
     loopConfig.sandboxConfig       = groupCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
     loopConfig.chatPermissionMode  = meta.permissionMode || 'inherit'
     loopConfig.chatAllowList       = meta.chatAllowList || []
@@ -1153,7 +1152,7 @@ ipcMain.handle('agent:compact', (event, chatId) => {
 
 ipcMain.handle('agent:compact-standalone', async (event, { chatId, messages, config, enabledAgents, enabledSkills }) => {
   logger.agent('Standalone compaction requested', { chatId, msgCount: messages?.length })
-  const loop = new AgentLoop({ ...config, soulsDir: ds.paths().SOULS_DIR, dataPath: ds.paths().DATA_DIR })
+  const loop = new AgentLoop({ ...config, agentArtifactsDir: ds.paths().AGENT_ARTIFACTS_DIR, dataPath: ds.paths().DATA_DIR })
   try {
     const result = await loop.compactStandalone(
       messages,
@@ -1487,7 +1486,7 @@ ipcMain.handle('agent:doc-run', async (event, {
     // falling back to config.defaultProvider. This is the same path used by
     // the main chat flow (see _normalizeLoopConfig in agentRuntimeUtils.js).
     const fullCfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
-    const loopConfig = _normalizeLoopConfig({ ...config, soulsDir: ds.paths().SOULS_DIR }, agentId || null)
+    const loopConfig = _normalizeLoopConfig({ ...config, agentArtifactsDir: ds.paths().AGENT_ARTIFACTS_DIR }, agentId || null)
 
     const loopConfigError = _validateLoopConfig(loopConfig)
     if (loopConfigError) {
@@ -1506,9 +1505,9 @@ ipcMain.handle('agent:doc-run', async (event, {
     loopConfig.DoCPath      = fullCfg.DoCPath      || ''
     loopConfig.memoryDir    = ds.paths().MEMORY_DIR
     // Doc editing is a narrow-scope task — drop tools that are irrelevant here
-    // and that could surprise users if accidentally invoked (soul memory
+    // and that could surprise users if accidentally invoked (memory
     // mutates long-term agent state; newsfeed is unrelated).
-    loopConfig.excludedToolNames = ['update_soul_memory', 'read_soul_memory', 'fetch_newsfeed']
+    loopConfig.excludedToolNames = ['update_memory', 'read_memory', 'fetch_newsfeed']
     _injectCachedModelMaxOutputTokens(loopConfig)
 
     const loop = new AgentLoop(loopConfig)
@@ -2485,7 +2484,7 @@ ipcMain.handle('agent:send-message', async (event, {
 
     const promises = runList.map(run => {
       const loopKey = `${chatId}:${run.agentId}`
-      const loopConfig = _normalizeLoopConfig({ ...run.config, soulsDir: ds.paths().SOULS_DIR }, run.agentId)
+      const loopConfig = _normalizeLoopConfig({ ...run.config, agentArtifactsDir: ds.paths().AGENT_ARTIFACTS_DIR }, run.agentId)
       loopConfig.sandboxConfig = fullCfg.sandboxConfig || { defaultMode: 'sandbox', sandboxAllowList: [] }
       loopConfig.chatPermissionMode = targetChatMeta.permissionMode || 'inherit'
       loopConfig.chatAllowList = targetChatMeta.chatAllowList || []
@@ -2565,7 +2564,7 @@ ipcMain.handle('agent:send-message', async (event, {
           const groupPending = pendingMemoryFacts.get(chatId)
           if (groupPending?.length > 0) {
             pendingMemoryFacts.delete(chatId)
-            const block = ['\n\n[MEMORY PENDING CONFIRMATION]', 'The following facts were observed but need user confirmation.', 'At an appropriate moment, naturally ask the user if they want you to remember them.', 'If confirmed, call update_soul_memory. Do not be abrupt — integrate naturally.', ...groupPending.map(p => `- [${p.section}] ${p.entry} (for ${p.target})`), '[/MEMORY PENDING CONFIRMATION]'].join('\n')
+            const block = ['\n\n[MEMORY PENDING CONFIRMATION]', 'The following facts were observed but need user confirmation.', 'At an appropriate moment, naturally ask the user if they want you to remember them.', 'If confirmed, call update_memory. Do not be abrupt — integrate naturally.', ...groupPending.map(p => `- [${p.section}] ${p.entry} (for ${p.target})`), '[/MEMORY PENDING CONFIRMATION]'].join('\n')
             runAgentPrompts.systemAgentPrompt = (runAgentPrompts.systemAgentPrompt || '') + block
           }
 
@@ -3020,4 +3019,4 @@ ipcMain.handle('agent:send-message', async (event, {
 
 }
 
-module.exports = { register, activeLoops, activeLoopMeta, lastContextSnapshots, lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtraction, _runStartupIndexRecovery, readSoulFileSync, chatLoadedSkills, _buildSkillInjectionMessages, _injectSkillsIntoRuns }
+module.exports = { register, activeLoops, activeLoopMeta, lastContextSnapshots, lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtraction, _runStartupIndexRecovery, readMemoryFileSync, chatLoadedSkills, _buildSkillInjectionMessages, _injectSkillsIntoRuns }

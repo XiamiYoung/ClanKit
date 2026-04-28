@@ -129,18 +129,18 @@ export const storage = {
     lsSet('clankai:agents', agents)
   },
 
-  // ── Soul Memory ────────────────────────────────────────────────────────────
-  async getSoul(agentId, type) {
-    if (isElectron()) return window.electronAPI.souls.read(agentId, type)
-    return lsGet(`clankai:soul:${type}:${agentId}`, null)
+  // ── Memory ────────────────────────────────────────────────────────────────
+  async getMemory(agentId, type) {
+    if (isElectron()) return window.electronAPI.memory.read(agentId, type)
+    return lsGet(`clankai:memory:${type}:${agentId}`, null)
   },
-  async saveSoul(agentId, type, content) {
-    if (isElectron()) return window.electronAPI.souls.write(agentId, type, content)
-    lsSet(`clankai:soul:${type}:${agentId}`, content)
+  async saveMemory(agentId, type, content) {
+    if (isElectron()) return window.electronAPI.memory.write(agentId, type, content)
+    lsSet(`clankai:memory:${type}:${agentId}`, content)
   },
-  async soulExists(agentId, type) {
-    if (isElectron()) return window.electronAPI.souls.exists(agentId, type)
-    return lsGet(`clankai:soul:${type}:${agentId}`, null) !== null
+  async memoryExists(agentId, type) {
+    if (isElectron()) return window.electronAPI.memory.exists(agentId, type)
+    return lsGet(`clankai:memory:${type}:${agentId}`, null) !== null
   },
 
 }

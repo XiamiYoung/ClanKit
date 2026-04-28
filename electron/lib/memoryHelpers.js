@@ -1,6 +1,6 @@
 /**
  * Memory directory management and file I/O for agent/user memory system.
- * Used by ipc/memory.js, ipc/agent.js, and ipc/souls.js.
+ * Used by ipc/memory.js and ipc/agent.js.
  */
 const path = require('path')
 const fs = require('fs')

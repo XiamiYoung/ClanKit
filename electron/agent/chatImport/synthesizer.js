@@ -5,7 +5,7 @@
  *
  * Takes verified claims from the critic and assembles them into the 8 Nuwa
  * output sections, written as a structured object with markdown bullet lists
- * per section. The IPC layer then writes these into the agent's soul file.
+ * per section. The IPC layer then writes these into the agent's memory store.
  *
  * 8 Nuwa categories (Phase 3):
  *   1. Mental Models       — verified=mental_model, dimensions: any
@@ -211,7 +211,7 @@ function formatClaimList(claims) {
 /**
  * Main entry — synthesize all 8 Nuwa sections from verified claims.
  *
- * Returns an object that the caller writes into the agent's soul file.
+ * Returns an object that the caller writes into the agent's memory store.
  */
 async function synthesizeNuwaSections(verified, profile, chatBlock, config, language) {
   const name = profile?.name || 'Them'
@@ -224,7 +224,7 @@ async function synthesizeNuwaSections(verified, profile, chatBlock, config, lang
     generateIdentityCard(name, verified, config, language),
   ])
 
-  // Build the soul section markdown blobs
+  // Build the section markdown blobs
   const sections = {
     'Identity':              identityCard ? `\n${identityCard}\n` : '',
     'Mental Models':         '\n' + (formatClaimList(grouped.mentalModels) || '_(none extracted yet)_') + '\n',

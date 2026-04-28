@@ -45,13 +45,13 @@ async function runScenario(scenarioPath) {
   const mock = createMockAnthropic({ responses: scenario.llmResponses || [] })
   await mock.listen(MOCK_PORT)
 
-  // Per-run empty fixture dirs (souls/memory/data are loaded by AgentLoop
+  // Per-run empty fixture dirs (artifacts/memory/data are loaded by AgentLoop
   // but must not contain anything that leaks real user state).
   const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'clank-recorder-'))
-  const soulsDir = path.join(fixtureRoot, 'souls')
+  const agentArtifactsDir = path.join(fixtureRoot, 'agent-artifacts')
   const memoryDir = path.join(fixtureRoot, 'memory')
   const dataPath = path.join(fixtureRoot, 'data')
-  for (const d of [soulsDir, memoryDir, dataPath]) fs.mkdirSync(d, { recursive: true })
+  for (const d of [agentArtifactsDir, memoryDir, dataPath]) fs.mkdirSync(d, { recursive: true })
 
   const loopConfig = {
     provider: {
@@ -60,7 +60,7 @@ async function runScenario(scenarioPath) {
       baseURL: `http://127.0.0.1:${MOCK_PORT}`,
       model: scenario.model || 'claude-haiku-4-5',
     },
-    soulsDir,
+    agentArtifactsDir,
     memoryDir,
     dataPath,
     chatId: 'recorder-chat',

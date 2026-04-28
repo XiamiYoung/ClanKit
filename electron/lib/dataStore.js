@@ -11,9 +11,49 @@ const path = require('path')
 const fs = require('fs')
 const { app } = require('electron')
 const { logger } = require('../logger')
+const safeStorageHelper = require('./safeStorageHelper')
 
 // --- Path state (populated by init()) ----------------------------------------
 let _paths = null
+
+// Config fields that contain credentials and must be encrypted at rest using
+// safeStorage (DPAPI / Keychain / libsecret). Encryption is transparent to
+// callers of readJSON / writeJSON / readJSONAsync / writeJSONAtomic — values
+// appear plaintext in memory and ciphertext on disk. This protects config.json
+// from cloud-sync leaks (OneDrive, etc.) without forcing every consumer to
+// know about it. encryptString is idempotent so round-trip read/modify/write
+// of unrelated fields is safe.
+function _isConfigFile(file) {
+  return _paths && file === _paths.CONFIG_FILE
+}
+
+function _decryptConfigSensitive(cfg) {
+  if (!cfg || typeof cfg !== 'object') return cfg
+  const out = { ...cfg }
+  if (Array.isArray(cfg.providers)) {
+    out.providers = cfg.providers.map(p => p && typeof p === 'object'
+      ? { ...p, apiKey: safeStorageHelper.decryptString(p.apiKey) }
+      : p)
+  }
+  if (cfg.smtp && typeof cfg.smtp === 'object') {
+    out.smtp = { ...cfg.smtp, pass: safeStorageHelper.decryptString(cfg.smtp.pass) }
+  }
+  return out
+}
+
+function _encryptConfigSensitive(cfg) {
+  if (!cfg || typeof cfg !== 'object') return cfg
+  const out = { ...cfg }
+  if (Array.isArray(cfg.providers)) {
+    out.providers = cfg.providers.map(p => p && typeof p === 'object'
+      ? { ...p, apiKey: safeStorageHelper.encryptString(p.apiKey) }
+      : p)
+  }
+  if (cfg.smtp && typeof cfg.smtp === 'object') {
+    out.smtp = { ...cfg.smtp, pass: safeStorageHelper.encryptString(cfg.smtp.pass) }
+  }
+  return out
+}
 
 function paths() {
   if (!_paths) throw new Error('dataStore.init() has not been called')
@@ -81,7 +121,7 @@ function init() {
     AGENTS_FILE:          path.join(DATA_DIR, 'agents.json'),
     MCP_SERVERS_FILE:     path.join(DATA_DIR, 'mcp-servers.json'),
     TOOLS_FILE:           path.join(DATA_DIR, 'tools.json'),
-    SOULS_DIR:            path.join(DATA_DIR, 'souls'),
+    AGENT_ARTIFACTS_DIR:  path.join(DATA_DIR, 'agent-artifacts'),
     KNOWLEDGE_FILE:       path.join(DATA_DIR, 'knowledge.json'),
     UTILITY_USAGE_FILE:   path.join(DATA_DIR, 'utility-usage.json'),
     TASKS_FILE:           path.join(DATA_DIR, 'tasks.json'),
@@ -105,7 +145,10 @@ function init() {
 // --- JSON I/O ----------------------------------------------------------------
 function readJSON(file, fallback) {
   try {
-    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'))
+    if (fs.existsSync(file)) {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'))
+      return _isConfigFile(file) ? _decryptConfigSensitive(data) : data
+    }
   } catch {}
   return fallback
 }
@@ -113,15 +156,17 @@ function readJSON(file, fallback) {
 function writeJSON(file, data) {
   const dir = path.dirname(file)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8')
+  const payload = _isConfigFile(file) ? _encryptConfigSensitive(data) : data
+  fs.writeFileSync(file, JSON.stringify(payload, null, 2), 'utf8')
 }
 
 async function writeJSONAtomic(file, data, _retries = 3) {
   const dir = path.dirname(file)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   const tmp = file + `.tmp.${process.pid}.${Date.now()}`
+  const payload = _isConfigFile(file) ? _encryptConfigSensitive(data) : data
   try {
-    await fs.promises.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
+    await fs.promises.writeFile(tmp, JSON.stringify(payload, null, 2), 'utf8')
     // Small delay on Windows: antivirus may briefly hold the tmp file after write,
     // causing the rename to fail with ENOENT even though we just wrote it.
     if (process.platform === 'win32') await new Promise(r => setTimeout(r, 15))
@@ -139,7 +184,8 @@ async function writeJSONAtomic(file, data, _retries = 3) {
 async function readJSONAsync(file, fallback) {
   try {
     const raw = await fs.promises.readFile(file, 'utf8')
-    return JSON.parse(raw)
+    const data = JSON.parse(raw)
+    return _isConfigFile(file) ? _decryptConfigSensitive(data) : data
   } catch {
     return fallback
   }

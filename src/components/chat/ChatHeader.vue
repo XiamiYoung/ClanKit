@@ -159,12 +159,12 @@
                     :src="activeUserAvatarDataUri"
                     alt=""
                     class="agent-card-avatar-img"
-                    @click.stop="$emit('open-soul-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
+                    @click.stop="$emit('open-body-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
                   />
                   <div
                     v-else
                     class="agent-card-avatar-default user"
-                    @click.stop="$emit('open-soul-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
+                    @click.stop="$emit('open-body-viewer', activeUserAgent?.id || '__default_user__', 'users', activeUserAgent?.name || 'User')"
                   >
                     <svg style="width:14px;height:14px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                   </div>
@@ -471,7 +471,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'open-chat-settings',
-  'open-soul-viewer',
+  'open-body-viewer',
   'remove-group-agent',
   'start-call',
   'enter-grid',
@@ -759,9 +759,9 @@ function toggleSystemAgent(agentId) {
   }
 }
 
-// ── System avatar click: grid/group → soul viewer; normal → nothing ──
+// ── System avatar click: grid/group → body viewer; normal → nothing ──
 function onSysAvatarClick(pid) {
-  emit('open-soul-viewer', pid, 'system', agentsStore.getAgentById(pid)?.name || 'System')
+  emit('open-body-viewer', pid, 'system', agentsStore.getAgentById(pid)?.name || 'System')
 }
 
 // ── Agent tooltip (header-only) ──

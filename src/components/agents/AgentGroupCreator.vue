@@ -210,7 +210,7 @@ import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useAgentsStore } from '../../stores/agents'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
-import { getAgentTemplates, PROFESSIONAL_TEMPLATE_IDS, getEntertainmentTemplateIds, templateSoulToSections, templateSpeechToDna } from '../../data/agentTemplates'
+import { getAgentTemplates, PROFESSIONAL_TEMPLATE_IDS, getEntertainmentTemplateIds, templateMemoryToSections, templateSpeechToDna } from '../../data/agentTemplates'
 import AppButton from '../common/AppButton.vue'
 import { getCharacterPromptSections, getProfessionalPromptSections } from '../../utils/agentDefinitionPrompts'
 
@@ -798,7 +798,7 @@ ${profSections}
 
 The "prompt" field must be a plain string with markdown section headers.
 
-Each agent must ALSO ship with a Nuwa-style "soul" and "speech" block — these become persistent memory injected into the system prompt at runtime, simulating what would normally come from imported chat history. Without them, the agent feels generic on first contact.
+Each agent must ALSO ship with a Nuwa-style "memory" and "speech" block — these become persistent memory injected into the system prompt at runtime, simulating what would normally come from imported chat history. Without them, the agent feels generic on first contact.
 
 Return ONLY valid JSON — no markdown, no code fences, no explanation:
 {
@@ -809,7 +809,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation:
       "role": "brief role (3-8 words)",
       "description": "keyword-style summary, max 100 characters",
       "prompt": "full agent definition prompt text",
-      "soul": {
+      "memory": {
         "identity": "1-2 sentence first-person self-intro",
         "mentalModels": ["3-5 beliefs in 'believe X → therefore Y → always Z' form"],
         "decisionHeuristics": ["4-6 concrete decision rules"],
@@ -841,7 +841,7 @@ Rules:
 - The "prompt" field MUST follow the COMPLETE chosen section template above — all sections, full instructions, full detail. Do NOT abbreviate or shorten.
 - Use ALL sections defined in the chosen template — do not skip any section
 - Do NOT write fixed dialogue lines in trigger rules — write strategy descriptions instead
-- soul.mentalModels / decisionHeuristics / etc. items must be one short sentence each, NOT objects or nested structures${langInstruction}`,
+- memory.mentalModels / decisionHeuristics / etc. items must be one short sentence each, NOT objects or nested structures${langInstruction}`,
       config,
     })
 
@@ -889,8 +889,8 @@ Rules:
               ? a.prompt.trim()
               : buildFallbackPrompt(a, lang),
             // Pass through Nuwa-style assets (may be undefined if AI omitted them).
-            // The install path turns these into souls/system/{id}.md and .speech.json.
-            soul:   (a.soul && typeof a.soul === 'object') ? a.soul : null,
+            // The install path turns these into MemoryStore rows + .speech.json sidecar.
+            memory: (a.memory && typeof a.memory === 'object') ? a.memory : null,
             speech: (a.speech && typeof a.speech === 'object') ? a.speech : null,
           })
         }
@@ -943,10 +943,10 @@ async function createAgents() {
         .map(c => normalizeName(c.name))
     )
 
-    // Map of normalizedName → { soul, speech } for built-in templates that ship
-    // pre-fabricated Nuwa-style memory. Populated only on the template path so
-    // the AI-proposal path stays unchanged.
-    let templateSoulMap = null
+    // Map of normalizedName → { memory, speech } for built-in templates that
+    // ship pre-fabricated Nuwa-style memory. Populated only on the template
+    // path so the AI-proposal path stays unchanged.
+    let templateMemoryMap = null
 
     if (activeTab.value === 'templates' && selectedTemplate.value) {
       const tmpl = selectedTemplate.value
@@ -966,10 +966,10 @@ async function createAgents() {
         prompt: a.prompt,
         avatar: a.avatar || `a${Math.floor(Math.random() * 36) + 1}`
       }))
-      templateSoulMap = new Map()
+      templateMemoryMap = new Map()
       for (const a of tmpl.agents) {
-        if (a.soul || a.speech) {
-          templateSoulMap.set(normalizeName(a.name), { soul: a.soul, speech: a.speech })
+        if (a.memory || a.speech) {
+          templateMemoryMap.set(normalizeName(a.name), { memory: a.memory, speech: a.speech })
         }
       }
     } else if (generatedProposal.value) {
@@ -990,10 +990,10 @@ async function createAgents() {
         prompt: a.prompt,
         avatar: `a${Math.floor(Math.random() * 36) + 1}`
       }))
-      templateSoulMap = new Map()
+      templateMemoryMap = new Map()
       for (const a of prop.agents) {
-        if (a.soul || a.speech) {
-          templateSoulMap.set(normalizeName(a.name), { soul: a.soul, speech: a.speech })
+        if (a.memory || a.speech) {
+          templateMemoryMap.set(normalizeName(a.name), { memory: a.memory, speech: a.speech })
         }
       }
     }
@@ -1038,17 +1038,17 @@ async function createAgents() {
           createdIds.push(agent.id)
         }
 
-        // Built-in templates ship with pre-fabricated soul + speech DNA so the
-        // first conversation feels deep instead of starting from scratch. Write
-        // those assets to disk now that we have stable agent IDs. Best-effort —
+        // Built-in templates ship with pre-fabricated memory + speech DNA so
+        // the first conversation feels deep instead of starting from scratch.
+        // Write those assets now that we have stable agent IDs. Best-effort —
         // a failure here must not abort the install.
-        if (templateSoulMap && templateSoulMap.size > 0) {
+        if (templateMemoryMap && templateMemoryMap.size > 0) {
           for (const newAgent of newAgents) {
-            const assets = templateSoulMap.get(normalizeName(newAgent.name))
+            const assets = templateMemoryMap.get(normalizeName(newAgent.name))
             if (!assets) continue
             try {
-              if (assets.soul) {
-                const sections = templateSoulToSections(assets.soul)
+              if (assets.memory) {
+                const sections = templateMemoryToSections(assets.memory)
                 if (sections) {
                   await window.electronAPI.agentImport.writeNuwaSections({
                     agentId:    newAgent.id,
@@ -1070,7 +1070,7 @@ async function createAgents() {
                 }
               }
             } catch (err) {
-              console.warn('[AgentGroupCreator] failed to write soul/speech for', newAgent.name, err)
+              console.warn('[AgentGroupCreator] failed to write memory/speech for', newAgent.name, err)
             }
           }
         }

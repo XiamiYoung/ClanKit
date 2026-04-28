@@ -26,7 +26,7 @@ vi.mock('../../utils/edgeVoices', () => ({ getDefaultVoiceForLocale: () => 'en-U
 vi.stubGlobal('window', {
   ...globalThis.window,
   electronAPI: {
-    souls: { deleteAgentData: vi.fn().mockResolvedValue(true) },
+    memory: { deleteAgentData: vi.fn().mockResolvedValue(true) },
   },
 })
 

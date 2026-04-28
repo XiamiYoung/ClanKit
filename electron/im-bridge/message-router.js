@@ -8,8 +8,11 @@ const { AgentLoop } = require('../agent/agentLoop')
 const ds = require('../lib/dataStore')
 const { normalizeLoopConfig } = require('../ipc/agentRuntimeUtils')
 
+// Delegate to dataStore.readJSON so CONFIG_FILE reads transparently decrypt
+// safeStorage-protected fields (apiKey, smtp.pass). Other files pass through
+// unchanged.
 function readJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return fallback }
+  return ds.readJSON(file, fallback)
 }
 
 function writeAtomic(filePath, data) {
@@ -163,7 +166,7 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
 
   const baseConfig = {
     ...config,
-    soulsDir:            ds.paths().SOULS_DIR,
+    agentArtifactsDir:   ds.paths().AGENT_ARTIFACTS_DIR,
     dataPath:            ds.paths().DATA_DIR,
     chatPermissionMode:  'all_permissions',
     chatAllowList:       [],
@@ -286,7 +289,7 @@ async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, noti
   const provider = config.defaultProvider || 'anthropic'
   const loopConfig = {
     ...config,
-    soulsDir:            ds.paths().SOULS_DIR,
+    agentArtifactsDir:   ds.paths().AGENT_ARTIFACTS_DIR,
     dataPath:            ds.paths().DATA_DIR,
     chatPermissionMode:  'all_permissions',
     chatAllowList:       [],

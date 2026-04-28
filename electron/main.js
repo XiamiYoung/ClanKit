@@ -188,16 +188,18 @@ function ensureDataDir() {
   ds.init()
 }
 
+// Delegate to dataStore.readJSON so CONFIG_FILE reads transparently decrypt
+// safeStorage-protected fields (apiKey, smtp.pass). Other files pass through
+// unchanged.
 function readJSON(file, fallback) {
-  try {
-    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'))
-  } catch {}
-  return fallback
+  return ds.readJSON(file, fallback)
 }
 
+// Delegate to dataStore.writeJSON so CONFIG_FILE writes transparently encrypt
+// sensitive fields. Other files pass through unchanged.
 function writeJSON(file, data) {
   ensureDataDir()
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8')
+  ds.writeJSON(file, data)
 }
 
 // --- Atomic async JSON write (write to unique .tmp then rename) ---------------

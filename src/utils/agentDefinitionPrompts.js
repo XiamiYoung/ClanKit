@@ -564,7 +564,7 @@ ${charSections}
 ## Output Format (CRITICAL)
 - Return ONLY valid JSON, no markdown fences, no extra text
 - The "prompt" field MUST be a single plain string with markdown ## section headers inside — NOT a nested object
-- DO NOT include any "soul" or "speech" fields in the JSON — all persona content lives in the "prompt" string
+- DO NOT include any "memory" or "speech" fields in the JSON — all persona content lives in the "prompt" string
 {
   "name": "realistic personal name",
   "description": "keyword-style summary, max 100 characters, no prose sentences",
@@ -606,7 +606,7 @@ ${userSections}
 ## Output Format (CRITICAL)
 - Return ONLY valid JSON, no markdown fences, no extra text
 - The "prompt" field MUST be a single plain string with markdown ## section headers inside — NOT a nested object
-- DO NOT include any "soul" or "speech" fields in the JSON — all persona content lives in the "prompt" string
+- DO NOT include any "memory" or "speech" fields in the JSON — all persona content lives in the "prompt" string
 {
   "name": "persona name or title",
   "description": "keyword-style summary, max 100 characters, no prose sentences",

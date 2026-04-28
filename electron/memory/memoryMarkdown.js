@@ -1,10 +1,12 @@
 /**
- * soulMarkdown — pure parse/serialize between soul .md files and structured rows.
+ * memoryMarkdown — pure parse/serialize between memory markdown blobs and
+ * structured rows.
  *
- * The SQLite-backed SoulStore is the source of truth, but agents (LLM tool calls),
- * the chat-import pipeline, and the legacy `souls:read/write` IPC contract all
- * still want a markdown view. This module is the boundary: zero side effects,
- * zero IPC, zero DB. Pure functions only — fully testable without native deps.
+ * The SQLite-backed MemoryStore is the source of truth, but agents (LLM tool
+ * calls), the chat-import pipeline, and the `memory:read/write` IPC contract
+ * all still want a markdown view. This module is the boundary: zero side
+ * effects, zero IPC, zero DB. Pure functions only — fully testable without
+ * native deps.
  *
  * Row shape:
  *   {
@@ -21,8 +23,8 @@
  */
 const crypto = require('crypto')
 
-// Canonical section ordering — mirrors the original SoulTool SECTIONS constant.
-// Used for stable serialization so round-tripping through the store doesn't
+// Canonical section ordering. Used for stable serialization so round-tripping
+// through the store doesn't
 // reorder sections every save.
 const SECTIONS = [
   'Identity',
@@ -69,10 +71,10 @@ function deterministicId(agentId, agentType, section, content) {
 }
 
 /**
- * Parse a soul markdown file into structured rows.
+ * Parse a memory markdown blob into structured rows.
  *
  * Behaviour notes:
- * - Section headings are matched as `^## (.+)$` (consistent with existing SoulTool).
+ * - Section headings are matched as `^## (.+)$`.
  * - Within a section, only lines starting with `- ` count as entries. Anything
  *   else (blank lines, raw paragraphs, sub-headers like `### Foo`) is ignored
  *   for entry extraction. The `## Identity` block uses `- Type: …` / `- Created: …`
@@ -101,7 +103,7 @@ function parseMarkdownToRows(content, agentId, agentType, opts = {}) {
   let agentName = null
 
   for (const line of lines) {
-    const titleMatch = line.match(/^#\s+Soul:\s+(.+)$/)
+    const titleMatch = line.match(/^#\s+Memory:\s+(.+)$/)
     if (titleMatch && !currentSection) {
       agentName = titleMatch[1].trim()
       headerLines.push(line)
@@ -149,7 +151,7 @@ function parseMarkdownToRows(content, agentId, agentType, opts = {}) {
 }
 
 /**
- * Serialize structured rows back into a soul markdown document.
+ * Serialize structured rows back into a memory markdown document.
  *
  * Sections are emitted in the canonical SECTIONS order. Rows in unknown
  * sections (custom or deprecated) come AFTER known sections in alphabetical
@@ -168,7 +170,7 @@ function rowsToMarkdown(rows, headerInfo = {}) {
   const lastUpdated = headerInfo.lastUpdated || _isoNow()
 
   const out = []
-  out.push(`# Soul: ${agentName}`)
+  out.push(`# Memory: ${agentName}`)
   out.push(`> Last updated: ${lastUpdated}`)
   out.push('')
 
@@ -180,7 +182,7 @@ function rowsToMarkdown(rows, headerInfo = {}) {
   }
 
   // Emit sections in canonical order. Always render Identity even if empty so
-  // round-tripping a freshly-templated soul stays stable.
+  // round-tripping a freshly-templated memory stays stable.
   const knownSections = SECTIONS.slice()
   const unknownSections = [...bySection.keys()]
     .filter(s => !SECTION_ORDER.has(s))
@@ -218,8 +220,8 @@ function rowsToMarkdown(rows, headerInfo = {}) {
 }
 
 /**
- * Diff two row sets to produce minimal CRUD operations. Used by `souls:write`
- * to reconcile an externally-edited markdown blob (e.g. agent saved a soul.md
+ * Diff two row sets to produce minimal CRUD operations. Used by `memory:write`
+ * to reconcile an externally-edited markdown blob (e.g. agent saved memory
  * via the legacy textarea) back into the row store without losing IDs of
  * unchanged entries.
  *

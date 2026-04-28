@@ -14,7 +14,7 @@
       @swap-chat="gridSwapChat"
       @maximize-chat="gridMaximizeChat"
       @open-chat-settings="gridOpenChatSettings"
-      @open-soul-viewer="(id, type, name) => openSoulViewer(id, type, name)"
+      @open-body-viewer="(id, type, name) => openBodyViewer(id, type, name)"
       @remove-group-agent="(cId, pid) => requestRemoveGroupAgent(cId, pid)"
       @start-call="handleStartCall"
     />
@@ -278,7 +278,7 @@
           ref="chatHeaderRef"
           :chatId="chatsStore.activeChatId"
           @open-chat-settings="showChatConfigModal = true"
-          @open-soul-viewer="(id, type, name) => openSoulViewer(id, type, name)"
+          @open-body-viewer="(id, type, name) => openBodyViewer(id, type, name)"
           @remove-group-agent="(cId, pid) => requestRemoveGroupAgent(cId, pid)"
           @start-call="handleStartCall"
           @enter-grid="enterGridMode"
@@ -790,24 +790,24 @@
   />
   <!-- Agent Body Viewer Modal (chat context — model changes go to per-chat override) -->
   <AgentBodyViewer
-    v-if="soulViewerTarget"
-    :agent-id="soulViewerTarget.agentId"
-    :agent-type="soulViewerTarget.agentType"
-    :agent-name="soulViewerTarget.agentName"
-    :agent-description="soulViewerTarget.agentDescription"
-    :agent-prompt="soulViewerTarget.agentPrompt"
-    :agent-provider-id="soulViewerTarget.agentProviderId"
-    :agent-model-id="soulViewerTarget.agentModelId"
-    :agent-voice-id="soulViewerTarget.agentVoiceId"
-    :agent-avatar="soulViewerTarget.agentAvatar"
-    :agent-required-tool-ids="soulViewerTarget.agentRequiredToolIds"
-    :agent-required-skill-ids="soulViewerTarget.agentRequiredSkillIds"
-    :agent-required-mcp-server-ids="soulViewerTarget.agentRequiredMcpServerIds"
-    :agent-required-knowledge-base-ids="soulViewerTarget.agentRequiredKnowledgeBaseIds"
+    v-if="bodyViewerTarget"
+    :agent-id="bodyViewerTarget.agentId"
+    :agent-type="bodyViewerTarget.agentType"
+    :agent-name="bodyViewerTarget.agentName"
+    :agent-description="bodyViewerTarget.agentDescription"
+    :agent-prompt="bodyViewerTarget.agentPrompt"
+    :agent-provider-id="bodyViewerTarget.agentProviderId"
+    :agent-model-id="bodyViewerTarget.agentModelId"
+    :agent-voice-id="bodyViewerTarget.agentVoiceId"
+    :agent-avatar="bodyViewerTarget.agentAvatar"
+    :agent-required-tool-ids="bodyViewerTarget.agentRequiredToolIds"
+    :agent-required-skill-ids="bodyViewerTarget.agentRequiredSkillIds"
+    :agent-required-mcp-server-ids="bodyViewerTarget.agentRequiredMcpServerIds"
+    :agent-required-knowledge-base-ids="bodyViewerTarget.agentRequiredKnowledgeBaseIds"
     :from-chat="true"
     :read-only="true"
-    @close="closeSoulViewer"
-    @update-agent="handleSoulViewerUpdateAgent"
+    @close="closeBodyViewer"
+    @update-agent="handleBodyViewerUpdateAgent"
   />
 
   <!-- Confirm Delete Modal -->
@@ -1683,12 +1683,12 @@ function loadMoreMessages() {
   visibleLimit.value += 25
 }
 
-// ── Soul Viewer modal state ──────────────────────────────────────────────
-const soulViewerTarget = ref(null) // { agentId, agentType, agentName, agentDescription, agentPrompt, agentProviderId, agentModelId, agentVoiceId, agentAvatar }
+// ── Body Viewer modal state ──────────────────────────────────────────────
+const bodyViewerTarget = ref(null) // { agentId, agentType, agentName, agentDescription, agentPrompt, agentProviderId, agentModelId, agentVoiceId, agentAvatar }
 
-function openSoulViewer(agentId, agentType, agentName) {
+function openBodyViewer(agentId, agentType, agentName) {
   const agent = agentsStore.getAgentById(agentId)
-  soulViewerTarget.value = {
+  bodyViewerTarget.value = {
     agentId,
     agentType,
     agentRequiredToolIds: agent?.requiredToolIds ?? [],
@@ -1705,14 +1705,14 @@ function openSoulViewer(agentId, agentType, agentName) {
   }
 }
 
-function closeSoulViewer() {
-  soulViewerTarget.value = null
+function closeBodyViewer() {
+  bodyViewerTarget.value = null
 }
 
 
-async function handleSoulViewerUpdateAgent(updates) {
-  if (!soulViewerTarget.value) return
-  const pid = soulViewerTarget.value.agentId
+async function handleBodyViewerUpdateAgent(updates) {
+  if (!bodyViewerTarget.value) return
+  const pid = bodyViewerTarget.value.agentId
   const agent = agentsStore.getAgentById(pid)
   if (!agent) return
 
@@ -1723,10 +1723,10 @@ async function handleSoulViewerUpdateAgent(updates) {
   if (Object.keys(globalUpdates).length > 0) {
     const updated = { ...agent, ...globalUpdates }
     await agentsStore.saveAgent(updated)
-    if (!soulViewerTarget.value) return
-    soulViewerTarget.value.agentPrompt = updated.prompt ?? soulViewerTarget.value.agentPrompt
-    soulViewerTarget.value.agentDescription = updated.description ?? soulViewerTarget.value.agentDescription
-    if (globalUpdates.voiceId !== undefined) soulViewerTarget.value.agentVoiceId = updated.voiceId ?? null
+    if (!bodyViewerTarget.value) return
+    bodyViewerTarget.value.agentPrompt = updated.prompt ?? bodyViewerTarget.value.agentPrompt
+    bodyViewerTarget.value.agentDescription = updated.description ?? bodyViewerTarget.value.agentDescription
+    if (globalUpdates.voiceId !== undefined) bodyViewerTarget.value.agentVoiceId = updated.voiceId ?? null
   }
 }
 

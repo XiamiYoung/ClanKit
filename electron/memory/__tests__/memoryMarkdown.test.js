@@ -1,16 +1,16 @@
 /**
- * soulMarkdown unit tests — pure parse/serialize/diff logic. No DB, no IPC.
- * Covers the contract that the SQLite-backed SoulStore relies on for round-tripping
- * legacy markdown files into structured rows and back.
+ * memoryMarkdown unit tests — pure parse/serialize/diff logic. No DB, no IPC.
+ * Covers the contract that the SQLite-backed MemoryStore relies on for
+ * round-tripping markdown blobs into structured rows and back.
  */
 import { describe, it, expect } from 'vitest'
 
 // CJS module — vitest 4 supports interop
-const { parseMarkdownToRows, rowsToMarkdown, diffRows, deterministicId, SECTIONS } = require('../soulMarkdown')
+const { parseMarkdownToRows, rowsToMarkdown, diffRows, deterministicId, SECTIONS } = require('../memoryMarkdown')
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
-const SAMPLE_MD = `# Soul: Alice
+const SAMPLE_MD = `# Memory: Alice
 
 > Last updated: 2026-04-27T12:00:00Z
 
@@ -36,7 +36,7 @@ const SAMPLE_MD = `# Soul: Alice
 - [2026-04-27] add: Likes concise replies
 `
 
-const NUWA_MD = `# Soul: Bob
+const NUWA_MD = `# Memory: Bob
 
 > Last updated: 2026-04-27T08:00:00Z
 
@@ -57,10 +57,10 @@ const SOUL_NO_HEADER = `## Preferences
 // ── parseMarkdownToRows ─────────────────────────────────────────────────────
 
 describe('parseMarkdownToRows', () => {
-  it('parses a complete soul file into rows with stable section names', () => {
+  it('parses a complete memory blob into rows with stable section names', () => {
     const { rows, agentName, headerLines } = parseMarkdownToRows(SAMPLE_MD, 'agent-1', 'system')
     expect(agentName).toBe('Alice')
-    expect(headerLines.some(l => l.startsWith('# Soul: Alice'))).toBe(true)
+    expect(headerLines.some(l => l.startsWith('# Memory: Alice'))).toBe(true)
 
     const sections = new Set(rows.map(r => r.section))
     expect(sections.has('Identity')).toBe(true)
@@ -99,7 +99,7 @@ describe('parseMarkdownToRows', () => {
     expect(headerLines).toEqual([''])
   })
 
-  it('handles markdown without a Soul header', () => {
+  it('handles markdown without a Memory header', () => {
     const { rows, agentName } = parseMarkdownToRows(SOUL_NO_HEADER, 'agent-4', 'system')
     expect(agentName).toBe(null)
     expect(rows).toHaveLength(1)
@@ -153,12 +153,12 @@ Stray paragraph.
 // ── rowsToMarkdown ──────────────────────────────────────────────────────────
 
 describe('rowsToMarkdown', () => {
-  it('emits a soul header and Last updated line', () => {
+  it('emits a memory header and Last updated line', () => {
     const rows = [
       { section: 'Preferences', content: 'X', agentId: 'a', agentType: 'system' },
     ]
     const md = rowsToMarkdown(rows, { agentName: 'Alice', agentType: 'system', lastUpdated: '2026-04-27T00:00:00Z' })
-    expect(md).toMatch(/^# Soul: Alice\n> Last updated: 2026-04-27T00:00:00Z/)
+    expect(md).toMatch(/^# Memory: Alice\n> Last updated: 2026-04-27T00:00:00Z/)
   })
 
   it('emits sections in canonical SECTIONS order regardless of row insertion order', () => {
@@ -324,7 +324,7 @@ describe('deterministicId', () => {
 // ── SECTIONS export ─────────────────────────────────────────────────────────
 
 describe('SECTIONS constant', () => {
-  it('matches the original SoulTool section list ordering', () => {
+  it('matches the canonical section list ordering', () => {
     expect(SECTIONS[0]).toBe('Identity')
     expect(SECTIONS).toContain('Mental Models')
     expect(SECTIONS).toContain('Preferences')

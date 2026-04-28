@@ -34,7 +34,7 @@ const te  = require('./toolExecutor')
 
 // Module-level helpers (re-imported from extracted modules for use in run())
 const { serializeToolResult, uiResult, sliceToLastNTurns } = mc
-const { readSoulFile, readFileIfExists } = spb
+const { readMemoryFile, readFileIfExists } = spb
 
 // Strip lone Unicode surrogates that break JSON.stringify / Anthropic API.
 // Replaces unpaired high/low surrogates with U+FFFD (replacement character).
@@ -113,7 +113,7 @@ class AgentLoop {
       this.isOpenAI = false
     }
     this.contextManager  = new ContextManager(this.anthropicClient, config.modelContextWindow || null)
-    this.toolRegistry    = new ToolRegistry(config.soulsDir)
+    this.toolRegistry    = new ToolRegistry()
     this.subAgentManager = new SubAgentManager(this.anthropicClient, this.toolRegistry, this.isOpenAI)
     this.taskManager     = new TaskManager()
     this.contextSnapshot = null
@@ -377,8 +377,8 @@ class AgentLoop {
    * @param {Array<string|{id:string, name:string, systemPrompt?:string}>} enabledSkills
    *        Either plain skill IDs (legacy) or full skill objects with systemPrompt
    */
-  buildSystemPrompt(enabledAgents, enabledSkills, agentContext = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
-    return spb.buildSystemPrompt(this.config, this.mcpServers, this.httpTools, enabledAgents, enabledSkills, agentContext, userSoulContent, systemSoulContent, participantSouls, memoryContext, ragContext)
+  buildSystemPrompt(enabledAgents, enabledSkills, agentContext = {}, userMemoryContent, systemMemoryContent, participantMemories, memoryContext = {}, ragContext = null) {
+    return spb.buildSystemPrompt(this.config, this.mcpServers, this.httpTools, enabledAgents, enabledSkills, agentContext, userMemoryContent, systemMemoryContent, participantMemories, memoryContext, ragContext)
   }
   /**
    * Build conversation messages, transforming the last user message's
@@ -486,21 +486,6 @@ class AgentLoop {
       }
     }
 
-    // Set compaction config for soul file auto-compression
-    const um = this.config.utilityModel
-    if (um?.provider && um?.model) {
-      const providerCfg = (this.config.providers || []).find(p => p.type === um.provider && p.apiKey)
-      if (providerCfg?.apiKey) {
-        this.toolRegistry.setSoulCompactionConfig({
-          model:        um.model,
-          apiKey:       providerCfg.apiKey,
-          baseURL:      providerCfg.baseURL,
-          isOpenAI:     um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google',
-          directAuth:   um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google' && um.provider !== 'openai',
-          providerType: um.provider,
-        })
-      }
-    }
 
     // Inject runtime config into tools that need it (e.g. NewsfeedTool reads newsFeeds)
     this.toolRegistry.setRuntimeConfig(this.config)
@@ -535,20 +520,19 @@ class AgentLoop {
     // Store RAG context for system prompt injection
     this.ragContext = ragContext || null
 
-    // ── Load soul memory before building system prompt ──
-    const soulsDir = this.config.soulsDir
+    // ── Load memory before building system prompt ──
     const userAgentId = agentPrompts?.userAgentId
     const systemAgentId = agentPrompts?.systemAgentId
-    const userSoulContent = readSoulFile(soulsDir, userAgentId, 'users')
-    const systemSoulContent = readSoulFile(soulsDir, systemAgentId, 'system')
+    const userMemoryContent = readMemoryFile(userAgentId, 'users')
+    const systemMemoryContent = readMemoryFile(systemAgentId, 'system')
 
-    // Load soul content for other group chat participants
-    const participantSouls = []
+    // Load memory blobs for other group chat participants
+    const participantMemories = []
     if (agentPrompts?.groupChatContext?.otherParticipants) {
       for (const p of agentPrompts.groupChatContext.otherParticipants) {
         if (p.id) {
-          const content = readSoulFile(soulsDir, p.id, 'system')
-          if (content) participantSouls.push({ name: p.name, content })
+          const content = readMemoryFile(p.id, 'system')
+          if (content) participantMemories.push({ name: p.name, content })
         }
       }
     }
@@ -562,13 +546,13 @@ class AgentLoop {
       userMd = readFileIfExists(path.join(memoryDir, 'users', userId, 'USER.md'))
     }
 
-    // ── Hybrid Top-K retrieval from SoulStore (BM25 + semantic) ──
-    // Picks the most relevant soul entries for the latest user message and
-    // injects them into the prompt. For agents with small souls (<4KB) the
+    // ── Hybrid Top-K retrieval from MemoryStore (BM25 + semantic) ──
+    // Picks the most relevant memory entries for the latest user message and
+    // injects them into the prompt. For agents with small memories (<4KB) the
     // resolver short-circuits to full content. Empty / no-query → null →
     // section is skipped in buildSystemPrompt.
-    let relevantUserSoul = null
-    let relevantSystemSoul = null
+    let relevantUserMemory = null
+    let relevantSystemMemory = null
     try {
       const lastUserText = (() => {
         const lu = [...messages].reverse().find(m => m.role === 'user')
@@ -580,23 +564,23 @@ class AgentLoop {
         return null
       })()
       if (lastUserText && lastUserText.trim()) {
-        const { resolveSoulContentForPrompt } = require('./systemPromptBuilder')
+        const { resolveMemoryContentForPrompt } = require('./systemPromptBuilder')
         const [u, s] = await Promise.all([
-          userAgentId ? resolveSoulContentForPrompt(userAgentId, 'users', lastUserText) : null,
-          systemAgentId ? resolveSoulContentForPrompt(systemAgentId, 'system', lastUserText) : null,
+          userAgentId ? resolveMemoryContentForPrompt(userAgentId, 'users', lastUserText) : null,
+          systemAgentId ? resolveMemoryContentForPrompt(systemAgentId, 'system', lastUserText) : null,
         ])
-        relevantUserSoul = u
-        relevantSystemSoul = s
+        relevantUserMemory = u
+        relevantSystemMemory = s
       }
     } catch (rErr) {
       // Retrieval failures must never break agent runs — log and continue
-      try { require('../logger').logger.debug('[agentLoop] soul retrieval failed', rErr.message) } catch {}
+      try { require('../logger').logger.debug('[agentLoop] memory retrieval failed', rErr.message) } catch {}
     }
 
     let systemPrompt = this.buildSystemPrompt(
       enabledAgents, enabledSkills, agentPrompts,
-      userSoulContent, systemSoulContent, participantSouls,
-      { userMd, relevantUserSoul, relevantSystemSoul },
+      userMemoryContent, systemMemoryContent, participantMemories,
+      { userMd, relevantUserMemory, relevantSystemMemory },
       this.ragContext
     )
 
@@ -941,7 +925,7 @@ class AgentLoop {
 
         // ── Snapshot context for inspector ──
         // Build memory sections explicitly so the frontend never has to parse
-        // them out of the assembled string (soul files may contain their own ## headings).
+        // them out of the assembled string (memory blobs may contain their own ## headings).
         const _memorySections = []
         if (userMd)          _memorySections.push({ title: 'User Profile',        content: userMd })
 

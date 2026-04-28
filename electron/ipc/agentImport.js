@@ -412,7 +412,7 @@ ${generatedPrompt}`
 })
 
 // ─── agent:import-write-harness ───────────────────────────────────────────
-// Persist validation scores to {soulsDir}/{type}/{agentId}.harness.json
+// Persist validation scores to {agentArtifactsDir}/{type}/{agentId}.harness.json
 // after the agent is created. Non-blocking; purely informational for now.
 
 ipcMain.handle('agent:import-write-harness', async (_event, { agentId, agentType, harness }) => {
@@ -422,7 +422,7 @@ ipcMain.handle('agent:import-write-harness', async (_event, { agentId, agentType
     const ds = require('../lib/dataStore')
     const fs = require('fs')
     const type = agentType === 'user' || agentType === 'users' ? 'users' : 'system'
-    const dir = path.join(ds.paths().SOULS_DIR, type)
+    const dir = path.join(ds.paths().AGENT_ARTIFACTS_DIR, type)
     fs.mkdirSync(dir, { recursive: true })
 
     const filePath = path.join(dir, `${agentId}.harness.json`)
@@ -437,10 +437,10 @@ ipcMain.handle('agent:import-write-harness', async (_event, { agentId, agentType
 })
 
 // ─── agent:import-write-nuwa-sections ────────────────────────────────────
-// Persist Nuwa-pipeline sections to the agent's soul file (structured bulk
+// Persist Nuwa-pipeline sections to the agent's memory store (structured bulk
 // write) and the evidence index to a sidecar JSON. Called by the wizard after
-// agent creation. Merges into the existing soul template — preserves any
-// runtime memory already written.
+// agent creation. Merges into the existing memory — preserves any runtime
+// entries already written.
 
 ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, agentName, agentType, sections, evidenceIndex }) => {
   try {
@@ -451,13 +451,13 @@ ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, age
     const ds = require('../lib/dataStore')
     const fs = require('fs')
     const type = agentType === 'user' || agentType === 'users' ? 'users' : 'system'
-    const soulsDir = ds.paths().SOULS_DIR
-    const dir = path.join(soulsDir, type)
+    const artifactsDir = ds.paths().AGENT_ARTIFACTS_DIR
+    const dir = path.join(artifactsDir, type)
     fs.mkdirSync(dir, { recursive: true })  // still used for evidence sidecar
 
-    const { createTemplate, parseSoul, serializeSoul, updateTimestamp } = require('../agent/tools/SoulTool')
-    const soulStoreMod = require('../memory/soulStore')
-    const store = soulStoreMod.getInstance(ds.paths().MEMORY_DIR)
+    const { createTemplate, parseMarkdown, serializeMarkdown, updateTimestamp } = require('../agent/tools/MemoryTool')
+    const memoryStoreMod = require('../memory/memoryStore')
+    const store = memoryStoreMod.getInstance(ds.paths().MEMORY_DIR)
 
     // Hydrate from store (markdown view), or template if this is a fresh agent.
     let content = store.readMarkdown(agentId, type)
@@ -465,7 +465,7 @@ ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, age
       content = createTemplate(agentName || agentId, type === 'users' ? 'user' : 'system')
     }
 
-    const { headerLines, sections: soulSections } = parseSoul(content)
+    const { headerLines, sections: memorySections } = parseMarkdown(content)
 
     // For each nuwa section, REPLACE (not merge) the content. These sections are
     // owned by the import pipeline and rewritten wholesale on re-import.
@@ -473,17 +473,17 @@ ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, age
       if (!sectionBody || !sectionBody.trim()) continue
       const bodyLines = sectionBody.split('\n')
       if (bodyLines[bodyLines.length - 1] !== '') bodyLines.push('')
-      soulSections.set(sectionName, bodyLines)
+      memorySections.set(sectionName, bodyLines)
     }
 
     updateTimestamp(headerLines)
-    const newContent = serializeSoul(headerLines, soulSections)
+    const newContent = serializeMarkdown(headerLines, memorySections)
 
     // Write through the store — its diff preserves IDs of unchanged entries.
     store.upsertMeta(agentId, type, agentName)
     const result = store.writeMarkdown(agentId, type, newContent)
 
-    // Evidence index sidecar still lives next to soulsDir as JSON
+    // Evidence index sidecar lives in artifactsDir as JSON
     if (evidenceIndex) {
       const evidencePath = path.join(dir, `${agentId}.evidence.json`)
       fs.writeFileSync(evidencePath, JSON.stringify(evidenceIndex, null, 2), 'utf8')
@@ -498,7 +498,7 @@ ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, age
 })
 
 // ─── agent:import-write-speech-dna ────────────────────────────────────────
-// Persist the extracted speech DNA to {soulsDir}/{type}/{agentId}.speech.json.
+// Persist the extracted speech DNA to {agentArtifactsDir}/{type}/{agentId}.speech.json.
 // Called by the wizard after agent creation, in parallel with writeMemories.
 
 ipcMain.handle('agent:import-write-speech-dna', async (_event, { agentId, agentType, speechDna }) => {
@@ -508,7 +508,7 @@ ipcMain.handle('agent:import-write-speech-dna', async (_event, { agentId, agentT
     const ds = require('../lib/dataStore')
     const fs = require('fs')
     const type = agentType === 'user' || agentType === 'users' ? 'users' : 'system'
-    const dir = path.join(ds.paths().SOULS_DIR, type)
+    const dir = path.join(ds.paths().AGENT_ARTIFACTS_DIR, type)
     fs.mkdirSync(dir, { recursive: true })
 
     const filePath = path.join(dir, `${agentId}.speech.json`)
@@ -582,7 +582,7 @@ ipcMain.handle('agent:import-save-history', async (event, { agentId, messages, c
 })
 
 // ─── agent:import-write-memories ──────────────────────────────────────────
-// Write extracted memories to an agent's soul file.
+// Write extracted memories to an agent's memory store.
 
 ipcMain.handle('agent:import-write-memories', async (_event, { agentId, memories }) => {
   try {
@@ -590,10 +590,8 @@ ipcMain.handle('agent:import-write-memories', async (_event, { agentId, memories
       return { success: true, count: 0 }
     }
 
-    const ds = require('../lib/dataStore')
-    const soulsDir = ds.paths().SOULS_DIR
-    const { SoulUpdateTool } = require('../agent/tools/SoulTool')
-    const tool = new SoulUpdateTool(soulsDir)
+    const { MemoryUpdateTool } = require('../agent/tools/MemoryTool')
+    const tool = new MemoryUpdateTool()
 
     let written = 0
     for (const mem of memories.slice(0, 100)) {

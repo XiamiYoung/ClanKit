@@ -6,7 +6,7 @@
       :isGridView="true"
       :compactAgents="true"
       @open-chat-settings="$emit('open-chat-settings', chatId)"
-      @open-soul-viewer="(id, type, name) => $emit('open-soul-viewer', id, type, name)"
+      @open-body-viewer="(id, type, name) => $emit('open-body-viewer', id, type, name)"
       @remove-group-agent="(cId, pid) => $emit('remove-group-agent', cId, pid)"
       @start-call="cId => $emit('start-call', cId)"
     >
@@ -288,7 +288,7 @@ const props = defineProps({
   gridChatIds: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['select', 'swap-chat', 'maximize', 'open-chat-settings', 'open-soul-viewer', 'remove-group-agent', 'start-call'])
+const emit = defineEmits(['select', 'swap-chat', 'maximize', 'open-chat-settings', 'open-body-viewer', 'remove-group-agent', 'start-call'])
 
 const { t } = useI18n()
 

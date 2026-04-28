@@ -1201,14 +1201,14 @@ class RenderReportTool extends BaseTool {
 
   /**
    * Locate the extract_sections cache file. AnalyzeAgentTool uses
-   * `souls/system/` for non-user agents while this tool's agentType is
-   * `agents`, so we search both locations.
+   * `agent-artifacts/system/` for non-user agents while this tool's agentType
+   * is `agents`, so we search both locations.
    */
   _findSectionsCache() {
     const candidates = [
-      path.join(this.dataPath, 'souls', 'system', `${this.agentId}.sections.json`),
-      path.join(this.dataPath, 'souls', 'users',  `${this.agentId}.sections.json`),
-      path.join(this.dataPath, 'souls', 'agents', `${this.agentId}.sections.json`),
+      path.join(this.dataPath, 'agent-artifacts', 'system', `${this.agentId}.sections.json`),
+      path.join(this.dataPath, 'agent-artifacts', 'users',  `${this.agentId}.sections.json`),
+      path.join(this.dataPath, 'agent-artifacts', 'agents', `${this.agentId}.sections.json`),
     ]
     for (const p of candidates) {
       if (fs.existsSync(p)) return p
@@ -1464,7 +1464,7 @@ class RenderReportTool extends BaseTool {
 
       // Output goes to the user's aidoc folder (DoCPath) when configured,
       // so users find reports next to their other notes. Fallback is the
-      // internal souls/ dir, which keeps old behaviour intact if DoCPath
+      // internal agent-artifacts/ dir, which keeps old behaviour intact if DoCPath
       // is blank.
       let outPath
       if (this.docPath) {
@@ -1472,9 +1472,9 @@ class RenderReportTool extends BaseTool {
         const safeName = this._safeFileName(agentName)
         outPath = path.join(this.docPath, `${safeName}_report.html`)
       } else {
-        const soulsDir = path.join(this.dataPath, 'souls', this.agentType)
-        fs.mkdirSync(soulsDir, { recursive: true })
-        outPath = path.join(soulsDir, `${this.agentId}.report.html`)
+        const artifactsDir = path.join(this.dataPath, 'agent-artifacts', this.agentType)
+        fs.mkdirSync(artifactsDir, { recursive: true })
+        outPath = path.join(artifactsDir, `${this.agentId}.report.html`)
       }
       fs.writeFileSync(outPath, out, 'utf8')
 

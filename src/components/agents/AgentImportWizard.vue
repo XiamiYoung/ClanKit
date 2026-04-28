@@ -1460,7 +1460,7 @@ async function doCreateAgent() {
     }
   }
 
-  // Write memories to agent's soul file if enabled
+  // Write memories to agent's memory store if enabled
   if (importMemories.value && extractedMemories.value.length > 0) {
     try {
       await window.electronAPI.agentImport.writeMemories({

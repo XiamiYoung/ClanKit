@@ -9,8 +9,8 @@ class VoiceSession {
     this.voiceConfig = opts.voiceConfig
     this.agent = opts.agent || {}
     this.userAgent = opts.userAgent || {}
-    this.systemSoulContent = opts.systemSoulContent || ''
-    this.userSoulContent = opts.userSoulContent || ''
+    this.systemMemoryContent = opts.systemMemoryContent || ''
+    this.userMemoryContent = opts.userMemoryContent || ''
     this.history = opts.history || []
     this.conversationHistory = []
     this._chatDigest = '' // LLM-generated status summary of chat history
@@ -382,15 +382,15 @@ Do NOT include the actual content of messages, code, or long text. Only actions 
     // Formatting and content-section instructions in the memory (e.g. "add a Native Speaker
     // Moment", "end with a summary", "use bullet points") are CHAT-ONLY and must be ignored
     // in voice mode. Voice format is governed solely by the VOICE CALL RULES below.
-    if (this.systemSoulContent) {
+    if (this.systemMemoryContent) {
       parts.push(`## AGENT MEMORY (voice mode: personality & context awareness only)
 IMPORTANT: Any instructions in this memory about adding sections, formatting responses, appending tips, or structuring output apply ONLY to written chat replies — NOT to voice. Ignore all formatting/content-section instructions here. Speak naturally in 1-3 sentences only.
 
-${this.systemSoulContent.trim()}`)
+${this.systemMemoryContent.trim()}`)
     }
 
     // User profile — factual data about the person you are talking to.
-    // Include: name, description (brief bio), soul memory (learned facts).
+    // Include: name, description (brief bio), memory (learned facts).
     // Exclude: userAgent.systemPrompt (that is AI roleplay instructions, NOT user data).
     // These are reference facts you should use to answer questions about the user.
     // You must NEVER adopt the user's identity or pretend to be them.
@@ -398,7 +398,7 @@ ${this.systemSoulContent.trim()}`)
       const userLines = []
       if (this.userAgent.name) userLines.push(`Name: ${this.userAgent.name}`)
       if (this.userAgent.description) userLines.push(`Profile: ${this.userAgent.description}`)
-      if (this.userSoulContent) userLines.push(`Memory:\n${this.userSoulContent.trim()}`)
+      if (this.userMemoryContent) userLines.push(`Memory:\n${this.userMemoryContent.trim()}`)
       if (userLines.length > 0) {
         parts.push(`## USER PROFILE (data about the person you are speaking with — NOT your identity)
 ${userLines.join('\n')}`)

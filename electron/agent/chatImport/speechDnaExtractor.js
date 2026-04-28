@@ -10,7 +10,7 @@
  *      jokes), anti-patterns ("never does"), emoji context.
  *
  * Output is a structured JSON blob written to:
- *   {soulsDir}/{type}/{agentId}.speech.json
+ *   {agentArtifactsDir}/{type}/{agentId}.speech.json
  *
  * At runtime, systemPromptBuilder.js reads this file and injects it as a
  * hard-constraint block at the top of the system prompt — this is the

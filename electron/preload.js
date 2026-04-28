@@ -130,31 +130,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   getClipboardImage: () => ipcRenderer.invoke('clipboard:get-image'),
 
-  // ── Soul Memory ────────────────────────────────────────────────────────
-  souls: {
-    read:   (agentId, type) => ipcRenderer.invoke('souls:read', agentId, type),
-    write:  (agentId, type, content) => ipcRenderer.invoke('souls:write', agentId, type, content),
-    exists: (agentId, type) => ipcRenderer.invoke('souls:exists', agentId, type),
-    list:   (type) => ipcRenderer.invoke('souls:list', type),
-    delete:          (agentId, type) => ipcRenderer.invoke('souls:delete', agentId, type),
-    deleteAgentData: (agentId, type) => ipcRenderer.invoke('souls:delete-agent-data', agentId, type),
-  },
-
-  // ── Memory Extraction ─────────────────────────────────────────────────
+  // ── Memory ─────────────────────────────────────────────────────────────
+  // Unified namespace for all memory operations. Three groups of channels:
+  //   - blob: read/write/exists/listAgents/deleteAgent/deleteAgentData
+  //   - structured CRUD: listEntries/addEntry/updateEntry/deleteEntry/search/reindex
+  //   - extraction: accept/extractOnChatSwitch/extractCollaboration
   memory: {
-    accept:              (params) => ipcRenderer.invoke('memory:accept', params),
-    extractOnChatSwitch: (params) => ipcRenderer.invoke('memory:extract-on-chat-switch', params),
-    extractCollaboration: (params) => ipcRenderer.invoke('memory:extract-collaboration', params),
-  },
-
-  // ── Structured Memory (per-entry CRUD on SoulStore) ──────────────────
-  memories: {
-    list:    (agentId, agentType)              => ipcRenderer.invoke('memories:list', agentId, agentType),
-    add:     (payload)                         => ipcRenderer.invoke('memories:add', payload),
-    update:  (payload)                         => ipcRenderer.invoke('memories:update', payload),
-    delete:  (id)                              => ipcRenderer.invoke('memories:delete', id),
-    search:  (payload)                         => ipcRenderer.invoke('memories:search', payload),
-    reindex: ()                                => ipcRenderer.invoke('memories:reindex'),
+    // Markdown blob contract
+    read:             (agentId, type)              => ipcRenderer.invoke('memory:read', agentId, type),
+    write:            (agentId, type, content)     => ipcRenderer.invoke('memory:write', agentId, type, content),
+    exists:           (agentId, type)              => ipcRenderer.invoke('memory:exists', agentId, type),
+    listAgents:       (type)                       => ipcRenderer.invoke('memory:list-agents', type),
+    deleteAgent:      (agentId, type)              => ipcRenderer.invoke('memory:delete-agent', agentId, type),
+    deleteAgentData:  (agentId, type)              => ipcRenderer.invoke('memory:delete-agent-data', agentId, type),
+    // Structured CRUD
+    listEntries:      (agentId, agentType)         => ipcRenderer.invoke('memory:list-entries', agentId, agentType),
+    addEntry:         (payload)                    => ipcRenderer.invoke('memory:add-entry', payload),
+    updateEntry:      (payload)                    => ipcRenderer.invoke('memory:update-entry', payload),
+    deleteEntry:      (id)                         => ipcRenderer.invoke('memory:delete-entry', id),
+    search:           (payload)                    => ipcRenderer.invoke('memory:search', payload),
+    reindex:          ()                           => ipcRenderer.invoke('memory:reindex'),
+    // Extraction
+    accept:               (params)                 => ipcRenderer.invoke('memory:accept', params),
+    extractOnChatSwitch:  (params)                 => ipcRenderer.invoke('memory:extract-on-chat-switch', params),
+    extractCollaboration: (params)                 => ipcRenderer.invoke('memory:extract-collaboration', params),
   },
 
   // ── Knowledge / Local RAG ────────────────────────────────────────────────

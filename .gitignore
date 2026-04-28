@@ -55,7 +55,6 @@ scripts/*
 !scripts/after-pack.js
 !scripts/check-models-staleness.js
 !scripts/update-models.js
-!scripts/migrate-souls-to-sqlite.js
 !scripts/prepare-embedding-model.js
 !scripts/recorder/
 

@@ -262,7 +262,7 @@
                   </button>
                 </div>
 
-                <!-- Memory (structured cards backed by SoulStore) -->
+                <!-- Memory (structured cards backed by MemoryStore) -->
                 <div v-if="activePanel === 'memory'" class="bv-detail-body">
                   <div v-if="memoryLoading" class="bv-detail-empty">{{ t('common.loading') }}...</div>
                   <template v-else-if="memoryGroups.length > 0">
@@ -310,7 +310,7 @@
                   <template v-else>
                     <!-- Fallback: no structured rows yet — keep the legacy textarea so
                          users can dump raw markdown for brand-new agents. The blob
-                         is round-tripped through souls.write into the store on save. -->
+                         is round-tripped through memory.write into the store on save. -->
                     <div v-if="readOnly" class="bv-readonly-text bv-readonly-multiline bv-readonly-grow">{{ draftMemory || t('agents.noMemory') }}</div>
                     <textarea v-else v-model="draftMemory" class="bv-textarea bv-textarea-grow" :placeholder="t('agents.memoryPlaceholder')" spellcheck="false"></textarea>
                   </template>
@@ -878,11 +878,11 @@ const draftPrompt      = ref(props.agentPrompt || '')
 const draftAvatar      = ref(props.agentAvatar || null)
 const draftVoiceId     = ref(props.agentVoiceId || getDefaultVoiceForLocale(configStore.config.language))
 
-// Soul + Speech DNA produced by surpriseMe / generateFromDescription. Held in
-// memory until the user clicks save, then flushed to disk by the parent
+// Memory seed + Speech DNA produced by surpriseMe / generateFromDescription.
+// Held in memory until the user clicks save, then flushed by the parent
 // component via writeNuwaSections / writeSpeechDna IPC calls. Cleared after a
 // successful save so editing an existing agent doesn't keep re-writing.
-const draftSoul   = ref(null)
+const draftMemorySeed = ref(null)
 const draftSpeech = ref(null)
 
 // Pre-fill prompt template for new user agents
@@ -983,16 +983,16 @@ function onAvatarFileUpload(event) {
   reader.readAsDataURL(file)
 }
 
-// ── Memory (structured rows from SoulStore) ────────────────────────────────
+// ── Memory (structured rows from MemoryStore) ──────────────────────────────
 // Replaces the legacy "load full markdown blob into a textarea" pattern. The
-// SQLite-backed SoulStore now exposes per-entry CRUD via `memories:*` IPC,
+// SQLite-backed MemoryStore now exposes per-entry CRUD via `memory:*` IPC,
 // so each memory has a stable id, section, source, confidence and timestamps —
 // editable as discrete cards instead of a free-form text field.
 //
 // `draftMemory` (the markdown string) is retained as a fallback view: when
 // the agent has no structured rows yet (e.g. brand-new agent) we still let
 // users dump raw markdown in. On save, that blob is round-tripped through
-// `souls.write` which lands in the store via the markdown adapter.
+// `memory.write` which lands in the store via the markdown adapter.
 const memoryRows    = ref([])             // [{ id, section, content, source, confidence, createdAt, updatedAt }]
 const draftMemory   = ref('')             // fallback markdown view
 const memoryLoading = ref(!props.isNew)
@@ -1004,7 +1004,7 @@ const newEntryDrafts = reactive({})       // { [sectionName]: string }
 const editingEntryId = ref(null)
 const editingEntryDraft = ref('')
 
-// Canonical section ordering — mirrors electron/memory/soulMarkdown.js.
+// Canonical section ordering — mirrors electron/memory/memoryMarkdown.js.
 const MEMORY_SECTION_ORDER = [
   'Identity',
   'Mental Models', 'Decision Heuristics', 'Values & Anti-Patterns',
@@ -1041,13 +1041,13 @@ async function loadMemory() {
   if (memoryLoaded.value || props.isNew) return
   memoryLoading.value = true
   try {
-    if (window.electronAPI?.memories?.list) {
-      const result = await window.electronAPI.memories.list(props.agentId, props.agentType)
+    if (window.electronAPI?.memory?.listEntries) {
+      const result = await window.electronAPI.memory.listEntries(props.agentId, props.agentType)
       memoryRows.value = (result?.rows) || []
     }
     // Always also pull the markdown view for the fallback editor when there
     // are zero rows (brand-new agent case).
-    const md = await window.electronAPI.souls.read(props.agentId, props.agentType)
+    const md = await window.electronAPI.memory.read(props.agentId, props.agentType)
     draftMemory.value = md || ''
     memoryLoaded.value = true
   } catch (err) {
@@ -1058,8 +1058,8 @@ async function loadMemory() {
 
 async function refreshMemory() {
   try {
-    if (window.electronAPI?.memories?.list) {
-      const result = await window.electronAPI.memories.list(props.agentId, props.agentType)
+    if (window.electronAPI?.memory?.listEntries) {
+      const result = await window.electronAPI.memory.listEntries(props.agentId, props.agentType)
       memoryRows.value = (result?.rows) || []
     }
   } catch (err) {
@@ -1071,7 +1071,7 @@ async function addMemoryEntry(section) {
   const text = (newEntryDrafts[section] || '').trim()
   if (!text) return
   try {
-    const r = await window.electronAPI.memories.add({
+    const r = await window.electronAPI.memory.addEntry({
       agentId: props.agentId,
       agentType: props.agentType,
       section,
@@ -1100,7 +1100,7 @@ async function saveEditEntry() {
   const content = editingEntryDraft.value.trim()
   if (!id || !content) return cancelEditEntry()
   try {
-    const r = await window.electronAPI.memories.update({ id, content })
+    const r = await window.electronAPI.memory.updateEntry({ id, content })
     if (r?.success) await refreshMemory()
   } catch (err) {
     console.error('[Memory] update failed', err)
@@ -1110,7 +1110,7 @@ async function saveEditEntry() {
 async function deleteMemoryEntry(row) {
   if (!row?.id) return
   try {
-    const r = await window.electronAPI.memories.delete(row.id)
+    const r = await window.electronAPI.memory.deleteEntry(row.id)
     if (r?.success) await refreshMemory()
   } catch (err) {
     console.error('[Memory] delete failed', err)
@@ -1455,9 +1455,9 @@ async function surpriseMe() {
       if (data.name) draftName.value = data.name
       if (data.description) draftDescription.value = String(data.description)
       if (data.prompt)      draftPrompt.value = typeof data.prompt === 'string' ? data.prompt : JSON.stringify(data.prompt, null, 2)
-      // Capture the Nuwa-style soul + speech blocks if the AI returned them.
+      // Capture the Nuwa-style memory + speech blocks if the AI returned them.
       // Held in draft state until user clicks save; parent then writes to disk.
-      if (data.soul && typeof data.soul === 'object') draftSoul.value = data.soul
+      if (data.memory && typeof data.memory === 'object') draftMemorySeed.value = data.memory
       if (data.speech && typeof data.speech === 'object') draftSpeech.value = data.speech
       _applyAiAvatarVoice(data)
     } else {
@@ -1497,7 +1497,7 @@ async function generateFromDescription() {
       }
       if (data.description) draftDescription.value = String(data.description)
       if (data.prompt)      draftPrompt.value = typeof data.prompt === 'string' ? data.prompt : JSON.stringify(data.prompt, null, 2)
-      if (data.soul && typeof data.soul === 'object') draftSoul.value = data.soul
+      if (data.memory && typeof data.memory === 'object') draftMemorySeed.value = data.memory
       if (data.speech && typeof data.speech === 'object') draftSpeech.value = data.speech
       _applyAiAvatarVoice(data)
     } else {
@@ -1725,13 +1725,13 @@ function saveAll() {
     return
   }
   const isSystemAgent = props.agentType === 'system'
-  // Snapshot + clear soul/speech so a subsequent save (after edits) doesn't
-  // re-write the same Nuwa assets. The parent uses these to populate the
-  // soul.md and speech.json files via writeNuwaSections / writeSpeechDna IPC.
-  const _soulOnce   = draftSoul.value
+  // Snapshot + clear memory/speech seeds so a subsequent save (after edits)
+  // doesn't re-write the same Nuwa assets. The parent uses these to populate
+  // the memory store + speech.json via writeNuwaSections / writeSpeechDna IPC.
+  const _memoryOnce = draftMemorySeed.value
   const _speechOnce = draftSpeech.value
-  draftSoul.value   = null
-  draftSpeech.value = null
+  draftMemorySeed.value = null
+  draftSpeech.value     = null
   emit('update-agent', {
     name:        draftName.value,
     avatar:      draftAvatar.value,
@@ -1746,15 +1746,15 @@ function saveAll() {
     requiredKnowledgeBaseIds: draftRequiredKnowledgeBaseIds.value || [],
     // Non-persistent fields — parent handler reads these and writes to disk
     // via the chat-import IPC, then drops them before saveAgent.
-    _soulSeed:   _soulOnce,
+    _memorySeed: _memoryOnce,
     _speechSeed: _speechOnce,
   })
-  // Memory persistence: structured rows are saved live via memories:add/update/
-  // delete as the user edits cards, so nothing to flush there. Only the legacy
-  // textarea fallback (shown when the agent has zero rows) needs an explicit
-  // souls.write — that blob gets diffed into rows on the main side.
+  // Memory persistence: structured rows are saved live via memory:addEntry/
+  // updateEntry/deleteEntry as the user edits cards, so nothing to flush
+  // there. Only the textarea fallback (shown when the agent has zero rows)
+  // needs an explicit memory.write — that blob gets diffed into rows in main.
   if (memoryLoaded.value && memoryRows.value.length === 0 && (draftMemory.value || '').trim()) {
-    window.electronAPI.souls.write(props.agentId, props.agentType, draftMemory.value)
+    window.electronAPI.memory.write(props.agentId, props.agentType, draftMemory.value)
       .catch(err => console.error('Memory save failed:', err))
   }
   emit('close')
@@ -1953,7 +1953,7 @@ function saveAll() {
 .bv-mem-content-ro::-webkit-scrollbar-track { background: transparent; }
 .bv-mem-content-ro::-webkit-scrollbar-thumb { background: #333; border-radius: 9999px; }
 
-/* ── Memory: structured cards (Path B — backed by SoulStore) ── */
+/* ── Memory: structured cards (Path B — backed by MemoryStore) ── */
 .bv-mem-cards {
   list-style: none; padding: 0; margin: 0;
   display: flex; flex-direction: column; gap: 0.25rem;

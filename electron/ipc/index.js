@@ -7,7 +7,6 @@ function registerAll({ DEFAULT_CONFIG, imBridge, mcpManager } = {}) {
   // Order matters: store must register before agent (agent imports accumulateUsage from store)
   require('./store').register({ DEFAULT_CONFIG })
   require('./tasks').register()
-  require('./souls').register()
   require('./mcp').register({ mcpManager })
   require('./knowledge').register()
   require('./models').register()

@@ -163,7 +163,7 @@ export const en = {
     configSubtitle: 'Providers, paths, voice, knowledge, security and more',
     savedDataPathRestart: 'Saved — restart app for data path changes',
     saved: 'Saved',
-    dataPathHint: 'Directory where ClankAI stores all data (chats, agents, MCP servers, tools, souls). Config file stays at a fixed location. Default:',
+    dataPathHint: 'Directory where ClankAI stores all data (chats, agents, MCP servers, tools, memory). Config file stays at a fixed location. Default:',
     dataPathApplyRestart: 'Apply & Restart',
     dataPathWarningTitle: 'Change Data Directory',
     dataPathWarningBody: 'Changing the data directory does NOT automatically copy your existing data. You must manually copy the data to the new location before restarting.',

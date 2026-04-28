@@ -863,7 +863,7 @@ ${docTemplate}`
 
 /**
  * Extract key memories/events from chat history via LLM.
- * Returns structured memory entries for the agent's soul file.
+ * Returns structured memory entries for the agent's memory store.
  */
 async function _extractKeyMemories(messageBlock, profile, config, language, contextWindows, analyzeTarget) {
   const isSelf = analyzeTarget === 'self'

@@ -299,7 +299,7 @@ Behavior per user choice:
 - User explicitly asks for a new framework/perspective
 - User has rejected prior analysis 2+ times
 
-Cache invalidates automatically when `totalMessages` or `lastTimestamp` changes (new messages imported). Users can manually delete `souls/{type}/{agentId}.analysis.json` to purge.
+Cache invalidates automatically when `totalMessages` or `lastTimestamp` changes (new messages imported). Users can manually delete `agent-artifacts/{type}/{agentId}.analysis.json` to purge.
 
 ---
 

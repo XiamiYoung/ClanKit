@@ -8,10 +8,10 @@ const fs   = require('fs')
 const path = require('path')
 const { logger } = require('../logger')
 
-// ── Soul Memory Helpers ──────────────────────────────────────────────────────
-// Sections preserved when truncating large soul files. Includes both the old
+// ── Memory Helpers ───────────────────────────────────────────────────────────
+// Sections preserved when truncating large memory blobs. Includes both the old
 // free-form sections AND the new Nuwa-methodology sections from chat import.
-const SOUL_KEY_SECTIONS = [
+const MEMORY_KEY_SECTIONS = [
   // Nuwa-methodology sections (from chat import)
   'Mental Models',
   'Decision Heuristics',
@@ -32,13 +32,13 @@ const SOUL_KEY_SECTIONS = [
  * Read the speech DNA JSON file for an agent. Returns parsed object or null.
  * Speech DNA is a hard-constraint surface-style fingerprint from chat import.
  *
- * Looks under both souls/system/ and souls/users/ since agentId is unique.
+ * Looks under both system/ and users/ subdirs since agentId is unique.
  */
-function readSpeechDna(soulsDir, agentId) {
-  if (!soulsDir || !agentId) return null
+function readSpeechDna(artifactsDir, agentId) {
+  if (!artifactsDir || !agentId) return null
   for (const type of ['system', 'users']) {
     try {
-      const filePath = path.join(soulsDir, type, `${agentId}.speech.json`)
+      const filePath = path.join(artifactsDir, type, `${agentId}.speech.json`)
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf8')
         return JSON.parse(raw)
@@ -51,22 +51,18 @@ function readSpeechDna(soulsDir, agentId) {
 }
 
 /**
- * Read a soul file. Returns the markdown reconstructed from the SQLite-backed
- * SoulStore, or null when the agent has no entries.
- *
- * The `soulsDir` parameter is preserved for back-compat with callers that still
- * pass it (older code, tests). It is no longer used — the SoulStore is the
- * single source of truth and resolves its own path via dataStore.
+ * Read agent memory as markdown via the SQLite-backed MemoryStore. Returns
+ * null when the agent has no entries.
  */
-function readSoulFile(soulsDir, agentId, agentType) {
+function readMemoryFile(agentId, agentType) {
   if (!agentId) return null
   try {
     const ds = require('../lib/dataStore')
-    const soulStore = require('../memory/soulStore')
-    const store = soulStore.getInstance(ds.paths().MEMORY_DIR)
+    const memoryStore = require('../memory/memoryStore')
+    const store = memoryStore.getInstance(ds.paths().MEMORY_DIR)
     return store.readMarkdown(agentId, agentType)
   } catch (err) {
-    logger.error('readSoulFile error', err.message)
+    logger.error('readMemoryFile error', err.message)
     return null
   }
 }
@@ -84,7 +80,7 @@ function extractKeySections(content) {
     const sectionMatch = line.match(/^## (.+)$/)
     if (sectionMatch) {
       currentSection = sectionMatch[1]
-      includeSection = SOUL_KEY_SECTIONS.includes(currentSection)
+      includeSection = MEMORY_KEY_SECTIONS.includes(currentSection)
       if (includeSection) {
         result.push(line)
       }
@@ -96,47 +92,47 @@ function extractKeySections(content) {
     }
   }
 
-  result.push('', '(Some sections omitted for brevity. Use read_soul_memory tool to access full memory.)')
+  result.push('', '(Some sections omitted for brevity. Use read_memory tool to access full memory.)')
   return result.join('\n')
 }
 
 /**
  * Size-gated injection: full for < 4KB, key sections for 4-16KB, warning for > 16KB.
  */
-function prepareSoulContent(content) {
+function prepareMemoryContent(content) {
   if (!content) return null
   const size = Buffer.byteLength(content, 'utf8')
   if (size < 4096) return content
   if (size < 16384) return extractKeySections(content)
-  return extractKeySections(content) + '\n\n(Warning: Soul memory is large. Consider pruning old entries.)'
+  return extractKeySections(content) + '\n\n(Warning: Memory is large. Consider pruning old entries.)'
 }
 
 /**
- * Retrieve top-K most relevant soul entries for a query, formatted as markdown
- * suitable for direct prompt injection. Uses SoulStore.searchHybrid (BM25 +
- * semantic). Falls back gracefully on any error — the size-gated full-content
- * path remains the safety net.
+ * Retrieve top-K most relevant memory entries for a query, formatted as
+ * markdown suitable for direct prompt injection. Uses MemoryStore.searchHybrid
+ * (BM25 + semantic). Falls back gracefully on any error — the size-gated
+ * full-content path remains the safety net.
  *
  * @param {string} agentId
  * @param {string} agentType  'system' | 'users'
  * @param {string} query      The user's most recent message text
- * @param {object} [opts]     { topK?: number, minK?: number }
+ * @param {object} [opts]     { topK?: number }
  * @returns {Promise<string|null>}  Markdown block or null if retrieval is empty/failed
  */
-async function retrieveTopKSoulContent(agentId, agentType, query, opts = {}) {
+async function retrieveTopKMemoryContent(agentId, agentType, query, opts = {}) {
   if (!agentId || !agentType || !query || !query.trim()) return null
   const topK = opts.topK || 8
   try {
     const ds = require('../lib/dataStore')
-    const soulStore = require('../memory/soulStore')
-    const store = soulStore.getInstance(ds.paths().MEMORY_DIR)
+    const memoryStore = require('../memory/memoryStore')
+    const store = memoryStore.getInstance(ds.paths().MEMORY_DIR)
     const rows = await store.searchHybrid(agentId, agentType, query, topK)
     if (!rows || rows.length === 0) return null
 
     const meta = store.getMeta(agentId, agentType)
     const header = meta?.agent_name
-      ? `# Soul: ${meta.agent_name}\n> Most relevant ${rows.length} entries (hybrid retrieval)\n`
-      : `# Soul\n> Most relevant ${rows.length} entries (hybrid retrieval)\n`
+      ? `# Memory: ${meta.agent_name}\n> Most relevant ${rows.length} entries (hybrid retrieval)\n`
+      : `# Memory\n> Most relevant ${rows.length} entries (hybrid retrieval)\n`
 
     const bySection = new Map()
     for (const r of rows) {
@@ -153,38 +149,38 @@ async function retrieveTopKSoulContent(agentId, agentType, query, opts = {}) {
     }
     return out.join('\n')
   } catch (err) {
-    logger.debug('[systemPromptBuilder] retrieveTopKSoulContent failed', err.message)
+    logger.debug('[systemPromptBuilder] retrieveTopKMemoryContent failed', err.message)
     return null
   }
 }
 
 /**
- * Top-K aware variant of prepareSoulContent. When a query is supplied AND the
- * full content is large enough that retrieval would help (>4KB), try hybrid
- * retrieval first. Otherwise fall back to size-gated full content.
+ * Top-K aware variant of prepareMemoryContent. When a query is supplied AND
+ * the full content is large enough that retrieval would help (>4KB), try
+ * hybrid retrieval first. Otherwise fall back to size-gated full content.
  *
- * @param {string|null} fullContent  The full soul markdown (may be null)
+ * @param {string|null} fullContent  The full memory markdown (may be null)
  * @param {string} agentId
  * @param {string} agentType
  * @param {string|null} query        Recent user message text
  * @returns {Promise<string|null>}
  */
-async function prepareSoulContentSmart(fullContent, agentId, agentType, query) {
+async function prepareMemoryContentSmart(fullContent, agentId, agentType, query) {
   if (!fullContent) return null
   const size = Buffer.byteLength(fullContent, 'utf8')
 
-  // Small souls: always inject the whole thing — retrieval would only lose info
+  // Small memories: always inject the whole thing — retrieval would only lose info
   if (size < 4096) return fullContent
 
-  // Large souls + a query: try retrieval first
+  // Large memories + a query: try retrieval first
   if (query && query.trim()) {
-    const retrieved = await retrieveTopKSoulContent(agentId, agentType, query)
+    const retrieved = await retrieveTopKMemoryContent(agentId, agentType, query)
     if (retrieved) return retrieved
   }
 
   // Fallback: size-gated key sections
   if (size < 16384) return extractKeySections(fullContent)
-  return extractKeySections(fullContent) + '\n\n(Warning: Soul memory is large. Consider pruning old entries.)'
+  return extractKeySections(fullContent) + '\n\n(Warning: Memory is large. Consider pruning old entries.)'
 }
 
 /**
@@ -212,14 +208,14 @@ function readFileIfExists(filePath) {
  * @param {object} agentContext  { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId,
  *                                 systemAgentName, systemAgentDescription, userAgentName,
  *                                 userAgentDescription, groupChatContext, chatHandoverNote }
- * @param {string|null} userSoulContent      Soul content for the user agent
- * @param {string|null} systemSoulContent    Soul content for the system agent
- * @param {Array|null}  participantSouls     Soul content for group participants
+ * @param {string|null} userMemoryContent    Memory content for the user agent
+ * @param {string|null} systemMemoryContent  Memory content for the system agent
+ * @param {Array|null}  participantMemories  Memory content for group participants
  * @param {object} memoryContext { userMd, agentMemoryMd, todayLogMd, yesterdayLogMd, todayDate, yesterdayDate, historicalContext }
  * @param {object|null} ragContext           RAG retrieval results
  * @returns {string} The assembled system prompt
  */
-function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName, analysisTargetAgentType } = {}, userSoulContent, systemSoulContent, participantSouls, memoryContext = {}, ragContext = null) {
+function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName, analysisTargetAgentType } = {}, userMemoryContent, systemMemoryContent, participantMemories, memoryContext = {}, ragContext = null) {
   // When a named agent is active, use it as the opening identity (highest priority).
   // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
   let openingIdentity
@@ -286,8 +282,8 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
   if (systemAgentId) {
     try {
       const dataPathForSpeech = config.dataPath || require('../lib/dataStore').paths().DATA_DIR
-      const soulsDirForSpeech = path.join(dataPathForSpeech, 'souls')
-      const speechDna = readSpeechDna(soulsDirForSpeech, systemAgentId)
+      const artifactsDirForSpeech = path.join(dataPathForSpeech, 'agent-artifacts')
+      const speechDna = readSpeechDna(artifactsDirForSpeech, systemAgentId)
       if (speechDna) {
         const { formatSpeechDnaBlock } = require('./chatImport/speechDnaExtractor')
         const block = formatSpeechDnaBlock(speechDna)
@@ -413,14 +409,14 @@ When the user requests a full analysis report (HTML), call render_persona_report
 - After writing the file, tell the user the file path and offer to open it or generate the HTML version`
   }
 
-  // ── Inject agent IDs for SoulTool ──
+  // ── Inject agent IDs for MemoryTool ──
   // Without these, the LLM has no way to know the correct UUIDs when calling
-  // update_soul_memory / read_soul_memory, and will guess wrong (e.g. "user").
+  // update_memory / read_memory, and will guess wrong (e.g. "user").
   const agentIdBlock = []
   if (systemAgentId) agentIdBlock.push(`Your agent ID (system): ${systemAgentId}`)
   if (userAgentId && userAgentId !== '__default_user__') agentIdBlock.push(`User agent ID: ${userAgentId}`)
   if (agentIdBlock.length > 0) {
-    system += `\n\n---\n## AGENT IDS (use these with soul memory tools)\n${agentIdBlock.join('\n')}`
+    system += `\n\n---\n## AGENT IDS (use these with memory tools)\n${agentIdBlock.join('\n')}`
   }
 
   system += `
@@ -500,7 +496,7 @@ This is the local data folder for the ClankAI desktop application. Its structure
   ├── agents.json          — AI agent definitions
   ├── knowledge.json       — RAG knowledge config
   ├── chats/               — Per-chat message history
-  ├── souls/               — Persistent memory files (system/, users/)
+  ├── memory/              — Persistent memory store (memory.db, memory-vec/)
   ├── clank_aidoc/         — AI Doc folder (readable documents)
   └── artifact/            — AI-generated non-document output
 
@@ -630,21 +626,21 @@ ${subfolderList}
   }
 
   // ── Memory context injection ──
-  const { userMd, relevantUserSoul, relevantSystemSoul } = memoryContext
+  const { userMd, relevantUserMemory, relevantSystemMemory } = memoryContext
 
   if (userMd) {
-    system += `\n\n## User Profile\n${prepareSoulContent(userMd)}`
+    system += `\n\n## User Profile\n${prepareMemoryContent(userMd)}`
   }
 
-  // Soul memory injection — top-K relevant entries pre-resolved by the agent
-  // runtime (agentLoop.resolveSoulContentForPrompt) using the latest user
-  // message as the retrieval query. Falls back to full soul content for small
-  // souls. Strings are already prepared markdown — no further transformation.
-  if (relevantUserSoul) {
-    system += `\n\n## What I remember about the user\n${relevantUserSoul}`
+  // Memory injection — top-K relevant entries pre-resolved by the agent
+  // runtime (agentLoop.resolveMemoryContentForPrompt) using the latest user
+  // message as the retrieval query. Falls back to full content for small
+  // memories. Strings are already prepared markdown — no further transformation.
+  if (relevantUserMemory) {
+    system += `\n\n## What I remember about the user\n${relevantUserMemory}`
   }
-  if (relevantSystemSoul) {
-    system += `\n\n## What I remember about myself\n${relevantSystemSoul}`
+  if (relevantSystemMemory) {
+    system += `\n\n## What I remember about myself\n${relevantSystemMemory}`
   }
 
   // Current date — essential for LLMs to interpret relative dates ("去年", "last month", etc.)
@@ -714,9 +710,10 @@ function stripInfraFromPrompt(fullPrompt) {
 }
 
 /**
- * Resolve the soul content to inject into the prompt for one agent. Picks
- * between full content (small soul) and top-K hybrid retrieval (large soul,
- * query available) and returns a markdown string ready for `memoryContext.userMd`.
+ * Resolve the memory content to inject into the prompt for one agent. Picks
+ * between full content (small memory) and top-K hybrid retrieval (large
+ * memory, query available) and returns a markdown string ready for
+ * `memoryContext.userMd`.
  *
  * Caller is the agent runtime (agentLoop, voiceSession). Designed to be the
  * SINGLE async resolution step before the synchronous buildSystemPrompt.
@@ -726,18 +723,18 @@ function stripInfraFromPrompt(fullPrompt) {
  * @param {string|null} query Recent user message — drives retrieval
  * @returns {Promise<string|null>}
  */
-async function resolveSoulContentForPrompt(agentId, agentType, query) {
+async function resolveMemoryContentForPrompt(agentId, agentType, query) {
   if (!agentId || !agentType) return null
   try {
     const ds = require('../lib/dataStore')
-    const soulStore = require('../memory/soulStore')
-    const store = soulStore.getInstance(ds.paths().MEMORY_DIR)
+    const memoryStore = require('../memory/memoryStore')
+    const store = memoryStore.getInstance(ds.paths().MEMORY_DIR)
     const fullContent = store.readMarkdown(agentId, agentType)
-    return await prepareSoulContentSmart(fullContent, agentId, agentType, query)
+    return await prepareMemoryContentSmart(fullContent, agentId, agentType, query)
   } catch (err) {
-    logger.debug('[systemPromptBuilder] resolveSoulContentForPrompt failed', err.message)
+    logger.debug('[systemPromptBuilder] resolveMemoryContentForPrompt failed', err.message)
     return null
   }
 }
 
-module.exports = { buildSystemPrompt, stripInfraFromPrompt, readSoulFile, readSpeechDna, prepareSoulContent, prepareSoulContentSmart, retrieveTopKSoulContent, resolveSoulContentForPrompt, extractKeySections, readFileIfExists, SOUL_KEY_SECTIONS }
+module.exports = { buildSystemPrompt, stripInfraFromPrompt, readMemoryFile, readSpeechDna, prepareMemoryContent, prepareMemoryContentSmart, retrieveTopKMemoryContent, resolveMemoryContentForPrompt, extractKeySections, readFileIfExists, MEMORY_KEY_SECTIONS }

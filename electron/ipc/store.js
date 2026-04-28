@@ -7,6 +7,20 @@ const fs = require('fs')
 const { ipcMain } = require('electron')
 const { logger } = require('../logger')
 const ds = require('../lib/dataStore')
+const safeStorageHelper = require('../lib/safeStorageHelper')
+
+// Detect plaintext credentials on disk so first-startup-after-upgrade can
+// transparently re-write config.json in encrypted form. Idempotent — once all
+// sensitive fields carry the enc:v1: prefix, this returns false and no
+// migration write happens.
+function _hasPlaintextSensitiveFields(rawCfg) {
+  if (!rawCfg || typeof rawCfg !== 'object') return false
+  for (const p of rawCfg.providers || []) {
+    if (p?.apiKey && !safeStorageHelper.isEncrypted(p.apiKey)) return true
+  }
+  if (rawCfg.smtp?.pass && !safeStorageHelper.isEncrypted(rawCfg.smtp.pass)) return true
+  return false
+}
 
 // -- Segment archiving --------------------------------------------------------
 const SEGMENT_HOT_COUNT = 100
@@ -150,6 +164,24 @@ function register({ DEFAULT_CONFIG }) {
 
   ipcMain.handle('store:get-config', () => {
     const saved = ds.readJSON(p().CONFIG_FILE, {})
+
+    // One-time encryption migration: if any sensitive field is still plaintext
+    // (legacy install pre-safeStorage), re-write the file so it lands on disk
+    // encrypted. Peek at the raw file directly because ds.readJSON has already
+    // decrypted the in-memory copy. Idempotent — once everything carries the
+    // enc:v1: prefix this branch never runs again.
+    try {
+      if (safeStorageHelper.isAvailable() && fs.existsSync(p().CONFIG_FILE)) {
+        const rawCfg = JSON.parse(fs.readFileSync(p().CONFIG_FILE, 'utf8'))
+        if (_hasPlaintextSensitiveFields(rawCfg)) {
+          ds.writeJSON(p().CONFIG_FILE, saved)
+          logger.info('[safeStorage] migrated plaintext credentials in config.json to encrypted form')
+        }
+      }
+    } catch (err) {
+      logger.warn('[safeStorage] migration check failed (non-fatal):', err.message)
+    }
+
     const sanitizeProvider = (provider) => {
       const settings = { ...(provider?.settings || {}) }
       delete settings.temperature

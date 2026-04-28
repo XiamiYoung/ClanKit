@@ -260,7 +260,7 @@ class AnalyzeAgentTool extends BaseTool {
   _sectionsCachePath() {
     const fs = require('fs')
     const type = this.targetAgentType === 'user' ? 'users' : 'system'
-    const dir = path.join(this.dataPath, 'souls', type)
+    const dir = path.join(this.dataPath, 'agent-artifacts', type)
     try { fs.mkdirSync(dir, { recursive: true }) } catch (_) {}
     return path.join(dir, `${this.targetAgentId}.sections.json`)
   }
@@ -463,9 +463,9 @@ class AnalyzeAgentTool extends BaseTool {
     // ── Load import artifacts for extra data ────────────────────────
     let artifactBlock = ''
     try {
-      const soulsDir = path.join(this.dataPath, 'souls')
+      const artifactsDir = path.join(this.dataPath, 'agent-artifacts')
       for (const t of ['system', 'users']) {
-        const sp = path.join(soulsDir, t, `${this.targetAgentId}.speech.json`)
+        const sp = path.join(artifactsDir, t, `${this.targetAgentId}.speech.json`)
         if (fs.existsSync(sp)) {
           const sd = JSON.parse(fs.readFileSync(sp, 'utf8'))
           artifactBlock = `\n\n## 导入时 Speech DNA\n- catchphrases: ${(sd.catchphrases||[]).map(c=>c.phrase||c).join(', ')}\n- emoji: ${(sd.emoji||[]).map(e=>`${e.char}(${e.frequency})`).join(', ')}\n- avg_len: ${sd.sentenceStyle?.avgLength}  median: ${sd.sentenceStyle?.median}\n- short_pct: ${sd.sentenceStyle?.shortPct}  punctuation: ${sd.sentenceStyle?.punctuation}\n- reply_latency_sec: ${sd.replyTiming?.medianLatencySec}`
@@ -606,7 +606,7 @@ class AnalyzeAgentTool extends BaseTool {
           logger.warn(`[AnalyzeAgentTool] group ${group.id} parse attempt ${attempt} failed:`, err.message)
 
           try {
-            const debugPath = path.join(this.dataPath, 'souls',
+            const debugPath = path.join(this.dataPath, 'agent-artifacts',
               this.targetAgentType === 'user' ? 'users' : 'system',
               `${this.targetAgentId}.sections.${group.id}-${attempt}.debug.txt`)
             fs.writeFileSync(debugPath, rawJson, 'utf8')
@@ -1503,32 +1503,22 @@ Output JSON directly, starting with { :`
       harness: null,
     }
 
-    // Determine soul presence — check the SQLite SoulStore first, then fall
-    // back to legacy on-disk .md detection for sidecar JSON discovery
-    // (speech.json / evidence.json / harness.json still live next to the
-    // legacy soulsDir as separate files).
-    const soulsDir = path.join(this.dataPath, 'souls')
-    const soulStoreMod = require('../../memory/soulStore')
+    // Determine memory presence — check the SQLite MemoryStore. Sidecar
+    // JSON files (speech.json / evidence.json / harness.json) live alongside
+    // the agent-artifacts directory.
+    const artifactsDir = path.join(this.dataPath, 'agent-artifacts')
+    const memoryStoreMod = require('../../memory/memoryStore')
     const memoryDir = path.join(this.dataPath, 'memory')
-    const _soulStore = soulStoreMod.getInstance(memoryDir)
-    let soulType = null
+    const _memoryStore = memoryStoreMod.getInstance(memoryDir)
+    let agentTypeFound = null
     for (const t of ['system', 'users']) {
-      if (_soulStore.exists(agentId, t)) { soulType = t; break }
-    }
-    if (!soulType) {
-      // Fallback: legacy .md files (e.g. on systems where migration hasn't run yet)
-      for (const t of ['system', 'users']) {
-        if (fs.existsSync(path.join(soulsDir, t, `${agentId}.md`))) {
-          soulType = t
-          break
-        }
-      }
+      if (_memoryStore.exists(agentId, t)) { agentTypeFound = t; break }
     }
 
     // 1. Speech DNA
     try {
       for (const t of ['system', 'users']) {
-        const speechPath = path.join(soulsDir, t, `${agentId}.speech.json`)
+        const speechPath = path.join(artifactsDir, t, `${agentId}.speech.json`)
         if (fs.existsSync(speechPath)) {
           result.speechDna = JSON.parse(fs.readFileSync(speechPath, 'utf8'))
           result.imported = true
@@ -1542,7 +1532,7 @@ Output JSON directly, starting with { :`
     // 2. Evidence Index
     try {
       for (const t of ['system', 'users']) {
-        const evidencePath = path.join(soulsDir, t, `${agentId}.evidence.json`)
+        const evidencePath = path.join(artifactsDir, t, `${agentId}.evidence.json`)
         if (fs.existsSync(evidencePath)) {
           result.evidenceIndex = JSON.parse(fs.readFileSync(evidencePath, 'utf8'))
           result.imported = true
@@ -1556,7 +1546,7 @@ Output JSON directly, starting with { :`
     // 3. Harness validation scores
     try {
       for (const t of ['system', 'users']) {
-        const harnessPath = path.join(soulsDir, t, `${agentId}.harness.json`)
+        const harnessPath = path.join(artifactsDir, t, `${agentId}.harness.json`)
         if (fs.existsSync(harnessPath)) {
           result.harness = JSON.parse(fs.readFileSync(harnessPath, 'utf8'))
           result.imported = true
@@ -1567,10 +1557,10 @@ Output JSON directly, starting with { :`
       logger.warn('[AnalyzeAgentTool] harness.json read error:', err.message)
     }
 
-    // 4. Nuwa sections from the soul file (extract only Nuwa-specific sections)
-    if (soulType) {
+    // 4. Nuwa sections from the memory store (extract only Nuwa-specific sections)
+    if (agentTypeFound) {
       try {
-        const content = _soulStore.readMarkdown(agentId, soulType) || ''
+        const content = _memoryStore.readMarkdown(agentId, agentTypeFound) || ''
         const nuwaSectionNames = ['Mental Models', 'Decision Heuristics', 'Values & Anti-Patterns',
           'Relational Genealogy', 'Honest Boundaries', 'Core Tensions', 'Relationship Timeline']
         const sections = {}
@@ -1598,7 +1588,7 @@ Output JSON directly, starting with { :`
           result.imported = true
         }
       } catch (err) {
-        logger.warn('[AnalyzeAgentTool] soul file read error:', err.message)
+        logger.warn('[AnalyzeAgentTool] memory read error:', err.message)
       }
     }
 
@@ -1662,12 +1652,12 @@ Output JSON directly, starting with { :`
    */
   /**
    * Path for the cached analysis JSON.
-   * Stored alongside other soul artifacts so it lives with the agent.
+   * Stored alongside other agent artifacts so it lives with the agent.
    */
   _analysisCachePath() {
     const fs = require('fs')
     const type = this.targetAgentType === 'user' ? 'users' : 'system'
-    const dir = path.join(this.dataPath, 'souls', type)
+    const dir = path.join(this.dataPath, 'agent-artifacts', type)
     try { fs.mkdirSync(dir, { recursive: true }) } catch (_) {}
     return path.join(dir, `${this.targetAgentId}.analysis.json`)
   }
@@ -1836,9 +1826,9 @@ Output JSON directly, starting with { :`
     let artifactBlock = ''
     try {
       const fs = require('fs')
-      const soulsDir = path.join(this.dataPath, 'souls')
+      const artifactsDir = path.join(this.dataPath, 'agent-artifacts')
       for (const t of ['system', 'users']) {
-        const sp = path.join(soulsDir, t, `${this.targetAgentId}.speech.json`)
+        const sp = path.join(artifactsDir, t, `${this.targetAgentId}.speech.json`)
         if (fs.existsSync(sp)) {
           const sd = JSON.parse(fs.readFileSync(sp, 'utf8'))
           artifactBlock += `\n\nSpeech DNA: catchphrases=[${(sd.catchphrases||[]).map(c=>c.phrase||c).join(', ')}], emoji=[${(sd.emoji||[]).map(e=>e.char).join('')}], avg_len=${sd.sentenceStyle?.avgLength}, punctuation=${sd.sentenceStyle?.punctuation}, reply_latency=${sd.replyTiming?.medianLatencySec}s`
@@ -1847,7 +1837,7 @@ Output JSON directly, starting with { :`
         }
       }
       for (const t of ['system', 'users']) {
-        const ep = path.join(soulsDir, t, `${this.targetAgentId}.evidence.json`)
+        const ep = path.join(artifactsDir, t, `${this.targetAgentId}.evidence.json`)
         if (fs.existsSync(ep)) {
           const ei = JSON.parse(fs.readFileSync(ep, 'utf8'))
           const topClaims = (ei.claims||[]).slice(0, 8).map(c => c.claim).join('; ')

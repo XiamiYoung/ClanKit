@@ -894,7 +894,7 @@ async function goNext() {
     })
     await configStore.saveConfig({ defaultProvider: selectedProviderType.value, setupWizardStep: 6 })
     // Silently install all recommended built-in agents (with their pre-fab
-    // Soul + Speech DNA) before entering the tour. Failures are swallowed so
+    // Memory + Speech DNA) before entering the tour. Failures are swallowed so
     // a hiccup here can't block onboarding — user can re-install via the
     // Templates panel later.
     await runInstallRecommended()

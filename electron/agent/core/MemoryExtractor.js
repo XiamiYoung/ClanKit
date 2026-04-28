@@ -2,10 +2,10 @@
  * MemoryExtractor — post-turn memory extraction via the configured utility model.
  *
  * After agent turns complete, this module analyses the last exchange
- * (user message + assistant response) against existing soul content and
+ * (user message + assistant response) against existing memory and
  * returns candidate memory entries with confidence scores for routing.
  *
- * High-confidence (≥0.8): auto-saved directly to soul files.
+ * High-confidence (≥0.8): auto-saved directly to the memory store.
  * Medium-confidence (0.5–0.8): injected into next system prompt for conversational confirmation.
  * Low-confidence (<0.5): silently discarded.
  */
@@ -40,7 +40,7 @@ function buildExtractionPrompt(participants, language) {
 
 You will be given:
 1. The last user message and assistant response
-2. Existing soul/memory content for the user and system agent (if any)
+2. Existing memory content for the user and system agent (if any)
 ${hasParticipants ? '3. A list of AI agents participating in this conversation' : ''}
 
 WHAT TO EXTRACT (only these categories):
@@ -51,14 +51,14 @@ WHAT TO EXTRACT (only these categories):
 - Behavioral feedback: how the AI should adjust tone, format, verbosity, approach
 - Significant relationships: key people mentioned by name and their roles
 - Long-term projects or goals the user is working on
-- Soul-defining information: things that shape who this person/agent IS
+- Identity-level information: things that shape who this person/agent IS
 
 WHAT TO IGNORE (never extract these):
 - General questions and their answers (e.g. "how do I sort an array" — that's a task, not a memory)
 - Troubleshooting steps, debugging sessions, code fixes
 - One-off requests, transient instructions, session-specific context
 - Greetings, small talk, filler, pleasantries ("Hey", "What's up", "How are you")
-- Information already present in the existing soul files
+- Information already present in the existing memory
 - Vague or obvious observations ("user is interested in coding")
 - AI agent descriptions, roles, or capabilities that come from the system prompt — these are CONFIGURATION, not learned memories
 - Inferred or assumed context — only extract facts EXPLICITLY stated by the user in their message
@@ -106,18 +106,18 @@ class MemoryExtractor {
    * @param {object} params
    * @param {string} params.lastUserMessage — text of the last user message
    * @param {string} params.lastAssistantMessage — text of the last assistant response
-   * @param {string|null} params.userSoulContent — existing user soul file content
-   * @param {string|null} params.systemSoulContent — existing system soul file content
+   * @param {string|null} params.userMemoryContent — existing user memory content
+   * @param {string|null} params.systemMemoryContent — existing system memory content
    * @param {string} params.userAgentId
    * @param {string} params.systemAgentId
    * @param {Array<{id: string, name: string, type: string}>} [params.participants] — all AI agents in the conversation
    * @param {string} [params.language] — language code ('en' | 'zh') for memory entry language
    * @returns {Promise<Array<{target: string, section: string, entry: string, confidence: number, agentId: string, agentType: string}>>}
    */
-  async extract({ lastUserMessage, lastAssistantMessage, userSoulContent, systemSoulContent, userAgentId, systemAgentId, participants, language }) {
+  async extract({ lastUserMessage, lastAssistantMessage, userMemoryContent, systemMemoryContent, userAgentId, systemAgentId, participants, language }) {
     if (!lastUserMessage || !lastAssistantMessage) return []
 
-    const userContent = this._buildUserContent(lastUserMessage, lastAssistantMessage, userSoulContent, systemSoulContent, participants)
+    const userContent = this._buildUserContent(lastUserMessage, lastAssistantMessage, userMemoryContent, systemMemoryContent, participants)
     const systemPrompt = buildExtractionPrompt(participants, language)
 
     try {
@@ -148,7 +148,7 @@ class MemoryExtractor {
         .map(m => {
           const confidence = typeof m.confidence === 'number' ? m.confidence : 1.0
 
-          // "user" target → user soul file
+          // "user" target → user memory
           if (m.target === 'user') {
             return { target: m.target, section: m.section, entry: m.entry, confidence, agentId: userAgentId, agentType: 'users' }
           }
@@ -158,7 +158,7 @@ class MemoryExtractor {
             return { target: m.target, section: m.section, entry: m.entry, confidence, agentId: systemAgentId, agentType: 'system' }
           }
 
-          // Participant name target → route to that agent's soul file
+          // Participant name target → route to that agent's memory
           const matched = participantByName.get(m.target.toLowerCase())
           if (matched) {
             return { target: m.target, section: m.section, entry: m.entry, confidence, agentId: matched.id, agentType: matched.type || 'system' }
@@ -181,11 +181,11 @@ class MemoryExtractor {
    * @param {object} params
    * @param {string} params.transcript — "[AgentName]: text" formatted conversation
    * @param {Array<{id: string, name: string, type: string}>} params.participants — agents involved
-   * @param {Object<string, string|null>} params.existingSouls — agentId → soul file content
+   * @param {Object<string, string|null>} params.existingMemories — agentId → memory content
    * @param {string} [params.language] — language code ('en' | 'zh') for memory entry language
    * @returns {Promise<Array<{target: string, section: string, entry: string, confidence: number, agentId: string, agentType: string}>>}
    */
-  async extractFromCollaboration({ transcript, participants, existingSouls, language }) {
+  async extractFromCollaboration({ transcript, participants, existingMemories, language }) {
     if (!transcript || !participants || participants.length < 2) return []
 
     const nameList = participants.map(p => `"${p.name}"`).join(', ')
@@ -194,7 +194,7 @@ class MemoryExtractor {
 
 You will be given:
 1. A transcript of a conversation between AI agents (no human participant)
-2. Existing memory/soul content for each agent (if any)
+2. Existing memory content for each agent (if any)
 
 Agents in this conversation: ${nameList}
 
@@ -210,7 +210,7 @@ WHAT TO EXTRACT (focus on inter-agent dynamics):
 WHAT TO IGNORE:
 - Generic pleasantries and turn-taking mechanics ("Sure, let me respond", "Thanks for sharing")
 - Information that is just restating the agent's configured system prompt or description
-- Facts already present in the existing soul files
+- Facts already present in the existing memory
 - Trivial exchanges with no lasting significance
 - The human user's original prompt/instruction that started the conversation
 
@@ -232,12 +232,12 @@ Respond with ONLY valid JSON (no markdown fences, no explanation):
 {"memories": [{"target": "<agent_name>", "section": "<section name>", "entry": "<the memory entry>", "confidence": 0.85}]}`
 
     const parts = ['## Agent Collaboration Transcript', transcript]
-    if (existingSouls) {
+    if (existingMemories) {
       for (const p of participants) {
-        const soul = existingSouls[p.id]
-        if (soul) {
+        const mem = existingMemories[p.id]
+        if (mem) {
           parts.push(`\n## Existing Memory for ${p.name}`)
-          parts.push(soul)
+          parts.push(mem)
         }
       }
     }
@@ -338,7 +338,7 @@ Respond with ONLY valid JSON (no markdown fences, no explanation):
     return response.choices?.[0]?.message?.content || ''
   }
 
-  _buildUserContent(userMsg, assistantMsg, userSoul, systemSoul, participants) {
+  _buildUserContent(userMsg, assistantMsg, userMemory, systemMemory, participants) {
     const parts = []
     parts.push('## Last Exchange')
     parts.push(`**User:** ${userMsg}`)
@@ -349,13 +349,13 @@ Respond with ONLY valid JSON (no markdown fences, no explanation):
         parts.push(`- ${p.name} (AI agent)`)
       }
     }
-    if (userSoul) {
+    if (userMemory) {
       parts.push('\n## Existing User Memory')
-      parts.push(userSoul)
+      parts.push(userMemory)
     }
-    if (systemSoul) {
+    if (systemMemory) {
       parts.push('\n## Existing System Agent Memory')
-      parts.push(systemSoul)
+      parts.push(systemMemory)
     }
     return parts.join('\n')
   }

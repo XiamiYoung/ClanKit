@@ -133,7 +133,7 @@ When a model is not in the litellm catalog AND the provider API doesn't report `
 - All data stored in `%APPDATA%/clankai/data/` on Windows, `~/.config/clankai/data/` on Linux/macOS (configurable via `CLANKAI_DATA_PATH` in `.env`)
 - Files: `config.json`, `agents.json`, `mcp-servers.json`, `tools.json`, `knowledge.json`
 - Chats: `chats/index.json` (metadata) + `chats/{id}.json` (per-chat with messages)
-- Souls: `souls/{agentId}/{type}.md`
+- Memory: SQLite at `memory/memory.db` (rows + FTS5) + vectra at `memory/memory-vec/`. Sidecar JSON artifacts (speech / evidence / harness) at `agent-artifacts/{type}/{id}.*.json`
 
 All configuration lives in `config.json`. The `.env` file only stores `CLANKAI_DATA_PATH` (data directory override).
 
@@ -200,7 +200,7 @@ Every `agentRun` from `_buildAgentRuns()` must be fully isolated. NEVER share be
 | Resource | How isolated |
 |---|---|
 | Provider credentials + model | Per-agent config copy; `customModel = agent.modelId` |
-| System prompt | `systemPromptBuilder.js` → per-agent soul files + skills |
+| System prompt | `systemPromptBuilder.js` → per-agent memory + skills |
 | Skills | Filtered by `agent.requiredSkillIds` |
 | MCP servers | Filtered by `agent.requiredMcpServerIds` |
 | HTTP tools | Filtered by `agent.requiredToolIds` |

@@ -1,28 +1,24 @@
 /**
- * SoulTool — agent tools for read/update of soul memory.
+ * MemoryTool — agent tools for read/update of agent memory.
  *
  * Two tools exported:
- *   - SoulUpdateTool: add/update/remove entries in soul memory
- *   - SoulReadTool:   read existing soul memory (or a specific section)
+ *   - MemoryUpdateTool: add/update/remove entries
+ *   - MemoryReadTool:   read existing memory (or a specific section)
  *
- * Storage: SQLite-backed SoulStore at {DATA_DIR}/memory/souls.db.
- * The legacy {DATA_DIR}/souls/{type}/{id}.md files are no longer authoritative —
- * they are seeded into the store on first migration and then ignored at runtime.
+ * Storage: SQLite-backed MemoryStore at {DATA_DIR}/memory/memory.db.
  *
- * Backwards-compat helpers (`createTemplate`, `parseSoul`, `serializeSoul`,
- * `SECTIONS`) are still exported because the chat-import nuwa pipeline (Phase B)
- * builds soul markdown directly from chat-derived sections, then writes it via
- * `souls:write` — that path now lands in the store via the markdown adapter.
+ * Compat helpers (`createTemplate`, `parseMarkdown`, `serializeMarkdown`,
+ * `SECTIONS`) are exported because the chat-import nuwa pipeline (Phase B)
+ * builds memory markdown directly from chat-derived sections, then writes it
+ * via `memory:write` — that path lands in the store via the markdown adapter.
  */
-const path = require('path')
-const fs = require('fs')
 const { BaseTool } = require('./BaseTool')
 const { logger } = require('../../logger')
-const soulStoreMod = require('../../memory/soulStore')
-const soulMarkdown = require('../../memory/soulMarkdown')
+const memoryStoreMod = require('../../memory/memoryStore')
+const memoryMarkdown = require('../../memory/memoryMarkdown')
 
 // Re-export for chatImport / agentLoop compatibility
-const SECTIONS = soulMarkdown.SECTIONS
+const SECTIONS = memoryMarkdown.SECTIONS
 
 // ── Compat helpers used by chatImport ──────────────────────────────────────
 
@@ -34,13 +30,13 @@ function dateStamp() {
 }
 
 /**
- * Create a blank soul file template. Used by chatImport when synthesizing
- * a fresh soul from a chat dump. Output is markdown; caller writes via
- * `souls:write` which lands in the SoulStore.
+ * Create a blank memory template. Used by chatImport when synthesizing a
+ * fresh memory document from a chat dump. Output is markdown; caller writes
+ * via `memory:write` which lands in the MemoryStore.
  */
 function createTemplate(agentName, agentType) {
   const lines = [
-    `# Soul: ${agentName}`,
+    `# Memory: ${agentName}`,
     `> Last updated: ${isoNow()}`,
     '',
     '## Identity',
@@ -56,10 +52,10 @@ function createTemplate(agentName, agentType) {
 }
 
 /**
- * Compat: parse a soul markdown into { headerLines, sections: Map<name, lines[]> }.
- * Used by chat-import nuwa pipeline.
+ * Compat: parse memory markdown into { headerLines, sections: Map<name, lines[]> }.
+ * Used by the chat-import nuwa pipeline.
  */
-function parseSoul(content) {
+function parseMarkdown(content) {
   const lines = content.split('\n')
   const sections = new Map()
   let currentSection = null
@@ -80,9 +76,9 @@ function parseSoul(content) {
 }
 
 /**
- * Compat: serialize parsed soul back to markdown.
+ * Compat: serialize parsed memory back to markdown.
  */
-function serializeSoul(headerLines, sections) {
+function serializeMarkdown(headerLines, sections) {
   const parts = [...headerLines]
   for (const [name, lines] of sections) {
     parts.push(`## ${name}`)
@@ -104,31 +100,15 @@ function updateTimestamp(headerLines) {
   headerLines.splice(1, 0, `> Last updated: ${isoNow()}`)
 }
 
-// ── SoulUpdateTool ─────────────────────────────────────────────────────────
+// ── MemoryUpdateTool ───────────────────────────────────────────────────────
 
-class SoulUpdateTool extends BaseTool {
-  /**
-   * @param {string} soulsDir — kept for ctor signature back-compat (the legacy
-   *                            on-disk path); no longer functionally used.
-   */
-  constructor(soulsDir) {
+class MemoryUpdateTool extends BaseTool {
+  constructor() {
     super(
-      'update_soul_memory',
-      'Update memory for a user or system agent. For user agents (agent_type: "users"): store user preferences, facts, habits, and personal context. For system agents (agent_type: "system"): store behavioral learnings, tone/format preferences, and domain context that help this AI agent respond better. Always check existing memory with read_soul_memory before adding duplicates.',
-      'update_soul_memory'
+      'update_memory',
+      'Update memory for a user or system agent. For user agents (agent_type: "users"): store user preferences, facts, habits, and personal context. For system agents (agent_type: "system"): store behavioral learnings, tone/format preferences, and domain context that help this AI agent respond better. Always check existing memory with read_memory before adding duplicates.',
+      'update_memory'
     )
-    this.soulsDir = soulsDir
-    this._compactionConfig = null
-  }
-
-  /**
-   * Compatibility shim: kept so agentLoop can still call it during tool
-   * registration. The new store-based flow doesn't need LLM compaction —
-   * structured rows are deduped + retrieved on demand, so unbounded growth
-   * is no longer the concern markdown files faced. Method is a no-op.
-   */
-  setCompactionConfig(config) {
-    this._compactionConfig = config
   }
 
   schema() {
@@ -148,9 +128,8 @@ class SoulUpdateTool extends BaseTool {
   }
 
   _getStore() {
-    // Resolve memory dir at call time — dataStore must already be init()'d
     const ds = require('../../lib/dataStore')
-    return soulStoreMod.getInstance(ds.paths().MEMORY_DIR)
+    return memoryStoreMod.getInstance(ds.paths().MEMORY_DIR)
   }
 
   async execute(toolCallId, params, signal, onUpdate) {
@@ -183,7 +162,6 @@ class SoulUpdateTool extends BaseTool {
           content: entry,
           source: 'tool',
         })
-        // Append to Memory Updates Log so audit trail is preserved
         this._appendLog(store, agent_id, agent_type, action, entry)
         break
       }
@@ -206,13 +184,12 @@ class SoulUpdateTool extends BaseTool {
         return this._err(`Unknown action: ${action}`)
     }
 
-    logger.agent('SoulUpdateTool', { agent_type, section, action })
+    logger.agent('MemoryUpdateTool', { agent_type, section, action })
     return this._ok(`Memory ${action}d in ${section}: ${entry}`, { agent_id, section, action })
   }
 
   /**
-   * Append a Memory Updates Log entry. Bounded — prunes oldest log rows
-   * past 50 to keep the section a useful audit trail without unbounded growth.
+   * Append a Memory Updates Log entry. Bounded to 50 most recent rows.
    */
   _appendLog(store, agentId, agentType, action, entry) {
     try {
@@ -229,21 +206,20 @@ class SoulUpdateTool extends BaseTool {
         for (const r of toDelete) store.deleteRow(r.id)
       }
     } catch (err) {
-      logger.warn('[SoulUpdateTool] _appendLog failed (non-fatal)', err.message)
+      logger.warn('[MemoryUpdateTool] _appendLog failed (non-fatal)', err.message)
     }
   }
 }
 
-// ── SoulReadTool ───────────────────────────────────────────────────────────
+// ── MemoryReadTool ─────────────────────────────────────────────────────────
 
-class SoulReadTool extends BaseTool {
-  constructor(soulsDir) {
+class MemoryReadTool extends BaseTool {
+  constructor() {
     super(
-      'read_soul_memory',
-      'Read the agent memory (soul file). Use this to check existing memories before adding new ones, or to recall what you know about the user.',
-      'read_soul_memory'
+      'read_memory',
+      'Read the agent memory. Use this to check existing memories before adding new ones, or to recall what you know about the user.',
+      'read_memory'
     )
-    this.soulsDir = soulsDir
   }
 
   schema() {
@@ -260,7 +236,7 @@ class SoulReadTool extends BaseTool {
 
   _getStore() {
     const ds = require('../../lib/dataStore')
-    return soulStoreMod.getInstance(ds.paths().MEMORY_DIR)
+    return memoryStoreMod.getInstance(ds.paths().MEMORY_DIR)
   }
 
   async execute(toolCallId, params, signal, onUpdate) {
@@ -273,7 +249,7 @@ class SoulReadTool extends BaseTool {
     const store = this._getStore()
 
     if (!store.exists(agent_id, agent_type)) {
-      return this._ok('No soul file exists for this agent yet.', { exists: false })
+      return this._ok('No memory exists for this agent yet.', { exists: false })
     }
 
     if (!section) {
@@ -290,12 +266,12 @@ class SoulReadTool extends BaseTool {
 }
 
 module.exports = {
-  SoulUpdateTool,
-  SoulReadTool,
+  MemoryUpdateTool,
+  MemoryReadTool,
   // Compat helpers — chatImport pipeline still uses these for direct .md synthesis
   createTemplate,
-  parseSoul,
-  serializeSoul,
+  parseMarkdown,
+  serializeMarkdown,
   updateTimestamp,
   SECTIONS,
 }

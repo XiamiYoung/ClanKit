@@ -174,7 +174,7 @@ function getPaths() {
     plansFile:          pp.PLANS_FILE,
     taskRunsDir:        pp.TASK_RUNS_DIR,
     taskRunsIndex:      pp.TASK_RUNS_INDEX,
-    soulsDir:           pp.SOULS_DIR,
+    agentArtifactsDir:  pp.AGENT_ARTIFACTS_DIR,
     taskCategoriesFile: pp.TASK_CATEGORIES_FILE,
     planCategoriesFile: pp.PLAN_CATEGORIES_FILE,
     aiTaskTreeFile:     pp.AI_TASK_TREE_FILE,
@@ -263,9 +263,9 @@ function buildAgentConfig(agent, globalCfg) {
 
 // ── Execute a single step with a single agent ───────────────────────────────
 
-async function _runAgentStep(agent, promptText, globalCfg, soulsDir, artifactPath, skillsPath, DoCPath, sandboxConfig) {
+async function _runAgentStep(agent, promptText, globalCfg, agentArtifactsDir, artifactPath, skillsPath, DoCPath, sandboxConfig) {
   const agentCfg = buildAgentConfig(agent, globalCfg)
-  agentCfg.soulsDir           = soulsDir
+  agentCfg.agentArtifactsDir           = agentArtifactsDir
   agentCfg.artifactPath       = artifactPath || ''
   agentCfg.skillsPath         = skillsPath   || ''
   agentCfg.DoCPath            = DoCPath       || ''
@@ -411,7 +411,7 @@ async function _syncAiTaskTree(plan, itemId, triggeredBy) {
 // ── Execute a full plan (all steps sequentially) ──────────────────────────────
 
 async function _executePlan(plan, triggeredBy = 'schedule') {
-  const { configFile, agentsFile, tasksFile, taskRunsDir, taskRunsIndex, soulsDir } = getPaths()
+  const { configFile, agentsFile, tasksFile, taskRunsDir, taskRunsIndex, agentArtifactsDir } = getPaths()
   const globalCfg   = readJSON(configFile,   {})
   const agentsData = readJSON(agentsFile, { agents: [] })
   const allAgents  = agentsData.agents || agentsData || []
@@ -536,7 +536,7 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
 
         const stepStartedAt = new Date().toISOString()
         try {
-          const output = await _runAgentStep(agent, promptText, globalCfg, soulsDir, artifactPath, skillsPath, DoCPath, sandboxConfig)
+          const output = await _runAgentStep(agent, promptText, globalCfg, agentArtifactsDir, artifactPath, skillsPath, DoCPath, sandboxConfig)
           stepOutputs.push(output)
           stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, agentId: agent.id, agentName: agent.name, output, status: 'done', startedAt: stepStartedAt, completedAt: new Date().toISOString() })
           logger.info(`[TaskScheduler] Step ${stepIdx} agent ${agent.name}: done`)

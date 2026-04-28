@@ -609,9 +609,9 @@ function createNew(type) {
 
 async function onBodyViewerUpdate(updates) {
   if (!bodyViewerAgent.value) return
-  // Strip the Nuwa seed payload before persisting — soul/speech belong on
-  // disk under souls/system/, not in agents.json.
-  const { _soulSeed, _speechSeed, ...agentUpdates } = updates
+  // Strip the Nuwa seed payload before persisting — memory/speech belong in
+  // the memory store and agent-artifacts/, not in agents.json.
+  const { _memorySeed, _speechSeed, ...agentUpdates } = updates
   const updated = { ...bodyViewerAgent.value }
   delete updated.isNew
   Object.assign(updated, agentUpdates)
@@ -620,14 +620,14 @@ async function onBodyViewerUpdate(updates) {
 
   // After save the agent has a stable id (existing or freshly minted by the
   // store). If the AI generation step produced Nuwa-style seed data, write it
-  // to the soul + speech files now. Best-effort — failures don't block save.
-  if (_soulSeed || _speechSeed) {
+  // to the memory store + speech file now. Best-effort — failures don't block save.
+  if (_memorySeed || _speechSeed) {
     try {
-      const { templateSoulToSections, templateSpeechToDna } = await import('../data/agentTemplates')
+      const { templateMemoryToSections, templateSpeechToDna } = await import('../data/agentTemplates')
       const persisted = agentsStore.agents.find(a => a.id === updated.id) || updated
       const agentType = persisted.type === 'user' ? 'user' : 'system'
-      if (_soulSeed) {
-        const sections = templateSoulToSections(_soulSeed)
+      if (_memorySeed) {
+        const sections = templateMemoryToSections(_memorySeed)
         if (sections) {
           await window.electronAPI.agentImport.writeNuwaSections({
             agentId:    persisted.id,

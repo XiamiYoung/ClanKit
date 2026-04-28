@@ -471,7 +471,7 @@ TA 与 12 星座或 16 MBTI 的匹配度（至少 8 个类型），每个 0-100%
 - 避免同一份聊天记录重复跑分析（根据数据量不同，可能是几十秒到几十分钟——参见 cache_info 里的 `saved_time_label`）
 - 数据没变时，生成的报告一致性更好（同一份分析多次转 HTML）
 - 缓存会自动失效：导入新消息后 `totalMessages` 或 `lastTimestamp` 变化 → 下次调用自动重跑
-- 用户可以手动删除 `souls/{type}/{agentId}.analysis.json` 来清理
+- 用户可以手动删除 `agent-artifacts/{type}/{agentId}.analysis.json` 来清理
 
 ### 强制重新分析
 

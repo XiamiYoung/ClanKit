@@ -491,10 +491,10 @@ export const useAgentsStore = defineStore('agents', () => {
     if (agent?.isBuiltin) return
     targetRef.value = targetRef.value.filter(p => p.id !== id)
     await persist()
-    // Clean up soul file + memory directory for deleted agent
+    // Clean up memory + per-agent memory directory for deleted agent
     try {
       const type = agent?.type === 'user' ? 'users' : 'system'
-      await window.electronAPI?.souls?.deleteAgentData?.(id, type)
+      await window.electronAPI?.memory?.deleteAgentData?.(id, type)
     } catch { /* best-effort cleanup */ }
   }
 

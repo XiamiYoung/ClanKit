@@ -102,7 +102,7 @@
              @click="handleContentClick"
              :data-segment-index="i"
              :data-content-length="seg.content.length" />
-      </template><div v-else-if="seg.type === 'tool' && isSoulTool(seg)" class="my-1.5 rounded-xl overflow-hidden" style="border:1px solid #E5E5EA; background:#FFFFFF;">
+      </template><div v-else-if="seg.type === 'tool' && isMemoryTool(seg)" class="my-1.5 rounded-xl overflow-hidden" style="border:1px solid #E5E5EA; background:#FFFFFF;">
         <div class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none"
           :class="seg.output === undefined ? 'tool-header-running' : 'tool-header-done'"
           @click="toggleTool(i, seg)">
@@ -169,7 +169,7 @@
           </div>
         </div>
       </template>
-      <template v-else-if="(seg.type === 'tool' || seg.type === 'permission' || seg.type === 'warning') && !isSoulTool(seg) && processExpanded">
+      <template v-else-if="(seg.type === 'tool' || seg.type === 'permission' || seg.type === 'warning') && !isMemoryTool(seg) && processExpanded">
       <!-- File diff (file_operation write/append) -->
       <div v-if="seg.type === 'tool' && isFileWrite(seg)" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #d1d5db; font-size:0.78rem;">
         <!-- Diff header -->
@@ -237,7 +237,7 @@
             <span v-if="seg.name === 'execute_shell'">💻</span>
             <span v-else-if="seg.name === 'dispatch_subagent' || seg.name === 'dispatch_subagents'">🤖</span>
             <span v-else-if="seg.name === 'background_task'">⚙️</span>
-            <span v-else-if="seg.name === 'update_soul_memory' || seg.name === 'read_soul_memory'">🧠</span>
+            <span v-else-if="seg.name === 'update_memory' || seg.name === 'read_memory'">🧠</span>
             <span v-else>🔧</span>
           </span>
           <!-- Tool name -->
@@ -1100,13 +1100,13 @@ const copiedBlock     = ref(null)
 // ── Execution records collapse ─
 const processExpanded = ref(false)
 
-function isSoulTool(seg) {
-  return seg.name === 'update_soul_memory' || seg.name === 'read_soul_memory'
+function isMemoryTool(seg) {
+  return seg.name === 'update_memory' || seg.name === 'read_memory'
 }
-// Visible = rendered inside the collapsible block (excludes hidden tools AND soul tools)
+// Visible = rendered inside the collapsible block (excludes hidden tools AND memory tools)
 function isVisibleProcessSegment(s) {
   if (s.type === 'permission' || s.type === 'warning') return true
-  if (s.type === 'tool') return (isFileWrite(s) || !isHiddenTool(s) || s.output === undefined) && !isSoulTool(s)
+  if (s.type === 'tool') return (isFileWrite(s) || !isHiddenTool(s) || s.output === undefined) && !isMemoryTool(s)
   return false
 }
 
@@ -1127,7 +1127,7 @@ const activeToolLabel = computed(() => {
   let lastCompleted = ''
   for (let i = 0; i < segs.length; i++) {
     const s = segs[i]
-    if (s.type !== 'tool' || isSoulTool(s)) continue
+    if (s.type !== 'tool' || isMemoryTool(s)) continue
     const name = toolDisplayName(s)
     const summary = toolSummary(s)
     const label = summary ? `${name} — ${summary}` : name
@@ -1142,7 +1142,7 @@ const runningToolLabel = computed(() => {
   if (!segs) return ''
   for (let i = 0; i < segs.length; i++) {
     const s = segs[i]
-    if (s.type !== 'tool' || isSoulTool(s)) continue
+    if (s.type !== 'tool' || isMemoryTool(s)) continue
     if (s.output !== undefined) continue
     const name = toolDisplayName(s)
     const summary = toolSummary(s)
@@ -1247,8 +1247,8 @@ function toolDisplayName(seg) {
   if (seg.name === 'dispatch_subagents') return t('chats.toolDispatchSubagent')
   if (seg.name === 'background_task')  return t('chats.toolBackgroundTask')
   if (seg.name === 'file_operation')   return t('chats.toolFileOperation')
-  if (seg.name === 'update_soul_memory') return t('chats.toolUpdateMemory')
-  if (seg.name === 'read_soul_memory') return t('chats.toolReadMemory')
+  if (seg.name === 'update_memory') return t('chats.toolUpdateMemory')
+  if (seg.name === 'read_memory') return t('chats.toolReadMemory')
   if (seg.name === 'todo_manager') return t('chats.toolTodoManager')
   if (seg.name === 'search_chat_history') return t('chats.toolSearchChatHistory')
   // User-defined tools are exposed to the LLM as `{type}_{id}` (e.g. smtp_smtp-qq-com).

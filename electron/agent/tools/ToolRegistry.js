@@ -7,7 +7,7 @@
  */
 const { logger } = require('../../logger')
 const { TodoTool }    = require('./TodoTool')
-const { SoulUpdateTool, SoulReadTool } = require('./SoulTool')
+const { MemoryUpdateTool, MemoryReadTool } = require('./MemoryTool')
 const { SearchHistoryTool } = require('./SearchHistoryTool')
 const { NewsfeedTool } = require('./NewsfeedTool')
 const { KnowledgeTool } = require('./KnowledgeTool')
@@ -37,16 +37,10 @@ const knowledgeTool = new KnowledgeTool()
 // WebFetchTool is always available (for reading web pages)
 const webFetchTool = new WebFetchTool()
 
-// Soul tools are always available (for agent memory)
-let soulUpdateTool = null
-let soulReadTool = null
-
-function initSoulTools(soulsDir) {
-  if (soulsDir && !soulUpdateTool) {
-    soulUpdateTool = new SoulUpdateTool(soulsDir)
-    soulReadTool = new SoulReadTool(soulsDir)
-  }
-}
+// Memory tools are always available — they resolve their store at call time
+// from dataStore.paths(), so no constructor args needed.
+const memoryUpdateTool = new MemoryUpdateTool()
+const memoryReadTool   = new MemoryReadTool()
 
 // SearchHistoryTool — keyed by agentId, searches chat history via SQLite FTS5
 const searchHistoryToolCache = new Map()
@@ -60,18 +54,13 @@ function getSearchHistoryTool(memoryDir, agentId) {
 }
 
 class ToolRegistry {
-  constructor(soulsDir) {
+  constructor() {
     this.tools = new Map()
     // Always register the todo tool
     this.registerTool('todo_manager', todoTool)
-    // Always register soul tools if soulsDir is available
-    if (soulsDir) {
-      initSoulTools(soulsDir)
-    }
-    if (soulUpdateTool) {
-      this.registerTool('update_soul_memory', soulUpdateTool)
-      this.registerTool('read_soul_memory', soulReadTool)
-    }
+    // Always register memory tools (for agent long-term memory)
+    this.registerTool('update_memory', memoryUpdateTool)
+    this.registerTool('read_memory', memoryReadTool)
     // Always register newsfeed tool
     this.registerTool('fetch_newsfeed', newsfeedTool)
     // Always register knowledge tool (RAG management)
@@ -104,17 +93,15 @@ class ToolRegistry {
    * @param {Array<string|{id:string}>} enabledAgents  Either plain IDs or full agent objects
    *        from the store (only agents whose toggle is on are passed here)
    * @param {Array<string>} [excludedToolNames]  Tool names to forcibly exclude,
-   *        even from the always-on list (e.g. doc editing drops soul tools).
+   *        even from the always-on list (e.g. doc editing drops memory tools).
    */
   loadForAgents(enabledAgents, excludedToolNames = []) {
     this.tools.clear()
     // Always have todo
     this.registerTool('todo_manager', todoTool)
-    // Always have soul tools
-    if (soulUpdateTool) {
-      this.registerTool('update_soul_memory', soulUpdateTool)
-      this.registerTool('read_soul_memory', soulReadTool)
-    }
+    // Always have memory tools
+    this.registerTool('update_memory', memoryUpdateTool)
+    this.registerTool('read_memory', memoryReadTool)
     // Always have newsfeed tool
     this.registerTool('fetch_newsfeed', newsfeedTool)
     // Always have knowledge tool
@@ -160,13 +147,12 @@ class ToolRegistry {
   }
 
   /**
-   * Set utility model config for soul file compaction.
-   * Called by AgentLoop.run() once config is available.
+   * Compaction config setter — kept as a no-op for back-compat with callers
+   * that still invoke it. Structured rows + retrieval replaced LLM-driven
+   * markdown compaction, so no tool needs this anymore.
    */
-  setSoulCompactionConfig(config) {
-    if (soulUpdateTool && config) {
-      soulUpdateTool.setCompactionConfig(config)
-    }
+  setMemoryCompactionConfig(_config) {
+    // intentionally empty
   }
 
   /**
