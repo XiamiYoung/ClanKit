@@ -56,7 +56,11 @@ scripts/*
 !scripts/check-models-staleness.js
 !scripts/update-models.js
 !scripts/migrate-souls-to-sqlite.js
+!scripts/prepare-embedding-model.js
 !scripts/recorder/
+
+# Bundled embedding model — ~449 MB, fetched at build time via prepare-models
+electron/models/
 
 # Model staleness check flag (dev-only)
 .models-stale

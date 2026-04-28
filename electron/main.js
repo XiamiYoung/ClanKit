@@ -556,10 +556,22 @@ app.whenReady().then(async () => {
 
   ensureDataDir()
 
-  // Initialize local RAG modules (path-only, no model loading)
+  // Initialize local RAG modules (path-only, no model loading).
+  //
+  // Embedding model resolution order:
+  //   1. BUNDLED — production: process.resourcesPath/models  (set in
+  //      electron-builder extraResources). Dev: <projectRoot>/electron/models/
+  //      so a developer who's run `node scripts/prepare-embedding-model.js`
+  //      sees the same code path as a packaged install.
+  //   2. USER DATA — {DATA_DIR}/models — back-compat for users who downloaded
+  //      under the old flow; new installs should never need this.
   const localEmbedding = require('./lib/localEmbedding')
   const localVectorStore = require('./lib/localVectorStore')
-  localEmbedding.init(ds.paths().MODELS_DIR)
+  const isPackaged = (require('electron').app).isPackaged
+  const bundledModelsDir = isPackaged
+    ? path.join(process.resourcesPath, 'models')
+    : path.join(__dirname, 'models')
+  localEmbedding.init(ds.paths().MODELS_DIR, bundledModelsDir)
   localVectorStore.init(ds.paths().DATA_DIR)
 
   await migrateChatsIfNeeded()

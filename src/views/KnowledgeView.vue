@@ -46,7 +46,7 @@
               <span class="switch-label-text">{{ knowledgeStore.ragEnabled ? t('knowledge.on') : t('knowledge.off') }}</span>
               <span v-if="saveMsg" class="save-msg" :class="saveMsg.ok ? 'save-ok' : 'save-err'">{{ saveMsg.text }}</span>
             </div>
-            <AppButton size="compact" @click="addMethodOpen = true" :disabled="!knowledgeStore.modelReady">
+            <AppButton size="compact" @click="addMethodOpen = true">
               <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
@@ -55,25 +55,10 @@
           </div>
         </div>
 
-        <!-- Model not ready — redirect to config (mirrors voice pattern) -->
-        <div v-if="!knowledgeStore.modelReady && !knowledgeStore.modelChecking" class="empty-state-card">
-          <div class="empty-icon-wrap">
-            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-              <line x1="12" y1="22.08" x2="12" y2="12"/>
-            </svg>
-          </div>
-          <h2 class="empty-title">{{ t('knowledge.embeddingModel') }}</h2>
-          <p class="empty-desc">{{ t('knowledge.modelRequired') }}</p>
-          <router-link to="/config?tab=knowledge" class="btn-primary compact" style="margin-top:1rem; display:inline-flex; align-items:center; gap:0.35rem; text-decoration:none;">
-            {{ t('common.goToConfig') }}
-            <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </router-link>
-        </div>
-
-        <!-- Main two-panel layout (only when model ready) -->
-        <template v-if="knowledgeStore.modelReady">
+        <!-- Main two-panel layout. Embedding model is now bundled with the
+             installer — no gating required. The empty-state model-download
+             prompt was removed in the bundled-model cutover. -->
+        <template v-if="true">
 
           <div class="index-layout">
 

@@ -19,11 +19,16 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   // Per-KB configs: { [kbId]: { enabled } }
   const kbConfigs = ref({})
 
-  // Embedding model status (mirrors voice local env pattern)
+  // Embedding model status. Post-bundle cutover: the model ships with the
+  // installer so `modelReady` is normally true the first time it's checked.
+  // The legacy download flow is retained as a no-op fallback in case a user's
+  // bundled files were corrupted or removed manually.
   const modelReady = ref(false)
   const modelChecking = ref(false)
-  const modelSetupProgress = ref(null)   // { step, progress, message }
+  const modelSetupProgress = ref(null)   // { step, progress, message } — legacy
   const modelSetupError = ref(null)
+  // Full info from the embedding engine: { modelId, version, sizeMB, source, ... }
+  const modelInfo = ref(null)
 
   // Computed: enabled knowledge bases
   const enabledKnowledgeBases = computed(() => {
@@ -228,9 +233,11 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     modelChecking.value = true
     try {
       const info = await window.electronAPI.knowledge.checkModel()
-      modelReady.value = info.ready
+      modelReady.value = !!info?.ready
+      modelInfo.value = info || null
     } catch (err) {
       modelReady.value = false
+      modelInfo.value = null
     } finally {
       modelChecking.value = false
     }
@@ -283,7 +290,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     knowledgeBases, selectedKbId, isLoading,
     documents, isLoadingDocs, isUploading, uploadProgress,
     ragEnabled, kbConfigs, enabledKnowledgeBases,
-    modelReady, modelChecking, modelSetupProgress, modelSetupError,
+    modelReady, modelChecking, modelSetupProgress, modelSetupError, modelInfo,
     loadConfig, saveConfig,
     loadKnowledgeBases, createKnowledgeBase, deleteKnowledgeBase,
     selectKnowledgeBase, toggleKbEnabled,

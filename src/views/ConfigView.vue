@@ -981,7 +981,9 @@
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
-        <!-- Knowledge (AI > Knowledge) — Embedding Model Setup -->
+        <!-- Knowledge (AI > Knowledge) — Embedding model info (read-only)
+             Model is now bundled with the installer, so this card is purely
+             informational. No download / remove buttons. -->
         <!-- ════════════════════════════════════════════════════════════════ -->
         <template v-if="activeTopTab === 'ai' && activeSubTab === 'knowledge'">
           <div class="config-card">
@@ -995,48 +997,32 @@
             <p class="hint" style="margin-bottom:1rem;">{{ t('knowledge.modelSpec') }}</p>
 
             <div class="form-group">
-              <label class="form-label">{{ t('knowledge.modelSource') }}</label>
-              <select v-model="knowledgeModelSource" class="field" style="max-width:16rem;">
-                <option value="huggingface">HuggingFace</option>
-                <option value="mirror">HF Mirror ({{ t('knowledge.modelSourceCN') }})</option>
-              </select>
-            </div>
-
-            <div class="form-divider"></div>
-            <div class="test-connection-row">
-              <div>
-                <p class="form-section-title" style="display:flex; align-items:center; gap:0.5rem;">
-                  <span v-if="knowledgeModelChecking" style="color:var(--c-text-muted); display:flex; align-items:center; gap:0.35rem;">
+              <div class="bundled-model-info">
+                <div class="bundled-model-row">
+                  <span class="bundled-model-label">{{ t('knowledge.modelName') }}</span>
+                  <span class="bundled-model-value">{{ knowledgeStore.modelInfo?.modelId || 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2' }}</span>
+                </div>
+                <div class="bundled-model-row">
+                  <span class="bundled-model-label">{{ t('knowledge.modelVersion') }}</span>
+                  <span class="bundled-model-value">{{ knowledgeStore.modelInfo?.version || '1.0.0' }}</span>
+                </div>
+                <div class="bundled-model-row">
+                  <span class="bundled-model-label">{{ t('knowledge.modelDimension') }}</span>
+                  <span class="bundled-model-value">{{ knowledgeStore.modelInfo?.dimension || 384 }}</span>
+                </div>
+                <div class="bundled-model-row">
+                  <span class="bundled-model-label">{{ t('knowledge.modelStatus') }}</span>
+                  <span v-if="knowledgeModelChecking" class="bundled-model-value" style="color:var(--c-text-muted); display:flex; align-items:center; gap:0.35rem;">
                     <svg class="icon-sm spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
                     {{ t('knowledge.modelChecking') }}
                   </span>
-                  <span v-else-if="knowledgeStore.modelReady" style="color:#10B981;">&#10003; {{ t('knowledge.modelReady') }}</span>
-                  <span v-else style="color:var(--c-text-muted);">{{ t('knowledge.modelNotDownloaded') }}</span>
-                </p>
-                <p class="hint" style="margin-top:2px;">{{ t('knowledge.modelSize') }}</p>
-              </div>
-              <div style="display:flex; gap:0.5rem;">
-                <AppButton v-if="!knowledgeStore.modelReady" size="compact" @click="setupKnowledgeModel" :disabled="settingUpKnowledgeModel || knowledgeModelChecking" :loading="settingUpKnowledgeModel">
-                  {{ settingUpKnowledgeModel ? t('knowledge.downloadingModel') : t('knowledge.downloadModel') }}
-                </AppButton>
-                <AppButton v-if="knowledgeStore.modelReady" size="compact" style="color:#EF4444;" @click="removeKnowledgeModel" :disabled="settingUpKnowledgeModel || removingKnowledgeModel" :loading="removingKnowledgeModel">
-                  {{ removingKnowledgeModel ? t('knowledge.removingModel') : t('knowledge.removeModel') }}
-                </AppButton>
-              </div>
-            </div>
-
-            <div v-if="knowledgeSetupProgress" style="margin-top:0.75rem;">
-              <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.25rem;">
-                <div style="flex:1; height:4px; background:var(--c-border); border-radius:2px; overflow:hidden;">
-                  <div style="height:100%; background:linear-gradient(135deg, #0F0F0F, #374151); transition:width 0.3s;" :style="{ width: Math.max(0, knowledgeSetupProgress.progress) + '%' }"></div>
+                  <span v-else-if="knowledgeStore.modelReady" class="bundled-model-value" style="color:#10B981;">
+                    &#10003; {{ t('knowledge.modelBundled') }}
+                  </span>
+                  <span v-else class="bundled-model-value" style="color:#EF4444;">{{ t('knowledge.modelNotBundled') }}</span>
                 </div>
-                <span style="font-size:var(--fs-small); color:var(--c-text-muted); min-width:3rem; text-align:right;">{{ knowledgeSetupProgress.progress }}%</span>
               </div>
-              <p class="hint">{{ knowledgeSetupProgress.message }}</p>
-            </div>
-            <div v-if="knowledgeSetupError" class="test-result error" style="margin-top:10px;">
-              <svg class="icon-sm shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span>{{ knowledgeSetupError }}</span>
+              <p class="hint" style="margin-top:0.5rem;">{{ t('knowledge.modelBundledHint') }}</p>
             </div>
           </div>
         </template>
@@ -3095,13 +3081,10 @@ function onUtilityProviderChange(providerType) {
 
 
 
-// Knowledge embedding model state
-const knowledgeModelSource = ref('huggingface')
+// Knowledge embedding model state — model is bundled now, so only the
+// "checking" flag drives any UI. Download / remove state was removed in the
+// bundled-model cutover.
 const knowledgeModelChecking = ref(false)
-const settingUpKnowledgeModel = ref(false)
-const removingKnowledgeModel = ref(false)
-const knowledgeSetupProgress = ref(null)
-const knowledgeSetupError = ref(null)
 const savedKnowledgeMsg = ref('')
 
 // Voice Call tab state
@@ -4951,27 +4934,6 @@ async function saveSkills() {
   }
 }
 
-async function setupKnowledgeModel() {
-  settingUpKnowledgeModel.value = true
-  knowledgeSetupProgress.value = null
-  knowledgeSetupError.value = null
-  const cleanup = window.electronAPI?.knowledge?.onSetupProgress?.((data) => {
-    knowledgeSetupProgress.value = data
-    if (data.step === 'error') knowledgeSetupError.value = data.message
-  })
-  try {
-    const result = await knowledgeStore.setupModel(knowledgeModelSource.value)
-    if (!result?.success) {
-      knowledgeSetupError.value = result?.error || 'Download failed'
-    }
-  } catch (err) {
-    knowledgeSetupError.value = err.message
-  } finally {
-    settingUpKnowledgeModel.value = false
-    if (cleanup) cleanup()
-  }
-}
-
 // ── Local Voice helpers ──────────────────────────────────────────────────
 const defaultLocalInstallPath = ref('')
 
@@ -5182,17 +5144,6 @@ async function testSmtpConnection() {
     testResultSmtp.value = { ok: false, message: err.message }
   } finally {
     testingSmtp.value = false
-  }
-}
-
-async function removeKnowledgeModel() {
-  removingKnowledgeModel.value = true
-  try {
-    await knowledgeStore.removeModel()
-  } catch (err) {
-    knowledgeSetupError.value = err.message
-  } finally {
-    removingKnowledgeModel.value = false
   }
 }
 
@@ -5460,6 +5411,34 @@ async function checkKnowledgeModelIfNeeded() {
 .model-list-item.selected {
   background: #1A1A1A;
   color: #FFFFFF;
+}
+
+/* ── Bundled-model info card (read-only) ────────────────────────────────── */
+.bundled-model-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 0.875rem;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+}
+.bundled-model-row {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  font-size: var(--fs-secondary);
+}
+.bundled-model-label {
+  color: var(--text-muted);
+  min-width: 5.5rem;
+  font-weight: 500;
+}
+.bundled-model-value {
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--fs-caption);
+  word-break: break-all;
 }
 
 /* ── Test connection row ────────────────────────────────────────────────── */
