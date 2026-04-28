@@ -16,11 +16,17 @@
         <!-- Body -->
         <div class="limit-body">
           <p class="limit-message">{{ message }}</p>
+          <p v-if="!isAuthenticated" class="limit-privacy-note">{{ t('limits.privacyNote') }}</p>
         </div>
 
         <!-- Footer -->
         <div class="limit-footer">
           <button class="limit-close-btn" @click="$emit('close')">{{ t('common.close') }}</button>
+          <button
+            v-if="!isAuthenticated"
+            class="limit-signin-btn"
+            @click="onSignIn"
+          >{{ t('limits.signInToUnlock') }}</button>
         </div>
       </div>
     </div>
@@ -29,9 +35,13 @@
 
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from '../../i18n/useI18n'
+import { useAuth } from '../../composables/useAuth'
 
 const { t } = useI18n()
+const router = useRouter()
+const { isAuthenticated } = useAuth()
 
 const props = defineProps({
   visible: {
@@ -45,6 +55,11 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close'])
+
+function onSignIn() {
+  emit('close')
+  router.push({ path: '/config', query: { tab: 'account' } })
+}
 
 function onKeydown(e) {
   if (e.key === 'Escape' && props.visible) {
@@ -134,30 +149,57 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown, true))
   margin: 0;
 }
 
+.limit-privacy-note {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-tiny, 0.75rem);
+  color: #6B7280;
+  line-height: 1.5;
+  margin: 0.75rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px dashed #1F1F1F;
+}
+
 .limit-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 0.5rem;
   padding: 0.875rem 1.25rem;
   border-top: 1px solid #1F1F1F;
   background: #0A0A0A;
 }
 
-.limit-close-btn {
+.limit-close-btn,
+.limit-signin-btn {
   padding: 0.5rem 1.25rem;
   border-radius: 0.5rem;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-body);
   font-weight: 600;
-  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151);
-  color: #fff;
-  border: 1px solid #374151;
   cursor: pointer;
   transition: all 0.15s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.limit-close-btn {
+  background: transparent;
+  color: #9CA3AF;
+  border: 1px solid #2A2A2A;
 }
 
 .limit-close-btn:hover {
+  background: #1A1A1A;
+  border-color: #374151;
+  color: #FFF;
+}
+
+.limit-signin-btn {
+  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151);
+  color: #fff;
+  border: 1px solid #374151;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.limit-signin-btn:hover {
   background: linear-gradient(135deg, #1A1A1A, #2D2D2D, #4B5563);
   border-color: #4B5563;
 }

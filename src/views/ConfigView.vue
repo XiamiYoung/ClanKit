@@ -132,6 +132,37 @@
             </div>
           </div>
 
+          <!-- Privacy + guest-limits panel — visible regardless of sign-in state -->
+          <div class="config-card account-privacy-card">
+            <div class="form-section-header">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <h3 class="form-section-title">{{ t('account.privacyTitle') }}</h3>
+            </div>
+            <ul class="account-privacy-list">
+              <li>{{ t('account.privacyBullet1') }}</li>
+              <li>{{ t('account.privacyBullet2') }}</li>
+              <li>{{ t('account.privacyBullet3') }}</li>
+              <li>{{ t('account.privacyBullet4') }}</li>
+            </ul>
+            <div v-if="!auth.isAuthenticated.value" class="account-limits-block">
+              <div class="account-limits-title">{{ t('account.guestLimitsTitle') }}</div>
+              <p class="account-limits-hint">{{ t('account.guestLimitsHint') }}</p>
+              <div class="account-limits-grid">
+                <div class="account-limit-cell"><span class="lim-num">15</span><span class="lim-lab">{{ t('nav.chats') }}</span></div>
+                <div class="account-limit-cell"><span class="lim-num">5</span><span class="lim-lab">{{ t('account.limitFolders') }}</span></div>
+                <div class="account-limit-cell"><span class="lim-num">20</span><span class="lim-lab">{{ t('nav.agents') }}</span></div>
+                <div class="account-limit-cell"><span class="lim-num">3</span><span class="lim-lab">{{ t('nav.userPersonas') }}</span></div>
+                <div class="account-limit-cell"><span class="lim-num">5</span><span class="lim-lab">{{ t('tasks.tabs.tasks') }}</span></div>
+                <div class="account-limit-cell"><span class="lim-num">5</span><span class="lim-lab">{{ t('tasks.tabs.plans') }}</span></div>
+              </div>
+            </div>
+          </div>
+
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
@@ -7038,6 +7069,60 @@ async function checkKnowledgeModelIfNeeded() {
   color: var(--text-secondary);
   max-width: 360px;
   line-height: 1.55;
+}
+
+.account-privacy-card { margin-top: 1rem; }
+.account-privacy-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+.account-privacy-list li {
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  padding: 0.15rem 0;
+}
+.account-limits-block {
+  margin-top: 1rem;
+  padding-top: 0.875rem;
+  border-top: 1px dashed var(--border-color, #E5E5EA);
+}
+.account-limits-title {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+.account-limits-hint {
+  margin: 0 0 0.75rem;
+  font-size: var(--fs-tiny, 0.75rem);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.account-limits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: 0.5rem;
+}
+.account-limit-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.5rem 0.625rem;
+  background: rgba(0, 0, 0, 0.025);
+  border: 1px solid var(--border-color, #E5E5EA);
+  border-radius: var(--radius-sm, 8px);
+}
+.account-limit-cell .lim-num {
+  font-size: var(--fs-subtitle);
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.account-limit-cell .lim-lab {
+  font-size: var(--fs-tiny, 0.75rem);
+  color: var(--text-secondary);
 }
 </style>
 

@@ -54,6 +54,13 @@
   <AuthDialog />
   <SessionExpiredDialog />
 
+  <!-- Global guest-limit modal — fired by stores (agents.js, tasks.js) without a wrapping view. -->
+  <PreviewLimitModal
+    :visible="globalLimitVisible"
+    :message="globalLimitMessage"
+    @close="closeGlobalLimit"
+  />
+
   <!-- New-chat blocker — fired from sidebar new-chat button or AgentCard "chat with agent" -->
   <ConfirmModal
     v-if="newChatBlockReason"
@@ -84,6 +91,8 @@ import MinibarOverlay from './components/focus/MinibarOverlay.vue'
 import AuthDialog from './components/common/AuthDialog.vue'
 import SessionExpiredDialog from './components/common/SessionExpiredDialog.vue'
 import ConfirmModal from './components/common/ConfirmModal.vue'
+import PreviewLimitModal from './components/common/PreviewLimitModal.vue'
+import { usePreviewLimit } from './composables/usePreviewLimit'
 import { useAuth } from './composables/useAuth'
 import { useNewChatGuard } from './composables/useNewChatGuard'
 import { useChatsStore }  from './stores/chats'
@@ -115,6 +124,7 @@ const toolsStore    = useToolsStore()
 const knowledgeStore = useKnowledgeStore()
 const focusModeStore = useFocusModeStore()
 const { blockReason: newChatBlockReason, clearBlock: clearNewChatBlock } = useNewChatGuard()
+const { visible: globalLimitVisible, message: globalLimitMessage, close: closeGlobalLimit } = usePreviewLimit()
 
 function onNewChatBlockConfirm() {
   const reason = newChatBlockReason.value

@@ -4,6 +4,8 @@ import { v4 as uuid } from 'uuid'
 import { useConfigStore } from './config'
 import { useChatsStore } from './chats'
 import { useAgentsStore } from './agents'
+import { isLimitEnforced, PREVIEW_LIMITS } from '../utils/guestLimits'
+import { triggerPreviewLimit } from '../composables/usePreviewLimit'
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
@@ -572,6 +574,12 @@ export const useTasksStore = defineStore('tasks', () => {
 
   async function saveTask(task) {
     if (!window.electronAPI?.tasks) return null
+    // Guest cap — only on the create path (id absent or not yet in tasks list).
+    const isNew = !task?.id || !tasks.value.some(t => t.id === task.id)
+    if (isNew && isLimitEnforced() && tasks.value.length >= PREVIEW_LIMITS.maxTasks) {
+      triggerPreviewLimit('maxTasks')
+      return { success: false, error: 'preview_limit:maxTasks' }
+    }
     try {
       const result = await window.electronAPI.tasks.save(task)
       if (result.success) await loadTasks()
@@ -600,6 +608,11 @@ export const useTasksStore = defineStore('tasks', () => {
 
   async function savePlan(plan) {
     if (!window.electronAPI?.plans) return null
+    const isNew = !plan?.id || !plans.value.some(p => p.id === plan.id)
+    if (isNew && isLimitEnforced() && plans.value.length >= PREVIEW_LIMITS.maxPlans) {
+      triggerPreviewLimit('maxPlans')
+      return { success: false, error: 'preview_limit:maxPlans' }
+    }
     try {
       const result = await window.electronAPI.plans.save(plan)
       if (result.success) await loadPlans()

@@ -9,6 +9,8 @@ import { useMcpStore } from './mcp'
 import { useSkillsStore } from './skills'
 import { useKnowledgeStore } from './knowledge'
 import { getDefaultVoiceForLocale } from '../utils/edgeVoices'
+import { isLimitEnforced, PREVIEW_LIMITS } from '../utils/guestLimits'
+import { triggerPreviewLimit } from '../composables/usePreviewLimit'
 
 // ── Built-in agents (non-deletable) ─────────────────────────────────────
 export const BUILTIN_SYSTEM_AGENT_ID = '__default_system__'
@@ -461,6 +463,16 @@ export const useAgentsStore = defineStore('agents', () => {
     // Create path: route by incoming type (default 'system')
     const type = agent.type === 'user' ? 'user' : 'system'
     const targetRef = _refForAgentType(type)
+    // Guest cap — enforced once at the chokepoint so every saveAgent caller
+    // (template install, import wizard, group creator, setup wizard) is covered.
+    if (isLimitEnforced()) {
+      const cap = type === 'user' ? PREVIEW_LIMITS.maxUserPersonas : PREVIEW_LIMITS.maxAgents
+      const limitKey = type === 'user' ? 'maxUserPersonas' : 'maxAgents'
+      if (targetRef.value.length >= cap) {
+        triggerPreviewLimit(limitKey)
+        throw new Error(`preview_limit:${limitKey}`)
+      }
+    }
     const newAgent = {
       id: uuidv4(),
       createdAt: Date.now(),

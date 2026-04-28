@@ -582,12 +582,17 @@ function openBodyViewer(agent) {
 }
 
 function createNew(type) {
-  if (isLimitEnforced() && agentsStore.agents.length >= PREVIEW_LIMITS.maxAgents) {
-    previewLimitMessage.value = t('limits.maxAgents')
-    showPreviewLimitModal.value = true
-    return
-  }
   const resolvedType = type || selectedView.agentType
+  if (isLimitEnforced()) {
+    const isUser = resolvedType === 'user'
+    const cap = isUser ? PREVIEW_LIMITS.maxUserPersonas : PREVIEW_LIMITS.maxAgents
+    const count = isUser ? agentsStore.userAgents.length : agentsStore.systemAgents.length
+    if (count >= cap) {
+      previewLimitMessage.value = t(isUser ? 'limits.maxUserPersonas' : 'limits.maxAgents')
+      showPreviewLimitModal.value = true
+      return
+    }
+  }
   const { providerId, modelId } = resolveDefaultProviderModel()
   bodyViewerAgent.value = {
     id: uuidv4(),
