@@ -204,7 +204,7 @@
                 </g>
 
                 <!-- TOOLS (left hand) -->
-                <g v-if="agentType === 'system'" class="bv-hotspot" :class="{ active: activePanel === 'tools' }" @click="togglePanel('tools')">
+                <g v-if="agentType === 'system'" class="bv-hotspot" :class="{ active: activePanel === 'tools', 'bv-tour-pulse': tourHighlightActive }" @click="togglePanel('tools')">
                   <line x1="56" y1="266" x2="18" y2="266" class="bv-hs-line"/>
                   <rect x="2" y="254" width="54" height="24" rx="12" class="bv-hs-label-bg"/>
                   <text x="29" y="270" text-anchor="middle" class="bv-hs-label">{{ t('agents.tools') }}</text>
@@ -213,7 +213,7 @@
                 </g>
 
                 <!-- SKILLS (right hand) -->
-                <g v-if="agentType === 'system'" class="bv-hotspot" :class="{ active: activePanel === 'skills' }" @click="togglePanel('skills')">
+                <g v-if="agentType === 'system'" class="bv-hotspot" :class="{ active: activePanel === 'skills', 'bv-tour-pulse': tourHighlightActive }" @click="togglePanel('skills')">
                   <line x1="264" y1="266" x2="302" y2="266" class="bv-hs-line"/>
                   <rect x="264" y="254" width="54" height="24" rx="12" class="bv-hs-label-bg"/>
                   <text x="291" y="270" text-anchor="middle" class="bv-hs-label">{{ t('agents.skills') }}</text>
@@ -222,7 +222,7 @@
                 </g>
 
                 <!-- KNOWLEDGE (belly center) -->
-                <g v-if="agentType === 'system'" class="bv-hotspot" :class="{ active: activePanel === 'knowledge' }" @click="togglePanel('knowledge')">
+                <g v-if="agentType === 'system'" class="bv-hotspot" :class="{ active: activePanel === 'knowledge', 'bv-tour-pulse': tourHighlightActive }" @click="togglePanel('knowledge')">
                   <line x1="145" y1="210" x2="80" y2="210" class="bv-hs-line"/>
                   <rect x="2" y="198" width="78" height="24" rx="12" class="bv-hs-label-bg"/>
                   <text x="41" y="214" text-anchor="middle" class="bv-hs-label">{{ t('agents.knowledge') }}</text>
@@ -231,7 +231,7 @@
                 </g>
 
                 <!-- MCP (right shin) -->
-                <g v-if="agentType === 'system'" class="bv-hotspot" :class="{ active: activePanel === 'mcp' }" @click="togglePanel('mcp')">
+                <g v-if="agentType === 'system'" class="bv-hotspot" :class="{ active: activePanel === 'mcp', 'bv-tour-pulse': tourHighlightActive }" @click="togglePanel('mcp')">
                   <line x1="202" y1="326" x2="248" y2="340" class="bv-hs-line"/>
                   <rect x="240" y="328" width="76" height="24" rx="12" class="bv-hs-label-bg"/>
                   <text x="278" y="344" text-anchor="middle" class="bv-hs-label">{{ t('agents.mcp') }}</text>
@@ -702,7 +702,7 @@
                 </div>
 
                 <!-- Tools -->
-                <div v-if="agentType === 'system'" class="bv-summary-row clickable" @click="togglePanel('tools')">
+                <div v-if="agentType === 'system'" class="bv-summary-row clickable" :class="{ 'bv-summary-spotlight': tourHighlightActive }" @click="togglePanel('tools')">
                   <span class="bv-summary-icon">🔧</span>
                   <div class="bv-summary-content">
                     <span class="bv-summary-label">{{ t('agents.tools') }}</span>
@@ -714,7 +714,7 @@
                 </div>
 
                 <!-- Skills -->
-                <div v-if="agentType === 'system'" class="bv-summary-row clickable" @click="togglePanel('skills')">
+                <div v-if="agentType === 'system'" class="bv-summary-row clickable" :class="{ 'bv-summary-spotlight': tourHighlightActive }" @click="togglePanel('skills')">
                   <span class="bv-summary-icon">⚡</span>
                   <div class="bv-summary-content">
                     <span class="bv-summary-label">{{ t('agents.skills') }}</span>
@@ -726,7 +726,7 @@
                 </div>
 
                 <!-- Knowledge -->
-                <div v-if="agentType === 'system'" class="bv-summary-row clickable" @click="togglePanel('knowledge')">
+                <div v-if="agentType === 'system'" class="bv-summary-row clickable" :class="{ 'bv-summary-spotlight': tourHighlightActive }" @click="togglePanel('knowledge')">
                   <span class="bv-summary-icon">📚</span>
                   <div class="bv-summary-content">
                     <span class="bv-summary-label">{{ t('agents.knowledge') }}</span>
@@ -738,7 +738,7 @@
                 </div>
 
                 <!-- MCP Servers -->
-                <div v-if="agentType === 'system'" class="bv-summary-row clickable" @click="togglePanel('mcp')">
+                <div v-if="agentType === 'system'" class="bv-summary-row clickable" :class="{ 'bv-summary-spotlight': tourHighlightActive }" @click="togglePanel('mcp')">
                   <span class="bv-summary-icon">🌐</span>
                   <div class="bv-summary-content">
                     <span class="bv-summary-label">{{ t('agents.mcp') }}</span>
@@ -839,6 +839,9 @@ const { t, locale } = useI18n()
 
 // ── Active panel ───────────────────────────────────────────────────────────
 const activePanel = ref(null)
+
+// Wizard tour: pulse the assignment hotspots when this agent is the highlight target
+const tourHighlightActive = computed(() => agentsStore.wizardHighlightAgentId && agentsStore.wizardHighlightAgentId === props.agentId)
 
 function togglePanel(panel) {
   activePanel.value = activePanel.value === panel ? null : panel
@@ -2159,6 +2162,24 @@ function saveAll() {
 .bv-hotspot:hover .bv-hs-label { fill: #7AAADD; }
 .bv-hotspot.active .bv-hs-label { fill: #7CB9FF; }
 
+/* Wizard tour pulse — draws attention to assignment hotspots */
+.bv-hotspot.bv-tour-pulse .bv-hs-circle {
+  animation: bv-tour-pulse-glow 1.4s ease-in-out infinite;
+  fill: rgba(56, 189, 248, 0.18);
+  stroke: #38BDF8;
+  stroke-width: 2;
+}
+.bv-hotspot.bv-tour-pulse .bv-hs-label-bg {
+  fill: rgba(56, 189, 248, 0.18);
+  stroke: #38BDF8;
+}
+.bv-hotspot.bv-tour-pulse .bv-hs-label { fill: #BAE6FD; }
+.bv-hotspot.bv-tour-pulse .bv-hs-line { stroke: #38BDF8; stroke-dasharray: none; }
+@keyframes bv-tour-pulse-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(56, 189, 248, 0.5)); }
+  50%      { filter: drop-shadow(0 0 10px rgba(56, 189, 248, 1)); }
+}
+
 .bv-figure-hint {
   display: flex;
   align-items: center;
@@ -2520,6 +2541,36 @@ function saveAll() {
 .bv-summary-row:last-child { border-bottom: none; }
 .bv-summary-row.clickable:hover { background: #141414; }
 .bv-summary-row.clickable:hover .bv-summary-chevron { color: #6B7280; }
+
+/* Wizard tour spotlight — draws attention to the 4 assignable categories */
+.bv-summary-row.bv-summary-spotlight {
+  position: relative;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+  animation: bv-summary-spotlight-glow 1.6s ease-in-out infinite;
+  z-index: 1;
+}
+.bv-summary-row.bv-summary-spotlight .bv-summary-label {
+  color: #FFFFFF;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.95);
+  font-weight: 800;
+}
+.bv-summary-row.bv-summary-spotlight .bv-summary-value {
+  color: #FFFFFF;
+}
+.bv-summary-row.bv-summary-spotlight .bv-summary-icon {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.95));
+}
+.bv-summary-row.bv-summary-spotlight .bv-summary-chevron {
+  color: #FFFFFF;
+}
+@keyframes bv-summary-spotlight-glow {
+  0%, 100% {
+    box-shadow: inset 4px 0 0 #FFFFFF, 0 0 10px rgba(255, 255, 255, 0.55), 0 0 18px rgba(255, 255, 255, 0.25);
+  }
+  50% {
+    box-shadow: inset 4px 0 0 #FFFFFF, 0 0 22px rgba(255, 255, 255, 1), 0 0 36px rgba(255, 255, 255, 0.55);
+  }
+}
 
 .bv-summary-icon {
   font-size: 1rem;

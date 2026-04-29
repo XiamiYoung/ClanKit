@@ -89,6 +89,43 @@ const chatLoadedSkills = new Map()     // chatId -> Map(skillId -> content) — 
 const lastExtractedMsgCount = new Map() // chatId -> message count at last extraction
 const pendingMemoryFacts = new Map()    // chatId -> Array of pending fact objects (medium-confidence)
 
+// ── Loop registry API for non-IPC AgentLoop entry points (IM bridge, future
+// task scheduler, etc). Iron-law three-piece: register before run, unregister
+// in finally, consume pending stop before run. Without this, the agent:stop
+// IPC can't reach the loop and chat.isRunning stays out of sync.
+function registerLoop(key, loop, meta) {
+  activeLoops.set(key, loop)
+  activeLoopMeta.set(key, meta || {})
+}
+function unregisterLoop(key) {
+  activeLoops.delete(key)
+  activeLoopMeta.delete(key)
+}
+function consumePendingStop(chatId) {
+  if (pendingStops.has(chatId)) {
+    pendingStops.delete(chatId)
+    return true
+  }
+  return false
+}
+
+// ── Per-chat cancellation flag for sequential per-agent fan-out (IM bridge's
+// for-loop over respondingIds). One Esc must break the whole loop, not just
+// kill the current agent and let the next one start. agent:stop sets this on
+// every call; routeMessage clears it on entry and checks it before each loop.
+const cancelledChats = new Set()
+function markChatCancelled(chatId) {
+  cancelledChats.add(chatId)
+  // Auto-clear so a stale cancellation can't sabotage a much later send.
+  setTimeout(() => cancelledChats.delete(chatId), 30000)
+}
+function isChatCancelled(chatId) {
+  return cancelledChats.has(chatId)
+}
+function clearChatCancelled(chatId) {
+  cancelledChats.delete(chatId)
+}
+
 /**
  * Build synthetic skill-injection message pair from a Map of loaded skills.
  * Returns an array of two messages (user + assistant) if skills exist, empty array otherwise.
@@ -1013,6 +1050,10 @@ ipcMain.handle('agent:run-additional', async (event, {
 
 ipcMain.handle('agent:stop', (event, chatId) => {
   if (chatId) {
+    // Always mark this chat as cancelled — stops any sequential per-agent
+    // fan-out (IM bridge's for-loop over respondingIds) from spawning a
+    // fresh AgentLoop after we just killed the current one.
+    markChatCancelled(chatId)
     let stopped = false
     // Stop exact match and all group agent loops (chatId:agentId)
     for (const [key, loop] of activeLoops) {
@@ -2513,6 +2554,7 @@ ipcMain.handle('agent:send-message', async (event, {
         run.agentPrompts = prompts
       }
 
+
       // Check if user already pressed stop before the loop was created (race condition fix)
       if (pendingStops.has(chatId)) {
         pendingStops.delete(chatId)
@@ -3019,4 +3061,4 @@ ipcMain.handle('agent:send-message', async (event, {
 
 }
 
-module.exports = { register, activeLoops, activeLoopMeta, lastContextSnapshots, lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtraction, _runStartupIndexRecovery, readMemoryFileSync, chatLoadedSkills, _buildSkillInjectionMessages, _injectSkillsIntoRuns }
+module.exports = { register, activeLoops, activeLoopMeta, lastContextSnapshots, lastExtractedMsgCount, pendingMemoryFacts, runMemoryExtraction, _runStartupIndexRecovery, readMemoryFileSync, chatLoadedSkills, _buildSkillInjectionMessages, _injectSkillsIntoRuns, registerLoop, unregisterLoop, consumePendingStop, markChatCancelled, isChatCancelled, clearChatCancelled, classifyError: _classifyError }

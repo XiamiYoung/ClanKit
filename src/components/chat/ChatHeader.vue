@@ -208,74 +208,92 @@
 
   <!-- ── User Agent Modal ── -->
   <Teleport to="body">
-    <div v-if="showUsrPopover" class="ch-modal-backdrop">
-      <div class="ch-modal" role="dialog" aria-modal="true">
-        <div class="ch-modal-header">
-          <div class="ch-modal-header-icon">
-            <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <span class="ch-modal-title">{{ t('chats.userAgent') }}</span>
-          <button class="ch-modal-close" @click="showUsrPopover = false">
-            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    <div v-if="showUsrPopover" class="modal-dialog-backdrop">
+      <div class="modal-dialog-container ch-picker-dialog" role="dialog" aria-modal="true" @keydown.escape.stop="showUsrPopover = false">
+        <div class="modal-dialog-header">
+          <h3 class="modal-dialog-title">{{ t('chats.userPersona') }}</h3>
+          <button class="modal-dialog-close-btn" @click="showUsrPopover = false" :aria-label="t('common.close')">
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
-        <div class="ch-modal-body">
-          <!-- User categories -->
-          <div v-for="cat in agentsStore.userCategories" :key="cat.id" class="ch-cat-section">
-            <button class="ch-cat-header" @click="toggleUserCat(cat.id)">
-              <svg class="ch-cat-chevron" :class="{ expanded: expandedUserCatIds.has(cat.id) }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-              <span v-if="cat.emoji" class="ch-cat-emoji">{{ cat.emoji }}</span>
-              <span class="ch-cat-name">{{ cat.name }}</span>
-              <span class="ch-cat-count">{{ agentsStore.agentsInCategory(cat.id).length }}</span>
-            </button>
-            <div v-if="expandedUserCatIds.has(cat.id)" class="ch-cat-items">
-              <button
-                v-for="p in agentsStore.agentsInCategory(cat.id)"
-                :key="p.id"
-                class="ch-modal-item"
-                :class="{ selected: resolvedUserAgentId === p.id }"
-                @click="selectAgent('user', p.id)"
-              >
-                <div class="ch-modal-item-avatar">
-                  <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
-                  <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+        <div class="modal-dialog-body ch-picker-body">
+          <section class="np-section">
+            <header class="np-section-header">
+              <div class="np-section-title-row">
+                <h4 class="np-section-title">{{ t('chats.userPersona') }}</h4>
+                <span class="np-section-hint">{{ activeUserAgent?.name || t('common.default') }}</span>
+              </div>
+              <div class="np-search-wrap">
+                <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input v-model="userSearchQuery" type="text" :placeholder="t('chats.searchAgents')" class="np-search-input" @keydown.stop />
+                <button v-if="userSearchQuery" class="np-search-clear" @click="userSearchQuery = ''" :aria-label="t('common.clear')">
+                  <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+              </div>
+            </header>
+            <!-- Search mode: flat grid -->
+            <template v-if="userSearchQuery.trim()">
+              <div class="np-agent-grid np-agent-grid--scroll" v-if="filteredUserAgents.length > 0">
+                <AgentCardItem
+                  v-for="p in filteredUserAgents" :key="p.id"
+                  :agent="p" :selected="resolvedUserAgentId === p.id"
+                  :show-default="p.id === defaultUserAgentId" kind="user"
+                  @click="selectAgent('user', p.id)"
+                />
+              </div>
+              <div v-else class="np-empty">{{ t('chats.noAgentsMatch') }}</div>
+            </template>
+            <!-- Grouped mode: by category -->
+            <template v-else>
+              <div class="np-grouped-list" v-if="sortedUserAgents.length > 0">
+                <div class="np-cat-group np-cat-group--default" v-if="defaultUserAgentObj">
+                  <div class="np-cat-group-header">
+                    <span class="np-cat-group-emoji">⭐</span>
+                    <span class="np-cat-group-name">{{ t('common.default') }}</span>
+                  </div>
+                  <div class="np-agent-grid np-agent-grid--in-group">
+                    <AgentCardItem
+                      :agent="defaultUserAgentObj" :selected="resolvedUserAgentId === defaultUserAgentObj.id"
+                      :show-default="true" kind="user"
+                      @click="selectAgent('user', defaultUserAgentObj.id)"
+                    />
+                  </div>
                 </div>
-                <div class="ch-modal-item-text">
-                  <span class="ch-modal-item-name">{{ p.name }}</span>
-                  <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+                <template v-for="cat in agentsStore.userCategories" :key="cat.id">
+                  <div class="np-cat-group" v-if="agentsInUserCatLocal(cat.id).length > 0">
+                    <div class="np-cat-group-header">
+                      <span v-if="cat.emoji" class="np-cat-group-emoji">{{ cat.emoji }}</span>
+                      <span class="np-cat-group-name">{{ cat.name }}</span>
+                      <span class="np-cat-group-count">{{ agentsInUserCatLocal(cat.id).length }}</span>
+                    </div>
+                    <div class="np-agent-grid np-agent-grid--in-group">
+                      <AgentCardItem
+                        v-for="p in agentsInUserCatLocal(cat.id)" :key="p.id"
+                        :agent="p" :selected="resolvedUserAgentId === p.id"
+                        :show-default="p.id === defaultUserAgentId" kind="user"
+                        @click="selectAgent('user', p.id)"
+                      />
+                    </div>
+                  </div>
+                </template>
+                <div class="np-cat-group" v-if="uncatUserAgents.length > 0">
+                  <div class="np-cat-group-header">
+                    <span class="np-cat-group-name">{{ t('agents.uncategorized') }}</span>
+                    <span class="np-cat-group-count">{{ uncatUserAgents.length }}</span>
+                  </div>
+                  <div class="np-agent-grid np-agent-grid--in-group">
+                    <AgentCardItem
+                      v-for="p in uncatUserAgents" :key="p.id"
+                      :agent="p" :selected="resolvedUserAgentId === p.id"
+                      :show-default="p.id === defaultUserAgentId" kind="user"
+                      @click="selectAgent('user', p.id)"
+                    />
+                  </div>
                 </div>
-                <svg v-if="resolvedUserAgentId === p.id" class="ch-modal-check" style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-              <div v-if="agentsStore.agentsInCategory(cat.id).length === 0" class="ch-cat-empty">No agents</div>
-            </div>
-          </div>
-          <!-- All (fallback) section — always last -->
-          <div class="ch-cat-section">
-            <button class="ch-cat-header" @click="toggleUserCat('__all__')">
-              <svg class="ch-cat-chevron" :class="{ expanded: expandedUserCatIds.has('__all__') }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-              <span class="ch-cat-name">All</span>
-              <span class="ch-cat-count">{{ sortedUserAgents.length }}</span>
-            </button>
-            <div v-if="expandedUserCatIds.has('__all__')" class="ch-cat-items">
-              <button
-                v-for="p in sortedUserAgents"
-                :key="p.id"
-                class="ch-modal-item"
-                :class="{ selected: resolvedUserAgentId === p.id }"
-                @click="selectAgent('user', p.id)"
-              >
-                <div class="ch-modal-item-avatar">
-                  <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
-                  <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
-                </div>
-                <div class="ch-modal-item-text">
-                  <span class="ch-modal-item-name">{{ p.name }}</span>
-                  <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
-                </div>
-                <svg v-if="resolvedUserAgentId === p.id" class="ch-modal-check" style="width:16px;height:16px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-            </div>
-          </div>
+              </div>
+              <div v-else class="np-empty">{{ t('agents.noUserAgents', 'No user agents yet') }}</div>
+            </template>
+          </section>
         </div>
       </div>
     </div>
@@ -283,114 +301,96 @@
 
   <!-- ── System Agent Picker Modal ── -->
   <Teleport to="body">
-    <div v-if="showGroupAddPopover" class="ch-modal-backdrop">
-      <div class="ch-modal" role="dialog" aria-modal="true">
-        <div class="ch-modal-header">
-          <div class="ch-modal-header-icon">
-            <svg style="width:15px;height:15px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><path d="M4 12h16"/><path d="M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1"/><path d="M9 16h0"/><path d="M15 16h0"/></svg>
-          </div>
-          <span class="ch-modal-title">{{ t('chats.systemAgents') }}</span>
-          <button class="ch-modal-close" @click="showGroupAddPopover = false">
-            <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    <div v-if="showGroupAddPopover" class="modal-dialog-backdrop">
+      <div class="modal-dialog-container ch-picker-dialog" role="dialog" aria-modal="true" @keydown.escape.stop="showGroupAddPopover = false">
+        <div class="modal-dialog-header">
+          <h3 class="modal-dialog-title">{{ t('chats.systemAgents') }}</h3>
+          <button class="modal-dialog-close-btn" @click="showGroupAddPopover = false" :aria-label="t('common.close')">
+            <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
-        <div class="ch-modal-search">
-          <svg style="width:14px;height:14px;flex-shrink:0;color:#6B7280;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input
-            ref="agentSearchEl"
-            v-model="agentSearchQuery"
-            type="text"
-            :placeholder="t('chats.searchAgents')"
-            class="ch-modal-search-input"
-          />
-        </div>
-        <div class="ch-modal-body">
-          <!-- When searching: flat filtered list -->
-          <template v-if="agentSearchQuery.trim()">
-            <label
-              v-for="p in filteredSystemAgents"
-              :key="p.id"
-              class="ch-modal-item ch-modal-item-check"
-              :class="{ selected: activeSystemAgentIds.includes(p.id) }"
-            >
-              <div class="ch-modal-check-box" :class="{ checked: activeSystemAgentIds.includes(p.id) }">
-                <input type="checkbox" :checked="activeSystemAgentIds.includes(p.id)" @change="toggleSystemAgent(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
-                <svg v-if="activeSystemAgentIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+        <div class="modal-dialog-body ch-picker-body">
+          <section class="np-section">
+            <header class="np-section-header">
+              <div class="np-section-title-row">
+                <h4 class="np-section-title">{{ t('chats.systemAgents') }}</h4>
+                <span class="np-section-hint">
+                  {{ activeSystemAgentIds.length === 0
+                    ? t('chats.defaultSystemPersona')
+                    : t('chats.systemPersonaSelected', undefined, { count: activeSystemAgentIds.length }) }}
+                </span>
               </div>
-              <div class="ch-modal-item-avatar">
-                <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
-                <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+              <div class="np-search-wrap">
+                <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input ref="agentSearchEl" v-model="agentSearchQuery" type="text" :placeholder="t('chats.searchAgents')" class="np-search-input" @keydown.stop />
+                <button v-if="agentSearchQuery" class="np-search-clear" @click="agentSearchQuery = ''" :aria-label="t('common.clear')">
+                  <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
               </div>
-              <div class="ch-modal-item-text">
-                <span class="ch-modal-item-name">{{ p.name }}</span>
-                <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+            </header>
+            <!-- Search mode: flat grid -->
+            <template v-if="agentSearchQuery.trim()">
+              <div class="np-agent-grid np-agent-grid--scroll" v-if="filteredSystemAgents.length > 0">
+                <AgentCardItem
+                  v-for="p in filteredSystemAgents" :key="p.id"
+                  :agent="p" :selected="activeSystemAgentIds.includes(p.id)"
+                  :show-default="p.id === defaultSystemAgentId" kind="system"
+                  @click="toggleSystemAgent(p.id)"
+                />
               </div>
-            </label>
-            <div v-if="filteredSystemAgents.length === 0" class="ch-modal-empty">{{ t('chats.noAgentsMatch') }}</div>
-          </template>
-          <!-- No search: category tree -->
-          <template v-else>
-            <!-- System categories -->
-            <div v-for="cat in agentsStore.systemCategories" :key="cat.id" class="ch-cat-section">
-              <button class="ch-cat-header" @click="toggleSysCat(cat.id)">
-                <svg class="ch-cat-chevron" :class="{ expanded: expandedSysCatIds.has(cat.id) }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                <span v-if="cat.emoji" class="ch-cat-emoji">{{ cat.emoji }}</span>
-                <span class="ch-cat-name">{{ cat.name }}</span>
-                <span class="ch-cat-count">{{ agentsStore.agentsInCategory(cat.id).length }}</span>
-              </button>
-              <div v-if="expandedSysCatIds.has(cat.id)" class="ch-cat-items">
-                <label
-                  v-for="p in agentsStore.agentsInCategory(cat.id)"
-                  :key="p.id"
-                  class="ch-modal-item ch-modal-item-check"
-                  :class="{ selected: activeSystemAgentIds.includes(p.id) }"
-                >
-                  <div class="ch-modal-check-box" :class="{ checked: activeSystemAgentIds.includes(p.id) }">
-                    <input type="checkbox" :checked="activeSystemAgentIds.includes(p.id)" @change="toggleSystemAgent(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
-                    <svg v-if="activeSystemAgentIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+              <div v-else class="np-empty">{{ t('chats.noAgentsMatch') }}</div>
+            </template>
+            <!-- Grouped mode: by category -->
+            <template v-else>
+              <div class="np-grouped-list" v-if="sortedSystemAgents.length > 0">
+                <div class="np-cat-group np-cat-group--default" v-if="defaultSystemAgentObj">
+                  <div class="np-cat-group-header">
+                    <span class="np-cat-group-emoji">⭐</span>
+                    <span class="np-cat-group-name">{{ t('common.default') }}</span>
                   </div>
-                  <div class="ch-modal-item-avatar">
-                    <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
-                    <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
+                  <div class="np-agent-grid np-agent-grid--in-group">
+                    <AgentCardItem
+                      :agent="defaultSystemAgentObj" :selected="activeSystemAgentIds.includes(defaultSystemAgentObj.id)"
+                      :show-default="true" kind="system"
+                      @click="toggleSystemAgent(defaultSystemAgentObj.id)"
+                    />
                   </div>
-                  <div class="ch-modal-item-text">
-                    <span class="ch-modal-item-name">{{ p.name }}</span>
-                    <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
+                </div>
+                <template v-for="cat in agentsStore.systemCategories" :key="cat.id">
+                  <div class="np-cat-group" v-if="agentsInSysCatLocal(cat.id).length > 0">
+                    <div class="np-cat-group-header">
+                      <span v-if="cat.emoji" class="np-cat-group-emoji">{{ cat.emoji }}</span>
+                      <span class="np-cat-group-name">{{ cat.name }}</span>
+                      <span class="np-cat-group-count">{{ agentsInSysCatLocal(cat.id).length }}</span>
+                    </div>
+                    <div class="np-agent-grid np-agent-grid--in-group">
+                      <AgentCardItem
+                        v-for="p in agentsInSysCatLocal(cat.id)" :key="p.id"
+                        :agent="p" :selected="activeSystemAgentIds.includes(p.id)"
+                        :show-default="p.id === defaultSystemAgentId" kind="system"
+                        @click="toggleSystemAgent(p.id)"
+                      />
+                    </div>
                   </div>
-                </label>
-                <div v-if="agentsStore.agentsInCategory(cat.id).length === 0" class="ch-cat-empty">No agents</div>
+                </template>
+                <div class="np-cat-group" v-if="uncatSystemAgents.length > 0">
+                  <div class="np-cat-group-header">
+                    <span class="np-cat-group-name">{{ t('agents.uncategorized') }}</span>
+                    <span class="np-cat-group-count">{{ uncatSystemAgents.length }}</span>
+                  </div>
+                  <div class="np-agent-grid np-agent-grid--in-group">
+                    <AgentCardItem
+                      v-for="p in uncatSystemAgents" :key="p.id"
+                      :agent="p" :selected="activeSystemAgentIds.includes(p.id)"
+                      :show-default="p.id === defaultSystemAgentId" kind="system"
+                      @click="toggleSystemAgent(p.id)"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-            <!-- All (fallback) section — always last -->
-            <div class="ch-cat-section">
-              <button class="ch-cat-header" @click="toggleSysCat('__all__')">
-                <svg class="ch-cat-chevron" :class="{ expanded: expandedSysCatIds.has('__all__') }" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                <span class="ch-cat-name">All</span>
-                <span class="ch-cat-count">{{ sortedSystemAgents.length }}</span>
-              </button>
-              <div v-if="expandedSysCatIds.has('__all__')" class="ch-cat-items">
-                <label
-                  v-for="p in sortedSystemAgents"
-                  :key="p.id"
-                  class="ch-modal-item ch-modal-item-check"
-                  :class="{ selected: activeSystemAgentIds.includes(p.id) }"
-                >
-                  <div class="ch-modal-check-box" :class="{ checked: activeSystemAgentIds.includes(p.id) }">
-                    <input type="checkbox" :checked="activeSystemAgentIds.includes(p.id)" @change="toggleSystemAgent(p.id)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;" />
-                    <svg v-if="activeSystemAgentIds.includes(p.id)" style="width:11px;height:11px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                  </div>
-                  <div class="ch-modal-item-avatar">
-                    <img v-if="getAvatarDataUriForAgent(p)" :src="getAvatarDataUriForAgent(p)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" />
-                    <span v-else class="ch-modal-avatar-fallback">{{ p.name.charAt(0) }}</span>
-                  </div>
-                  <div class="ch-modal-item-text">
-                    <span class="ch-modal-item-name">{{ p.name }}</span>
-                    <span v-if="p.description" class="ch-modal-item-desc">{{ p.description }}</span>
-                  </div>
-                </label>
-              </div>
-            </div>
-          </template>
+              <div v-else class="np-empty">{{ t('agents.noSystemAgents', 'No system agents yet') }}</div>
+            </template>
+          </section>
         </div>
       </div>
     </div>
@@ -460,6 +460,7 @@ import { getAvatarDataUri } from '../agents/agentAvatars'
 import { estimateToolTokens, estimateMcpTokens, formatTokens } from '../../utils/tokenEstimate'
 import { useVoiceStore } from '../../stores/voice'
 import { useI18n } from '../../i18n/useI18n'
+import AgentCardItem from './AgentCardItem.js'
 
 const { t } = useI18n()
 
@@ -616,14 +617,13 @@ function cancelEdit() {
 // ── User agent popover ──
 const showUsrPopover = ref(false)
 const usrChipWrap = ref(null)
-const expandedUserCatIds = ref(new Set())
+const userSearchQuery = ref('')
 
 // ── Group add popover ──
 const showGroupAddPopover = ref(false)
 const groupAddChipWrap = ref(null)
 const agentSearchEl = ref(null)
 const agentSearchQuery = ref('')
-const expandedSysCatIds = ref(new Set())
 
 // ── Own tooltip state (not shared with parent) ──
 const tooltipState = reactive({ visible: false, name: '', providerModel: '', text: '', x: 0, y: 0, flipY: false })
@@ -687,22 +687,49 @@ const filteredSystemAgents = computed(() => {
   )
 })
 
-// ── Category tree toggle helpers ──
-function toggleUserCat(id) {
-  const s = new Set(expandedUserCatIds.value)
-  s.has(id) ? s.delete(id) : s.add(id)
-  expandedUserCatIds.value = s
+// ── Agent grouping helpers (for picker modals) ──
+const defaultUserAgentId = computed(() => agentsStore.defaultUserAgent?.id || null)
+const defaultSystemAgentId = computed(() => agentsStore.defaultSystemAgent?.id || null)
+const defaultUserAgentObj = computed(() => agentsStore.defaultUserAgent || null)
+const defaultSystemAgentObj = computed(() => agentsStore.defaultSystemAgent || null)
+
+function agentsInUserCatLocal(catId) {
+  return sortedUserAgents.value.filter(a =>
+    a.id !== defaultUserAgentId.value &&
+    Array.isArray(a.categoryIds) && a.categoryIds.includes(catId)
+  )
 }
-function toggleSysCat(id) {
-  const s = new Set(expandedSysCatIds.value)
-  s.has(id) ? s.delete(id) : s.add(id)
-  expandedSysCatIds.value = s
+function agentsInSysCatLocal(catId) {
+  return sortedSystemAgents.value.filter(a =>
+    a.id !== defaultSystemAgentId.value &&
+    Array.isArray(a.categoryIds) && a.categoryIds.includes(catId)
+  )
 }
+const uncatUserAgents = computed(() =>
+  sortedUserAgents.value.filter(a =>
+    a.id !== defaultUserAgentId.value &&
+    (!Array.isArray(a.categoryIds) || a.categoryIds.length === 0)
+  )
+)
+const uncatSystemAgents = computed(() =>
+  sortedSystemAgents.value.filter(a =>
+    a.id !== defaultSystemAgentId.value &&
+    (!Array.isArray(a.categoryIds) || a.categoryIds.length === 0)
+  )
+)
+const filteredUserAgents = computed(() => {
+  const q = userSearchQuery.value.toLowerCase().trim()
+  if (!q) return sortedUserAgents.value
+  return sortedUserAgents.value.filter(p =>
+    p.name.toLowerCase().includes(q) ||
+    (p.description && p.description.toLowerCase().includes(q))
+  )
+})
 
 // ── Popover functions ──
 function togglePopover(type) {
   if (type === 'user') {
-    expandedUserCatIds.value = new Set()
+    userSearchQuery.value = ''
     showUsrPopover.value = !showUsrPopover.value
   }
 }
@@ -736,7 +763,6 @@ function openAgentCombobox() {
   showGroupAddPopover.value = !showGroupAddPopover.value
   if (showGroupAddPopover.value) {
     agentSearchQuery.value = ''
-    expandedSysCatIds.value = new Set()
     nextTick(() => agentSearchEl.value?.focus())
   }
 }
@@ -1345,6 +1371,32 @@ const effectiveAgentRounds = computed(() => {
   white-space: nowrap;
   pointer-events: none;
   box-shadow: 0 4px 12px rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.12);
+}
+
+/* ── Single-section agent picker modal ── */
+.ch-picker-dialog {
+  width: min(90rem, 96vw);
+  min-width: min(52rem, 96vw);
+  height: 80vh;
+  min-height: min(36rem, 92vh);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ch-picker-dialog .modal-dialog-body {
+  padding: 0.75rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.ch-picker-dialog .np-grouped-list {
+  max-height: none;
+}
+.ch-picker-dialog .np-agent-grid--scroll {
+  max-height: none;
 }
 
 /* ── Agent modals (teleported) ── */

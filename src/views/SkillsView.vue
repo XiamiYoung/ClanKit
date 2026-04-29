@@ -113,9 +113,7 @@
           :title="t('skills.noSkillsFound')"
           :description="t('skills.emptyGuideDesc')"
           :useCases="[t('skills.emptyGuideUseCase1'), t('skills.emptyGuideUseCase2'), t('skills.emptyGuideUseCase3')]"
-          :ctaLabel="t('skills.createViaChat')"
           :secondaryLabel="t('skills.browseAndInstall')"
-          @create="startChatGuide(t('skills.emptyGuideChatMsg'), t('skills.title'))"
           @secondary="switchTab('tencent')"
         >
           <template #icon>

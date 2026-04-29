@@ -27,6 +27,11 @@
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
           </AppButton>
+          <AppButton size="icon" @click="addMethodOpen = true" v-tooltip="t('knowledge.createKnowledgeBase')">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </AppButton>
         </div>
       </div>
     </div>
@@ -46,12 +51,6 @@
               <span class="switch-label-text">{{ knowledgeStore.ragEnabled ? t('knowledge.on') : t('knowledge.off') }}</span>
               <span v-if="saveMsg" class="save-msg" :class="saveMsg.ok ? 'save-ok' : 'save-err'">{{ saveMsg.text }}</span>
             </div>
-            <AppButton size="compact" @click="addMethodOpen = true">
-              <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              {{ t('knowledge.createKnowledgeBase') }}
-            </AppButton>
           </div>
         </div>
 
@@ -75,8 +74,6 @@
                   :title="t('knowledge.title')"
                   :description="t('knowledge.emptyGuideDesc')"
                   :useCases="[t('knowledge.emptyGuideUseCase1'), t('knowledge.emptyGuideUseCase2')]"
-                  :ctaLabel="t('knowledge.createViaChat')"
-                  @create="startChatGuide(t('knowledge.emptyGuideChatMsg'), t('knowledge.title'))"
                 />
               </div>
               <div v-else class="index-list">

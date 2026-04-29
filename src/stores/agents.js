@@ -68,7 +68,7 @@ function buildBuiltinDocEditorCopy(locale, utilityModel) {
     isBuiltin: true,
     createdAt: 0,
     updatedAt: 0,
-    requiredToolIds: [],
+    requiredToolIds: ['file_operation'],
     requiredSkillIds: ['pdf', 'docx', 'pptx', 'xlsx'],
     requiredMcpServerIds: [],
     requiredKnowledgeBaseIds: [],
@@ -132,6 +132,8 @@ export const useAgentsStore = defineStore('agents', () => {
   const _userAgents       = ref([])
   const _systemCategories = ref([])
   const _userCategories   = ref([])
+
+  const wizardHighlightAgentId = ref(null)
 
   const configStore = useConfigStore()
   const toolsStore = useToolsStore()
@@ -671,5 +673,7 @@ export const useAgentsStore = defineStore('agents', () => {
     cleanStaleKnowledgeRefs,
     // Plan usage protection
     isAgentUsedInPlans, agentPlanUsageCount,
+    // Wizard tour highlight (drives BodyViewer auto-open + section glow)
+    wizardHighlightAgentId,
   }
 })

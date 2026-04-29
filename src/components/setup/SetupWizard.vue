@@ -5,6 +5,13 @@
 
         <!-- ═══ WIZARD PHASE ═══ -->
         <template v-if="phase === 'steps'">
+          <!-- Configure later row — centered above step indicators -->
+          <div class="sw-dismiss-row">
+            <button class="sw-dismiss-btn" @click="skipSetup">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:0.75rem;height:0.75rem;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              {{ t('setupWizard.configureLater') }}
+            </button>
+          </div>
           <!-- Step indicator -->
           <div class="sw-steps-bar">
             <div
@@ -52,13 +59,18 @@
               </div>
             </template>
 
-            <!-- Step 2: Choose how to use ClankAI — Google or email-based account. -->
+            <!-- Step 2: Account (optional) -->
             <template v-else-if="step === 2">
               <div class="sw-step-content sw-step-auth">
                 <AuthForm :reset-signal="0" :signup-only="true" @success="onAuthStepSuccess" />
-                <button class="sw-btn-text sw-auth-skip" @click="onAuthStepSkip">
+                <button class="sw-auth-skip-card" @click="onAuthStepSkip">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   {{ t('setupWizard.signInLater') }}
                 </button>
+                <p class="sw-auth-privacy-hint">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:0.75rem;height:0.75rem;flex-shrink:0;color:#6EE7B7;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  {{ t('setupWizard.authPrivacyBody') }}
+                </p>
               </div>
             </template>
 
@@ -160,16 +172,18 @@
                   </div>
                 </template>
                 <div class="sw-form-group">
-                  <div class="sw-input-row">
-                    <AppButton size="compact" @click="handleTestConnection" :disabled="testingConnection || !canTest" :loading="testingConnection">
-                      {{ testingConnection ? t('setupWizard.testing') : t('setupWizard.testConnection') }}
-                    </AppButton>
-                  </div>
                   <div v-if="testResult" class="sw-test-result" :class="testResult.ok ? 'success' : 'error'">
                     <svg v-if="testResult.ok" style="width:1rem;height:1rem;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                     <svg v-else style="width:1rem;height:1rem;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    <span>{{ testResult.ok ? t('setupWizard.testSuccess') : (testResult.message || t('setupWizard.testFailed')) }}</span>
+                    <span style="flex:1;">{{ testResult.ok ? t('setupWizard.testSuccess') : (testResult.message || t('setupWizard.testFailed')) }}</span>
+                    <button class="sw-retest-btn" @click="handleTestConnection" :disabled="testingConnection">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:0.75rem;height:0.75rem;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                      {{ t('setupWizard.retest') }}
+                    </button>
                   </div>
+                  <AppButton v-else size="compact" style="width:100%;" @click="handleTestConnection" :disabled="testingConnection || !canTest" :loading="testingConnection">
+                    {{ testingConnection ? t('setupWizard.testing') : t('setupWizard.testConnection') }}
+                  </AppButton>
                 </div>
               </div>
             </template>
@@ -267,7 +281,6 @@
               </button>
             </div>
             <div class="sw-footer-right">
-              <button class="sw-btn-text" @click="skipSetup">{{ t('setupWizard.configureLater') }}</button>
               <AppButton v-if="step !== 2" variant="primary" size="modal" :disabled="!canProceed || aiGenerating || installingRecommended" :loading="aiGenerating || installingRecommended" @click="goNext">
                 {{ t('common.next') }}
               </AppButton>
@@ -323,34 +336,33 @@
               <!-- Skills page: loading / Install / Skip buttons -->
               <template v-if="isOnSkillsTourStep && !skillsInstalled">
                 <template v-if="skillsHubLoading">
-                  <AppButton variant="primary" size="modal" :loading="true" :disabled="true">
+                  <AppButton variant="primary" size="compact" :loading="true" :disabled="true">
                     {{ t('setupWizard.tourSkillsLoading') }}
                   </AppButton>
                 </template>
                 <template v-else-if="showSkillsDialog">
-                  <AppButton v-if="!installingSkills" variant="secondary" size="modal" @click="installSelectedSkills">
+                  <AppButton v-if="!installingSkills" variant="secondary" size="compact" @click="installSelectedSkills">
                     {{ t('setupWizard.tourSkillsInstall') }}
                   </AppButton>
-                  <AppButton v-else variant="secondary" size="modal" :loading="true" :disabled="true">
+                  <AppButton v-else variant="secondary" size="compact" :loading="true" :disabled="true">
                     {{ t('setupWizard.tourSkillsInstalling') }}
                   </AppButton>
-                  <AppButton variant="primary" size="modal" :disabled="installingSkills" @click="skipSkillsInstall">
+                  <AppButton variant="primary" size="compact" :disabled="installingSkills" @click="skipSkillsInstall">
                     {{ t('setupWizard.tourSkillsSkip') }}
                   </AppButton>
                 </template>
                 <template v-else>
-                  <!-- Hub error or no skills — skip only after load finished -->
                   <button class="sw-btn-text" @click="skipSkillsInstall">{{ t('setupWizard.tourSkillsSkip') }}</button>
                 </template>
               </template>
               <!-- Normal tour buttons -->
               <template v-else-if="tourStep < tourSteps.length">
-                <AppButton variant="primary" size="modal" @click="tourStep++; navigateTour()">
+                <AppButton variant="primary" size="compact" @click="tourStep++; navigateTour()">
                   {{ t('common.next') }}
                 </AppButton>
               </template>
               <template v-else>
-                <AppButton variant="primary" size="modal" @click="finishTour">
+                <AppButton variant="primary" size="compact" @click="finishTour">
                   {{ t('setupWizard.startChatting') }}
                 </AppButton>
               </template>
@@ -380,7 +392,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfigStore, PROVIDER_PRESETS } from '../../stores/config'
 import { useModelsStore } from '../../stores/models'
-import { useAgentsStore, BUILTIN_SYSTEM_AGENT_ID } from '../../stores/agents'
+import { useAgentsStore, BUILTIN_SYSTEM_AGENT_ID, BUILTIN_DOC_EDITOR_ID } from '../../stores/agents'
 import { useChatsStore } from '../../stores/chats'
 import { useSkillsStore } from '../../stores/skills'
 import { useI18n } from '../../i18n/useI18n'
@@ -651,6 +663,19 @@ async function handleFetchModels() {
     fetchingModels.value = false
   }
 }
+
+// Auto-test when model is selected (non-Anthropic)
+watch(selectedModelId, (newVal) => {
+  if (newVal && canTest.value && !testingConnection.value) handleTestConnection()
+})
+
+// Auto-test for Anthropic when sonnet model field is filled (debounced)
+let _anthropicTestTimer = null
+watch(anthropicSonnet, (newVal) => {
+  if (!newVal || !canTest.value || testingConnection.value) return
+  clearTimeout(_anthropicTestTimer)
+  _anthropicTestTimer = setTimeout(() => handleTestConnection(), 800)
+})
 
 async function handleTestConnection() {
   syncProviderFields()
@@ -930,7 +955,7 @@ const tourSteps = computed(() => [
   { route: '/tools', title: t('setupWizard.tourTools'), desc: t('setupWizard.tourToolsDesc') },
   { route: '/mcp', title: t('setupWizard.tourMcp'), desc: t('setupWizard.tourMcpDesc') },
   { route: '/knowledge', title: t('setupWizard.tourKnowledge'), desc: t('setupWizard.tourKnowledgeDesc') },
-  { route: '/agents', title: t('setupWizard.tourAssignReminder'), desc: t('setupWizard.tourAssignReminderDesc') },
+  { route: '/agents', title: t('setupWizard.tourAssignReminder'), desc: t('setupWizard.tourAssignReminderDesc'), highlightAssignBody: true },
   { route: '/news', title: t('setupWizard.tourNews'), desc: t('setupWizard.tourNewsDesc') },
   { route: '/notes', title: t('setupWizard.tourDocs'), desc: t('setupWizard.tourDocsDesc') },
 ])
@@ -1078,6 +1103,8 @@ function navigateTour() {
   if (s?.route === '/skills') fetchTopSkills()
   // Auto-seed default news feeds when landing on news tour step
   if (s?.route === '/news') seedDefaultNewsFeeds()
+  // Open Clank's BodyViewer with section highlights on the assign-reminder step
+  agentsStore.wizardHighlightAgentId = s?.highlightAssignBody ? BUILTIN_SYSTEM_AGENT_ID : null
 }
 
 function tourGoBack() {
@@ -1093,12 +1120,14 @@ function tourGoBack() {
 
 async function finishTour() {
   try {
+    // Clear any wizard-driven body viewer highlight before navigating to chats
+    agentsStore.wizardHighlightAgentId = null
     // Read language from config (persisted to disk in step 1) — ref may be stale after restarts
     const lang = configStore.config.language || selectedLanguage.value || 'en'
     const userAgent = agentsStore.userAgents.find(a => !a.isBuiltin)
     const userAgentId = userAgent?.id || null
     const chatTitle = lang === 'zh' ? '新聊天' : 'New Chat'
-    const chat = await chatsStore.createChat(chatTitle, [BUILTIN_SYSTEM_AGENT_ID], null, { userAgentId })
+    const chat = await chatsStore.createChat(chatTitle, [BUILTIN_SYSTEM_AGENT_ID, BUILTIN_DOC_EDITOR_ID], null, { userAgentId })
     const chatId = chat?.id
     if (chatId) await chatsStore.setChatSettings(chatId, { permissionMode: 'all_permissions' })
     // Mark this chat for AI Docs nav highlight when agent replies
@@ -1111,8 +1140,8 @@ async function finishTour() {
     setTimeout(() => {
       if (chatId) {
         const greeting = lang === 'zh'
-          ? '你好，很高兴和你一起开启 AI 旅程，告诉我关于我你知道什么，你能做什么，你可以把对我的了解通过使用工具创建到一个文档吗？'
-          : 'Hi, excited to start this AI journey with you! Tell me what you know about me, what you can do, and can you use your tools to create a document about what you know about me?'
+          ? '@Clank @文档大师 你好！@Clank 请先简单介绍一下你自己——你是谁、你能做什么、你最擅长帮我处理什么事情；然后告诉我你目前对我有多少了解（比如我的身份、偏好、正在做的事），如果还不太了解我也直说没关系。最后把这份介绍整理成一份 markdown 文档保存到 AI Doc，告诉我文件路径。@文档大师 请在 Clank 写完后审阅这份文档，补充一些有用的段落（比如使用建议、协作方式），并在文档末尾加上 author 字段。'
+          : '@Clank @DocMaster Hi! @Clank please give me a short self-introduction — who you are, what you can do, and what you can help me with most. Then tell me how much you currently know about me (e.g. my role, preferences, what I am working on); it is fine to say you do not know me well yet. Finally, save the introduction as a markdown document to AI Doc and tell me the file path. @DocMaster please review the document after Clank finishes, add a few useful sections (e.g. usage tips, collaboration suggestions), and append an author field at the end.'
         chatsStore.sendMinibarMessage(greeting, chatId)
       }
       // Trigger logo dance animation to welcome the user
@@ -1127,6 +1156,7 @@ async function finishTour() {
 }
 
 async function skipSetup() {
+  agentsStore.wizardHighlightAgentId = null
   await configStore.saveConfig({ setupDismissed: true })
   emit('close')
 }
@@ -1220,24 +1250,20 @@ watch(step, (val) => {
 .sw-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(1px);
+  pointer-events: all;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .sw-backdrop.sw-tour-mode {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(1px);
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 4.5rem 1.25rem 1.25rem;
-  pointer-events: none;
-}
-
-.sw-backdrop.sw-tour-mode .sw-tour-card {
-  pointer-events: auto;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 1.25rem 1.5rem 2rem;
 }
 
 .sw-container {
@@ -1254,8 +1280,9 @@ watch(step, (val) => {
 }
 
 .sw-container.sw-tour-card {
-  width: min(24rem, 80vw);
-  max-height: unset;
+  width: min(28rem, 85vw);
+  min-height: 18rem;
+  max-height: 75vh;
   animation: sw-tour-enter 0.25s ease-out;
 }
 
@@ -1371,14 +1398,66 @@ watch(step, (val) => {
 }
 
 .sw-step-content { animation: sw-fade 0.2s ease; }
+.sw-dismiss-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.625rem 1.5rem 0;
+  border-bottom: 1px solid #1F1F1F;
+}
+
+.sw-dismiss-btn {
+  background: transparent;
+  border: none;
+  color: #6B7280;
+  cursor: pointer;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.375rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: inherit;
+  transition: color 0.12s;
+}
+.sw-dismiss-btn:hover { color: #9CA3AF; }
+
 .sw-step-auth {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.625rem;
 }
-.sw-auth-skip {
-  align-self: center;
-  margin-top: 0.5rem;
+
+.sw-auth-skip-card {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 11px 16px;
+  background: var(--bg-card, #1A1A1A);
+  border: 1px solid var(--border, #2A2A2A);
+  border-radius: 10px;
+  color: var(--text-primary, #FFFFFF);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, border-color 0.12s, transform 0.12s;
+}
+.sw-auth-skip-card:hover { background: var(--bg-hover, #222222); border-color: var(--text-secondary, #6B7280); }
+.sw-auth-skip-card:active { transform: translateY(1px); }
+
+.sw-auth-privacy-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: #6B7280;
+  margin: 0;
+  line-height: 1.45;
+  padding: 0 0.25rem;
 }
 
 @keyframes sw-fade {
@@ -1595,11 +1674,31 @@ watch(step, (val) => {
   font-size: var(--fs-secondary, 0.875rem);
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
-  margin-top: 0.5rem;
 }
 
 .sw-test-result.success { background: #064E3B; color: #6EE7B7; }
 .sw-test-result.error { background: #7F1D1D; color: #FCA5A5; }
+
+.sw-retest-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: transparent;
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-family: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.12s;
+}
+.sw-retest-btn:hover { opacity: 1; }
+.sw-retest-btn:disabled { opacity: 0.35; cursor: default; }
 
 /* ── Provider list ─────────────────────────────────────────────────── */
 
@@ -1756,6 +1855,7 @@ watch(step, (val) => {
 
 .sw-tour-body {
   padding: 0.75rem 1.25rem 1rem;
+  flex: 1;
 }
 
 .sw-tour-title {
@@ -1874,12 +1974,13 @@ watch(step, (val) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.875rem 1.25rem;
+  padding: 0.75rem 1.25rem;
   border-top: 1px solid #1F1F1F;
   background: #0A0A0A;
+  flex-shrink: 0;
 }
 
-.sw-footer-right { display: flex; align-items: center; gap: 0.5rem; }
+.sw-footer-right { display: flex; align-items: center; gap: 0.5rem; flex-wrap: nowrap; }
 
 .sw-btn-text {
   display: flex;

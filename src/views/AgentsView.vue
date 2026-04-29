@@ -538,9 +538,11 @@ const activeCategories = computed(() => {
 })
 
 const currentViewTitle = computed(() => {
-  if (selectedView.type === 'all') return 'Agents'
+  if (selectedView.type === 'all') {
+    return selectedView.agentType === 'system' ? t('nav.systemAgents') : t('nav.userPersonas')
+  }
   const cat = agentsStore.getCategoryById(selectedView.categoryId)
-  return cat?.name || 'Category'
+  return cat?.name || t('common.category', 'Category')
 })
 
 const currentCategoryEmoji = computed(() => {
@@ -580,6 +582,17 @@ const bodyViewerRef = ref(null)
 function openBodyViewer(agent) {
   bodyViewerAgent.value = { ...agent }
 }
+
+// Wizard tour: auto-open Clank's body viewer when the assign-reminder step is active
+watch(() => agentsStore.wizardHighlightAgentId, async (id) => {
+  if (id) {
+    if (!agentsStore.systemAgents.length) await agentsStore.loadAgents()
+    const target = agentsStore.getAgentById(id)
+    if (target) bodyViewerAgent.value = { ...target }
+  } else if (bodyViewerAgent.value) {
+    bodyViewerAgent.value = null
+  }
+}, { immediate: true })
 
 function createNew(type) {
   const resolvedType = type || selectedView.agentType

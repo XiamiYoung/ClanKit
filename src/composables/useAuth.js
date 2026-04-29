@@ -121,6 +121,10 @@ export function useAuth() {
   // Priority: remembered last method > language default
   // zh-* locale → primary 'email' (China path) · else → primary 'google'
   const isChinese = computed(() => (configStore.language || 'en').startsWith('zh'))
+
+  // Backend OTP-email API expects 'en' | 'zh'; normalize the configStore value
+  // (which may be 'zh-CN', 'en-US', etc. depending on where it was set).
+  const currentLang = () => (configStore.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'
   const primaryMethod = computed(() => {
     if (lastMethod.value === 'email' || lastMethod.value === 'google') return lastMethod.value
     return isChinese.value ? 'email' : 'google'
@@ -137,7 +141,7 @@ export function useAuth() {
   }
 
   async function signUpStart(emailInput, password, displayName) {
-    const r = await api.register(emailInput, password, displayName)
+    const r = await api.register(emailInput, password, displayName, currentLang())
     // Optimistically remember the name client-side; backend echoes it back on verify-email.
     if (r.ok && displayName) name.value = displayName
     return r
@@ -159,7 +163,7 @@ export function useAuth() {
     return r
   }
   async function requestPasswordReset(emailInput) {
-    return api.forgotPassword(emailInput)
+    return api.forgotPassword(emailInput, currentLang())
   }
   async function confirmPasswordReset(emailInput, otp, newPassword) {
     return api.resetPassword(emailInput, otp, newPassword)

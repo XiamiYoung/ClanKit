@@ -58,8 +58,6 @@
         :title="t('mcp.noServers')"
         :description="t('mcp.emptyGuideDesc')"
         :useCases="[t('mcp.emptyGuideUseCase1'), t('mcp.emptyGuideUseCase2'), t('mcp.emptyGuideUseCase3')]"
-        :ctaLabel="t('mcp.createViaChat')"
-        @create="startChatGuide(t('mcp.emptyGuideChatMsg'), t('mcp.title'))"
       >
         <template #icon>
           <svg style="width:1.5rem;height:1.5rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">

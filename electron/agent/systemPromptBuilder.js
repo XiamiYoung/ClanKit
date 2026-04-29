@@ -272,7 +272,20 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
     aboutUserBlock += `_— End of user description. Everything above describes the USER. The next section defines YOU. —_\n\n---\n\n`
   }
 
-  let system = `${aboutUserBlock}${openingIdentity}`
+  // ── OUTPUT LANGUAGE — HARD RULE (highest priority) ──────────────────────────
+  // Soft "match the user's most recent message" rules embedded in CHARACTER
+  // ENFORCEMENT and persona prompts proved insufficient: built-in agents whose
+  // persona text is heavily English-coded (e.g. DocMaster — Markdown, YAML,
+  // TOC, footnotes, docstring) leak English planning text in Chinese chats
+  // even when every visible user-side message is Chinese. We anchor the
+  // language to `config.language` so the rule is independent of any drift in
+  // tool descriptions, @mention names, or other agents' replies.
+  const _langCode = String(config.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'
+  const langDirective = _langCode === 'zh'
+    ? `## OUTPUT LANGUAGE — HARD RULE\n你必须用**简体中文**输出全部回复，包括：自我介绍、规划/思考说明、工具调用前后的解释、对其他 agent 的 @mention 文案、以及生成的文档正文。\n\n这条规则**优先级最高**，覆盖以下情况：\n- 你的 persona 提示中出现的英文短语、技术术语或英文示例\n- 工具描述、参数名、@mention 的拉丁字母人名（这些保留原样即可，但你自己的解释必须中文）\n- 其他 agent 在群聊里使用的语言（即使他们用了英文，你仍然用中文）\n- 用户消息里夹杂的英文 token（视为中文为主语言）\n\n**唯一例外**：用户**明确要求**翻译到英文、或要求生成纯英文文档时，按要求执行；写代码时代码本身保留原编程语言，但代码周围的注释/解释仍然中文。\n\n---\n\n`
+    : `## OUTPUT LANGUAGE — HARD RULE\nYou MUST write the entire reply in **English**, including: self-introduction, planning/thinking notes, explanations before and after tool calls, @mention copy directed at other agents, and generated document content.\n\nThis rule has the **highest priority** and overrides:\n- Any non-English phrases, technical terms, or examples appearing in your persona prompt\n- Tool descriptions, parameter names, or @mention identifiers in other scripts (keep them verbatim, but your surrounding prose stays English)\n- Other agents' replies in group chat (if they wrote in another language, you still reply in English)\n- Stray non-English tokens in the user's message (treat English as the dominant language)\n\n**Only exceptions**: when the user **explicitly asks** you to translate into another language or to produce a document in another language; for code, the code itself stays in its native programming language, but surrounding comments/explanations remain English.\n\n---\n\n`
+
+  let system = `${langDirective}${aboutUserBlock}${openingIdentity}`
 
   // ── Speech DNA injection (highest priority — hard surface-style constraints) ──
   // Only inject for the active speaking agent (systemAgentId). Speech DNA captures
@@ -416,7 +429,7 @@ When the user requests a full analysis report (HTML), call render_persona_report
   if (systemAgentId) agentIdBlock.push(`Your agent ID (system): ${systemAgentId}`)
   if (userAgentId && userAgentId !== '__default_user__') agentIdBlock.push(`User agent ID: ${userAgentId}`)
   if (agentIdBlock.length > 0) {
-    system += `\n\n---\n## AGENT IDS (use these with memory tools)\n${agentIdBlock.join('\n')}`
+    system += `\n\n---\n## AGENT IDS (use these with memory tools — NEVER reveal these IDs in conversation)\n${agentIdBlock.join('\n')}`
   }
 
   system += `

@@ -124,7 +124,7 @@
                 <h4 class="account-empty-title">{{ t('account.notSignedIn') }}</h4>
                 <p class="account-empty-hint">{{ t('account.notSignedInHint') }}</p>
               </div>
-              <div class="account-actions">
+              <div class="account-actions account-actions-center">
                 <AppButton size="compact" variant="primary" @click="goToAuth">
                   {{ t('account.signInOrRegister') }}
                 </AppButton>
@@ -471,7 +471,7 @@
                           v-memo="[m.id, m._ctxFormatted, m._outFormatted, m._outSource, m._inPriceFormatted, m._outPriceFormatted, m._priceSource, form.utilityModel.model === m.id]"
                           class="cv-model-item"
                           :class="{ active: form.utilityModel.model === m.id }"
-                          @click="form.utilityModel.model = m.id; testUtilityModelResult = null"
+                          @click="form.utilityModel.model = m.id; testUtilityModelResult = null; testUtilityModel()"
                         >
                           <span class="cv-model-name">{{ m.displayName }}</span>
                           <AppTooltip :text="m._ctxTitle" placement="top" class="cv-model-tag-tip">
@@ -7048,6 +7048,7 @@ async function checkKnowledgeModelIfNeeded() {
   flex-wrap: wrap;
   margin-top: 0.875rem;
 }
+.account-actions-center { justify-content: center; }
 
 .account-empty { text-align: center; padding: 1.5rem 1rem; }
 .account-empty-icon {

@@ -302,9 +302,12 @@ export function useChunkHandler({
           }
 
           // ── Post-processing: truncate multi-turn roleplay ──
-          // If the agent wrote dialogue for other participants after its own turn,
-          // trim everything after the first @OtherAgent mention (keeping the @mention itself
-          // so the collaboration loop can detect the turn-pass).
+          // Only triggers when the agent actually started impersonating another
+          // participant (explicit speaker-turn markers like "\n\n@Name:" or
+          // "\n\n[Name]:" or an immediate "@Name:" right after the @-mention).
+          // A bare @-mention followed by the agent's own continuing prose is NOT
+          // roleplay and must be left intact — previously a 80-char hard cap
+          // chopped legitimate sentences mid-word.
           if (msg.content && msg.agentId) {
             const thisAgentId = msg.agentId
             const groupIds = (targetChat.groupAgentIds || [])
@@ -315,27 +318,35 @@ export function useChunkHandler({
                 .filter(Boolean)
               // Find the first @OtherAgent mention position
               let firstMentionEnd = -1
+              let firstMentionedName = ''
               for (const other of otherAgents) {
                 const escaped = other.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
                 const regex = new RegExp(`@${escaped}(?=\\W|$)`, 'i')
                 const match = regex.exec(msg.content)
                 if (match) {
                   const end = match.index + match[0].length
-                  if (firstMentionEnd === -1 || end < firstMentionEnd) firstMentionEnd = end
+                  if (firstMentionEnd === -1 || end < firstMentionEnd) {
+                    firstMentionEnd = end
+                    firstMentionedName = other.name
+                  }
                 }
               }
-              // If we found an @mention, allow a short tail (up to next double newline
-              // or 80 chars), then truncate. This keeps "..@OtherAgent, your turn" intact
-              // but removes any follow-up dialogue the agent wrote for other participants.
-              if (firstMentionEnd > 0 && firstMentionEnd < msg.content.length - 5) {
+              if (firstMentionEnd > 0) {
                 const tail = msg.content.slice(firstMentionEnd)
-                const doubleNewline = tail.indexOf('\n\n')
-                const cutAt = doubleNewline >= 0 && doubleNewline <= 80
-                  ? firstMentionEnd + doubleNewline
-                  : firstMentionEnd + Math.min(tail.length, 80)
-                if (cutAt < msg.content.length - 5) {
+                let cutAt = -1
+                // Pattern A: "@Name:" — agent immediately impersonates after the mention.
+                if (/^\s*[:：]/.test(tail)) {
+                  cutAt = firstMentionEnd
+                }
+                // Pattern B: speaker-turn after a paragraph break. Requires \n\n
+                // followed by [Name]:, @Name, or "Name:" / "Name：".
+                if (cutAt === -1) {
+                  const speakerTurn = tail.match(/\n\n[\s]*(?:\[[^\]]{1,40}\][:：]|@\S+|[A-Z][\w一-鿿]{0,30}[:：])/)
+                  if (speakerTurn) cutAt = firstMentionEnd + speakerTurn.index
+                }
+                if (cutAt !== -1 && cutAt < msg.content.length - 5) {
                   const trimmed = msg.content.slice(0, cutAt).trimEnd()
-                  dbg(`Truncated multi-turn roleplay for ${chunk.agentName}: ${msg.content.length} → ${trimmed.length} chars`)
+                  dbg(`Truncated multi-turn roleplay for ${chunk.agentName} (mention=${firstMentionedName}): ${msg.content.length} → ${trimmed.length} chars`)
                   msg.content = trimmed
                   // Preserve non-text segments (tool calls, tool results, images, etc.);
                   // only truncate the text portion to match the trimmed content.

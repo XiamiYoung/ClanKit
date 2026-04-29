@@ -2118,11 +2118,49 @@ onMounted(async () => {
     })
   }
   if (window.electronAPI?.im?.onAgentStreamEnd) {
-    window.electronAPI.im.onAgentStreamEnd(({ chatId, messageId }) => {
+    window.electronAPI.im.onAgentStreamEnd(({ chatId, messageId, removed, error }) => {
       const chat = chatsStore.chats.find(c => c.id === chatId)
       if (!chat?.messages) return
-      const msg = chat.messages.find(m => m.id === messageId)
-      if (msg) msg.streaming = false
+      const idx = chat.messages.findIndex(m => m.id === messageId)
+      if (idx === -1) return
+      // `removed:true` means message-router deleted the placeholder on disk
+      // (no content produced / consumed pendingStop / cancelled). The renderer
+      // must splice too, otherwise an empty assistant bubble persists in
+      // memory until reload — that's the "ghost empty bubble" symptom.
+      if (removed) {
+        chat.messages.splice(idx, 1)
+        return
+      }
+      const m = chat.messages[idx]
+      m.streaming = false
+      // Carry the structured-error fields so ChatWindow.vue's error indicator
+      // bar + auth-error hint render the same red card as the chat-window send
+      // path. Without this, the IM bridge bubble would just look empty/blank
+      // when the agent failed.
+      if (error) {
+        m.errorDetail = error.detail
+        m.errorCode = error.code
+        if (error.isError) m.isError = true
+      }
+    })
+  }
+  // Iron-law three-piece (#B): map IM bridge run lifecycle to chat.isRunning,
+  // so the interrupt button and status badges in the chat window light up
+  // exactly like for chat-window sends.
+  if (window.electronAPI?.im?.onRunStarted) {
+    window.electronAPI.im.onRunStarted(({ chatId }) => {
+      const chat = chatsStore.chats.find(c => c.id === chatId)
+      if (chat) chat.isRunning = true
+    })
+  }
+  if (window.electronAPI?.im?.onRunEnded) {
+    window.electronAPI.im.onRunEnded(({ chatId }) => {
+      const chat = chatsStore.chats.find(c => c.id === chatId)
+      if (chat) {
+        chat.isRunning = false
+        chat.isThinking = false
+        chat.isCallingTool = false
+      }
     })
   }
 

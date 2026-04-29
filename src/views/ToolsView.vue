@@ -105,8 +105,6 @@
         :title="t('tools.noTools')"
         :description="t('tools.emptyGuideDesc')"
         :useCases="[t('tools.emptyGuideUseCase1'), t('tools.emptyGuideUseCase2'), t('tools.emptyGuideUseCase3')]"
-        :ctaLabel="t('tools.createViaChat')"
-        @create="startChatGuide(t('tools.emptyGuideChatMsg'), t('tools.title'))"
       >
         <template #icon>
           <svg style="width:1.5rem;height:1.5rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">

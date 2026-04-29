@@ -254,6 +254,49 @@ describe('useChunkHandler', () => {
       // But should contain the @Bob mention itself
       expect(msg.content).toContain('@Bob')
     })
+
+    it('does NOT truncate when @-mention is a salutation followed by the agent\'s own continuing text', () => {
+      const { handleChunk } = createHandler()
+      const chat = mockChatsStore.chats[0]
+      chat.groupAgentIds = ['a1', 'a2']
+      mockAgentsStore.getAgentById = vi.fn((id) => {
+        if (id === 'a1') return { id: 'a1', name: 'Alice' }
+        if (id === 'a2') return { id: 'a2', name: '文档大师' }
+        return null
+      })
+
+      handleChunk('chat1', { type: 'agent_start', agentId: 'a1', agentName: 'Alice' })
+
+      // Salutation: @-mention at start, then a long single-paragraph self-introduction
+      // (no double-newline, no roleplay markers). Must be preserved in full.
+      const fullText = '@文档大师  \n你好！我是 Alice — 一个能写代码、读网页、跑工具、拆任务、生成报告、也懂怎么把一句话变成结构清晰的 Markdown 或 .docx 的实操派。'
+      handleChunk('chat1', { type: 'text', text: fullText, agentId: 'a1' })
+      handleChunk('chat1', { type: 'agent_end', agentId: 'a1', agentName: 'Alice' })
+
+      const msg = chat.messages[0]
+      expect(msg.content).toBe(fullText)
+      expect(msg.content).toContain('Markdown 或 .docx 的实操派')
+    })
+
+    it('truncates when agent immediately impersonates other (\"@Bob: ...\" pattern)', () => {
+      const { handleChunk } = createHandler()
+      const chat = mockChatsStore.chats[0]
+      chat.groupAgentIds = ['a1', 'a2']
+      mockAgentsStore.getAgentById = vi.fn((id) => {
+        if (id === 'a1') return { id: 'a1', name: 'Alice' }
+        if (id === 'a2') return { id: 'a2', name: 'Bob' }
+        return null
+      })
+
+      handleChunk('chat1', { type: 'agent_start', agentId: 'a1', agentName: 'Alice' })
+      const fullText = 'Done. @Bob: thanks Alice, I will take it from here and finish the review tonight.'
+      handleChunk('chat1', { type: 'text', text: fullText, agentId: 'a1' })
+      handleChunk('chat1', { type: 'agent_end', agentId: 'a1', agentName: 'Alice' })
+
+      const msg = chat.messages[0]
+      expect(msg.content).toContain('@Bob')
+      expect(msg.content).not.toContain('thanks Alice')
+    })
   })
 
   // ─── 5. send_message_complete chunk ──────────────────────────────────────

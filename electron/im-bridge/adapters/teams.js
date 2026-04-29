@@ -21,6 +21,23 @@ let _opts             = {}     // { tenantId, clientId, scopes, selfOnly, allowe
 let _onMessage        = null
 let _authPollTimer    = null
 let _sentMessageIds   = new Set()
+// Fallback dedup: tracks the expected polled-back text of recently sent bot
+// messages, indexed by normalized content. Closes the race where _graphPost is
+// in flight (msg already created on Graph servers, but resp.id not yet recorded
+// in _sentMessageIds) and the next poll fires during that window. Each entry
+// is consume-once: when matched, it's removed so a user's identical follow-up
+// message isn't silently dropped.
+let _sentContentEntries = []  // [{ hash, ts }]
+// In-flight lock: setInterval doesn't await async callbacks, so a slow _poll
+// (Graph API jitter, multi-chat fetch) can be re-entered with the same stale
+// _lastCheckTime. Two concurrent _polls then ingest the same incoming msg
+// twice → two routeMessage calls → duplicate user bubble + duplicate agent
+// turn. The lock makes overlapping ticks no-ops.
+let _pollInFlight     = false
+// Defensive per-msg-ID dedup ring buffer for ingested messages. Independent
+// from `_sentMessageIds` (which dedupes our OWN outgoing posts). If anything
+// ever bypasses the in-flight lock (bug, future refactor), this catches it.
+let _ingestedMsgIds   = []   // [{ id, ts }]
 
 // ---------------------------------------------------------------------------
 // Token persistence
@@ -157,6 +174,49 @@ async function _fetchUserProfile(token) {
 // HTML → plain text
 // ---------------------------------------------------------------------------
 
+function _normalizeContent(text) {
+  // Strip ALL whitespace (not collapse to single space). Teams may add or remove
+  // whitespace between block-level elements when storing/serving HTML — e.g.
+  // `<ul><li>A</li><li>B</li></ul>` we POSTed strips to "AB", but Teams's stored
+  // HTML often has whitespace between <li>s and strips to "A B". Removing all
+  // whitespace gives a stable fingerprint either way.
+  return (text || '').replace(/\s+/g, '')
+}
+
+function _markSentContent(text) {
+  const hash = _normalizeContent(text)
+  if (!hash) return
+  const now = Date.now()
+  _sentContentEntries.push({ hash, ts: now })
+  const cutoff = now - 60000
+  while (_sentContentEntries.length && _sentContentEntries[0].ts < cutoff) {
+    _sentContentEntries.shift()
+  }
+}
+
+function _consumeSentContent(text) {
+  const hash = _normalizeContent(text)
+  if (!hash) return false
+  const idx = _sentContentEntries.findIndex(e => e.hash === hash)
+  if (idx === -1) return false
+  _sentContentEntries.splice(idx, 1)
+  return true
+}
+
+function _markIngested(msgId) {
+  if (!msgId) return
+  const now = Date.now()
+  _ingestedMsgIds.push({ id: msgId, ts: now })
+  const cutoff = now - 60000
+  while (_ingestedMsgIds.length && _ingestedMsgIds[0].ts < cutoff) {
+    _ingestedMsgIds.shift()
+  }
+}
+
+function _wasIngested(msgId) {
+  return _ingestedMsgIds.some(e => e.id === msgId)
+}
+
 function _stripHtml(html) {
   return html
     .replace(/<br\s*\/?>/gi, '\n')
@@ -179,6 +239,9 @@ function _stripHtml(html) {
 // ---------------------------------------------------------------------------
 
 async function _poll() {
+  if (_pollInFlight) return  // skip overlapping ticks — keeps _lastCheckTime sane
+  _pollInFlight = true
+  try {
   const token = await _getAccessToken()
   if (!token) return
 
@@ -198,7 +261,6 @@ async function _poll() {
       }
     }
 
-    let newMsgCount = 0
     for (const chatId of chatIds) {
       let msgsResp
       try {
@@ -214,8 +276,19 @@ async function _poll() {
         const senderId = msg.from?.user?.id || ''
         const senderName = msg.from?.user?.displayName || senderId || 'unknown'
 
+        // Defensive: if we already ingested this msg in a recent poll (e.g.
+        // overlap slipped through, or Graph returned the same id twice), skip.
+        if (_wasIngested(msg.id)) continue
+
         // Skip bot-sent messages (our own Graph API replies)
         if (_sentMessageIds.has(msg.id)) { _sentMessageIds.delete(msg.id); continue }
+
+        // Extract text early so we can dedupe by content as a race-window fallback.
+        const _body = msg.body || {}
+        const _text = _body.contentType === 'html'
+          ? _stripHtml(_body.content || '')
+          : (_body.content || '').trim()
+        if (_text && _consumeSentContent(_text)) continue
 
         // Access control (only in non-selfOnly mode)
         if (!_opts.selfOnly) {
@@ -225,31 +298,24 @@ async function _poll() {
           }
         }
 
-        // Extract text
-        const body = msg.body || {}
-        const text = body.contentType === 'html'
-          ? _stripHtml(body.content || '')
-          : (body.content || '').trim()
+        const text = _text
         if (!text) continue
 
-        newMsgCount++
+        _markIngested(msg.id)
         const chatLabel = chatId === SELF_CHAT_ID ? 'self-chat' : 'chat ' + chatId.slice(0, 20) + '...'
         console.log(`[teams] new msg from "${senderName}" in ${chatLabel}: "${text.slice(0, 100)}"`)
         if (_onMessage) _onMessage(chatId, senderName, text)
       }
     }
 
-    if (newMsgCount === 0) {
-      if (!_poll._q) _poll._q = 0
-      if (++_poll._q % 12 === 1) {
-        console.log(`[teams] poll: no new messages (selfOnly=${!!_opts.selfOnly})`)
-      }
-    }
   } catch (err) {
     console.error('[teams] _poll error:', err.message)
   }
 
   _lastCheckTime = new Date().toISOString()
+  } finally {
+    _pollInFlight = false
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -431,6 +497,9 @@ async function sendMessage(chatId, text) {
   if (!token) return
   try {
     const html = _markdownToHtml(text)
+    // Pre-record the polled-back form so a poll firing during _graphPost
+    // (before resp.id can be added to _sentMessageIds) still dedupes correctly.
+    _markSentContent(_stripHtml(html))
     const resp = await _graphPost(`/chats/${chatId}/messages`, token, {
       body: { contentType: 'html', content: html },
     })

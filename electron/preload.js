@@ -464,6 +464,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('im:agent-stream-end', (_e, d) => cb(d))
       return () => ipcRenderer.removeAllListeners('im:agent-stream-end')
     },
+    // Per-callback listeners (LESSONS.md #29) — multiple subscribers can coexist.
+    onRunStarted: (cb) => {
+      const listener = (_e, d) => cb(d)
+      ipcRenderer.on('im:run-started', listener)
+      return () => ipcRenderer.removeListener('im:run-started', listener)
+    },
+    onRunEnded: (cb) => {
+      const listener = (_e, d) => cb(d)
+      ipcRenderer.on('im:run-ended', listener)
+      return () => ipcRenderer.removeListener('im:run-ended', listener)
+    },
     requestWhatsAppQr: () => ipcRenderer.invoke('im:whatsapp-request-qr'),
     onWhatsAppQr: (cb) => {
       ipcRenderer.removeAllListeners('im:whatsapp-qr')

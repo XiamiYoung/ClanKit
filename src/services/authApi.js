@@ -61,10 +61,12 @@ async function request(path, body, { authToken, method = 'POST' } = {}) {
 export const checkEmail      = (email)                        => request('/auth/check-email',     { email })
 
 // Email + password — China default path.
-export const register        = (email, password, name)        => request('/auth/register',        { email, password, name })
-export const verifyEmail     = (email, otp)                   => request('/auth/verify-email',    { email, otp })
-export const login           = (email, password)              => request('/auth/login',           { email, password })
-export const forgotPassword  = (email)                        => request('/auth/forgot-password', { email })
+// `language` ('en' | 'zh') controls the OTP email's localized subject + body; backend
+// normalizes anything unrecognized back to 'en'.
+export const register        = (email, password, name, language) => request('/auth/register',        { email, password, name, language })
+export const verifyEmail     = (email, otp)                      => request('/auth/verify-email',    { email, otp })
+export const login           = (email, password)                 => request('/auth/login',           { email, password })
+export const forgotPassword  = (email, language)                 => request('/auth/forgot-password', { email, language })
 export const resetPassword   = (email, otp, newPassword)      => request('/auth/reset-password',  { email, otp, newPassword })
 export const refresh         = (refreshToken)                 => request('/auth/refresh',         { refreshToken })
 

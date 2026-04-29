@@ -60,6 +60,7 @@
         autocomplete="email" :placeholder="t('auth.emailPlaceholder')"
         @keyup.enter="onSubmitEmail"
       />
+      <p v-if="!signupOnly" class="auth-flow-hint">{{ t('auth.emailFirstFlowHint') }}</p>
 
       <p v-if="error" class="auth-error">{{ error }}</p>
 
@@ -437,6 +438,12 @@ async function onGoogleSignIn() {
   margin: 8px 0 0;
   font-size: 12.5px;
   color: var(--text-secondary);
+}
+.auth-flow-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted, var(--text-secondary));
+  line-height: 1.45;
 }
 .auth-google-btn {
   display: inline-flex;

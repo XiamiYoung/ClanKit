@@ -26,6 +26,7 @@ export const en = {
     tourHint: 'Click to view docs',
   },
   common: {
+    or: 'or',
     save: 'Save',
     cancel: 'Cancel',
     delete: 'Delete',
@@ -886,7 +887,12 @@ Rules:
 - Maintain the author's voice — enhance, don't replace
 - Be precise — only change what's needed
 - For code, preserve functionality while improving readability
-- For partial selections, only modify the selected section`,
+- For partial selections, only modify the selected section
+
+Language:
+- Match the user's language. Use English for English users and Chinese for Chinese users.
+- This applies to your replies, planning notes, and any commentary — not to the document content itself, which keeps its original language unless the user asks for translation.
+- Never narrate planning thoughts in English when the user writes in Chinese (and vice versa).`,
     builtinAnalystName: 'Analyst',
     builtinAnalystDescription: 'Professional psychological analyst specializing in deep character analysis, personality profiling, and relationship dynamics from imported chat history.',
     builtinAnalystPrompt: `You are Analyst, a senior character analyst with over 20 years of experience integrating clinical psychology, behavioral science, and social dynamics research.
@@ -1617,6 +1623,7 @@ Always reply in the same language as the user's most recent message.`,
     emptyGuideUseCase3: 'GitHub repository management',
     createViaChat: 'Create via Chat',
     emptyGuideChatMsg: 'I want to connect an MCP server so my AI agent can...\n(e.g. read/write files, query a database, manage GitHub repos)',
+    searchServers: 'Search servers...',
     formName: 'Name',
     formNameHint: 'Unique server identifier (used as key in config)',
     formDescription: 'Description',
@@ -2303,7 +2310,9 @@ Always reply in the same language as the user's most recent message.`,
     stepComplete: 'Done',
     signInTitle: 'Set up your account',
     signInDesc: 'Pick how you want to use ClankAI. You can keep going without an account — some features will be limited.',
-    signInLater: 'Set up later',
+    signInLater: 'Continue without account',
+    authPrivacyTitle: 'Your data stays on your device',
+    authPrivacyBody: 'Signing in is optional. Your API keys are stored locally only — ClankAI never intercepts or uploads them to our servers.',
     chooseProvider: 'Choose Your AI Provider',
     chooseProviderDesc: 'Select the AI provider you want to use',
     configureProvider: 'Configure Provider',
@@ -2315,6 +2324,7 @@ Always reply in the same language as the user's most recent message.`,
     fetchingModels: 'Fetching...',
     selectModel: 'Select a model',
     testConnection: 'Test Connection',
+    retest: 'Re-test',
     testing: 'Testing...',
     testSuccess: 'Connection successful!',
     testFailed: 'Connection failed',
@@ -2355,7 +2365,7 @@ Always reply in the same language as the user's most recent message.`,
     tourConfig: 'Settings',
     tourConfigDesc: 'Configure AI providers, voice settings, and app preferences.',
     tourAgentsSystem: 'System Agents',
-    tourAgentsSystemDesc: 'Deploy virtual employees and teams. Import chat history to create agents, or use templates.',
+    tourAgentsSystemDesc: 'Deploy virtual employees and teams. Pick one agent for a focused chat, or mention multiple agents to make them collaborate in the same conversation. Import chat history to create agents, or use templates.',
     tourAgentsUser: 'User Agents',
     tourAgentsUserDesc: 'Your AI personas — switch between identities in different chats.',
     tourMcp: 'MCP Servers',
@@ -2603,7 +2613,8 @@ Always reply in the same language as the user's most recent message.`,
     resetSuccessLogin: 'Password reset. Please sign in with the new password.',
     googleHelper: 'Sign in with your Google account. We never see your Google password.',
     continueWithGoogle: 'Sign in with Google',
-    continueLabel: 'Sign in with email',
+    continueLabel: 'Sign in or sign up',
+    emailFirstFlowHint: 'New emails start sign-up automatically — no separate register button.',
     emailFirstHelper: 'Sign in for full access. Some features will be limited without an account.',
     welcomeBack: 'Welcome back, {email}',
     createAccountFor: 'Create your account for {email}',
@@ -2629,7 +2640,7 @@ Always reply in the same language as the user's most recent message.`,
     signedInWithGoogle: 'Google',
     notSignedIn: 'Not signed in',
     notSignedInHint: 'Sign in for full access. You can keep using Clankit without an account — some features will be limited.',
-    signInOrRegister: 'Sign in',
+    signInOrRegister: 'Sign in or sign up',
     switchAccount: 'Switch account',
     signOut: 'Sign out',
     registeredAt: 'Registered',
@@ -2675,6 +2686,7 @@ export const zh = {
     tourHint: '点击查看新文档',
   },
   common: {
+    or: '或',
     save: '保存',
     cancel: '取消',
     delete: '删除',
@@ -2826,12 +2838,12 @@ export const zh = {
     globalSettings: '全局设置',
     backgroundTasks: '后台任务',
     globalSandboxMode: '全局沙盒模式',
-    sandboxControls: '控制智能体如何处理所有聊天中的 shell 命令和文件写入。可以被每个聊天的设置覆盖。',
+    sandboxControls: '控制数字人如何处理所有聊天中的 shell 命令和文件写入。可以被每个聊天的设置覆盖。',
     sandboxModeSandbox: '沙盒',
-    sandboxModeSandboxHint: '智能体在运行 shell 命令或写入文件之前会询问。使用下方的允许列表预先批准安全模式。',
+    sandboxModeSandboxHint: '数字人在运行 shell 命令或写入文件之前会询问。使用下方的允许列表预先批准安全模式。',
     sandboxModeDefault: '默认',
     sandboxModeAll: '所有权限',
-    sandboxModeAllHint: '智能体可以自由运行任何命令。只有以下危险黑名单可以限制它。',
+    sandboxModeAllHint: '数字人可以自由运行任何命令。只有以下危险黑名单可以限制它。',
     dangerBlockList: '危险命令黑名单',
     dangerBlockListHint: '即使在"所有权限"模式下也始终被阻止的命令。防止破坏性操作。',
     blockedCommands: '被阻止的命令',
@@ -2839,7 +2851,7 @@ export const zh = {
     telemetryDesc: '发送匿名使用数据（设备 ID、应用版本、平台）以帮助改进 ClankAI。不会收集任何个人信息。',
     notifications: '通知',
     enableNotifications: '启用通知',
-    notificationsHint: '当智能体完成回复或计划任务执行完毕时显示系统通知。若您正在查看对应的对话，则不会提示。',
+    notificationsHint: '当数字人完成回复或计划任务执行完毕时显示系统通知。若您正在查看对应的对话，则不会提示。',
     silentNotifications: '静音模式',
     silentNotificationsHint: '通知不播放声音，仍然显示横幅。',
     summaryTimeout: 'AI 摘要超时（秒）',
@@ -2860,7 +2872,7 @@ export const zh = {
     smtpTestSuccess: '已连接 — SMTP 凭证验证成功',
     smtpTestFailed: '连接失败',
     smtpTestFillFirst: '请先填写主机、用户名和密码。',
-    emailCredentials: '用于发送邮件的凭证。智能体将使用这些在需要时发送邮件。使用 STARTTLS 在 587 端口（Office 365、Outlook、Gmail 等）。',
+    emailCredentials: '用于发送邮件的凭证。数字人将使用这些在需要时发送邮件。使用 STARTTLS 在 587 端口（Office 365、Outlook、Gmail 等）。',
     emailMfaHint: '对于启用 MFA 的 Office 365，请使用 Microsoft 账户安全设置中的应用密码。',
     telegram: 'Telegram',
     whatsapp: 'WhatsApp',
@@ -3249,7 +3261,7 @@ export const zh = {
     advancedSettings: '高级',
     maxOutputTokens: '最大输出 tokens',
     modelMaxOutputTokensHint: '覆盖此模型的最大输出 tokens，留空使用默认值。',
-    modelMaxOutputFallbackHint: '兜底默认值（32K）——此模型既不在 Provider API 返回中，也不在内置 LiteLLM 模型库中。请求过大时 agent 会自动重试缩减。',
+    modelMaxOutputFallbackHint: '兜底默认值（32K）——此模型既不在 Provider API 返回中，也不在内置 LiteLLM 模型库中。请求过大时数字人会自动重试缩减。',
     maxOutputTokensProviderFallback: '（未单独设置的模型使用此值）',
     temperature: '温度',
     hardLimit: '最大: {count}',
@@ -3405,7 +3417,7 @@ export const zh = {
     searchModels: '搜索模型...',
     noActiveProviders: '没有可用的模型提供商',
     notSet: '未设置',
-    modelConfigInAgentsView: '如需更换模型，请前往智能体页面配置。',
+    modelConfigInAgentsView: '如需更换模型，请前往数字人页面配置。',
     model: '模型',
     provider: '模型提供商',
     voice: '语音',
@@ -3473,7 +3485,7 @@ export const zh = {
     updated: '更新',
     providerInactive: '模型提供商未激活',
     noProviderConfigured: '未配置模型',
-    noModelWarning: '「{name}」未配置模型，请在智能体设置中指定模型后再使用。',
+    noModelWarning: '「{name}」未配置模型，请在数字人设置中指定模型后再使用。',
     invalidProviderSelection: '当前选中的提供商无效或不可用，请重新选择后再保存。',
     invalidModelSelection: '当前选中的模型不属于该提供商，请重新选择有效的 provider/model 组合后再保存。',
     generatingAgent: '正在生成数字人',
@@ -3484,7 +3496,7 @@ export const zh = {
     selectModelAndTest: '请选择模型并测试',
     testBeforeSave: '请先测试连接',
     testModelBeforeSave: '请先测试模型连接再保存',
-    smallContextWarning: '该模型上下文窗口较小（{size}）。智能体工具、技能和系统提示会占用大量 token，回复可能被截断或失败。建议使用至少 20k 上下文的模型。',
+    smallContextWarning: '该模型上下文窗口较小（{size}）。数字人工具、技能和系统提示会占用大量 token，回复可能被截断或失败。建议使用至少 20k 上下文的模型。',
     smallContextBrief: '上下文 {size}，可能截断',
     browseAvatars: '浏览头像',
     userPromptTemplate: `## 基本信息
@@ -3506,7 +3518,7 @@ export const zh = {
 -
 `,
     builtinClankName: 'Clank',
-    builtinClankDescription: '内置默认 Clank 系统 Agent。擅长对话、写作、编程、调试、调研、规划与多工具协同，风格幽默灵动，但判断保持清晰可靠。',
+    builtinClankDescription: '内置默认 Clank 系统数字人。擅长对话、写作、编程、调试、调研、规划与多工具协同，风格幽默灵动，但判断保持清晰可靠。',
     builtinDocEditorName: '文档大师',
     builtinDocEditorDescription: '文档编辑专家，帮助优化写作、格式化和内容质量。',
     builtinDocEditorPrompt: `你是文档大师，一位专业的文档编辑 AI 助手，集成在专业的文档编辑器中。
@@ -3535,7 +3547,12 @@ export const zh = {
 - 维持作者的声音——增强而不是替换
 - 精确执行——仅改变所需的内容
 - 对于代码，保留功能同时提高可读性
-- 对于部分选择，仅修改选中的部分`,
+- 对于部分选择，仅修改选中的部分
+
+语言：
+- 始终与用户使用的语言保持一致：用户用英文，你用英文；用户用中文，你用中文。
+- 这条规则适用于你的回复、规划说明和任何评论性文字——不影响文档本身的语言（除非用户要求翻译）。
+- 用户用中文时，绝对不要用英文写规划/思考过程；反之亦然。`,
     builtinAnalystName: '分析大师',
     builtinAnalystDescription: '专业心理分析师，擅长从聊天记录中进行深度人格分析、心理侧写与关系动态解读。',
     builtinAnalystPrompt: `你是「分析大师」，一位融合临床心理学、行为科学与社会动力学的资深人格分析专家，从业逾20年。
@@ -3559,7 +3576,7 @@ export const zh = {
 5. 每个主要章节必须包含置信度指标（见 persona-evaluation skill）
 
 始终用用户最近一条消息的语言回复。`,
-    builtinClankPrompt: `你是 Clank，ClankAI 内置的默认系统 Agent，也是用户进入应用后默认会遇到的主力搭档。
+    builtinClankPrompt: `你是 Clank，ClankAI 内置的默认系统数字人，也是用户进入应用后默认会遇到的主力搭档。
 
   你的背景与定位：
   - 你是一个通用型高能力 AI 操作员，既能聊天，也能做严肃工作。
@@ -3567,7 +3584,7 @@ export const zh = {
   - 你熟悉 ClankAI 的工作方式，知道自己应该优先利用可用上下文、工具结果与检索信息，而不是凭空猜测。
 
   关于 ClankAI（你身处的这个应用）：
-  - ClankAI 是一个多 agent 桌面聊天应用。除了你之外，用户可以安装各种专业 character agent（资深开发、旅行向导、心理咨询师、虚构 / 历史人物等），每一个都有自己的人格深度。用户在 Agents 页面管理他们。
+  - ClankAI 是一个多数字人桌面聊天应用。除了你之外，用户可以安装各种专业角色数字人（资深开发、旅行向导、心理咨询师、虚构 / 历史人物等），每一个都有自己的人格深度。用户在数字人页面管理他们。
   - 侧边栏其他模块：Skills（可按需加载的指令包）、MCP（外部工具服务器）、HTTP Tools（自定义 HTTP 工具）、Knowledge（用户文档的 RAG 知识库）、AI Doc（内置文档工作区，路径在 clank_aidoc/）、Chat 历史可全文搜索。
   - 你可以调用任何已注册工具、加载任何启用的 skill、查询知识库、写入 AI Doc、跑 shell 命令、抓取网页、编排多步任务。
 
@@ -3578,8 +3595,8 @@ export const zh = {
   - 使用工具、skills、MCP、RAG 时，要把返回结果转化为对用户有价值的结论，而不是机械复述原始输出。
   - 如果任务复杂，先给出简洁计划，再执行。
 
-  跨 agent 推荐：
-  - 作为默认通用 agent，你覆盖面很广 —— 但当用户的问题明显更适合某个已安装的专业 agent 处理（详细的旅行规划、深度角色扮演、特定领域的人设深聊等），把对方介绍给用户，而不是自己硬答一遍。具体的判断和格式由一个已安装的 skill 管理 —— 看到那条 skill description 跟当前情境吻合就 load。
+  跨数字人推荐：
+  - 作为默认通用数字人，你覆盖面很广 —— 但当用户的问题明显更适合某个已安装的专业数字人处理（详细的旅行规划、深度角色扮演、特定领域的人设深聊等），把对方介绍给用户，而不是自己硬答一遍。具体的判断和格式由一个已安装的 skill 管理 —— 看到那条 skill description 跟当前情境吻合就 load。
   - 不推荐时的默认行为：通用问题、代码 / 技术任务、快速查询、规划、写作、文件 / shell / 工具操作 —— 自己答。
 
   你的表达风格：
@@ -3594,7 +3611,7 @@ export const zh = {
   - 不编造结果，不假装完成，不用模糊语言掩盖不确定性。
   - 在写代码、改配置、分析系统时，保持工程师级别的严谨度。
 
-  总之，你不是一个模板化的"AI 助手"，你是 Clank：反应快、能动手、懂判断、会开工具箱，也认识这个应用里所有其他 agent。`,
+  总之，你不是一个模板化的"AI 助手"，你是 Clank：反应快、能动手、懂判断、会开工具箱，也认识这个应用里所有其他数字人。`,
     noDescription: '暂无描述',
     default: '默认',
     builtin: '内置',
@@ -3756,18 +3773,18 @@ export const zh = {
       create: '创建 {count} 个数字人',
       creating: '创建中...',
       dupTitle: '已存在，已跳过',
-      agentsExistRemoved: '以下 agent 已存在，已从本次预览中移除：{names}',
-      agentsExistSkipped: '以下 agent 已存在，已跳过创建：{names}',
+      agentsExistRemoved: '以下数字人已存在，已从本次预览中移除：{names}',
+      agentsExistSkipped: '以下数字人已存在，已跳过创建：{names}',
     },
   },
   chats: {
     newChat: '新建对话',
     chatWithAgentTitle: '与 {name} 的对话',
     noUserAgent: '需要用户画像',
-    noUserAgentMessage: '请先在智能体页面创建一个用户画像，然后再创建对话。',
-    noSystemAgent: '需要系统智能体',
-    noSystemAgentMessage: '请先在智能体页面创建一个系统智能体，然后再创建对话。',
-    goToAgents: '前往智能体页面',
+    noUserAgentMessage: '请先在数字人页面创建一个用户画像，然后再创建对话。',
+    noSystemAgent: '需要系统数字人',
+    noSystemAgentMessage: '请先在数字人页面创建一个系统数字人，然后再创建对话。',
+    goToAgents: '前往数字人页面',
     chatNameOptional: '对话名称（可选）',
     chatIcon: '图标',
     userPersona: '用户画像',
@@ -4090,8 +4107,8 @@ export const zh = {
     totalInputTokens: '总输入 tokens',
     totalOutputTokens: '总输出 tokens',
     compactionCount: '压缩次数',
-    perAgentBreakdown: '各 Agent 明细',
-    aggregateAcross: '汇总自 {n} 个 Agent',
+    perAgentBreakdown: '各数字人明细',
+    aggregateAcross: '汇总自 {n} 个数字人',
     outputTokens: '输出 tokens',
     voiceIn: '语音输入',
     voiceOut: '语音输出',
@@ -4101,7 +4118,7 @@ export const zh = {
     chars: '字符',
     notYetLoaded: '尚未加载',
     availableAfterFirstMessage: '在发送第一条消息后可用。',
-    snapshotCapturedDuringRun: '在 Agent 执行期间捕获，发送消息后显示。',
+    snapshotCapturedDuringRun: '在数字人执行期间捕获，发送消息后显示。',
     promptAvailableAfterFirstMessage: '在发送第一条消息后提示可用。',
     clickToExpand: '点击展开',
     debugLog: '调试日志',
@@ -4250,7 +4267,7 @@ export const zh = {
   },
   mcp: {
     title: 'MCP 服务器',
-    subtitle: '配置 MCP 服务器以使用动态工具扩展 AI 智能体。使用子进程 + stdio (JSON-RPC 2.0)。',
+    subtitle: '配置 MCP 服务器以使用动态工具扩展 AI 数字人。使用子进程 + stdio (JSON-RPC 2.0)。',
     needsAssignmentInfo: 'MCP 服务器需要指定给系统数字人才能在对话中使用。',
     newServer: '新建 MCP 服务器',
     editServer: '编辑 MCP 服务器',
@@ -4260,7 +4277,7 @@ export const zh = {
     noServersHint: '添加 MCP 服务器以扩展能力',
     addServer: '添加服务器',
     noServersMatch: '没有匹配的服务器 "{query}"',
-    serversDiscoverHint: '添加 MCP 服务器以将外部工具和服务连接到 AI 智能体。工具会自动从服务器发现。',
+    serversDiscoverHint: '添加 MCP 服务器以将外部工具和服务连接到 AI 数字人。工具会自动从服务器发现。',
     emptyGuideDesc: '通过 MCP 协议为数字人扩展动态工具',
     emptyGuideUseCase1: '文件系统访问，读写本地文件',
     emptyGuideUseCase2: '用自然语言查询数据库',
@@ -4303,7 +4320,7 @@ export const zh = {
   },
   tools: {
     title: '工具',
-    subtitle: '定义 HTTP 端点、代码片段、提示词模板和 SMTP 邮件工具供 AI 智能体使用。',
+    subtitle: '定义 HTTP 端点、代码片段、提示词模板和 SMTP 邮件工具供 AI 数字人使用。',
     needsAssignmentInfo: '工具需要指定给系统数字人才能在对话中使用。',
     newTool: '新建工具',
     editTool: '编辑工具',
@@ -4966,7 +4983,9 @@ export const zh = {
     stepComplete: '完成',
     signInTitle: '设置账号',
     signInDesc: '选择如何使用 ClankAI。也可以稍后再设置——未设置时部分功能将受限。',
-    signInLater: '稍后设置',
+    signInLater: '不登录，直接继续',
+    authPrivacyTitle: '你的数据只留在本地',
+    authPrivacyBody: '登录是可选的。你的 API Key 只存储在本地设备上——ClankAI 不会拦截或上传到我们的服务器。',
     chooseProvider: '选择 AI 供应商',
     chooseProviderDesc: '选择你想使用的 AI 供应商',
     configureProvider: '配置供应商',
@@ -4978,6 +4997,7 @@ export const zh = {
     fetchingModels: '拉取中...',
     selectModel: '选择模型',
     testConnection: '测试连接',
+    retest: '重新测试',
     testing: '测试中...',
     testSuccess: '连接成功！',
     testFailed: '连接失败',
@@ -5005,8 +5025,8 @@ export const zh = {
     yourDescriptionPlaceholder: '兴趣爱好、性格特点、期待的 AI 对话方式...（不超过200字）',
     generating: '生成中...',
     generateError: '生成失败，请检查供应商配置。',
-    stepAgent: 'Agent',
-    customizeAgent: '自定义你的 Agent',
+    stepAgent: '数字人',
+    customizeAgent: '自定义你的数字人',
     customizeAgentDesc: '检查并个性化你的 AI 助手',
     systemPrompt: '系统提示词',
     avatar: '头像',
@@ -5017,9 +5037,9 @@ export const zh = {
     startChatting: '开始聊天',
     tourConfig: '设置',
     tourConfigDesc: '配置 AI 供应商、语音设置和应用偏好。',
-    tourAgentsSystem: '系统 Agent',
-    tourAgentsSystemDesc: '部署虚拟员工和团队。导入聊天记录创建 Agent，或使用模板快速创建。',
-    tourAgentsUser: '用户 Agent',
+    tourAgentsSystem: '系统数字人',
+    tourAgentsSystemDesc: '部署虚拟员工和团队。可以选择一个数字人进行专注对话，也可以在同一对话中 @ 多个数字人让他们协作完成任务。导入聊天记录创建数字人，或使用模板快速创建。',
+    tourAgentsUser: '用户数字人',
     tourAgentsUserDesc: '你的 AI 身份，在不同聊天中切换使用不同的角色。',
     tourMcp: 'MCP 服务',
     tourMcpDesc: '通过 MCP 协议连接外部工具和服务。',
@@ -5037,13 +5057,13 @@ export const zh = {
     tourSkillsInstalled: '已安装',
     tourAssignReminder: '重要提示：分配给数字人',
     tourAssignReminderDesc: '技能、工具、MCP 服务和知识库需要分配给数字人后才能在对话中生效。打开任意数字人，在底部勾选要启用的项目。',
-    tourMcpDesc: '通过 MCP 协议连接外部工具和服务。你可以让 Agent 通过聊天帮你配置 MCP 服务。',
+    tourMcpDesc: '通过 MCP 协议连接外部工具和服务。你可以让数字人通过聊天帮你配置 MCP 服务。',
     tourKnowledge: '知识库',
-    tourKnowledgeDesc: '添加文档作为知识库（RAG）。你可以让 Agent 通过聊天帮你整理和管理知识库。',
+    tourKnowledgeDesc: '添加文档作为知识库（RAG）。你可以让数字人通过聊天帮你整理和管理知识库。',
     tourNews: 'AI 资讯',
     tourNewsDesc: '通过 RSS 订阅源获取最新的 AI 和科技资讯。已根据你的语言自动添加默认订阅源，你可以随时自定义。',
     tourDocs: 'AI 文档',
-    tourDocsDesc: '借助 AI 创建、阅读和整理文档。你的 Agent 可以帮你撰写、总结和管理 Markdown、Word、PDF 等各类文档。',
+    tourDocsDesc: '借助 AI 创建、阅读和整理文档。你的数字人可以帮你撰写、总结和管理 Markdown、Word、PDF 等各类文档。',
   },
   onboarding: {
     addProviderTitle: '添加 AI 提供商',
@@ -5058,27 +5078,27 @@ export const zh = {
     createUserAgentTitle: '创建你的用户画像',
     createUserAgentDesc: '点击 + 按钮设置你的身份 — AI 将通过这些信息认识你',
     fillUserAgentTitle: '设置你的身份',
-    fillUserAgentDesc: '这决定了 AI 智能体如何理解你、如何与你沟通',
+    fillUserAgentDesc: '这决定了 AI 数字人如何理解你、如何与你沟通',
     userStep1: '名称 — 例如 "小明"、"Emily"',
     userStep2: '描述 — 例如 "产品经理，5年经验"',
     userStep3: '点击 "从描述生成" 自动生成你的提示词',
     userStep4: '头像 — 点击人形图标选择视觉形象',
     multiUserAgentTitle: '提示：多重身份',
-    multiUserAgentDesc: '你可以创建多个用户画像，以不同身份与 AI 沟通 — 例如「工作中的我」和「生活中的我」。随时可以在智能体页面创建更多。',
+    multiUserAgentDesc: '你可以创建多个用户画像，以不同身份与 AI 沟通 — 例如「工作中的我」和「生活中的我」。随时可以在数字人页面创建更多。',
     systemAgentTitle: '部署你的首个团队',
-    systemAgentDesc: '选择一个模板部署 AI 智能体团队，之后可以随时自定义。',
+    systemAgentDesc: '选择一个模板部署 AI 数字人团队，之后可以随时自定义。',
     configureUtilityTitle: '设置工具模型',
     configureUtilityDesc: '保存前必须先测试连接',
     newChatTitle: '创建你的第一个对话',
     newChatDesc: '点击 + 按钮开始新对话',
     setupChatTitle: '设置你的对话',
-    setupChatDesc: '为这个对话选择智能体',
-    chatStep1: '选择系统智能体 — 你要对话的 AI 助手',
+    setupChatDesc: '为这个对话选择数字人',
+    chatStep1: '选择系统数字人 — 你要对话的 AI 助手',
     chatStep2: '选择用户画像 — 你在对话中的身份',
     chatStep3: '点击创建，开始聊天！',
     firstChatName: '我的第一个对话',
     chatComplete: '设置完成！',
-    chatCompleteDesc: '你随时可以在对话头部更改智能体配置。开始享受 ClankAI 吧！',
+    chatCompleteDesc: '你随时可以在对话头部更改数字人配置。开始享受 ClankAI 吧！',
     configureLater: '稍后配置',
     chooseProviderTitle: '选择 AI 提供商',
     chooseProviderDesc: '我们根据你的语言推荐了一个免费方案，你也可以选择其他提供商。',
@@ -5105,7 +5125,7 @@ export const zh = {
     privacyNote: '我们不会收集你的对话内容、提示词、API Key 或任何服务商凭据。登录仅用于解除访客额度限制。',
     maxChats: '访客最多创建 15 个对话。登录后即可继续创建。',
     maxFolders: '访客最多创建 5 个对话文件夹。登录后即可继续创建。',
-    maxAgents: '访客最多创建 20 个 Agent。登录后即可继续创建。',
+    maxAgents: '访客最多创建 20 个数字人。登录后即可继续创建。',
     maxUserPersonas: '访客最多创建 3 个用户人格。登录后即可继续创建。',
     maxTasks: '访客最多创建 5 个任务。登录后即可继续创建。',
     maxPlans: '访客最多创建 5 个计划。登录后即可继续创建。',
@@ -5266,7 +5286,8 @@ export const zh = {
     resetSuccessLogin: '密码已重置，请使用新密码登录。',
     googleHelper: '使用你的 Google 账号登录。我们看不到你的 Google 密码。',
     continueWithGoogle: '使用 Google 登录',
-    continueLabel: '使用邮箱登录',
+    continueLabel: '登录或注册',
+    emailFirstFlowHint: '新邮箱将自动进入注册流程,无需单独的注册入口。',
     emailFirstHelper: '登录后可解锁完整功能。未登录时部分功能将受限。',
     welcomeBack: '欢迎回来，{email}',
     createAccountFor: '为 {email} 创建账号',
@@ -5292,7 +5313,7 @@ export const zh = {
     signedInWithGoogle: 'Google',
     notSignedIn: '尚未登录',
     notSignedInHint: '登录后可解锁完整功能。不登录也可以继续使用 Clankit，但部分功能将受限。',
-    signInOrRegister: '登录',
+    signInOrRegister: '登录 / 注册',
     switchAccount: '切换账号',
     signOut: '退出登录',
     registeredAt: '注册时间',
@@ -5300,7 +5321,7 @@ export const zh = {
     privacyTitle: '我们会收集 / 不会收集什么',
     privacyBullet1: '我们绝不会读取或上传你的对话、提示词、回复或附件。',
     privacyBullet2: '我们绝不会读取或上传你的 API Key、服务商凭据或任何模型输出。',
-    privacyBullet3: '登录仅用于解除应用内显示的访客额度（对话、Agent、任务等）。',
+    privacyBullet3: '登录仅用于解除应用内显示的访客额度（对话、数字人、任务等）。',
     privacyBullet4: '所有数据都保存在你的本地设备。设置 → 数据目录 中的内容均不会上传。',
     guestLimitsTitle: '访客额度',
     guestLimitsHint: '正式打包版本对未登录用户生效。登录后所有额度立即解除。',

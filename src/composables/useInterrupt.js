@@ -4,11 +4,24 @@ import { useChatsStore } from '../stores/chats'
 /**
  * Per-chat interrupt composable — THE SOLE ENTRY POINT for stopping/recalling.
  *
- * Contract:
- *   - Agent has NOT started (no text / tool / image / plan in system bubble):
- *       interrupt → terminate, delete user + system bubble, recall user prompt to textarea
- *   - Agent HAS started (any visible content):
- *       interrupt → terminate, keep all bubbles, append [Request interrupted by user.] marker
+ * Contract (single & group chat unified):
+ *   Find every streaming-or-waiting assistant msg in this chat (pendingMsgs).
+ *   Compute `anyActivity = pendingMsgs.some(_hasActivity)` — OR across ALL pending
+ *   bubbles, never look only at the last one. Single chat is the N=1 degenerate
+ *   case of group chat.
+ *
+ *   - anyActivity = true:
+ *       terminate, then for each pending msg: append [Request interrupted by user.]
+ *       on the ones with activity, splice-remove the empty placeholders so no
+ *       "marker on an empty bubble" ghosts remain. user msg + textarea untouched.
+ *
+ *   - anyActivity = false (every pending bubble is empty):
+ *       terminate, splice-remove all empty placeholders, delete the user msg,
+ *       recall user text + attachments back to textarea.
+ *
+ *   Iron law: NEVER decide based on the last pending msg alone — that's the
+ *   group-chat regression that keeps coming back. Iterating across pendingMsgs
+ *   is mandatory.
  *
  * @param {Object}   opts
  * @param {string|()=>string} opts.chatId
@@ -75,10 +88,16 @@ export function useInterrupt({
         const waitIdx = chat.messages.findIndex(m => m.isWaitingIndicator)
         if (waitIdx >= 0) chat.messages.splice(waitIdx, 1)
       }
-      const streamingMsg = chat.messages?.slice().reverse().find(
+      // Apply marker / splice on ALL streaming assistant msgs — group chat may
+      // have N. Single chat is the N=1 degenerate case. _applyInterruptMarker:
+      //   has activity → append marker, streaming=false
+      //   empty       → splice out
+      const streamingMsgs = (chat.messages || []).filter(
         m => m.streaming && m.role === 'assistant' && !m.isWaitingIndicator
       )
-      if (streamingMsg) _applyInterruptMarker(chat, streamingMsg)
+      for (const msg of streamingMsgs) {
+        _applyInterruptMarker(chat, msg)
+      }
       chat.isRunning = false
       chat.isThinking = false
       chat.isCallingTool = false
@@ -97,27 +116,44 @@ export function useInterrupt({
     const chat = chatsStore.chats.find(c => c.id === cid)
     if (!chat?.messages?.length) return
 
-    // Find the last assistant msg that is streaming or waiting
-    const lastAssistantMsg = [...chat.messages].reverse().find(
+    // Collect ALL streaming-or-waiting assistant msgs (group chat: up to N).
+    // Single chat is the N=1 degenerate case.
+    const pendingMsgs = chat.messages.filter(
       m => m.role === 'assistant' && (m.streaming || m.isWaitingIndicator)
     )
-    if (!lastAssistantMsg) return
+    if (pendingMsgs.length === 0) return
 
     _busy = true
 
-    // Capture activity BEFORE stopping (stop will modify/remove the msg)
-    const hasActivity = _hasActivity(lastAssistantMsg)
+    // anyActivity must cover the WHOLE turn, not just msgs still streaming.
+    // Sequence that motivates this: user sends → Cindy starts (empty) → Esc
+    // marks Cindy and stops → Aisha is queued and starts (empty) → Esc again.
+    // At second Esc, pendingMsgs=[Aisha (empty)] so pending-only check would
+    // flip anyActivity=false → recall path → user msg deleted, even though
+    // Cindy already produced output earlier in this same turn. Look at every
+    // assistant msg since the last user msg; if any of them has any content,
+    // we are NOT in the "recall" branch.
+    const lastUserIdx = chat.messages.map(m => m.role).lastIndexOf('user')
+    const turnSlice = lastUserIdx === -1 ? chat.messages : chat.messages.slice(lastUserIdx + 1)
+    const anyActivity = turnSlice.some(
+      m => m.role === 'assistant' && !m.isWaitingIndicator && _hasActivity(m)
+    )
 
-    // Step 1: terminate the agent (await ensures cleanup is done before recall)
+    // Step 1: terminate every running agent in this chat. _stopAgent matches
+    // by chatId prefix (all chatId:agentId loops stop together) AND iterates
+    // every streaming assistant msg to apply marker (with activity) or splice
+    // (empty placeholder).
     await _stopAgent(cid)
 
-    // Step 2: agent had activity → keep all bubbles, done
-    if (hasActivity) {
+    // Step 2: at least one agent had activity → bubbles already handled by
+    // _stopAgent (active ones marked, empty ones spliced). user msg untouched.
+    if (anyActivity) {
       _busy = false
       return
     }
 
-    // Step 3: agent hadn't started → recall user message to textarea
+    // Step 3: every pending bubble was empty → all spliced by _stopAgent.
+    // Recall the user's prompt to the textarea.
     const lastUserMsg = [...chat.messages].reverse().find(m => m.role === 'user')
     if (!lastUserMsg) {
       _busy = false

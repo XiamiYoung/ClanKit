@@ -7,6 +7,7 @@ const { AgentLoop } = require('../agent/agentLoop')
 
 const ds = require('../lib/dataStore')
 const { normalizeLoopConfig } = require('../ipc/agentRuntimeUtils')
+const ipcAgent = require('../ipc/agent')
 
 // Delegate to dataStore.readJSON so CONFIG_FILE reads transparently decrypt
 // safeStorage-protected fields (apiKey, smtp.pass). Other files pass through
@@ -126,6 +127,14 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
   appendMessage(chatId, userMsg)
   notifyRenderer('im:chat-updated', { chatId })
 
+  // Iron-law three-piece (#B): tell the renderer this chat is now running, so
+  // the chat-window UI flips chat.isRunning=true → interrupt button shows up,
+  // status badges light up, etc. Paired with im:run-ended in the outer finally.
+  notifyRenderer('im:run-started', { chatId })
+  // Fresh turn — wipe any stale cancellation from a previous turn so this run
+  // doesn't get aborted before the first agent fires.
+  ipcAgent.clearChatCancelled(chatId)
+  try {
   const config   = readJSON(ds.paths().CONFIG_FILE, {})
   const chat     = readJSON(chatFile(chatId), { id: chatId, messages: [] })
   const agents = readAgents()
@@ -178,6 +187,10 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
   }
 
   for (const pid of respondingIds) {
+    // One Esc stops the WHOLE fan-out, not just the current agent. agent:stop
+    // marks the chat cancelled; this check breaks the for-loop before a new
+    // AgentLoop is even constructed for the next agent.
+    if (ipcAgent.isChatCancelled(chatId)) break
     const agent = agentById[pid]
     if (!agent) continue
 
@@ -219,7 +232,26 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
     appendMessage(chatId, streamingMsg)
     notifyRenderer('im:agent-stream-start', { chatId, message: streamingMsg })
 
+    // Honor a stop request that arrived before this loop was created (race:
+    // user clicked stop while routeMessage was iterating respondingIds).
+    if (ipcAgent.consumePendingStop(chatId)) {
+      removeMessage(chatId, msgId)
+      notifyRenderer('im:agent-stream-end', { chatId, messageId: msgId, removed: true })
+      break
+    }
+
     const loop = new AgentLoop(loopConfig)
+    // Register so agent:stop IPC can find and stop us. Iron-law three-piece
+    // (#C in LESSONS.md): every AgentLoop entry point must register here +
+    // unregister in finally, otherwise stopAgent is a no-op for this path.
+    const loopKey = `${chatId}:${agent.id}`
+    ipcAgent.registerLoop(loopKey, loop, {
+      chatId,
+      agentId: agent.id,
+      agentName: agent.name,
+      isGroup: isGroupChat,
+    })
+
     let fullText = ''
     let flushedLen = 0
     const groupPrefix = isGroupChat && respondingIds.length > 1 ? `**${agent.name}**: ` : ''
@@ -251,11 +283,37 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
         null
       )
     } catch (err) {
-      console.error(`[im-bridge] agentLoop error (agent ${agent.name}):`, err.message)
+      const errorCode = ipcAgent.classifyError(err)
+      console.error(`[im-bridge] agentLoop error (agent ${agent.name}) [${errorCode}]:`, err.message)
       await sendToIM(`Error: ${err.message}`)
+      // Mirror the chat-window error UX: classify the error, set isError +
+      // errorCode + errorDetail on the msg. ChatWindow.vue's existing error
+      // indicator bar + auth-error hint render off these fields. Don't dump
+      // the raw error text into msg.content — that bypasses the structured
+      // error widget and looks ugly. Standard path (useChunkHandler.js sets
+      // isError only when !hasActivity) — we do the same: keep partial text
+      // if any streamed before the error, otherwise mark isError so the red
+      // error card shows.
+      const updates = {
+        streaming: false,
+        errorDetail: err.message,
+        errorCode,
+      }
+      if (fullText) {
+        updates.content = fullText
+        updates.segments = [{ type: 'text', content: fullText }]
+      } else {
+        updates.isError = true
+      }
+      finalizeMessage(chatId, msgId, updates)
+      notifyRenderer('im:agent-stream-end', {
+        chatId, messageId: msgId,
+        error: { code: errorCode, detail: err.message, isError: !fullText },
+      })
       continue
     } finally {
       loop.stop?.()
+      ipcAgent.unregisterLoop(loopKey)
     }
 
     // Finalize: replace streaming placeholder with final content
@@ -280,8 +338,11 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
       }
     } else {
       removeMessage(chatId, msgId)
-      notifyRenderer('im:agent-stream-end', { chatId, messageId: msgId })
+      notifyRenderer('im:agent-stream-end', { chatId, messageId: msgId, removed: true })
     }
+  }
+  } finally {
+    notifyRenderer('im:run-ended', { chatId })
   }
 }
 
@@ -321,7 +382,22 @@ async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, noti
   appendMessage(chatId, streamingMsg)
   notifyRenderer('im:agent-stream-start', { chatId, message: streamingMsg })
 
+  // Honor a stop request that arrived before this loop was created.
+  if (ipcAgent.consumePendingStop(chatId)) {
+    removeMessage(chatId, msgId)
+    notifyRenderer('im:agent-stream-end', { chatId, messageId: msgId, removed: true })
+    return
+  }
+
   const loop = new AgentLoop(loopConfig)
+  // Iron-law three-piece (#C): register so agent:stop IPC can find us.
+  const loopKey = chatId
+  ipcAgent.registerLoop(loopKey, loop, {
+    chatId,
+    agentId: null,
+    agentName: null,
+    isGroup: false,
+  })
   let fullText = ''
   let flushedLen = 0
 
@@ -340,11 +416,30 @@ async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, noti
       notifyRenderer('im:agent-chunk', { chatId, messageId: msgId, chunk })
     }, imageAttachment ? [imageAttachment] : [], undefined, [], [], null)
   } catch (err) {
-    console.error('[im-bridge] agentLoop error:', err.message)
+    const errorCode = ipcAgent.classifyError(err)
+    console.error(`[im-bridge] agentLoop error [${errorCode}]:`, err.message)
     await sendToIM('Error: ' + err.message)
+    // Same structured-error UX as the routeMessage catch — see comment there.
+    const updates = {
+      streaming: false,
+      errorDetail: err.message,
+      errorCode,
+    }
+    if (fullText) {
+      updates.content = fullText
+      updates.segments = [{ type: 'text', content: fullText }]
+    } else {
+      updates.isError = true
+    }
+    finalizeMessage(chatId, msgId, updates)
+    notifyRenderer('im:agent-stream-end', {
+      chatId, messageId: msgId,
+      error: { code: errorCode, detail: err.message, isError: !fullText },
+    })
     return
   } finally {
     loop.stop?.()
+    ipcAgent.unregisterLoop(loopKey)
   }
 
   if (fullText) {
@@ -358,7 +453,7 @@ async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, noti
     notifyRenderer('im:agent-stream-end', { chatId, messageId: msgId })
   } else {
     removeMessage(chatId, msgId)
-    notifyRenderer('im:agent-stream-end', { chatId, messageId: msgId })
+    notifyRenderer('im:agent-stream-end', { chatId, messageId: msgId, removed: true })
   }
 }
 
