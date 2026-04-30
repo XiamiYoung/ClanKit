@@ -578,6 +578,19 @@ app.whenReady().then(async () => {
 
   await migrateChatsIfNeeded()
 
+  // One-shot agents.json + souls/ → agents.db migration. No-op after first run.
+  try {
+    const { migrate: migrateAgents } = require('./migrations/agentsToSqlite')
+    const result = migrateAgents(ds.paths().DATA_DIR)
+    if (!result.skipped) {
+      logger.info(`[main] agents.db migration complete: ${result.migrated} agents, ${result.artifactsRecovered} artifacts`)
+    }
+  } catch (err) {
+    logger.error('[main] agents.db migration failed:', err.message, err.stack)
+    // Do not block app startup — Phase 3 will cut IPC over to AgentStore;
+    // until then, store:get-agents still falls back to agents.json on disk.
+  }
+
   createWindow()
 
   // ── Lazy local file server for HTML preview (started on first use) ──
