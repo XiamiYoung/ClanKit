@@ -24,7 +24,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   relaunchApp: () => ipcRenderer.invoke('app:relaunch'),
   getEnvPaths: () => ipcRenderer.invoke('store:get-env-paths'),
   saveEnvPath: (key, value) => ipcRenderer.invoke('store:save-env-path', key, value),
-  getUtilityUsage: () => ipcRenderer.invoke('store:get-utility-usage'),
 
   getAgents: () => ipcRenderer.invoke('store:get-agents'),
   saveAgents: (agents) => ipcRenderer.invoke('store:save-agents', agents),

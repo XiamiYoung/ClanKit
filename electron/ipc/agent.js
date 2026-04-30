@@ -1279,7 +1279,6 @@ Examples:
     _activeEditRequests.set(requestId, abort)
 
     const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
-    let inputTokens = 0, outputTokens = 0
 
     if (isOpenAI) {
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
@@ -1311,10 +1310,6 @@ Examples:
         if (delta && !event.sender.isDestroyed()) {
           event.sender.send('agent:edit-chunk', { requestId, type: 'delta', text: delta })
         }
-        if (chunk.usage) {
-          inputTokens = chunk.usage.prompt_tokens || 0
-          outputTokens = chunk.usage.completion_tokens || 0
-        }
       }
     } else {
       const { AnthropicClient } = require('../agent/core/AnthropicClient')
@@ -1338,9 +1333,7 @@ Examples:
         }
       })
 
-      const finalMsg = await stream.finalMessage()
-      inputTokens = finalMsg.usage?.input_tokens || 0
-      outputTokens = finalMsg.usage?.output_tokens || 0
+      await stream.finalMessage()
     }
 
     _activeEditRequests.delete(requestId)
