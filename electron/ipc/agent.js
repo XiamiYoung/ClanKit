@@ -25,7 +25,7 @@ const { mcpManager } = require('../agent/mcp/McpManager')
 const { MemoryExtractor } = require('../agent/core/MemoryExtractor')
 
 const { HistoryIndex } = require('../memory/HistoryIndex')
-const { accumulateUsage, accumulateUtilityUsage } = require('./store')
+const { accumulateUsage } = require('./store')
 const { queryRAG } = require('./knowledge')
 const { createChunkAccumulator } = require('../agent/chunkAccumulator')
 const { normalizeAgents, normalizeTools, normalizeMcpServers } = require('../agent/dataNormalizers')
@@ -1344,7 +1344,6 @@ Examples:
     }
 
     _activeEditRequests.delete(requestId)
-    accumulateUtilityUsage(um.model, um.provider, inputTokens, outputTokens).catch(() => {})
 
     if (!event.sender.isDestroyed()) {
       event.sender.send('agent:edit-chunk', { requestId, type: 'done' })
@@ -1799,7 +1798,6 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
         contents: prompt,
       })
       const text = resp.candidates?.[0]?.content?.parts?.[0]?.text || ''
-      accumulateUtilityUsage(um.model, um.provider, 0, 0).catch(() => {})
       return { success: true, text }
     }
 
@@ -1823,7 +1821,6 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
         messages: [{ role: 'user', content: prompt }],
       })
       const text = response.choices?.[0]?.message?.content || ''
-      accumulateUtilityUsage(um.model, um.provider, response.usage?.prompt_tokens || 0, response.usage?.completion_tokens || 0).catch(() => {})
       return { success: true, text }
     } else {
       // anthropic or openrouter — both use AnthropicClient
@@ -1841,7 +1838,6 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
         messages: [{ role: 'user', content: prompt }],
       })
       const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
-      accumulateUtilityUsage(um.model, um.provider, response.usage?.input_tokens || 0, response.usage?.output_tokens || 0).catch(() => {})
       return { success: true, text }
     }
   } catch (err) {
@@ -1919,7 +1915,6 @@ If none should respond, reply with [].`
         ],
       })
       raw = resp.choices?.[0]?.message?.content || ''
-      accumulateUtilityUsage(um.model, um.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
     } else {
       // anthropic or openrouter
       const { AnthropicClient } = require('../agent/core/AnthropicClient')
@@ -1936,7 +1931,6 @@ If none should respond, reply with [].`
         messages: [{ role: 'user', content: userContent }],
       })
       raw = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
-      accumulateUtilityUsage(um.model, um.provider, resp.usage?.input_tokens || 0, resp.usage?.output_tokens || 0).catch(() => {})
     }
 
     // Extract JSON array from response (may have surrounding prose)
@@ -2058,7 +2052,6 @@ Examples:
         ],
       })
       raw = resp.choices?.[0]?.message?.content || ''
-      accumulateUtilityUsage(um.model, um.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
     } else {
       const { AnthropicClient } = require('../agent/core/AnthropicClient')
       const cfg = {
@@ -2074,7 +2067,6 @@ Examples:
         messages: [{ role: 'user', content: userContent }],
       })
       raw = resp.content.filter(block => block.type === 'text').map(block => block.text).join('').trim()
-      accumulateUtilityUsage(um.model, um.provider, resp.usage?.input_tokens || 0, resp.usage?.output_tokens || 0).catch(() => {})
     }
 
     const match = raw.match(/\[.*?\]/s)
@@ -2175,7 +2167,6 @@ Reply with ONLY a JSON object:
         messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }],
       })
       raw = resp.choices?.[0]?.message?.content || ''
-      accumulateUtilityUsage(um.model, um.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
     } else {
       const { AnthropicClient } = require('../agent/core/AnthropicClient')
       const cfg = { apiKey: providerCfg.apiKey, baseURL: providerCfg.baseURL.replace(/\/+$/, ''), customModel: um.model, _scenario: 'dispatch-group-tasks' }
@@ -2184,7 +2175,6 @@ Reply with ONLY a JSON object:
         messages: [{ role: 'user', content: userContent }],
       })
       raw = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
-      accumulateUtilityUsage(um.model, um.provider, resp.usage?.input_tokens || 0, resp.usage?.output_tokens || 0).catch(() => {})
     }
 
     // Parse response — new format is a JSON object with executionMode + dispatched array
@@ -2339,7 +2329,6 @@ Rules:
         ],
       })
       raw = resp.choices?.[0]?.message?.content || ''
-      accumulateUtilityUsage(resolvedUm.model, resolvedUm.provider, resp.usage?.prompt_tokens || 0, resp.usage?.completion_tokens || 0).catch(() => {})
     } else {
       const { AnthropicClient } = require('../agent/core/AnthropicClient')
       const clientCfg = {
@@ -2355,7 +2344,6 @@ Rules:
         messages: [{ role: 'user', content: userContent }],
       })
       raw = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
-      accumulateUtilityUsage(resolvedUm.model, resolvedUm.provider, resp.usage?.input_tokens || 0, resp.usage?.output_tokens || 0).catch(() => {})
     }
 
     const match = raw.match(/\{[\s\S]*\}/m)

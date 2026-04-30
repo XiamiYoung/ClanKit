@@ -70,21 +70,6 @@ async function accumulateUsage(chatId, metrics, provider, model) {
   }
 }
 
-async function accumulateUtilityUsage(model, provider, inputTokens, outputTokens) {
-  if (!model || (!inputTokens && !outputTokens)) return
-  try {
-    const existing = await ds.readJSONAsync(ds.paths().UTILITY_USAGE_FILE, { model, provider, inputTokens: 0, outputTokens: 0 })
-    const updated = {
-      model, provider: provider || existing.provider || '',
-      inputTokens:  (existing.inputTokens  || 0) + (inputTokens  || 0),
-      outputTokens: (existing.outputTokens || 0) + (outputTokens || 0),
-    }
-    await ds.writeJSONAtomic(ds.paths().UTILITY_USAGE_FILE, updated)
-  } catch (err) {
-    logger.warn('accumulateUtilityUsage write failed', err.message)
-  }
-}
-
 function register({ DEFAULT_CONFIG }) {
   const p = () => ds.paths()
 
@@ -237,8 +222,6 @@ function register({ DEFAULT_CONFIG }) {
     dataPath: p().DATA_DIR, defaultDataPath: p().DEFAULT_DATA_PATH, platform: process.platform,
   }))
 
-  ipcMain.handle('store:get-utility-usage', async () => ds.readJSONAsync(p().UTILITY_USAGE_FILE, null))
-
   ipcMain.handle('store:save-data-path', (_, newDataPath) => {
     try {
       // Write dataPath to the fixed settings.json (pointer file, outside DATA_DIR)
@@ -291,4 +274,4 @@ function register({ DEFAULT_CONFIG }) {
   })
 }
 
-module.exports = { register, accumulateUsage, accumulateUtilityUsage }
+module.exports = { register, accumulateUsage }

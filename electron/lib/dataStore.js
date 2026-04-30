@@ -123,7 +123,6 @@ function init() {
     TOOLS_FILE:           path.join(DATA_DIR, 'tools.json'),
     AGENT_ARTIFACTS_DIR:  path.join(DATA_DIR, 'agent-artifacts'),
     KNOWLEDGE_FILE:       path.join(DATA_DIR, 'knowledge.json'),
-    UTILITY_USAGE_FILE:   path.join(DATA_DIR, 'utility-usage.json'),
     TASKS_FILE:           path.join(DATA_DIR, 'tasks.json'),
     PLANS_FILE:           path.join(DATA_DIR, 'plans.json'),
     TASK_RUNS_DIR:        path.join(DATA_DIR, 'task-runs'),
