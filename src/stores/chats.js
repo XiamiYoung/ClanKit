@@ -1172,6 +1172,7 @@ export const useChatsStore = defineStore('chats', () => {
       if (msg) {
         msg.streaming = false
         if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
+        if (!msg.timestamp) msg.timestamp = Date.now()
         if (!msg.content && !(msg.segments || []).some(s => s.type === 'text' && s.content)) {
           msg.isError = true
           msg.content = '_No response_'
@@ -1193,6 +1194,7 @@ export const useChatsStore = defineStore('chats', () => {
         if (m.streaming) {
           m.streaming = false
           if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
+          if (!m.timestamp) m.timestamp = Date.now()
         }
       }
       if (chunk.type === 'send_message_error') {

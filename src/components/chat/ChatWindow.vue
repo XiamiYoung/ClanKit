@@ -283,7 +283,7 @@
               class="cw-msg-timestamp"
               :style="msg.role === 'user' ? 'text-align:right;' : 'text-align:left;'"
             >
-              {{ formatTime(msg.timestamp) }}
+              {{ formatTimeRange(msg) }}
             </div>
           </div>
 
@@ -778,6 +778,16 @@ function formatTime(ts) {
   const h = String(d.getHours()).padStart(2, '0')
   const m = String(d.getMinutes()).padStart(2, '0')
   return `${Y}-${M}-${D} ${h}:${m}`
+}
+
+// User bubbles show a single timestamp. Assistant / system bubbles show
+// "start → end". end falls back to: completion time → stop/error time → start time.
+function formatTimeRange(msg) {
+  if (msg.role === 'user') return formatTime(msg.timestamp)
+  const start = msg.streamingStartedAt
+  const end = msg.timestamp
+  if (start && end) return `${formatTime(start)} → ${formatTime(end)}`
+  return formatTime(end || start)
 }
 
 // ── Copy ──

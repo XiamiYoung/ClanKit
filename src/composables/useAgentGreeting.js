@@ -68,6 +68,7 @@ function _ensureSubscription(chatsStore) {
       msg.errorCode = errorCode
       msg.errorDetail = errorDetail
       if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
+      if (!msg.timestamp) msg.timestamp = Date.now()
       // Leave content empty — formatErrorLabel renders a localized label from
       // errorCode + errorDetail, and the bubble shouldn't show "_No response_".
       msg.content = ''
@@ -159,6 +160,7 @@ export async function triggerAgentGreeting({ chatId, agentId }) {
       placeholder.errorCode = _classifyErrorText(detail)
       placeholder.errorDetail = detail
       if (placeholder.streamingStartedAt) placeholder.durationMs = Date.now() - placeholder.streamingStartedAt
+      if (!placeholder.timestamp) placeholder.timestamp = Date.now()
       placeholder.content = ''
       placeholder.segments = []
     }

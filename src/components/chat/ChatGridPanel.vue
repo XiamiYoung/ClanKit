@@ -633,6 +633,7 @@ async function onMentionSend(text) {
               else { msg.segments = [{ type: 'text', content: `Error: ${res.error}` }]; msg.content = `Error: ${res.error}` }
               msg.streaming = false
               if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
+              if (!msg.timestamp) msg.timestamp = Date.now()
             }
           }
           // Append this agent's reply to apiMessages for next agent's context
@@ -642,14 +643,14 @@ async function onMentionSend(text) {
           const currentChat = chatsStore.chats.find(c => c.id === chatId)
           if (currentChat?.messages) {
             const msg = currentChat.messages.find(m => m.id === streamingMsgId)
-            if (msg) { msg.content = `Error: ${err.message}`; msg.streaming = false; if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt }
+            if (msg) { msg.content = `Error: ${err.message}`; msg.streaming = false; if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt; if (!msg.timestamp) msg.timestamp = Date.now() }
           }
         }
       }
     } finally {
       const finChat = chatsStore.chats.find(c => c.id === chatId)
       if (finChat) { finChat.isRunning = false; finChat.isThinking = false }
-      if (finChat?.messages) for (const m of finChat.messages) if (m.streaming) { m.streaming = false; if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt }
+      if (finChat?.messages) for (const m of finChat.messages) if (m.streaming) { m.streaming = false; if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt; if (!m.timestamp) m.timestamp = Date.now() }
       // Mark chat as completed (display logic will show Done label for non-active chats)
       chatsStore.markCompleted(chatId)
       await chatsStore.persist?.()
@@ -731,17 +732,17 @@ async function onSend(text, pendingAttachments = [], longBlobs = {}) {
       if (msg) {
         if (res.success) { if (!msg.content && res.result) { msg.segments = [{ type: 'text', content: res.result }]; msg.content = res.result } }
         else { msg.segments = [{ type: 'text', content: `Error: ${res.error}` }]; msg.content = `Error: ${res.error}` }
-        msg.streaming = false; if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
+        msg.streaming = false; if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt; if (!msg.timestamp) msg.timestamp = Date.now()
       }
     }
     await chatsStore.persist?.()
   } catch (err) {
     const tc = chatsStore.chats.find(c => c.id === chatId)
-    if (tc?.messages) { const msg = tc.messages.find(m => m.id === streamingMsgId); if (msg) { msg.content = `Error: ${err.message}`; msg.streaming = false; if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt } }
+    if (tc?.messages) { const msg = tc.messages.find(m => m.id === streamingMsgId); if (msg) { msg.content = `Error: ${err.message}`; msg.streaming = false; if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt; if (!msg.timestamp) msg.timestamp = Date.now() } }
   } finally {
     const finChat = chatsStore.chats.find(c => c.id === chatId)
     if (finChat) { finChat.isRunning = false; finChat.isThinking = false }
-    if (finChat?.messages) for (const m of finChat.messages) if (m.streaming) { m.streaming = false; if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt }
+    if (finChat?.messages) for (const m of finChat.messages) if (m.streaming) { m.streaming = false; if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt; if (!m.timestamp) m.timestamp = Date.now() }
     // Mark chat as completed (display logic will show Done label for non-active chats)
     chatsStore.markCompleted(chatId)
   }
