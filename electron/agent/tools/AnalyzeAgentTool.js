@@ -18,6 +18,7 @@
 const path = require('path')
 const { BaseTool } = require('./BaseTool')
 const { logger } = require('../../logger')
+const { getInstance: getAgentStore } = require('../AgentStore')
 
 class AnalyzeAgentTool extends BaseTool {
   /**
@@ -463,15 +464,11 @@ class AnalyzeAgentTool extends BaseTool {
     // ── Load import artifacts for extra data ────────────────────────
     let artifactBlock = ''
     try {
-      const artifactsDir = path.join(this.dataPath, 'agent-artifacts')
-      for (const t of ['system', 'users']) {
-        const sp = path.join(artifactsDir, t, `${this.targetAgentId}.speech.json`)
-        if (fs.existsSync(sp)) {
-          const sd = JSON.parse(fs.readFileSync(sp, 'utf8'))
-          artifactBlock = `\n\n## 导入时 Speech DNA\n- catchphrases: ${(sd.catchphrases||[]).map(c=>c.phrase||c).join(', ')}\n- emoji: ${(sd.emoji||[]).map(e=>`${e.char}(${e.frequency})`).join(', ')}\n- avg_len: ${sd.sentenceStyle?.avgLength}  median: ${sd.sentenceStyle?.median}\n- short_pct: ${sd.sentenceStyle?.shortPct}  punctuation: ${sd.sentenceStyle?.punctuation}\n- reply_latency_sec: ${sd.replyTiming?.medianLatencySec}`
-          if (sd.conventions?.callsYou?.length) artifactBlock += `\n- calls_you: ${sd.conventions.callsYou.join(', ')}`
-          break
-        }
+      const _artifacts = getAgentStore(this.dataPath).getImportArtifacts(this.targetAgentId)
+      const sd = _artifacts?.speechDna || null
+      if (sd) {
+        artifactBlock = `\n\n## 导入时 Speech DNA\n- catchphrases: ${(sd.catchphrases||[]).map(c=>c.phrase||c).join(', ')}\n- emoji: ${(sd.emoji||[]).map(e=>`${e.char}(${e.frequency})`).join(', ')}\n- avg_len: ${sd.sentenceStyle?.avgLength}  median: ${sd.sentenceStyle?.median}\n- short_pct: ${sd.sentenceStyle?.shortPct}  punctuation: ${sd.sentenceStyle?.punctuation}\n- reply_latency_sec: ${sd.replyTiming?.medianLatencySec}`
+        if (sd.conventions?.callsYou?.length) artifactBlock += `\n- calls_you: ${sd.conventions.callsYou.join(', ')}`
       }
     } catch (_) {}
 
@@ -1503,10 +1500,7 @@ Output JSON directly, starting with { :`
       harness: null,
     }
 
-    // Determine memory presence — check the SQLite MemoryStore. Sidecar
-    // JSON files (speech.json / evidence.json / harness.json) live alongside
-    // the agent-artifacts directory.
-    const artifactsDir = path.join(this.dataPath, 'agent-artifacts')
+    // Determine memory presence — check the SQLite MemoryStore.
     const memoryStoreMod = require('../../memory/memoryStore')
     const memoryDir = path.join(this.dataPath, 'memory')
     const _memoryStore = memoryStoreMod.getInstance(memoryDir)
@@ -1515,46 +1509,14 @@ Output JSON directly, starting with { :`
       if (_memoryStore.exists(agentId, t)) { agentTypeFound = t; break }
     }
 
-    // 1. Speech DNA
+    // 1–3. Speech DNA, Evidence Index, Harness — single DB read
     try {
-      for (const t of ['system', 'users']) {
-        const speechPath = path.join(artifactsDir, t, `${agentId}.speech.json`)
-        if (fs.existsSync(speechPath)) {
-          result.speechDna = JSON.parse(fs.readFileSync(speechPath, 'utf8'))
-          result.imported = true
-          break
-        }
-      }
+      const _artifacts = getAgentStore(this.dataPath).getImportArtifacts(agentId)
+      if (_artifacts?.speechDna)  { result.speechDna = _artifacts.speechDna; result.imported = true }
+      if (_artifacts?.evidence)   { result.evidenceIndex = _artifacts.evidence; result.imported = true }
+      if (_artifacts?.harness)    { result.harness = _artifacts.harness; result.imported = true }
     } catch (err) {
-      logger.warn('[AnalyzeAgentTool] speech.json read error:', err.message)
-    }
-
-    // 2. Evidence Index
-    try {
-      for (const t of ['system', 'users']) {
-        const evidencePath = path.join(artifactsDir, t, `${agentId}.evidence.json`)
-        if (fs.existsSync(evidencePath)) {
-          result.evidenceIndex = JSON.parse(fs.readFileSync(evidencePath, 'utf8'))
-          result.imported = true
-          break
-        }
-      }
-    } catch (err) {
-      logger.warn('[AnalyzeAgentTool] evidence.json read error:', err.message)
-    }
-
-    // 3. Harness validation scores
-    try {
-      for (const t of ['system', 'users']) {
-        const harnessPath = path.join(artifactsDir, t, `${agentId}.harness.json`)
-        if (fs.existsSync(harnessPath)) {
-          result.harness = JSON.parse(fs.readFileSync(harnessPath, 'utf8'))
-          result.imported = true
-          break
-        }
-      }
-    } catch (err) {
-      logger.warn('[AnalyzeAgentTool] harness.json read error:', err.message)
+      logger.warn('[AnalyzeAgentTool] import_artifacts read error:', err.message)
     }
 
     // 4. Nuwa sections from the memory store (extract only Nuwa-specific sections)
@@ -1825,25 +1787,16 @@ Output JSON directly, starting with { :`
     // ── Load import artifacts for both paths ───────────────────────────
     let artifactBlock = ''
     try {
-      const fs = require('fs')
-      const artifactsDir = path.join(this.dataPath, 'agent-artifacts')
-      for (const t of ['system', 'users']) {
-        const sp = path.join(artifactsDir, t, `${this.targetAgentId}.speech.json`)
-        if (fs.existsSync(sp)) {
-          const sd = JSON.parse(fs.readFileSync(sp, 'utf8'))
-          artifactBlock += `\n\nSpeech DNA: catchphrases=[${(sd.catchphrases||[]).map(c=>c.phrase||c).join(', ')}], emoji=[${(sd.emoji||[]).map(e=>e.char).join('')}], avg_len=${sd.sentenceStyle?.avgLength}, punctuation=${sd.sentenceStyle?.punctuation}, reply_latency=${sd.replyTiming?.medianLatencySec}s`
-          if (sd.conventions?.callsYou?.length) artifactBlock += `, calls_user=[${sd.conventions.callsYou.join(', ')}]`
-          break
-        }
+      const _artifacts = getAgentStore(this.dataPath).getImportArtifacts(this.targetAgentId)
+      const sd = _artifacts?.speechDna || null
+      if (sd) {
+        artifactBlock += `\n\nSpeech DNA: catchphrases=[${(sd.catchphrases||[]).map(c=>c.phrase||c).join(', ')}], emoji=[${(sd.emoji||[]).map(e=>e.char).join('')}], avg_len=${sd.sentenceStyle?.avgLength}, punctuation=${sd.sentenceStyle?.punctuation}, reply_latency=${sd.replyTiming?.medianLatencySec}s`
+        if (sd.conventions?.callsYou?.length) artifactBlock += `, calls_user=[${sd.conventions.callsYou.join(', ')}]`
       }
-      for (const t of ['system', 'users']) {
-        const ep = path.join(artifactsDir, t, `${this.targetAgentId}.evidence.json`)
-        if (fs.existsSync(ep)) {
-          const ei = JSON.parse(fs.readFileSync(ep, 'utf8'))
-          const topClaims = (ei.claims||[]).slice(0, 8).map(c => c.claim).join('; ')
-          if (topClaims) artifactBlock += `\nVerified claims: ${topClaims}`
-          break
-        }
+      const ei = _artifacts?.evidence || null
+      if (ei) {
+        const topClaims = (ei.claims||[]).slice(0, 8).map(c => c.claim).join('; ')
+        if (topClaims) artifactBlock += `\nVerified claims: ${topClaims}`
       }
     } catch (_) {}
 
