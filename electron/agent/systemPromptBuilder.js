@@ -29,25 +29,21 @@ const MEMORY_KEY_SECTIONS = [
 ]
 
 /**
- * Read the speech DNA JSON file for an agent. Returns parsed object or null.
- * Speech DNA is a hard-constraint surface-style fingerprint from chat import.
- *
- * Looks under both system/ and users/ subdirs since agentId is unique.
+ * Read the speech DNA for an agent from the AgentStore import_artifacts table.
+ * Returns the parsed speechDna object or null.
  */
-function readSpeechDna(artifactsDir, agentId) {
-  if (!artifactsDir || !agentId) return null
-  for (const type of ['system', 'users']) {
-    try {
-      const filePath = path.join(artifactsDir, type, `${agentId}.speech.json`)
-      if (fs.existsSync(filePath)) {
-        const raw = fs.readFileSync(filePath, 'utf8')
-        return JSON.parse(raw)
-      }
-    } catch (err) {
-      logger.warn('[systemPromptBuilder] readSpeechDna parse error:', err.message)
-    }
+function readSpeechDna(agentId) {
+  if (!agentId) return null
+  try {
+    const { getInstance: getAgentStore } = require('./AgentStore')
+    const ds = require('../lib/dataStore')
+    const agentStore = getAgentStore(ds.paths().DATA_DIR)
+    const artifacts = agentStore.getImportArtifacts(agentId)
+    return artifacts?.speechDna || null
+  } catch (err) {
+    logger.warn('[systemPromptBuilder] readSpeechDna error:', err.message)
+    return null
   }
-  return null
 }
 
 /**
@@ -294,9 +290,7 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
   // model treats it as part of "who you are", not as an afterthought.
   if (systemAgentId) {
     try {
-      const dataPathForSpeech = config.dataPath || require('../lib/dataStore').paths().DATA_DIR
-      const artifactsDirForSpeech = path.join(dataPathForSpeech, 'agent-artifacts')
-      const speechDna = readSpeechDna(artifactsDirForSpeech, systemAgentId)
+      const speechDna = readSpeechDna(systemAgentId)
       if (speechDna) {
         const { formatSpeechDnaBlock } = require('./chatImport/speechDnaExtractor')
         const block = formatSpeechDnaBlock(speechDna)
