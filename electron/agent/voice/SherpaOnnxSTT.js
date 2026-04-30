@@ -114,7 +114,7 @@ class SherpaOnnxSTT {
       // Non-WAV: try sherpa's readWave with a temp file as fallback
       const fs = require('fs')
       const os = require('os')
-      const tmp = path.join(os.tmpdir(), `clankai-stt-${Date.now()}.webm`)
+      const tmp = path.join(os.tmpdir(), `clankit-stt-${Date.now()}.webm`)
       try {
         fs.writeFileSync(tmp, audioBuffer)
         const sherpa = getSherpa()

@@ -143,7 +143,7 @@ function fetchFeed(feed) {
       const fetcher = url.startsWith('https') ? https : http
       const req = fetcher.get(url, {
         headers: {
-          'User-Agent': 'ClankAI/1.0 RSS Reader',
+          'User-Agent': 'ClanKit/1.0 RSS Reader',
           'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*'
         },
         timeout: 15000
@@ -154,7 +154,7 @@ function fetchFeed(feed) {
             const rFetcher = redirectUrl.startsWith('https') ? https : http
             const rReq = rFetcher.get(redirectUrl, {
               headers: {
-                'User-Agent': 'ClankAI/1.0 RSS Reader',
+                'User-Agent': 'ClanKit/1.0 RSS Reader',
                 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*'
               },
               timeout: 15000

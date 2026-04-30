@@ -45,7 +45,7 @@ class McpManager {
   // ── Internal helpers ───────────────────────────────────────────────────────
 
   /**
-   * Convert a ClankAI server config to a mcporter ServerDefinition.
+   * Convert a ClanKit server config to a mcporter ServerDefinition.
    * Uses serverId as the mcporter name for a 1:1 mapping.
    *
    * Supports two transport kinds:

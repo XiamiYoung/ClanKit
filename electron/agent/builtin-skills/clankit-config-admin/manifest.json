@@ -1,0 +1,6 @@
+{
+  "id": "clankit-config-admin",
+  "version": 2,
+  "builtin": true,
+  "description": "Built-in skill for managing ClanKit app configuration files"
+}

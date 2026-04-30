@@ -11,7 +11,7 @@ const fs = require('fs')
 exports.default = async function afterPack(context) {
   if (context.electronPlatformName !== 'win32') return
 
-  const exePath = path.join(context.appOutDir, 'ClankAI.exe')
+  const exePath = path.join(context.appOutDir, 'ClanKit.exe')
   const iconPath = path.resolve(__dirname, '../build/icons/icon.ico')
   const rceditPath = path.resolve(__dirname, '../node_modules/electron-winstaller/vendor/rcedit.exe')
 

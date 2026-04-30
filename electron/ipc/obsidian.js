@@ -102,7 +102,7 @@ function register() {
     if (!vaultPath) {
       const dataDir = p().DATA_DIR || ''
       if (dataDir) {
-        vaultPath = path.join(dataDir, 'clank_aidoc')
+        vaultPath = path.join(dataDir, 'clankit_doc')
         try { fs.mkdirSync(vaultPath, { recursive: true }) } catch {}
         // Persist so it's used next time
         cfg.DoCPath = vaultPath

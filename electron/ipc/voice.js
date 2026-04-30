@@ -599,7 +599,7 @@ function register() {
       }
 
       // Multi-chunk: parallel synthesis with concurrency limit
-      const sessionDir = path.join(os.tmpdir(), `clankai-tts-${sessionId}`)
+      const sessionDir = path.join(os.tmpdir(), `clankit-tts-${sessionId}`)
       await fs.promises.mkdir(sessionDir, { recursive: true })
       activeTtsSessions.set(sessionId, { cancelled: false })
 
@@ -648,7 +648,7 @@ function register() {
 
   ipcMain.handle('voice:edge-tts-cleanup', async (_, { sessionDir }) => {
     try {
-      if (sessionDir && sessionDir.includes('clankai-tts-')) {
+      if (sessionDir && sessionDir.includes('clankit-tts-')) {
         await fs.promises.rm(sessionDir, { recursive: true, force: true })
       }
       return { success: true }

@@ -22,7 +22,7 @@ function register() {
           }
           const fetcher = url.startsWith('https') ? https : http
           const req = fetcher.get(url, {
-            headers: { 'User-Agent': 'ClankAI/1.0 RSS Reader', 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
+            headers: { 'User-Agent': 'ClanKit/1.0 RSS Reader', 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
             timeout: 15000
           }, (res) => {
             if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -30,7 +30,7 @@ function register() {
                 const redirectUrl = new URL(res.headers.location, url).href
                 const rFetcher = redirectUrl.startsWith('https') ? https : http
                 const rReq = rFetcher.get(redirectUrl, {
-                  headers: { 'User-Agent': 'ClankAI/1.0 RSS Reader', 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
+                  headers: { 'User-Agent': 'ClanKit/1.0 RSS Reader', 'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
                   timeout: 15000
                 }, (rRes) => {
                   let body = ''

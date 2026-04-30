@@ -1,15 +1,15 @@
 ---
-name: ClankAI Config Admin
-description: Create or edit ClankAI app configuration files — tools, MCP servers, agents, knowledge bases, tasks, and plans. Load this skill whenever the user asks you to add, modify, or remove any of these.
+name: ClanKit Config Admin
+description: Create or edit ClanKit app configuration files — tools, MCP servers, agents, knowledge bases, tasks, and plans. Load this skill whenever the user asks you to add, modify, or remove any of these.
 ---
 
-# ClankAI Config Admin
+# ClanKit Config Admin
 
-You are managing the ClankAI desktop application's configuration files on disk. This skill gives you the authoritative paths, schemas, and rules for editing them. Follow it exactly — do not improvise field names or file layouts.
+You are managing the ClanKit desktop application's configuration files on disk. This skill gives you the authoritative paths, schemas, and rules for editing them. Follow it exactly — do not improvise field names or file layouts.
 
 ## Data directory
 
-All configuration files live in the ClankAI data directory. The absolute path appears in your system prompt under `CLANKAI DATA DIRECTORY: <path>`. Use that path (referred to as `<DATA_DIR>` below) for every file operation in this skill. Never guess the path.
+All configuration files live in the ClanKit data directory. The absolute path appears in your system prompt under `CLANKIT DATA DIRECTORY: <path>`. Use that path (referred to as `<DATA_DIR>` below) for every file operation in this skill. Never guess the path.
 
 ## Standard workflow
 

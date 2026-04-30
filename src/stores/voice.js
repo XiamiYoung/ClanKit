@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
-const VOICE_DAILY_KEY = 'clankai_voice_daily'
+const VOICE_DAILY_KEY = 'clankit_voice_daily'
 
 export const useVoiceStore = defineStore('voice', () => {
   const isCallActive = ref(false)

@@ -439,7 +439,7 @@ const stepLabels = computed(() => [
 
 const stepTitle = computed(() => {
   switch (step.value) {
-    case 1: return t('setupWizard.welcomeToClankAI')
+    case 1: return t('setupWizard.welcomeToClanKit')
     case 2: return t('setupWizard.signInTitle')
     case 3: return t('setupWizard.chooseProvider')
     case 4: return t('setupWizard.configureProvider')

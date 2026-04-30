@@ -15,7 +15,7 @@
         </div>
 
         <div v-if="result.output" class="attb-output">
-          <div class="prose-clankai" v-html="sanitizeHtml(result.output)"></div>
+          <div class="prose-clankit" v-html="sanitizeHtml(result.output)"></div>
         </div>
 
         <div v-if="result.error" class="attb-error">
@@ -205,17 +205,17 @@ function sanitizeHtml(text) {
   border-left: 3px solid #DC2626;
 }
 
-:deep(.prose-clankai) {
+:deep(.prose-clankit) {
   color: var(--text-primary);
   line-height: 1.65;
 }
 
-:deep(.prose-clankai a) {
+:deep(.prose-clankit a) {
   color: var(--accent);
   text-decoration: underline;
 }
 
-:deep(.prose-clankai code) {
+:deep(.prose-clankit code) {
   background: var(--accent-light);
   color: var(--accent);
   padding: 0.125rem 0.25rem;
@@ -224,7 +224,7 @@ function sanitizeHtml(text) {
   font-size: 0.85em;
 }
 
-:deep(.prose-clankai pre) {
+:deep(.prose-clankit pre) {
   background: #1C1C1E;
   color: #E5E5EA;
   padding: 0.75rem;
@@ -234,14 +234,14 @@ function sanitizeHtml(text) {
   line-height: 1.5;
 }
 
-:deep(.prose-clankai pre code) {
+:deep(.prose-clankit pre code) {
   background: none;
   color: inherit;
   padding: 0;
   border-radius: 0;
 }
 
-:deep(.prose-clankai blockquote) {
+:deep(.prose-clankit blockquote) {
   border-left: 3px solid var(--text-muted);
   padding-left: 0.75rem;
   color: var(--text-secondary);

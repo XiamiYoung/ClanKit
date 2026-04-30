@@ -283,7 +283,7 @@ export function useChunkHandler({
 
           msg.streaming = false
           if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
-          if (!msg.timestamp) msg.timestamp = Date.now()
+          msg.timestamp = Date.now()
           // Must match useInterrupt._hasActivity — pending tool calls (no output) don't count.
           const hasActivity = !!(msg.content?.trim()) || msg.planData ||
             (msg.segments || []).some(s => {
@@ -638,7 +638,7 @@ export function useChunkHandler({
               m.isError = true
               m.errorDetail = chunk.error
               if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
-              if (!m.timestamp) m.timestamp = Date.now()
+              m.timestamp = Date.now()
             }
           }
           // If no streaming message exists (error before agent_start), create an error message
@@ -667,7 +667,7 @@ export function useChunkHandler({
           if (m.streaming && !m.isWaitingIndicator) {
             m.streaming = false
             if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
-            if (!m.timestamp) m.timestamp = Date.now()
+            m.timestamp = Date.now()
           }
         }
       }

@@ -483,25 +483,25 @@ Loading a skill is cheap (returns a markdown guide); skipping it when relevant c
     }
   }
 
-  // ── ClankAI Data Directory ──
+  // ── ClanKit Data Directory ──
   // dataPath is injected by main.js (DATA_DIR) — single source of truth
   const dataPath = config.dataPath || require('../lib/dataStore').paths().DATA_DIR
   // DoCPath = AI Doc folder (readable documents: md, docx, pdf, pptx, txt, etc.)
   // artifactPath = non-document output (exports, temp files, data, code snippets)
-  const aidocPath    = config.DoCPath || path.join(dataPath, 'clank_aidoc')
+  const aidocPath    = config.DoCPath || path.join(dataPath, 'clankit_doc')
   const artifactPath = config.artifactPath || path.join(dataPath, 'artifact')
   const codingPath = config.chatWorkingPath || ''
   const isCodingMode = !!(config.codingMode && codingPath)
   const skillsPath = config.skillsPath || path.join(dataPath, 'skills')
   // utilityModel fields were historically inlined into the DATA FILE ROUTING
-  // prompt block. That block now lives in the clankai-config-admin built-in
+  // prompt block. That block now lives in the clankit-config-admin built-in
   // skill (loaded on demand via load_skill). These vars are kept only as
   // commented documentation — remove if unused for 2+ releases.
   // const utilityModel = config.utilityModel || {}
   // const utilityProvider = utilityModel.provider || ''
   // const utilityModelId  = utilityModel.model    || ''
-  system += `\n\nCLANKAI DATA DIRECTORY: ${dataPath}
-This is the local data folder for the ClankAI desktop application. Its structure:
+  system += `\n\nCLANKIT DATA DIRECTORY: ${dataPath}
+This is the local data folder for the ClanKit desktop application. Its structure:
   ${dataPath}/
   ├── config.json          — App settings (API keys, models, providers, paths)
   ├── mcp-servers.json     — MCP server definitions
@@ -510,7 +510,7 @@ This is the local data folder for the ClankAI desktop application. Its structure
   ├── knowledge.json       — RAG knowledge config
   ├── chats/               — Per-chat message history
   ├── memory/              — Persistent memory store (memory.db, memory-vec/)
-  ├── clank_aidoc/         — AI Doc folder (readable documents)
+  ├── clankit_doc/         — AI Doc folder (readable documents)
   └── artifact/            — AI-generated non-document output
 
 AI DOC PATH (primary directory for readable documents): ${aidocPath}

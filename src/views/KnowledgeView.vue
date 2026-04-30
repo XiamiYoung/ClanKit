@@ -2,11 +2,11 @@
   <div class="knowledge-page">
 
     <!-- Header -->
-    <div class="knowledge-header">
-      <div class="knowledge-header-top">
+    <div class="catalog-header">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
         <div>
           <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-            <h1 class="knowledge-title">{{ t('knowledge.title') }}</h1>
+            <h1 class="catalog-title">{{ t('knowledge.title') }}</h1>
             <span class="catalog-count-badge">{{ knowledgeStore.knowledgeBases.length }}</span>
             <span class="catalog-assignment-hint">
               <svg class="catalog-assignment-hint-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -16,16 +16,13 @@
               <router-link to="/agents" class="catalog-assignment-hint-link">{{ t('common.goAssign') }} &rarr;</router-link>
             </span>
           </div>
-          <p class="knowledge-subtitle">
+          <p class="catalog-subtitle">
             {{ t('knowledge.subtitle') }}
           </p>
         </div>
-        <div class="header-actions">
+        <div class="flex items-center gap-2">
           <AppButton size="icon" @click="refreshAll" :disabled="isRefreshing" :loading="isRefreshing" v-tooltip="t('common.refresh')">
-            <svg v-if="!isRefreshing" class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="23 4 23 10 17 10"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
+            <svg v-if="!isRefreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
           </AppButton>
           <AppButton size="icon" @click="addMethodOpen = true" v-tooltip="t('knowledge.createKnowledgeBase')">
             <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -774,10 +771,25 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .knowledge-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-main); }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
-.knowledge-header { padding: 1.5rem 2rem 1.25rem; background: var(--bg-card); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.knowledge-header-top { display: flex; align-items: flex-start; justify-content: space-between; }
-.knowledge-title { font-family: 'Inter', sans-serif; font-size: var(--fs-page-title); font-weight: 700; color: var(--text-primary); margin: 0; }
-.knowledge-subtitle { font-family: 'Inter', sans-serif; font-size: var(--fs-body); color: var(--text-secondary); margin: 0.25rem 0 0 0; }
+.catalog-header {
+  flex-shrink: 0;
+  padding: 1rem 1.5rem 0.875rem;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5EA;
+}
+.catalog-title {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-page-title);
+  font-weight: 700;
+  color: #1A1A1A;
+  margin: 0;
+}
+.catalog-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  color: #6B7280;
+  margin: 0.25rem 0 0 0;
+}
 .catalog-assignment-hint {
   display: inline-flex;
   align-items: center;
@@ -814,7 +826,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .catalog-assignment-hint-link:hover {
   background: rgba(180, 83, 9, 0.18);
 }
-.header-actions { display: flex; align-items: center; gap: 0.5rem; }
 .catalog-count-badge {
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-caption);

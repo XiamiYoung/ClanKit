@@ -42,13 +42,13 @@ function key(platform, channelId) {
   return `${platform}:${channelId}`
 }
 
-/** Returns the ClankAI chatId for the active chat of this IM channel, or null. */
+/** Returns the ClanKit chatId for the active chat of this IM channel, or null. */
 function getActiveChatId(platform, channelId) {
   _ensureLoaded()
   return _activeChats.get(key(platform, channelId)) || null
 }
 
-/** Set which ClankAI chat this IM channel is currently routing into. */
+/** Set which ClanKit chat this IM channel is currently routing into. */
 function setActiveChatId(platform, channelId, clankChatId, displayName) {
   _ensureLoaded()
   const k = key(platform, channelId)

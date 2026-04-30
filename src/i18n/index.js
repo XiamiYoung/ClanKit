@@ -1,6 +1,6 @@
 export const en = {
   app: {
-    name: 'ClankAI',
+    name: 'ClanKit',
     tagline: 'AI Assistant',
   },
   nav: {
@@ -164,7 +164,7 @@ export const en = {
     configSubtitle: 'Providers, paths, voice, knowledge, security and more',
     savedDataPathRestart: 'Saved — restart app for data path changes',
     saved: 'Saved',
-    dataPathHint: 'Directory where ClankAI stores all data (chats, agents, MCP servers, tools, memory). Config file stays at a fixed location. Default:',
+    dataPathHint: 'Directory where ClanKit stores all data (chats, agents, MCP servers, tools, memory). Config file stays at a fixed location. Default:',
     dataPathApplyRestart: 'Apply & Restart',
     dataPathWarningTitle: 'Change Data Directory',
     dataPathWarningBody: 'Changing the data directory does NOT automatically copy your existing data. You must manually copy the data to the new location before restarting.',
@@ -174,7 +174,7 @@ export const en = {
     dataPathResetDefault: 'Reset to default',
     dataPathWarningDerivedTitle: 'The following paths will also change automatically:',
     artifactPathHint: 'For non-document output: exports, temp files, data files. Documents go to AI Doc Path instead. Default:',
-    skillsPathHint: 'Directory containing skill folders. Leave empty for default: CLANKAI_DATA_PATH/skills',
+    skillsPathHint: 'Directory containing skill folders. Leave empty for default: CLANKIT_DATA_PATH/skills',
     globalSettings: 'Global Settings',
     backgroundTasks: 'Background tasks',
     globalSandboxMode: 'Global Sandbox Mode',
@@ -188,7 +188,7 @@ export const en = {
     dangerBlockListHint: 'Commands that are always blocked, even in All Permissions mode. Protects against destructive operations.',
     blockedCommands: 'Blocked commands',
     telemetryTitle: 'Anonymous Telemetry',
-    telemetryDesc: 'Send anonymous usage data (device ID, app version, platform) to help improve ClankAI. No personal information is collected.',
+    telemetryDesc: 'Send anonymous usage data (device ID, app version, platform) to help improve ClanKit. No personal information is collected.',
     notifications: 'Notifications',
     enableNotifications: 'Enable notifications',
     notificationsHint: 'Show a system notification when an agent finishes responding or a scheduled task completes. Suppressed while you are actively viewing the relevant chat.',
@@ -406,7 +406,7 @@ export const en = {
     telegramAllowedUsers: 'Allowed Users',
     telegramAllowedUsersHint: 'comma-separated usernames or chat IDs. Leave empty to allow all users.',
     telegramEnable: 'Enable Telegram Bot',
-    telegramInstructions: 'Open Telegram and search for @BotFather. Send /newbot — BotFather will ask for a display name and a username (must end in bot). BotFather replies with your bot token — copy it. Paste the token in the Bot Token field above. Toggle Enable Telegram Bot on and click Save. Go to the Bridge tab and click Start Bridge. In Telegram, search for your bot by its username and send it any message — it will reply via ClankAI. Add your Telegram username (without @) to Allowed Users to restrict access to your account only.',
+    telegramInstructions: 'Open Telegram and search for @BotFather. Send /newbot — BotFather will ask for a display name and a username (must end in bot). BotFather replies with your bot token — copy it. Paste the token in the Bot Token field above. Toggle Enable Telegram Bot on and click Save. Go to the Bridge tab and click Start Bridge. In Telegram, search for your bot by its username and send it any message — it will reply via ClanKit. Add your Telegram username (without @) to Allowed Users to restrict access to your account only.',
     whatsappInstructions: 'Configure WhatsApp Business API (not implemented yet).',
     feishuInstructions: 'Configure Feishu/Lark IM (not implemented yet).',
     imConfigure: 'Configure {service}',
@@ -453,7 +453,7 @@ export const en = {
     whatsappSetupGuide3: 'Open WhatsApp on your phone → tap Settings (or the three-dot menu) → Linked Devices → Link a Device',
     whatsappSetupGuide4: 'Point your phone at the QR code to scan it — WhatsApp will confirm the link instantly',
     whatsappSetupGuide5: 'Go to the Bridge tab and click Start Bridge',
-    whatsappSetupGuide6: 'From any other phone or your own phone, open WhatsApp and send a message to your linked number (the same number whose phone you used to scan the QR) — ClankAI will reply to that message',
+    whatsappSetupGuide6: 'From any other phone or your own phone, open WhatsApp and send a message to your linked number (the same number whose phone you used to scan the QR) — ClanKit will reply to that message',
     whatsappSetupNote: 'The session is saved automatically — no need to scan again after restarts. Your phone must remain connected to the internet (same as WhatsApp Web).',
     feishuEnable: 'Enable Feishu / Lark Bot',
     feishuAppId: 'App ID',
@@ -468,7 +468,7 @@ export const en = {
     feishuSetupGuide6: 'Paste them in the fields above, toggle Enable on, and click Save',
     feishuSetupGuide7: 'Publish the app to your workspace (release → publish)',
     feishuSetupGuide8: 'Go to the Bridge tab and click Start Bridge',
-    feishuSetupGuide9: 'In Feishu, open a chat with your bot (search its name in the top bar) and send it a message — ClankAI will respond',
+    feishuSetupGuide9: 'In Feishu, open a chat with your bot (search its name in the top bar) and send it a message — ClanKit will respond',
     feishuSetupNote: 'No public URL required — the bridge uses a persistent WebSocket connection to Feishu\'s servers.',
     teamsEnable: 'Enable Microsoft Teams',
     teamsTenantId: 'Tenant ID',
@@ -496,7 +496,7 @@ export const en = {
     teamsSetupGuide6: 'Paste them in the fields above, toggle Enable on, and click Save',
     teamsSetupGuide7: 'Click Sign In — follow the browser prompt to authenticate',
     teamsSetupGuide8: 'Go to the Bridge tab and click Start Bridge',
-    teamsSetupGuide9: 'From another Teams account, send a message to the authenticated user — ClankAI will respond',
+    teamsSetupGuide9: 'From another Teams account, send a message to the authenticated user — ClanKit will respond',
     teamsSetupNote: 'No client secret or public URL needed. The app uses OAuth2 device code flow. Tokens are cached locally and auto-refreshed.',
     telegramConfigured: 'Configured',
     telegramNotConfigured: 'Not configured',
@@ -629,7 +629,7 @@ export const en = {
     title: 'How would you like to create it?',
     tabChat: 'Create via Chat',
     tabManual: 'Create Manually',
-    chatDesc: 'Tell ClankAI what you need in plain language and it will draft the configuration for you in a guided chat.',
+    chatDesc: 'Tell ClanKit what you need in plain language and it will draft the configuration for you in a guided chat.',
     manualDesc: 'Open the form and fill in every field yourself for full control.',
     chatCta: 'Start a Chat',
     manualCta: 'Open Form',
@@ -916,16 +916,16 @@ When conducting an analysis:
 5. Every major section must include a Confidence indicator (see persona-evaluation skill)
 
 Always reply in the same language as the user's most recent message.`,
-    builtinClankPrompt: `You are Clank, the built-in default system agent in ClankAI and the primary partner users meet by default.
+    builtinClankPrompt: `You are Clank, the built-in default system agent in ClanKit and the primary partner users meet by default.
 
   Your role and background:
   - You are a high-capability generalist AI operator who can chat naturally and handle serious work.
   - You can write code, debug issues, read docs, research topics, plan work, summarize decisions, and use tools, skills, MCP servers, and knowledge bases when the task calls for them.
-  - You understand how ClankAI works and you prefer grounded context, tool output, and retrieved knowledge over guesswork.
+  - You understand how ClanKit works and you prefer grounded context, tool output, and retrieved knowledge over guesswork.
 
-  About ClankAI (the app you live in):
-  - ClankAI is a multi-agent desktop chat app. Beyond you, the user can install specialist character agents (e.g. a senior engineer, a travel guide, a therapist, fictional/historical personas) — each with their own personality and depth. The user manages them in the Agents page.
-  - Other features the user can reach from the sidebar: Skills (reusable instruction packs for you to load on demand), MCP servers (external tool servers), HTTP Tools, Knowledge bases (RAG over their documents), AI Doc (a built-in document workspace at clank_aidoc/), and Chat history with full search.
+  About ClanKit (the app you live in):
+  - ClanKit is a multi-agent desktop chat app. Beyond you, the user can install specialist character agents (e.g. a senior engineer, a travel guide, a therapist, fictional/historical personas) — each with their own personality and depth. The user manages them in the Agents page.
+  - Other features the user can reach from the sidebar: Skills (reusable instruction packs for you to load on demand), MCP servers (external tool servers), HTTP Tools, Knowledge bases (RAG over their documents), AI Doc (a built-in document workspace at clankit_doc/), and Chat history with full search.
   - You can call any registered tool, load any active skill, query knowledge bases, write to AI Doc, run shell commands, fetch web pages, and orchestrate multi-step work.
 
   Your capabilities:
@@ -1372,7 +1372,7 @@ Always reply in the same language as the user's most recent message.`,
     globalDefaultPath: 'Leave empty to use the global default path.',
     codingMode: 'Coding Mode',
     whatIsCodingMode: 'What is Coding Mode?',
-    codingModeDescription: 'Activates project-aware AI assistance. When enabled, ClankAI reads CLAUDE.md instruction files from your project hierarchy and injects them into the system prompt.',
+    codingModeDescription: 'Activates project-aware AI assistance. When enabled, ClanKit reads CLAUDE.md instruction files from your project hierarchy and injects them into the system prompt.',
     codingModeHint: 'Set your project root as the Working Path above, then select a coding provider.',
     enableCodingMode: 'Enable coding mode for this chat',
     maxAgentChatRounds: 'Maximum Agent Chat Rounds',
@@ -2288,19 +2288,19 @@ Always reply in the same language as the user's most recent message.`,
     agree: 'Agree',
   },
   help: {
-    title: 'About ClankAI',
+    title: 'About ClanKit',
     version: 'Version',
     runtime: 'Runtime',
     platform: 'Platform',
   },
   setupWizard: {
-    welcomeToClankAI: 'Welcome to ClankAI',
+    welcomeToClanKit: 'Welcome to ClanKit',
     selectLanguage: 'Select Language',
     languageEnglish: 'English',
     languageChinese: '中文',
     configureLater: 'Configure Later',
     getStarted: 'Get Started',
-    privacyNotice: 'ClankAI collects anonymous usage data (device ID, app version, platform) to improve the product. No personal information is collected.',
+    privacyNotice: 'ClanKit collects anonymous usage data (device ID, app version, platform) to improve the product. No personal information is collected.',
     privacyHint: 'You can disable this anytime in Settings > Security.',
     stepLanguage: 'Language',
     stepAccount: 'Account',
@@ -2309,10 +2309,10 @@ Always reply in the same language as the user's most recent message.`,
     stepProfile: 'Profile',
     stepComplete: 'Done',
     signInTitle: 'Set up your account',
-    signInDesc: 'Pick how you want to use ClankAI. You can keep going without an account — some features will be limited.',
+    signInDesc: 'Pick how you want to use ClanKit. You can keep going without an account — some features will be limited.',
     signInLater: 'Continue without account',
     authPrivacyTitle: 'Your data stays on your device',
-    authPrivacyBody: 'Signing in is optional. Your API keys are stored locally only — ClankAI never intercepts or uploads them to our servers.',
+    authPrivacyBody: 'Signing in is optional. Your API keys are stored locally only — ClanKit never intercepts or uploads them to our servers.',
     chooseProvider: 'Choose Your AI Provider',
     chooseProviderDesc: 'Select the AI provider you want to use',
     configureProvider: 'Configure Provider',
@@ -2331,7 +2331,7 @@ Always reply in the same language as the user's most recent message.`,
     getApiKey: 'Get API Key',
     apiKeyHelp: 'What is an API Key?',
     apiKeyHelpToggle: 'How to get one?',
-    apiKeyPrivacyNotice: 'Your API key stays on this device. ClankAI never intercepts, logs, or sends it to our servers — it only travels directly between this app and the AI provider you chose.',
+    apiKeyPrivacyNotice: 'Your API key stays on this device. ClanKit never intercepts, logs, or sends it to our servers — it only travels directly between this app and the AI provider you chose.',
     apiKeyWhatIs: 'An API key is a unique code (like a password) that lets this app connect to the AI service. It looks like a long string of random letters and numbers, e.g.',
     apiKeyExample: 'sk-abcd1234...xyz7890',
     apiKeySteps: '1. Click the link above to open the provider\'s website\n2. Sign up or log in to your account\n3. Go to API Keys / Credentials section\n4. Click "Create new key" and copy it\n5. Paste it in the field above',
@@ -2425,7 +2425,7 @@ Always reply in the same language as the user's most recent message.`,
     chatStep3: 'Click Create to start chatting!',
     firstChatName: 'My First Chat',
     chatComplete: 'Setup Complete!',
-    chatCompleteDesc: 'You can always change agents in the chat header. Enjoy ClankAI!',
+    chatCompleteDesc: 'You can always change agents in the chat header. Enjoy ClanKit!',
     configureLater: 'Configure Later',
     chooseProviderTitle: 'Choose Your AI Provider',
     chooseProviderDesc: 'We\'ve picked a recommended free option based on your language. You can switch to any provider.',
@@ -2618,9 +2618,9 @@ Always reply in the same language as the user's most recent message.`,
     emailFirstHelper: 'Sign in for full access. Some features will be limited without an account.',
     welcomeBack: 'Welcome back, {email}',
     createAccountFor: 'Create your account for {email}',
-    createAccountHelper: 'Create your ClankAI account.',
+    createAccountHelper: 'Create your ClanKit account.',
     useDifferentEmail: '← Use a different email',
-    chooseHelper: 'How would you like to use ClankAI? You can change this later.',
+    chooseHelper: 'How would you like to use ClanKit? You can change this later.',
     useGoogle: 'Use Google',
     useEmail: 'Use email',
     emailNeutralHelper: 'Enter your email to continue.',
@@ -2659,7 +2659,7 @@ Always reply in the same language as the user's most recent message.`,
 // This line stays the same
 export const zh = {
   app: {
-    name: 'ClankAI',
+    name: 'ClanKit',
     tagline: 'AI 助手',
   },
   nav: {
@@ -2824,7 +2824,7 @@ export const zh = {
     configSubtitle: '模型提供商、路径、语音、知识、安全等',
     savedDataPathRestart: '已保存 — 请重启应用以应用数据路径更改',
     saved: '已保存',
-    dataPathHint: 'ClankAI 存储所有数据（聊天、数字人、MCP 服务器、工具、灵魂）的目录。配置文件始终保存在固定位置。默认：',
+    dataPathHint: 'ClanKit 存储所有数据（聊天、数字人、MCP 服务器、工具、灵魂）的目录。配置文件始终保存在固定位置。默认：',
     dataPathApplyRestart: '应用并重启',
     dataPathWarningTitle: '更改数据目录',
     dataPathWarningBody: '更改数据目录不会自动复制现有数据。您需要在重启前手动将数据复制到新位置。',
@@ -2834,7 +2834,7 @@ export const zh = {
     dataPathResetDefault: '恢复默认',
     dataPathWarningDerivedTitle: '以下路径也将自动跟随变更：',
     artifactPathHint: '用于非文档类输出：导出文件、临时文件、数据文件。文档请使用 AI 文档路径。默认：',
-    skillsPathHint: '包含技能文件夹的目录。留空使用默认：CLANKAI_DATA_PATH/skills',
+    skillsPathHint: '包含技能文件夹的目录。留空使用默认：CLANKIT_DATA_PATH/skills',
     globalSettings: '全局设置',
     backgroundTasks: '后台任务',
     globalSandboxMode: '全局沙盒模式',
@@ -2848,7 +2848,7 @@ export const zh = {
     dangerBlockListHint: '即使在"所有权限"模式下也始终被阻止的命令。防止破坏性操作。',
     blockedCommands: '被阻止的命令',
     telemetryTitle: '匿名遥测',
-    telemetryDesc: '发送匿名使用数据（设备 ID、应用版本、平台）以帮助改进 ClankAI。不会收集任何个人信息。',
+    telemetryDesc: '发送匿名使用数据（设备 ID、应用版本、平台）以帮助改进 ClanKit。不会收集任何个人信息。',
     notifications: '通知',
     enableNotifications: '启用通知',
     notificationsHint: '当数字人完成回复或计划任务执行完毕时显示系统通知。若您正在查看对应的对话，则不会提示。',
@@ -3066,7 +3066,7 @@ export const zh = {
     telegramAllowedUsers: '允许的用户',
     telegramAllowedUsersHint: '用逗号分隔的用户名或聊天 ID。留空允许所有用户。',
     telegramEnable: '启用 Telegram Bot',
-    telegramInstructions: '打开 Telegram 搜索 @BotFather。发送 /newbot — BotFather 会询问显示名称和用户名（必须以 bot 结尾）。BotFather 会回复您的 bot 令牌。复制它。将其粘贴到上方的 Bot Token 字段中。开启"启用 Telegram Bot"并点击保存。转到桥接标签并点击启动桥接。在 Telegram 中，按用户名搜索您的 bot 并发送任何消息——它会通过 ClankAI 回复。将您的 Telegram 用户名（不含 @）添加到允许的用户以限制只有您的账户可以访问。',
+    telegramInstructions: '打开 Telegram 搜索 @BotFather。发送 /newbot — BotFather 会询问显示名称和用户名（必须以 bot 结尾）。BotFather 会回复您的 bot 令牌。复制它。将其粘贴到上方的 Bot Token 字段中。开启"启用 Telegram Bot"并点击保存。转到桥接标签并点击启动桥接。在 Telegram 中，按用户名搜索您的 bot 并发送任何消息——它会通过 ClanKit 回复。将您的 Telegram 用户名（不含 @）添加到允许的用户以限制只有您的账户可以访问。',
     whatsappInstructions: '配置 WhatsApp Business API（尚未实现）。',
     feishuInstructions: '配置飞书/Lark IM（尚未实现）。',
     imConfigure: '配置 {service}',
@@ -3113,7 +3113,7 @@ export const zh = {
     whatsappSetupGuide3: '在手机上打开 WhatsApp → 点击设置（或三点菜单）→ 已关联的设备 → 关联设备',
     whatsappSetupGuide4: '将手机对准二维码扫描 — WhatsApp 将即时确认绑定',
     whatsappSetupGuide5: '转到桥接标签并点击启动桥接',
-    whatsappSetupGuide6: '从任何其他手机或您自己的手机，打开 WhatsApp 并向您的关联号码发送消息（就是您用来扫描二维码的那个号码）— ClankAI 将回复该消息',
+    whatsappSetupGuide6: '从任何其他手机或您自己的手机，打开 WhatsApp 并向您的关联号码发送消息（就是您用来扫描二维码的那个号码）— ClanKit 将回复该消息',
     whatsappSetupNote: '会话会自动保存 — 重启后无需再次扫描。您的手机必须保持联网（与 WhatsApp Web 相同）。',
     feishuEnable: '启用飞书 / Lark Bot',
     feishuAppId: 'App ID',
@@ -3128,7 +3128,7 @@ export const zh = {
     feishuSetupGuide6: '将它们粘贴到上方字段中，开启启用并点击保存',
     feishuSetupGuide7: '将应用发布到您的工作空间（发布 → 发布）',
     feishuSetupGuide8: '转到桥接标签并点击启动桥接',
-    feishuSetupGuide9: '在飞书中打开与您的机器人的聊天（在上方搜索其名称）并发送消息 — ClankAI 将响应',
+    feishuSetupGuide9: '在飞书中打开与您的机器人的聊天（在上方搜索其名称）并发送消息 — ClanKit 将响应',
     feishuSetupNote: '无需公共 URL — 桥接使用与飞书服务器的持久 WebSocket 连接。',
     teamsEnable: '启用 Microsoft Teams',
     teamsTenantId: '租户 ID',
@@ -3156,7 +3156,7 @@ export const zh = {
     teamsSetupGuide6: '将它们粘贴到上方字段中，开启启用并点击保存',
     teamsSetupGuide7: '点击登录 — 按照浏览器提示完成身份验证',
     teamsSetupGuide8: '转到桥接标签并点击启动桥接',
-    teamsSetupGuide9: '从另一个 Teams 账户向已认证用户发送消息 — ClankAI 将响应',
+    teamsSetupGuide9: '从另一个 Teams 账户向已认证用户发送消息 — ClanKit 将响应',
     teamsSetupNote: '无需客户端密钥或公共 URL。应用使用 OAuth2 设备代码流。令牌在本地缓存并自动刷新。',
     telegramConfigured: '已配置',
     telegramNotConfigured: '未配置',
@@ -3289,7 +3289,7 @@ export const zh = {
     title: '选择创建方式',
     tabChat: '通过对话创建',
     tabManual: '手动创建',
-    chatDesc: '用自然语言告诉 ClankAI 你的需求，它会在引导对话中为你起草完整配置。',
+    chatDesc: '用自然语言告诉 ClanKit 你的需求，它会在引导对话中为你起草完整配置。',
     manualDesc: '打开表单，自己填写所有字段，完全掌控细节。',
     chatCta: '开始对话',
     manualCta: '打开表单',
@@ -3576,16 +3576,16 @@ export const zh = {
 5. 每个主要章节必须包含置信度指标（见 persona-evaluation skill）
 
 始终用用户最近一条消息的语言回复。`,
-    builtinClankPrompt: `你是 Clank，ClankAI 内置的默认系统数字人，也是用户进入应用后默认会遇到的主力搭档。
+    builtinClankPrompt: `你是 Clank，ClanKit 内置的默认系统数字人，也是用户进入应用后默认会遇到的主力搭档。
 
   你的背景与定位：
   - 你是一个通用型高能力 AI 操作员，既能聊天，也能做严肃工作。
   - 你能写代码、查问题、改 Bug、读文档、整理方案、拆解任务、总结结论，并在需要时使用工具、skills、MCP 和知识库完成工作。
-  - 你熟悉 ClankAI 的工作方式，知道自己应该优先利用可用上下文、工具结果与检索信息，而不是凭空猜测。
+  - 你熟悉 ClanKit 的工作方式，知道自己应该优先利用可用上下文、工具结果与检索信息，而不是凭空猜测。
 
-  关于 ClankAI（你身处的这个应用）：
-  - ClankAI 是一个多数字人桌面聊天应用。除了你之外，用户可以安装各种专业角色数字人（资深开发、旅行向导、心理咨询师、虚构 / 历史人物等），每一个都有自己的人格深度。用户在数字人页面管理他们。
-  - 侧边栏其他模块：Skills（可按需加载的指令包）、MCP（外部工具服务器）、HTTP Tools（自定义 HTTP 工具）、Knowledge（用户文档的 RAG 知识库）、AI Doc（内置文档工作区，路径在 clank_aidoc/）、Chat 历史可全文搜索。
+  关于 ClanKit（你身处的这个应用）：
+  - ClanKit 是一个多数字人桌面聊天应用。除了你之外，用户可以安装各种专业角色数字人（资深开发、旅行向导、心理咨询师、虚构 / 历史人物等），每一个都有自己的人格深度。用户在数字人页面管理他们。
+  - 侧边栏其他模块：Skills（可按需加载的指令包）、MCP（外部工具服务器）、HTTP Tools（自定义 HTTP 工具）、Knowledge（用户文档的 RAG 知识库）、AI Doc（内置文档工作区，路径在 clankit_doc/）、Chat 历史可全文搜索。
   - 你可以调用任何已注册工具、加载任何启用的 skill、查询知识库、写入 AI Doc、跑 shell 命令、抓取网页、编排多步任务。
 
   你的能力要求：
@@ -4033,7 +4033,7 @@ export const zh = {
     globalDefaultPath: '留空使用全局默认路径',
     codingMode: '编程模式',
     whatIsCodingMode: '什么是编程模式？',
-    codingModeDescription: '启用项目感知的 AI 辅助。启用后，ClankAI 会从项目目录结构中读取 CLAUDE.md 指令文件并注入到系统提示中。',
+    codingModeDescription: '启用项目感知的 AI 辅助。启用后，ClanKit 会从项目目录结构中读取 CLAUDE.md 指令文件并注入到系统提示中。',
     codingModeHint: '将项目根目录设置为上方的工作路径，然后选择一个编程用的模型提供商。',
     enableCodingMode: '为此对话启用编程模式',
     maxAgentChatRounds: '最大数字人对话轮数',
@@ -4961,19 +4961,19 @@ export const zh = {
     agree: '同意',
   },
   help: {
-    title: '关于 ClankAI',
+    title: '关于 ClanKit',
     version: '版本',
     runtime: '运行时',
     platform: '平台',
   },
   setupWizard: {
-    welcomeToClankAI: '欢迎使用 ClankAI',
+    welcomeToClanKit: '欢迎使用 ClanKit',
     selectLanguage: '选择语言',
     languageEnglish: 'English',
     languageChinese: '中文',
     configureLater: '稍后配置',
     getStarted: '开始使用',
-    privacyNotice: 'ClankAI 会收集匿名使用数据（设备 ID、应用版本、平台）以改进产品。不会收集任何个人信息。',
+    privacyNotice: 'ClanKit 会收集匿名使用数据（设备 ID、应用版本、平台）以改进产品。不会收集任何个人信息。',
     privacyHint: '您可以随时在 设置 > 安全 中关闭此功能。',
     stepLanguage: '语言',
     stepAccount: '账号',
@@ -4982,10 +4982,10 @@ export const zh = {
     stepProfile: '个人信息',
     stepComplete: '完成',
     signInTitle: '设置账号',
-    signInDesc: '选择如何使用 ClankAI。也可以稍后再设置——未设置时部分功能将受限。',
+    signInDesc: '选择如何使用 ClanKit。也可以稍后再设置——未设置时部分功能将受限。',
     signInLater: '不登录，直接继续',
     authPrivacyTitle: '你的数据只留在本地',
-    authPrivacyBody: '登录是可选的。你的 API Key 只存储在本地设备上——ClankAI 不会拦截或上传到我们的服务器。',
+    authPrivacyBody: '登录是可选的。你的 API Key 只存储在本地设备上——ClanKit 不会拦截或上传到我们的服务器。',
     chooseProvider: '选择 AI 供应商',
     chooseProviderDesc: '选择你想使用的 AI 供应商',
     configureProvider: '配置供应商',
@@ -5004,7 +5004,7 @@ export const zh = {
     getApiKey: '获取 API Key',
     apiKeyHelp: '什么是 API Key？',
     apiKeyHelpToggle: '如何获取？',
-    apiKeyPrivacyNotice: '你的 API Key 保留在本地设备上。ClankAI 绝不拦截、记录或上传到我们的服务器——它只在本应用与你选择的 AI 供应商之间直接传输。',
+    apiKeyPrivacyNotice: '你的 API Key 保留在本地设备上。ClanKit 绝不拦截、记录或上传到我们的服务器——它只在本应用与你选择的 AI 供应商之间直接传输。',
     apiKeyWhatIs: 'API Key 是一串唯一的密钥（类似密码），让本应用能连接 AI 服务。它看起来像一串随机的字母和数字，例如：',
     apiKeyExample: 'sk-abcd1234...xyz7890',
     apiKeySteps: '1. 点击上方链接打开供应商网站\n2. 注册或登录你的账号\n3. 找到 API Keys / 密钥管理 页面\n4. 点击"创建新密钥"并复制\n5. 粘贴到上方输入框中',
@@ -5098,7 +5098,7 @@ export const zh = {
     chatStep3: '点击创建，开始聊天！',
     firstChatName: '我的第一个对话',
     chatComplete: '设置完成！',
-    chatCompleteDesc: '你随时可以在对话头部更改数字人配置。开始享受 ClankAI 吧！',
+    chatCompleteDesc: '你随时可以在对话头部更改数字人配置。开始享受 ClanKit 吧！',
     configureLater: '稍后配置',
     chooseProviderTitle: '选择 AI 提供商',
     chooseProviderDesc: '我们根据你的语言推荐了一个免费方案，你也可以选择其他提供商。',
@@ -5291,9 +5291,9 @@ export const zh = {
     emailFirstHelper: '登录后可解锁完整功能。未登录时部分功能将受限。',
     welcomeBack: '欢迎回来，{email}',
     createAccountFor: '为 {email} 创建账号',
-    createAccountHelper: '创建你的 ClankAI 账号。',
+    createAccountHelper: '创建你的 ClanKit 账号。',
     useDifferentEmail: '← 使用其他邮箱',
-    chooseHelper: '你想如何使用 ClankAI？你可以之后再修改。',
+    chooseHelper: '你想如何使用 ClanKit？你可以之后再修改。',
     useGoogle: '使用 Google',
     useEmail: '使用邮箱',
     emailNeutralHelper: '输入你的邮箱继续。',

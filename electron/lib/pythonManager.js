@@ -193,7 +193,7 @@ function _download(url, dest, onProgress) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest)
     const request = (u) => {
-      https.get(u, { headers: { 'User-Agent': 'ClankAI' } }, (res) => {
+      https.get(u, { headers: { 'User-Agent': 'ClanKit' } }, (res) => {
         // Handle redirects (GitHub uses 301/302)
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           return request(res.headers.location)

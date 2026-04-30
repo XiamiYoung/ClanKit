@@ -1,5 +1,5 @@
 /**
- * Centralized data path management and JSON I/O for ClankAI.
+ * Centralized data path management and JSON I/O for ClanKit.
  * All IPC handler modules require() this to access file paths and read/write data.
  *
  * Usage:
@@ -63,7 +63,7 @@ function paths() {
 // --- Initialization -----------------------------------------------------------
 function init() {
   // SETTINGS_DIR is FIXED — the only file here is settings.json (dataPath pointer)
-  const SETTINGS_DIR = path.join(app.getPath('appData'), 'clankai')
+  const SETTINGS_DIR = path.join(app.getPath('appData'), 'clankit')
   const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json')
   const DEFAULT_DATA_PATH = path.join(SETTINGS_DIR, 'data')
 
@@ -85,7 +85,7 @@ function init() {
   }
 
   const DATA_DIR = userDataPath || DEFAULT_DATA_PATH
-  process.env.CLANKAI_DATA_PATH = DATA_DIR
+  process.env.CLANKIT_DATA_PATH = DATA_DIR
   logger.setLogDir(path.join(DATA_DIR, 'logs'))
 
   // Always persist the resolved dataPath so settings.json is never empty

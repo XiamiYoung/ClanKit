@@ -121,7 +121,7 @@ function startLoopbackServer({ stateToken, onCode, onError }) {
         }
 
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-        res.end(htmlResponse('Signed in', 'You can close this tab and return to ClankAI.'))
+        res.end(htmlResponse('Signed in', 'You can close this tab and return to ClanKit.'))
         onCode(code)
       } catch (err) {
         try {

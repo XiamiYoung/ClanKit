@@ -280,7 +280,7 @@ export const useChatsStore = defineStore('chats', () => {
         // Restore last active chat, or fall back to the first chat
         const allChats = flattenChats(chatTree.value)
         let restoredId = null
-        try { restoredId = localStorage.getItem('clankai_lastActiveChatId') || null } catch {}
+        try { restoredId = localStorage.getItem('clankit_lastActiveChatId') || null } catch {}
         const targetChat = restoredId ? allChats.find(c => c.id === restoredId) : null
         const initialChat = targetChat || allChats[0]
         if (initialChat) {
@@ -510,7 +510,7 @@ export const useChatsStore = defineStore('chats', () => {
     // Expand ancestor folders so the chat is visible in the sidebar tree
     _expandAncestorFolders(id)
     // Persist last active chat so it restores on next app launch
-    try { localStorage.setItem('clankai_lastActiveChatId', id || '') } catch {}
+    try { localStorage.setItem('clankit_lastActiveChatId', id || '') } catch {}
     ensureMessages(id)  // fire-and-forget: UI shows loading indicator, never blocks
   }
 
@@ -1172,7 +1172,7 @@ export const useChatsStore = defineStore('chats', () => {
       if (msg) {
         msg.streaming = false
         if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
-        if (!msg.timestamp) msg.timestamp = Date.now()
+        msg.timestamp = Date.now()
         if (!msg.content && !(msg.segments || []).some(s => s.type === 'text' && s.content)) {
           msg.isError = true
           msg.content = '_No response_'
@@ -1194,7 +1194,7 @@ export const useChatsStore = defineStore('chats', () => {
         if (m.streaming) {
           m.streaming = false
           if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
-          if (!m.timestamp) m.timestamp = Date.now()
+          m.timestamp = Date.now()
         }
       }
       if (chunk.type === 'send_message_error') {

@@ -32,7 +32,7 @@ function resolveSkillsPath(configPath) {
     }
     return normalizePath(p)
   }
-  // Default: CLANKAI_DATA_PATH/skills
+  // Default: CLANKIT_DATA_PATH/skills
   return path.join(ds.paths().DATA_DIR, 'skills')
 }
 

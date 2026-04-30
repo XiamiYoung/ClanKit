@@ -1,7 +1,7 @@
 {
-  "name": "clankai",
+  "name": "clankit",
   "version": "0.0.3",
-  "description": "ClankAI - Multi-LLM Desktop Application",
+  "description": "ClanKit - Multi-LLM Desktop Application",
   "license": "SEE LICENSE IN LICENSE",
   "main": "electron/main.js",
   "scripts": {
@@ -16,12 +16,12 @@
     "dist:win": "npm run prepare-models && npm run build && npx electron-builder --win --publish=never",
     "dist:mac": "npm run prepare-models && npm run build && npx electron-builder --mac --publish=never",
     "dist:all": "npm run prepare-models && npm run build && npx electron-builder --win --mac --publish=never",
-    "bundle:mcporter": "cd ../mcporter && node_modules/.bin/tsc -p tsconfig.build.json && cd ../ClankAI && node_modules/.bin/esbuild ../mcporter/src/index.ts --bundle --format=esm --platform=node --main-fields=module,main \"--banner:js=import { createRequire as __cjsRequire } from 'module'; const require = __cjsRequire(import.meta.url);\" --outfile=electron/agent/mcp/mcporter-bundle.mjs",
+    "bundle:mcporter": "cd ../mcporter && node_modules/.bin/tsc -p tsconfig.build.json && cd ../ClanKit && node_modules/.bin/esbuild ../mcporter/src/index.ts --bundle --format=esm --platform=node --main-fields=module,main \"--banner:js=import { createRequire as __cjsRequire } from 'module'; const require = __cjsRequire(import.meta.url);\" --outfile=electron/agent/mcp/mcporter-bundle.mjs",
     "update-models": "node scripts/update-models.js"
   },
   "build": {
-    "appId": "com.clankai.app",
-    "productName": "ClankAI",
+    "appId": "com.clankit.app",
+    "productName": "ClanKit",
     "directories": {
       "output": "dist-release"
     },
@@ -75,7 +75,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "ClankAI"
+      "shortcutName": "ClanKit"
     },
     "mac": {
       "target": [
@@ -91,7 +91,7 @@
       "icon": "build/icons/icon.png"
     },
     "dmg": {
-      "title": "ClankAI",
+      "title": "ClanKit",
       "contents": [
         {
           "x": 130,

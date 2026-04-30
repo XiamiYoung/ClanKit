@@ -67,7 +67,7 @@ function isModelReady(dataDir) {
 async function downloadFile(url, onProgress) {
   const resp = await fetch(url, {
     signal: AbortSignal.timeout(600000),
-    headers: { 'User-Agent': 'ClankAI' },
+    headers: { 'User-Agent': 'ClanKit' },
   })
   if (!resp.ok) throw new Error(`HTTP ${resp.status} from ${url}`)
 

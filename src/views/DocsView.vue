@@ -1333,7 +1333,7 @@ function _onDocsKeydown(e) {
 }
 
 // Floating AI Doc panel state (position + size)
-const AI_PANEL_STORAGE_KEY = 'clankai-aidoc-panel'
+const AI_PANEL_STORAGE_KEY = 'clankit-aidoc-panel'
 const AI_PANEL_MIN_W = 300
 const AI_PANEL_MIN_H = 300
 

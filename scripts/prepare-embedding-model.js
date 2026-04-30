@@ -71,7 +71,7 @@ function fetchOnce(url, dest) {
     const req = https.get({
       hostname: u.hostname,
       path: u.pathname + u.search,
-      headers: { 'User-Agent': 'ClankAI-prepare-models/1.0' },
+      headers: { 'User-Agent': 'ClanKit-prepare-models/1.0' },
     }, (res) => {
       // Follow redirects (HF returns 302 to CDN)
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {

@@ -55,7 +55,7 @@ class AnalyzeAgentTool extends BaseTool {
     this.targetAgentType = targetAgentType || 'system'
     this.dataPath = dataPath
     // Resolve aidoc dir: user-configured DoCPath takes priority over default
-    this.aidocPath = docPath || path.join(dataPath || '', 'clank_aidoc')
+    this.aidocPath = docPath || path.join(dataPath || '', 'clankit_doc')
     this.llmConfig = null
     // Populated by agentLoop after skill manifests are loaded.
     // Shape: { [action]: { strategy: 'chat'|'reasoner'|{provider,model}, ... } }

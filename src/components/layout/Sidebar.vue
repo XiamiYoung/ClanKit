@@ -9,7 +9,7 @@
       <div ref="logoWrapRef" class="logo-wrap" @mouseenter="onLogoHover" @mouseleave="onLogoLeave" @mousemove="onLogoMouseMove" @click="onLogoClick">
         <img
           :src="appIconUrl"
-          alt="ClankAI"
+          alt="ClanKit"
           :class="[isCollapsed ? 'w-12 h-12 rounded-xl' : 'w-20 h-20 rounded-2xl', 'logo-img', logoAnimClass]"
           style="object-fit:contain;flex-shrink:0;"
         />
@@ -20,7 +20,7 @@
         </div>
       </Teleport>
       <span v-show="!isCollapsed" style="font-family:'Inter','Figtree',system-ui,sans-serif; font-size:1.75rem; font-weight:800; color:#1A1A1A; letter-spacing:-0.03em;">
-        ClankAI
+        ClanKit
       </span>
     </div>
 
@@ -206,9 +206,9 @@
       <div v-if="showHelpPopover" class="help-popover-backdrop" @click="showHelpPopover = false"></div>
       <div v-if="showHelpPopover" class="help-popover" :style="helpPopoverStyle">
         <div class="help-popover-header">
-          <img :src="appIconUrl" alt="ClankAI" style="width:2rem;height:2rem;border-radius:0.5rem;" />
+          <img :src="appIconUrl" alt="ClanKit" style="width:2rem;height:2rem;border-radius:0.5rem;" />
           <div style="flex:1;">
-            <div style="font-weight:700;font-size:0.875rem;color:#1A1A1A;">ClankAI</div>
+            <div style="font-weight:700;font-size:0.875rem;color:#1A1A1A;">ClanKit</div>
             <div style="font-size:0.6875rem;color:#999;">{{ t('app.tagline') }}</div>
           </div>
           <button class="help-privacy-btn" v-tooltip="t('nav.privacy')" @click="showPrivacyModal = true; showHelpPopover = false">

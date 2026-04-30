@@ -119,41 +119,41 @@
   }
 
   /* Prose styles for markdown rendering inside chat bubbles */
-  .prose-clankai {
+  .prose-clankit {
     color: var(--text-primary);
     line-height: 1.65;
     font-size: var(--fs-body);
   }
-  .prose-clankai h1,
-  .prose-clankai h2,
-  .prose-clankai h3 {
+  .prose-clankit h1,
+  .prose-clankit h2,
+  .prose-clankit h3 {
     font-family: 'Inter', 'Figtree', system-ui, sans-serif;
     color: var(--text-primary);
     font-weight: 600;
     margin-top: 1rem;
     margin-bottom: 0.5rem;
   }
-  .prose-clankai h1 { font-size: var(--fs-section); }
-  .prose-clankai h2 { font-size: var(--fs-subtitle); }
-  .prose-clankai h3 { font-size: var(--fs-body); }
-  .prose-clankai p  { margin-bottom: 0.75rem; }
-  .prose-clankai ul,
-  .prose-clankai ol {
+  .prose-clankit h1 { font-size: var(--fs-section); }
+  .prose-clankit h2 { font-size: var(--fs-subtitle); }
+  .prose-clankit h3 { font-size: var(--fs-body); }
+  .prose-clankit p  { margin-bottom: 0.75rem; }
+  .prose-clankit ul,
+  .prose-clankit ol {
     margin-left: 1.25rem;
     margin-bottom: 0.75rem;
   }
-  .prose-clankai ul { list-style-type: disc; }
-  .prose-clankai ol { list-style-type: decimal; }
-  .prose-clankai a  { color: var(--accent); text-decoration: underline; }
-  .prose-clankai a:hover { color: var(--accent-hover); }
-  .prose-clankai blockquote {
+  .prose-clankit ul { list-style-type: disc; }
+  .prose-clankit ol { list-style-type: decimal; }
+  .prose-clankit a  { color: var(--accent); text-decoration: underline; }
+  .prose-clankit a:hover { color: var(--accent-hover); }
+  .prose-clankit blockquote {
     border-left: 3px solid var(--border);
     padding-left: 0.75rem;
     color: var(--text-muted);
     font-style: italic;
     margin: 0.75rem 0;
   }
-  .prose-clankai code:not(pre code) {
+  .prose-clankit code:not(pre code) {
     background: var(--accent-light);
     color: var(--accent);
     padding: 0.1rem 0.35rem;
@@ -161,7 +161,7 @@
     font-size: 0.85em;
     font-family: 'JetBrains Mono', monospace;
   }
-  .prose-clankai pre {
+  .prose-clankit pre {
     background: #1C1C1E;
     color: #E5E5EA;
     border-radius: var(--radius-md);
@@ -170,13 +170,13 @@
     margin-bottom: 0.75rem;
     border: 1px solid #2C2C2E;
   }
-  .prose-clankai pre code {
+  .prose-clankit pre code {
     font-size: var(--fs-secondary);
     font-family: 'JetBrains Mono', monospace;
     color: inherit;
   }
   /* Wrap tables so they scroll horizontally on narrow windows */
-  .prose-clankai table {
+  .prose-clankit table {
     display: block;
     width: 100%;
     overflow-x: auto;
@@ -184,7 +184,7 @@
     margin-bottom: 0.75rem;
     font-size: var(--fs-secondary);
   }
-  .prose-clankai th {
+  .prose-clankit th {
     background: #F9F9F9;
     color: var(--text-secondary);
     padding: 0.5rem 0.75rem;
@@ -192,17 +192,17 @@
     font-weight: 600;
     border: 1px solid var(--border);
   }
-  .prose-clankai td {
+  .prose-clankit td {
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border);
   }
-  .prose-clankai img    { border-radius: var(--radius-md); max-width: 100%; margin: 0.5rem 0; }
-  .prose-clankai hr     { border-color: var(--border); margin: 1rem 0; }
-  .prose-clankai strong { font-weight: 600; }
-  .prose-clankai em     { font-style: italic; }
+  .prose-clankit img    { border-radius: var(--radius-md); max-width: 100%; margin: 0.5rem 0; }
+  .prose-clankit hr     { border-color: var(--border); margin: 1rem 0; }
+  .prose-clankit strong { font-weight: 600; }
+  .prose-clankit em     { font-style: italic; }
 
   /* Legacy alias */
-  .prose-botanic { @apply prose-clankai; }
+  .prose-botanic { @apply prose-clankit; }
 
   /* ── Modal Dialogs ──────────────────────────────────────────────────────── */
   .modal-dialog-backdrop {

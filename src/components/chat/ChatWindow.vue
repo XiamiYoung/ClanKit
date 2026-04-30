@@ -265,7 +265,7 @@
                   </button>
                 </div>
               </div>
-              <div :class="msg.role === 'user' ? 'user-content' : 'prose-clankai'">
+              <div :class="msg.role === 'user' ? 'user-content' : 'prose-clankit'">
                 <MessageRenderer
                   :message="msg"
                   :plan-data="msg.planData || null"
@@ -777,14 +777,19 @@ function formatTime(ts) {
   const D = String(d.getDate()).padStart(2, '0')
   const h = String(d.getHours()).padStart(2, '0')
   const m = String(d.getMinutes()).padStart(2, '0')
-  return `${Y}-${M}-${D} ${h}:${m}`
+  const s = String(d.getSeconds()).padStart(2, '0')
+  return `${Y}-${M}-${D} ${h}:${m}:${s}`
 }
 
 // User bubbles show a single timestamp. Assistant / system bubbles show
-// "start → end". end falls back to: completion time → stop/error time → start time.
+// "start → end" once finalized. While `streaming` is true, only the start
+// time is shown — the end isn't known yet (and `msg.timestamp` may have
+// been auto-stamped at creation by addMessage, which we must NOT treat
+// as an end-of-task signal).
 function formatTimeRange(msg) {
   if (msg.role === 'user') return formatTime(msg.timestamp)
   const start = msg.streamingStartedAt
+  if (msg.streaming) return formatTime(start)
   const end = msg.timestamp
   if (start && end) return `${formatTime(start)} → ${formatTime(end)}`
   return formatTime(end || start)

@@ -45,7 +45,7 @@ class ListAgentsTool extends BaseTool {
   constructor(context) {
     super(
       'list_agents',
-      'List the other AI agents installed in this ClankAI app. Use this when the user\'s question may fit a specialist agent (e.g. travel, fitness, niche professional, in-character roleplay) better than you. Returns each agent\'s id, name, and short description so you can pick one and recommend it via the <recommend-agent/> tag.',
+      'List the other AI agents installed in this ClanKit app. Use this when the user\'s question may fit a specialist agent (e.g. travel, fitness, niche professional, in-character roleplay) better than you. Returns each agent\'s id, name, and short description so you can pick one and recommend it via the <recommend-agent/> tag.',
       'List Agents'
     )
     this._context = context || {}

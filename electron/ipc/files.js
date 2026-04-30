@@ -151,7 +151,7 @@ function register() {
       // and re-clicking never re-writes the same content
       const crypto = require('crypto')
       const hash = crypto.createHash('md5').update(match[2]).digest('hex').slice(0, 10)
-      const tmpPath = path.join(os.tmpdir(), `clankai-img-${hash}.${ext}`)
+      const tmpPath = path.join(os.tmpdir(), `clankit-img-${hash}.${ext}`)
       if (!fs.existsSync(tmpPath)) {
         fs.writeFileSync(tmpPath, Buffer.from(match[2], 'base64'))
       }

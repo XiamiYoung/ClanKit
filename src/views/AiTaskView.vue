@@ -9,8 +9,8 @@
           <p class="atv-subtitle">{{ t('tasks.aiTasksSubtitle') }}</p>
         </div>
       </div>
-      <AppButton size="compact" @click="refreshAll" :loading="isRefreshing">
-        <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+      <AppButton size="icon" @click="refreshAll" :loading="isRefreshing" v-tooltip="t('common.refresh')">
+        <svg v-if="!isRefreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
       </AppButton>
     </div>
 
@@ -193,13 +193,13 @@ onBeforeUnmount(() => {
 
 .atv-header {
   flex-shrink: 0;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border);
+  padding: 1rem 1.5rem 0.875rem;
+  border-bottom: 1px solid #E5E5EA;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  background: var(--bg-card);
+  background: #FFFFFF;
 }
 
 .atv-header-left {
@@ -216,15 +216,17 @@ onBeforeUnmount(() => {
 
 .atv-title {
   margin: 0;
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-page-title);
   font-weight: 700;
-  color: var(--text-primary);
+  color: #1A1A1A;
 }
 
 .atv-subtitle {
-  margin: 0.25rem 0 0;
-  font-size: var(--fs-secondary);
-  color: var(--text-secondary);
+  margin: 0.25rem 0 0 0;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  color: #6B7280;
 }
 
 .atv-body {

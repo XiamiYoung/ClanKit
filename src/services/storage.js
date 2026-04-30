@@ -54,18 +54,18 @@ export const storage = {
   // ── Chats (bulk — backward compat) ─────────────────────────────────────────
   async getChats() {
     if (isElectron()) return window.electronAPI.getChats()
-    return lsGet('clankai:chats', [])
+    return lsGet('clankit:chats', [])
   },
   async saveChats(chats) {
     if (isElectron()) return window.electronAPI.saveChats(chats)
-    lsSet('clankai:chats', chats)
+    lsSet('clankit:chats', chats)
   },
 
   // ── Chats (per-chat granular) ─────────────────────────────────────────────
   async getChatIndex() {
     if (isElectron()) return window.electronAPI.getChatIndex()
     // localStorage fallback: extract metadata from full chats
-    const chats = lsGet('clankai:chats', [])
+    const chats = lsGet('clankit:chats', [])
     return chats.map(({ messages, ...meta }) => meta)
   },
   async saveChatIndex(index) {
@@ -75,7 +75,7 @@ export const storage = {
   async getChat(id) {
     if (isElectron()) return window.electronAPI.getChat(id)
     // localStorage fallback: find in full array
-    const chats = lsGet('clankai:chats', [])
+    const chats = lsGet('clankit:chats', [])
     return chats.find(c => c.id === id) || null
   },
   async getChatSegments(params) {
@@ -85,22 +85,22 @@ export const storage = {
   async saveChat(chat) {
     if (isElectron()) return window.electronAPI.saveChat(chat)
     // localStorage fallback: update in full array
-    const chats = lsGet('clankai:chats', [])
+    const chats = lsGet('clankit:chats', [])
     const idx = chats.findIndex(c => c.id === chat.id)
     if (idx >= 0) chats[idx] = chat
     else chats.unshift(chat)
-    lsSet('clankai:chats', chats)
+    lsSet('clankit:chats', chats)
   },
   async deleteChat(id) {
     if (isElectron()) return window.electronAPI.deleteChat(id)
-    const chats = lsGet('clankai:chats', [])
-    lsSet('clankai:chats', chats.filter(c => c.id !== id))
+    const chats = lsGet('clankit:chats', [])
+    lsSet('clankit:chats', chats.filter(c => c.id !== id))
   },
 
   // ── Config ─────────────────────────────────────────────────────────────────
   async getConfig() {
     if (isElectron()) return window.electronAPI.getConfig()
-    const saved = lsGet('clankai:config', {})
+    const saved = lsGet('clankit:config', {})
     const defaults = browserDefaultConfig()
     // Only let saved values override defaults when non-empty
     const nonEmpty = Object.fromEntries(
@@ -116,31 +116,31 @@ export const storage = {
   },
   async saveConfig(config) {
     if (isElectron()) return window.electronAPI.saveConfig(config)
-    lsSet('clankai:config', config)
+    lsSet('clankit:config', config)
   },
 
   // ── Agents ──────────────────────────────────────────────────────────────────
   async getAgents() {
     if (isElectron()) return window.electronAPI.getAgents()
-    return lsGet('clankai:agents', { categories: [], agents: [] })
+    return lsGet('clankit:agents', { categories: [], agents: [] })
   },
   async saveAgents(agents) {
     if (isElectron()) return window.electronAPI.saveAgents(agents)
-    lsSet('clankai:agents', agents)
+    lsSet('clankit:agents', agents)
   },
 
   // ── Memory ────────────────────────────────────────────────────────────────
   async getMemory(agentId, type) {
     if (isElectron()) return window.electronAPI.memory.read(agentId, type)
-    return lsGet(`clankai:memory:${type}:${agentId}`, null)
+    return lsGet(`clankit:memory:${type}:${agentId}`, null)
   },
   async saveMemory(agentId, type, content) {
     if (isElectron()) return window.electronAPI.memory.write(agentId, type, content)
-    lsSet(`clankai:memory:${type}:${agentId}`, content)
+    lsSet(`clankit:memory:${type}:${agentId}`, content)
   },
   async memoryExists(agentId, type) {
     if (isElectron()) return window.electronAPI.memory.exists(agentId, type)
-    return lsGet(`clankai:memory:${type}:${agentId}`, null) !== null
+    return lsGet(`clankit:memory:${type}:${agentId}`, null) !== null
   },
 
 }

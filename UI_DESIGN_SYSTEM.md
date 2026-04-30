@@ -1,4 +1,4 @@
-# UI/UX Design System — ClankAI
+# UI/UX Design System — ClanKit
 
 > This file contains the full UI/UX design specifications. Referenced from `CLAUDE.md`.
 
@@ -232,11 +232,11 @@ Floating panels over dark/mixed content: `background:#0F0F0F`, `border:1px solid
 ## Chat Bubbles
 
 - **User messages:** Black gradient background (`linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)`), all text forced to `#FFFFFF !important` via `.user-content` class
-- **Assistant messages:** White/light card background with prose-clankai styling
+- **Assistant messages:** White/light card background with prose-clankit styling
 - **Code blocks:** Dark background `#1C1C1E` with `#E5E5EA` text, 12px border-radius, 1px `#2C2C2E` border
 - **Inline code:** `var(--accent-light)` background, `var(--accent)` text color
 
-## Markdown Prose (`prose-clankai`)
+## Markdown Prose (`prose-clankit`)
 
 - Line height: 1.65
 - Links: `var(--accent)` with underline
@@ -306,7 +306,7 @@ Each `config-card` starts with a `form-section-header`: `section-icon-sm` (28×2
 
 ## Responsive Design System
 
-ClankAI targets **1920×1080 (HD)** as the primary resolution and **2560px+ (4K)** as the secondary. Design all UI for HD first; 4K gets proportional scaling via the global font-size step.
+ClanKit targets **1920×1080 (HD)** as the primary resolution and **2560px+ (4K)** as the secondary. Design all UI for HD first; 4K gets proportional scaling via the global font-size step.
 
 ### Breakpoints
 

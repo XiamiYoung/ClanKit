@@ -217,7 +217,7 @@ function getAllChatModelEntries(dataDir) {
   return out
 }
 
-// Map ClankAI provider type → litellm_provider name
+// Map ClanKit provider type → litellm_provider name
 const PROVIDER_TO_LITELLM = {
   openai_official: 'openai',
   anthropic: 'anthropic',
@@ -229,24 +229,27 @@ const PROVIDER_TO_LITELLM = {
   xai: 'xai',
 }
 
-// Curated recommendations per provider — balanced cost/quality sweet spot.
-// Ordered by preference; first available match wins. Matching is case-insensitive
-// and accepts either exact id or id.startsWith(entry) (covers dated suffixes like
-// "qwen-plus-2025-01-25"). Update this list when new flagship-tier mid-priced
-// models ship — not for every new minor release.
+// Curated recommendations per provider — flagship-first ordering.
+// First available match wins. Matching is case-insensitive and accepts either
+// exact id or id.startsWith(entry) (covers dated suffixes like "qwen-max-2025-01-25").
+// Always lead with the provider's top-tier general-purpose chat model so first-run
+// users experience the provider at its best. Specialized reasoning models that emit
+// thinking tokens (o1/o3, deepseek-reasoner) are intentionally NOT defaults — they
+// surprise new users with slow responses and reasoning output. Update this list
+// when a new flagship ships, not for every minor release.
 const RECOMMENDED_BY_PROVIDER = {
-  anthropic:       ['claude-sonnet-4-6', 'claude-sonnet-4-5', 'claude-3-7-sonnet', 'claude-3-5-sonnet'],
-  openai_official: ['gpt-4.1', 'gpt-4o'],
-  google:          ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'],
-  deepseek:        ['deepseek-chat'],
-  qwen:            ['qwen-plus-latest', 'qwen-plus', 'qwen-max-latest', 'qwen-max'],
-  openrouter:      ['anthropic/claude-sonnet-4.6', 'anthropic/claude-sonnet-4.5', 'anthropic/claude-3.7-sonnet'],
+  anthropic:       ['claude-opus-4-7', 'claude-opus-4-6', 'claude-opus-4-5', 'claude-sonnet-4-6', 'claude-sonnet-4-5'],
+  openai_official: ['gpt-5.5', 'gpt-5', 'gpt-4.1', 'gpt-4o'],
+  google:          ['gemini-3.1-pro', 'gemini-3-pro', 'gemini-2.5-pro', 'gemini-pro-latest'],
+  deepseek:        ['deepseek-chat', 'deepseek-v3', 'deepseek-reasoner'],
+  qwen:            ['qwen-max-latest', 'qwen-max', 'qwen-plus-latest', 'qwen-plus'],
+  openrouter:      ['anthropic/claude-opus-4.7', 'anthropic/claude-opus-4.6', 'anthropic/claude-opus-4.5', 'anthropic/claude-sonnet-4.6', 'anthropic/claude-sonnet-4.5'],
   groq:            ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile'],
   glm:             ['glm-4-plus', 'glm-4-air'],
   moonshot:        ['kimi-k2-0905-preview', 'moonshot-v1-32k'],
-  doubao:          ['doubao-pro-32k', 'doubao-pro-128k'],
-  mistral:         ['mistral-medium-latest', 'mistral-large-latest'],
-  xai:             ['grok-3', 'grok-2'],
+  doubao:          ['doubao-pro-128k', 'doubao-pro-32k'],
+  mistral:         ['mistral-large-latest', 'mistral-medium-latest'],
+  xai:             ['grok-4', 'grok-3-latest', 'grok-3'],
 }
 
 // Try the curated whitelist first. Returns a matched available model id, or null.
@@ -289,11 +292,10 @@ function _loadRawCatalog(dataDir) {
  * Strategy:
  * - Filter litellm catalog for matching provider + mode=chat models
  * - Intersect with the user's actual available model IDs (from API fetch)
- * - Sort by total cost (input + output per token)
- * - Pick the median model (balanced cost/performance)
- * - If 1-2 models: pick the more expensive one (better quality)
+ * - Sort by total cost (input + output per token), pick the most expensive
+ *   (price is the best available proxy for capability when there's no curated entry)
  *
- * @param {string} providerType - ClankAI provider type (e.g. 'qwen', 'deepseek')
+ * @param {string} providerType - ClanKit provider type (e.g. 'qwen', 'deepseek')
  * @param {string[]} availableModelIds - Model IDs from the user's API fetch
  * @param {string} [dataDir] - User data directory for cached litellm data
  * @returns {{ modelId: string|null, reason: string }}
@@ -309,20 +311,20 @@ function recommendModel(providerType, availableModelIds, dataDir) {
   // 1. Curated whitelist — fastest path, most explainable, stable across model list churn.
   const whitelisted = _pickFromWhitelist(providerType, availableModelIds)
   if (whitelisted) {
-    return { modelId: whitelisted, reason: 'curated recommendation' }
+    return { modelId: whitelisted, reason: 'curated flagship' }
   }
 
   const litellmProvider = PROVIDER_TO_LITELLM[providerType]
   if (!litellmProvider) {
-    // Unknown provider — pick middle of list
-    const mid = Math.floor(availableModelIds.length / 2)
-    return { modelId: availableModelIds[mid], reason: 'unknown provider, picked middle' }
+    // Unknown provider — without catalog data, just pick the first model.
+    // Picking "middle" was an arbitrary cost-balanced heuristic; flagship-first
+    // policy has no signal here, so don't pretend to.
+    return { modelId: availableModelIds[0], reason: 'unknown provider, no catalog signal' }
   }
 
   const catalog = _loadRawCatalog(dataDir)
   if (!catalog || Object.keys(catalog).length === 0) {
-    const mid = Math.floor(availableModelIds.length / 2)
-    return { modelId: availableModelIds[mid], reason: 'no catalog data' }
+    return { modelId: availableModelIds[0], reason: 'no catalog data' }
   }
 
   // Build a set of available IDs (lowercase) for matching
@@ -351,29 +353,21 @@ function recommendModel(providerType, availableModelIds, dataDir) {
   }
 
   if (scored.length === 0) {
-    // No catalog matches — pick middle of available list
-    const mid = Math.floor(availableModelIds.length / 2)
-    return { modelId: availableModelIds[mid], reason: 'no catalog matches' }
+    return { modelId: availableModelIds[0], reason: 'no catalog matches' }
   }
 
-  // Deduplicate by model ID (keep lowest cost entry per ID)
+  // Deduplicate by model ID (keep highest cost entry per ID — usually a tie, but
+  // be defensive in case the same id appears with different metadata)
   const byId = new Map()
   for (const s of scored) {
     const key = s.id.toLowerCase()
-    if (!byId.has(key) || s.cost < byId.get(key).cost) byId.set(key, s)
+    if (!byId.has(key) || s.cost > byId.get(key).cost) byId.set(key, s)
   }
-  const unique = [...byId.values()].sort((a, b) => a.cost - b.cost)
-
-  if (unique.length <= 2) {
-    // 1-2 models: pick the more expensive (better quality)
-    const pick = unique[unique.length - 1]
-    return { modelId: pick.id, reason: `best of ${unique.length}` }
-  }
-
-  // 3+ models: pick the median (balanced)
-  const medianIdx = Math.floor(unique.length / 2)
-  const pick = unique[medianIdx]
-  return { modelId: pick.id, reason: `median of ${unique.length} (cost rank ${medianIdx + 1})` }
+  // Pick the most expensive — price is our best proxy for capability when we
+  // don't have a curated flagship entry for this provider.
+  const sorted = [...byId.values()].sort((a, b) => b.cost - a.cost)
+  const pick = sorted[0]
+  return { modelId: pick.id, reason: `top-priced of ${sorted.length}` }
 }
 
 /**

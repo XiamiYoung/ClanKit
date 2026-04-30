@@ -19,11 +19,11 @@
       </div>
       <!-- Inline content: text segments interleaved with blob chips -->
       <template v-if="contentSegments.length === 1 && contentSegments[0].type === 'text'">
-        <div v-if="message.content" class="prose-clankai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleContentClick" />
+        <div v-if="message.content" class="prose-clankit user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(message.content || '')" @click="handleContentClick" />
       </template>
       <template v-else-if="contentSegments.length > 0">
         <span v-for="(seg, si) in contentSegments" :key="si">
-          <span v-if="seg.type === 'text' && seg.value" class="prose-clankai user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(seg.value)" />
+          <span v-if="seg.type === 'text' && seg.value" class="prose-clankit user-content" style="max-width:none; color:#ffffff !important;" v-html="renderMarkdown(seg.value)" />
           <span v-else-if="seg.type === 'blob'" class="msg-blob-chip" @click="emit('view-blob', seg.content)">
             📄 {{ t('chats.longInputChip', { preview: seg.content.slice(0, 10), count: seg.content.length }) }}
           </span>
@@ -89,14 +89,14 @@
             <span>{{ expandedThinking[i] ? $t('chats.hideThinking') : $t('chats.showThinking') }}</span>
           </div>
           <div v-if="expandedThinking[i]"
-               class="prose-clankai"
+               class="prose-clankit"
                style="max-width:none; opacity:0.6; font-size:0.88em; margin-top:4px;"
                v-html="renderMarkdown(seg.content)"
                @click="handleContentClick" />
         </div>
         <!-- Final response text: always shown normally -->
         <div v-else
-             class="prose-clankai"
+             class="prose-clankit"
              style="max-width:none;"
              v-html="renderMarkdown(seg.content)"
              @click="handleContentClick"

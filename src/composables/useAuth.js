@@ -101,7 +101,7 @@ function applyTokens(emailValue, tokens, method) {
 
 // Mark the user as having seen the auth screen (signed in OR explicitly skipped).
 // Persisted in config.json so it survives reinstalls of the renderer-side localStorage
-// and follows the user's CLANKAI_DATA_PATH. Safe to call multiple times — idempotent.
+// and follows the user's CLANKIT_DATA_PATH. Safe to call multiple times — idempotent.
 async function markAuthOnboardedInConfig() {
   try {
     // Lazy import to avoid load-order dependency on Pinia.

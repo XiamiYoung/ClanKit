@@ -1,4 +1,4 @@
-# ClankAI
+# ClanKit
 
 A local-first, multi-LLM desktop workspace for chat, agent collaboration, and tool orchestration.
 
@@ -54,7 +54,7 @@ Download the latest release from the [Releases](../../releases) page:
 
 ```bash
 git clone <repo-url>
-cd ClankAI
+cd ClanKit
 npm install
 npm run dev
 ```
@@ -126,11 +126,11 @@ git push && git push --tags
 
 Default user data directory:
 
-- **Windows:** `%APPDATA%\clankai\data`
-- **macOS:** `~/Library/Application Support/clankai/data`
-- **Linux:** `~/.config/clankai/data`
+- **Windows:** `%APPDATA%\clankit\data`
+- **macOS:** `~/Library/Application Support/clankit/data`
+- **Linux:** `~/.config/clankit/data`
 
-Override via the `CLANKAI_DATA_PATH` environment variable (the only path setting that lives in `.env`).
+Override via the `CLANKIT_DATA_PATH` environment variable (the only path setting that lives in `.env`).
 
 Typical files inside the data directory:
 
@@ -156,7 +156,7 @@ The app uses hash-based routing for Electron compatibility:
 ## Project Layout
 
 ```
-ClankAI/
+ClanKit/
 ├── electron/              # Main process (Node.js, CommonJS)
 │   ├── main.js            # App bootstrap
 │   ├── preload.js         # contextBridge API surface

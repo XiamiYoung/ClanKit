@@ -1,8 +1,8 @@
-# CLAUDE.md — ClankAI Project Guide
+# CLAUDE.md — ClanKit Project Guide
 
 ## Project Overview
 
-ClankAI is a multi-LLM desktop chat application built with **Electron + Vue 3 + Vite**. It supports Anthropic (Claude), OpenRouter, and OpenAI-compatible backends. Features include agent management, MCP server integration, HTTP tools, knowledge base (RAG via local embeddings and vectra vector store), skills, and an agentic tool-use loop.
+ClanKit is a multi-LLM desktop chat application built with **Electron + Vue 3 + Vite**. It supports Anthropic (Claude), OpenRouter, and OpenAI-compatible backends. Features include agent management, MCP server integration, HTTP tools, knowledge base (RAG via local embeddings and vectra vector store), skills, and an agentic tool-use loop.
 
 ## Tech Stack
 
@@ -130,12 +130,12 @@ When a model is not in the litellm catalog AND the provider API doesn't report `
 
 ### Data Storage
 
-- All data stored in `%APPDATA%/clankai/data/` on Windows, `~/.config/clankai/data/` on Linux/macOS (configurable via `CLANKAI_DATA_PATH` in `.env`)
+- All data stored in `%APPDATA%/clankit/data/` on Windows, `~/.config/clankit/data/` on Linux/macOS (configurable via `CLANKIT_DATA_PATH` in `.env`)
 - Files: `config.json`, `agents.json`, `mcp-servers.json`, `tools.json`, `knowledge.json`
 - Chats: `chats/index.json` (metadata) + `chats/{id}.json` (per-chat with messages)
 - Memory: SQLite at `memory/memory.db` (rows + FTS5) + vectra at `memory/memory-vec/`. Sidecar JSON artifacts (speech / evidence / harness) at `agent-artifacts/{type}/{id}.*.json`
 
-All configuration lives in `config.json`. The `.env` file only stores `CLANKAI_DATA_PATH` (data directory override).
+All configuration lives in `config.json`. The `.env` file only stores `CLANKIT_DATA_PATH` (data directory override).
 
 ## Electron Agent Architecture
 

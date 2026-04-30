@@ -1,6 +1,0 @@
-{
-  "id": "clankai-config-admin",
-  "version": 2,
-  "builtin": true,
-  "description": "Built-in skill for managing ClankAI app configuration files"
-}

@@ -41,7 +41,7 @@ async function _createSocket() {
   _sock = makeWASocket({
     auth: state,
     version,
-    browser: Browsers.windows('ClankAI'),
+    browser: Browsers.windows('ClanKit'),
     printQRInTerminal: false,
     syncFullHistory:    false,
     markOnlineOnConnect: false,

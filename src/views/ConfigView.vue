@@ -267,18 +267,17 @@
                 </svg>
               </div>
               <h3 class="form-section-title">{{ t('config.dataPath') }}</h3>
-              <span class="form-label-hint">CLANKAI_DATA_PATH</span>
+              <span class="form-label-hint">CLANKIT_DATA_PATH</span>
             </div>
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
                 <input id="dataPath" v-model="form.dataPath" type="text" :placeholder="defaultDataPath" class="field font-mono" />
                 <AppTooltip :text="t('common.selectFolder', 'Select folder')">
-                  <button class="open-folder-btn" @click="pickDataFolder">
-                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <AppButton variant="primary" size="icon" @click="pickDataFolder">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                      <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
                     </svg>
-                  </button>
+                  </AppButton>
                 </AppTooltip>
               </div>
               <p class="hint">
@@ -304,18 +303,17 @@
                 </svg>
               </div>
               <h3 class="form-section-title">{{ t('config.artifactPath') }}</h3>
-              <span class="form-label-hint">CLANKAI_ARTIFACT_PATH</span>
+              <span class="form-label-hint">CLANKIT_ARTIFACT_PATH</span>
             </div>
             <div class="form-group" style="margin-bottom:0;">
               <div class="input-with-trailing-btn">
                 <input id="artifactPath" :value="form.artifactPath || defaultArtifactPath" @input="form.artifactPath = $event.target.value" type="text" class="field font-mono" />
                 <AppTooltip :text="t('common.selectFolder', 'Select folder')">
-                  <button class="open-folder-btn" @click="pickArtifactFolder">
-                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <AppButton variant="primary" size="icon" @click="pickArtifactFolder">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                      <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
                     </svg>
-                  </button>
+                  </AppButton>
                 </AppTooltip>
               </div>
               <p class="hint">
@@ -913,11 +911,11 @@
               <div class="input-with-trailing-btn">
                 <input id="skillsPath" :value="form.skillsPath || defaultSkillsPath" @input="form.skillsPath = $event.target.value" type="text" class="field font-mono" />
                 <AppTooltip :text="t('common.openInExplorer', 'Open in file explorer')">
-                  <button class="open-folder-btn" @click="openInExplorer(form.skillsPath || defaultSkillsPath)">
-                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <AppButton variant="primary" size="icon" @click="openInExplorer(form.skillsPath || defaultSkillsPath)">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                     </svg>
-                  </button>
+                  </AppButton>
                 </AppTooltip>
               </div>
               <p class="hint">{{ t('config.skillsPathHint') }}</p>
@@ -957,19 +955,18 @@
               <div class="input-with-trailing-btn">
                 <input id="DoCPath" :value="form.DoCPath || defaultAidocPath" @input="form.DoCPath = $event.target.value" type="text" class="field font-mono" />
                 <AppTooltip :text="t('common.selectFolder', 'Select folder')">
-                  <button class="open-folder-btn" @click="pickAidocFolder">
-                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <AppButton variant="primary" size="icon" @click="pickAidocFolder">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                      <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
                     </svg>
-                  </button>
+                  </AppButton>
                 </AppTooltip>
                 <AppTooltip :text="t('common.openInExplorer', 'Open in file explorer')">
-                  <button class="open-folder-btn" @click="openInExplorer(form.DoCPath || defaultAidocPath)">
-                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <AppButton variant="primary" size="icon" @click="openInExplorer(form.DoCPath || defaultAidocPath)">
+                    <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
                     </svg>
-                  </button>
+                  </AppButton>
                 </AppTooltip>
               </div>
               <p class="hint">{{ t('config.aidocPathHint') }}</p>
@@ -3308,7 +3305,7 @@ const derivedPathsAffected = computed(() => {
     affected.push({ label: t('config.artifactPath'), newPath: to + sep + 'artifact' })
   }
   if (dependsOnDataDir(form.DoCPath)) {
-    affected.push({ label: t('config.aidocPath'), newPath: to + sep + 'clank_aidoc' })
+    affected.push({ label: t('config.aidocPath'), newPath: to + sep + 'clankit_doc' })
   }
   return affected
 })
@@ -3322,7 +3319,7 @@ const defaultSkillsPath = computed(() => {
 })
 const defaultAidocPath = computed(() => {
   const dp = form.dataPath || defaultDataPath.value
-  return dp ? `${dp}${osSep}clank_aidoc` : ''
+  return dp ? `${dp}${osSep}clankit_doc` : ''
 })
 const savingGeneral = ref(false)
 const savedGeneralMsg = ref('')
@@ -5375,17 +5372,6 @@ async function checkKnowledgeModelIfNeeded() {
 /* ── Input with trailing button ────────────────────────────────────────── */
 .input-with-trailing-btn { display: flex; gap: 6px; align-items: stretch; }
 .input-with-trailing-btn .field { flex: 1; }
-.open-folder-btn {
-  display: flex; align-items: center; justify-content: center;
-  padding: 0 10px; border: none; border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF; cursor: pointer; transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-}
-.open-folder-btn:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
-}
 .field-action-btn.danger:hover { color: #FF3B30; }
 
 /* ── Icon sizes ─────────────────────────────────────────────────────────── */

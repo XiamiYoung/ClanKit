@@ -266,7 +266,7 @@ export function useSendMessage({
       wait.waitingError = errorText || t('chats.preResponseFailed')
       wait.streaming = false
       if (wait.streamingStartedAt) wait.durationMs = Date.now() - wait.streamingStartedAt
-      if (!wait.timestamp) wait.timestamp = Date.now()
+      wait.timestamp = Date.now()
     }
 
     try {
@@ -505,14 +505,14 @@ export function useSendMessage({
             msg.content = `Error: ${err.message}`
             msg.streaming = false
             if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
-            if (!msg.timestamp) msg.timestamp = Date.now()
+            msg.timestamp = Date.now()
           }
         }
         // Also stop any streaming group messages
         for (const m of chat.messages) {
           if (m.streaming) {
             m.streaming = false
-            if (!m.timestamp) m.timestamp = Date.now()
+            m.timestamp = Date.now()
           }
         }
       }
@@ -593,7 +593,7 @@ export function useSendMessage({
           if (m.streaming) {
             m.streaming = false
             if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
-            if (!m.timestamp) m.timestamp = Date.now()
+            m.timestamp = Date.now()
           }
         }
       }
@@ -630,7 +630,7 @@ export function useSendMessage({
           if (msg) {
             msg.streaming = false
             if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
-            if (!msg.timestamp) msg.timestamp = Date.now()
+            msg.timestamp = Date.now()
           }
         }
       }

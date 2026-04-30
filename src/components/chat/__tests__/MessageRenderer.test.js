@@ -112,7 +112,7 @@ describe('MessageRenderer', () => {
       segments: [{ type: 'text', content: 'Hello world' }],
     })
     expect(wrapper.findAll('.wave-bar').length).toBeGreaterThan(0)
-    expect(wrapper.find('.prose-clankai').exists()).toBe(true)
+    expect(wrapper.find('.prose-clankit').exists()).toBe(true)
   })
 
   // 3. Completed message — no wavebar, duration shown

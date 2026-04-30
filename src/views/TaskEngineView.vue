@@ -13,10 +13,10 @@
         </div>
       </div>
       <div class="tev-header-actions">
-        <AppButton size="compact" @click="refreshTab" :loading="isRefreshing" v-tooltip="t('common.refresh')">
-          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        <AppButton size="icon" @click="refreshTab" :loading="isRefreshing" v-tooltip="t('common.refresh')">
+          <svg v-if="!isRefreshing" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </AppButton>
-        <AppButton v-if="activeTab !== 'calendar' && activeTab !== 'dashboard'" size="compact" @click="activeTab === 'tasks' ? openTaskEditor(null) : openPlanEditor(null)" v-tooltip="activeTab === 'tasks' ? t('tasks.newTask') : t('tasks.plan.newPlan')">
+        <AppButton v-if="activeTab !== 'calendar' && activeTab !== 'dashboard'" size="icon" @click="activeTab === 'tasks' ? openTaskEditor(null) : openPlanEditor(null)" v-tooltip="activeTab === 'tasks' ? t('tasks.newTask') : t('tasks.plan.newPlan')">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </AppButton>
       </div>
@@ -988,7 +988,7 @@ onBeforeUnmount(() => {
 /* Header */
 .tev-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
 }
@@ -1009,18 +1009,19 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 .tev-title {
+  font-family: 'Inter', sans-serif;
   font-size: var(--fs-page-title);
   font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
+  color: #1A1A1A;
   margin: 0;
 }
 .tev-subtitle {
-  font-size: var(--fs-secondary);
-  color: var(--text-muted);
-  margin: 0.125rem 0 0;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  color: #6B7280;
+  margin: 0.25rem 0 0 0;
 }
-.tev-header-actions { display: flex; align-items: center; gap: 0.5rem; padding-top: 0.25rem; }
+.tev-header-actions { display: flex; align-items: center; gap: 0.5rem; }
 
 /* Tabs */
 .tev-tabs {

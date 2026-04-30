@@ -1,7 +1,7 @@
 /**
  * Built-in skill bootstrapping.
  *
- * A "built-in" skill is one that ships with the ClankAI source tree under
+ * A "built-in" skill is one that ships with the ClanKit source tree under
  * electron/agent/builtin-skills/<id>/. On startup we copy any missing built-in
  * skill folders into the user's skills directory so they appear just like any
  * other skill, but with an isBuiltin flag that prevents the UI from deleting

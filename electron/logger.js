@@ -5,7 +5,7 @@ const os = require('os')
 // Fallback log dir used before DATA_DIR is known (early boot messages only).
 // Redirected to DATA_DIR/logs via setLogDir() once main.js resolves the data path.
 // Use OS temp dir to avoid creating stale directories before DATA_DIR is known.
-let LOG_DIR = path.join(os.tmpdir(), 'clankai-logs')
+let LOG_DIR = path.join(os.tmpdir(), 'clankit-logs')
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
 
 const LEVEL_PRIORITY = { DEBUG: 0, AGENT: 1, INFO: 2, WARN: 3, ERROR: 4 }
@@ -14,7 +14,7 @@ let minLevel = LEVEL_PRIORITY.AGENT // default: show AGENT and above, skip DEBUG
 function logFile() {
   const d = new Date()
   const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-  return path.join(LOG_DIR, `clankai-${date}.log`)
+  return path.join(LOG_DIR, `clankit-${date}.log`)
 }
 
 function write(level, ...args) {
