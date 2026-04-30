@@ -275,11 +275,13 @@ function register({ DEFAULT_CONFIG }) {
     }
   })
   ipcMain.handle('store:save-agents', async (_, data) => {
-    // Snapshot the current agents.json to .bak before overwriting. Recovery
-    // path of last resort if a write ever drops user agents (or anything else)
-    // by mistake. Best-effort — never blocks the write.
-    ds.backupFile(p().AGENTS_FILE)
-    await ds.writeJSONAtomic(p().AGENTS_FILE, data)
+    const { getInstance: getAgentStore } = require('../agent/AgentStore')
+    const store = getAgentStore(p().DATA_DIR)
+    // The renderer pushes the full bag; we replace each kind atomically.
+    // import_artifacts is NOT touched here — it has its own write path via
+    // the agent:import-write-* handlers in agentImport.js.
+    store.replaceKind('system', data?.agents?.items   || [], data?.agents?.categories   || [])
+    store.replaceKind('user',   data?.personas?.items || [], data?.personas?.categories || [])
     return true
   })
 }
