@@ -504,18 +504,13 @@ ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, age
 ipcMain.handle('agent:import-write-speech-dna', async (_event, { agentId, agentType, speechDna }) => {
   try {
     if (!agentId || !speechDna) return { success: true, written: false }
-
     const ds = require('../lib/dataStore')
-    const fs = require('fs')
-    const type = agentType === 'user' || agentType === 'users' ? 'users' : 'system'
-    const dir = path.join(ds.paths().AGENT_ARTIFACTS_DIR, type)
-    fs.mkdirSync(dir, { recursive: true })
-
-    const filePath = path.join(dir, `${agentId}.speech.json`)
-    fs.writeFileSync(filePath, JSON.stringify(speechDna, null, 2), 'utf8')
-
-    logger.info(`agent:import-write-speech-dna: wrote ${filePath}`)
-    return { success: true, written: true, filePath }
+    const { getInstance: getAgentStore } = require('../agent/AgentStore')
+    const store = getAgentStore(ds.paths().DATA_DIR)
+    const source = agentType === 'user' || agentType === 'users' ? 'user-import' : 'system-import'
+    store.upsertImportArtifacts(agentId, { speechDna, source })
+    logger.info(`agent:import-write-speech-dna: stored for ${agentId}`)
+    return { success: true, written: true }
   } catch (err) {
     logger.error('agent:import-write-speech-dna error', err.message)
     return { success: false, error: err.message }
