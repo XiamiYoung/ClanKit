@@ -166,6 +166,209 @@ class AgentStore {
       this._db = null
     }
   }
+
+  // ── Agents ─────────────────────────────────────────────────────────────
+
+  getAll() {
+    const db = this._open()
+    return db.prepare('SELECT * FROM agents ORDER BY created_at DESC').all().map(rowToAgent)
+  }
+
+  getByKind(kind) {
+    const db = this._open()
+    return db.prepare('SELECT * FROM agents WHERE kind = ? ORDER BY created_at DESC').all(kind).map(rowToAgent)
+  }
+
+  getById(id) {
+    if (!id) return null
+    const db = this._open()
+    const row = db.prepare('SELECT * FROM agents WHERE id = ?').get(id)
+    return rowToAgent(row)
+  }
+
+  countByKind(kind) {
+    const db = this._open()
+    return db.prepare('SELECT COUNT(*) AS n FROM agents WHERE kind = ?').get(kind).n
+  }
+
+  saveAgent(agent) {
+    if (!agent || !agent.id || !agent.type) throw new Error('saveAgent: id and type required')
+    const db = this._open()
+    const r = agentToRow(agent)
+    db.prepare(`
+      INSERT INTO agents (
+        id, kind, name, avatar, description, prompt,
+        provider_id, model_id, voice_id, is_default, is_builtin,
+        created_at, updated_at,
+        category_ids, required_tool_ids, required_skill_ids,
+        required_mcp_server_ids, required_knowledge_base_ids,
+        marketplace_id, marketplace_version, marketplace_signature
+      ) VALUES (
+        @id, @kind, @name, @avatar, @description, @prompt,
+        @provider_id, @model_id, @voice_id, @is_default, @is_builtin,
+        @created_at, @updated_at,
+        @category_ids, @required_tool_ids, @required_skill_ids,
+        @required_mcp_server_ids, @required_knowledge_base_ids,
+        @marketplace_id, @marketplace_version, @marketplace_signature
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        kind=excluded.kind, name=excluded.name, avatar=excluded.avatar,
+        description=excluded.description, prompt=excluded.prompt,
+        provider_id=excluded.provider_id, model_id=excluded.model_id,
+        voice_id=excluded.voice_id, is_default=excluded.is_default, is_builtin=excluded.is_builtin,
+        updated_at=excluded.updated_at,
+        category_ids=excluded.category_ids,
+        required_tool_ids=excluded.required_tool_ids,
+        required_skill_ids=excluded.required_skill_ids,
+        required_mcp_server_ids=excluded.required_mcp_server_ids,
+        required_knowledge_base_ids=excluded.required_knowledge_base_ids,
+        marketplace_id=excluded.marketplace_id,
+        marketplace_version=excluded.marketplace_version,
+        marketplace_signature=excluded.marketplace_signature
+    `).run(r)
+  }
+
+  deleteAgent(id) {
+    if (!id) return
+    const db = this._open()
+    db.prepare('DELETE FROM agents WHERE id = ?').run(id)
+  }
+
+  // ── Categories ─────────────────────────────────────────────────────────
+
+  getCategoriesByKind(kind) {
+    const db = this._open()
+    return db.prepare('SELECT id, kind, name, emoji, sort_order AS sortOrder FROM categories WHERE kind = ? ORDER BY sort_order').all(kind)
+      .map(c => ({ id: c.id, type: c.kind, name: c.name, emoji: c.emoji || null, sortOrder: c.sortOrder || 0 }))
+  }
+
+  saveCategory(cat) {
+    if (!cat || !cat.id || !cat.type) throw new Error('saveCategory: id and type required')
+    const db = this._open()
+    db.prepare(`
+      INSERT INTO categories (id, kind, name, emoji, sort_order)
+      VALUES (@id, @kind, @name, @emoji, @sort_order)
+      ON CONFLICT(id) DO UPDATE SET
+        kind=excluded.kind, name=excluded.name, emoji=excluded.emoji, sort_order=excluded.sort_order
+    `).run({
+      id: cat.id, kind: cat.type, name: cat.name,
+      emoji: cat.emoji || null, sort_order: cat.sortOrder || 0,
+    })
+  }
+
+  deleteCategory(id) {
+    if (!id) return
+    const db = this._open()
+    db.prepare('DELETE FROM categories WHERE id = ?').run(id)
+  }
+
+  // ── Bulk replace (used by store:save-agents IPC) ───────────────────────
+
+  /**
+   * Replace all agents and categories of a given kind atomically.
+   * Used to keep the existing IPC surface that takes the full
+   * { categories, items } object on each save. import_artifacts is NOT
+   * touched — it has its own write path via upsertImportArtifacts.
+   */
+  replaceKind(kind, items, categories) {
+    const db = this._open()
+    const tx = db.transaction(() => {
+      db.prepare('DELETE FROM agents WHERE kind = ?').run(kind)
+      db.prepare('DELETE FROM categories WHERE kind = ?').run(kind)
+      const insertCat = db.prepare(`
+        INSERT INTO categories (id, kind, name, emoji, sort_order)
+        VALUES (@id, @kind, @name, @emoji, @sort_order)
+      `)
+      for (const cat of (categories || [])) {
+        if (!cat?.id) continue
+        insertCat.run({
+          id: cat.id, kind, name: cat.name || '',
+          emoji: cat.emoji || null, sort_order: cat.sortOrder || 0,
+        })
+      }
+      const insertAgent = db.prepare(`
+        INSERT INTO agents (
+          id, kind, name, avatar, description, prompt,
+          provider_id, model_id, voice_id, is_default, is_builtin,
+          created_at, updated_at,
+          category_ids, required_tool_ids, required_skill_ids,
+          required_mcp_server_ids, required_knowledge_base_ids,
+          marketplace_id, marketplace_version, marketplace_signature
+        ) VALUES (
+          @id, @kind, @name, @avatar, @description, @prompt,
+          @provider_id, @model_id, @voice_id, @is_default, @is_builtin,
+          @created_at, @updated_at,
+          @category_ids, @required_tool_ids, @required_skill_ids,
+          @required_mcp_server_ids, @required_knowledge_base_ids,
+          @marketplace_id, @marketplace_version, @marketplace_signature
+        )
+      `)
+      for (const a of (items || [])) {
+        if (!a?.id) continue
+        // Force kind to match the section being written (defensive — the
+        // renderer's save shape splits by section, but a stray mismatched
+        // type field on an item would corrupt the kind column).
+        insertAgent.run(agentToRow({ ...a, type: kind }))
+      }
+    })
+    tx()
+  }
+
+  // ── Import artifacts ───────────────────────────────────────────────────
+
+  getImportArtifacts(agentId) {
+    if (!agentId) return null
+    const db = this._open()
+    const row = db.prepare('SELECT * FROM import_artifacts WHERE agent_id = ?').get(agentId)
+    if (!row) return null
+    return {
+      agentId: row.agent_id,
+      source: row.source || null,
+      contactName: row.contact_name || null,
+      speechDna: row.speech_dna ? JSON.parse(row.speech_dna) : null,
+      evidence: row.evidence ? JSON.parse(row.evidence) : null,
+      harness: row.harness ? JSON.parse(row.harness) : null,
+      importedAt: row.imported_at || 0,
+    }
+  }
+
+  upsertImportArtifacts(agentId, patch) {
+    if (!agentId || !patch) throw new Error('upsertImportArtifacts: agentId and patch required')
+    const db = this._open()
+    const existing = db.prepare('SELECT * FROM import_artifacts WHERE agent_id = ?').get(agentId) || {}
+    const merged = {
+      agent_id:     agentId,
+      source:       patch.source       ?? existing.source       ?? null,
+      contact_name: patch.contactName  ?? existing.contact_name ?? null,
+      speech_dna:   patch.speechDna !== undefined
+                    ? (patch.speechDna == null ? null : JSON.stringify(patch.speechDna))
+                    : (existing.speech_dna ?? null),
+      evidence:     patch.evidence !== undefined
+                    ? (patch.evidence == null ? null : JSON.stringify(patch.evidence))
+                    : (existing.evidence ?? null),
+      harness:      patch.harness !== undefined
+                    ? (patch.harness == null ? null : JSON.stringify(patch.harness))
+                    : (existing.harness ?? null),
+      imported_at:  patch.importedAt ?? existing.imported_at ?? Date.now(),
+    }
+    db.prepare(`
+      INSERT INTO import_artifacts (agent_id, source, contact_name, speech_dna, evidence, harness, imported_at)
+      VALUES (@agent_id, @source, @contact_name, @speech_dna, @evidence, @harness, @imported_at)
+      ON CONFLICT(agent_id) DO UPDATE SET
+        source=excluded.source,
+        contact_name=excluded.contact_name,
+        speech_dna=excluded.speech_dna,
+        evidence=excluded.evidence,
+        harness=excluded.harness,
+        imported_at=excluded.imported_at
+    `).run(merged)
+  }
+
+  deleteImportArtifacts(agentId) {
+    if (!agentId) return
+    const db = this._open()
+    db.prepare('DELETE FROM import_artifacts WHERE agent_id = ?').run(agentId)
+  }
 }
 
 let _instance = null
