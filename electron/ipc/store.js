@@ -260,10 +260,20 @@ function register({ DEFAULT_CONFIG }) {
     }
   })
 
-  ipcMain.handle('store:get-agents', async () => ds.readJSONAsync(p().AGENTS_FILE, {
-    agents:   { categories: [], items: [] },
-    personas: { categories: [], items: [] },
-  }))
+  ipcMain.handle('store:get-agents', async () => {
+    const { getInstance: getAgentStore } = require('../agent/AgentStore')
+    const store = getAgentStore(p().DATA_DIR)
+    return {
+      agents: {
+        items:      store.getByKind('system'),
+        categories: store.getCategoriesByKind('system'),
+      },
+      personas: {
+        items:      store.getByKind('user'),
+        categories: store.getCategoriesByKind('user'),
+      },
+    }
+  })
   ipcMain.handle('store:save-agents', async (_, data) => {
     // Snapshot the current agents.json to .bak before overwriting. Recovery
     // path of last resort if a write ever drops user agents (or anything else)
