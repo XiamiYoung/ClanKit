@@ -75,7 +75,7 @@ describe('agentsStore', () => {
     it('preserves existing agents and backfills fields', async () => {
       storage.getAgents.mockResolvedValue(withSystem([
         { id: 'custom-1', name: 'Custom', type: 'system' },
-        { id: BUILTIN_SYSTEM_AGENT_ID, name: 'Old Clank', type: 'system', providerId: 'my-provider' },
+        { id: BUILTIN_SYSTEM_AGENT_ID, name: 'Old Clank', type: 'system', providerId: 'my-provider', isBuiltin: true },
       ]))
       const store = useAgentsStore()
       await store.loadAgents()
@@ -85,10 +85,26 @@ describe('agentsStore', () => {
       expect(custom.requiredToolIds).toEqual([])
       expect(custom.categoryIds).toEqual([])
       expect(custom.voiceId).toBe('en-US-AriaNeural')
-      // Builtin system agent merged, preserves providerId
+      // SSOT: existing builtin is loaded as-is (not re-merged), providerId preserved
       const sys = store.getAgentById(BUILTIN_SYSTEM_AGENT_ID)
       expect(sys.providerId).toBe('my-provider')
       expect(sys.isBuiltin).toBe(true)
+    })
+
+    it('SSOT: existing builtin agent prompt is NOT overwritten on load', async () => {
+      const customized = {
+        id: BUILTIN_SYSTEM_AGENT_ID, type: 'system', name: 'Custom Name',
+        prompt: 'CUSTOMIZED PROMPT — DO NOT TOUCH', isBuiltin: true, isDefault: true,
+        avatar: '__system_icon__', description: '', voiceId: 'zh-CN-YunxiaNeural',
+        providerId: null, modelId: null, createdAt: 0, updatedAt: 0,
+        requiredToolIds: [], requiredSkillIds: [], requiredMcpServerIds: [], requiredKnowledgeBaseIds: [], categoryIds: [],
+      }
+      storage.getAgents.mockResolvedValue(withSystem([customized]))
+      const store = useAgentsStore()
+      await store.loadAgents()
+      const sys = store.getAgentById(BUILTIN_SYSTEM_AGENT_ID)
+      expect(sys.prompt).toBe('CUSTOMIZED PROMPT — DO NOT TOUCH')
+      expect(sys.name).toBe('Custom Name')
     })
 
     it('routes system agents and user personas into separate sections', async () => {

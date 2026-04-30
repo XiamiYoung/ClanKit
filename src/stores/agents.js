@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { storage } from '../services/storage'
 import { en, zh } from '../i18n'
@@ -103,16 +103,6 @@ function buildBuiltinAnalystCopy(locale, utilityModel) {
   }
 }
 
-function arrayEquals(a, b) {
-  if (a === b) return true
-  if (!Array.isArray(a) || !Array.isArray(b)) return false
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i] !== b[i]) return false
-  }
-  return true
-}
-
 // BUILTIN_DOC_EDITOR_AGENT is now built dynamically via buildBuiltinDocEditorCopy()
 
 // BUILTIN_USER_AGENT removed — user must create their own via onboarding
@@ -140,8 +130,6 @@ export const useAgentsStore = defineStore('agents', () => {
   const mcpStore = useMcpStore()
   const skillsStore = useSkillsStore()
   const knowledgeStore = useKnowledgeStore()
-  let builtinSyncInFlight = false
-
   const byCreatedDesc = (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
 
   // Public merged read-only views — preserve the legacy `agents` / `categories`
@@ -188,22 +176,6 @@ export const useAgentsStore = defineStore('agents', () => {
     )
   }
 
-  function mergeBuiltinSystemAgent(existing) {
-    const builtin = createBuiltinSystemAgent()
-    const previous = existing || {}
-    return {
-      ...previous,
-      ...builtin,
-      providerId: previous.providerId ?? builtin.providerId,
-      modelId: previous.modelId ?? builtin.modelId,
-      isDefault: previous.isDefault ?? builtin.isDefault,
-      isBuiltin: true,
-      categoryIds: Array.isArray(previous.categoryIds) ? previous.categoryIds : [],
-      createdAt: previous.createdAt ?? builtin.createdAt,
-      updatedAt: previous.updatedAt ?? builtin.updatedAt,
-    }
-  }
-
   function createBuiltinDocEditorAgent() {
     return buildBuiltinDocEditorCopy(
       configStore.language || 'en',
@@ -211,131 +183,11 @@ export const useAgentsStore = defineStore('agents', () => {
     )
   }
 
-  function mergeBuiltinDocEditorAgent(existing) {
-    const builtin = createBuiltinDocEditorAgent()
-    const previous = existing || {}
-    return {
-      ...previous,
-      ...builtin,
-      providerId: previous.providerId ?? builtin.providerId,
-      modelId: previous.modelId ?? builtin.modelId,
-      isBuiltin: true,
-      categoryIds: Array.isArray(previous.categoryIds) ? previous.categoryIds : [],
-      createdAt: previous.createdAt ?? builtin.createdAt,
-      updatedAt: previous.updatedAt ?? builtin.updatedAt,
-    }
-  }
-
-  function builtinDocEditorAgentNeedsSync(current, next) {
-    if (!current) return true
-    return current.name !== next.name ||
-      current.avatar !== next.avatar ||
-      current.description !== next.description ||
-      current.voiceId !== next.voiceId ||
-      current.prompt !== next.prompt ||
-      !arrayEquals(current.requiredSkillIds || [], next.requiredSkillIds || [])
-  }
-
-  async function syncBuiltinDocEditorAgent(persistChanges = true) {
-    const docIdx = _systemAgents.value.findIndex(p => p.id === BUILTIN_DOC_EDITOR_ID)
-    if (docIdx === -1 || builtinSyncInFlight) return
-    const current = _systemAgents.value[docIdx]
-    const next = mergeBuiltinDocEditorAgent(current)
-    if (!builtinDocEditorAgentNeedsSync(current, next)) return
-
-    builtinSyncInFlight = true
-    _systemAgents.value[docIdx] = {
-      ...next,
-      updatedAt: Date.now(),
-    }
-    try {
-      if (persistChanges) await persist()
-    } finally {
-      builtinSyncInFlight = false
-    }
-  }
-
   function createBuiltinAnalystAgent() {
     return buildBuiltinAnalystCopy(
       configStore.language || 'en',
       configStore.config.utilityModel || {}
     )
-  }
-
-  function mergeBuiltinAnalystAgent(existing) {
-    const builtin = createBuiltinAnalystAgent()
-    const previous = existing || {}
-    return {
-      ...previous,
-      ...builtin,
-      providerId: previous.providerId ?? builtin.providerId,
-      modelId: previous.modelId ?? builtin.modelId,
-      isBuiltin: true,
-      categoryIds: Array.isArray(previous.categoryIds) ? previous.categoryIds : [],
-      createdAt: previous.createdAt ?? builtin.createdAt,
-      updatedAt: previous.updatedAt ?? builtin.updatedAt,
-    }
-  }
-
-  function builtinAnalystAgentNeedsSync(current, next) {
-    if (!current) return true
-    return current.name !== next.name ||
-      current.avatar !== next.avatar ||
-      current.description !== next.description ||
-      current.voiceId !== next.voiceId ||
-      current.prompt !== next.prompt ||
-      !arrayEquals(current.requiredSkillIds || [], next.requiredSkillIds || [])
-  }
-
-  async function syncBuiltinAnalystAgent(persistChanges = true) {
-    const analystIdx = _systemAgents.value.findIndex(p => p.id === BUILTIN_ANALYST_ID)
-    if (analystIdx === -1 || builtinSyncInFlight) return
-    const current = _systemAgents.value[analystIdx]
-    const next = mergeBuiltinAnalystAgent(current)
-    if (!builtinAnalystAgentNeedsSync(current, next)) return
-
-    builtinSyncInFlight = true
-    _systemAgents.value[analystIdx] = {
-      ...next,
-      updatedAt: Date.now(),
-    }
-    try {
-      if (persistChanges) await persist()
-    } finally {
-      builtinSyncInFlight = false
-    }
-  }
-
-  function builtinSystemAgentNeedsSync(current, next) {
-    if (!current) return true
-    return current.name !== next.name ||
-      current.avatar !== next.avatar ||
-      current.description !== next.description ||
-      current.prompt !== next.prompt ||
-      current.voiceId !== next.voiceId ||
-      !arrayEquals(current.requiredToolIds || [], next.requiredToolIds || []) ||
-      !arrayEquals(current.requiredSkillIds || [], next.requiredSkillIds || []) ||
-      !arrayEquals(current.requiredMcpServerIds || [], next.requiredMcpServerIds || []) ||
-      !arrayEquals(current.requiredKnowledgeBaseIds || [], next.requiredKnowledgeBaseIds || [])
-  }
-
-  async function syncBuiltinSystemAgent(persistChanges = true) {
-    const sysIdx = _systemAgents.value.findIndex(p => p.id === BUILTIN_SYSTEM_AGENT_ID)
-    if (sysIdx === -1 || builtinSyncInFlight) return
-    const current = _systemAgents.value[sysIdx]
-    const next = mergeBuiltinSystemAgent(current)
-    if (!builtinSystemAgentNeedsSync(current, next)) return
-
-    builtinSyncInFlight = true
-    _systemAgents.value[sysIdx] = {
-      ...next,
-      updatedAt: Date.now(),
-    }
-    try {
-      if (persistChanges) await persist()
-    } finally {
-      builtinSyncInFlight = false
-    }
   }
 
   function getAgentById(id) {
@@ -374,25 +226,15 @@ export const useAgentsStore = defineStore('agents', () => {
     const userList = stored?.personas?.items      || []
     const userCats = stored?.personas?.categories || []
 
-    // Ensure built-in system agent exists (lives in system list)
-    const sysIdx = sysList.findIndex(p => p.id === BUILTIN_SYSTEM_AGENT_ID)
-    if (sysIdx >= 0) {
-      sysList[sysIdx] = mergeBuiltinSystemAgent(sysList[sysIdx])
-    } else {
+    // SSOT: only seed builtins when MISSING. Once a row exists, the DB is the
+    // source of truth — user edits to prompt/name/skills persist forever.
+    if (!sysList.some(p => p.id === BUILTIN_SYSTEM_AGENT_ID)) {
       sysList.unshift(createBuiltinSystemAgent())
     }
-    // Ensure built-in doc editor agent exists
-    const docIdx = sysList.findIndex(p => p.id === BUILTIN_DOC_EDITOR_ID)
-    if (docIdx >= 0) {
-      sysList[docIdx] = mergeBuiltinDocEditorAgent(sysList[docIdx])
-    } else {
+    if (!sysList.some(p => p.id === BUILTIN_DOC_EDITOR_ID)) {
       sysList.push(createBuiltinDocEditorAgent())
     }
-    // Ensure built-in analyst agent exists
-    const analystIdx = sysList.findIndex(p => p.id === BUILTIN_ANALYST_ID)
-    if (analystIdx >= 0) {
-      sysList[analystIdx] = mergeBuiltinAnalystAgent(sysList[analystIdx])
-    } else {
+    if (!sysList.some(p => p.id === BUILTIN_ANALYST_ID)) {
       sysList.push(createBuiltinAnalystAgent())
     }
 
@@ -404,8 +246,6 @@ export const useAgentsStore = defineStore('agents', () => {
     const backfillFields = (p) => {
       if (p.providerId === undefined) p.providerId = null
       if (p.modelId === undefined) p.modelId = null
-      if (p.enabledSkillIds === undefined) p.enabledSkillIds = null
-      if (p.mcpServerIds === undefined) p.mcpServerIds = null
       if (!p.voiceId) p.voiceId = getDefaultVoiceForLocale(configStore.language)
       if (!Array.isArray(p.requiredToolIds)) p.requiredToolIds = []
       if (!Array.isArray(p.requiredSkillIds)) p.requiredSkillIds = []
@@ -626,21 +466,6 @@ export const useAgentsStore = defineStore('agents', () => {
       return 0
     }
   }
-
-  watch(
-    () => ({
-      language: configStore.language,
-      toolIds: (toolsStore.tools || []).map(tool => tool.id).join('|'),
-      skillIds: (skillsStore.allSkillObjects || []).map(skill => skill.id).join('|'),
-      mcpIds: (mcpStore.servers || []).map(server => server.id).join('|'),
-      knowledgeIds: (knowledgeStore.knowledgeBases || []).map(kb => kb.id).join('|'),
-    }),
-    () => {
-      syncBuiltinSystemAgent(true)
-      syncBuiltinDocEditorAgent(true)
-      syncBuiltinAnalystAgent(true)
-    }
-  )
 
   async function cleanStaleKnowledgeRefs(validIndexIds) {
     const validSet = new Set(validIndexIds)
