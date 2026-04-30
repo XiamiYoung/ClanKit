@@ -415,21 +415,15 @@ ${generatedPrompt}`
 // Persist validation scores to {agentArtifactsDir}/{type}/{agentId}.harness.json
 // after the agent is created. Non-blocking; purely informational for now.
 
-ipcMain.handle('agent:import-write-harness', async (_event, { agentId, agentType, harness }) => {
+ipcMain.handle('agent:import-write-harness', async (_event, { agentId, agentType: _agentType, harness }) => {
   try {
     if (!agentId || !harness) return { success: true, written: false }
-
     const ds = require('../lib/dataStore')
-    const fs = require('fs')
-    const type = agentType === 'user' || agentType === 'users' ? 'users' : 'system'
-    const dir = path.join(ds.paths().AGENT_ARTIFACTS_DIR, type)
-    fs.mkdirSync(dir, { recursive: true })
-
-    const filePath = path.join(dir, `${agentId}.harness.json`)
-    fs.writeFileSync(filePath, JSON.stringify(harness, null, 2), 'utf8')
-
-    logger.info(`agent:import-write-harness: wrote ${filePath}`)
-    return { success: true, written: true, filePath }
+    const { getInstance: getAgentStore } = require('../agent/AgentStore')
+    const store = getAgentStore(ds.paths().DATA_DIR)
+    store.upsertImportArtifacts(agentId, { harness })
+    logger.info(`agent:import-write-harness: stored for ${agentId}`)
+    return { success: true, written: true }
   } catch (err) {
     logger.error('agent:import-write-harness error', err.message)
     return { success: false, error: err.message }
@@ -449,11 +443,7 @@ ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, age
     }
 
     const ds = require('../lib/dataStore')
-    const fs = require('fs')
     const type = agentType === 'user' || agentType === 'users' ? 'users' : 'system'
-    const artifactsDir = ds.paths().AGENT_ARTIFACTS_DIR
-    const dir = path.join(artifactsDir, type)
-    fs.mkdirSync(dir, { recursive: true })  // still used for evidence sidecar
 
     const { createTemplate, parseMarkdown, serializeMarkdown, updateTimestamp } = require('../agent/tools/MemoryTool')
     const memoryStoreMod = require('../memory/memoryStore')
@@ -483,10 +473,12 @@ ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, age
     store.upsertMeta(agentId, type, agentName)
     const result = store.writeMarkdown(agentId, type, newContent)
 
-    // Evidence index sidecar lives in artifactsDir as JSON
+    // Evidence index goes into the import_artifacts table. The nuwa sections
+    // above already wrote into memory.db — that path is unchanged.
     if (evidenceIndex) {
-      const evidencePath = path.join(dir, `${agentId}.evidence.json`)
-      fs.writeFileSync(evidencePath, JSON.stringify(evidenceIndex, null, 2), 'utf8')
+      const { getInstance: getAgentStore } = require('../agent/AgentStore')
+      const agentStore = getAgentStore(ds.paths().DATA_DIR)
+      agentStore.upsertImportArtifacts(agentId, { evidence: evidenceIndex })
     }
 
     logger.info(`agent:import-write-nuwa-sections: wrote (store)`, { agentId, ...result })
