@@ -387,14 +387,8 @@ function cancel() {
   box-sizing: border-box;
 }
 .te-select {
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A0A0A0' stroke-width='2.5'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-position: right 0.625rem center;
-  background-size: 14px;
-  padding-right: 2rem;
   cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
 }
 .te-select option {
   background: #1A1A1A;
