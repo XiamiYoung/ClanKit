@@ -1083,18 +1083,23 @@ function deleteMessage(msg) {
 
 /* ── Mode chip (read-only, no click) ── */
 .gp-mode-chip {
-  display: inline-flex;
-  padding: 2px 4px;
-  border-radius: 4px;
-  background: var(--bg-card, #fff);
-  border: 1px solid var(--border, #e5e7eb);
+  display: flex;
   align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--bg-card, #fff);
+  color: var(--text-secondary, #6b7280);
   flex-shrink: 0;
 }
 .gp-mode-chip--productivity {
-  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151);
-  color: #fff;
-  border-color: transparent;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border-color: #1A1A1A;
+  color: #FFFFFF;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
 }
 </style>
 

@@ -23,18 +23,7 @@
         @mouseenter="showPathTooltip"
         @mouseleave="hidePathTooltip"
       >
-        <button
-          v-if="showModeChip"
-          class="ch-mode-chip"
-          :class="{ 'ch-mode-chip--productivity': isProductivity }"
-          @click.stop="onModeChipClick"
-          :title="isProductivity ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip')"
-        >
-          <svg v-if="isProductivity" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-          <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          <span>{{ isProductivity ? t('chats.modeProductivity') : t('chats.modeChat') }}</span>
-        </button>
-        <div v-else class="ch-title-icon">
+        <div class="ch-title-icon">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
@@ -73,6 +62,19 @@
       <!-- Right side: call + settings (single view) or grid action buttons -->
       <div class="ch-row-top-actions">
         <template v-if="!isGridView">
+          <!-- Mode chip button -->
+          <div v-if="showModeChip" class="ch-mode-btn-wrap" ref="modeChipBtnEl">
+            <button
+              class="ch-mode-btn"
+              :class="{ 'ch-mode-btn--productivity': isProductivity }"
+              @click.stop="onModeChipClick"
+              :title="isProductivity ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip')"
+              :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
+            >
+              <svg v-if="isProductivity" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </button>
+          </div>
           <!-- Voice call button -->
           <div
             ref="callBtnEl"
@@ -1731,30 +1733,39 @@ function confirmProductivitySwitch() {
   line-height: 1.5;
 }
 
-/* ── Mode chip ── */
-.ch-mode-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.625rem;
-  border-radius: var(--radius-md, 0.5rem);
-  font-size: var(--fs-secondary, 0.875rem);
-  cursor: pointer;
-  border: 1px solid var(--border, #e5e7eb);
-  background: var(--bg-card, #fff);
-  color: var(--text-primary, #111);
-  transition: background 0.15s, border-color 0.15s;
+/* ── Mode button (right-actions area) ── */
+.ch-mode-btn-wrap {
+  position: relative;
   flex-shrink: 0;
 }
-.ch-mode-chip:hover {
+.ch-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.875rem;
+  height: 1.875rem;
+  padding: 0;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--bg-card, #fff);
+  color: var(--text-secondary, #6b7280);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.ch-mode-btn:hover {
   border-color: var(--text-primary, #111);
+  color: var(--text-primary, #111);
 }
-.ch-mode-chip--productivity {
-  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151);
-  color: #fff;
-  border-color: transparent;
+.ch-mode-btn--productivity {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border-color: #1A1A1A;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
-.ch-mode-chip--productivity:hover {
-  filter: brightness(1.1);
+.ch-mode-btn--productivity:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  border-color: #2D2D2D;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
 }
 </style>

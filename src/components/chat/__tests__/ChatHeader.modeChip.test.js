@@ -123,28 +123,28 @@ beforeEach(() => {
 describe('ChatHeader mode chip', () => {
   it('shows chat mode chip when chat.mode === "chat"', () => {
     const wrapper = mountHeader({ mode: 'chat' })
-    const chip = wrapper.find('.ch-mode-chip')
+    const chip = wrapper.find('.ch-mode-btn')
     expect(chip.exists()).toBe(true)
-    expect(chip.classes()).not.toContain('ch-mode-chip--productivity')
+    expect(chip.classes()).not.toContain('ch-mode-btn--productivity')
   })
 
   it('shows productivity mode style when chat.mode === "productivity"', () => {
     const wrapper = mountHeader({ mode: 'productivity' })
-    const chip = wrapper.find('.ch-mode-chip')
+    const chip = wrapper.find('.ch-mode-btn')
     expect(chip.exists()).toBe(true)
-    expect(chip.classes()).toContain('ch-mode-chip--productivity')
+    expect(chip.classes()).toContain('ch-mode-btn--productivity')
   })
 
   it('clicking chip in chat mode with productivityModeNoticeShown=false opens confirm modal', async () => {
     const wrapper = mountHeader({ mode: 'chat', productivityModeNoticeShown: false })
-    wrapper.find('.ch-mode-chip').element.click()
+    wrapper.find('.ch-mode-btn').element.click()
     await wrapper.vm.$nextTick()
     expect(wrapper.findComponent({ name: 'ConfirmProductivityModal' }).exists()).toBe(true)
   })
 
   it('clicking chip when noticeShown=true switches silently without modal', async () => {
     const wrapper = mountHeader({ mode: 'chat', productivityModeNoticeShown: true })
-    wrapper.find('.ch-mode-chip').element.click()
+    wrapper.find('.ch-mode-btn').element.click()
     await wrapper.vm.$nextTick()
     expect(setModeMock).toHaveBeenCalledWith('c1', 'productivity')
     expect(wrapper.findComponent({ name: 'ConfirmProductivityModal' }).exists()).toBe(false)
@@ -152,7 +152,7 @@ describe('ChatHeader mode chip', () => {
 
   it('clicking chip in productivity mode switches to chat without modal', async () => {
     const wrapper = mountHeader({ mode: 'productivity', productivityModeNoticeShown: true })
-    wrapper.find('.ch-mode-chip').element.click()
+    wrapper.find('.ch-mode-btn').element.click()
     await wrapper.vm.$nextTick()
     expect(setModeMock).toHaveBeenCalledWith('c1', 'chat')
     expect(wrapper.findComponent({ name: 'ConfirmProductivityModal' }).exists()).toBe(false)
@@ -160,7 +160,7 @@ describe('ChatHeader mode chip', () => {
 
   it('confirm button in modal calls setMode then closes modal', async () => {
     const wrapper = mountHeader({ mode: 'chat', productivityModeNoticeShown: false })
-    wrapper.find('.ch-mode-chip').element.click()
+    wrapper.find('.ch-mode-btn').element.click()
     await wrapper.vm.$nextTick()
     const modal = wrapper.findComponent({ name: 'ConfirmProductivityModal' })
     expect(modal.exists()).toBe(true)
@@ -172,6 +172,6 @@ describe('ChatHeader mode chip', () => {
 
   it('chip is hidden when chat.type === "analysis"', () => {
     const wrapper = mountHeader({ type: 'analysis' })
-    expect(wrapper.find('.ch-mode-chip').exists()).toBe(false)
+    expect(wrapper.find('.ch-mode-btn').exists()).toBe(false)
   })
 })
