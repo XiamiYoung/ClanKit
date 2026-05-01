@@ -240,6 +240,284 @@ class TaskStore {
       this._db = null
     }
   }
+
+  // ── Plans ───────────────────────────────────────────────────────────────
+
+  listActivePlans() {
+    const db = this._open()
+    return db.prepare('SELECT * FROM plans WHERE deleted_at IS NULL ORDER BY created_at DESC').all().map(rowToPlan)
+  }
+
+  listAllPlans() {
+    const db = this._open()
+    return db.prepare('SELECT * FROM plans ORDER BY created_at DESC').all().map(rowToPlan)
+  }
+
+  getPlanById(id) {
+    if (!id) return null
+    const db = this._open()
+    return rowToPlan(db.prepare('SELECT * FROM plans WHERE id = ?').get(id))
+  }
+
+  savePlan(plan) {
+    if (!plan?.id || !plan?.name) throw new Error('savePlan: id and name required')
+    const db = this._open()
+    const r = planToRow(plan)
+    db.prepare(`
+      INSERT INTO plans (
+        id, name, description, prompt, agent_id, schedule, enabled,
+        category_id, created_at, updated_at, last_run_at, deleted_at
+      ) VALUES (
+        @id, @name, @description, @prompt, @agent_id, @schedule, @enabled,
+        @category_id, @created_at, @updated_at, @last_run_at, @deleted_at
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        name=excluded.name, description=excluded.description, prompt=excluded.prompt,
+        agent_id=excluded.agent_id, schedule=excluded.schedule, enabled=excluded.enabled,
+        category_id=excluded.category_id, updated_at=excluded.updated_at,
+        last_run_at=excluded.last_run_at, deleted_at=excluded.deleted_at
+    `).run(r)
+  }
+
+  /** Soft-delete: marks deleted_at = now. Tasks with this plan_id remain. */
+  softDeletePlan(id) {
+    if (!id) return
+    const db = this._open()
+    db.prepare('UPDATE plans SET deleted_at = ?, updated_at = ? WHERE id = ?').run(Date.now(), Date.now(), id)
+  }
+
+  /** Hard-delete: removes the row. Tasks' plan_id becomes NULL via ON DELETE SET NULL. */
+  hardDeletePlan(id) {
+    if (!id) return
+    const db = this._open()
+    db.prepare('DELETE FROM plans WHERE id = ?').run(id)
+  }
+
+  setPlanLastRunAt(id, ts) {
+    if (!id) return
+    const db = this._open()
+    db.prepare('UPDATE plans SET last_run_at = ? WHERE id = ?').run(ts || Date.now(), id)
+  }
+
+  // ── Tasks ───────────────────────────────────────────────────────────────
+
+  listActiveTasks() {
+    const db = this._open()
+    return db.prepare('SELECT * FROM tasks WHERE deleted_at IS NULL ORDER BY created_at DESC').all().map(rowToTask)
+  }
+
+  listTasksByPlan(planId) {
+    const db = this._open()
+    return db.prepare('SELECT * FROM tasks WHERE plan_id = ? AND deleted_at IS NULL ORDER BY step_index, created_at').all(planId).map(rowToTask)
+  }
+
+  listStandaloneTasks() {
+    const db = this._open()
+    return db.prepare('SELECT * FROM tasks WHERE plan_id IS NULL AND deleted_at IS NULL ORDER BY created_at DESC').all().map(rowToTask)
+  }
+
+  getTaskById(id) {
+    if (!id) return null
+    const db = this._open()
+    return rowToTask(db.prepare('SELECT * FROM tasks WHERE id = ?').get(id))
+  }
+
+  saveTask(task) {
+    if (!task?.id) throw new Error('saveTask: id required')
+    const db = this._open()
+    const r = taskToRow(task)
+    db.prepare(`
+      INSERT INTO tasks (
+        id, plan_id, step_index, type, description, cron_expr, prompt,
+        agent_id, depends_on, created_at, deleted_at
+      ) VALUES (
+        @id, @plan_id, @step_index, @type, @description, @cron_expr, @prompt,
+        @agent_id, @depends_on, @created_at, @deleted_at
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        plan_id=excluded.plan_id, step_index=excluded.step_index,
+        type=excluded.type, description=excluded.description,
+        cron_expr=excluded.cron_expr, prompt=excluded.prompt,
+        agent_id=excluded.agent_id, depends_on=excluded.depends_on,
+        deleted_at=excluded.deleted_at
+    `).run(r)
+  }
+
+  softDeleteTask(id) {
+    if (!id) return
+    const db = this._open()
+    db.prepare('UPDATE tasks SET deleted_at = ? WHERE id = ?').run(Date.now(), id)
+  }
+
+  hardDeleteTask(id) {
+    if (!id) return
+    const db = this._open()
+    db.prepare('DELETE FROM tasks WHERE id = ?').run(id)
+  }
+
+  // ── Runs ────────────────────────────────────────────────────────────────
+
+  listRuns({ planId, itemId, limit } = {}) {
+    const db = this._open()
+    const where = []
+    const args = []
+    if (planId) { where.push('plan_id = ?'); args.push(planId) }
+    if (itemId) { where.push('item_id = ?'); args.push(itemId) }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+    const limitSql = limit ? `LIMIT ${Number(limit)}` : ''
+    return db.prepare(`SELECT * FROM runs ${whereSql} ORDER BY started_at DESC ${limitSql}`).all(...args).map(rowToRun)
+  }
+
+  /** Light listing — same shape that index.json used to return (no output / step_results). */
+  listRunSummaries({ planId, itemId, limit } = {}) {
+    const db = this._open()
+    const where = []
+    const args = []
+    if (planId) { where.push('plan_id = ?'); args.push(planId) }
+    if (itemId) { where.push('item_id = ?'); args.push(itemId) }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+    const limitSql = limit ? `LIMIT ${Number(limit)}` : ''
+    return db.prepare(`
+      SELECT id, plan_id, item_id, plan_name, triggered_by, status, started_at, completed_at, error
+      FROM runs ${whereSql} ORDER BY started_at DESC ${limitSql}
+    `).all(...args).map(row => ({
+      id: row.id, planId: row.plan_id, itemId: row.item_id,
+      planName: row.plan_name, triggeredBy: row.triggered_by,
+      status: row.status, startedAt: row.started_at, completedAt: row.completed_at,
+      error: row.error || null,
+    }))
+  }
+
+  getRunById(id) {
+    if (!id) return null
+    const db = this._open()
+    return rowToRun(db.prepare('SELECT * FROM runs WHERE id = ?').get(id))
+  }
+
+  saveRun(run) {
+    if (!run?.id) throw new Error('saveRun: id required')
+    const db = this._open()
+    const r = runToRow(run)
+    db.prepare(`
+      INSERT INTO runs (
+        id, plan_id, item_id, plan_name, triggered_by,
+        started_at, completed_at, status, duration_ms,
+        output, step_results, error
+      ) VALUES (
+        @id, @plan_id, @item_id, @plan_name, @triggered_by,
+        @started_at, @completed_at, @status, @duration_ms,
+        @output, @step_results, @error
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        plan_id=excluded.plan_id, item_id=excluded.item_id,
+        plan_name=excluded.plan_name, triggered_by=excluded.triggered_by,
+        completed_at=excluded.completed_at, status=excluded.status,
+        duration_ms=excluded.duration_ms, output=excluded.output,
+        step_results=excluded.step_results, error=excluded.error
+    `).run(r)
+  }
+
+  deleteRun(id) {
+    if (!id) return
+    const db = this._open()
+    db.prepare('DELETE FROM runs WHERE id = ?').run(id)
+  }
+
+  /** Trim runs table to keep only most-recent N rows. Mirrors the old
+   *  index.json 200-row cap. */
+  pruneRuns(keepRecent = 200) {
+    const db = this._open()
+    db.prepare(`
+      DELETE FROM runs WHERE id IN (
+        SELECT id FROM runs ORDER BY started_at DESC LIMIT -1 OFFSET ?
+      )
+    `).run(keepRecent)
+  }
+
+  // ── Categories ──────────────────────────────────────────────────────────
+
+  listTaskCategories() {
+    const db = this._open()
+    return db.prepare('SELECT id, name, emoji, sort_order AS sortOrder FROM task_categories ORDER BY sort_order').all()
+  }
+
+  saveTaskCategory(cat) {
+    if (!cat?.id || !cat?.name) throw new Error('saveTaskCategory: id and name required')
+    const db = this._open()
+    db.prepare(`
+      INSERT INTO task_categories (id, name, emoji, sort_order)
+      VALUES (@id, @name, @emoji, @sort_order)
+      ON CONFLICT(id) DO UPDATE SET name=excluded.name, emoji=excluded.emoji, sort_order=excluded.sort_order
+    `).run({ id: cat.id, name: cat.name, emoji: cat.emoji || null, sort_order: cat.sortOrder || 0 })
+  }
+
+  deleteTaskCategory(id) {
+    if (!id) return
+    const db = this._open()
+    db.prepare('DELETE FROM task_categories WHERE id = ?').run(id)
+  }
+
+  listPlanCategories() {
+    const db = this._open()
+    return db.prepare('SELECT id, name, emoji, sort_order AS sortOrder FROM plan_categories ORDER BY sort_order').all()
+  }
+
+  savePlanCategory(cat) {
+    if (!cat?.id || !cat?.name) throw new Error('savePlanCategory: id and name required')
+    const db = this._open()
+    db.prepare(`
+      INSERT INTO plan_categories (id, name, emoji, sort_order)
+      VALUES (@id, @name, @emoji, @sort_order)
+      ON CONFLICT(id) DO UPDATE SET name=excluded.name, emoji=excluded.emoji, sort_order=excluded.sort_order
+    `).run({ id: cat.id, name: cat.name, emoji: cat.emoji || null, sort_order: cat.sortOrder || 0 })
+  }
+
+  deletePlanCategory(id) {
+    if (!id) return
+    const db = this._open()
+    db.prepare('DELETE FROM plan_categories WHERE id = ?').run(id)
+  }
+
+  // ── Tree (replaces ai-task-tree.json + ai-task:sync-tree) ───────────────
+
+  /** Return all rows needed to reconstruct the plan→tasks tree, including
+   *  soft-deleted plans/tasks (UI shows them as tombstones). */
+  getTreeRows() {
+    const db = this._open()
+    return db.prepare(`
+      SELECT
+        p.id            AS planId,
+        p.name          AS planName,
+        p.category_id   AS categoryId,
+        pc.name         AS categoryName,
+        pc.emoji        AS categoryEmoji,
+        p.deleted_at    AS planDeletedAt,
+        t.id            AS itemId,
+        t.type          AS itemType,
+        t.description   AS itemDescription,
+        t.cron_expr     AS itemCronExpr,
+        t.created_at    AS itemCreatedAt,
+        t.deleted_at    AS itemDeletedAt
+      FROM plans p
+      LEFT JOIN plan_categories pc ON p.category_id = pc.id
+      LEFT JOIN tasks t            ON t.plan_id     = p.id
+      ORDER BY p.created_at DESC, t.step_index
+    `).all()
+  }
+
+  // ── Counts (migration idempotency) ──────────────────────────────────────
+
+  countPlans() {
+    return this._open().prepare('SELECT COUNT(*) AS n FROM plans').get().n
+  }
+
+  countTasks() {
+    return this._open().prepare('SELECT COUNT(*) AS n FROM tasks').get().n
+  }
+
+  countRuns() {
+    return this._open().prepare('SELECT COUNT(*) AS n FROM runs').get().n
+  }
 }
 
 let _instance = null
