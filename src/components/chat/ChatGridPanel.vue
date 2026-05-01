@@ -11,19 +11,18 @@
       @start-call="cId => $emit('start-call', cId)"
     >
       <template #actions>
-        <!-- Mode dropdown (chat ↔ professional) -->
+        <!-- Mode dropdown (chat ↔ professional) — icon-only, matches other grid btns -->
         <div v-if="showModeChip" class="gp-mode-dd-wrap" ref="modeDropdownWrapEl">
           <button
             class="gp-mode-dd-btn"
+            v-tooltip="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
             :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
             :aria-haspopup="true"
             :aria-expanded="modeDropdownOpen ? 'true' : 'false'"
             @click.stop="modeDropdownOpen = !modeDropdownOpen"
           >
-            <svg v-if="isProductivity" style="width:11px;height:11px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-            <svg v-else style="width:11px;height:11px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            <span class="gp-mode-dd-label">{{ isProductivity ? t('chats.modeProductivity') : t('chats.modeChat') }}</span>
-            <svg class="gp-mode-dd-chevron" :class="{ open: modeDropdownOpen }" style="width:10px;height:10px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            <svg v-if="isProductivity" style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            <svg v-else style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           </button>
           <div v-if="modeDropdownOpen" class="gp-mode-dd-menu" role="menu">
             <button class="gp-mode-dd-item" :class="{ active: isProductivity }" role="menuitem" @click.stop="selectMode('productivity')">
@@ -1140,42 +1139,32 @@ function deleteMessage(msg) {
 
 .gp-swap-wrap { position: relative; }
 
-/* ── Mode dropdown (matches ChatHeader, smaller) ── */
+/* ── Mode dropdown (icon-only button matches gp-maximize-btn / gp-swap-btn) ── */
 .gp-mode-dd-wrap {
   position: relative;
   flex-shrink: 0;
 }
 .gp-mode-dd-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.3125rem;
-  height: 1.625rem;
-  padding: 0 0.5rem;
-  border-radius: 0.4375rem;
-  border: 1px solid #1A1A1A;
+  justify-content: center;
+  width: 1.875rem;
+  height: 1.875rem;
+  padding: 0;
+  border-radius: 0.5rem;
+  border: none;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
   cursor: pointer;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.7rem;
-  font-weight: 600;
-  white-space: nowrap;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-  transition: all 0.15s ease;
+  transition: background 0.15s, box-shadow 0.15s;
+  flex-shrink: 0;
 }
 .gp-mode-dd-btn:hover {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  border-color: #2D2D2D;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.10);
 }
-.gp-mode-dd-label {
-  pointer-events: none;
-}
-.gp-mode-dd-chevron {
-  transition: transform 0.18s ease;
-}
-.gp-mode-dd-chevron.open {
-  transform: rotate(180deg);
-}
+/* Dark dropdown menu — matches the dark gradient button */
 .gp-mode-dd-menu {
   position: absolute;
   top: calc(100% + 0.3125rem);
@@ -1185,10 +1174,10 @@ function deleteMessage(msg) {
   flex-direction: column;
   gap: 0.1875rem;
   padding: 0.3125rem;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
   border-radius: 0.5625rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
   z-index: 1000;
 }
 .gp-mode-dd-item {
@@ -1196,39 +1185,39 @@ function deleteMessage(msg) {
   flex-direction: column;
   gap: 0.125rem;
   padding: 0.4375rem 0.5625rem;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   border-radius: 0.375rem;
   cursor: pointer;
   text-align: left;
   font-family: 'Inter', sans-serif;
-  transition: background 0.12s;
+  transition: background 0.12s, border-color 0.12s;
 }
 .gp-mode-dd-item:hover {
-  background: #F5F5F7;
+  background: rgba(255, 255, 255, 0.06);
 }
 .gp-mode-dd-item.active {
-  background: linear-gradient(135deg, rgba(15, 15, 15, 0.04), rgba(55, 65, 81, 0.04));
-  border: 1px solid rgba(26, 26, 26, 0.18);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.08));
+  border-color: rgba(255, 255, 255, 0.18);
 }
 .gp-mode-dd-item-head {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  color: #1A1A1A;
+  color: #FFFFFF;
 }
 .gp-mode-dd-item-title {
   font-size: 0.78rem;
   font-weight: 600;
 }
 .gp-mode-dd-check {
-  color: #0F766E;
+  color: #34D399;
 }
 .gp-mode-dd-item-desc {
   margin-left: 1.25rem;
   font-size: 0.65rem;
   font-weight: 400;
-  color: #6B7280;
+  color: #9CA3AF;
   line-height: 1.4;
 }
 </style>

@@ -1854,10 +1854,10 @@ function confirmProductivitySwitch() {
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.375rem;
-  background: #FFFFFF;
-  border: 1px solid #E5E5EA;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
   border-radius: 0.625rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
   z-index: 1000;
 }
 .ch-mode-dd-item {
@@ -1865,39 +1865,39 @@ function confirmProductivitySwitch() {
   flex-direction: column;
   gap: 0.1875rem;
   padding: 0.5rem 0.625rem;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   border-radius: 0.4375rem;
   cursor: pointer;
   text-align: left;
   font-family: 'Inter', sans-serif;
-  transition: background 0.12s;
+  transition: background 0.12s, border-color 0.12s;
 }
 .ch-mode-dd-item:hover {
-  background: #F5F5F7;
+  background: rgba(255, 255, 255, 0.06);
 }
 .ch-mode-dd-item.active {
-  background: linear-gradient(135deg, rgba(15, 15, 15, 0.04), rgba(55, 65, 81, 0.04));
-  border: 1px solid rgba(26, 26, 26, 0.18);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.08));
+  border-color: rgba(255, 255, 255, 0.18);
 }
 .ch-mode-dd-item-head {
   display: flex;
   align-items: center;
   gap: 0.4375rem;
-  color: #1A1A1A;
+  color: #FFFFFF;
 }
 .ch-mode-dd-item-title {
   font-size: var(--fs-secondary, 0.875rem);
   font-weight: 600;
 }
 .ch-mode-dd-check {
-  color: #0F766E;
+  color: #34D399;
 }
 .ch-mode-dd-item-desc {
   margin-left: 1.4rem;
   font-size: 0.7rem;
   font-weight: 400;
-  color: #6B7280;
+  color: #9CA3AF;
   line-height: 1.4;
 }
 </style>
