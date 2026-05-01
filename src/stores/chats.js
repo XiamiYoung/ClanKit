@@ -908,8 +908,6 @@ export const useChatsStore = defineStore('chats', () => {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
     if ('workingPath' in settings) chat.workingPath = settings.workingPath
-    if ('codingMode' in settings) chat.codingMode = settings.codingMode
-    if ('codingProvider' in settings) chat.codingProvider = settings.codingProvider
     if ('permissionMode' in settings) chat.permissionMode = settings.permissionMode
     if ('chatAllowList' in settings) chat.chatAllowList = settings.chatAllowList
     if ('chatDangerOverrides' in settings) chat.chatDangerOverrides = settings.chatDangerOverrides
