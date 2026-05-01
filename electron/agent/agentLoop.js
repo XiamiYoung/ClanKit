@@ -139,6 +139,11 @@ class AgentLoop {
     //   'required' — model MUST call at least one tool (maps to Anthropic 'any')
     //   'none'     — tools listed but model must not call them
     this.toolChoice = (config.provider?.settings?.toolChoice || 'auto').toLowerCase()
+    this._mode = (config.mode === 'productivity') ? 'productivity' : 'chat'
+    // Tracks providers that rejected tool_choice='required' so we don't try
+    // to force again on the next iteration once we know they can't honor it.
+    // Cleared per-loop instance (so a different chat may probe again).
+    this._toolChoiceForceUnsupported = false
 
     logger.agent('AgentLoop init', {
       provider: config.provider?.type || (this.isOpenAI ? 'openai' : 'anthropic'),
@@ -148,7 +153,27 @@ class AgentLoop {
       ctxWindow: config.modelContextWindow || null,
       permissionMode: config.chatPermissionMode || 'inherit',
       toolChoice: this.toolChoice,
+      mode: this._mode,
     })
+  }
+
+  /**
+   * Resolve the effective tool_choice for a given iteration.
+   * In productivity mode, the FIRST iteration is forced to 'required' so the
+   * model can't skip tool calls and narrate from memory (a common failure mode
+   * for low-temperature OpenAI-compat models like Qwen). Iterations after the
+   * first fall back to the user-configured value (or 'auto') so the model can
+   * summarize tool results without infinite-looping.
+   *
+   * If a previous iteration in this run discovered the provider rejects
+   * 'required' (via _toolChoiceForceUnsupported), subsequent forces are
+   * suppressed for the lifetime of this loop.
+   */
+  _resolveEffectiveToolChoice(iteration, hasTools) {
+    if (!hasTools) return 'none'
+    if (this._toolChoiceForceUnsupported) return this.toolChoice
+    if (this._mode === 'productivity' && iteration === 1) return 'required'
+    return this.toolChoice
   }
 
   stop() {
@@ -914,10 +939,14 @@ class AgentLoop {
 
         if (allTools.length > 0) {
           createParams.tools = allTools
-          // Apply tool_choice from provider settings (Anthropic format)
-          if (this.toolChoice === 'required' || this.toolChoice === 'any') {
+          // Apply effective tool_choice (Anthropic format).
+          // Productivity mode forces 'any' on iteration 1 so the model cannot
+          // skip a tool call. See _resolveEffectiveToolChoice.
+          const effectiveChoice = this._resolveEffectiveToolChoice(iteration, true)
+          if (effectiveChoice === 'required' || effectiveChoice === 'any') {
             createParams.tool_choice = { type: 'any' }
-          } else if (this.toolChoice === 'none') {
+          } else if (effectiveChoice === 'none' && this.toolChoice === 'none') {
+            // Honour explicit user 'none' setting (don't suppress mid-loop)
             createParams.tool_choice = { type: 'none' }
           }
           // 'auto' is the API default — omit to keep it implicit
@@ -1264,10 +1293,16 @@ class AgentLoop {
           }
           if (allTools.length > 0) {
             openaiParams.tools = allTools
-            // Apply tool_choice from provider settings (OpenAI format)
-            if (this.toolChoice === 'required' || this.toolChoice === 'any') {
+            // Apply effective tool_choice (OpenAI format).
+            // Productivity mode forces 'required' on iteration 1; if the provider
+            // rejects (some OpenAI-compat servers don't implement tool_choice),
+            // the catch block below retries with tool_choice removed and sets
+            // _toolChoiceForceUnsupported so we don't try again this loop.
+            const effectiveChoice = this._resolveEffectiveToolChoice(iteration, true)
+            if (effectiveChoice === 'required' || effectiveChoice === 'any') {
               openaiParams.tool_choice = 'required'
-            } else if (this.toolChoice === 'none') {
+            } else if (effectiveChoice === 'none' && this.toolChoice === 'none') {
+              // Honour explicit user 'none' setting (don't suppress mid-loop)
               openaiParams.tool_choice = 'none'
             }
             // 'auto' is the API default — omit to keep it implicit
@@ -1292,6 +1327,31 @@ class AgentLoop {
           } catch (streamErr) {
             // ── Smart retry logic for recoverable errors ──
             let retried = false
+
+            // 0. tool_choice='required' rejected by provider → retry with auto.
+            //    Triggers when the OpenAI-compat backend either doesn't implement
+            //    tool_choice or rejects 'required' specifically. The error text
+            //    varies wildly by vendor; we match on common substrings + 4xx.
+            const toolChoiceRejected = openaiParams.tool_choice === 'required' && (
+              streamErr.status === 400 ||
+              streamErr.message?.includes('tool_choice') ||
+              streamErr.message?.includes('Invalid value') ||
+              streamErr.message?.includes("'required'") ||
+              streamErr.message?.includes('not supported')
+            )
+            if (!retried && toolChoiceRejected) {
+              logger.warn('Provider rejected tool_choice=required — retrying with auto and disabling forcing for this loop', streamErr.message)
+              this._toolChoiceForceUnsupported = true
+              const retryParams = { ...openaiParams }
+              delete retryParams.tool_choice
+              try {
+                stream = await client.chat.completions.create(retryParams, { signal: this._abortController.signal })
+                retried = true
+              } catch (retryErr) {
+                logger.error('Retry without tool_choice also FAILED', retryErr.message)
+                // Fall through to the next retry branch (don't throw yet)
+              }
+            }
 
             // 1. Tool-use not supported → retry without tools
             const noToolSupport = streamErr.message?.includes('tool use') ||
@@ -1857,6 +1917,35 @@ class AgentLoop {
                 })
               }
             } catch (streamErr) {
+              // tool_choice='any' rejected → retry without tool_choice and disable
+              // forcing for this loop. Some Anthropic-compat or older models may
+              // reject the 'any' choice; we degrade gracefully.
+              const toolChoiceRejected = createParams.tool_choice?.type === 'any' && (
+                streamErr.status === 400 ||
+                streamErr.message?.includes('tool_choice') ||
+                streamErr.message?.includes("'any'") ||
+                streamErr.message?.includes('not supported')
+              )
+              if (toolChoiceRejected) {
+                logger.warn('Anthropic-compat provider rejected tool_choice=any — retrying with auto and disabling forcing for this loop', streamErr.message)
+                this._toolChoiceForceUnsupported = true
+                const retryParams = { ...createParams }
+                delete retryParams.tool_choice
+                try {
+                  if (retryParams.betas && retryParams.betas.length > 0) {
+                    const { betas, ...rest } = retryParams
+                    stream = await client.beta.messages.stream({ ...rest, betas }, { signal: this._abortController.signal })
+                  } else {
+                    stream = await client.messages.stream(retryParams, { signal: this._abortController.signal })
+                  }
+                  // Successfully retried — let normal stream consumption proceed
+                  // by falling through to the code after this try/catch.
+                } catch (retryErr) {
+                  logger.error('Retry without tool_choice (Anthropic) also FAILED', retryErr.message)
+                  // Fall through to normal error path
+                }
+              }
+
               // Some models (e.g. OpenRouter image-generation models) reject tool use with 404.
               // Retry once without tools so image generation can proceed.
               const noToolSupport = streamErr.status === 404 &&

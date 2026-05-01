@@ -9,7 +9,7 @@ class FileTool extends BaseTool {
   constructor() {
     super(
       'file_operation',
-      'Read, write, edit, list, append, search, glob, grep, or delete files on the local filesystem. Use "edit" for precise text replacement instead of overwriting the whole file. Use "glob" for filename pattern matching and "grep" for content search.',
+      'Read, write, edit, list, append, search, glob, grep, or delete files and directories on the local filesystem. Call this tool — do NOT describe what you would do, do NOT recite filenames from memory or earlier conversation. When the user asks about ANY file or directory (including paths outside your working folder), invoke this tool with an absolute path. The tool returns the real, current state of disk; trust it and report it.',
       'file_operation'
     )
   }
@@ -21,22 +21,38 @@ class FileTool extends BaseTool {
         operation: {
           type: 'string',
           enum: ['read', 'write', 'edit', 'append', 'list', 'delete', 'exists', 'search', 'mkdir', 'glob', 'grep'],
-          description: 'Operation to perform.'
+          description: [
+            'Which operation to run. Pick the most specific match for the user request:',
+            '- "list": enumerate immediate children of a directory (files + subdirs). Use when user asks "what files are in X" or "what\'s in this folder". REQUIRED params: path (directory).',
+            '- "read": read full text of a file. Use when user asks "what does X say" or "show me X" or before editing a file. REQUIRED: path (file). OPTIONAL: offset (1-indexed start line), limit (max lines).',
+            '- "write": create or overwrite a file. REQUIRED: path, content. Prefer "edit" over "write" when changing existing files — write loses any content you did not include in `content`.',
+            '- "edit": replace EXACT text within a file. Use this for any modification of an existing file you can describe by a substring. REQUIRED: path, oldText (the literal text to find), newText (the replacement). OPTIONAL: occurrences ("unique" default, "first", "all"). The tool errors if oldText is not found OR matches multiple times under "unique" — in that case, fetch more context with read and try again with a longer oldText.',
+            '- "append": add to the end of a file (creates if missing). REQUIRED: path, content.',
+            '- "delete": remove a file or directory recursively. REQUIRED: path.',
+            '- "exists": probe whether a path exists (returns "true"/"false"). REQUIRED: path.',
+            '- "mkdir": create a directory (recursive, no error if exists). REQUIRED: path.',
+            '- "search": substring search over filenames under a directory. REQUIRED: path (dir), pattern (substring matched against names). OPTIONAL: recursive (default true).',
+            '- "glob": glob-pattern match over file paths under a directory (e.g. "**/*.md"). REQUIRED: path (dir), pattern (picomatch glob).',
+            '- "grep": regex search over file CONTENTS. REQUIRED: path (file or dir), pattern (regex). OPTIONAL: multiline (default false; enables . to match \\n and patterns to span lines). On a directory, walks files recursively (skips binaries by extension and node_modules/.git/dist/build/__pycache__).'
+          ].join('\n')
         },
-        path:     { type: 'string' },
-        content:  { type: 'string', description: 'Content to write/append.' },
-        oldText:  { type: 'string', description: 'Exact text to find (for edit).' },
-        newText:  { type: 'string', description: 'Replacement text (for edit).' },
+        path: {
+          type: 'string',
+          description: 'Absolute path. Forward slashes or backslashes both fine on Windows. ~ is expanded to the user home directory. Even if the path is outside the chat\'s working folder, pass it through — the tool serves arbitrary paths.'
+        },
+        content:  { type: 'string', description: 'Full file content (for write) or text to append (for append).' },
+        oldText:  { type: 'string', description: 'Exact text to locate inside the file for edit. Match is verbatim including whitespace and newlines. If unsure of formatting, read the file first.' },
+        newText:  { type: 'string', description: 'Replacement text for edit. Whatever you put here replaces the matched oldText 1:1.' },
         occurrences: {
           type: 'string',
           enum: ['unique', 'first', 'all'],
-          description: 'edit: unique (default — error if 0 or 2+ matches), first (replace first), all (replace all).'
+          description: 'edit only. "unique" (default): require exactly one match — fail if 0 or 2+, forcing you to pick a more specific oldText. "first": replace only the first occurrence. "all": replace every occurrence (use for renames).'
         },
-        pattern:  { type: 'string', description: 'Substring (search), glob (glob), or regex (grep).' },
-        multiline: { type: 'boolean', description: 'grep: enable multiline regex (.matches \\n).' },
-        recursive: { type: 'boolean' },
-        offset:   { type: 'number' },
-        limit:    { type: 'number' }
+        pattern:  { type: 'string', description: 'For search: substring matched against entry names. For glob: a picomatch pattern like "**/*.md" or "src/**/index.js". For grep: a regex (anchors like ^/$ work; multiline mode requires the multiline flag).' },
+        multiline: { type: 'boolean', description: 'grep only. true = compile regex with g+m+s so . matches newlines and patterns can span lines. Default false (per-line matching).' },
+        recursive: { type: 'boolean', description: 'search only. Default true. Pass false to limit search to the immediate directory.' },
+        offset:   { type: 'number', description: 'read only. 1-indexed line number to start reading from. Useful when a file is large and you only want a section.' },
+        limit:    { type: 'number', description: 'read only. Maximum number of lines to return starting at offset. Combine with offset for paging.' }
       },
       required: ['operation', 'path']
     }
