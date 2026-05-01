@@ -611,6 +611,12 @@ app.whenReady().then(async () => {
     const plans = ts.listActivePlans()
     logger.info(`[diag] active tasks (${tasks.length}): ${JSON.stringify(tasks.map(t => ({id: t.id.slice(0,8), name: t.name, hasName: !!t.name, hasIcon: !!t.icon, hasPrompt: !!t.prompt})))}`)
     logger.info(`[diag] active plans (${plans.length}): ${JSON.stringify(plans.map(p => ({id: p.id.slice(0,8), name: p.name, stepCount: (p.steps||[]).length, taskIds: (p.steps||[]).map(s => s.taskId?.slice(0,8))})))}`)
+    const tc = ts.listTaskCategories()
+    const pc = ts.listPlanCategories()
+    logger.info(`[diag] task_categories (${tc.length}): ${JSON.stringify(tc.map(c => ({id: c.id.slice(0,8), name: c.name, emoji: c.emoji})))}`)
+    logger.info(`[diag] plan_categories (${pc.length}): ${JSON.stringify(pc.map(c => ({id: c.id.slice(0,8), name: c.name, emoji: c.emoji})))}`)
+    const runs = ts.listRunSummaries({ limit: 5 })
+    logger.info(`[diag] recent runs (${runs.length}): ${JSON.stringify(runs.map(r => ({id: r.id?.slice(0,8), planId: r.planId?.slice(0,8), itemId: r.itemId?.slice(0,8), status: r.status, startedAt: new Date(r.startedAt).toISOString()})))}`)
   } catch (err) {
     logger.warn('[diag] dump failed:', err.message)
   }

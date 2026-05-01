@@ -311,6 +311,7 @@
       <TaskDashboard
         :runs="tasksStore.runs"
         :plans="tasksStore.plans"
+        :tasks="tasksStore.tasks"
         :planColors="planColors"
         :plan-categories="tasksStore.planCategories"
         @open-run="onDashboardOpenRun"
