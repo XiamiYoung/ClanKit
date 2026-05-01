@@ -602,6 +602,19 @@ app.whenReady().then(async () => {
     logger.error('[main] tasks.db migration failed:', err.message, err.stack)
   }
 
+  // ── DIAG (temporary): dump tasks/plans state on startup so user can see name fields
+  // Remove this block once tasks migration is verified clean.
+  try {
+    const { getInstance: getTaskStore } = require('./agent/TaskStore')
+    const ts = getTaskStore(ds.paths().DATA_DIR)
+    const tasks = ts.listActiveTasks()
+    const plans = ts.listActivePlans()
+    logger.info(`[diag] active tasks (${tasks.length}): ${JSON.stringify(tasks.map(t => ({id: t.id.slice(0,8), name: t.name, hasName: !!t.name, hasIcon: !!t.icon, hasPrompt: !!t.prompt})))}`)
+    logger.info(`[diag] active plans (${plans.length}): ${JSON.stringify(plans.map(p => ({id: p.id.slice(0,8), name: p.name, stepCount: (p.steps||[]).length, taskIds: (p.steps||[]).map(s => s.taskId?.slice(0,8))})))}`)
+  } catch (err) {
+    logger.warn('[diag] dump failed:', err.message)
+  }
+
   createWindow()
 
   // ── Lazy local file server for HTML preview (started on first use) ──
