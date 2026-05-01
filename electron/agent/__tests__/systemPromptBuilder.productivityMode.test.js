@@ -71,9 +71,8 @@ describe('Speech DNA in productivity mode', () => {
       { ...baseConfig, mode: 'chat' },
       [], [], [], [], baseAgent
     )
-    // The Speech DNA block uses formatSpeechDnaBlock; assert that some marker
-    // from the fake speech DNA made it into the prompt.
-    expect(out).toMatch(/catchphrases|哈哈|frequent/)
+    // The Speech DNA block uses formatSpeechDnaBlock; assert on its unconditional header.
+    expect(out).toContain('## SPEECH DNA — HARD CONSTRAINTS (overrides everything below)')
   })
 
   it('productivity mode skips Speech DNA even when speech DNA is available', () => {
@@ -81,8 +80,7 @@ describe('Speech DNA in productivity mode', () => {
       { ...baseConfig, mode: 'productivity' },
       [], [], [], [], baseAgent
     )
-    expect(out).not.toMatch(/catchphrases/)
-    expect(out).not.toContain('哈哈')
+    expect(out).not.toContain('## SPEECH DNA — HARD CONSTRAINTS (overrides everything below)')
   })
 })
 

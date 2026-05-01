@@ -212,8 +212,7 @@ function readFileIfExists(filePath) {
  * @returns {string} The assembled system prompt
  */
 function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName, analysisTargetAgentType } = {}, userMemoryContent, systemMemoryContent, participantMemories, memoryContext = {}, ragContext = null) {
-  const _mode = config.mode === 'productivity' ? 'productivity' : 'chat'
-  const _isProductivity = _mode === 'productivity'
+  const _isProductivity = config.mode === 'productivity'
 
   // When a named agent is active, use it as the opening identity (highest priority).
   // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
