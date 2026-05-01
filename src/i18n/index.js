@@ -2676,7 +2676,7 @@ Always reply in the same language as the user's most recent message.`,
 // This line stays the same
 export const zh = {
   app: {
-    name: '咣咣AI',
+    name: '叮咣AI',
     tagline: 'AI 助手',
   },
   nav: {
@@ -2855,7 +2855,7 @@ export const zh = {
     configSubtitle: '模型提供商、路径、语音、知识、安全等',
     savedDataPathRestart: '已保存 — 请重启应用以应用数据路径更改',
     saved: '已保存',
-    dataPathHint: '咣咣AI 存储所有数据（聊天、数字人、MCP 服务器、工具、灵魂）的目录。配置文件始终保存在固定位置。默认：',
+    dataPathHint: '叮咣AI 存储所有数据（聊天、数字人、MCP 服务器、工具、灵魂）的目录。配置文件始终保存在固定位置。默认：',
     dataPathApplyRestart: '应用并重启',
     dataPathWarningTitle: '更改数据目录',
     dataPathWarningBody: '更改数据目录不会自动复制现有数据。您需要在重启前手动将数据复制到新位置。',
@@ -2879,7 +2879,7 @@ export const zh = {
     dangerBlockListHint: '即使在"所有权限"模式下也始终被阻止的命令。防止破坏性操作。',
     blockedCommands: '被阻止的命令',
     telemetryTitle: '匿名遥测',
-    telemetryDesc: '发送匿名使用数据（设备 ID、应用版本、平台）以帮助改进 咣咣AI。不会收集任何个人信息。',
+    telemetryDesc: '发送匿名使用数据（设备 ID、应用版本、平台）以帮助改进 叮咣AI。不会收集任何个人信息。',
     notifications: '通知',
     enableNotifications: '启用通知',
     notificationsHint: '当数字人完成回复或计划任务执行完毕时显示系统通知。若您正在查看对应的对话，则不会提示。',
@@ -3144,7 +3144,7 @@ export const zh = {
     whatsappSetupGuide3: '在手机上打开 WhatsApp → 点击设置（或三点菜单）→ 已关联的设备 → 关联设备',
     whatsappSetupGuide4: '将手机对准二维码扫描 — WhatsApp 将即时确认绑定',
     whatsappSetupGuide5: '转到桥接标签并点击启动桥接',
-    whatsappSetupGuide6: '从任何其他手机或您自己的手机，打开 WhatsApp 并向您的关联号码发送消息（就是您用来扫描二维码的那个号码）— 咣咣AI 将回复该消息',
+    whatsappSetupGuide6: '从任何其他手机或您自己的手机，打开 WhatsApp 并向您的关联号码发送消息（就是您用来扫描二维码的那个号码）— 叮咣AI 将回复该消息',
     whatsappSetupNote: '会话会自动保存 — 重启后无需再次扫描。您的手机必须保持联网（与 WhatsApp Web 相同）。',
     feishuEnable: '启用飞书 / Lark Bot',
     feishuAppId: 'App ID',
@@ -3159,7 +3159,7 @@ export const zh = {
     feishuSetupGuide6: '将它们粘贴到上方字段中，开启启用并点击保存',
     feishuSetupGuide7: '将应用发布到您的工作空间（发布 → 发布）',
     feishuSetupGuide8: '转到桥接标签并点击启动桥接',
-    feishuSetupGuide9: '在飞书中打开与您的机器人的聊天（在上方搜索其名称）并发送消息 — 咣咣AI 将响应',
+    feishuSetupGuide9: '在飞书中打开与您的机器人的聊天（在上方搜索其名称）并发送消息 — 叮咣AI 将响应',
     feishuSetupNote: '无需公共 URL — 桥接使用与飞书服务器的持久 WebSocket 连接。',
     teamsEnable: '启用 Microsoft Teams',
     teamsTenantId: '租户 ID',
@@ -3187,7 +3187,7 @@ export const zh = {
     teamsSetupGuide6: '将它们粘贴到上方字段中，开启启用并点击保存',
     teamsSetupGuide7: '点击登录 — 按照浏览器提示完成身份验证',
     teamsSetupGuide8: '转到桥接标签并点击启动桥接',
-    teamsSetupGuide9: '从另一个 Teams 账户向已认证用户发送消息 — 咣咣AI 将响应',
+    teamsSetupGuide9: '从另一个 Teams 账户向已认证用户发送消息 — 叮咣AI 将响应',
     teamsSetupNote: '无需客户端密钥或公共 URL。应用使用 OAuth2 设备代码流。令牌在本地缓存并自动刷新。',
     telegramConfigured: '已配置',
     telegramNotConfigured: '未配置',
@@ -3320,7 +3320,7 @@ export const zh = {
     title: '选择创建方式',
     tabChat: '通过对话创建',
     tabManual: '手动创建',
-    chatDesc: '用自然语言告诉 咣咣AI 你的需求，它会在引导对话中为你起草完整配置。',
+    chatDesc: '用自然语言告诉 叮咣AI 你的需求，它会在引导对话中为你起草完整配置。',
     manualDesc: '打开表单，自己填写所有字段，完全掌控细节。',
     chatCta: '开始对话',
     manualCta: '打开表单',
@@ -3607,15 +3607,15 @@ export const zh = {
 5. 每个主要章节必须包含置信度指标（见 persona-evaluation skill）
 
 始终用用户最近一条消息的语言回复。`,
-    builtinClankPrompt: `你是 Clank，咣咣AI 内置的默认系统数字人，也是用户进入应用后默认会遇到的主力搭档。
+    builtinClankPrompt: `你是 Clank，叮咣AI 内置的默认系统数字人，也是用户进入应用后默认会遇到的主力搭档。
 
   你的背景与定位：
   - 你是一个通用型高能力 AI 操作员，既能聊天，也能做严肃工作。
   - 你能写代码、查问题、改 Bug、读文档、整理方案、拆解任务、总结结论，并在需要时使用工具、skills、MCP 和知识库完成工作。
-  - 你熟悉 咣咣AI 的工作方式，知道自己应该优先利用可用上下文、工具结果与检索信息，而不是凭空猜测。
+  - 你熟悉 叮咣AI 的工作方式，知道自己应该优先利用可用上下文、工具结果与检索信息，而不是凭空猜测。
 
-  关于 咣咣AI（你身处的这个应用）：
-  - 咣咣AI 是一个多数字人桌面聊天应用。除了你之外，用户可以安装各种专业角色数字人（资深开发、旅行向导、心理咨询师、虚构 / 历史人物等），每一个都有自己的人格深度。用户在数字人页面管理他们。
+  关于 叮咣AI（你身处的这个应用）：
+  - 叮咣AI 是一个多数字人桌面聊天应用。除了你之外，用户可以安装各种专业角色数字人（资深开发、旅行向导、心理咨询师、虚构 / 历史人物等），每一个都有自己的人格深度。用户在数字人页面管理他们。
   - 侧边栏其他模块：Skills（可按需加载的指令包）、MCP（外部工具服务器）、HTTP Tools（自定义 HTTP 工具）、Knowledge（用户文档的 RAG 知识库）、AI Doc（内置文档工作区，路径在 clankit_doc/）、Chat 历史可全文搜索。
   - 你可以调用任何已注册工具、加载任何启用的 skill、查询知识库、写入 AI Doc、跑 shell 命令、抓取网页、编排多步任务。
 
@@ -4064,7 +4064,7 @@ export const zh = {
     globalDefaultPath: '留空使用全局默认路径',
     codingMode: '编程模式',
     whatIsCodingMode: '什么是编程模式？',
-    codingModeDescription: '启用项目感知的 AI 辅助。启用后，咣咣AI 会从项目目录结构中读取 CLAUDE.md 指令文件并注入到系统提示中。',
+    codingModeDescription: '启用项目感知的 AI 辅助。启用后，叮咣AI 会从项目目录结构中读取 CLAUDE.md 指令文件并注入到系统提示中。',
     codingModeHint: '将项目根目录设置为上方的工作路径，然后选择一个编程用的模型提供商。',
     enableCodingMode: '为此对话启用编程模式',
     maxAgentChatRounds: '最大数字人对话轮数',
@@ -4995,19 +4995,19 @@ export const zh = {
     agree: '同意',
   },
   help: {
-    title: '关于 咣咣AI',
+    title: '关于 叮咣AI',
     version: '版本',
     runtime: '运行时',
     platform: '平台',
   },
   setupWizard: {
-    welcomeToClanKit: '欢迎使用 咣咣AI',
+    welcomeToClanKit: '欢迎使用 叮咣AI',
     selectLanguage: '选择语言',
     languageEnglish: 'English',
     languageChinese: '中文',
     configureLater: '稍后配置',
     getStarted: '开始使用',
-    privacyNotice: '咣咣AI 会收集匿名使用数据（设备 ID、应用版本、平台）以改进产品。不会收集任何个人信息。',
+    privacyNotice: '叮咣AI 会收集匿名使用数据（设备 ID、应用版本、平台）以改进产品。不会收集任何个人信息。',
     privacyHint: '您可以随时在 设置 > 安全 中关闭此功能。',
     stepLanguage: '语言',
     stepAccount: '账号',
@@ -5016,10 +5016,10 @@ export const zh = {
     stepProfile: '个人信息',
     stepComplete: '完成',
     signInTitle: '设置账号',
-    signInDesc: '选择如何使用 咣咣AI。也可以稍后再设置——未设置时部分功能将受限。',
+    signInDesc: '选择如何使用 叮咣AI。也可以稍后再设置——未设置时部分功能将受限。',
     signInLater: '不登录，直接继续',
     authPrivacyTitle: '你的数据只留在本地',
-    authPrivacyBody: '登录是可选的。你的 API Key 只存储在本地设备上——咣咣AI 不会拦截或上传到我们的服务器。',
+    authPrivacyBody: '登录是可选的。你的 API Key 只存储在本地设备上——叮咣AI 不会拦截或上传到我们的服务器。',
     chooseProvider: '选择 AI 供应商',
     chooseProviderDesc: '选择你想使用的 AI 供应商',
     configureProvider: '配置供应商',
@@ -5038,7 +5038,7 @@ export const zh = {
     getApiKey: '获取 API Key',
     apiKeyHelp: '什么是 API Key？',
     apiKeyHelpToggle: '如何获取？',
-    apiKeyPrivacyNotice: '你的 API Key 保留在本地设备上。咣咣AI 绝不拦截、记录或上传到我们的服务器——它只在本应用与你选择的 AI 供应商之间直接传输。',
+    apiKeyPrivacyNotice: '你的 API Key 保留在本地设备上。叮咣AI 绝不拦截、记录或上传到我们的服务器——它只在本应用与你选择的 AI 供应商之间直接传输。',
     apiKeyWhatIs: 'API Key 是一串唯一的密钥（类似密码），让本应用能连接 AI 服务。它看起来像一串随机的字母和数字，例如：',
     apiKeyExample: 'sk-abcd1234...xyz7890',
     apiKeySteps: '1. 点击上方链接打开供应商网站\n2. 注册或登录你的账号\n3. 找到 API Keys / 密钥管理 页面\n4. 点击"创建新密钥"并复制\n5. 粘贴到上方输入框中',
@@ -5132,7 +5132,7 @@ export const zh = {
     chatStep3: '点击创建，开始聊天！',
     firstChatName: '我的第一个对话',
     chatComplete: '设置完成！',
-    chatCompleteDesc: '你随时可以在对话头部更改数字人配置。开始享受 咣咣AI 吧！',
+    chatCompleteDesc: '你随时可以在对话头部更改数字人配置。开始享受 叮咣AI 吧！',
     configureLater: '稍后配置',
     chooseProviderTitle: '选择 AI 提供商',
     chooseProviderDesc: '我们根据你的语言推荐了一个免费方案，你也可以选择其他提供商。',
@@ -5294,7 +5294,7 @@ export const zh = {
   auth: {
     signIn: '登录',
     sessionExpiredTitle: '登录已失效',
-    sessionExpiredBody: '当前登录状态已失效。你可以重新登录，或继续使用 咣咣AI——未登录时部分功能将受限。',
+    sessionExpiredBody: '当前登录状态已失效。你可以重新登录，或继续使用 叮咣AI——未登录时部分功能将受限。',
     continueWithoutLogin: '不登录继续使用',
     signInAgain: '重新登录',
     signUp: '注册',
@@ -5325,9 +5325,9 @@ export const zh = {
     emailFirstHelper: '登录后可解锁完整功能。未登录时部分功能将受限。',
     welcomeBack: '欢迎回来，{email}',
     createAccountFor: '为 {email} 创建账号',
-    createAccountHelper: '创建你的 咣咣AI 账号。',
+    createAccountHelper: '创建你的 叮咣AI 账号。',
     useDifferentEmail: '← 使用其他邮箱',
-    chooseHelper: '你想如何使用 咣咣AI？你可以之后再修改。',
+    chooseHelper: '你想如何使用 叮咣AI？你可以之后再修改。',
     useGoogle: '使用 Google',
     useEmail: '使用邮箱',
     emailNeutralHelper: '输入你的邮箱继续。',
@@ -5346,7 +5346,7 @@ export const zh = {
     signedInWithEmail: '邮箱',
     signedInWithGoogle: 'Google',
     notSignedIn: '尚未登录',
-    notSignedInHint: '登录后可解锁完整功能。不登录也可以继续使用 咣咣AI，但部分功能将受限。',
+    notSignedInHint: '登录后可解锁完整功能。不登录也可以继续使用 叮咣AI，但部分功能将受限。',
     signInOrRegister: '登录 / 注册',
     switchAccount: '切换账号',
     signOut: '退出登录',

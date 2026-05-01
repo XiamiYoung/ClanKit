@@ -99,7 +99,7 @@
           <template v-else>
             <section class="privacy-section">
               <h2>1. 简介</h2>
-              <p>ClanKit（以下简称"我们"或"本应用"）是一款在您计算机上本地运行的桌面应用程序。我们致力于保护您的隐私。本隐私政策说明了我们收集哪些信息、如何使用这些信息，以及您对数据的选择权。</p>
+              <p>叮咣AI（以下简称"我们"或"本应用"）是一款在您计算机上本地运行的桌面应用程序。我们致力于保护您的隐私。本隐私政策说明了我们收集哪些信息、如何使用这些信息，以及您对数据的选择权。</p>
             </section>
 
             <section class="privacy-section">
@@ -143,7 +143,7 @@
 
             <section class="privacy-section">
               <h2>5. 第三方服务</h2>
-              <p>ClanKit 使用<strong>您提供的</strong> API 密钥连接第三方 AI 服务（如 Anthropic、OpenAI、OpenRouter）。这些连接从您的计算机直接发起。我们不代理、拦截或存储任何此类通信。有关这些服务的数据实践，请参阅其各自的隐私政策。</p>
+              <p>叮咣AI 使用<strong>您提供的</strong> API 密钥连接第三方 AI 服务（如 Anthropic、OpenAI、OpenRouter）。这些连接从您的计算机直接发起。我们不代理、拦截或存储任何此类通信。有关这些服务的数据实践，请参阅其各自的隐私政策。</p>
             </section>
 
             <section class="privacy-section">
@@ -158,7 +158,7 @@
 
             <section class="privacy-section">
               <h2>8. 儿童隐私</h2>
-              <p>ClanKit 不会故意收集 13 岁以下（或您所在地区适用年龄以下）儿童的任何个人信息。</p>
+              <p>叮咣AI 不会故意收集 13 岁以下（或您所在地区适用年龄以下）儿童的任何个人信息。</p>
             </section>
 
             <section class="privacy-section">
