@@ -305,10 +305,12 @@ describe('chatsStore', () => {
       const source = await store.createChat('source', null, null, { mode: 'productivity' })
       source.workingPath = '/tmp/x'
       source.modeTransitions = [{ from: 'chat', to: 'productivity', at: 1, afterMessageId: null }]
+      source.productivityModeNoticeShown = true
       const fork = await store.createChatFromHistory(source.id, 'fork')
       expect(fork.mode).toBe('productivity')
       expect(fork.workingPath).toBe('/tmp/x')
       expect(fork.modeTransitions).toEqual([])
+      expect(fork.productivityModeNoticeShown).toBe(false)
     })
 
     it('backfillChat sets mode="chat" for legacy chats and drops coding fields', () => {

@@ -462,7 +462,7 @@ export const useChatsStore = defineStore('chats', () => {
       mode: source.mode || 'chat',
       modeTransitions: [],
       modeTransitionPending: null,
-      productivityModeNoticeShown: source.productivityModeNoticeShown || false,
+      productivityModeNoticeShown: false,
     }
     // Override agents if provided
     if (agentOverride && agentOverride.length > 0) {
