@@ -66,7 +66,7 @@
           <div
             v-if="showModeChip"
             class="ch-mode-switch"
-            :title="isProductivity ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip')"
+            v-tooltip="isProductivity ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip')"
             :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
             role="switch"
             :aria-checked="isProductivity ? 'true' : 'false'"
@@ -1793,6 +1793,11 @@ function confirmProductivitySwitch() {
   background: #D1D5DB;
   transition: background 0.2s;
   flex-shrink: 0;
+  /* Children are decorative — let clicks bubble straight to the outer .ch-mode-switch */
+  pointer-events: none;
+}
+.ch-mode-switch-label {
+  pointer-events: none;
 }
 .ch-mode-switch-track.on {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -1807,6 +1812,7 @@ function confirmProductivitySwitch() {
   background: #FFFFFF;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
 }
 .ch-mode-switch-track.on .ch-mode-switch-thumb {
   transform: translateX(1rem);
