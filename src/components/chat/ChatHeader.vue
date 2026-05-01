@@ -2,17 +2,14 @@
   <div class="chat-header">
     <!-- Row 1: Centered title badge + slot for extra actions -->
     <div class="ch-row-top">
-      <!-- Running / approval indicator (left-aligned) -->
+      <!-- Permission-approval indicator (left-aligned). Running state is shown
+           via the spinner inside the title badge — no duplicate label here. -->
       <div class="ch-row-top-status">
         <span v-if="chatsStore.pendingPermissionChatIds.has(resolvedChatId)" class="ch-status-badge ch-status-badge--approval">
           <svg style="width:10px;height:10px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
           </svg>
           {{ t('chats.permissionApproval') }}
-        </span>
-        <span v-else-if="isRunning" class="ch-status-badge ch-status-badge--running">
-          <span class="ch-status-dot"></span>
-          {{ t('chats.statusRunning') }}
         </span>
       </div>
       <!-- Centered chat title badge -->
@@ -1185,18 +1182,6 @@ function confirmProductivitySwitch() {
   animation: chApprovalPulse 1.5s ease-in-out infinite;
 }
 @keyframes chApprovalPulse { 0%,100%{ opacity:1; } 50%{ opacity:0.65; } }
-.ch-status-badge--running {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-  animation: chRunningPulse 1.2s ease-in-out infinite;
-}
-.ch-status-dot {
-  width: 0.375rem; height: 0.375rem; border-radius: 50%;
-  background: #FFFFFF;
-  animation: chRunningPulse 1.2s ease-in-out infinite;
-}
-@keyframes chRunningPulse { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
 
 /* ── Actions (right-aligned, title row) ── */
 .ch-row-top-actions {
