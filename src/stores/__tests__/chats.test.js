@@ -282,4 +282,45 @@ describe('chatsStore', () => {
       expect(store.completedChatIds.has('c1')).toBe(true)
     })
   })
+
+  // ── chat.mode field ──
+  describe('chat.mode field', () => {
+    it('createChat defaults mode to "chat"', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('test')
+      expect(chat.mode).toBe('chat')
+      expect(chat.modeTransitions).toEqual([])
+      expect(chat.modeTransitionPending).toBeNull()
+      expect(chat.productivityModeNoticeShown).toBe(false)
+    })
+
+    it('createChat accepts explicit mode in options', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('test', null, null, { mode: 'productivity' })
+      expect(chat.mode).toBe('productivity')
+    })
+
+    it('createChatFromHistory inherits mode and workingPath but resets transitions', async () => {
+      const store = useChatsStore()
+      const source = await store.createChat('source', null, null, { mode: 'productivity' })
+      source.workingPath = '/tmp/x'
+      source.modeTransitions = [{ from: 'chat', to: 'productivity', at: 1, afterMessageId: null }]
+      const fork = await store.createChatFromHistory(source.id, 'fork')
+      expect(fork.mode).toBe('productivity')
+      expect(fork.workingPath).toBe('/tmp/x')
+      expect(fork.modeTransitions).toEqual([])
+    })
+
+    it('backfillChat sets mode="chat" for legacy chats and drops coding fields', () => {
+      const legacy = { id: 'x', title: 't', messages: [], codingMode: true, codingProvider: 'claude-code' }
+      const store = useChatsStore()
+      store._testBackfill(legacy)
+      expect(legacy.mode).toBe('chat')
+      expect(legacy.modeTransitions).toEqual([])
+      expect(legacy.modeTransitionPending).toBeNull()
+      expect(legacy.productivityModeNoticeShown).toBe(false)
+      expect(legacy).not.toHaveProperty('codingMode')
+      expect(legacy).not.toHaveProperty('codingProvider')
+    })
+  })
 })

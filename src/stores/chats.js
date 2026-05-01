@@ -97,10 +97,15 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.permissionMode === 'sandbox') chat.permissionMode = 'chat_only' // migrate old value
     if (chat.chatAllowList === undefined) chat.chatAllowList = []
     if (chat.chatDangerOverrides === undefined) chat.chatDangerOverrides = []
-    if (chat.codingMode === undefined) chat.codingMode = false
     if (chat.maxAgentRounds === undefined) chat.maxAgentRounds = null  // null = use default (10)
-    if (chat.codingProvider === undefined) chat.codingProvider = 'claude-code'
     if (chat.usage === undefined) chat.usage = null  // null = no usage data yet
+    if (chat.mode === undefined) chat.mode = 'chat'
+    if (chat.modeTransitions === undefined) chat.modeTransitions = []
+    if (chat.modeTransitionPending === undefined) chat.modeTransitionPending = null
+    if (chat.productivityModeNoticeShown === undefined) chat.productivityModeNoticeShown = false
+    // Drop deprecated coding-mode fields if present (workingPath stays — semantics redefined elsewhere)
+    if ('codingMode' in chat) delete chat.codingMode
+    if ('codingProvider' in chat) delete chat.codingProvider
     // messages === null means "not loaded yet" (lazy)
     if (chat.messages) {
       for (const msg of chat.messages) {
@@ -364,6 +369,7 @@ export const useChatsStore = defineStore('chats', () => {
       : NEW_CHAT_TITLES.has(title)
     const chatType = options?.chatType || 'chat'
     const analysisTargetAgentId = options?.analysisTargetAgentId || null
+    const mode = options?.mode === 'productivity' ? 'productivity' : 'chat'
     const chat = {
       type: chatType,
       id: uuidv4(),
@@ -390,8 +396,10 @@ export const useChatsStore = defineStore('chats', () => {
       groupAudienceMode: 'auto',
       groupAudienceAgentIds: [],
       workingPath: null,
-      codingMode: false,
-      codingProvider: 'claude-code',
+      mode,
+      modeTransitions: [],
+      modeTransitionPending: null,
+      productivityModeNoticeShown: false,
       ...(analysisTargetAgentId ? { analysisTargetAgentId } : {}),
     }
     if (agentConfig && agentConfig.length === 1) {
@@ -451,8 +459,10 @@ export const useChatsStore = defineStore('chats', () => {
       groupAudienceMode: source.groupAudienceMode || 'auto',
       groupAudienceAgentIds: JSON.parse(JSON.stringify(source.groupAudienceAgentIds || [])),
       workingPath: source.workingPath || null,
-      codingMode: source.codingMode || false,
-      codingProvider: source.codingProvider || 'claude-code',
+      mode: source.mode || 'chat',
+      modeTransitions: [],
+      modeTransitionPending: null,
+      productivityModeNoticeShown: source.productivityModeNoticeShown || false,
     }
     // Override agents if provided
     if (agentOverride && agentOverride.length > 0) {
@@ -1428,6 +1438,8 @@ export const useChatsStore = defineStore('chats', () => {
     }
   }
 
+  function _testBackfill(chat) { backfillChat(chat) }
+
   return {
     chatTree, chats, activeChatId, activeFolderId, activeChat, isLoading,
     unreadChatIds, completedChatIds, pendingPermissionChatIds,
@@ -1450,5 +1462,6 @@ export const useChatsStore = defineStore('chats', () => {
     reconnectRunningAgents,
     getChunkLog: () => _chunkLog ? [..._chunkLog] : [],
     clearChunkLog: () => { if (_chunkLog) _chunkLog.length = 0 },
+    _testBackfill,
   }
 })
