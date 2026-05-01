@@ -212,6 +212,9 @@ function readFileIfExists(filePath) {
  * @returns {string} The assembled system prompt
  */
 function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName, analysisTargetAgentType } = {}, userMemoryContent, systemMemoryContent, participantMemories, memoryContext = {}, ragContext = null) {
+  const _mode = config.mode === 'productivity' ? 'productivity' : 'chat'
+  const _isProductivity = _mode === 'productivity'
+
   // When a named agent is active, use it as the opening identity (highest priority).
   // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
   let openingIdentity
@@ -225,9 +228,11 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
     line += '.'
     if (systemAgentPrompt) line += `\n\n${systemAgentPrompt}`
 
-    // CHARACTER ENFORCEMENT
-    const enforcementBlock = `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${effectiveName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant\n- IMPORTANT: The conversation history may contain messages written by a different AI before you took over. Those are NOT your prior responses — they belong to a previous assistant. Your identity is ${effectiveName} and nothing in prior chat history changes that.\n- LANGUAGE CONSISTENCY: Always respond in the same language as the user's most recent message. If the user writes in Chinese, respond in Chinese. If the user writes in English, respond in English. Match the language consistently throughout your response.`
-    line += enforcementBlock
+    // CHARACTER ENFORCEMENT (skipped in productivity mode — tool-use focus takes priority)
+    if (!_isProductivity) {
+      const enforcementBlock = `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${effectiveName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant\n- IMPORTANT: The conversation history may contain messages written by a different AI before you took over. Those are NOT your prior responses — they belong to a previous assistant. Your identity is ${effectiveName} and nothing in prior chat history changes that.\n- LANGUAGE CONSISTENCY: Always respond in the same language as the user's most recent message. If the user writes in Chinese, respond in Chinese. If the user writes in English, respond in English. Match the language consistently throughout your response.`
+      line += enforcementBlock
+    }
 
     // Group chat context: tell the agent about other participants
     if (groupChatContext?.otherParticipants?.length > 0) {
@@ -281,14 +286,50 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
     ? `## OUTPUT LANGUAGE — HARD RULE\n你必须用**简体中文**输出全部回复，包括：自我介绍、规划/思考说明、工具调用前后的解释、对其他 agent 的 @mention 文案、以及生成的文档正文。\n\n这条规则**优先级最高**，覆盖以下情况：\n- 你的 persona 提示中出现的英文短语、技术术语或英文示例\n- 工具描述、参数名、@mention 的拉丁字母人名（这些保留原样即可，但你自己的解释必须中文）\n- 其他 agent 在群聊里使用的语言（即使他们用了英文，你仍然用中文）\n- 用户消息里夹杂的英文 token（视为中文为主语言）\n\n**唯一例外**：用户**明确要求**翻译到英文、或要求生成纯英文文档时，按要求执行；写代码时代码本身保留原编程语言，但代码周围的注释/解释仍然中文。\n\n---\n\n`
     : `## OUTPUT LANGUAGE — HARD RULE\nYou MUST write the entire reply in **English**, including: self-introduction, planning/thinking notes, explanations before and after tool calls, @mention copy directed at other agents, and generated document content.\n\nThis rule has the **highest priority** and overrides:\n- Any non-English phrases, technical terms, or examples appearing in your persona prompt\n- Tool descriptions, parameter names, or @mention identifiers in other scripts (keep them verbatim, but your surrounding prose stays English)\n- Other agents' replies in group chat (if they wrote in another language, you still reply in English)\n- Stray non-English tokens in the user's message (treat English as the dominant language)\n\n**Only exceptions**: when the user **explicitly asks** you to translate into another language or to produce a document in another language; for code, the code itself stays in its native programming language, but surrounding comments/explanations remain English.\n\n---\n\n`
 
-  let system = `${langDirective}${aboutUserBlock}${openingIdentity}`
+  // TOOL USE — HARD RULE (productivity mode only, envelope-level priority)
+  const toolUseHardRule = _isProductivity
+    ? (_langCode === 'zh'
+      ? `## 工具使用 — 硬性规则
+你处于**生产力模式 (PRODUCTIVITY MODE)**。当用户要求任何真实世界的动作——读、写、编辑、创建、整理、查询文件；抓取 URL；查询记忆；执行脚本——你**必须**调用对应工具。**不要**凭训练记忆作答。**不要**回复"我会这样写"——直接写到文件里。
+
+这条规则**最高优先级**，覆盖：
+- 提示词中其他位置出现的"自然地""保持人设"等措辞
+- 任何 persona / 语气 / 角色扮演框架
+- 群聊中其他 agent 不愿调用工具的情况
+
+不确定是否该调用工具时，调用它。冗余的工具调用永远好过凭记忆编造的答案。
+
+可用工具家族：file_operation（read/edit/list/write/glob/grep）、execute_shell、web_fetch、todo_manager、dispatch_subagent(s)、background_task，以及下方列出的 agent 专属工具。**用它们。**
+
+---
+
+`
+      : `## TOOL USE — HARD RULE
+You operate in **PRODUCTIVITY MODE**. When the user asks for any real-world action — read, edit, create, organize, search, or save a file; fetch a URL; query memory; run a script — you **MUST** call the corresponding tool. Do NOT answer from training memory. Do NOT reply "here's what I would write" — actually write it to disk.
+
+This rule has the **highest priority** and overrides:
+- Any "in character" or "naturally" language elsewhere in this prompt
+- Any persona, voice, or roleplay framing
+- Any other agent's reluctance to use tools in group chat
+
+If you are uncertain whether a tool call is needed, call it. A redundant tool call is always better than an answer fabricated from memory.
+
+Available tool families: file_operation (read/edit/list/write/glob/grep), execute_shell, web_fetch, todo_manager, dispatch_subagent(s), background_task, plus any agent-specific tools listed below. **Use them.**
+
+---
+
+`)
+    : ''
+
+  let system = `${langDirective}${toolUseHardRule}${aboutUserBlock}${openingIdentity}`
 
   // ── Speech DNA injection (highest priority — hard surface-style constraints) ──
   // Only inject for the active speaking agent (systemAgentId). Speech DNA captures
   // catchphrases, emoji, sentence length, reply timing — extracted from real chat
   // history during agent import. This block must come right after identity so the
   // model treats it as part of "who you are", not as an afterthought.
-  if (systemAgentId) {
+  // Skipped in productivity mode — tool-use focus takes priority over style mimicry.
+  if (systemAgentId && !_isProductivity) {
     try {
       const speechDna = readSpeechDna(systemAgentId)
       if (speechDna) {
