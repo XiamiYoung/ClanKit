@@ -46,7 +46,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from '../../i18n/useI18n'
 
 const { t } = useI18n()
@@ -64,7 +64,7 @@ const openPlans = ref(new Set())
 
 const groupedTree = computed(() => {
   const catMap = Object.fromEntries(props.planCategories.map(c => [c.id, { ...c, plans: [] }]))
-  const uncategorized = { id: null, name: 'Uncategorized', emoji: '📋', plans: [] }
+  const uncategorized = { id: '__uncat__', name: 'Uncategorized', emoji: '📋', plans: [] }
 
   for (const plan of props.tree.plans) {
     if (plan.categoryId && catMap[plan.categoryId]) {
@@ -74,13 +74,25 @@ const groupedTree = computed(() => {
     }
   }
 
-  const result = [...Object.values(catMap).filter(g => g.plans.length), ...(uncategorized.plans.length ? [uncategorized] : [])]
-  // Auto-open first category
-  if (result.length > 0 && openCategories.value.size === 0) {
-    openCategories.value.add(result[0].id)
-  }
-  return result
+  return [...Object.values(catMap).filter(g => g.plans.length), ...(uncategorized.plans.length ? [uncategorized] : [])]
 })
+
+// Auto-open the first category ONCE on initial tree population. Doing this
+// inside the computed creates a feedback loop: collapsing the only category
+// makes openCategories.size === 0, which re-fires the computed (since it
+// reads .size) and re-adds the category — toggle appears stuck.
+let _autoOpenedOnce = false
+watch(
+  () => groupedTree.value,
+  (groups) => {
+    if (_autoOpenedOnce) return
+    if (groups.length > 0) {
+      openCategories.value.add(groups[0].id)
+      _autoOpenedOnce = true
+    }
+  },
+  { immediate: true },
+)
 
 function toggleCategory(id) {
   if (openCategories.value.has(id)) {
