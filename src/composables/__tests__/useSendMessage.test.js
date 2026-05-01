@@ -21,7 +21,7 @@ const mockChat = reactive({
   maxOutputTokens: null,
   maxAgentRounds: 10,
   workingPath: null,
-  codingMode: false,
+  mode: 'chat',
   contextMetrics: { inputTokens: 0 },
 })
 
@@ -402,6 +402,55 @@ describe('useSendMessage', () => {
     // Both messages should be gone
     expect(mockChat.messages.find(m => m.id === 'u1')).toBeFalsy()
     expect(mockChat.messages.find(m => m.id === 'a1')).toBeFalsy()
+  })
+
+  // ─── 13. chat.mode flows through to loopConfig ───────────────────────────
+
+  describe('chat.mode flows through to loopConfig', () => {
+    it('productivity mode chat passes mode="productivity" and chatWorkingPath', async () => {
+      mockChat.mode = 'productivity'
+      mockChat.workingPath = '/work'
+      const inputText = ref('Hello')
+      const { sendMessage } = createSendMessage({ inputText })
+
+      await sendMessage()
+
+      expect(mockElectronAPI.sendMessage).toHaveBeenCalledTimes(1)
+      const meta = mockElectronAPI.sendMessage.mock.calls[0][0].targetChatMeta
+      expect(meta.mode).toBe('productivity')
+      expect(meta.chatWorkingPath).toBe('/work')
+      expect(meta).not.toHaveProperty('codingMode')
+      expect(meta).not.toHaveProperty('codingProvider')
+    })
+
+    it('chat mode passes mode="chat" and chatWorkingPath=null (ignores workingPath)', async () => {
+      mockChat.mode = 'chat'
+      mockChat.workingPath = '/should-be-ignored'
+      const inputText = ref('Hello')
+      const { sendMessage } = createSendMessage({ inputText })
+
+      await sendMessage()
+
+      expect(mockElectronAPI.sendMessage).toHaveBeenCalledTimes(1)
+      const meta = mockElectronAPI.sendMessage.mock.calls[0][0].targetChatMeta
+      expect(meta.mode).toBe('chat')
+      expect(meta.chatWorkingPath).toBeNull()
+      expect(meta).not.toHaveProperty('codingMode')
+    })
+
+    it('productivity mode without workingPath yields chatWorkingPath=null', async () => {
+      mockChat.mode = 'productivity'
+      mockChat.workingPath = null
+      const inputText = ref('Hello')
+      const { sendMessage } = createSendMessage({ inputText })
+
+      await sendMessage()
+
+      expect(mockElectronAPI.sendMessage).toHaveBeenCalledTimes(1)
+      const meta = mockElectronAPI.sendMessage.mock.calls[0][0].targetChatMeta
+      expect(meta.mode).toBe('productivity')
+      expect(meta.chatWorkingPath).toBeNull()
+    })
   })
 })
 

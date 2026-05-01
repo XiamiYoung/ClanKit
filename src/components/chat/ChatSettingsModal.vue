@@ -21,8 +21,6 @@ const ccmActiveTab = ref('general')
 // ── General tab draft state ──
 const draftMaxAgentRounds = ref(10)
 const draftWorkingPath = ref('')
-const draftCodingMode = ref(false)
-const draftCodingProvider = ref('claude-code')
 
 // ── Permissions tab draft state ──
 const draftPermissionMode = ref('inherit')
@@ -30,10 +28,6 @@ const draftChatAllowList = ref([])
 const draftChatDangerOverrides = ref([]) // patterns un-blocked for this chat in all_permissions mode
 const newAllowPattern = ref('')
 const newAllowDesc = ref('')
-
-// ── Coding mode tooltip state ──
-const showCodingInfoTooltip = ref(false)
-const showProviderInfoTooltip = ref(false)
 
 function addChatAllowEntry() {
   const pattern = newAllowPattern.value.trim()
@@ -68,8 +62,6 @@ watch(() => props.visible, (open) => {
   // Snapshot for cancel
   _draftSnapshot = {
     workingPath: draftWorkingPath.value,
-    codingMode: draftCodingMode.value,
-    codingProvider: draftCodingProvider.value,
     maxAgentRounds: draftMaxAgentRounds.value,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
@@ -82,10 +74,9 @@ function saveChatSettings() {
   if (!chatId) return
   const rawRounds = Number(draftMaxAgentRounds.value)
   const clampedRounds = Number.isFinite(rawRounds) ? Math.min(100, Math.max(1, rawRounds)) : 10
+  // Mode is configured via the ChatHeader dropdown — not here. Skip setMode.
   chatsStore.setChatSettings(chatId, {
     workingPath: draftWorkingPath.value || null,
-    codingMode: draftCodingMode.value,
-    codingProvider: draftCodingProvider.value,
     maxAgentRounds: clampedRounds,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
@@ -108,8 +99,6 @@ function cancelChatSettings() {
   // Revert draft to snapshot
   if (_draftSnapshot) {
     draftWorkingPath.value = _draftSnapshot.workingPath
-    draftCodingMode.value = _draftSnapshot.codingMode ?? false
-    draftCodingProvider.value = _draftSnapshot.codingProvider ?? 'claude-code'
     draftMaxAgentRounds.value = _draftSnapshot.maxAgentRounds
     draftPermissionMode.value = _draftSnapshot.permissionMode
     draftChatAllowList.value = _draftSnapshot.chatAllowList
@@ -125,30 +114,12 @@ async function browseWorkingPath() {
   if (result) draftWorkingPath.value = result
 }
 
-const codingProviderInfo = computed(() => {
-  const providers = {
-    'claude-code': {
-      label: 'Claude Code',
-      description: 'Loads CLAUDE.md instruction files from your project hierarchy, identical to how the Claude Code CLI works. Each file is watched for live changes.',
-      files: [
-        '~/.claude/CLAUDE.md (global)',
-        '<parent-dirs>/CLAUDE.md (ancestors)',
-        '<working-path>/CLAUDE.md (project root)',
-        '<working-path>/**/CLAUDE.md (sub-dirs, if any)',
-      ],
-    },
-  }
-  return providers[draftCodingProvider.value] || providers['claude-code']
-})
-
 // Load draft state from the chat's persisted settings
 function _loadDraftFromChat() {
   const chat = chatsStore.chats.find(c => c.id === props.chatId)
   if (!chat) return
   // Working path
   draftWorkingPath.value = chat.workingPath || ''
-  draftCodingMode.value = chat.codingMode ?? false
-  draftCodingProvider.value = chat.codingProvider ?? 'claude-code'
   // Max agent rounds (null in JSON = use default 10)
   draftMaxAgentRounds.value = chat.maxAgentRounds ?? 10
   // Permissions
@@ -194,62 +165,17 @@ function _loadDraftFromChat() {
         <!-- GENERAL TAB -->
         <div v-if="ccmActiveTab === 'general'" class="ccm-tab-content">
           <div class="ccm-dark-section">
-            <div class="ccm-dark-section-label">{{ t('chats.workingPath') }} <span class="ccm-dark-badge">{{ t('chats.artifactDirectory') }}</span></div>
+            <div class="ccm-dark-section-label">{{ t('chats.workingFolder') }}</div>
             <div class="ccm-working-path-row">
-              <input v-model="draftWorkingPath" type="text" :placeholder="configStore.config.artifactPath || `${configStore.config.dataPath}/artifact`" class="ccm-working-path-input" />
+              <input v-model="draftWorkingPath" type="text" :placeholder="configStore.config.DoCPath || `${configStore.config.dataPath}/clankit_doc`" class="ccm-working-path-input" />
               <button class="ccm-working-path-browse" @click="browseWorkingPath" :title="t('chats.browseFolder')">
                 <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
               </button>
             </div>
-            <span class="ccm-working-path-hint">{{ t('chats.globalDefaultPath') }}</span>
+            <span class="ccm-working-path-hint">{{ t('chats.workingFolderHint') }}</span>
           </div>
 
-          <!-- Coding Mode toggle + provider selector -->
-          <div class="ccm-dark-section">
-            <div class="ccm-dark-section-label">
-              {{ t('chats.codingMode') }}
-              <span class="ccm-coding-info-chip" @mouseenter="showCodingInfoTooltip = true" @mouseleave="showCodingInfoTooltip = false">
-                <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-                </svg>
-                <div v-if="showCodingInfoTooltip" class="ccm-coding-tooltip">
-                  <div class="ccm-coding-tooltip-title">{{ t('chats.whatIsCodingMode') }}</div>
-                  <div class="ccm-coding-tooltip-body">{{ t('chats.codingModeDescription') }}</div>
-                  <div class="ccm-coding-tooltip-hint">{{ t('chats.codingModeHint') }}</div>
-                </div>
-              </span>
-            </div>
-            <div class="ccm-coding-toggle-row">
-              <span class="ccm-coding-toggle-label">{{ t('chats.enableCodingMode') }}</span>
-              <label class="ccm-coding-switch" @click.stop>
-                <input type="checkbox" v-model="draftCodingMode" />
-                <span class="ccm-coding-switch-track"><span class="ccm-coding-switch-thumb"></span></span>
-              </label>
-            </div>
-            <div v-if="draftCodingMode" class="ccm-working-path-row" style="margin-top:10px;">
-              <label style="font-size:var(--fs-small);color:#9CA3AF;min-width:90px;">{{ t('chats.chatSettingsProvider') }}</label>
-              <select v-model="draftCodingProvider" class="ccm-working-path-input" style="max-width:200px; cursor:pointer;">
-                <option value="claude-code">Claude Code</option>
-              </select>
-              <span class="ccm-provider-info-anchor" @mouseenter="showProviderInfoTooltip = true" @mouseleave="showProviderInfoTooltip = false">
-                <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-                </svg>
-                <div v-if="showProviderInfoTooltip" class="ccm-coding-tooltip ccm-coding-tooltip-right">
-                  <div class="ccm-coding-tooltip-title">{{ codingProviderInfo.label }}</div>
-                  <div class="ccm-coding-tooltip-body">{{ codingProviderInfo.description }}</div>
-                  <div class="ccm-coding-tooltip-files">
-                    <div class="ccm-coding-tooltip-files-label">{{ t('chats.filesLoaded') }}</div>
-                    <div v-for="f in codingProviderInfo.files" :key="f" class="ccm-coding-tooltip-file">
-                      <svg style="width:10px;height:10px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                      <code>{{ f }}</code>
-                    </div>
-                  </div>
-                </div>
-              </span>
-            </div>
-          </div>
-
+          <!-- Mode radio -->
           <div class="ccm-dark-section">
             <div class="ccm-dark-section-label">
               {{ t('chats.maxAgentChatRounds') }}
@@ -500,122 +426,6 @@ function _loadDraftFromChat() {
 }
 .ccm-dark-badge.badge-on { background: #064E3B; color: #6EE7B7; }
 .ccm-dark-badge.badge-off { background: #451A1A; color: #FCA5A5; }
-
-/* ── Coding Mode — info chip & tooltips ──────────────────────────────── */
-.ccm-coding-info-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.25rem; height: 1.25rem;
-  border-radius: 50%;
-  background: #1F1F1F;
-  border: 1px solid #2A2A2A;
-  color: #6B7280;
-  cursor: help;
-  position: relative;
-  flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
-}
-.ccm-coding-info-chip:hover { background: #2A2A2A; color: #9CA3AF; }
-
-.ccm-coding-tooltip {
-  position: absolute;
-  bottom: calc(100% + 0.5rem);
-  left: 0;
-  width: 17.5rem;
-  background: #161616;
-  border: 1px solid #2A2A2A;
-  border-radius: 0.625rem;
-  padding: 0.75rem 0.875rem;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
-  z-index: 9999;
-  pointer-events: none;
-  font-family: 'Inter', sans-serif;
-}
-.ccm-coding-tooltip-right {
-  left: auto;
-  right: 0;
-}
-.ccm-coding-tooltip-title {
-  font-size: 12px; font-weight: 700; color: #E5E5EA; margin-bottom: 0.375rem;
-}
-.ccm-coding-tooltip-body {
-  font-size: 11px; font-weight: 400; color: #9CA3AF; line-height: 1.55;
-}
-.ccm-coding-tooltip-body code {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px; color: #67E8F9;
-  background: #0C1F26; padding: 0.0625rem 0.3125rem; border-radius: 0.25rem;
-}
-.ccm-coding-tooltip-hint {
-  margin-top: 0.5rem;
-  font-size: 11px; font-weight: 500; color: #4B5563;
-  border-top: 1px solid #1F1F1F; padding-top: 0.5rem;
-}
-.ccm-coding-tooltip-files { margin-top: 0.5rem; }
-.ccm-coding-tooltip-files-label {
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.05em; color: #4B5563; margin-bottom: 0.3125rem;
-}
-.ccm-coding-tooltip-file {
-  display: flex; align-items: center; gap: 0.375rem;
-  padding: 0.1875rem 0; color: #6B7280;
-}
-.ccm-coding-tooltip-file code {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px; color: #67E8F9;
-}
-
-/* ── Coding Mode — toggle row ──────────────────────────────────────────── */
-.ccm-coding-toggle-row {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 0.75rem; padding: 0.625rem 0.875rem;
-  background: #1A1A1A; border: 1px solid #222;
-  border-radius: 0.625rem;
-}
-.ccm-coding-toggle-label {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-secondary); font-weight: 500;
-  color: #9CA3AF;
-}
-
-/* ── Coding Mode — switch (teal accent, not black) ─────────────────────── */
-.ccm-coding-switch {
-  display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0;
-}
-.ccm-coding-switch input { display: none; }
-.ccm-coding-switch-track {
-  position: relative; width: 2.375rem; height: 1.375rem;
-  border-radius: 0.6875rem; background: #2A2A2A;
-  border: 1px solid #333;
-  transition: background 0.2s, border-color 0.2s;
-}
-.ccm-coding-switch input:checked + .ccm-coding-switch-track {
-  background: #0E7490;
-  border-color: #0891B2;
-}
-.ccm-coding-switch-thumb {
-  position: absolute; top: 0.125rem; left: 0.125rem;
-  width: 1rem; height: 1rem; border-radius: 50%;
-  background: #4B5563;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-  transition: transform 0.2s, background 0.2s;
-}
-.ccm-coding-switch input:checked + .ccm-coding-switch-track .ccm-coding-switch-thumb {
-  transform: translateX(1rem); background: #FFFFFF;
-}
-
-/* ── Provider info anchor ─────────────────────────────────────────────── */
-.ccm-provider-info-anchor {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 1.375rem; height: 1.375rem;
-  border-radius: 50%;
-  background: #1A1A1A; border: 1px solid #2A2A2A;
-  color: #4B5563; cursor: help;
-  position: relative; flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
-}
-.ccm-provider-info-anchor:hover { background: #2A2A2A; color: #9CA3AF; }
 
 /* Provider buttons (dark) — used in Permissions tab */
 .ccm-provider-btns {

@@ -41,31 +41,35 @@
             <span v-else>{{ t('chats.loadOlder') }}</span>
           </button>
         </div>
-        <div
-          v-for="msg in visibleMessages"
-          :key="msg.id"
-          :class="[
-            'flex gap-3 cw-animate-fade-in',
-            (msg.isWaitingIndicator || msg.role === 'system') ? 'justify-center' : msg.role === 'user' ? 'justify-end' : 'justify-start'
-          ]"
-        >
+        <template v-for="item in renderItems" :key="item.kind === 'msg' ? item.data.id : 'div-' + item.data.at + '-' + item.data.afterMessageId">
+          <div v-if="item.kind === 'divider'" class="cw-mode-divider">
+            <span>{{ formatModeTransitionDivider(item.data) }}</span>
+          </div>
+          <div
+            v-else
+            :key="item.data.id"
+            :class="[
+              'flex gap-3 cw-animate-fade-in',
+              (item.data.isWaitingIndicator || item.data.role === 'system') ? 'justify-center' : item.data.role === 'user' ? 'justify-end' : 'justify-start'
+            ]"
+          >
           <!-- Pre-response waiting row (between user bubble and first assistant bubble) -->
-          <div v-if="msg.isWaitingIndicator" class="cw-pre-response-row" :class="msg.waitingState === 'error' ? 'cw-pre-response-row--error' : ''">
+          <div v-if="item.data.isWaitingIndicator" class="cw-pre-response-row" :class="item.data.waitingState === 'error' ? 'cw-pre-response-row--error' : ''">
             <div class="cw-pre-response-wave">
               <span
                 v-for="n in 5"
                 :key="n"
                 class="cw-wave-bar"
-                :style="`--bar-color:${msg.waitingState === 'error' ? '#ef4444' : '#4c8446'}; --bar-glow:${msg.waitingState === 'error' ? '#ef444480' : '#4c844680'}; animation-delay:${(n-1)*0.13}s;`"
+                :style="`--bar-color:${item.data.waitingState === 'error' ? '#ef4444' : '#4c8446'}; --bar-glow:${item.data.waitingState === 'error' ? '#ef444480' : '#4c844680'}; animation-delay:${(n-1)*0.13}s;`"
               />
             </div>
-            <span v-if="msg.waitingState === 'error'" class="cw-pre-response-error">
-              {{ msg.waitingError || t('chats.preResponseFailed') }}
+            <span v-if="item.data.waitingState === 'error'" class="cw-pre-response-error">
+              {{ item.data.waitingError || t('chats.preResponseFailed') }}
             </span>
             <button
-              v-if="msg.waitingState === 'error'"
+              v-if="item.data.waitingState === 'error'"
               class="cw-retry-btn"
-              @click="emit('retry-waiting-indicator', msg)"
+              @click="emit('retry-waiting-indicator', item.data)"
             >
               <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
               {{ t('chats.retry') }}
@@ -73,78 +77,78 @@
           </div>
 
           <!-- System info banner (stop/resume/compaction notifications) -->
-          <div v-else-if="msg.role === 'system'" class="cw-system-banner"
-            :class="msg.compaction ? (msg.compactionKind === 'overflow-recovery' ? 'cw-system-banner--compact-recovery' : 'cw-system-banner--compact') : msg.interruptType === 'stop' ? 'cw-system-banner--stop' : msg.interruptType === 'pause' ? 'cw-system-banner--pause' : ''">
+          <div v-else-if="item.data.role === 'system'" class="cw-system-banner"
+            :class="item.data.compaction ? (item.data.compactionKind === 'overflow-recovery' ? 'cw-system-banner--compact-recovery' : 'cw-system-banner--compact') : item.data.interruptType === 'stop' ? 'cw-system-banner--stop' : item.data.interruptType === 'pause' ? 'cw-system-banner--pause' : ''">
             <!-- Compaction icon -->
-            <svg v-if="msg.compaction" style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg v-if="item.data.compaction" style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/>
             </svg>
             <!-- Pause icon -->
-            <svg v-else-if="msg.interruptType === 'pause'" style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="currentColor">
+            <svg v-else-if="item.data.interruptType === 'pause'" style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="currentColor">
               <rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>
             </svg>
             <!-- Stop icon -->
-            <svg v-else-if="msg.interruptType === 'stop'" style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="currentColor">
+            <svg v-else-if="item.data.interruptType === 'stop'" style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="currentColor">
               <rect x="5" y="5" width="14" height="14" rx="2"/>
             </svg>
             <!-- Fallback info icon -->
             <svg v-else style="width:13px;height:13px;flex-shrink:0;display:block;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
-            <template v-if="msg.compaction">
+            <template v-if="item.data.compaction">
               <span class="cw-system-banner-text">{{
-                msg.compactionKind === 'overflow-recovery' ? t('chats.contextCompactedRecovery')
-                : msg.compactionKind === 'auto'            ? t('chats.contextCompactedAuto')
+                item.data.compactionKind === 'overflow-recovery' ? t('chats.contextCompactedRecovery')
+                : item.data.compactionKind === 'auto'            ? t('chats.contextCompactedAuto')
                 : t('chats.contextCompacted')
               }}</span>
-              <template v-if="msg.agentName">
+              <template v-if="item.data.agentName">
                 <span class="cw-system-banner-sep">·</span>
-                <span class="cw-system-banner-agent">{{ msg.agentName }}</span>
+                <span class="cw-system-banner-agent">{{ item.data.agentName }}</span>
               </template>
-              <template v-if="msg.tokensBefore && msg.tokensAfter">
+              <template v-if="item.data.tokensBefore && item.data.tokensAfter">
                 <span class="cw-system-banner-sep">·</span>
                 <span class="cw-system-banner-tokens">
-                  {{ msg.tokensBefore >= 1000 ? (msg.tokensBefore / 1000).toFixed(1) + 'k' : msg.tokensBefore }}
+                  {{ item.data.tokensBefore >= 1000 ? (item.data.tokensBefore / 1000).toFixed(1) + 'k' : item.data.tokensBefore }}
                   <svg style="width:10px;height:10px;opacity:0.6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                  {{ msg.tokensAfter >= 1000 ? (msg.tokensAfter / 1000).toFixed(1) + 'k' : msg.tokensAfter }}
+                  {{ item.data.tokensAfter >= 1000 ? (item.data.tokensAfter / 1000).toFixed(1) + 'k' : item.data.tokensAfter }}
                   <span style="opacity:0.5;">{{ t('common.tokens') }}</span>
                 </span>
               </template>
             </template>
-            <span v-else class="cw-system-banner-text">{{ msg.content }}</span>
+            <span v-else class="cw-system-banner-text">{{ item.data.content }}</span>
           </div>
 
           <!-- Assistant avatar + name chip -->
-          <div v-else-if="msg.role === 'assistant'" class="cw-msg-avatar-col">
+          <div v-else-if="item.data.role === 'assistant'" class="cw-msg-avatar-col">
             <div
               class="cw-msg-avatar-wrap"
-              @mouseenter="showAvatarTooltip($event, msg)"
+              @mouseenter="showAvatarTooltip($event, item.data)"
               @mouseleave="hideAvatarTooltip"
             >
-              <img v-if="getSystemAvatar(msg)" :src="getSystemAvatar(msg)" alt="" class="cw-msg-avatar-img" />
+              <img v-if="getSystemAvatar(item.data)" :src="getSystemAvatar(item.data)" alt="" class="cw-msg-avatar-img" />
               <div v-else class="cw-msg-avatar-fallback system">
                 <svg style="width:22px;height:22px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M12 8V4H8M4 12h16M5 12a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1M9 16h0M15 16h0"/>
                 </svg>
               </div>
             </div>
-            <span class="cw-msg-name-chip cw-msg-name-chip--assistant">{{ truncateName(getMsgAssistantName(msg)) }}</span>
+            <span class="cw-msg-name-chip cw-msg-name-chip--assistant">{{ truncateName(getMsgAssistantName(item.data)) }}</span>
           </div>
 
           <!-- Message bubble (not rendered for system banners) -->
           <div
-            v-if="!msg.isWaitingIndicator && msg.role !== 'system'"
+            v-if="!item.data.isWaitingIndicator && item.data.role !== 'system'"
             :class="[
               'relative group/bubble max-w-[75%]',
-              msg.role === 'assistant' ? 'min-w-[50%]' : ''
+              item.data.role === 'assistant' ? 'min-w-[50%]' : ''
             ]"
           >
             <!-- Resend button shown when pre-response failed for this user message -->
             <button
-              v-if="msg.role === 'user' && hasFailedWaitingAfter(msg.id)"
+              v-if="item.data.role === 'user' && hasFailedWaitingAfter(item.data.id)"
               class="cw-user-resend-btn"
-              @click="$emit('resend-message', msg)"
-              v-tooltip="getWaitingErrorForUser(msg.id)"
+              @click="$emit('resend-message', item.data)"
+              v-tooltip="getWaitingErrorForUser(item.data.id)"
             >
               <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
@@ -154,13 +158,13 @@
 
             <!-- Hover action buttons -->
             <div
-              v-if="!msg.streaming"
+              v-if="!item.data.streaming"
               class="absolute -top-2 right-1 z-10 flex items-center gap-1 transition-all duration-150"
             >
               <!-- Quote button -->
               <button
-                v-if="showQuote && msg.content"
-                @click="quoteMessage(msg)"
+                v-if="showQuote && item.data.content"
+                @click="quoteMessage(item.data)"
                 class="cw-msg-action-btn"
                 v-tooltip="t('chats.quoteMessage')"
                 :aria-label="t('chats.quoteMessage')"
@@ -172,13 +176,13 @@
               </button>
               <!-- Copy button -->
               <button
-                v-if="msg.content"
-                @click="copyMessage(msg)"
+                v-if="item.data.content"
+                @click="copyMessage(item.data)"
                 class="cw-msg-action-btn"
-                v-tooltip="copiedId === msg.id ? t('chats.messageCopied') : t('chats.copyMessage')"
+                v-tooltip="copiedId === item.data.id ? t('chats.messageCopied') : t('chats.copyMessage')"
                 :aria-label="t('chats.copyMessage')"
               >
-                <svg v-if="copiedId === msg.id" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <svg v-if="copiedId === item.data.id" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
                 <svg v-else class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -188,20 +192,20 @@
               </button>
               <!-- Speak button -->
               <button
-                v-if="msg.role === 'assistant' && msg.content"
-                @click="emit('speak-message', msg)"
+                v-if="item.data.role === 'assistant' && item.data.content"
+                @click="emit('speak-message', item.data)"
                 class="cw-msg-action-btn"
-                :class="{ 'opacity-40 cursor-not-allowed': !voiceConfigured, 'cw-msg-action-btn-active': props.speakingMsgId === msg.id }"
+                :class="{ 'opacity-40 cursor-not-allowed': !voiceConfigured, 'cw-msg-action-btn-active': props.speakingMsgId === item.data.id }"
                 :disabled="!voiceConfigured"
-                v-tooltip="!voiceConfigured ? t('chats.speakNeedsVoice') : props.speakingMsgId === msg.id ? t('chats.stopSpeaking') : t('chats.speakMessage')"
+                v-tooltip="!voiceConfigured ? t('chats.speakNeedsVoice') : props.speakingMsgId === item.data.id ? t('chats.stopSpeaking') : t('chats.speakMessage')"
                 :aria-label="t('chats.speakMessage')"
               >
                 <!-- Loading: TTS IPC in progress -->
-                <svg v-if="props.speakingMsgId === msg.id && props.ttsPlayingMsgId !== msg.id" class="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <svg v-if="props.speakingMsgId === item.data.id && props.ttsPlayingMsgId !== item.data.id" class="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <path d="M21 12a9 9 0 1 1-6.2-8.6"/>
                 </svg>
                 <!-- Playing: audio waveform -->
-                <svg v-else-if="props.ttsPlayingMsgId === msg.id" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <svg v-else-if="props.ttsPlayingMsgId === item.data.id" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                   <rect x="4" y="8" width="3" height="8" rx="1"><animate attributeName="height" values="8;16;8" dur="0.8s" repeatCount="indefinite"/><animate attributeName="y" values="8;4;8" dur="0.8s" repeatCount="indefinite"/></rect>
                   <rect x="10.5" y="6" width="3" height="12" rx="1"><animate attributeName="height" values="12;6;12" dur="0.8s" begin="0.2s" repeatCount="indefinite"/><animate attributeName="y" values="6;9;6" dur="0.8s" begin="0.2s" repeatCount="indefinite"/></rect>
                   <rect x="17" y="8" width="3" height="8" rx="1"><animate attributeName="height" values="8;14;8" dur="0.8s" begin="0.4s" repeatCount="indefinite"/><animate attributeName="y" values="8;5;8" dur="0.4s" begin="0.4s" repeatCount="indefinite"/></rect>
@@ -215,7 +219,7 @@
               <!-- Delete button -->
               <button
                 v-if="showDelete"
-                @click="$emit('delete-message', msg)"
+                @click="$emit('delete-message', item.data)"
                 class="cw-msg-action-btn cw-msg-action-btn-delete"
                 v-tooltip="t('chats.deleteMessage')"
                 :aria-label="t('chats.deleteMessage')"
@@ -231,32 +235,32 @@
 
             <div
               class="cw-msg-bubble"
-              :class="[msg.role === 'user' ? 'cw-msg-bubble-user' : msg.isError ? 'cw-msg-bubble-error' : 'cw-msg-bubble-assistant', shakingIds.has(msg.id) ? 'bubble-shake' : '']"
+              :class="[item.data.role === 'user' ? 'cw-msg-bubble-user' : item.data.isError ? 'cw-msg-bubble-error' : 'cw-msg-bubble-assistant', shakingIds.has(item.data.id) ? 'bubble-shake' : '']"
             >
               <!-- Error indicator bar -->
-              <div v-if="msg.isError" class="cw-error-indicator">
+              <div v-if="item.data.isError" class="cw-error-indicator">
                 <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
-                <span>{{ formatErrorLabel(msg) }}</span>
-                <span v-if="msg.isError" class="cw-error-info" :data-tooltip="msg.errorDetail || t('errors.unknownError')">
+                <span>{{ formatErrorLabel(item.data) }}</span>
+                <span v-if="item.data.isError" class="cw-error-info" :data-tooltip="item.data.errorDetail || t('errors.unknownError')">
                   <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
                   </svg>
                 </span>
               </div>
               <!-- Auth error hint: typically caused by invalid key or empty balance -->
-              <div v-if="msg.isError && msg.errorCode === 'auth_error'" class="cw-error-hint">
+              <div v-if="item.data.isError && item.data.errorCode === 'auth_error'" class="cw-error-hint">
                 <svg style="width:13px;height:13px;flex-shrink:0;margin-top:1px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                 </svg>
                 <div class="cw-error-hint-body">
                   <span>{{ t('chats.error_auth_hint') }}</span>
                   <button
-                    v-if="msg.agentId"
+                    v-if="item.data.agentId"
                     type="button"
                     class="cw-error-hint-btn"
-                    @click="openAgentBody(msg)"
+                    @click="openAgentBody(item.data)"
                   >
                     {{ t('chats.error_auth_open_agent') }}
                     <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -265,14 +269,14 @@
                   </button>
                 </div>
               </div>
-              <div :class="msg.role === 'user' ? 'user-content' : 'prose-clankit'">
+              <div :class="item.data.role === 'user' ? 'user-content' : 'prose-clankit'">
                 <MessageRenderer
-                  :message="msg"
-                  :plan-data="msg.planData || null"
-                  :plan-state="msg.planState || 'pending'"
-                  :on-approve-plan="() => props.onApprovePlan?.(msg)"
-                  :on-refine-plan="() => props.onRefinePlan?.(msg)"
-                  :on-reject-plan="() => props.onRejectPlan?.(msg)"
+                  :message="item.data"
+                  :plan-data="item.data.planData || null"
+                  :plan-state="item.data.planState || 'pending'"
+                  :on-approve-plan="() => props.onApprovePlan?.(item.data)"
+                  :on-refine-plan="() => props.onRefinePlan?.(item.data)"
+                  :on-reject-plan="() => props.onRejectPlan?.(item.data)"
                   @quote-image="emit('quote-image', $event)"
                   @delete-message="emit('delete-message', $event)"
                   @view-blob="viewingBlobContent = $event"
@@ -281,29 +285,30 @@
             </div>
             <div
               class="cw-msg-timestamp"
-              :style="msg.role === 'user' ? 'text-align:right;' : 'text-align:left;'"
+              :style="item.data.role === 'user' ? 'text-align:right;' : 'text-align:left;'"
             >
-              {{ formatTimeRange(msg) }}
+              {{ formatTimeRange(item.data) }}
             </div>
           </div>
 
           <!-- User avatar + name chip (per-message: preserves original user agent after switch) -->
-          <div v-if="msg.role === 'user'" class="cw-msg-avatar-col">
+          <div v-if="item.data.role === 'user'" class="cw-msg-avatar-col">
             <div
               class="cw-msg-avatar-wrap"
-              @mouseenter="showAvatarTooltip($event, msg)"
+              @mouseenter="showAvatarTooltip($event, item.data)"
               @mouseleave="hideAvatarTooltip"
             >
-              <img v-if="getUserAvatar(msg)" :src="getUserAvatar(msg)" alt="" class="cw-msg-avatar-img" />
+              <img v-if="getUserAvatar(item.data)" :src="getUserAvatar(item.data)" alt="" class="cw-msg-avatar-img" />
               <div v-else class="cw-msg-avatar-fallback user">
                 <svg style="width:22px;height:22px;color:#fff;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                 </svg>
               </div>
             </div>
-            <span class="cw-msg-name-chip cw-msg-name-chip--user">{{ truncateName(getMsgUserName(msg)) }}</span>
+            <span class="cw-msg-name-chip cw-msg-name-chip--user">{{ truncateName(getMsgUserName(item.data)) }}</span>
           </div>
-        </div>
+          </div>
+        </template>
       </template>
 
     </div>
@@ -690,6 +695,27 @@ const visibleMessages = computed(() => {
   if (all.length <= visibleLimit.value) return all
   return all.slice(all.length - visibleLimit.value)
 })
+
+// ── Render items: interleave mode-transition dividers into visibleMessages ──
+const renderItems = computed(() => {
+  const msgs = visibleMessages.value
+  const transitions = chat.value?.modeTransitions || []
+  const transByMsg = new Map(transitions.map(tr => [tr.afterMessageId, tr]))
+  const items = []
+  for (const m of msgs) {
+    items.push({ kind: 'msg', data: m })
+    const tr = transByMsg.get(m.id)
+    if (tr) items.push({ kind: 'divider', data: tr })
+  }
+  return items
+})
+
+function formatModeTransitionDivider(transition) {
+  const modeLabel = transition.to === 'productivity' ? t('chats.modeProductivity') : t('chats.modeChat')
+  const d = new Date(transition.at)
+  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return t('chats.modeTransitionDivider', { mode: modeLabel, time })
+}
 const hasHiddenMessages = computed(() => {
   const all = (chat.value?.messages ?? []).filter(m => !m.hidden)
   if (all.length > visibleLimit.value) return true
@@ -1840,5 +1866,17 @@ defineExpose({ scrollToBottom })
   color: #D1D1D6;
   line-height: 1.45;
   margin-top: 0.1875rem;
+}
+
+/* ── Mode-transition divider ── */
+.cw-mode-divider {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #6b7280);
+  margin: 1rem 0;
+  padding: 0.25rem 0;
+  border-top: 1px dashed var(--border, #e5e7eb);
+  border-bottom: 1px dashed var(--border, #e5e7eb);
+  font-style: italic;
 }
 </style>

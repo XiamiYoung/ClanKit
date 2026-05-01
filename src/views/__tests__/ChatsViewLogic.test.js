@@ -25,7 +25,7 @@ const mockChat = reactive({
   chatDangerOverrides: [],
   maxAgentRounds: 10,
   workingPath: null,
-  codingMode: false,
+  mode: 'chat',
   contextMetrics: { inputTokens: 0 },
   type: 'chat',
 })

@@ -444,6 +444,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getTree: () => ipcRenderer.invoke('ai-task:get-tree'),
   },
 
+  // ── Chat lifecycle events (main → renderer) ────────────────────────────────
+  onChatClearModeTransitionPending: (cb) => {
+    const listener = (_, data) => cb(data)
+    ipcRenderer.on('chat:clear-mode-transition-pending', listener)
+    return () => ipcRenderer.removeListener('chat:clear-mode-transition-pending', listener)
+  },
+
   // ── IM Bridge ─────────────────────────────────────────────────────────────
   im: {
     getStatus:   ()       => ipcRenderer.invoke('im:get-status'),

@@ -2,17 +2,14 @@
   <div class="chat-header">
     <!-- Row 1: Centered title badge + slot for extra actions -->
     <div class="ch-row-top">
-      <!-- Running / approval indicator (left-aligned) -->
+      <!-- Permission-approval indicator (left-aligned). Running state is shown
+           via the spinner inside the title badge — no duplicate label here. -->
       <div class="ch-row-top-status">
         <span v-if="chatsStore.pendingPermissionChatIds.has(resolvedChatId)" class="ch-status-badge ch-status-badge--approval">
           <svg style="width:10px;height:10px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
           </svg>
           {{ t('chats.permissionApproval') }}
-        </span>
-        <span v-else-if="isRunning" class="ch-status-badge ch-status-badge--running">
-          <span class="ch-status-dot"></span>
-          {{ t('chats.statusRunning') }}
         </span>
       </div>
       <!-- Centered chat title badge -->
@@ -62,6 +59,50 @@
       <!-- Right side: call + settings (single view) or grid action buttons -->
       <div class="ch-row-top-actions">
         <template v-if="!isGridView">
+          <!-- Mode toggle switch (chat ↔ productivity) -->
+          <div v-if="showModeChip" class="ch-mode-dd-wrap" ref="modeDropdownWrapEl">
+            <button
+              class="ch-mode-dd-btn"
+              :class="{ 'ch-mode-dd-btn--productivity': isProductivity }"
+              :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
+              :aria-haspopup="true"
+              :aria-expanded="modeDropdownOpen ? 'true' : 'false'"
+              @click.stop="modeDropdownOpen = !modeDropdownOpen"
+            >
+              <svg v-if="isProductivity" style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              <svg v-else style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span class="ch-mode-dd-label">{{ isProductivity ? t('chats.modeProductivity') : t('chats.modeChat') }}</span>
+              <svg class="ch-mode-dd-chevron" :class="{ open: modeDropdownOpen }" style="width:11px;height:11px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div v-if="modeDropdownOpen" class="ch-mode-dd-menu" role="menu">
+              <button
+                class="ch-mode-dd-item"
+                :class="{ active: isProductivity }"
+                role="menuitem"
+                @click.stop="selectMode('productivity')"
+              >
+                <div class="ch-mode-dd-item-head">
+                  <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                  <span class="ch-mode-dd-item-title">{{ t('chats.modeProductivity') }}</span>
+                  <svg v-if="isProductivity" class="ch-mode-dd-check" style="width:13px;height:13px;flex-shrink:0;margin-left:auto;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="ch-mode-dd-item-desc">{{ t('chats.modeProductivityDesc') }}</div>
+              </button>
+              <button
+                class="ch-mode-dd-item"
+                :class="{ active: !isProductivity }"
+                role="menuitem"
+                @click.stop="selectMode('chat')"
+              >
+                <div class="ch-mode-dd-item-head">
+                  <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  <span class="ch-mode-dd-item-title">{{ t('chats.modeChat') }}</span>
+                  <svg v-if="!isProductivity" class="ch-mode-dd-check" style="width:13px;height:13px;flex-shrink:0;margin-left:auto;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="ch-mode-dd-item-desc">{{ t('chats.modeChatDesc') }}</div>
+              </button>
+            </div>
+          </div>
           <!-- Voice call button -->
           <div
             ref="callBtnEl"
@@ -445,10 +486,17 @@
     </div>
   </Teleport>
 
+  <!-- First-switch productivity mode confirm modal -->
+  <ConfirmProductivityModal
+    v-if="showProductivityConfirm"
+    @confirm="confirmProductivitySwitch"
+    @cancel="showProductivityConfirm = false"
+  />
+
 </template>
 
 <script setup>
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useChatsStore } from '../../stores/chats'
 import { useConfigStore } from '../../stores/config'
 import { useAgentsStore } from '../../stores/agents'
@@ -461,6 +509,7 @@ import { estimateToolTokens, estimateMcpTokens, formatTokens } from '../../utils
 import { useVoiceStore } from '../../stores/voice'
 import { useI18n } from '../../i18n/useI18n'
 import AgentCardItem from './AgentCardItem.js'
+import ConfirmProductivityModal from './ConfirmProductivityModal.vue'
 
 const { t } = useI18n()
 
@@ -529,7 +578,10 @@ function onKeyDown(e) {
   if (showUsrPopover.value) { showUsrPopover.value = false; return }
 }
 onMounted(() => window.addEventListener('keydown', onKeyDown))
-onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+  if (_pathTooltipAutoHideTimer) clearTimeout(_pathTooltipAutoHideTimer)
+})
 
 const isGroupChat = computed(() => chat.value?.isGroupChat ?? false)
 const canStartCall = computed(() => {
@@ -568,15 +620,22 @@ const chatFolderPath = computed(() => props.chatId ? chatsStore.getChatFolderPat
 // ── Folder path tooltip ──
 const titleBadgeEl = ref(null)
 const pathTooltip = ref({ visible: false, x: 0, y: 0, text: '' })
+let _pathTooltipAutoHideTimer = null
 function showPathTooltip() {
   if (!titleBadgeEl.value || !chat.value) return
   const rect = titleBadgeEl.value.getBoundingClientRect()
   const folderPart = chatFolderPath.value
   const text = `Path: ${folderPart ? `${folderPart}/${chat.value.title}` : chat.value.title}`
   pathTooltip.value = { visible: true, x: rect.left + rect.width / 2, y: rect.bottom + 6, text }
+  // Defensive auto-hide: if mouseleave never fires (e.g. parent element unmounts
+  // while hovered, or cursor jumps to a disabled UI element), the tooltip used
+  // to stick on screen forever. 3s ceiling clears it.
+  if (_pathTooltipAutoHideTimer) clearTimeout(_pathTooltipAutoHideTimer)
+  _pathTooltipAutoHideTimer = setTimeout(() => { pathTooltip.value.visible = false }, 3000)
 }
 function hidePathTooltip() {
   pathTooltip.value.visible = false
+  if (_pathTooltipAutoHideTimer) { clearTimeout(_pathTooltipAutoHideTimer); _pathTooltipAutoHideTimer = null }
 }
 
 // ── Running state ──
@@ -613,6 +672,12 @@ async function confirmEdit() {
 function cancelEdit() {
   isEditing.value = false
 }
+
+// Hide path tooltip when conditions that block mouseleave from firing change:
+// (a) chat switches → DOM may rerender without mouse re-entering;
+// (b) edit mode toggled → title-badge unmounts mid-hover.
+watch(() => chat.value?.id, () => hidePathTooltip())
+watch(() => isEditing.value, () => hidePathTooltip())
 
 // ── User agent popover ──
 const showUsrPopover = ref(false)
@@ -878,6 +943,58 @@ const effectiveAgentRounds = computed(() => {
   return chat.value?.maxAgentRounds ?? 10
 })
 
+// ── Mode chip ──
+const showProductivityConfirm = ref(false)
+const isProductivity = computed(() => chat.value?.mode === 'productivity')
+const modeDropdownOpen = ref(false)
+const modeDropdownWrapEl = ref(null)
+
+const showModeChip = computed(() => {
+  const c = chat.value
+  if (!c) return false
+  if (c.type === 'analysis') return false
+  return true
+})
+
+function onModeChipClick() {
+  if (!chat.value) return
+  if (!isProductivity.value && !chat.value.productivityModeNoticeShown) {
+    showProductivityConfirm.value = true
+    return
+  }
+  const target = isProductivity.value ? 'chat' : 'productivity'
+  chatsStore.setMode(chat.value.id, target)
+}
+
+function selectMode(target) {
+  modeDropdownOpen.value = false
+  if (!chat.value) return
+  // No-op when picking the current mode
+  if ((target === 'productivity') === isProductivity.value) return
+  // First-time switch to productivity → show confirm modal
+  if (target === 'productivity' && !chat.value.productivityModeNoticeShown) {
+    showProductivityConfirm.value = true
+    return
+  }
+  chatsStore.setMode(chat.value.id, target)
+}
+
+// Click outside the mode dropdown closes it
+function onDocClickForModeDropdown(e) {
+  if (!modeDropdownOpen.value) return
+  if (modeDropdownWrapEl.value && !modeDropdownWrapEl.value.contains(e.target)) {
+    modeDropdownOpen.value = false
+  }
+}
+onMounted(() => document.addEventListener('click', onDocClickForModeDropdown))
+onUnmounted(() => document.removeEventListener('click', onDocClickForModeDropdown))
+
+function confirmProductivitySwitch() {
+  showProductivityConfirm.value = false
+  if (chat.value) {
+    chatsStore.setMode(chat.value.id, 'productivity')
+  }
+}
 
 </script>
 
@@ -1065,18 +1182,6 @@ const effectiveAgentRounds = computed(() => {
   animation: chApprovalPulse 1.5s ease-in-out infinite;
 }
 @keyframes chApprovalPulse { 0%,100%{ opacity:1; } 50%{ opacity:0.65; } }
-.ch-status-badge--running {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-  animation: chRunningPulse 1.2s ease-in-out infinite;
-}
-.ch-status-dot {
-  width: 0.375rem; height: 0.375rem; border-radius: 50%;
-  background: #FFFFFF;
-  animation: chRunningPulse 1.2s ease-in-out infinite;
-}
-@keyframes chRunningPulse { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
 
 /* ── Actions (right-aligned, title row) ── */
 .ch-row-top-actions {
@@ -1683,5 +1788,101 @@ const effectiveAgentRounds = computed(() => {
   font-weight: 400;
   color: #D1D1D6;
   line-height: 1.5;
+}
+
+/* ── Mode dropdown (right-actions area) ── */
+.ch-mode-dd-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.ch-mode-dd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.875rem;
+  padding: 0 0.625rem;
+  border-radius: 0.5rem;
+  border: 1px solid #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small, 0.75rem);
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: all 0.15s ease;
+}
+.ch-mode-dd-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  border-color: #2D2D2D;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.10);
+}
+/* Modifier kept for tests/aria — visual style same as base now (both use black gradient).
+   Differentiation between modes is the icon + label text, not the button color. */
+.ch-mode-dd-btn--productivity {}
+.ch-mode-dd-label {
+  pointer-events: none;
+}
+.ch-mode-dd-chevron {
+  transition: transform 0.18s ease;
+}
+.ch-mode-dd-chevron.open {
+  transform: rotate(180deg);
+}
+.ch-mode-dd-menu {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  right: 0;
+  min-width: 16rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.375rem;
+  background: #0F0F0F;
+  border: 1px solid #2A2A2A;
+  border-radius: 0.625rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+.ch-mode-dd-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 0.4375rem;
+  cursor: pointer;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  transition: background 0.12s, border-color 0.12s;
+}
+.ch-mode-dd-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.ch-mode-dd-item.active {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.08));
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.ch-mode-dd-item-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  color: #FFFFFF;
+}
+.ch-mode-dd-item-title {
+  font-size: var(--fs-secondary, 0.875rem);
+  font-weight: 600;
+}
+.ch-mode-dd-check {
+  color: #34D399;
+}
+.ch-mode-dd-item-desc {
+  margin-left: 1.4rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: #9CA3AF;
+  line-height: 1.4;
 }
 </style>

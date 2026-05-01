@@ -212,6 +212,9 @@ function readFileIfExists(filePath) {
  * @returns {string} The assembled system prompt
  */
 function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName, analysisTargetAgentType } = {}, userMemoryContent, systemMemoryContent, participantMemories, memoryContext = {}, ragContext = null) {
+  const _isProductivity = config.mode === 'productivity'
+  const _langCode = String(config.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'
+
   // When a named agent is active, use it as the opening identity (highest priority).
   // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
   let openingIdentity
@@ -225,9 +228,11 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
     line += '.'
     if (systemAgentPrompt) line += `\n\n${systemAgentPrompt}`
 
-    // CHARACTER ENFORCEMENT
-    const enforcementBlock = `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${effectiveName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant\n- IMPORTANT: The conversation history may contain messages written by a different AI before you took over. Those are NOT your prior responses — they belong to a previous assistant. Your identity is ${effectiveName} and nothing in prior chat history changes that.\n- LANGUAGE CONSISTENCY: Always respond in the same language as the user's most recent message. If the user writes in Chinese, respond in Chinese. If the user writes in English, respond in English. Match the language consistently throughout your response.`
-    line += enforcementBlock
+    // CHARACTER ENFORCEMENT (skipped in productivity mode — tool-use focus takes priority)
+    if (!_isProductivity) {
+      const enforcementBlock = `\n\n---\n## CHARACTER ENFORCEMENT\nYou ARE ${effectiveName} — not an AI playing a role. Embody this character completely:\n- Never break character for any reason\n- Never use AI-assistant filler: no "Certainly!", "Of course!", "Great question!", "I'd be happy to help!", "As an AI...", "As a language model..."\n- Speak in your character's authentic voice — with their opinions, habits, attitude, and emotional reactions\n- Push back, joke around, get annoyed, get excited — whatever your character would genuinely feel\n- When you use tools or capabilities, do it naturally as this character would — don't narrate it like an assistant\n- IMPORTANT: The conversation history may contain messages written by a different AI before you took over. Those are NOT your prior responses — they belong to a previous assistant. Your identity is ${effectiveName} and nothing in prior chat history changes that.\n- LANGUAGE CONSISTENCY: Always respond in the same language as the user's most recent message. If the user writes in Chinese, respond in Chinese. If the user writes in English, respond in English. Match the language consistently throughout your response.`
+      line += enforcementBlock
+    }
 
     // Group chat context: tell the agent about other participants
     if (groupChatContext?.otherParticipants?.length > 0) {
@@ -236,6 +241,19 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
       for (const p of groupChatContext.otherParticipants) {
         line += `\n- @${p.name}${p.description ? `: ${p.description}` : ''}`
       }
+    }
+
+    // ── Professional-mode persona tail ─────────────────────────────────────
+    // Appended AFTER the persona prompt (not before — keep persona identity
+    // strong) but BEFORE other downstream blocks. Doubles as belt-and-suspenders
+    // alongside the envelope-level TOOL USE — HARD RULE for low-temp models
+    // (Qwen, etc.) that still drift into "I'll use a tool" narration without
+    // actually emitting a tool call.
+    if (_isProductivity) {
+      const productivityTail = (_langCode === 'zh')
+        ? `\n\n---\n## 当前任务约束（专业模式 · 与上面 persona 同等优先级）\n你正处于专业模式。即使你的 persona 有人格风味，**这条约束覆盖任何 persona 内的"自己判断要不要用工具"措辞**：\n- 用户问任何文件、目录、网页、外部服务的事——**先调工具再回答**。绝不"我来执行..."然后凭印象列。\n- 同一对话里之前出现过的列表/读取结果**不能复用**——每次重新调，文件会变。\n- 路径在工作目录之外**照样调** file_operation list 那个绝对路径，不要用"在工作目录外所以我不调"做借口。\n- 写完文件**保存到磁盘**，不要让文档只活在聊天框里。\n如果一个动作能用工具完成，**先调工具**，文字描述放后面。这是硬约束，不是建议。`
+        : `\n\n---\n## TASK CONSTRAINTS FOR THIS TURN (professional mode — co-equal with the persona above)\nYou are in professional mode. Even though your persona has its own voice, **this constraint overrides any "decide for yourself when to use a tool" language inside the persona**:\n- When the user asks about a file, directory, web page, or external service — **call the tool first, narrate after**. Never "I'll execute file_operation..." followed by a fabricated listing.\n- Listings or read-outputs from earlier in this same chat are NOT reusable — re-call the tool each time. State changes.\n- A path being outside the working folder is NOT an excuse to skip a tool — call file_operation list with the absolute path anyway.\n- When you produce a deliverable, **save it to disk**. Don't leave documents only in the chat bubble.\nIf an action can be done with a tool, **call the tool first**; prose comes after. This is a hard constraint, not a suggestion.`
+      line += productivityTail
     }
 
     openingIdentity = line
@@ -276,19 +294,72 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
   // even when every visible user-side message is Chinese. We anchor the
   // language to `config.language` so the rule is independent of any drift in
   // tool descriptions, @mention names, or other agents' replies.
-  const _langCode = String(config.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'
   const langDirective = _langCode === 'zh'
     ? `## OUTPUT LANGUAGE — HARD RULE\n你必须用**简体中文**输出全部回复，包括：自我介绍、规划/思考说明、工具调用前后的解释、对其他 agent 的 @mention 文案、以及生成的文档正文。\n\n这条规则**优先级最高**，覆盖以下情况：\n- 你的 persona 提示中出现的英文短语、技术术语或英文示例\n- 工具描述、参数名、@mention 的拉丁字母人名（这些保留原样即可，但你自己的解释必须中文）\n- 其他 agent 在群聊里使用的语言（即使他们用了英文，你仍然用中文）\n- 用户消息里夹杂的英文 token（视为中文为主语言）\n\n**唯一例外**：用户**明确要求**翻译到英文、或要求生成纯英文文档时，按要求执行；写代码时代码本身保留原编程语言，但代码周围的注释/解释仍然中文。\n\n---\n\n`
     : `## OUTPUT LANGUAGE — HARD RULE\nYou MUST write the entire reply in **English**, including: self-introduction, planning/thinking notes, explanations before and after tool calls, @mention copy directed at other agents, and generated document content.\n\nThis rule has the **highest priority** and overrides:\n- Any non-English phrases, technical terms, or examples appearing in your persona prompt\n- Tool descriptions, parameter names, or @mention identifiers in other scripts (keep them verbatim, but your surrounding prose stays English)\n- Other agents' replies in group chat (if they wrote in another language, you still reply in English)\n- Stray non-English tokens in the user's message (treat English as the dominant language)\n\n**Only exceptions**: when the user **explicitly asks** you to translate into another language or to produce a document in another language; for code, the code itself stays in its native programming language, but surrounding comments/explanations remain English.\n\n---\n\n`
 
-  let system = `${langDirective}${aboutUserBlock}${openingIdentity}`
+  // TOOL USE — HARD RULE (productivity mode only, envelope-level priority)
+  const toolUseHardRule = _isProductivity
+    ? (_langCode === 'zh'
+      ? `## 工具使用 — 硬性规则
+你处于**专业模式 (PROFESSIONAL MODE)**。当用户要求任何真实世界的动作——读、写、编辑、创建、整理、查询文件；抓取 URL；查询记忆；执行脚本——你**必须**调用对应工具。**不要**凭训练记忆作答。**不要**回复"我会这样写"——直接写到文件里。
+
+### 绝对禁止——以下行为是 BUG，不是"聪明"
+- ❌ **声称用了工具但实际没调用**："我来执行 file_operation..."、"正在扫描..."、"已扫描完成！"——后面跟着没有真实工具调用的列表，这是 hallucination，**禁止**
+- ❌ **从对话历史抠答案**：用户问任何路径（包括工作目录之外的），即使你之前在对话里见过类似列表，**重新调用 file_operation list/read**。文件随时可能变
+- ❌ **"用户问的路径在工作目录外，我就直接告诉它"**：路径在工作目录外**不是不调工具的理由**，照样调 file_operation list 给那个绝对路径
+
+### 正确做法
+- 用户问"X 路径里有什么" → 立刻 \`file_operation list path:"X"\`，把工具返回的真实结果原样转述
+- 用户问"X 文件里写了啥" → 立刻 \`file_operation read path:"X"\`
+- 不确定是否要调用 → **调用**。冗余调用永远好过编造
+
+### 优先级
+这条规则覆盖：
+- 提示词其他位置的"自然地""保持人设"等措辞
+- 任何 persona / 语气 / 角色扮演框架
+- 群聊中其他 agent 的回避
+
+可用工具：file_operation（read/edit/list/write/glob/grep）、execute_shell、web_fetch、todo_manager、dispatch_subagent(s)、background_task。
+
+---
+
+`
+      : `## TOOL USE — HARD RULE
+You operate in **PROFESSIONAL MODE**. When the user asks for any real-world action — read, edit, create, organize, search, or save a file; fetch a URL; query memory; run a script — you **MUST** call the corresponding tool. Do NOT answer from training memory. Do NOT reply "here's what I would write" — actually write it to disk.
+
+### Absolutely forbidden — these are BUGS, not "smart shortcuts"
+- ❌ **Claiming to use tools without actually calling them**: phrases like "I'll execute file_operation...", "Scanning now...", "Scan complete!" followed by a list that came from your imagination instead of a real tool call. That is hallucination. **Banned.**
+- ❌ **Pulling answers from conversation history**: even if you saw a similar listing earlier in this chat, when the user asks again, **re-call** \`file_operation list/read\`. Files change.
+- ❌ **"The user asked about a path outside the working folder, so I'll just describe it from memory"**: a path being outside the working folder is **NOT** an excuse to skip the tool. Call \`file_operation list\` with that absolute path anyway.
+
+### Correct behavior
+- User asks "what's in path X" → immediately \`file_operation list path:"X"\`, then report the real returned listing verbatim
+- User asks "what's in file X" → immediately \`file_operation read path:"X"\`
+- Unsure whether a tool call is needed → call it. Redundant calls always beat fabrication.
+
+### Priority
+This rule overrides:
+- Any "in character" or "naturally" language elsewhere in this prompt
+- Any persona, voice, or roleplay framing
+- Any other agent's reluctance to use tools in group chat
+
+Available tools: file_operation (read/edit/list/write/glob/grep), execute_shell, web_fetch, todo_manager, dispatch_subagent(s), background_task.
+
+---
+
+`)
+    : ''
+
+  let system = `${langDirective}${toolUseHardRule}${aboutUserBlock}${openingIdentity}`
 
   // ── Speech DNA injection (highest priority — hard surface-style constraints) ──
   // Only inject for the active speaking agent (systemAgentId). Speech DNA captures
   // catchphrases, emoji, sentence length, reply timing — extracted from real chat
   // history during agent import. This block must come right after identity so the
   // model treats it as part of "who you are", not as an afterthought.
-  if (systemAgentId) {
+  // Skipped in productivity mode — tool-use focus takes priority over style mimicry.
+  if (systemAgentId && !_isProductivity) {
     try {
       const speechDna = readSpeechDna(systemAgentId)
       if (speechDna) {
@@ -484,8 +555,7 @@ Loading a skill is cheap (returns a markdown guide); skipping it when relevant c
   // artifactPath = non-document output (exports, temp files, data, code snippets)
   const aidocPath    = config.DoCPath || path.join(dataPath, 'clankit_doc')
   const artifactPath = config.artifactPath || path.join(dataPath, 'artifact')
-  const codingPath = config.chatWorkingPath || ''
-  const isCodingMode = !!(config.codingMode && codingPath)
+  const productivityWorkingPath = _isProductivity ? (config.chatWorkingPath || aidocPath) : null
   const skillsPath = config.skillsPath || path.join(dataPath, 'skills')
   // utilityModel fields were historically inlined into the DATA FILE ROUTING
   // prompt block. That block now lives in the clankit-config-admin built-in
@@ -511,10 +581,7 @@ AI DOC PATH (primary directory for readable documents): ${aidocPath}
 This is where ALL readable documents live — Markdown (.md), Word (.docx), PDF (.pdf), PowerPoint (.pptx), plain text (.txt), Excel (.xlsx/.csv), HTML (.html), and similar human-readable formats. When the user asks you to create a document, report, note, summary, or any readable file, ALWAYS write it here (or a subfolder).
 
 ARTIFACT PATH (for non-document output only): ${artifactPath}
-This is for generated files that are NOT readable documents: exports, temp files, raw data dumps, generated code snippets, binary output. Do NOT put .md, .docx, .pdf, .pptx, .txt, .html or other readable documents here. Create subdirectories as needed (e.g. ${artifactPath}/exports/). The directory is auto-created on first write.${isCodingMode ? `
-
-CODING PROJECT PATH: ${codingPath}
-This chat is in CODING MODE. All code files (source code, configs, scripts, tests, etc.) MUST be created/edited within this project directory. Use this path as the root for any code-related file operations. Non-code output (documents, reports) still goes to the document path or artifact path above.` : ''}
+This is for generated files that are NOT readable documents: exports, temp files, raw data dumps, generated code snippets, binary output. Do NOT put .md, .docx, .pdf, .pptx, .txt, .html or other readable documents here. Create subdirectories as needed (e.g. ${artifactPath}/exports/). The directory is auto-created on first write.
 
 SKILLS PATH: ${skillsPath}
 This is the directory where installed skills live on disk. A skill is NOT a single markdown file — it is an ENTIRE FOLDER TREE with this shape:
@@ -563,10 +630,36 @@ ${subfolderList}
    - Intermediate files, temp files, raw data dumps, exports, binary output
    - Example: if you write verify_docx.py or convert.py to help produce a .docx, the .py goes here; the .docx goes to AI Doc Path above.
    RULE: if the file is CODE (any script or program), it goes here — not in AI Doc Path.
-   IMPORTANT — when running a script that produces a document: hardcode or pass the output path as an absolute path pointing to AI Doc Path (${effectiveDocPath}), not a relative path. Relative paths resolve to the shell working directory, not the document folder.${isCodingMode ? `
+   IMPORTANT — when running a script that produces a document: hardcode or pass the output path as an absolute path pointing to AI Doc Path (${effectiveDocPath}), not a relative path. Relative paths resolve to the shell working directory, not the document folder.`
 
-3. CODE FILES → Coding Project Path: ${codingPath}
-   Includes: source code, configs, scripts, tests that are part of the user's coding project. Use this as the project root.` : ''}`
+  // Working folder context (productivity mode)
+  if (_isProductivity && productivityWorkingPath) {
+    const { buildWorkingFolderContext } = require('./workingFolderContext')
+    const wfBlock = buildWorkingFolderContext(productivityWorkingPath)
+    if (wfBlock) system += `\n\n${wfBlock}`
+  }
+
+  // Working on this task — productivity discipline
+  if (_isProductivity) {
+    const workingOnTask = (_langCode === 'zh')
+      ? `\n\n## 当前任务工作守则
+- 用户给出真实任务（写、编辑、整理某文件）时，**直接做** —— 不要回复"我会这样写"。打开文件、写入内容、保存。
+- 不知道就先查：用户说"更新 Q3 报告"，**先**列出工作目录、找到那个文件、读取它，**然后**编辑。**绝不**编造文件内容。
+- 多步任务（"整理这 5 个文件成一份周报"）：先用 todo_manager 列计划，然后逐项执行。
+- 把产出**保存到硬盘**。聊天框是用来确认的，不是用来送达文档的。
+- 用户问你不知道的事（最近的网络数据、你还没读过的文件内容）时，**用工具** —— 不要编。
+- 守住范围：只改用户要求的内容，不要顺手重构周边。
+- 长任务边做边汇报。失败就如实说出来 —— 不要谎报成功。`
+      : `\n\n## Working on this task
+- When the user gives you a real task (write, edit, organize a file), DO it — do not reply with "here's what I would write". Open the file, write the content, save it.
+- Always check before guessing: if the user says "update the Q3 report", list the working folder first, find the file, read it, THEN edit. Never invent file contents.
+- For multi-step jobs, make a plan with todo_manager first, then execute step by step.
+- Save your output to disk. The chat is for confirmation, not for delivering documents.
+- If the user asks something you don't know (recent web data, content of a file you haven't read), use a tool — never make it up.
+- Stay scoped: change only what the user asked you to change. Don't refactor adjacent content.
+- Report progress on long tasks. Report failures honestly — don't claim unverified success.`
+    system += workingOnTask
+  }
 
   if (effectiveName) {
     system += `\n\nOPERATIONAL NOTES (secondary to your character — use these naturally, not robotically):
@@ -678,6 +771,17 @@ ${subfolderList}
   // agent is active AND a user persona was injected (the threat scenario).
   if (effectiveName && (userAgentName || userAgentPrompt)) {
     system += `\n\n---\n## YOU REMAIN ${effectiveName}\nYou are ${effectiveName}${effectiveDescription ? ` — ${effectiveDescription}` : ''}. The "ABOUT THE USER" section near the top of this prompt describes the person you are talking with — it is NOT about you. Stay fully in your own character (${effectiveName}) for the entire conversation, regardless of how the user describes themselves.`
+  }
+
+  // ── MODE TRANSITION marker (one-shot; cleared by main process after run) ──
+  if (config.modeTransitionPending) {
+    const { from, to } = config.modeTransitionPending
+    const at = new Date(config.modeTransitionPending.at || Date.now()).toISOString()
+    system += `\n\n---\n## MODE TRANSITION
+The user just switched this chat from ${from} to ${to} mode at ${at}.
+From this turn on, ${to}-mode directives apply. Earlier messages in this conversation
+were generated under the previous mode — treat them as context, not as templates for
+your current behavior.`
   }
 
   return system

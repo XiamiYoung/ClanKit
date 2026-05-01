@@ -82,6 +82,50 @@ describe('NewChatModal', () => {
     expect(wrapper.find('.modal-dialog-backdrop').exists()).toBe(true)
   })
 
+  describe('mode radio at creation', () => {
+    it('renders two mode radio inputs', () => {
+      const wrapper = mountModal({ newChatMode: 'chat' })
+      const radios = wrapper.findAll('input[type="radio"]')
+      expect(radios.length).toBeGreaterThanOrEqual(2)
+    })
+
+    // Productivity is now the 1st radio, chat is the 2nd (per UI ordering)
+
+    it('first radio (productivity) is checked when newChatMode is productivity', () => {
+      const wrapper = mountModal({ newChatMode: 'productivity' })
+      const radios = wrapper.findAll('input[type="radio"]')
+      expect(radios[0].element.checked).toBe(true)
+      expect(radios[1].element.checked).toBe(false)
+    })
+
+    it('second radio (chat) is checked when newChatMode is chat', () => {
+      const wrapper = mountModal({ newChatMode: 'chat' })
+      const radios = wrapper.findAll('input[type="radio"]')
+      expect(radios[0].element.checked).toBe(false)
+      expect(radios[1].element.checked).toBe(true)
+    })
+
+    it('selecting productivity emits update:newChatMode', async () => {
+      const wrapper = mountModal({ newChatMode: 'chat' })
+      const productivityRadio = wrapper.findAll('input[type="radio"]').at(0)
+      productivityRadio.element.checked = true
+      productivityRadio.element.dispatchEvent(new Event('change'))
+      await wrapper.vm.$nextTick()
+      expect(wrapper.emitted('update:newChatMode')).toBeTruthy()
+      expect(wrapper.emitted('update:newChatMode')[0]).toEqual(['productivity'])
+    })
+
+    it('selecting chat emits update:newChatMode with chat', async () => {
+      const wrapper = mountModal({ newChatMode: 'productivity' })
+      const chatRadio = wrapper.findAll('input[type="radio"]').at(1)
+      chatRadio.element.checked = true
+      chatRadio.element.dispatchEvent(new Event('change'))
+      await wrapper.vm.$nextTick()
+      expect(wrapper.emitted('update:newChatMode')).toBeTruthy()
+      expect(wrapper.emitted('update:newChatMode')[0]).toEqual(['chat'])
+    })
+  })
+
   it('does not render when visible is false', () => {
     const wrapper = mountModal({ visible: false })
     expect(wrapper.find('.modal-dialog-backdrop').exists()).toBe(false)

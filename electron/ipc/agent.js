@@ -968,6 +968,9 @@ ipcMain.handle('agent:run-additional', async (event, {
     loopConfig.DoCPath             = groupCfg.DoCPath || ''
     loopConfig.memoryDir           = ds.paths().MEMORY_DIR
     loopConfig.chatId              = chatId
+    loopConfig.mode                = meta.mode || 'chat'
+    loopConfig.chatWorkingPath     = meta.chatWorkingPath || null
+    loopConfig.modeTransitionPending = meta.modeTransitionPending || null
     _injectCachedModelMaxOutputTokens(loopConfig)
 
     if (pendingStops.has(chatId)) {
@@ -1045,6 +1048,9 @@ ipcMain.handle('agent:run-additional', async (event, {
   })
 
   const results = await Promise.all(promises)
+  if (!event.sender.isDestroyed() && meta.modeTransitionPending) {
+    event.sender.send('chat:clear-mode-transition-pending', { chatId })
+  }
   return { success: true, results }
 })
 
@@ -2471,8 +2477,8 @@ ipcMain.handle('agent:get-context', (event, chatId) => {
 //   enabledSkills      - Vue-owned serialized enabled skill objects
 //   stickyTargetIds    - legacy selected audience IDs from Vue
 //   targetChatMeta     - { permissionMode, chatAllowList, chatDangerOverrides,
-//                         maxOutputTokens, maxAgentRounds, workingPath, codingMode,
-//                         claudeContext, userAgentId, systemAgentId,
+//                         maxOutputTokens, maxAgentRounds, mode, chatWorkingPath,
+//                         modeTransitionPending, userAgentId, systemAgentId,
 //                         groupAudienceMode, groupAudienceAgentIds }
 ipcMain.handle('agent:send-message', async (event, {
   chatId, messages, groupIds, isGroup, text, pendingAttachments,
@@ -2514,6 +2520,9 @@ ipcMain.handle('agent:send-message', async (event, {
       loopConfig.maxOutputTokens = targetChatMeta.maxOutputTokens || fullCfg.maxOutputTokens || null
       loopConfig._maxOutputTokensExplicit = !!targetChatMeta.maxOutputTokens
       loopConfig.smtpConfig = fullCfg.smtp || null
+      loopConfig.mode = targetChatMeta.mode || 'chat'
+      loopConfig.chatWorkingPath = targetChatMeta.chatWorkingPath || null
+      loopConfig.modeTransitionPending = targetChatMeta.modeTransitionPending || null
       loopConfig.dataPath     = ds.paths().DATA_DIR
       loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
       loopConfig.skillsPath   = fullCfg.skillsPath   || ''
@@ -2526,15 +2535,6 @@ ipcMain.handle('agent:send-message', async (event, {
         logger.error('agent:send-message invalid loop config', { chatId, agentId: run.agentId, error: loopConfigError })
         throw new Error(loopConfigError)
       }
-
-      // Inject coding mode context into system prompt if provided
-      if (targetChatMeta.codingMode && targetChatMeta.claudeContext) {
-        const ctxBlock = `\n\n[CODING CONTEXT]\n${targetChatMeta.claudeContext}\n[/CODING CONTEXT]`
-        const prompts = run.agentPrompts || {}
-        prompts.systemAgentPrompt = (prompts.systemAgentPrompt || '') + ctxBlock
-        run.agentPrompts = prompts
-      }
-
 
       // Check if user already pressed stop before the loop was created (race condition fix)
       if (pendingStops.has(chatId)) {
@@ -2803,24 +2803,41 @@ ipcMain.handle('agent:send-message', async (event, {
       return
     }
 
-    // Read all data from disk
-    const fullCfg      = ds.readJSON(ds.paths().CONFIG_FILE, {})
-    const agentsData   = normalizeAgents(ds.readAgentsCompat())
-    const mcpData      = normalizeMcpServers(ds.readJSON(ds.paths().MCP_SERVERS_FILE, []))
-    const toolsData    = normalizeTools(ds.readJSON(ds.paths().TOOLS_FILE, {}))
-    const knowledgeData = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
+    // ALL orchestration must run inside this try so any throw — including disk-read /
+    // normalize errors before the inner try below — is reported to the renderer via
+    // send_message_error. Without this, a failure here leaves the renderer's isRunning
+    // stuck true forever (no chunks ever arrive).
+    let fullCfg, agentsData, mcpData, toolsData, knowledgeData
+    let agentsById, safeSkills, allData
+    let effectiveGroupIds, groupAgents, trackMessages
+    try {
+      fullCfg       = ds.readJSON(ds.paths().CONFIG_FILE, {})
+      agentsData    = normalizeAgents(ds.readAgentsCompat())
+      mcpData       = normalizeMcpServers(ds.readJSON(ds.paths().MCP_SERVERS_FILE, []))
+      toolsData     = normalizeTools(ds.readJSON(ds.paths().TOOLS_FILE, {}))
+      knowledgeData = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
 
-    const agentsById = Object.fromEntries((agentsData || []).map(a => [a.id, a]))
-    const safeSkills = Array.isArray(enabledSkills) ? enabledSkills : []
+      agentsById = Object.fromEntries((agentsData || []).map(a => [a.id, a]))
+      safeSkills = Array.isArray(enabledSkills) ? enabledSkills : []
 
-    const allData = { agents: agentsData, mcpServers: mcpData, tools: toolsData, knowledgeCfg: knowledgeData, enabledSkills: safeSkills }
+      allData = { agents: agentsData, mcpServers: mcpData, tools: toolsData, knowledgeCfg: knowledgeData, enabledSkills: safeSkills }
 
-    // Determine the group agents list for @mention parsing
-    const effectiveGroupIds = groupIds || []
-    const groupAgents = effectiveGroupIds.map(id => agentsById[id]).filter(Boolean).map(a => ({ id: a.id, name: a.name, description: a.description || '' }))
+      // Determine the group agents list for @mention parsing
+      effectiveGroupIds = groupIds || []
+      groupAgents = effectiveGroupIds.map(id => agentsById[id]).filter(Boolean).map(a => ({ id: a.id, name: a.name, description: a.description || '' }))
 
-    // trackMessages mirrors the conversation for @mention scanning
-    const trackMessages = (messages || []).map(m => ({ ...m }))
+      // trackMessages mirrors the conversation for @mention scanning
+      trackMessages = (messages || []).map(m => ({ ...m }))
+    } catch (preErr) {
+      logger.error('agent:send-message early-setup error', { chatId, error: preErr.message, stack: preErr.stack })
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_error', error: `Setup failed: ${preErr.message}` } })
+        if (targetChatMeta?.modeTransitionPending) {
+          event.sender.send('chat:clear-mode-transition-pending', { chatId })
+        }
+      }
+      return
+    }
 
     try {
       // ── Determine respondingIds ───────────────────────────────────────────
@@ -2942,6 +2959,9 @@ ipcMain.handle('agent:send-message', async (event, {
 
         if (!event.sender.isDestroyed()) {
           event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_complete', stickyTargetIds: newStickyTargetIds } })
+          if (targetChatMeta.modeTransitionPending) {
+            event.sender.send('chat:clear-mode-transition-pending', { chatId })
+          }
         }
         _fireChatCompletionNotification(chatId, trackMessages, agentsById, fullCfg)
         return
@@ -3027,12 +3047,18 @@ ipcMain.handle('agent:send-message', async (event, {
 
       if (!event.sender.isDestroyed()) {
         event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_complete', stickyTargetIds: newStickyTargetIds } })
+        if (targetChatMeta.modeTransitionPending) {
+          event.sender.send('chat:clear-mode-transition-pending', { chatId })
+        }
       }
       _fireChatCompletionNotification(chatId, trackMessages, agentsById, fullCfg)
     } catch (err) {
       logger.error('agent:send-message orchestration error', { chatId, error: err.message })
       if (!event.sender.isDestroyed()) {
         event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_error', error: err.message } })
+        if (targetChatMeta.modeTransitionPending) {
+          event.sender.send('chat:clear-mode-transition-pending', { chatId })
+        }
       }
     }
   })()

@@ -110,12 +110,12 @@ describe('ChatHeader', () => {
     expect(wrapper.find('.chat-header-title').text()).toBe('My Chat Title')
   })
 
-  it('shows running status badge when chat is running', () => {
+  it('does NOT show a running status badge (running state is conveyed via the title spinner)', () => {
     const wrapper = mountHeader({ isRunning: true })
-    expect(wrapper.find('.ch-status-badge--running').exists()).toBe(true)
+    expect(wrapper.find('.ch-status-badge--running').exists()).toBe(false)
   })
 
-  it('does not show running badge when chat is not running', () => {
+  it('still does not show running badge when chat is not running', () => {
     const wrapper = mountHeader({ isRunning: false })
     expect(wrapper.find('.ch-status-badge--running').exists()).toBe(false)
   })

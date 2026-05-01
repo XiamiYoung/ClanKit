@@ -33,6 +33,29 @@
           />
         </div>
 
+        <!-- ── Mode section ─────────────────────────────────────── -->
+        <section class="np-section">
+          <header class="np-section-header">
+            <h4 class="np-section-title">{{ t('chats.mode') }}</h4>
+          </header>
+          <div class="np-mode-radio-row">
+            <label class="np-mode-radio">
+              <input type="radio" :checked="newChatMode === 'productivity'" @change="emit('update:newChatMode', 'productivity')" />
+              <div class="np-mode-radio-content">
+                <span class="np-mode-radio-title">{{ t('chats.modeProductivity') }}</span>
+                <small class="np-mode-radio-desc">{{ t('chats.modeProductivityDesc') }}</small>
+              </div>
+            </label>
+            <label class="np-mode-radio">
+              <input type="radio" :checked="newChatMode === 'chat'" @change="emit('update:newChatMode', 'chat')" />
+              <div class="np-mode-radio-content">
+                <span class="np-mode-radio-title">{{ t('chats.modeChat') }}</span>
+                <small class="np-mode-radio-desc">{{ t('chats.modeChatDesc') }}</small>
+              </div>
+            </label>
+          </div>
+        </section>
+
         <!-- ── User Persona section ──────────────────────────────── -->
         <section class="np-section">
           <header class="np-section-header">
@@ -304,6 +327,7 @@ const props = defineProps({
   newChatUserSearch: { type: String, default: '' },
   newChatUserCategoryId: { type: String, default: '__all__' },
   newChatFolderTreeExpanded: { type: Object, default: () => new Set() },
+  newChatMode: { type: String, default: 'productivity' },
   filteredNewChatAgents: { type: Array, default: () => [] },
   filteredNewChatUsers: { type: Array, default: () => [] },
   activeNewChatUserAgent: { type: Object, default: null },
@@ -330,6 +354,7 @@ const emit = defineEmits([
   'clear-new-chat-user-selection',
   'remove-new-chat-system-agent',
   'on-new-chat-icon-select',
+  'update:newChatMode',
 ])
 
 const newChatNameInputRef = ref(null)
@@ -788,5 +813,73 @@ const FolderTreeItem = defineComponent({
 .newchat-ftree-item[data-active] {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
+}
+
+/* ── Mode radio ──────────────────────────────────────────────────────── */
+.np-mode-radio-row {
+  display: flex;
+  gap: 0.625rem;
+  margin-top: 0.25rem;
+}
+.np-mode-radio {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #2A2A2A;
+  border-radius: var(--radius-md, 0.5rem);
+  cursor: pointer;
+  background: transparent;
+  user-select: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.np-mode-radio:hover {
+  border-color: #4A4A4A;
+}
+.np-mode-radio input[type="radio"] {
+  /* Hide native radio — the card itself is the visual control */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  opacity: 0;
+}
+.np-mode-radio-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  pointer-events: none; /* clicks pass through to the <label> */
+}
+.np-mode-radio-title {
+  font-size: var(--fs-secondary, 0.875rem);
+  font-weight: 600;
+  color: #E8E8E8;
+}
+.np-mode-radio-desc {
+  font-size: 0.75rem;
+  color: #8A8A8A;
+  line-height: 1.4;
+}
+.np-mode-radio:has(input:checked) {
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border-color: #4B5563;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.np-mode-radio:has(input:checked) .np-mode-radio-title {
+  color: #FFFFFF;
+}
+.np-mode-radio:has(input:checked) .np-mode-radio-desc {
+  color: #C8C8C8;
+}
+.np-mode-radio:has(input:focus-visible) {
+  outline: 2px solid rgba(255, 255, 255, 0.3);
+  outline-offset: 2px;
 }
 </style>

@@ -97,10 +97,15 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.permissionMode === 'sandbox') chat.permissionMode = 'chat_only' // migrate old value
     if (chat.chatAllowList === undefined) chat.chatAllowList = []
     if (chat.chatDangerOverrides === undefined) chat.chatDangerOverrides = []
-    if (chat.codingMode === undefined) chat.codingMode = false
     if (chat.maxAgentRounds === undefined) chat.maxAgentRounds = null  // null = use default (10)
-    if (chat.codingProvider === undefined) chat.codingProvider = 'claude-code'
     if (chat.usage === undefined) chat.usage = null  // null = no usage data yet
+    if (chat.mode === undefined) chat.mode = 'chat'
+    if (chat.modeTransitions === undefined) chat.modeTransitions = []
+    if (chat.modeTransitionPending === undefined) chat.modeTransitionPending = null
+    if (chat.productivityModeNoticeShown === undefined) chat.productivityModeNoticeShown = false
+    // Drop deprecated coding-mode fields if present (workingPath stays — semantics redefined elsewhere)
+    if ('codingMode' in chat) delete chat.codingMode
+    if ('codingProvider' in chat) delete chat.codingProvider
     // messages === null means "not loaded yet" (lazy)
     if (chat.messages) {
       for (const msg of chat.messages) {
@@ -364,6 +369,7 @@ export const useChatsStore = defineStore('chats', () => {
       : NEW_CHAT_TITLES.has(title)
     const chatType = options?.chatType || 'chat'
     const analysisTargetAgentId = options?.analysisTargetAgentId || null
+    const mode = options?.mode === 'productivity' ? 'productivity' : 'chat'
     const chat = {
       type: chatType,
       id: uuidv4(),
@@ -390,8 +396,10 @@ export const useChatsStore = defineStore('chats', () => {
       groupAudienceMode: 'auto',
       groupAudienceAgentIds: [],
       workingPath: null,
-      codingMode: false,
-      codingProvider: 'claude-code',
+      mode,
+      modeTransitions: [],
+      modeTransitionPending: null,
+      productivityModeNoticeShown: false,
       ...(analysisTargetAgentId ? { analysisTargetAgentId } : {}),
     }
     if (agentConfig && agentConfig.length === 1) {
@@ -451,8 +459,10 @@ export const useChatsStore = defineStore('chats', () => {
       groupAudienceMode: source.groupAudienceMode || 'auto',
       groupAudienceAgentIds: JSON.parse(JSON.stringify(source.groupAudienceAgentIds || [])),
       workingPath: source.workingPath || null,
-      codingMode: source.codingMode || false,
-      codingProvider: source.codingProvider || 'claude-code',
+      mode: source.mode || 'chat',
+      modeTransitions: [],
+      modeTransitionPending: null,
+      productivityModeNoticeShown: false,
     }
     // Override agents if provided
     if (agentOverride && agentOverride.length > 0) {
@@ -894,12 +904,40 @@ export const useChatsStore = defineStore('chats', () => {
     await persistIndex()
   }
 
+  async function setMode(chatId, newMode) {
+    if (newMode !== 'chat' && newMode !== 'productivity') {
+      throw new Error(`Invalid mode: ${newMode}`)
+    }
+    const chat = chats.value.find(c => c.id === chatId)
+    if (!chat) return
+    if (chat.mode === newMode) return
+    const from = chat.mode || 'chat'
+    const to = newMode
+    const at = Date.now()
+    // chat.messages may be null/empty (lazy-loaded); afterMessageId=null is valid (Task 18 divider handles it)
+    const lastMsg = chat.messages?.[chat.messages.length - 1]
+    const afterMessageId = lastMsg?.id || null
+    chat.mode = to
+    chat.modeTransitions.push({ from, to, at, afterMessageId })
+    chat.modeTransitionPending = { from, to, at }
+    if (to === 'productivity') chat.productivityModeNoticeShown = true
+    chat.updatedAt = at
+    await persistChat(chatId)
+    await persistIndex()
+  }
+
+  function clearModeTransitionPending(chatId) {
+    const chat = chats.value.find(c => c.id === chatId)
+    if (!chat) return
+    chat.modeTransitionPending = null
+    // No persist call — this is a transient runtime field; it's OK to redo the
+    // marker on the next prompt build if a crash happens between consume and clear.
+  }
+
   async function setChatSettings(chatId, settings) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
     if ('workingPath' in settings) chat.workingPath = settings.workingPath
-    if ('codingMode' in settings) chat.codingMode = settings.codingMode
-    if ('codingProvider' in settings) chat.codingProvider = settings.codingProvider
     if ('permissionMode' in settings) chat.permissionMode = settings.permissionMode
     if ('chatAllowList' in settings) chat.chatAllowList = settings.chatAllowList
     if ('chatDangerOverrides' in settings) chat.chatDangerOverrides = settings.chatDangerOverrides
@@ -1087,6 +1125,11 @@ export const useChatsStore = defineStore('chats', () => {
         s.add(chatId)
         unreadChatIds.value = s
       }
+    })
+
+    // Subscribe to mode-transition clear from main process (one-shot per turn)
+    window.electronAPI?.onChatClearModeTransitionPending?.(({ chatId }) => {
+      clearModeTransitionPending(chatId)
     })
   }
 
@@ -1390,9 +1433,9 @@ export const useChatsStore = defineStore('chats', () => {
         chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
         chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
         maxAgentRounds: targetChat.maxAgentRounds ?? 10,
-        workingPath: targetChat.workingPath || null,
-        codingMode: !!targetChat.codingMode,
-        claudeContext: null,
+        mode: targetChat.mode || 'chat',
+        chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
+        modeTransitionPending: targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null,
         userAgentId: targetChat.userAgentId || null,
         systemAgentId: isGroup ? null : (groupIds[0] || null),
         groupAudienceMode: targetChat.groupAudienceMode || 'auto',
@@ -1428,12 +1471,14 @@ export const useChatsStore = defineStore('chats', () => {
     }
   }
 
+  function _testBackfill(chat) { backfillChat(chat) }
+
   return {
     chatTree, chats, activeChatId, activeFolderId, activeChat, isLoading,
     unreadChatIds, completedChatIds, pendingPermissionChatIds,
     loadChats, createChat, createChatFromHistory, removeChat, renameChat,
     setActiveChat, clearActiveChat, revealActiveChat, addMessage, updateLastAssistantMessage, setChatAgent,
-    setChatProvider, setChatModel, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
+    setChatProvider, setChatModel, setChatSettings, setMode, clearModeTransitionPending, deleteMessage, clearChat, persist, ensureMessages,
     loadOlderSegments, hasOlderSegments,
     setGroupAgents, toggleGroupMode, setGroupAgentOverride,
     removeGroupAgent, addGroupAgent, reorderChats,
@@ -1450,5 +1495,6 @@ export const useChatsStore = defineStore('chats', () => {
     reconnectRunningAgents,
     getChunkLog: () => _chunkLog ? [..._chunkLog] : [],
     clearChunkLog: () => { if (_chunkLog) _chunkLog.length = 0 },
+    _testBackfill,
   }
 })

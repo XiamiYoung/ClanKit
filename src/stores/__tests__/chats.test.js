@@ -282,4 +282,119 @@ describe('chatsStore', () => {
       expect(store.completedChatIds.has('c1')).toBe(true)
     })
   })
+
+  // ── chat.mode field ──
+  describe('chat.mode field', () => {
+    it('createChat defaults mode to "chat"', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('test')
+      expect(chat.mode).toBe('chat')
+      expect(chat.modeTransitions).toEqual([])
+      expect(chat.modeTransitionPending).toBeNull()
+      expect(chat.productivityModeNoticeShown).toBe(false)
+    })
+
+    it('createChat accepts explicit mode in options', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('test', null, null, { mode: 'productivity' })
+      expect(chat.mode).toBe('productivity')
+    })
+
+    it('createChatFromHistory inherits mode and workingPath but resets transitions', async () => {
+      const store = useChatsStore()
+      const source = await store.createChat('source', null, null, { mode: 'productivity' })
+      source.workingPath = '/tmp/x'
+      source.modeTransitions = [{ from: 'chat', to: 'productivity', at: 1, afterMessageId: null }]
+      source.productivityModeNoticeShown = true
+      const fork = await store.createChatFromHistory(source.id, 'fork')
+      expect(fork.mode).toBe('productivity')
+      expect(fork.workingPath).toBe('/tmp/x')
+      expect(fork.modeTransitions).toEqual([])
+      expect(fork.productivityModeNoticeShown).toBe(false)
+    })
+
+    it('backfillChat sets mode="chat" for legacy chats and drops coding fields', () => {
+      const legacy = { id: 'x', title: 't', messages: [], codingMode: true, codingProvider: 'claude-code' }
+      const store = useChatsStore()
+      store._testBackfill(legacy)
+      expect(legacy.mode).toBe('chat')
+      expect(legacy.modeTransitions).toEqual([])
+      expect(legacy.modeTransitionPending).toBeNull()
+      expect(legacy.productivityModeNoticeShown).toBe(false)
+      expect(legacy).not.toHaveProperty('codingMode')
+      expect(legacy).not.toHaveProperty('codingProvider')
+    })
+  })
+
+  // ── chat.setMode action ──
+  describe('chat.setMode action', () => {
+    it('setMode updates chat.mode and appends to modeTransitions', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('t')
+      chat.messages.push({ id: 'm1', role: 'user', content: 'hi' })
+      await store.setMode(chat.id, 'productivity')
+      expect(chat.mode).toBe('productivity')
+      expect(chat.modeTransitions.length).toBe(1)
+      expect(chat.modeTransitions[0]).toMatchObject({
+        from: 'chat',
+        to: 'productivity',
+        afterMessageId: 'm1'
+      })
+      expect(chat.modeTransitions[0].at).toBeTypeOf('number')
+      expect(chat.modeTransitionPending).toMatchObject({
+        from: 'chat',
+        to: 'productivity'
+      })
+    })
+
+    it('setMode is a no-op when mode unchanged', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('t')
+      await store.setMode(chat.id, 'chat')
+      expect(chat.modeTransitions.length).toBe(0)
+      expect(chat.modeTransitionPending).toBeNull()
+    })
+
+    it('setMode sets productivityModeNoticeShown=true on first productivity switch', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('t')
+      expect(chat.productivityModeNoticeShown).toBe(false)
+      await store.setMode(chat.id, 'productivity')
+      expect(chat.productivityModeNoticeShown).toBe(true)
+      // switching back must NOT clear the flag
+      await store.setMode(chat.id, 'chat')
+      expect(chat.productivityModeNoticeShown).toBe(true)
+      // switching back to productivity must leave it true
+      await store.setMode(chat.id, 'productivity')
+      expect(chat.productivityModeNoticeShown).toBe(true)
+    })
+
+    it('setMode rejects invalid mode values', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('t')
+      await expect(store.setMode(chat.id, 'xyz')).rejects.toThrow()
+    })
+
+    it('setMode is a no-op for unknown chatId (no throw)', async () => {
+      const store = useChatsStore()
+      await expect(store.setMode('does-not-exist', 'productivity')).resolves.toBeUndefined()
+    })
+
+    it('clearModeTransitionPending nulls the field', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('t')
+      await store.setMode(chat.id, 'productivity')
+      expect(chat.modeTransitionPending).not.toBeNull()
+      store.clearModeTransitionPending(chat.id)
+      expect(chat.modeTransitionPending).toBeNull()
+    })
+
+    it('setMode with empty messages records afterMessageId=null', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('t')
+      // chat.messages is empty
+      await store.setMode(chat.id, 'productivity')
+      expect(chat.modeTransitions[0].afterMessageId).toBeNull()
+    })
+  })
 })

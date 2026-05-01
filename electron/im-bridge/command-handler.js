@@ -272,8 +272,7 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
       chatAllowList: [],
       chatDangerOverrides: [],
       maxAgentRounds: null,
-      codingMode: false,
-      codingProvider: 'claude-code',
+      mode: 'chat',
       maxOutputTokens: null,
     }
 
@@ -298,8 +297,7 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
       chatAllowList: [],
       chatDangerOverrides: [],
       maxAgentRounds: null,
-      codingMode: false,
-      codingProvider: 'claude-code',
+      mode: 'chat',
       maxOutputTokens: null,
     }
 

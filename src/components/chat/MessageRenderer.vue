@@ -1222,12 +1222,14 @@ function warningDetail(seg) {
 
 // ── Tool helpers ─────────────────────────────────────────────────────────────
 function isHiddenTool(seg) {
-  // Only hide file_operation read-only ops and todo_manager list
-  if (seg.name === 'file_operation' && seg.input) {
-    const hiddenOps = ['read', 'list', 'search', 'exists']
-    if (hiddenOps.includes(seg.input.operation)) return true
-  }
+  // todo_manager has its own dedicated panel renderer above, so hide it from
+  // the generic tool list to avoid duplication.
   if (seg.name === 'todo_manager') return true
+  // file_operation read-only ops (read/list/search/exists/glob/grep) used to be
+  // hidden to reduce UI noise. We now show them — productivity-mode users
+  // need to SEE tool calls to trust the system, and the collapsible
+  // "execution steps" header already handles the clutter concern by collapsing
+  // the whole block by default.
   return false
 }
 
