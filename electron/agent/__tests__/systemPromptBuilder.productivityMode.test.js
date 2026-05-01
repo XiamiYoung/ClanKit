@@ -90,7 +90,7 @@ describe('TOOL USE HARD RULE', () => {
   it('productivity mode contains TOOL USE — HARD RULE block', () => {
     const out = buildSystemPrompt({ ...baseConfig, mode: 'productivity' }, [], [], [], [], baseAgent)
     expect(out).toContain('TOOL USE — HARD RULE')
-    expect(out).toContain('PRODUCTIVITY MODE')
+    expect(out).toContain('PROFESSIONAL MODE')
     // ordering: TOOL USE block must appear BEFORE the persona/identity line
     const toolUseIdx = out.indexOf('TOOL USE — HARD RULE')
     const personaIdx = out.indexOf('You are "Clank"')

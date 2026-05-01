@@ -858,7 +858,7 @@ export const en = {
 -
 `,
     builtinClankName: 'Clank',
-    builtinClankDescription: 'Built-in default Clank productivity agent. A tool-first operator that reads/edits files, fetches the web, runs shell, plans multi-step work, and orchestrates skills/MCP — sharp, factual, action-biased.',
+    builtinClankDescription: 'Built-in default Clank professional agent. A tool-first operator that reads/edits files, fetches the web, runs shell, plans multi-step work, and orchestrates skills/MCP — sharp, factual, action-biased.',
     builtinDocEditorName: 'DocMaster',
     builtinDocEditorDescription: 'Expert document editing AI for writing, formatting, and content optimization.',
     builtinDocEditorPrompt: `You are DocMaster, a world-class document editing AI assistant embedded in a professional document editor.
@@ -916,7 +916,7 @@ When conducting an analysis:
 5. Every major section must include a Confidence indicator (see persona-evaluation skill)
 
 Always reply in the same language as the user's most recent message.`,
-    builtinClankPrompt: `You are Clank, the built-in productivity operator in ClanKit. You are NOT a chat companion — you are a tool-first operator that takes a task and executes it end-to-end with real tool calls, real files, and real verification.
+    builtinClankPrompt: `You are Clank, the built-in professional operator in ClanKit. You are NOT a chat companion — you are a tool-first operator that takes a task and executes it end-to-end with real tool calls, real files, and real verification.
 
   Identity:
   - Operator first, conversationalist second. Your unit of work is a tool call, not a paragraph of prose.
@@ -951,7 +951,7 @@ Always reply in the same language as the user's most recent message.`,
   - If you can solve it, solve it end-to-end. If blocked, state the blocker and the next move.
   - Save your output to disk when the user asked for a deliverable. The chat is for confirmation, not delivery.
 
-  In short: you are not a generic AI helper or a chat companion. You are Clank, the productivity operator: tool-first, file-aware, verifiable, sharp.`,
+  In short: you are not a generic AI helper or a chat companion. You are Clank, the professional operator: tool-first, file-aware, verifiable, sharp.`,
     noDescription: 'No description',
     default: 'Default',
     builtin: 'Built-in',
@@ -1369,16 +1369,16 @@ Always reply in the same language as the user's most recent message.`,
     browseFolder: 'Browse folder',
     mode: 'Mode',
     modeChat: 'Chat',
-    modeProductivity: 'Productivity',
+    modeProductivity: 'Professional',
     modeChatDesc: 'Casual conversation. Persona-rich.',
     modeProductivityDesc: 'Get work done. Tools and files first; persona reduced.',
     modeChatTooltip: 'Casual chat — agent stays in character',
-    modeProductivityTooltip: 'Productivity — agent uses tools and files actively',
+    modeProductivityTooltip: 'Professional — agent uses tools and files actively',
     modeTransitionDivider: '— Switched to {mode} · {time} —',
-    productivityFirstNoticeTitle: 'Switching to Productivity Mode',
-    productivityFirstNoticeBody: "In productivity mode, this chat's persona/character framing is reduced and the agent calls tools more actively. The working folder is exposed to the agent. Roleplay style will be diminished. Continue?",
+    productivityFirstNoticeTitle: 'Switching to Professional Mode',
+    productivityFirstNoticeBody: "In professional mode, this chat's persona/character framing is reduced and the agent calls tools more actively. The working folder is exposed to the agent. Roleplay style will be diminished. Continue?",
     workingFolder: 'Working folder',
-    workingFolderHint: 'The agent will read, list, and edit files here in productivity mode. Default: clankit_doc/',
+    workingFolderHint: 'The agent will read, list, and edit files here in professional mode. Default: clankit_doc/',
     maxAgentChatRounds: 'Maximum Agent Chat Rounds',
     maxAgentChatRoundsHint: 'How many back-and-forth rounds agents can run in one message. Default: 10. Hard limit: 100.',
     permissionMode: 'Permission',
@@ -3520,7 +3520,7 @@ export const zh = {
 -
 `,
     builtinClankName: 'Clank',
-    builtinClankDescription: '内置默认 Clank 生产力数字人。工具优先的操作员，会读写文件、抓网页、跑 shell、规划多步任务、调度 skills/MCP——锐利、事实导向、行动派。',
+    builtinClankDescription: '内置默认 Clank 专业数字人。工具优先的操作员，会读写文件、抓网页、跑 shell、规划多步任务、调度 skills/MCP——锐利、事实导向、行动派。',
     builtinDocEditorName: '文档大师',
     builtinDocEditorDescription: '文档编辑专家，帮助优化写作、格式化和内容质量。',
     builtinDocEditorPrompt: `你是文档大师，一位专业的文档编辑 AI 助手，集成在专业的文档编辑器中。
@@ -3578,7 +3578,7 @@ export const zh = {
 5. 每个主要章节必须包含置信度指标（见 persona-evaluation skill）
 
 始终用用户最近一条消息的语言回复。`,
-    builtinClankPrompt: `你是 Clank，ClanKit 内置的生产力操作员。你**不是**聊天伙伴——你是一个工具优先的操作员，接到任务就用真实的工具调用、真实的文件、真实的验证把事情端到端做完。
+    builtinClankPrompt: `你是 Clank，ClanKit 内置的专业操作员。你**不是**聊天伙伴——你是一个工具优先的操作员，接到任务就用真实的工具调用、真实的文件、真实的验证把事情端到端做完。
 
   身份：
   - 操作员第一，对话者第二。你的工作单位是一次工具调用，不是一段散文。
@@ -3613,7 +3613,7 @@ export const zh = {
   - 能解决就端到端解决；卡住就说卡在哪、下一步是什么。
   - 用户要交付物时，**保存到硬盘**。聊天框是确认环节，不是交付通道。
 
-  总之：你不是通用 AI 助手，也不是聊天搭子。你是 Clank，生产力操作员：工具优先、文件感知、可验证、锐利。`,
+  总之：你不是通用 AI 助手，也不是聊天搭子。你是 Clank，专业操作员：工具优先、文件感知、可验证、锐利。`,
     noDescription: '暂无描述',
     default: '默认',
     builtin: '内置',
@@ -4032,16 +4032,16 @@ export const zh = {
     browseFolder: '浏览文件夹',
     mode: '模式',
     modeChat: '聊天',
-    modeProductivity: '生产力',
+    modeProductivity: '专业',
     modeChatDesc: '普通对话，保留人格风味。',
     modeProductivityDesc: '专心干活。工具和文件优先，人格减弱。',
     modeChatTooltip: '聊天模式 —— agent 保持人格',
-    modeProductivityTooltip: '生产力模式 —— agent 主动调用工具和文件',
+    modeProductivityTooltip: '专业模式 —— agent 主动调用工具和文件',
     modeTransitionDivider: '— 切换到{mode} · {time} —',
-    productivityFirstNoticeTitle: '切换到生产力模式',
-    productivityFirstNoticeBody: '生产力模式下，本聊天的人格/角色框架会减弱，agent 会更主动地调用工具，工作目录会暴露给 agent。角色扮演风格会变弱。继续？',
+    productivityFirstNoticeTitle: '切换到专业模式',
+    productivityFirstNoticeBody: '专业模式下，本聊天的人格/角色框架会减弱，agent 会更主动地调用工具，工作目录会暴露给 agent。角色扮演风格会变弱。继续？',
     workingFolder: '工作目录',
-    workingFolderHint: '生产力模式下 agent 会在此读写、列举、编辑文件。默认：clankit_doc/',
+    workingFolderHint: '专业模式下 agent 会在此读写、列举、编辑文件。默认：clankit_doc/',
     maxAgentChatRounds: '最大数字人对话轮数',
     maxAgentChatRoundsHint: '数字人在单条消息中可以进行的往返轮数。默认: 10。上限: 100。',
     permissionMode: '权限',

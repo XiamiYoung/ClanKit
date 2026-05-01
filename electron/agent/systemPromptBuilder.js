@@ -243,7 +243,7 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
       }
     }
 
-    // ── Productivity-mode persona tail ──────────────────────────────────────
+    // ── Professional-mode persona tail ─────────────────────────────────────
     // Appended AFTER the persona prompt (not before — keep persona identity
     // strong) but BEFORE other downstream blocks. Doubles as belt-and-suspenders
     // alongside the envelope-level TOOL USE — HARD RULE for low-temp models
@@ -251,8 +251,8 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
     // actually emitting a tool call.
     if (_isProductivity) {
       const productivityTail = (_langCode === 'zh')
-        ? `\n\n---\n## 当前任务约束（生产力模式 · 与上面 persona 同等优先级）\n你正处于生产力模式。即使你的 persona 有人格风味，**这条约束覆盖任何 persona 内的"自己判断要不要用工具"措辞**：\n- 用户问任何文件、目录、网页、外部服务的事——**先调工具再回答**。绝不"我来执行..."然后凭印象列。\n- 同一对话里之前出现过的列表/读取结果**不能复用**——每次重新调，文件会变。\n- 路径在工作目录之外**照样调** file_operation list 那个绝对路径，不要用"在工作目录外所以我不调"做借口。\n- 写完文件**保存到磁盘**，不要让文档只活在聊天框里。\n如果一个动作能用工具完成，**先调工具**，文字描述放后面。这是硬约束，不是建议。`
-        : `\n\n---\n## TASK CONSTRAINTS FOR THIS TURN (productivity mode — co-equal with the persona above)\nYou are in productivity mode. Even though your persona has its own voice, **this constraint overrides any "decide for yourself when to use a tool" language inside the persona**:\n- When the user asks about a file, directory, web page, or external service — **call the tool first, narrate after**. Never "I'll execute file_operation..." followed by a fabricated listing.\n- Listings or read-outputs from earlier in this same chat are NOT reusable — re-call the tool each time. State changes.\n- A path being outside the working folder is NOT an excuse to skip a tool — call file_operation list with the absolute path anyway.\n- When you produce a deliverable, **save it to disk**. Don't leave documents only in the chat bubble.\nIf an action can be done with a tool, **call the tool first**; prose comes after. This is a hard constraint, not a suggestion.`
+        ? `\n\n---\n## 当前任务约束（专业模式 · 与上面 persona 同等优先级）\n你正处于专业模式。即使你的 persona 有人格风味，**这条约束覆盖任何 persona 内的"自己判断要不要用工具"措辞**：\n- 用户问任何文件、目录、网页、外部服务的事——**先调工具再回答**。绝不"我来执行..."然后凭印象列。\n- 同一对话里之前出现过的列表/读取结果**不能复用**——每次重新调，文件会变。\n- 路径在工作目录之外**照样调** file_operation list 那个绝对路径，不要用"在工作目录外所以我不调"做借口。\n- 写完文件**保存到磁盘**，不要让文档只活在聊天框里。\n如果一个动作能用工具完成，**先调工具**，文字描述放后面。这是硬约束，不是建议。`
+        : `\n\n---\n## TASK CONSTRAINTS FOR THIS TURN (professional mode — co-equal with the persona above)\nYou are in professional mode. Even though your persona has its own voice, **this constraint overrides any "decide for yourself when to use a tool" language inside the persona**:\n- When the user asks about a file, directory, web page, or external service — **call the tool first, narrate after**. Never "I'll execute file_operation..." followed by a fabricated listing.\n- Listings or read-outputs from earlier in this same chat are NOT reusable — re-call the tool each time. State changes.\n- A path being outside the working folder is NOT an excuse to skip a tool — call file_operation list with the absolute path anyway.\n- When you produce a deliverable, **save it to disk**. Don't leave documents only in the chat bubble.\nIf an action can be done with a tool, **call the tool first**; prose comes after. This is a hard constraint, not a suggestion.`
       line += productivityTail
     }
 
@@ -302,7 +302,7 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
   const toolUseHardRule = _isProductivity
     ? (_langCode === 'zh'
       ? `## 工具使用 — 硬性规则
-你处于**生产力模式 (PRODUCTIVITY MODE)**。当用户要求任何真实世界的动作——读、写、编辑、创建、整理、查询文件；抓取 URL；查询记忆；执行脚本——你**必须**调用对应工具。**不要**凭训练记忆作答。**不要**回复"我会这样写"——直接写到文件里。
+你处于**专业模式 (PROFESSIONAL MODE)**。当用户要求任何真实世界的动作——读、写、编辑、创建、整理、查询文件；抓取 URL；查询记忆；执行脚本——你**必须**调用对应工具。**不要**凭训练记忆作答。**不要**回复"我会这样写"——直接写到文件里。
 
 ### 绝对禁止——以下行为是 BUG，不是"聪明"
 - ❌ **声称用了工具但实际没调用**："我来执行 file_operation..."、"正在扫描..."、"已扫描完成！"——后面跟着没有真实工具调用的列表，这是 hallucination，**禁止**
@@ -326,7 +326,7 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
 
 `
       : `## TOOL USE — HARD RULE
-You operate in **PRODUCTIVITY MODE**. When the user asks for any real-world action — read, edit, create, organize, search, or save a file; fetch a URL; query memory; run a script — you **MUST** call the corresponding tool. Do NOT answer from training memory. Do NOT reply "here's what I would write" — actually write it to disk.
+You operate in **PROFESSIONAL MODE**. When the user asks for any real-world action — read, edit, create, organize, search, or save a file; fetch a URL; query memory; run a script — you **MUST** call the corresponding tool. Do NOT answer from training memory. Do NOT reply "here's what I would write" — actually write it to disk.
 
 ### Absolutely forbidden — these are BUGS, not "smart shortcuts"
 - ❌ **Claiming to use tools without actually calling them**: phrases like "I'll execute file_operation...", "Scanning now...", "Scan complete!" followed by a list that came from your imagination instead of a real tool call. That is hallucination. **Banned.**
