@@ -213,6 +213,7 @@ function readFileIfExists(filePath) {
  */
 function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName, analysisTargetAgentType } = {}, userMemoryContent, systemMemoryContent, participantMemories, memoryContext = {}, ragContext = null) {
   const _isProductivity = config.mode === 'productivity'
+  const _langCode = String(config.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'
 
   // When a named agent is active, use it as the opening identity (highest priority).
   // Otherwise fall back to the user-configured systemPrompt, or a neutral default.
@@ -240,6 +241,19 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
       for (const p of groupChatContext.otherParticipants) {
         line += `\n- @${p.name}${p.description ? `: ${p.description}` : ''}`
       }
+    }
+
+    // ── Productivity-mode persona tail ──────────────────────────────────────
+    // Appended AFTER the persona prompt (not before — keep persona identity
+    // strong) but BEFORE other downstream blocks. Doubles as belt-and-suspenders
+    // alongside the envelope-level TOOL USE — HARD RULE for low-temp models
+    // (Qwen, etc.) that still drift into "I'll use a tool" narration without
+    // actually emitting a tool call.
+    if (_isProductivity) {
+      const productivityTail = (_langCode === 'zh')
+        ? `\n\n---\n## 当前任务约束（生产力模式 · 与上面 persona 同等优先级）\n你正处于生产力模式。即使你的 persona 有人格风味，**这条约束覆盖任何 persona 内的"自己判断要不要用工具"措辞**：\n- 用户问任何文件、目录、网页、外部服务的事——**先调工具再回答**。绝不"我来执行..."然后凭印象列。\n- 同一对话里之前出现过的列表/读取结果**不能复用**——每次重新调，文件会变。\n- 路径在工作目录之外**照样调** file_operation list 那个绝对路径，不要用"在工作目录外所以我不调"做借口。\n- 写完文件**保存到磁盘**，不要让文档只活在聊天框里。\n如果一个动作能用工具完成，**先调工具**，文字描述放后面。这是硬约束，不是建议。`
+        : `\n\n---\n## TASK CONSTRAINTS FOR THIS TURN (productivity mode — co-equal with the persona above)\nYou are in productivity mode. Even though your persona has its own voice, **this constraint overrides any "decide for yourself when to use a tool" language inside the persona**:\n- When the user asks about a file, directory, web page, or external service — **call the tool first, narrate after**. Never "I'll execute file_operation..." followed by a fabricated listing.\n- Listings or read-outputs from earlier in this same chat are NOT reusable — re-call the tool each time. State changes.\n- A path being outside the working folder is NOT an excuse to skip a tool — call file_operation list with the absolute path anyway.\n- When you produce a deliverable, **save it to disk**. Don't leave documents only in the chat bubble.\nIf an action can be done with a tool, **call the tool first**; prose comes after. This is a hard constraint, not a suggestion.`
+      line += productivityTail
     }
 
     openingIdentity = line
@@ -280,7 +294,6 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
   // even when every visible user-side message is Chinese. We anchor the
   // language to `config.language` so the rule is independent of any drift in
   // tool descriptions, @mention names, or other agents' replies.
-  const _langCode = String(config.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'
   const langDirective = _langCode === 'zh'
     ? `## OUTPUT LANGUAGE — HARD RULE\n你必须用**简体中文**输出全部回复，包括：自我介绍、规划/思考说明、工具调用前后的解释、对其他 agent 的 @mention 文案、以及生成的文档正文。\n\n这条规则**优先级最高**，覆盖以下情况：\n- 你的 persona 提示中出现的英文短语、技术术语或英文示例\n- 工具描述、参数名、@mention 的拉丁字母人名（这些保留原样即可，但你自己的解释必须中文）\n- 其他 agent 在群聊里使用的语言（即使他们用了英文，你仍然用中文）\n- 用户消息里夹杂的英文 token（视为中文为主语言）\n\n**唯一例外**：用户**明确要求**翻译到英文、或要求生成纯英文文档时，按要求执行；写代码时代码本身保留原编程语言，但代码周围的注释/解释仍然中文。\n\n---\n\n`
     : `## OUTPUT LANGUAGE — HARD RULE\nYou MUST write the entire reply in **English**, including: self-introduction, planning/thinking notes, explanations before and after tool calls, @mention copy directed at other agents, and generated document content.\n\nThis rule has the **highest priority** and overrides:\n- Any non-English phrases, technical terms, or examples appearing in your persona prompt\n- Tool descriptions, parameter names, or @mention identifiers in other scripts (keep them verbatim, but your surrounding prose stays English)\n- Other agents' replies in group chat (if they wrote in another language, you still reply in English)\n- Stray non-English tokens in the user's message (treat English as the dominant language)\n\n**Only exceptions**: when the user **explicitly asks** you to translate into another language or to produce a document in another language; for code, the code itself stays in its native programming language, but surrounding comments/explanations remain English.\n\n---\n\n`
