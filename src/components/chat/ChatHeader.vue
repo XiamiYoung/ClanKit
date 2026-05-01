@@ -1738,10 +1738,10 @@ function confirmProductivitySwitch() {
   gap: 0.375rem;
   padding: 0.25rem 0.625rem;
   border-radius: var(--radius-md, 0.5rem);
-  font-size: var(--font-size-sm, 0.875rem);
+  font-size: var(--fs-secondary, 0.875rem);
   cursor: pointer;
-  border: 1px solid var(--border-color, #e5e7eb);
-  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--bg-card, #fff);
   color: var(--text-primary, #111);
   transition: background 0.15s, border-color 0.15s;
   flex-shrink: 0;

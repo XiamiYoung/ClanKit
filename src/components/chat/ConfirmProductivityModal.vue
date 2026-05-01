@@ -30,7 +30,7 @@ const emit = defineEmits(['confirm', 'cancel'])
   z-index: 9999;
 }
 .cpm-dialog {
-  background: var(--surface, #fff);
+  background: var(--bg-card, #fff);
   padding: 1.5rem;
   border-radius: var(--radius-lg, 0.75rem);
   max-width: 26rem;
@@ -38,12 +38,12 @@ const emit = defineEmits(['confirm', 'cancel'])
 }
 .cpm-title {
   margin: 0 0 0.75rem;
-  font-size: var(--font-size-lg, 1.125rem);
+  font-size: var(--fs-section, 1.25rem);
   font-weight: 600;
 }
 .cpm-body {
   margin: 0 0 1.25rem;
-  font-size: var(--font-size-sm, 0.875rem);
+  font-size: var(--fs-secondary, 0.875rem);
   color: var(--text-secondary, #4b5563);
   line-height: 1.5;
 }
