@@ -71,7 +71,6 @@ export function useSendMessage({
   const perChatDrafts = new Map() // chatId → { text, attachments }
   let streamingTimer = null
   const isCompacting = ref(false)
-  const _codingModeContext = ref(null)
 
   // Interrupt logic — shared with grid panels via the useInterrupt composable.
   const { interrupt, _stopAgent } = useInterrupt({
@@ -884,7 +883,6 @@ export function useSendMessage({
     processQueuedMessage,
     _saveDraftForChat,
     _restoreDraftForChat,
-    _codingModeContext,
     isCompacting,
     streamingTimer,
     startStreamingTimer,

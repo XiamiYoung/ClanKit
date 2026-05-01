@@ -1475,7 +1475,7 @@ const {
   sendMessage, interrupt, approvePlan, rejectPlan, refinePlan, compactContext,
   pendingInterrupt, confirmInterrupt, cancelInterrupt,
   _saveDraftForChat, _restoreDraftForChat,
-  _codingModeContext, isCompacting,
+  isCompacting,
   startStreamingTimer, stopStreamingTimer,
   setPendingLongBlobs,
 } = useSendMessage({
@@ -1956,45 +1956,6 @@ async function handleInterceptedFileDrop(url) {
   }
 }
 
-// --- Coding Mode: CLAUDE.md file watcher lifecycle ----------------------------
-// Mirrors Claude Code: watches the full CLAUDE.md hierarchy for the active chat.
-// When a file changes, main pushes claude:context-updated -> we store merged
-// context in _codingModeContext so it is used on the NEXT send automatically.
-// _codingModeContext ref comes from useSendMessage composable
-let _codingModeContextHandler = null  // IPC listener reference for cleanup
-
-// Sync watcher whenever the active chat or its coding settings change
-watch(
-  () => [chatsStore.activeChatId, chatsStore.activeChat?.codingMode, chatsStore.activeChat?.workingPath],
-  async ([chatId, codingMode, workingPath]) => {
-    // Tear down previous listener
-    if (_codingModeContextHandler && window.electronAPI?.claude?.offContextUpdated) {
-      window.electronAPI.claude.offContextUpdated(_codingModeContextHandler)
-      _codingModeContextHandler = null
-    }
-    _codingModeContext.value = null
-
-    if (!chatId || !codingMode || !workingPath || !window.electronAPI?.claude) return
-
-    // Start watching (main process, debounced 300ms)
-    try {
-      await window.electronAPI.claude.watchContext(chatId, workingPath)
-    } catch (err) {
-      console.warn('[CodingMode] watchContext failed:', err)
-      return
-    }
-
-    // Subscribe to push events from main
-    _codingModeContextHandler = (payload) => {
-      if (payload?.chatId === chatId) {
-        _codingModeContext.value = payload.context ?? null
-      }
-    }
-    window.electronAPI.claude.onContextUpdated(_codingModeContextHandler)
-  },
-  { immediate: true }
-)
-
 // KeepAlive lifecycle: fires every time the user navigates back to /chats
 onActivated(() => {
   rootExpanded.value = true
@@ -2200,15 +2161,6 @@ onUnmounted(() => {
   stopMicCapture()
   stopSpeaking()
   cleanupVoiceListeners()
-
-  // Tear down CLAUDE.md file watcher + IPC listener
-  if (_codingModeContextHandler && window.electronAPI?.claude?.offContextUpdated) {
-    window.electronAPI.claude.offContextUpdated(_codingModeContextHandler)
-    _codingModeContextHandler = null
-  }
-  if (chatsStore.activeChatId && window.electronAPI?.claude?.unwatchContext) {
-    window.electronAPI.claude.unwatchContext(chatsStore.activeChatId)
-  }
 
   chatsStore.clearUiChunkCallback()
 
