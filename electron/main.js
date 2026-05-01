@@ -616,7 +616,7 @@ app.whenReady().then(async () => {
     logger.info(`[diag] task_categories (${tc.length}): ${JSON.stringify(tc.map(c => ({id: c.id.slice(0,8), name: c.name, emoji: c.emoji})))}`)
     logger.info(`[diag] plan_categories (${pc.length}): ${JSON.stringify(pc.map(c => ({id: c.id.slice(0,8), name: c.name, emoji: c.emoji})))}`)
     const runs = ts.listRunSummaries({ limit: 5 })
-    logger.info(`[diag] recent runs (${runs.length}): ${JSON.stringify(runs.map(r => ({id: r.id?.slice(0,8), planId: r.planId?.slice(0,8), itemId: r.itemId?.slice(0,8), status: r.status, startedAt: new Date(r.startedAt).toISOString()})))}`)
+    logger.info(`[diag] recent runs (${runs.length}): ${JSON.stringify(runs.map(r => ({id: r.id?.slice(0,8), planId: r.planId?.slice(0,8), itemIdFull: r.itemId, status: r.status, startedAt: new Date(r.startedAt).toISOString()})))}`)
   } catch (err) {
     logger.warn('[diag] dump failed:', err.message)
   }
@@ -755,7 +755,7 @@ app.whenReady().then(async () => {
             " script-src 'self';" +
             " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
             " font-src 'self' data: https://fonts.gstatic.com;" +
-            " img-src 'self' data: blob: https: vault-asset:;" +
+            " img-src 'self' data: blob: https: vault-asset: personas:;" +
             " connect-src 'self' https: http://localhost:* ws://localhost:*;" +
             " media-src 'self' data: blob:;" +
             " worker-src 'self' blob:;"

@@ -485,20 +485,18 @@ function openDetail(row) {
 
 .tdb-stat-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 1.25rem 1.5rem;
   display: flex;
   align-items: center;
   gap: 1rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .tdb-stat-card--clickable {
   cursor: pointer;
 }
 .tdb-stat-card--clickable:hover {
-  border-color: #4B5563;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0,0,0,0.12);
 }
@@ -514,6 +512,7 @@ function openDetail(row) {
   color: #FFFFFF;
 }
 .tdb-stat-icon--total     { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
+.tdb-stat-icon--tasks     { background: linear-gradient(135deg, #1E3A8A, #3B82F6); }
 .tdb-stat-icon--scheduled { background: linear-gradient(135deg, #312E81, #6366F1); }
 .tdb-stat-icon--success   { background: linear-gradient(135deg, #065F46, #10B981); }
 .tdb-stat-icon--dur       { background: linear-gradient(135deg, #1E3A5F, #3B82F6); }
