@@ -64,6 +64,7 @@ function migrate(dataDir) {
         schedule: p.schedule || p.cron || null,
         enabled: p.enabled !== false,
         categoryId: p.categoryId || null,
+        steps: Array.isArray(p.steps) ? p.steps : [],
         createdAt: _toMs(p.createdAt) || Date.now(),
         updatedAt: _toMs(p.updatedAt) || Date.now(),
         lastRunAt: _toMs(p.lastRunAt),

@@ -34,12 +34,21 @@ describe('plan round-trip', () => {
       schedule: '0 9 * * *',
       enabled: true,
       categoryId: 'cat-1',
+      steps: [
+        { taskId: 'task-a', runCondition: 'always' },
+        { taskId: 'task-b', runCondition: 'on-success' },
+      ],
       createdAt: 1700000000000,
       updatedAt: 1700000001000,
       lastRunAt: 1700000002000,
       deletedAt: null,
     }
     expect(rowToPlan(planToRow(plan))).toMatchObject(plan)
+  })
+  it('plan without steps round-trips with empty array', () => {
+    const plan = { id: 'p', name: 'P', enabled: true, createdAt: 0, updatedAt: 0 }
+    const back = rowToPlan(planToRow(plan))
+    expect(back.steps).toEqual([])
   })
   it('round-trips object schedule via JSON serialization', () => {
     const plan = {
