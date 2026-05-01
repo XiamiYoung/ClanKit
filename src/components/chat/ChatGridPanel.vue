@@ -606,8 +606,8 @@ async function onMentionSend(text) {
         applyProviderCredsToConfig(singleCfg, pProvider)
         const pModel = agent.modelId || targetChat.model || null
         if (pModel) singleCfg.customModel = pModel
-        if (targetChat.workingPath) singleCfg.chatWorkingPath = targetChat.workingPath
-        if (targetChat.codingMode) singleCfg.codingMode = true
+        singleCfg.mode = targetChat.mode || 'chat'
+        singleCfg.chatWorkingPath = (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null
 
         const usrAgent = targetChat.userAgentId ? agentsStore.getAgentById(targetChat.userAgentId) : agentsStore.defaultUserAgent
         const agentPrompts = { systemAgentId: agentId, userAgentId: usrAgent?.id || '__default_user__' }
@@ -704,8 +704,8 @@ async function onSend(text, pendingAttachments = [], longBlobs = {}) {
   const chatProvider = targetChat.provider || 'anthropic'
   applyProviderCredsToConfig(cfg, chatProvider)
   if (targetChat.model) cfg.customModel = targetChat.model
-  if (targetChat.workingPath) cfg.chatWorkingPath = targetChat.workingPath
-  if (targetChat.codingMode) cfg.codingMode = true
+  cfg.mode = targetChat.mode || 'chat'
+  cfg.chatWorkingPath = (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null
   const sysAgent = targetChat.systemAgentId ? agentsStore.getAgentById(targetChat.systemAgentId) : agentsStore.defaultSystemAgent
   const usrAgent = targetChat.userAgentId ? agentsStore.getAgentById(targetChat.userAgentId) : agentsStore.defaultUserAgent
   const agentPrompts = {}

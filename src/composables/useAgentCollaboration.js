@@ -127,9 +127,8 @@ export function useAgentCollaboration({
       chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
       chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
       maxAgentRounds: targetChat.maxAgentRounds ?? 10,
-      workingPath: targetChat.workingPath || null,
-      codingMode: !!targetChat.codingMode,
-      claudeContext: null,
+      mode: targetChat.mode || 'chat',
+      chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
       userAgentId: targetChat.userAgentId || null,
       systemAgentId: agentIds[0] || null,
     }

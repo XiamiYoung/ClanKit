@@ -417,21 +417,6 @@ export function useSendMessage({
 
     dbg(`sendMessage → chatId=${chatId} isGroup=${isGroup} msgs=${apiMessagesRaw.length} skills=${enabledSkillObjects.value.length}`)
 
-    // Coding Mode: load CLAUDE.md context (Primary: watcher-cached, Fallback: IPC read)
-    let claudeContext = null
-    if (targetChat.codingMode && targetChat.workingPath) {
-      try {
-        const cached = targetChat.id === chatsStore.activeChatId ? _codingModeContext.value : null
-        claudeContext = cached ?? (
-          window.electronAPI?.claude?.loadContext
-            ? await window.electronAPI.claude.loadContext(targetChat.workingPath)
-            : null
-        )
-      } catch (err) {
-        console.warn('[CodingMode] Failed to load CLAUDE.md context:', err)
-      }
-    }
-
     // Chunks are handled by the persistent handleChunk listener registered in onMounted
 
     try {
@@ -476,9 +461,8 @@ export function useSendMessage({
           chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
           chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
           maxAgentRounds: targetChat.maxAgentRounds ?? 10,
-          workingPath: targetChat.workingPath || null,
-          codingMode: !!targetChat.codingMode,
-          claudeContext: claudeContext ? JSON.parse(JSON.stringify(claudeContext)) : null,
+          mode: targetChat.mode || 'chat',
+          chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
           userAgentId: targetChat.userAgentId || null,
           systemAgentId: isGroup ? null : (activeSystemAgentIds.value[0] || targetChat.systemAgentId || null),
           groupAudienceMode: targetChat.groupAudienceMode || 'auto',
@@ -704,19 +688,6 @@ export function useSendMessage({
     const isGroup = activeSystemAgentIds.value.length > 1
     if (isGroup) isInCollaborationLoop.value = true
 
-    // Coding Mode context
-    let claudeContext = null
-    if (targetChat.codingMode && targetChat.workingPath) {
-      try {
-        const cached = targetChat.id === chatsStore.activeChatId ? _codingModeContext.value : null
-        claudeContext = cached ?? (
-          window.electronAPI?.claude?.loadContext
-            ? await window.electronAPI.claude.loadContext(targetChat.workingPath)
-            : null
-        )
-      } catch {}
-    }
-
     // Fire the same unified IPC — chunks route to existing msg via perChatStreamingMsgId
     window.electronAPI.sendMessage({
       chatId,
@@ -732,9 +703,8 @@ export function useSendMessage({
         chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
         chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
         maxAgentRounds: targetChat.maxAgentRounds ?? 10,
-        workingPath: targetChat.workingPath || null,
-        codingMode: !!targetChat.codingMode,
-        claudeContext: claudeContext ? JSON.parse(JSON.stringify(claudeContext)) : null,
+        mode: targetChat.mode || 'chat',
+        chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
         userAgentId: targetChat.userAgentId || null,
         systemAgentId: isGroup ? null : (activeSystemAgentIds.value[0] || targetChat.systemAgentId || null),
         groupAudienceMode: targetChat.groupAudienceMode || 'auto',
