@@ -48,6 +48,9 @@ electron-compiled/
 # docs (local notes — not tracked)
 docs/
 
+# git worktrees (isolated workspaces)
+.worktrees/
+
 # Scripts (ignore all except whitelisted)
 scripts/*
 !scripts/run-electron.js
