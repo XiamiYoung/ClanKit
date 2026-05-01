@@ -315,6 +315,7 @@
         :planColors="planColors"
         :plan-categories="tasksStore.planCategories"
         @open-run="onDashboardOpenRun"
+        @navigate="onDashboardNavigate"
       />
     </div>
 
@@ -411,8 +412,10 @@ import TaskCalendar from '../components/tasks/TaskCalendar.vue'
 import TaskDashboard from '../components/tasks/TaskDashboard.vue'
 import PlanHistoryModal from '../components/tasks/PlanHistoryModal.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import { useRouter } from 'vue-router'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const tasksStore = useTasksStore()
 
@@ -941,6 +944,18 @@ async function refreshTab() {
     }
   } finally {
     isRefreshing.value = false
+  }
+}
+
+// ── Dashboard stat-card navigation ────────────────────────────────────────────
+function onDashboardNavigate(target) {
+  // Targets: 'tasks' | 'plans' | 'calendar' | 'history'
+  if (target === 'history') {
+    router.push('/ai-tasks')
+    return
+  }
+  if (target === 'tasks' || target === 'plans' || target === 'calendar') {
+    activeTab.value = target
   }
 }
 
