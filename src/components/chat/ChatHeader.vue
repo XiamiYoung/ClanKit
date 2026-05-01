@@ -80,19 +80,6 @@
             <div v-if="modeDropdownOpen" class="ch-mode-dd-menu" role="menu">
               <button
                 class="ch-mode-dd-item"
-                :class="{ active: !isProductivity }"
-                role="menuitem"
-                @click.stop="selectMode('chat')"
-              >
-                <div class="ch-mode-dd-item-head">
-                  <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  <span class="ch-mode-dd-item-title">{{ t('chats.modeChat') }}</span>
-                  <svg v-if="!isProductivity" class="ch-mode-dd-check" style="width:13px;height:13px;flex-shrink:0;margin-left:auto;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                </div>
-                <div class="ch-mode-dd-item-desc">{{ t('chats.modeChatDesc') }}</div>
-              </button>
-              <button
-                class="ch-mode-dd-item"
                 :class="{ active: isProductivity }"
                 role="menuitem"
                 @click.stop="selectMode('productivity')"
@@ -103,6 +90,19 @@
                   <svg v-if="isProductivity" class="ch-mode-dd-check" style="width:13px;height:13px;flex-shrink:0;margin-left:auto;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
                 <div class="ch-mode-dd-item-desc">{{ t('chats.modeProductivityDesc') }}</div>
+              </button>
+              <button
+                class="ch-mode-dd-item"
+                :class="{ active: !isProductivity }"
+                role="menuitem"
+                @click.stop="selectMode('chat')"
+              >
+                <div class="ch-mode-dd-item-head">
+                  <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  <span class="ch-mode-dd-item-title">{{ t('chats.modeChat') }}</span>
+                  <svg v-if="!isProductivity" class="ch-mode-dd-check" style="width:13px;height:13px;flex-shrink:0;margin-left:auto;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="ch-mode-dd-item-desc">{{ t('chats.modeChatDesc') }}</div>
               </button>
             </div>
           </div>

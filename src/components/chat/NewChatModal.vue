@@ -40,17 +40,17 @@
           </header>
           <div class="np-mode-radio-row">
             <label class="np-mode-radio">
-              <input type="radio" :checked="newChatMode === 'chat'" @change="emit('update:newChatMode', 'chat')" />
-              <div class="np-mode-radio-content">
-                <span class="np-mode-radio-title">{{ t('chats.modeChat') }}</span>
-                <small class="np-mode-radio-desc">{{ t('chats.modeChatDesc') }}</small>
-              </div>
-            </label>
-            <label class="np-mode-radio">
               <input type="radio" :checked="newChatMode === 'productivity'" @change="emit('update:newChatMode', 'productivity')" />
               <div class="np-mode-radio-content">
                 <span class="np-mode-radio-title">{{ t('chats.modeProductivity') }}</span>
                 <small class="np-mode-radio-desc">{{ t('chats.modeProductivityDesc') }}</small>
+              </div>
+            </label>
+            <label class="np-mode-radio">
+              <input type="radio" :checked="newChatMode === 'chat'" @change="emit('update:newChatMode', 'chat')" />
+              <div class="np-mode-radio-content">
+                <span class="np-mode-radio-title">{{ t('chats.modeChat') }}</span>
+                <small class="np-mode-radio-desc">{{ t('chats.modeChatDesc') }}</small>
               </div>
             </label>
           </div>

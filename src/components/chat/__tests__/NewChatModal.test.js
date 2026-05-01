@@ -89,15 +89,17 @@ describe('NewChatModal', () => {
       expect(radios.length).toBeGreaterThanOrEqual(2)
     })
 
-    it('first radio is checked when newChatMode is chat', () => {
-      const wrapper = mountModal({ newChatMode: 'chat' })
+    // Productivity is now the 1st radio, chat is the 2nd (per UI ordering)
+
+    it('first radio (productivity) is checked when newChatMode is productivity', () => {
+      const wrapper = mountModal({ newChatMode: 'productivity' })
       const radios = wrapper.findAll('input[type="radio"]')
       expect(radios[0].element.checked).toBe(true)
       expect(radios[1].element.checked).toBe(false)
     })
 
-    it('second radio is checked when newChatMode is productivity', () => {
-      const wrapper = mountModal({ newChatMode: 'productivity' })
+    it('second radio (chat) is checked when newChatMode is chat', () => {
+      const wrapper = mountModal({ newChatMode: 'chat' })
       const radios = wrapper.findAll('input[type="radio"]')
       expect(radios[0].element.checked).toBe(false)
       expect(radios[1].element.checked).toBe(true)
@@ -105,7 +107,7 @@ describe('NewChatModal', () => {
 
     it('selecting productivity emits update:newChatMode', async () => {
       const wrapper = mountModal({ newChatMode: 'chat' })
-      const productivityRadio = wrapper.findAll('input[type="radio"]').at(1)
+      const productivityRadio = wrapper.findAll('input[type="radio"]').at(0)
       productivityRadio.element.checked = true
       productivityRadio.element.dispatchEvent(new Event('change'))
       await wrapper.vm.$nextTick()
@@ -115,7 +117,7 @@ describe('NewChatModal', () => {
 
     it('selecting chat emits update:newChatMode with chat', async () => {
       const wrapper = mountModal({ newChatMode: 'productivity' })
-      const chatRadio = wrapper.findAll('input[type="radio"]').at(0)
+      const chatRadio = wrapper.findAll('input[type="radio"]').at(1)
       chatRadio.element.checked = true
       chatRadio.element.dispatchEvent(new Event('change'))
       await wrapper.vm.$nextTick()

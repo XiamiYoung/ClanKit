@@ -1127,7 +1127,9 @@ async function finishTour() {
     const userAgent = agentsStore.userAgents.find(a => !a.isBuiltin)
     const userAgentId = userAgent?.id || null
     const chatTitle = lang === 'zh' ? '新聊天' : 'New Chat'
-    const chat = await chatsStore.createChat(chatTitle, [BUILTIN_SYSTEM_AGENT_ID, BUILTIN_DOC_EDITOR_ID], null, { userAgentId })
+    // Wizard's first chat defaults to productivity mode — onboarding intent is
+    // 'get work done with the AI', not 'chat with a persona'.
+    const chat = await chatsStore.createChat(chatTitle, [BUILTIN_SYSTEM_AGENT_ID, BUILTIN_DOC_EDITOR_ID], null, { userAgentId, mode: 'productivity' })
     const chatId = chat?.id
     if (chatId) await chatsStore.setChatSettings(chatId, { permissionMode: 'all_permissions' })
     // Mark this chat for AI Docs nav highlight when agent replies

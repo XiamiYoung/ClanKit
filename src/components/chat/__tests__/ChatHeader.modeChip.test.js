@@ -150,7 +150,7 @@ describe('ChatHeader mode dropdown', () => {
     wrapper.find('.ch-mode-dd-btn').element.click()
     await wrapper.vm.$nextTick()
     const items = wrapper.findAll('.ch-mode-dd-item')
-    items[1].element.click() // productivity is the 2nd item
+    items[0].element.click() // productivity is now the 1st item
     await wrapper.vm.$nextTick()
     expect(wrapper.findComponent({ name: 'ConfirmProductivityModal' }).exists()).toBe(true)
   })
@@ -159,7 +159,7 @@ describe('ChatHeader mode dropdown', () => {
     const wrapper = mountHeader({ mode: 'chat', productivityModeNoticeShown: true })
     wrapper.find('.ch-mode-dd-btn').element.click()
     await wrapper.vm.$nextTick()
-    wrapper.findAll('.ch-mode-dd-item')[1].element.click()
+    wrapper.findAll('.ch-mode-dd-item')[0].element.click()
     await wrapper.vm.$nextTick()
     expect(setModeMock).toHaveBeenCalledWith('c1', 'productivity')
     expect(wrapper.findComponent({ name: 'ConfirmProductivityModal' }).exists()).toBe(false)
@@ -169,7 +169,7 @@ describe('ChatHeader mode dropdown', () => {
     const wrapper = mountHeader({ mode: 'productivity', productivityModeNoticeShown: true })
     wrapper.find('.ch-mode-dd-btn').element.click()
     await wrapper.vm.$nextTick()
-    wrapper.findAll('.ch-mode-dd-item')[0].element.click() // chat is the 1st item
+    wrapper.findAll('.ch-mode-dd-item')[1].element.click() // chat is now the 2nd item
     await wrapper.vm.$nextTick()
     expect(setModeMock).toHaveBeenCalledWith('c1', 'chat')
     expect(wrapper.findComponent({ name: 'ConfirmProductivityModal' }).exists()).toBe(false)
@@ -179,7 +179,7 @@ describe('ChatHeader mode dropdown', () => {
     const wrapper = mountHeader({ mode: 'chat', productivityModeNoticeShown: false })
     wrapper.find('.ch-mode-dd-btn').element.click()
     await wrapper.vm.$nextTick()
-    wrapper.findAll('.ch-mode-dd-item')[1].element.click()
+    wrapper.findAll('.ch-mode-dd-item')[0].element.click() // productivity 1st
     await wrapper.vm.$nextTick()
     const modal = wrapper.findComponent({ name: 'ConfirmProductivityModal' })
     expect(modal.exists()).toBe(true)
@@ -192,7 +192,7 @@ describe('ChatHeader mode dropdown', () => {
     const wrapper = mountHeader({ mode: 'chat', productivityModeNoticeShown: true })
     wrapper.find('.ch-mode-dd-btn').element.click()
     await wrapper.vm.$nextTick()
-    wrapper.findAll('.ch-mode-dd-item')[0].element.click() // re-pick current 'chat'
+    wrapper.findAll('.ch-mode-dd-item')[1].element.click() // current 'chat' is 2nd item now
     await wrapper.vm.$nextTick()
     expect(setModeMock).not.toHaveBeenCalled()
   })
