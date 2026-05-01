@@ -2127,6 +2127,7 @@ Always reply in the same language as the user's most recent message.`,
     },
     dashboard: {
       totalRuns: 'Total Runs',
+      totalTasks: 'Total Tasks',
       scheduledAhead: 'Scheduled Ahead',
       successRate: 'Success Rate',
       avgDuration: 'Avg Duration',
@@ -4802,6 +4803,7 @@ export const zh = {
     },
     dashboard: {
       totalRuns: '总运行次数',
+      totalTasks: '任务总数',
       scheduledAhead: '计划中',
       successRate: '成功率',
       avgDuration: '平均时长',
