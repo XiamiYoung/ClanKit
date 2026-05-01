@@ -23,7 +23,18 @@
         @mouseenter="showPathTooltip"
         @mouseleave="hidePathTooltip"
       >
-        <div class="ch-title-icon">
+        <button
+          v-if="showModeChip"
+          class="ch-mode-chip"
+          :class="{ 'ch-mode-chip--productivity': isProductivity }"
+          @click.stop="onModeChipClick"
+          :title="isProductivity ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip')"
+        >
+          <svg v-if="isProductivity" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>{{ isProductivity ? t('chats.modeProductivity') : t('chats.modeChat') }}</span>
+        </button>
+        <div v-else class="ch-title-icon">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
@@ -445,6 +456,13 @@
     </div>
   </Teleport>
 
+  <!-- First-switch productivity mode confirm modal -->
+  <ConfirmProductivityModal
+    v-if="showProductivityConfirm"
+    @confirm="confirmProductivitySwitch"
+    @cancel="showProductivityConfirm = false"
+  />
+
 </template>
 
 <script setup>
@@ -461,6 +479,7 @@ import { estimateToolTokens, estimateMcpTokens, formatTokens } from '../../utils
 import { useVoiceStore } from '../../stores/voice'
 import { useI18n } from '../../i18n/useI18n'
 import AgentCardItem from './AgentCardItem.js'
+import ConfirmProductivityModal from './ConfirmProductivityModal.vue'
 
 const { t } = useI18n()
 
@@ -878,6 +897,33 @@ const effectiveAgentRounds = computed(() => {
   return chat.value?.maxAgentRounds ?? 10
 })
 
+// ── Mode chip ──
+const showProductivityConfirm = ref(false)
+const isProductivity = computed(() => chat.value?.mode === 'productivity')
+
+const showModeChip = computed(() => {
+  const c = chat.value
+  if (!c) return false
+  if (c.type === 'analysis') return false
+  return true
+})
+
+function onModeChipClick() {
+  if (!chat.value) return
+  if (!isProductivity.value && !chat.value.productivityModeNoticeShown) {
+    showProductivityConfirm.value = true
+    return
+  }
+  const target = isProductivity.value ? 'chat' : 'productivity'
+  chatsStore.setMode(chat.value.id, target)
+}
+
+function confirmProductivitySwitch() {
+  showProductivityConfirm.value = false
+  if (chat.value) {
+    chatsStore.setMode(chat.value.id, 'productivity')
+  }
+}
 
 </script>
 
@@ -1683,5 +1729,32 @@ const effectiveAgentRounds = computed(() => {
   font-weight: 400;
   color: #D1D1D6;
   line-height: 1.5;
+}
+
+/* ── Mode chip ── */
+.ch-mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-md, 0.5rem);
+  font-size: var(--font-size-sm, 0.875rem);
+  cursor: pointer;
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--surface, #fff);
+  color: var(--text-primary, #111);
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+.ch-mode-chip:hover {
+  border-color: var(--text-primary, #111);
+}
+.ch-mode-chip--productivity {
+  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151);
+  color: #fff;
+  border-color: transparent;
+}
+.ch-mode-chip--productivity:hover {
+  filter: brightness(1.1);
 }
 </style>
