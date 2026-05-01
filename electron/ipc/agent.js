@@ -2471,8 +2471,8 @@ ipcMain.handle('agent:get-context', (event, chatId) => {
 //   enabledSkills      - Vue-owned serialized enabled skill objects
 //   stickyTargetIds    - legacy selected audience IDs from Vue
 //   targetChatMeta     - { permissionMode, chatAllowList, chatDangerOverrides,
-//                         maxOutputTokens, maxAgentRounds, workingPath, codingMode,
-//                         claudeContext, userAgentId, systemAgentId,
+//                         maxOutputTokens, maxAgentRounds, mode, chatWorkingPath,
+//                         modeTransitionPending, userAgentId, systemAgentId,
 //                         groupAudienceMode, groupAudienceAgentIds }
 ipcMain.handle('agent:send-message', async (event, {
   chatId, messages, groupIds, isGroup, text, pendingAttachments,
@@ -2526,15 +2526,6 @@ ipcMain.handle('agent:send-message', async (event, {
         logger.error('agent:send-message invalid loop config', { chatId, agentId: run.agentId, error: loopConfigError })
         throw new Error(loopConfigError)
       }
-
-      // Inject coding mode context into system prompt if provided
-      if (targetChatMeta.codingMode && targetChatMeta.claudeContext) {
-        const ctxBlock = `\n\n[CODING CONTEXT]\n${targetChatMeta.claudeContext}\n[/CODING CONTEXT]`
-        const prompts = run.agentPrompts || {}
-        prompts.systemAgentPrompt = (prompts.systemAgentPrompt || '') + ctxBlock
-        run.agentPrompts = prompts
-      }
-
 
       // Check if user already pressed stop before the loop was created (race condition fix)
       if (pendingStops.has(chatId)) {

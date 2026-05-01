@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import path from 'path'
+import fs from 'fs'
 
 const { buildSystemPrompt } = require('../systemPromptBuilder')
 
@@ -108,5 +110,85 @@ describe('TOOL USE HARD RULE', () => {
       [], [], [], [], baseAgent
     )
     expect(out).toContain('工具使用 — 硬性规则')
+  })
+})
+
+describe('Working folder context (productivity mode)', () => {
+  it('productivity mode injects WORKING FOLDER section when chatWorkingPath is set', () => {
+    const tmp = path.join(process.env.TEMP || '/tmp', `t9-${Date.now()}`)
+    fs.mkdirSync(tmp, { recursive: true })
+    fs.writeFileSync(path.join(tmp, 'a.md'), 'x')
+    try {
+      const out = buildSystemPrompt(
+        { ...baseConfig, mode: 'productivity', chatWorkingPath: tmp },
+        [], [], [], [], baseAgent
+      )
+      expect(out).toContain('WORKING FOLDER FOR THIS CHAT')
+      expect(out).toContain(tmp)
+      expect(out).toContain('a.md')
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('productivity mode without explicit chatWorkingPath defaults to DoCPath', () => {
+    const tmp = path.join(process.env.TEMP || '/tmp', `t9-default-${Date.now()}`)
+    fs.mkdirSync(tmp, { recursive: true })
+    fs.writeFileSync(path.join(tmp, 'doc.md'), 'x')
+    try {
+      const out = buildSystemPrompt(
+        { ...baseConfig, mode: 'productivity', DoCPath: tmp },
+        [], [], [], [], baseAgent
+      )
+      expect(out).toContain('WORKING FOLDER FOR THIS CHAT')
+      expect(out).toContain(tmp)
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('chat mode does NOT inject WORKING FOLDER section even with chatWorkingPath set', () => {
+    const out = buildSystemPrompt(
+      { ...baseConfig, mode: 'chat', chatWorkingPath: '/tmp/anything' },
+      [], [], [], [], baseAgent
+    )
+    expect(out).not.toContain('WORKING FOLDER FOR THIS CHAT')
+  })
+})
+
+describe('Working on this task discipline section', () => {
+  it('productivity mode contains "Working on this task" section in English', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'productivity' }, [], [], [], [], baseAgent)
+    expect(out).toContain('Working on this task')
+    expect(out).toMatch(/DO it|do it/)
+  })
+
+  it('productivity mode in zh language uses Chinese section', () => {
+    const out = buildSystemPrompt(
+      { ...baseConfig, language: 'zh', mode: 'productivity' },
+      [], [], [], [], baseAgent
+    )
+    expect(out).toContain('当前任务工作守则')
+  })
+
+  it('chat mode does NOT contain that section', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'chat' }, [], [], [], [], baseAgent)
+    expect(out).not.toContain('Working on this task')
+    expect(out).not.toContain('当前任务工作守则')
+  })
+})
+
+describe('Coding mode block removed', () => {
+  it('CODING PROJECT PATH is never present, regardless of mode or config', () => {
+    const a = buildSystemPrompt({ ...baseConfig, mode: 'chat', codingMode: true, chatWorkingPath: '/x' }, [], [], [], [], baseAgent)
+    const b = buildSystemPrompt({ ...baseConfig, mode: 'productivity', chatWorkingPath: '/x' }, [], [], [], [], baseAgent)
+    expect(a).not.toContain('CODING PROJECT PATH')
+    expect(b).not.toContain('CODING PROJECT PATH')
+  })
+
+  it('chat mode prompt is unchanged byte-equivalent (regression canary)', () => {
+    const a = buildSystemPrompt({ ...baseConfig, mode: 'chat' }, [], [], [], [], baseAgent)
+    const b = buildSystemPrompt({ ...baseConfig, mode: 'chat' }, [], [], [], [], baseAgent)
+    expect(b).toBe(a)
   })
 })

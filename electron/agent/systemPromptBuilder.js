@@ -524,8 +524,7 @@ Loading a skill is cheap (returns a markdown guide); skipping it when relevant c
   // artifactPath = non-document output (exports, temp files, data, code snippets)
   const aidocPath    = config.DoCPath || path.join(dataPath, 'clankit_doc')
   const artifactPath = config.artifactPath || path.join(dataPath, 'artifact')
-  const codingPath = config.chatWorkingPath || ''
-  const isCodingMode = !!(config.codingMode && codingPath)
+  const productivityWorkingPath = _isProductivity ? (config.chatWorkingPath || aidocPath) : null
   const skillsPath = config.skillsPath || path.join(dataPath, 'skills')
   // utilityModel fields were historically inlined into the DATA FILE ROUTING
   // prompt block. That block now lives in the clankit-config-admin built-in
@@ -551,10 +550,7 @@ AI DOC PATH (primary directory for readable documents): ${aidocPath}
 This is where ALL readable documents live — Markdown (.md), Word (.docx), PDF (.pdf), PowerPoint (.pptx), plain text (.txt), Excel (.xlsx/.csv), HTML (.html), and similar human-readable formats. When the user asks you to create a document, report, note, summary, or any readable file, ALWAYS write it here (or a subfolder).
 
 ARTIFACT PATH (for non-document output only): ${artifactPath}
-This is for generated files that are NOT readable documents: exports, temp files, raw data dumps, generated code snippets, binary output. Do NOT put .md, .docx, .pdf, .pptx, .txt, .html or other readable documents here. Create subdirectories as needed (e.g. ${artifactPath}/exports/). The directory is auto-created on first write.${isCodingMode ? `
-
-CODING PROJECT PATH: ${codingPath}
-This chat is in CODING MODE. All code files (source code, configs, scripts, tests, etc.) MUST be created/edited within this project directory. Use this path as the root for any code-related file operations. Non-code output (documents, reports) still goes to the document path or artifact path above.` : ''}
+This is for generated files that are NOT readable documents: exports, temp files, raw data dumps, generated code snippets, binary output. Do NOT put .md, .docx, .pdf, .pptx, .txt, .html or other readable documents here. Create subdirectories as needed (e.g. ${artifactPath}/exports/). The directory is auto-created on first write.
 
 SKILLS PATH: ${skillsPath}
 This is the directory where installed skills live on disk. A skill is NOT a single markdown file — it is an ENTIRE FOLDER TREE with this shape:
@@ -603,10 +599,36 @@ ${subfolderList}
    - Intermediate files, temp files, raw data dumps, exports, binary output
    - Example: if you write verify_docx.py or convert.py to help produce a .docx, the .py goes here; the .docx goes to AI Doc Path above.
    RULE: if the file is CODE (any script or program), it goes here — not in AI Doc Path.
-   IMPORTANT — when running a script that produces a document: hardcode or pass the output path as an absolute path pointing to AI Doc Path (${effectiveDocPath}), not a relative path. Relative paths resolve to the shell working directory, not the document folder.${isCodingMode ? `
+   IMPORTANT — when running a script that produces a document: hardcode or pass the output path as an absolute path pointing to AI Doc Path (${effectiveDocPath}), not a relative path. Relative paths resolve to the shell working directory, not the document folder.`
 
-3. CODE FILES → Coding Project Path: ${codingPath}
-   Includes: source code, configs, scripts, tests that are part of the user's coding project. Use this as the project root.` : ''}`
+  // Working folder context (productivity mode)
+  if (_isProductivity && productivityWorkingPath) {
+    const { buildWorkingFolderContext } = require('./workingFolderContext')
+    const wfBlock = buildWorkingFolderContext(productivityWorkingPath)
+    if (wfBlock) system += `\n\n${wfBlock}`
+  }
+
+  // Working on this task — productivity discipline
+  if (_isProductivity) {
+    const workingOnTask = (_langCode === 'zh')
+      ? `\n\n## 当前任务工作守则
+- 用户给出真实任务（写、编辑、整理某文件）时，**直接做** —— 不要回复"我会这样写"。打开文件、写入内容、保存。
+- 不知道就先查：用户说"更新 Q3 报告"，**先**列出工作目录、找到那个文件、读取它，**然后**编辑。**绝不**编造文件内容。
+- 多步任务（"整理这 5 个文件成一份周报"）：先用 todo_manager 列计划，然后逐项执行。
+- 把产出**保存到硬盘**。聊天框是用来确认的，不是用来送达文档的。
+- 用户问你不知道的事（最近的网络数据、你还没读过的文件内容）时，**用工具** —— 不要编。
+- 守住范围：只改用户要求的内容，不要顺手重构周边。
+- 长任务边做边汇报。失败就如实说出来 —— 不要谎报成功。`
+      : `\n\n## Working on this task
+- When the user gives you a real task (write, edit, organize a file), DO it — do not reply with "here's what I would write". Open the file, write the content, save it.
+- Always check before guessing: if the user says "update the Q3 report", list the working folder first, find the file, read it, THEN edit. Never invent file contents.
+- For multi-step jobs, make a plan with todo_manager first, then execute step by step.
+- Save your output to disk. The chat is for confirmation, not for delivering documents.
+- If the user asks something you don't know (recent web data, content of a file you haven't read), use a tool — never make it up.
+- Stay scoped: change only what the user asked you to change. Don't refactor adjacent content.
+- Report progress on long tasks. Report failures honestly — don't claim unverified success.`
+    system += workingOnTask
+  }
 
   if (effectiveName) {
     system += `\n\nOPERATIONAL NOTES (secondary to your character — use these naturally, not robotically):
