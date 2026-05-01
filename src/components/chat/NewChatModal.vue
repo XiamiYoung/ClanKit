@@ -812,22 +812,49 @@ const FolderTreeItem = defineComponent({
 /* ── Mode radio ──────────────────────────────────────────────────────── */
 .np-mode-radio-row {
   display: flex;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
 }
 .np-mode-radio {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.4rem 0.75rem;
-  border: 1px solid var(--border, #e5e7eb);
-  border-radius: var(--radius-md, 0.5rem);
+  justify-content: center;
+  padding: 0.4rem 0.875rem;
+  border: 1px solid #2A2A2A;
+  border-radius: 9999px;
   cursor: pointer;
   font-size: var(--fs-secondary, 0.875rem);
-  transition: border-color 0.15s, background 0.15s;
+  font-weight: 500;
+  color: #B8B8B8;
+  background: transparent;
+  user-select: none;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.np-mode-radio:hover {
+  border-color: #4A4A4A;
+  color: #E8E8E8;
+}
+.np-mode-radio input[type="radio"] {
+  /* Hide native radio — label is the visual control */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  opacity: 0;
 }
 .np-mode-radio:has(input:checked) {
-  border-color: #1A1A1A;
-  background: linear-gradient(135deg, rgba(15,15,15,0.05), rgba(55,65,81,0.05));
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border-color: #4B5563;
+  color: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.np-mode-radio:has(input:focus-visible) {
+  outline: 2px solid rgba(255, 255, 255, 0.3);
+  outline-offset: 2px;
 }
 </style>

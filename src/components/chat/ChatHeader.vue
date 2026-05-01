@@ -473,7 +473,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useChatsStore } from '../../stores/chats'
 import { useConfigStore } from '../../stores/config'
 import { useAgentsStore } from '../../stores/agents'
@@ -555,7 +555,10 @@ function onKeyDown(e) {
   if (showUsrPopover.value) { showUsrPopover.value = false; return }
 }
 onMounted(() => window.addEventListener('keydown', onKeyDown))
-onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+  if (_pathTooltipAutoHideTimer) clearTimeout(_pathTooltipAutoHideTimer)
+})
 
 const isGroupChat = computed(() => chat.value?.isGroupChat ?? false)
 const canStartCall = computed(() => {
@@ -594,15 +597,22 @@ const chatFolderPath = computed(() => props.chatId ? chatsStore.getChatFolderPat
 // ── Folder path tooltip ──
 const titleBadgeEl = ref(null)
 const pathTooltip = ref({ visible: false, x: 0, y: 0, text: '' })
+let _pathTooltipAutoHideTimer = null
 function showPathTooltip() {
   if (!titleBadgeEl.value || !chat.value) return
   const rect = titleBadgeEl.value.getBoundingClientRect()
   const folderPart = chatFolderPath.value
   const text = `Path: ${folderPart ? `${folderPart}/${chat.value.title}` : chat.value.title}`
   pathTooltip.value = { visible: true, x: rect.left + rect.width / 2, y: rect.bottom + 6, text }
+  // Defensive auto-hide: if mouseleave never fires (e.g. parent element unmounts
+  // while hovered, or cursor jumps to a disabled UI element), the tooltip used
+  // to stick on screen forever. 3s ceiling clears it.
+  if (_pathTooltipAutoHideTimer) clearTimeout(_pathTooltipAutoHideTimer)
+  _pathTooltipAutoHideTimer = setTimeout(() => { pathTooltip.value.visible = false }, 3000)
 }
 function hidePathTooltip() {
   pathTooltip.value.visible = false
+  if (_pathTooltipAutoHideTimer) { clearTimeout(_pathTooltipAutoHideTimer); _pathTooltipAutoHideTimer = null }
 }
 
 // ── Running state ──
@@ -639,6 +649,12 @@ async function confirmEdit() {
 function cancelEdit() {
   isEditing.value = false
 }
+
+// Hide path tooltip when conditions that block mouseleave from firing change:
+// (a) chat switches → DOM may rerender without mouse re-entering;
+// (b) edit mode toggled → title-badge unmounts mid-hover.
+watch(() => chat.value?.id, () => hidePathTooltip())
+watch(() => isEditing.value, () => hidePathTooltip())
 
 // ── User agent popover ──
 const showUsrPopover = ref(false)
@@ -1743,7 +1759,8 @@ function confirmProductivitySwitch() {
   display: inline-flex;
   align-items: center;
   gap: 0.4375rem;
-  padding: 0.25rem 0.5rem;
+  height: 1.875rem; /* match call/settings buttons */
+  padding: 0 0.625rem;
   cursor: pointer;
   user-select: none;
   border-radius: 0.5rem;
