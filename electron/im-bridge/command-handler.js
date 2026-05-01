@@ -13,10 +13,8 @@ function readIndex() {
 }
 
 function readAgents() {
-  // Schema-agnostic flat list (handles new nested + both legacy formats).
-  try {
-    return normalizeAgents(JSON.parse(fs.readFileSync(ds.paths().AGENTS_FILE, 'utf8')))
-  } catch { return [] }
+  // Schema-agnostic flat list sourced from AgentStore (agents.db).
+  return normalizeAgents(ds.readAgentsCompat())
 }
 
 function readJSON(file, fallback) {

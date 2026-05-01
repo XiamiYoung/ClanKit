@@ -1,8 +1,6 @@
 // electron/im-bridge/agent-model-flow.js
 // Manages the multi-step inline keyboard flow for changing an agent's model/provider.
 'use strict'
-const fs   = require('fs')
-const path = require('path')
 const ds   = require('../lib/dataStore')
 
 // In-memory flow state per session key (`${platform}:${channelId}`)
@@ -32,24 +30,8 @@ const DEFAULT_MODELS = {
 const { normalizeAgents } = require('../agent/dataNormalizers')
 
 function readAgents() {
-  // Schema-agnostic flat list — for browse / find-by-id only.
-  try {
-    return normalizeAgents(JSON.parse(fs.readFileSync(ds.paths().AGENTS_FILE, 'utf8')))
-  } catch { return [] }
-}
-
-function readAgentsRaw() {
-  // Returns the full file structure so a subsequent write preserves the schema.
-  try {
-    return JSON.parse(fs.readFileSync(ds.paths().AGENTS_FILE, 'utf8'))
-  } catch { return null }
-}
-
-function writeAtomic(filePath, data) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-  const tmp = filePath + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2))
-  fs.renameSync(tmp, filePath)
+  // Schema-agnostic flat list sourced from AgentStore (agents.db).
+  return normalizeAgents(ds.readAgentsCompat())
 }
 
 function buildProviderRows() {
@@ -154,12 +136,9 @@ function handleCallback(key, cbQueryId, data, sendButtons, answerCallback) {
       return
     }
 
-    // Read the full file structure so the write preserves the on-disk schema
-    // (legacy flat array, legacy {categories,agents}, or new {agents,personas}).
-    // Mutating just the flat list returned by readAgents() and writing it back
-    // would corrupt the new nested schema and wipe the personas section.
-    const fullData = readAgentsRaw()
-    const agent = fullData ? ds.findAgentInFile(fullData, flow.agentId) : null
+    const { getInstance: getAgentStore } = require('../agent/AgentStore')
+    const agentStore = getAgentStore(ds.paths().DATA_DIR)
+    const agent = agentStore.getById(flow.agentId)
     if (!agent) {
       sendButtons('⚠️ Agent not found — it may have been deleted.', null)
       pendingFlows.delete(key)
@@ -168,7 +147,7 @@ function handleCallback(key, cbQueryId, data, sendButtons, answerCallback) {
 
     agent.providerId = flow.selectedProvider
     agent.modelId    = model
-    writeAtomic(ds.paths().AGENTS_FILE, fullData)
+    agentStore.saveAgent(agent)
     pendingFlows.delete(key)
 
     sendButtons(

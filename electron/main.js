@@ -643,7 +643,8 @@ app.whenReady().then(async () => {
     // existing agent's requiredSkillIds. Guarded by a config flag so users who
     // intentionally remove the skill from an agent don't see it come back.
     if (seeded.length > 0 && !startupCfg.builtinSkillsAssignedOnce) {
-      builtinSkills.seedBuiltinSkillsIntoAgents(p().AGENTS_FILE, builtinIds)
+      const { getInstance: getAgentStore } = require('./agent/AgentStore')
+      builtinSkills.seedBuiltinSkillsIntoAgents(getAgentStore(p().DATA_DIR), builtinIds)
       startupCfg.builtinSkillsAssignedOnce = true
       writeJSON(p().CONFIG_FILE, startupCfg)
     }

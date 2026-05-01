@@ -13,9 +13,6 @@
  *   2. It travels with the skill — bumping the skill manifest version is enough
  *      to roll out an update through ensureBuiltinSkills.
  */
-const fs = require('fs')
-const path = require('path')
-
 const SKILL_DIR = __dirname
 
 // Self-contained base — skill tools run from AppData and cannot import project
@@ -49,9 +46,7 @@ class ListAgentsTool extends BaseTool {
       'List Agents'
     )
     this._context = context || {}
-    this._agentsFilePath = context?.dataPath
-      ? path.join(context.dataPath, 'agents.json')
-      : null
+    this._dataPath = context?.dataPath || null
   }
 
   schema() {
@@ -61,25 +56,15 @@ class ListAgentsTool extends BaseTool {
   }
 
   async execute() {
-    if (!this._agentsFilePath) return this._err('Agents file path not available in skill context')
-    if (!fs.existsSync(this._agentsFilePath)) return this._err('agents.json does not exist')
+    if (!this._dataPath) return this._err('Data path not available in skill context')
 
-    let parsed
-    try {
-      parsed = JSON.parse(fs.readFileSync(this._agentsFilePath, 'utf8'))
-    } catch (err) {
-      return this._err(`Failed to parse agents.json: ${err.message}`)
-    }
-
-    // Schema-tolerant: accept the legacy flat array, the {agents:[]} wrapper,
-    // and the newer {agents:{categories,items}, personas:{...}} shape.
     let list = []
-    if (Array.isArray(parsed)) {
-      list = parsed
-    } else if (Array.isArray(parsed?.agents)) {
-      list = parsed.agents
-    } else if (Array.isArray(parsed?.agents?.items)) {
-      list = parsed.agents.items
+    try {
+      const { getInstance: getAgentStore } = require('../../../agent/AgentStore')
+      const store = getAgentStore(this._dataPath)
+      list = store.getByKind('system')
+    } catch (err) {
+      return this._err(`Failed to read agents: ${err.message}`)
     }
 
     const items = list

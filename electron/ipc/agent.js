@@ -233,7 +233,7 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
     // Resolve default user agent when chat has no explicit user agent
     if (!userAgentId || userAgentId === '__default_user__') {
       try {
-        const allAgents = normalizeAgents(ds.readJSON(ds.paths().AGENTS_FILE, { agents: [] }))
+        const allAgents = normalizeAgents(ds.readAgentsCompat())
         const defaultUsr = (allAgents || []).find(a => a.type === 'user' && a.isDefault)
         userAgentId = defaultUsr?.id || '__default_user__'
       } catch (_) { userAgentId = '__default_user__' }
@@ -921,7 +921,7 @@ ipcMain.handle('agent:run-additional', async (event, {
 
   // Read from disk
   const fullCfg     = ds.readJSON(ds.paths().CONFIG_FILE, {})
-  const agentsData  = normalizeAgents(ds.readJSON(ds.paths().AGENTS_FILE, { agents: [] }))
+  const agentsData  = normalizeAgents(ds.readAgentsCompat())
   const mcpData     = normalizeMcpServers(ds.readJSON(ds.paths().MCP_SERVERS_FILE, []))
   const toolsData   = normalizeTools(ds.readJSON(ds.paths().TOOLS_FILE, {}))
   const knowledgeData = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
@@ -1380,7 +1380,7 @@ ipcMain.handle('agent:generate-greeting', async (event, { chatId, agentId, langu
   }
   try {
     const cfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
-    const agents = normalizeAgents(ds.readJSON(ds.paths().AGENTS_FILE, []))
+    const agents = normalizeAgents(ds.readAgentsCompat())
     const agent = agents.find(a => a.id === agentId)
     if (!agent) { send({ type: 'error', text: 'Agent not found' }); return { success: false } }
     if (agent.type === 'user') { send({ type: 'done' }); return { success: false, skipped: true } }
@@ -2239,7 +2239,7 @@ ipcMain.handle('agent:suggest-chat-title', async (_event, { chatId, messages, at
     if (!providerCfg?.apiKey || !providerCfg?.baseURL) {
       // Fallback 1: chat's primary agent's provider/model.
       if (fallbackAgentId) {
-        const agentsData = normalizeAgents(ds.readJSON(ds.paths().AGENTS_FILE, { agents: [] }))
+        const agentsData = normalizeAgents(ds.readAgentsCompat())
         const agent = agentsData.find(a => a.id === fallbackAgentId)
         if (agent?.providerId && agent?.modelId) {
           const agentProvCfg = (cfg.providers || []).find(p => (p.type === agent.providerId || p.id === agent.providerId) && p.apiKey)
@@ -2805,7 +2805,7 @@ ipcMain.handle('agent:send-message', async (event, {
 
     // Read all data from disk
     const fullCfg      = ds.readJSON(ds.paths().CONFIG_FILE, {})
-    const agentsData   = normalizeAgents(ds.readJSON(ds.paths().AGENTS_FILE, { agents: [] }))
+    const agentsData   = normalizeAgents(ds.readAgentsCompat())
     const mcpData      = normalizeMcpServers(ds.readJSON(ds.paths().MCP_SERVERS_FILE, []))
     const toolsData    = normalizeTools(ds.readJSON(ds.paths().TOOLS_FILE, {}))
     const knowledgeData = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})

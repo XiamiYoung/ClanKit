@@ -28,6 +28,7 @@ try {
 const { AgentLoop } = require('./agent/agentLoop')
 
 const ds = require('./lib/dataStore')
+const { normalizeAgents } = require('./agent/dataNormalizers')
 const notifier = require('./lib/notifier')
 
 function _fireTaskCompletionNotification(runDetail) {
@@ -169,7 +170,6 @@ function getPaths() {
   const pp = ds.paths()
   return {
     configFile:         pp.CONFIG_FILE,
-    agentsFile:         pp.AGENTS_FILE,
     tasksFile:          pp.TASKS_FILE,
     plansFile:          pp.PLANS_FILE,
     taskRunsDir:        pp.TASK_RUNS_DIR,
@@ -411,10 +411,9 @@ async function _syncAiTaskTree(plan, itemId, triggeredBy) {
 // ── Execute a full plan (all steps sequentially) ──────────────────────────────
 
 async function _executePlan(plan, triggeredBy = 'schedule') {
-  const { configFile, agentsFile, tasksFile, taskRunsDir, taskRunsIndex, agentArtifactsDir } = getPaths()
+  const { configFile, tasksFile, taskRunsDir, taskRunsIndex, agentArtifactsDir } = getPaths()
   const globalCfg   = readJSON(configFile,   {})
-  const agentsData = readJSON(agentsFile, { agents: [] })
-  const allAgents  = agentsData.agents || agentsData || []
+  const allAgents   = normalizeAgents(ds.readAgentsCompat())
   const allTasks     = readJSON(tasksFile, [])
 
   const runId      = uuidv4()

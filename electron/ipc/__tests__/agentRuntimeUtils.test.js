@@ -10,21 +10,17 @@ const require_ = createRequire(import.meta.url)
 const ds = require_('../../lib/dataStore')
 const { logger } = require_('../../logger')
 
-const mockReadJSON = vi.fn()
-const mockPaths = { AGENTS_FILE: 'agents.json' }
+const mockReadAgentsCompat = vi.fn()
 
-const origReadJSON = ds.readJSON
-const origPaths = ds.paths
+const origReadAgentsCompat = ds.readAgentsCompat
 const origWarn = logger.warn
 
 beforeAll(() => {
-  ds.readJSON = mockReadJSON
-  ds.paths = () => mockPaths
+  ds.readAgentsCompat = mockReadAgentsCompat
   logger.warn = vi.fn()
 })
 afterAll(() => {
-  ds.readJSON = origReadJSON
-  ds.paths = origPaths
+  ds.readAgentsCompat = origReadAgentsCompat
   logger.warn = origWarn
 })
 
@@ -40,9 +36,9 @@ const {
 describe('agentRuntimeUtils regressions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // agents.json now uses the nested {agents:{items}, personas:{items}} schema —
-    // normalizeAgents flattens both sections back into a single array.
-    mockReadJSON.mockReturnValue({
+    // readAgentsCompat returns the legacy agents.json shape — normalizeAgents
+    // flattens both sections back into a single array.
+    mockReadAgentsCompat.mockReturnValue({
       agents: {
         categories: [],
         items: [

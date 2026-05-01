@@ -112,7 +112,7 @@ function normalizeLoopConfig(cfg, systemAgentId = null) {
 
   if (systemAgentId) {
     try {
-      const agentRecords = normalizeAgents(ds.readJSON(ds.paths().AGENTS_FILE, []))
+      const agentRecords = normalizeAgents(ds.readAgentsCompat())
       const agent = agentRecords.find(item => item.id === systemAgentId)
       if (agent?.providerId) resolvedProvider = agent.providerId
       if (agent?.modelId) resolvedModel = agent.modelId

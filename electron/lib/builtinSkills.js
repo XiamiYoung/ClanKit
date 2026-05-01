@@ -140,45 +140,28 @@ function readManifestVersion(manifestPath) {
  * on subsequent startups, otherwise users who intentionally removed the skill
  * from some agents would see it come back.
  *
- * @param {string}   agentsFile Absolute path to agents.json.
+ * @param {object}   agentStore AgentStore instance.
  * @param {string[]} builtinIds Ids to seed.
  * @returns {{ updated: number }}
  */
-function seedBuiltinSkillsIntoAgents(agentsFile, builtinIds) {
+function seedBuiltinSkillsIntoAgents(agentStore, builtinIds) {
   if (!builtinIds || builtinIds.length === 0) return { updated: 0 }
-  if (!fs.existsSync(agentsFile)) return { updated: 0 }
+  if (!agentStore) return { updated: 0 }
 
-  let data
-  try {
-    data = JSON.parse(fs.readFileSync(agentsFile, 'utf8'))
-  } catch (err) {
-    logger.error('[builtinSkills] read agents.json failed:', err.message)
-    return { updated: 0 }
-  }
-
-  // Schema-agnostic iteration so this seeding works against legacy flat files
-  // AND the new nested {agents:{items}, personas:{items}} schema. Mutating
-  // through iterateAgentsInFile keeps changes inside the original structure
-  // so the write below preserves the on-disk shape.
-  const ds = require('./dataStore')
+  const allAgents = agentStore.getAll()
   let updated = 0
-  ds.iterateAgentsInFile(data, agent => {
+  for (const agent of allAgents) {
     const current = Array.isArray(agent.requiredSkillIds) ? agent.requiredSkillIds : []
     const missing = builtinIds.filter(id => !current.includes(id))
     if (missing.length > 0) {
       agent.requiredSkillIds = [...current, ...missing]
+      agentStore.saveAgent(agent)
       updated++
     }
-  })
+  }
 
   if (updated > 0) {
-    try {
-      fs.writeFileSync(agentsFile, JSON.stringify(data, null, 2), 'utf8')
-      logger.info(`[builtinSkills] assigned ${builtinIds.join(', ')} to ${updated} existing agent(s)`)
-    } catch (err) {
-      logger.error('[builtinSkills] write agents.json failed:', err.message)
-      return { updated: 0 }
-    }
+    logger.info(`[builtinSkills] assigned ${builtinIds.join(', ')} to ${updated} existing agent(s)`)
   }
 
   return { updated }

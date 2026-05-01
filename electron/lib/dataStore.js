@@ -118,7 +118,6 @@ function init() {
     CHATS_FILE:           path.join(DATA_DIR, 'chats.json'),
     CHATS_DIR,
     CHATS_INDEX_FILE:     path.join(CHATS_DIR, 'index.json'),
-    AGENTS_FILE:          path.join(DATA_DIR, 'agents.json'),
     MCP_SERVERS_FILE:     path.join(DATA_DIR, 'mcp-servers.json'),
     TOOLS_FILE:           path.join(DATA_DIR, 'tools.json'),
     AGENT_ARTIFACTS_DIR:  path.join(DATA_DIR, 'agent-artifacts'),
@@ -190,40 +189,28 @@ async function readJSONAsync(file, fallback) {
   }
 }
 
-// ── agents.json structure-aware helpers ─────────────────────────────────────
-// agents.json shape: { agents: {items}, personas: {items} }. Mutating one
-// section's items must not touch the other — these helpers iterate / find
-// across both lists without callers having to know about the split.
-
-/** Return both in-place agent arrays inside the parsed agents.json object. */
-function _agentsListsFromData(data) {
-  if (!data || typeof data !== 'object') return []
-  const lists = []
-  if (Array.isArray(data.agents?.items))   lists.push(data.agents.items)
-  if (Array.isArray(data.personas?.items)) lists.push(data.personas.items)
-  return lists
-}
-
 /**
- * Iterate every agent record in agents.json regardless of schema. Mutations
- * applied inside `fn` are persisted by writing `data` back via writeJSONAtomic.
+ * Read agents in the legacy agents.json shape, sourcing from agents.db.
+ * Returns `{ agents: { categories, items }, personas: { categories, items } }`.
+ *
+ * Bridge for main-process callers that historically did
+ * `ds.readJSON(AGENTS_FILE, fallback)` and either flattened with normalizeAgents
+ * or walked the structure directly. Lets us delete agents.json from disk
+ * without rewriting every consumer.
  */
-function iterateAgentsInFile(data, fn) {
-  for (const list of _agentsListsFromData(data)) {
-    for (const agent of list) fn(agent)
+function readAgentsCompat() {
+  const { getInstance: getAgentStore } = require('../agent/AgentStore')
+  const store = getAgentStore(_paths.DATA_DIR)
+  return {
+    agents: {
+      items:      store.getByKind('system'),
+      categories: store.getCategoriesByKind('system'),
+    },
+    personas: {
+      items:      store.getByKind('user'),
+      categories: store.getCategoriesByKind('user'),
+    },
   }
-}
-
-/**
- * Find an agent by id inside an agents.json object (any schema). Returns the
- * live object reference (mutations stick) or null if not found.
- */
-function findAgentInFile(data, id) {
-  for (const list of _agentsListsFromData(data)) {
-    const found = list.find(a => a.id === id)
-    if (found) return found
-  }
-  return null
 }
 
 // Single-slot rolling backup. Copies `file` to `file + '.bak'` before the
@@ -305,8 +292,8 @@ module.exports = {
   writeJSONAtomic,
   readJSONAsync,
   backupFile,
-  iterateAgentsInFile,
-  findAgentInFile,
+  // Agents (AgentStore-backed bridge)
+  readAgentsCompat,
   // Helpers
   chatMetaFromChat,
   getEnvPaths,

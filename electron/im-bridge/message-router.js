@@ -72,9 +72,9 @@ function removeMessage(chatId, msgId) {
 }
 
 function readAgents() {
-  // Schema-agnostic flat list (handles new nested + both legacy formats).
+  // Schema-agnostic flat list sourced from AgentStore (agents.db).
   const { normalizeAgents } = require('../agent/dataNormalizers')
-  return normalizeAgents(readJSON(ds.paths().AGENTS_FILE, []))
+  return normalizeAgents(ds.readAgentsCompat())
 }
 
 
