@@ -426,8 +426,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ── AI Task Tree ───────────────────────────────────────────────────────────
   aiTask: {
-    syncTree: (payload) => ipcRenderer.invoke('ai-task:sync-tree', payload),
-    getTree:  ()        => ipcRenderer.invoke('ai-task:get-tree'),
+    getTree: () => ipcRenderer.invoke('ai-task:get-tree'),
   },
 
   // ── IM Bridge ─────────────────────────────────────────────────────────────

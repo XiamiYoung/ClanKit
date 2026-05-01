@@ -363,26 +363,6 @@ export const useTasksStore = defineStore('tasks', () => {
     try {
       await window.electronAPI.tasks.saveRun(runDetail)
       await loadRuns()
-      // Sync with AI Task Tree
-      if (window.electronAPI?.aiTask) {
-        try {
-          const planCat = planCategories.value.find(c => c.id === plan?.categoryId)
-          await window.electronAPI.aiTask.syncTree({
-            planId: plan?.id,
-            planName: plan?.name || '',
-            categoryId: plan?.categoryId || null,
-            categoryName: planCat?.name || null,
-            categoryEmoji: planCat?.emoji || null,
-            itemId,
-            itemType: schedType,
-            itemDescription: schedType === 'cron' ? `Recurring: ${plan?.schedule?.cron}` : schedType === 'once' ? 'One-time scheduled' : 'Manual',
-            itemCronExpr: schedType === 'cron' ? plan?.schedule?.cron : undefined,
-            itemCreatedAt: new Date().toISOString(),
-          })
-        } catch (err) {
-          console.warn('[TasksStore] ai-task sync error:', err)
-        }
-      }
     } catch (err) {
       console.warn('[TasksStore] Failed to persist run:', err)
     } finally {
