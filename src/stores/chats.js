@@ -1435,7 +1435,7 @@ export const useChatsStore = defineStore('chats', () => {
         maxAgentRounds: targetChat.maxAgentRounds ?? 10,
         mode: targetChat.mode || 'chat',
         chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
-        modeTransitionPending: targetChat.modeTransitionPending || null,
+        modeTransitionPending: targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null,
         userAgentId: targetChat.userAgentId || null,
         systemAgentId: isGroup ? null : (groupIds[0] || null),
         groupAudienceMode: targetChat.groupAudienceMode || 'auto',

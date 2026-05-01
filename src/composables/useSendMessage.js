@@ -462,7 +462,7 @@ export function useSendMessage({
           maxAgentRounds: targetChat.maxAgentRounds ?? 10,
           mode: targetChat.mode || 'chat',
           chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
-          modeTransitionPending: targetChat.modeTransitionPending || null,
+          modeTransitionPending: targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null,
           userAgentId: targetChat.userAgentId || null,
           systemAgentId: isGroup ? null : (activeSystemAgentIds.value[0] || targetChat.systemAgentId || null),
           groupAudienceMode: targetChat.groupAudienceMode || 'auto',
@@ -471,7 +471,27 @@ export function useSendMessage({
           chatType: targetChat.type || 'chat',
           analysisTargetAgentId: targetChat.analysisTargetAgentId || null,
         },
-      }).catch(err => dbg(`sendMessage IPC error: ${err.message}`, 'error'))
+      }).catch(err => {
+        dbg(`sendMessage IPC error: ${err.message}`, 'error')
+        // Recover stuck state on IPC failure (no chunks will arrive)
+        for (const id of activeSystemAgentIds.value) runningAgentKeys.delete(`${chatId}:${id}`)
+        const chat = chatsStore.chats.find(c => c.id === chatId)
+        if (chat) {
+          chat.isRunning = false
+          chat.isThinking = false
+          for (const m of chat.messages || []) {
+            if (m.streaming) {
+              m.streaming = false
+              m.content = m.content || `Error: ${err.message}`
+              m.segments = [{ type: 'text', content: m.content }]
+              m.isError = true
+              if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
+              m.timestamp = Date.now()
+            }
+          }
+        }
+        isInCollaborationLoop.value = false
+      })
 
       // Return immediately — completion is signalled via send_message_complete chunk in handleChunk.
       // handleChunk(agent_end) finalizes single-agent streaming messages just as it does for group.
@@ -705,7 +725,7 @@ export function useSendMessage({
         maxAgentRounds: targetChat.maxAgentRounds ?? 10,
         mode: targetChat.mode || 'chat',
         chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
-        modeTransitionPending: targetChat.modeTransitionPending || null,
+        modeTransitionPending: targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null,
         userAgentId: targetChat.userAgentId || null,
         systemAgentId: isGroup ? null : (activeSystemAgentIds.value[0] || targetChat.systemAgentId || null),
         groupAudienceMode: targetChat.groupAudienceMode || 'auto',

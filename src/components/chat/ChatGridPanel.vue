@@ -11,15 +11,16 @@
       @start-call="cId => $emit('start-call', cId)"
     >
       <template #actions>
-        <!-- Mode chip -->
+        <!-- Mode toggle indicator (read-only mini switch) -->
         <span
           v-if="showModeChip"
-          class="gp-mode-chip"
-          :class="{ 'gp-mode-chip--productivity': isProductivity }"
+          class="gp-mode-switch"
           :title="modeLabel"
+          aria-hidden="true"
         >
-          <svg v-if="isProductivity" style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-          <svg v-else style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span class="gp-mode-switch-track" :class="{ on: isProductivity }">
+            <span class="gp-mode-switch-thumb"></span>
+          </span>
         </span>
         <!-- Call -->
         <button class="gp-maximize-btn" @click.stop="$emit('start-call', chatId)" :title="t('chats.voiceCall')">
@@ -621,7 +622,7 @@ async function onMentionSend(text) {
         if (pModel) singleCfg.customModel = pModel
         singleCfg.mode = targetChat.mode || 'chat'
         singleCfg.chatWorkingPath = (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null
-        singleCfg.modeTransitionPending = targetChat.modeTransitionPending || null
+        singleCfg.modeTransitionPending = targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null
 
         const usrAgent = targetChat.userAgentId ? agentsStore.getAgentById(targetChat.userAgentId) : agentsStore.defaultUserAgent
         const agentPrompts = { systemAgentId: agentId, userAgentId: usrAgent?.id || '__default_user__' }
@@ -720,7 +721,7 @@ async function onSend(text, pendingAttachments = [], longBlobs = {}) {
   if (targetChat.model) cfg.customModel = targetChat.model
   cfg.mode = targetChat.mode || 'chat'
   cfg.chatWorkingPath = (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null
-  cfg.modeTransitionPending = targetChat.modeTransitionPending || null
+  cfg.modeTransitionPending = targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null
   const sysAgent = targetChat.systemAgentId ? agentsStore.getAgentById(targetChat.systemAgentId) : agentsStore.defaultSystemAgent
   const usrAgent = targetChat.userAgentId ? agentsStore.getAgentById(targetChat.userAgentId) : agentsStore.defaultUserAgent
   const agentPrompts = {}
@@ -1081,25 +1082,37 @@ function deleteMessage(msg) {
 
 .gp-swap-wrap { position: relative; }
 
-/* ── Mode chip (read-only, no click) ── */
-.gp-mode-chip {
-  display: flex;
+/* ── Mode toggle indicator (read-only mini switch) ── */
+.gp-mode-switch {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border, #e5e7eb);
-  background: var(--bg-card, #fff);
-  color: var(--text-secondary, #6b7280);
   flex-shrink: 0;
 }
-.gp-mode-chip--productivity {
+.gp-mode-switch-track {
+  position: relative;
+  width: 1.625rem;
+  height: 0.875rem;
+  border-radius: 9999px;
+  background: #D1D5DB;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.gp-mode-switch-track.on {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: #1A1A1A;
-  color: #FFFFFF;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
+.gp-mode-switch-thumb {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 9999px;
+  background: #FFFFFF;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.gp-mode-switch-track.on .gp-mode-switch-thumb {
+  transform: translateX(0.75rem);
 }
 </style>
 

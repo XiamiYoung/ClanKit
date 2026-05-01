@@ -2803,24 +2803,41 @@ ipcMain.handle('agent:send-message', async (event, {
       return
     }
 
-    // Read all data from disk
-    const fullCfg      = ds.readJSON(ds.paths().CONFIG_FILE, {})
-    const agentsData   = normalizeAgents(ds.readAgentsCompat())
-    const mcpData      = normalizeMcpServers(ds.readJSON(ds.paths().MCP_SERVERS_FILE, []))
-    const toolsData    = normalizeTools(ds.readJSON(ds.paths().TOOLS_FILE, {}))
-    const knowledgeData = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
+    // ALL orchestration must run inside this try so any throw — including disk-read /
+    // normalize errors before the inner try below — is reported to the renderer via
+    // send_message_error. Without this, a failure here leaves the renderer's isRunning
+    // stuck true forever (no chunks ever arrive).
+    let fullCfg, agentsData, mcpData, toolsData, knowledgeData
+    let agentsById, safeSkills, allData
+    let effectiveGroupIds, groupAgents, trackMessages
+    try {
+      fullCfg       = ds.readJSON(ds.paths().CONFIG_FILE, {})
+      agentsData    = normalizeAgents(ds.readAgentsCompat())
+      mcpData       = normalizeMcpServers(ds.readJSON(ds.paths().MCP_SERVERS_FILE, []))
+      toolsData     = normalizeTools(ds.readJSON(ds.paths().TOOLS_FILE, {}))
+      knowledgeData = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
 
-    const agentsById = Object.fromEntries((agentsData || []).map(a => [a.id, a]))
-    const safeSkills = Array.isArray(enabledSkills) ? enabledSkills : []
+      agentsById = Object.fromEntries((agentsData || []).map(a => [a.id, a]))
+      safeSkills = Array.isArray(enabledSkills) ? enabledSkills : []
 
-    const allData = { agents: agentsData, mcpServers: mcpData, tools: toolsData, knowledgeCfg: knowledgeData, enabledSkills: safeSkills }
+      allData = { agents: agentsData, mcpServers: mcpData, tools: toolsData, knowledgeCfg: knowledgeData, enabledSkills: safeSkills }
 
-    // Determine the group agents list for @mention parsing
-    const effectiveGroupIds = groupIds || []
-    const groupAgents = effectiveGroupIds.map(id => agentsById[id]).filter(Boolean).map(a => ({ id: a.id, name: a.name, description: a.description || '' }))
+      // Determine the group agents list for @mention parsing
+      effectiveGroupIds = groupIds || []
+      groupAgents = effectiveGroupIds.map(id => agentsById[id]).filter(Boolean).map(a => ({ id: a.id, name: a.name, description: a.description || '' }))
 
-    // trackMessages mirrors the conversation for @mention scanning
-    const trackMessages = (messages || []).map(m => ({ ...m }))
+      // trackMessages mirrors the conversation for @mention scanning
+      trackMessages = (messages || []).map(m => ({ ...m }))
+    } catch (preErr) {
+      logger.error('agent:send-message early-setup error', { chatId, error: preErr.message, stack: preErr.stack })
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_error', error: `Setup failed: ${preErr.message}` } })
+        if (targetChatMeta?.modeTransitionPending) {
+          event.sender.send('chat:clear-mode-transition-pending', { chatId })
+        }
+      }
+      return
+    }
 
     try {
       // ── Determine respondingIds ───────────────────────────────────────────

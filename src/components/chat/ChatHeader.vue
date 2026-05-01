@@ -62,18 +62,23 @@
       <!-- Right side: call + settings (single view) or grid action buttons -->
       <div class="ch-row-top-actions">
         <template v-if="!isGridView">
-          <!-- Mode chip button -->
-          <div v-if="showModeChip" class="ch-mode-btn-wrap" ref="modeChipBtnEl">
-            <button
-              class="ch-mode-btn"
-              :class="{ 'ch-mode-btn--productivity': isProductivity }"
-              @click.stop="onModeChipClick"
-              :title="isProductivity ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip')"
-              :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
-            >
-              <svg v-if="isProductivity" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-              <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
+          <!-- Mode toggle switch (chat ↔ productivity) -->
+          <div
+            v-if="showModeChip"
+            class="ch-mode-switch"
+            :title="isProductivity ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip')"
+            :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
+            role="switch"
+            :aria-checked="isProductivity ? 'true' : 'false'"
+            tabindex="0"
+            @click.stop="onModeChipClick"
+            @keydown.enter.prevent="onModeChipClick"
+            @keydown.space.prevent="onModeChipClick"
+          >
+            <span class="ch-mode-switch-label">{{ isProductivity ? t('chats.modeProductivity') : t('chats.modeChat') }}</span>
+            <div class="ch-mode-switch-track" :class="{ on: isProductivity }">
+              <span class="ch-mode-switch-thumb"></span>
+            </div>
           </div>
           <!-- Voice call button -->
           <div
@@ -1733,39 +1738,60 @@ function confirmProductivitySwitch() {
   line-height: 1.5;
 }
 
-/* ── Mode button (right-actions area) ── */
-.ch-mode-btn-wrap {
-  position: relative;
+/* ── Mode toggle switch (right-actions area) ── */
+.ch-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 0.5rem;
+  outline: none;
+  transition: background 0.15s;
   flex-shrink: 0;
 }
-.ch-mode-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.875rem;
-  height: 1.875rem;
-  padding: 0;
-  border-radius: 0.5rem;
-  border: 1px solid var(--border, #e5e7eb);
-  background: var(--bg-card, #fff);
-  color: var(--text-secondary, #6b7280);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+.ch-mode-switch:hover {
+  background: rgba(0, 0, 0, 0.04);
 }
-.ch-mode-btn:hover {
-  border-color: var(--text-primary, #111);
-  color: var(--text-primary, #111);
+.ch-mode-switch:focus-visible {
+  box-shadow: 0 0 0 2px rgba(15, 15, 15, 0.18);
 }
-.ch-mode-btn--productivity {
+.ch-mode-switch-label {
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-small, 0.75rem);
+  font-weight: 600;
+  color: #6B7280;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.ch-mode-switch:hover .ch-mode-switch-label {
+  color: #1A1A1A;
+}
+.ch-mode-switch-track {
+  position: relative;
+  width: 2.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background: #D1D5DB;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.ch-mode-switch-track.on {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: #1A1A1A;
-  color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
 }
-.ch-mode-btn--productivity:hover {
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-  border-color: #2D2D2D;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10);
+.ch-mode-switch-thumb {
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 9999px;
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ch-mode-switch-track.on .ch-mode-switch-thumb {
+  transform: translateX(1rem);
 }
 </style>
