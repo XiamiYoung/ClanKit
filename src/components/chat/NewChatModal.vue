@@ -327,7 +327,7 @@ const props = defineProps({
   newChatUserSearch: { type: String, default: '' },
   newChatUserCategoryId: { type: String, default: '__all__' },
   newChatFolderTreeExpanded: { type: Object, default: () => new Set() },
-  newChatMode: { type: String, default: 'chat' },
+  newChatMode: { type: String, default: 'productivity' },
   filteredNewChatAgents: { type: Array, default: () => [] },
   filteredNewChatUsers: { type: Array, default: () => [] },
   activeNewChatUserAgent: { type: Object, default: null },
