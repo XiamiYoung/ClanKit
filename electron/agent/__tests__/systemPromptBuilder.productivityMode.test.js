@@ -186,7 +186,7 @@ describe('Coding mode block removed', () => {
     expect(b).not.toContain('CODING PROJECT PATH')
   })
 
-  it('chat mode prompt is unchanged byte-equivalent (regression canary)', () => {
+  it('chat mode prompt is deterministic across calls (no time-dependent fields)', () => {
     const a = buildSystemPrompt({ ...baseConfig, mode: 'chat' }, [], [], [], [], baseAgent)
     const b = buildSystemPrompt({ ...baseConfig, mode: 'chat' }, [], [], [], [], baseAgent)
     expect(b).toBe(a)
