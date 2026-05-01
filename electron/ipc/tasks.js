@@ -190,34 +190,43 @@ function register() {
   // --- AI Task Tree (replaces ai-task-tree.json + ai-task:sync-tree) ---
   ipcMain.handle('ai-task:get-tree', async () => {
     try {
-      const rows = _store().getTreeRows()
-      const planMap = new Map()
-      for (const row of rows) {
-        if (!planMap.has(row.planId)) {
-          planMap.set(row.planId, {
-            planId: row.planId,
-            planName: row.planName,
-            categoryId: row.categoryId || null,
-            categoryName: row.categoryName || null,
-            categoryEmoji: row.categoryEmoji || null,
-            deletedAt: row.planDeletedAt ? new Date(row.planDeletedAt).toISOString() : null,
-            items: [],
-          })
-        }
-        if (row.itemId) {
-          planMap.get(row.planId).items.push({
-            itemId: row.itemId,
-            type: row.itemType,
-            description: row.itemDescription,
-            cronExpr: row.itemCronExpr || undefined,
-            createdAt: row.itemCreatedAt ? new Date(row.itemCreatedAt).toISOString() : null,
-            deletedAt: row.itemDeletedAt ? new Date(row.itemDeletedAt).toISOString() : null,
-          })
-        }
+      const { plans: planRows, tasks: taskRows } = _store().getTreeRows()
+      // Index tasks by id for step lookup
+      const taskMap = new Map()
+      for (const t of taskRows) {
+        taskMap.set(t.id, t)
       }
-      return { plans: [...planMap.values()] }
+      const result = []
+      for (const p of planRows) {
+        let steps = []
+        try { steps = JSON.parse(p.stepsJson || '[]') } catch {}
+        const items = []
+        for (const step of steps) {
+          if (!step?.taskId) continue
+          const task = taskMap.get(step.taskId)
+          if (!task) continue   // step references a missing/hard-deleted task — skip
+          items.push({
+            itemId: task.id,
+            type: task.type || 'manual',
+            description: task.description || task.name || '',
+            cronExpr: task.cron_expr || undefined,
+            createdAt: task.created_at ? new Date(task.created_at).toISOString() : null,
+            deletedAt: task.deleted_at ? new Date(task.deleted_at).toISOString() : null,
+          })
+        }
+        result.push({
+          planId: p.planId,
+          planName: p.planName,
+          categoryId: p.categoryId || null,
+          categoryName: p.categoryName || null,
+          categoryEmoji: p.categoryEmoji || null,
+          deletedAt: p.planDeletedAt ? new Date(p.planDeletedAt).toISOString() : null,
+          items,
+        })
+      }
+      return { plans: result }
     } catch (err) {
-      logger.warn('ai-task:get-tree error', err.message)
+      logger.warn('ai-task:get-tree error', err.message, err.stack)
       return { plans: [] }
     }
   })

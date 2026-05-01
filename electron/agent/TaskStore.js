@@ -547,11 +547,13 @@ class TaskStore {
 
   // ── Tree (replaces ai-task-tree.json + ai-task:sync-tree) ───────────────
 
-  /** Return all rows needed to reconstruct the plan→tasks tree, including
-   *  soft-deleted plans/tasks (UI shows them as tombstones). */
+  /** Return rows for tree reconstruction. Plans and tasks have NO foreign-key
+   *  relationship at the SQL level — plans reference tasks via the
+   *  `plans.steps[].taskId` JSON array. So we return plans (with their steps
+   *  JSON inline) plus a separate task list, and let the caller merge in JS. */
   getTreeRows() {
     const db = this._open()
-    return db.prepare(`
+    const plans = db.prepare(`
       SELECT
         p.id            AS planId,
         p.name          AS planName,
@@ -559,17 +561,16 @@ class TaskStore {
         pc.name         AS categoryName,
         pc.emoji        AS categoryEmoji,
         p.deleted_at    AS planDeletedAt,
-        t.id            AS itemId,
-        t.type          AS itemType,
-        t.description   AS itemDescription,
-        t.cron_expr     AS itemCronExpr,
-        t.created_at    AS itemCreatedAt,
-        t.deleted_at    AS itemDeletedAt
+        p.steps         AS stepsJson
       FROM plans p
       LEFT JOIN plan_categories pc ON p.category_id = pc.id
-      LEFT JOIN tasks t            ON t.plan_id     = p.id
-      ORDER BY p.created_at DESC, t.step_index
+      ORDER BY p.created_at DESC
     `).all()
+    const tasks = db.prepare(`
+      SELECT id, name, description, type, cron_expr, created_at, deleted_at
+      FROM tasks
+    `).all()
+    return { plans, tasks }
   }
 
   // ── Counts (migration idempotency) ──────────────────────────────────────
