@@ -50,7 +50,7 @@ describe('migrateChatRecord', () => {
     }
     const out = migrateChatRecord(already)
     expect(out).toEqual(already)
-    expect(out).toBe(out)  // returns the same object reference (or a structurally identical clone — either is acceptable)
+    expect(out).toBe(already)  // same object reference returned for idempotent path
   })
 
   it('chat with mode=chat is also idempotent', () => {

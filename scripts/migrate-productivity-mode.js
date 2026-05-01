@@ -11,7 +11,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export function migrateChatRecord(chat) {
-  // Idempotent: a chat that already has mode set is left untouched.
+  // Idempotent: a chat with a recognised mode is left untouched.
+  // Any other value (undefined, '', 'debug', etc.) is treated as legacy and migrated.
   if (chat.mode === 'chat' || chat.mode === 'productivity') {
     return chat
   }
@@ -49,14 +50,18 @@ function main() {
   let changed = 0
   for (const f of files) {
     const full = path.join(chatsDir, f)
-    const raw = fs.readFileSync(full, 'utf8')
-    const before = JSON.parse(raw)
-    const after = migrateChatRecord(before)
-    if (JSON.stringify(before) !== JSON.stringify(after)) {
-      fs.writeFileSync(full, JSON.stringify(after, null, 2))
-      changed += 1
-      const target = before.codingMode ? 'productivity' : 'chat'
-      console.log(`migrated: ${f} → ${target}`)
+    try {
+      const raw = fs.readFileSync(full, 'utf8')
+      const before = JSON.parse(raw)
+      const after = migrateChatRecord(before)
+      if (JSON.stringify(before) !== JSON.stringify(after)) {
+        fs.writeFileSync(full, JSON.stringify(after, null, 2))
+        changed += 1
+        const target = before.codingMode ? 'productivity' : 'chat'
+        console.log(`migrated: ${f} → ${target}`)
+      }
+    } catch (err) {
+      console.error(`skipped (error): ${f}: ${err.message}`)
     }
   }
   console.log(`Done. ${changed}/${files.length} chats updated.`)
