@@ -362,6 +362,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('window:maximized', handler)
   },
 
+  // ── Auto-Update ───────────────────────────────────────────────────────────
+  updater: {
+    check:               (opts) => ipcRenderer.invoke('updater:check', opts),
+    install:             ()     => ipcRenderer.invoke('updater:install'),
+    quitAndInstall:      ()     => ipcRenderer.invoke('updater:quit-and-install'),
+    openDownloadPage:    ()     => ipcRenderer.invoke('updater:open-download-page'),
+    getStatus:           ()     => ipcRenderer.invoke('updater:get-status'),
+    onCheckStarted:      (cb)   => { const h=(_e,d)=>cb(d); ipcRenderer.on('updater:check_started', h); return () => ipcRenderer.removeListener('updater:check_started', h) },
+    onAvailable:         (cb)   => { const h=(_e,d)=>cb(d); ipcRenderer.on('updater:available', h); return () => ipcRenderer.removeListener('updater:available', h) },
+    onNotAvailable:      (cb)   => { const h=(_e,d)=>cb(d); ipcRenderer.on('updater:not_available', h); return () => ipcRenderer.removeListener('updater:not_available', h) },
+    onProgress:          (cb)   => { const h=(_e,d)=>cb(d); ipcRenderer.on('updater:progress', h); return () => ipcRenderer.removeListener('updater:progress', h) },
+    onDownloaded:        (cb)   => { const h=(_e,d)=>cb(d); ipcRenderer.on('updater:downloaded', h); return () => ipcRenderer.removeListener('updater:downloaded', h) },
+    onError:             (cb)   => { const h=(_e,d)=>cb(d); ipcRenderer.on('updater:error', h); return () => ipcRenderer.removeListener('updater:error', h) },
+  },
+
   // ── Email / SMTP ────────────────────────────────────────────────────────────
   testSmtp: (smtpConfig) => ipcRenderer.invoke('store:test-smtp', smtpConfig),
 
